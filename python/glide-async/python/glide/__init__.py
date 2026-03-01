@@ -10,6 +10,9 @@ from glide.glide import (
     get_min_compressed_size,
 )
 from glide_shared import (
+    ALL_CHANNELS,
+    ALL_PATTERNS,
+    ALL_SHARDED_CHANNELS,
     OK,
     TOK,
     AdvancedGlideClientConfiguration,
@@ -164,9 +167,6 @@ from glide_shared import (
 )
 
 from .async_commands import (
-    ALL_CHANNELS,
-    ALL_PATTERNS,
-    ALL_SHARDED_CHANNELS,
     ft,
     glide_json,
 )

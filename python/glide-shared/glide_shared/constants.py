@@ -8,6 +8,26 @@ from glide_shared.routes import ByAddressRoute, RandomNode, SlotIdRoute, SlotKey
 
 OK: str = "OK"
 DEFAULT_READ_BYTES_SIZE: int = pow(2, 16)
+
+# PubSub constants for unsubscribing from all channels/patterns
+ALL_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all channels'.
+Pass this to unsubscribe() to unsubscribe from all channels.
+"""
+
+ALL_PATTERNS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all patterns'.
+Pass this to punsubscribe() to unsubscribe from all patterns.
+"""
+
+ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all sharded channels'.
+Pass this to sunsubscribe() to unsubscribe from all sharded channels.
+"""
+
 # Typing
 T = TypeVar("T")
 TOK = Literal["OK"]

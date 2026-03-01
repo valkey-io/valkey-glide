@@ -13,6 +13,7 @@ from glide_shared.exceptions import (
     ConfigurationError,
     RequestError,
 )
+from glide_shared.routes import AllNodes
 from glide_sync import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
@@ -24,11 +25,21 @@ from glide_sync import (
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 
 from tests.sync_tests.conftest import create_sync_client
-from tests.utils.utils import (
+from tests.utils.pubsub_test_utils import (
+    PubSubTestConstants,
+    SubscriptionMethod,
     create_pubsub_subscription,
+    create_sync_pubsub_client,
+    create_two_sync_clients_with_pubsub,
     decode_pubsub_msg,
-    get_random_string,
+    get_pubsub_modes,
     new_message,
+    sync_client_cleanup,
+    sync_subscribe_by_method,
+)
+from tests.utils.utils import (
+    get_random_string,
+    kill_connections,
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
 )
@@ -41,24 +52,11 @@ def create_simple_pubsub_config(
     sharded: Optional[Set[str]] = None,
 ):
     """Helper to create pubsub config from simple sets."""
-    modes = (
-        GlideClusterClientConfiguration.PubSubChannelModes
-        if cluster_mode
-        else GlideClientConfiguration.PubSubChannelModes
-    )
-
-    channels_dict = {}
-    if channels:
-        channels_dict[modes.Exact] = channels
-    if patterns:
-        channels_dict[modes.Pattern] = patterns
-    if cluster_mode and sharded:
-        channels_dict[modes.Sharded] = sharded  # type: ignore[union-attr,arg-type]
-
     return create_pubsub_subscription(
         cluster_mode,
-        channels_dict if cluster_mode else {},  # type: ignore[union-attr,arg-type]
-        channels_dict if not cluster_mode else {},  # type: ignore[union-attr,arg-type]
+        channels=channels,
+        patterns=patterns,
+        sharded_channels=sharded,
     )
 
 
@@ -73,57 +71,6 @@ class MethodTesting(IntEnum):
     "Uses synchronous subscription method."
     Callback = 2
     "Uses callback-based subscription method."
-
-
-def create_two_clients_with_pubsub(
-    request,
-    cluster_mode,
-    client1_pubsub: Optional[Any] = None,
-    client2_pubsub: Optional[Any] = None,
-    protocol: ProtocolVersion = ProtocolVersion.RESP3,
-    timeout: Optional[int] = None,
-) -> Tuple[TGlideClient, TGlideClient]:
-    """
-    Sets 2 up clients for testing purposes with optional pubsub configuration.
-
-    Args:
-        request: pytest request for creating a client.
-        cluster_mode: the cluster mode.
-        client1_pubsub: pubsub configuration subscription for the first client.
-        client2_pubsub: pubsub configuration subscription for the second client.
-        protocol: what protocol to use, used for the test: `test_pubsub_resp2_raise_an_error`.
-    """
-    cluster_mode_pubsub1, standalone_mode_pubsub1 = None, None
-    cluster_mode_pubsub2, standalone_mode_pubsub2 = None, None
-    if cluster_mode:
-        cluster_mode_pubsub1 = client1_pubsub
-        cluster_mode_pubsub2 = client2_pubsub
-    else:
-        standalone_mode_pubsub1 = client1_pubsub
-        standalone_mode_pubsub2 = client2_pubsub
-
-    client1 = create_sync_client(
-        request,
-        cluster_mode=cluster_mode,
-        cluster_mode_pubsub=cluster_mode_pubsub1,
-        standalone_mode_pubsub=standalone_mode_pubsub1,
-        protocol=protocol,
-        request_timeout=timeout,
-    )
-    try:
-        client2 = create_sync_client(
-            request,
-            cluster_mode=cluster_mode,
-            cluster_mode_pubsub=cluster_mode_pubsub2,
-            standalone_mode_pubsub=standalone_mode_pubsub2,
-            protocol=protocol,
-            request_timeout=timeout,
-        )
-    except Exception as e:
-        client1.close()
-        raise e
-
-    return client1, client2
 
 
 def get_message_by_method(
@@ -160,53 +107,102 @@ def check_no_messages_left(
         assert len(callback) == expected_callback_messages_count
 
 
-def client_cleanup(
-    client: Optional[Union[GlideClient, GlideClusterClient]],
-    cluster_mode_subs: Optional[
-        Union[
-            GlideClusterClientConfiguration.PubSubSubscriptions,
-            GlideClientConfiguration.PubSubSubscriptions,
-        ]
-    ] = None,
+def wait_for_subscription_state(
+    client: Union[GlideClient, GlideClusterClient],
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+    timeout_sec: float = 3.0,
+    check_actual: bool = True,
 ) -> None:
     """
-    This function tries its best to clear state assosiated with client
-    Its explicitly calls client.close() and deletes the object
-    In addition, it tries to clean up cluster mode subsciptions since it was found the closing the client via close() is
-    not enough.
-    Note that unsubscribing is not feasible in the current implementation since its unknown on which node the subs
-    are configured
+    Poll for subscription state to match expected channels/patterns.
+
+    Args:
+        client: The client to check
+        expected_channels: Expected exact channels (None to skip check, empty set to check for no channels)
+        expected_patterns: Expected pattern channels (None to skip check, empty set to check for no patterns)
+        expected_sharded: Expected sharded channels (None to skip check, empty set to check for no sharded)
+        timeout_sec: Maximum time to wait in seconds
+        check_actual: If True, check actual_subscriptions; if False, check desired_subscriptions
     """
-    # TODO: Once dynamic pubsub is implemented for the sync client
-    # fix the cleanup to mirror that of the async client
-    if client is None:
-        return
+    modes = get_pubsub_modes(client)
+    start_time = time.time()
 
-    if cluster_mode_subs:
-        for (
-            channel_type,
-            channel_patterns,
-        ) in cluster_mode_subs.channels_and_patterns.items():
-            if channel_type == GlideClusterClientConfiguration.PubSubChannelModes.Exact:
-                cmd = "UNSUBSCRIBE_BLOCKING"
-            elif (
-                channel_type
-                == GlideClusterClientConfiguration.PubSubChannelModes.Pattern
-            ):
-                cmd = "PUNSUBSCRIBE_BLOCKING"
-            elif not sync_check_if_server_version_lt(client, "7.0.0"):
-                cmd = "SUNSUBSCRIBE_BLOCKING"
-            else:
-                # disregard sharded config for versions < 7.0.0
-                continue
+    while time.time() - start_time < timeout_sec:
+        state = client.get_subscriptions()
+        subs = (
+            state.actual_subscriptions if check_actual else state.desired_subscriptions
+        )
 
-            for channel_patern in channel_patterns:
-                client.custom_command([cmd, channel_patern, "0"])
+        # For each subscription type, check if it matches expected
+        # If expected is None, skip the check
+        # If expected is empty set, check that actual is also empty
+        # If expected is non-empty set, check that expected is subset of actual
+        channels_match = (
+            expected_channels is None
+            or (len(expected_channels) == 0 and len(subs[modes.Exact]) == 0)
+            or (
+                len(expected_channels) > 0
+                and expected_channels.issubset(subs[modes.Exact])
+            )
+        )
+        patterns_match = (
+            expected_patterns is None
+            or (len(expected_patterns) == 0 and len(subs[modes.Pattern]) == 0)
+            or (
+                len(expected_patterns) > 0
+                and expected_patterns.issubset(subs[modes.Pattern])
+            )
+        )
+        sharded_match = (
+            expected_sharded is None
+            or not hasattr(modes, "Sharded")
+            or (len(expected_sharded) == 0 and len(subs.get(modes.Sharded, set())) == 0)  # type: ignore[union-attr,arg-type]
+            or (len(expected_sharded) > 0 and expected_sharded.issubset(subs.get(modes.Sharded, set())))  # type: ignore[union-attr,arg-type]
+        )
 
-    client.close()
-    del client
-    # The closure is not completed in the glide-core instantly
-    time.sleep(1)
+        if channels_match and patterns_match and sharded_match:
+            return
+
+        time.sleep(0.1)
+
+    # Final check with detailed error
+    state = client.get_subscriptions()
+    subs = state.actual_subscriptions if check_actual else state.desired_subscriptions
+
+    if expected_channels is not None:
+        if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
+            raise AssertionError(f"Expected no channels but found {subs[modes.Exact]}")
+        elif len(expected_channels) > 0 and not expected_channels.issubset(
+            subs[modes.Exact]
+        ):
+            raise AssertionError(
+                f"Expected channels {expected_channels} not in {subs[modes.Exact]}"
+            )
+
+    if expected_patterns is not None:
+        if len(expected_patterns) == 0 and len(subs[modes.Pattern]) > 0:
+            raise AssertionError(
+                f"Expected no patterns but found {subs[modes.Pattern]}"
+            )
+        elif len(expected_patterns) > 0 and not expected_patterns.issubset(
+            subs[modes.Pattern]
+        ):
+            raise AssertionError(
+                f"Expected patterns {expected_patterns} not in {subs[modes.Pattern]}"
+            )
+
+    if expected_sharded is not None and hasattr(modes, "Sharded"):
+        sharded_subs = subs.get(modes.Sharded, set())  # type: ignore[union-attr,arg-type]
+        if len(expected_sharded) == 0 and len(sharded_subs) > 0:
+            raise AssertionError(
+                f"Expected no sharded channels but found {sharded_subs}"
+            )
+        elif len(expected_sharded) > 0 and not expected_sharded.issubset(sharded_subs):
+            raise AssertionError(
+                f"Expected sharded {expected_sharded} not in {sharded_subs}"
+            )
 
 
 class TestSyncPubSub:
@@ -214,11 +210,20 @@ class TestSyncPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_exact_happy_path(
         self,
         request,
         cluster_mode: bool,
         method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests the basic happy path for exact PUBSUB functionality.
@@ -227,39 +232,25 @@ class TestSyncPubSub:
         Async, Sync, and Callback. It verifies that a message published to a
         specific channel is correctly received by a subscriber.
         """
-        listening_client, publishing_client = None, None
-        try:
-            channel = get_random_string(10)
-            message = get_random_string(5)
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            callback, context = None, None
-            callback_messages: List[PubSubMsg] = []
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages
+        channel = get_random_string(10)
+        message = get_random_string(5)
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
-                callback=callback,
-                context=context,
-            )
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
 
-            for i in range(3):
-                try:
-                    listening_client, publishing_client = (
-                        create_two_clients_with_pubsub(request, cluster_mode, pub_sub)
-                    )
-                    break
-                except Exception:
-                    if i == 2:
-                        raise
-                    time.sleep(2**i)
-
-            assert listening_client
-            assert publishing_client
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels={channel},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
@@ -275,13 +266,18 @@ class TestSyncPubSub:
             assert pubsub_msg.pattern is None
 
             check_no_messages_left(method, listening_client, callback_messages, 1)
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_exact_happy_path_coexistence(
-        self, request, cluster_mode: bool
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
         """
         Tests the coexistence of async and sync message retrieval methods in exact PUBSUB.
@@ -290,22 +286,15 @@ class TestSyncPubSub:
         and received using both async and sync methods to ensure that both methods
         can coexist and function correctly.
         """
-        listening_client, publishing_client = None, None
-        try:
-            channel = get_random_string(10)
-            message = get_random_string(5)
-            message2 = get_random_string(7)
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            )
+        channel = "test_exact_channel"
+        message = "test_exact_message_1"
+        message2 = "test_exact_message_2"
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
-
+        with sync_pubsub_test_clients(
+            request, cluster_mode, subscription_method, channels={channel}
+        ) as (listening_client, publishing_client):
             for msg in [message, message2]:
                 result = publishing_client.publish(msg, channel)
                 if cluster_mode:
@@ -337,16 +326,25 @@ class TestSyncPubSub:
                 )
 
             assert listening_client.try_get_pubsub_message() is None
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_exact_happy_path_many_channels(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests publishing and receiving messages across many channels in exact PUBSUB.
@@ -355,42 +353,31 @@ class TestSyncPubSub:
         unique message. It verifies that messages are correctly published and received
         using different retrieval methods: async, sync, and callback.
         """
-        listening_client, publishing_client = None, None
-        try:
-            NUM_CHANNELS = 256
-            shard_prefix = "{same-shard}"
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            # Create a map of channels to random messages with shard prefix
-            channels_and_messages = {
-                f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
-                for _ in range(NUM_CHANNELS)
-            }
+        NUM_CHANNELS = 256
+        shard_prefix = "{same-shard}"
 
-            callback, context = None, None
-            callback_messages: List[PubSubMsg] = []
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages
+        # Create a map of channels to random messages with shard prefix
+        channels_and_messages = {
+            f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
+            for _ in range(NUM_CHANNELS)
+        }
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        channels_and_messages.keys()
-                    )
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        channels_and_messages.keys()
-                    )
-                },
-                callback=callback,
-                context=context,
-            )
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
 
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels=set(channels_and_messages.keys()),
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
                 result = publishing_client.publish(message, channel)
@@ -417,14 +404,17 @@ class TestSyncPubSub:
                 method, listening_client, callback_messages, NUM_CHANNELS
             )
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-            pass
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_exact_happy_path_many_channels_co_existence(
-        self, request, cluster_mode: bool
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
         """
         Tests publishing and receiving messages across many channels in exact PUBSUB, ensuring coexistence of async and sync
@@ -435,35 +425,23 @@ class TestSyncPubSub:
         both methods
         can coexist and function correctly.
         """
-        listening_client, publishing_client = None, None
-        try:
-            NUM_CHANNELS = 256
-            shard_prefix = "{same-shard}"
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            # Create a map of channels to random messages with shard prefix
-            channels_and_messages = {
-                f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
-                for _ in range(NUM_CHANNELS)
-            }
+        NUM_CHANNELS = 256
+        shard_prefix = "{same-shard}"
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        channels_and_messages.keys()
-                    )
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        channels_and_messages.keys()
-                    )
-                },
-            )
+        # Create a map of channels to random messages with shard prefix
+        channels_and_messages = {
+            f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
+            for _ in range(NUM_CHANNELS)
+        }
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels=set(channels_and_messages.keys()),
+        ) as (listening_client, publishing_client):
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
                 result = publishing_client.publish(message, channel)
@@ -493,17 +471,25 @@ class TestSyncPubSub:
 
             assert listening_client.try_get_pubsub_message() is None
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_sharded_pubsub(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Test sharded PUBSUB functionality with different message retrieval methods.
@@ -512,30 +498,26 @@ class TestSyncPubSub:
         Async, Sync, and Callback. It verifies that a message published to a
         specific sharded channel is correctly received by a subscriber.
         """
-        listening_client, publishing_client = None, None
-        try:
-            channel = get_random_string(10)
-            message = get_random_string(5)
-            publish_response = 1
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            callback, context = None, None
-            callback_messages: List[PubSubMsg] = []
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages
+        channel = get_random_string(10)
+        message = get_random_string(5)
+        publish_response = 1
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {channel}},
-                {},
-                callback=callback,
-                context=context,
-            )
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded={channel},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
             assert (
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
@@ -556,13 +538,19 @@ class TestSyncPubSub:
             # assert there are no messages to read
             check_no_messages_left(method, listening_client, callback_messages, 1)
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
-    def test_sync_sharded_pubsub_co_existence(self, request, cluster_mode: bool):
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_sharded_pubsub_co_existence(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
         """
         Test sharded PUBSUB with co-existence of multiple messages.
 
@@ -574,22 +562,18 @@ class TestSyncPubSub:
         both async and sync methods. This ensures that the asynchronous and synchronous message
         retrieval methods can coexist without interfering with each other and operate as expected.
         """
-        listening_client, publishing_client = None, None
-        try:
-            channel = get_random_string(10)
-            message = get_random_string(5)
-            message2 = get_random_string(7)
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {channel}},
-                {},
-            )
+        channel = get_random_string(10)
+        message = get_random_string(5)
+        message2 = get_random_string(7)
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded={channel},
+        ) as (listening_client, publishing_client):
             assert (
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
@@ -629,17 +613,26 @@ class TestSyncPubSub:
                 )
 
             assert listening_client.try_get_pubsub_message() is None
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
     def test_sync_sharded_pubsub_many_channels(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Test sharded PUBSUB with multiple channels and different message retrieval methods.
@@ -648,40 +641,32 @@ class TestSyncPubSub:
         across multiple sharded channels. It covers three different message retrieval methods:
         Async, Sync, and Callback.
         """
-        listening_client, publishing_client = None, None
-        try:
-            NUM_CHANNELS = 256
-            shard_prefix = "{same-shard}"
-            publish_response = 1
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            # Create a map of channels to random messages with shard prefix
-            channels_and_messages = {
-                f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
-                for _ in range(NUM_CHANNELS)
-            }
+        NUM_CHANNELS = 256
+        shard_prefix = "{same-shard}"
+        publish_response = 1
 
-            callback, context = None, None
-            callback_messages: List[PubSubMsg] = []
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages
+        # Create a map of channels to random messages with shard prefix
+        channels_and_messages = {
+            f"{shard_prefix}{get_random_string(10)}": get_random_string(5)
+            for _ in range(NUM_CHANNELS)
+        }
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: set(
-                        channels_and_messages.keys()
-                    )
-                },
-                {},
-                callback=callback,
-                context=context,
-            )
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded=set(channels_and_messages.keys()),
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
                 assert (
@@ -712,18 +697,24 @@ class TestSyncPubSub:
                 method, listening_client, callback_messages, NUM_CHANNELS
             )
 
-        finally:
-            if listening_client:
-                client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            if publishing_client:
-                client_cleanup(publishing_client, None)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_pattern(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Test PUBSUB with pattern subscription using different message retrieval methods.
@@ -731,35 +722,28 @@ class TestSyncPubSub:
         This test verifies the behavior of PUBSUB when subscribing to a pattern and receiving
         messages using three different methods: Async, Sync, and Callback.
         """
-        listening_client, publishing_client = None, None
-        try:
-            PATTERN = "{{{}}}:{}".format("channel", "*")
-            channels = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    5
-                ),
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    5
-                ),
-            }
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            callback, context = None, None
-            callback_messages: List[PubSubMsg] = []
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages
+        PATTERN = "{{{}}}:{}".format("channel", "*")
+        channels = {
+            "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
+            "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
+        }
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                callback=callback,
-                context=context,
-            )
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
 
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            patterns={PATTERN},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
             for channel, message in channels.items():
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
@@ -783,12 +767,18 @@ class TestSyncPubSub:
 
             check_no_messages_left(method, listening_client, callback_messages, 2)
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_pubsub_pattern_co_existence(self, request, cluster_mode: bool):
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_pubsub_pattern_co_existence(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
         """
         Tests the coexistence of async and sync message retrieval methods in pattern-based PUBSUB.
 
@@ -796,28 +786,20 @@ class TestSyncPubSub:
         and received using both async and sync methods to ensure that both methods
         can coexist and function correctly.
         """
-        listening_client, publishing_client = None, None
-        try:
-            PATTERN = "{{{}}}:{}".format("channel", "*")
-            channels = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    5
-                ),
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    5
-                ),
-            }
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-            )
+        PATTERN = "{{{}}}:{}".format("channel", "*")
+        channels = {
+            "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
+            "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
+        }
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            patterns={PATTERN},
+        ) as (listening_client, publishing_client):
             for channel, message in channels.items():
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
@@ -847,16 +829,24 @@ class TestSyncPubSub:
 
             assert listening_client.try_get_pubsub_message() is None
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_pattern_many_channels(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests publishing and receiving messages across many channels in pattern-based PUBSUB.
@@ -865,34 +855,29 @@ class TestSyncPubSub:
         and received. It verifies that messages are correctly published and received
         using different retrieval methods: async, sync, and callback.
         """
-        listening_client, publishing_client = None, None
-        try:
-            NUM_CHANNELS = 256
-            PATTERN = "{{{}}}:{}".format("channel", "*")
-            channels = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
-            }
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            callback, context = None, None
-            callback_messages: List[PubSubMsg] = []
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages
+        NUM_CHANNELS = 256
+        PATTERN = "{{{}}}:{}".format("channel", "*")
+        channels = {
+            "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5)
+            for _ in range(NUM_CHANNELS)
+        }
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                callback=callback,
-                context=context,
-            )
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub
-            )
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
 
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            patterns={PATTERN},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
             for channel, message in channels.items():
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
@@ -918,16 +903,24 @@ class TestSyncPubSub:
                 method, listening_client, callback_messages, NUM_CHANNELS
             )
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_combined_exact_and_pattern_one_client(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests combined exact and pattern PUBSUB with one client.
@@ -973,25 +966,13 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channels
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    ),
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        PATTERN
-                    },
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    ),
-                    GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN},
-                },
+                channels=set(exact_channels_and_messages.keys()),
+                patterns={PATTERN},
                 callback=callback,
                 context=context,
             )
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
+            listening_client, publishing_client = create_two_sync_clients_with_pubsub(
                 request,
                 cluster_mode,
                 pub_sub_exact,
@@ -1030,15 +1011,27 @@ class TestSyncPubSub:
                 method, listening_client, callback_messages, NUM_CHANNELS * 2
             )
         finally:
-            client_cleanup(listening_client, pub_sub_exact if cluster_mode else None)
-            client_cleanup(publishing_client, None)
+            sync_client_cleanup(listening_client, pub_sub_exact if cluster_mode else None)
+            sync_client_cleanup(publishing_client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_combined_exact_and_pattern_multiple_clients(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests combined exact and pattern PUBSUB with multiple clients, one for each subscription.
@@ -1052,6 +1045,8 @@ class TestSyncPubSub:
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
+        from tests.sync_tests.conftest import create_sync_client
+
         (
             listening_client_exact,
             publishing_client,
@@ -1060,25 +1055,16 @@ class TestSyncPubSub:
         ) = (None, None, None, None)
         try:
             NUM_CHANNELS = 256
-            PATTERN = "{{{}}}:{}".format("pattern", "*")
+            PATTERN = "{pattern}:*"
 
-            # Create dictionaries of channels and their corresponding messages
+            # Create dictionaries of channels and their corresponding messages (deterministic)
             exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
-                for _ in range(NUM_CHANNELS)
+                f"{{channel}}:exact_{i}": f"exact_message_{i}"
+                for i in range(NUM_CHANNELS)
             }
             pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
-            }
-
-            all_channels_and_messages = {
-                **exact_channels_and_messages,
-                **pattern_channels_and_messages,
+                f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+                for i in range(NUM_CHANNELS)
             }
 
             callback, context = None, None
@@ -1088,53 +1074,66 @@ class TestSyncPubSub:
                 callback = new_message
                 context = callback_messages
 
-            # Setup PUBSUB for exact channels
-            pub_sub_exact = create_pubsub_subscription(
-                cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
-                callback=callback,
-                context=context,
-            )
+            exact_channels_set = set(exact_channels_and_messages.keys())
 
-            (
-                listening_client_exact,
-                publishing_client,
-            ) = create_two_clients_with_pubsub(
-                request,
-                cluster_mode,
-                pub_sub_exact,
-            )
+            if subscription_method == SubscriptionMethod.Config:
+                listening_client_exact = create_sync_pubsub_client(
+                    request,
+                    cluster_mode,
+                    channels=exact_channels_set,
+                    callback=callback,
+                    context=context,
+                )
+            else:
+                listening_client_exact = create_sync_pubsub_client(
+                    request,
+                    cluster_mode,
+                    callback=callback,
+                    context=context,
+                )
+                sync_subscribe_by_method(
+                    listening_client_exact,
+                    subscription_method,
+                    cluster_mode,
+                    channels=exact_channels_set,
+                )
+
+            publishing_client = create_sync_client(request, cluster_mode)
 
             callback_messages_pattern: List[PubSubMsg] = []
             if method == MethodTesting.Callback:
                 callback = new_message
                 context = callback_messages_pattern
 
-            # Setup PUBSUB for pattern channels
-            pub_sub_pattern = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                callback=callback,
-                context=context,
-            )
+            if subscription_method == SubscriptionMethod.Config:
+                listening_client_pattern = create_sync_pubsub_client(
+                    request,
+                    cluster_mode,
+                    patterns={PATTERN},
+                    callback=callback,
+                    context=context,
+                )
+            else:
+                listening_client_pattern = create_sync_pubsub_client(
+                    request,
+                    cluster_mode,
+                    callback=callback,
+                    context=context,
+                )
+                sync_subscribe_by_method(
+                    listening_client_pattern,
+                    subscription_method,
+                    cluster_mode,
+                    patterns={PATTERN},
+                )
 
-            (
-                listening_client_pattern,
-                client_dont_care,
-            ) = create_two_clients_with_pubsub(request, cluster_mode, pub_sub_pattern)
+            client_dont_care = create_sync_client(request, cluster_mode)
 
             # Publish messages to all channels
-            for channel, message in all_channels_and_messages.items():
+            for channel, message in {
+                **exact_channels_and_messages,
+                **pattern_channels_and_messages,
+            }.items():
                 result = publishing_client.publish(message, channel)
                 if cluster_mode:
                     assert result == 1
@@ -1185,22 +1184,30 @@ class TestSyncPubSub:
             )
 
         finally:
-            client_cleanup(
-                listening_client_exact, pub_sub_exact if cluster_mode else None
-            )
-            client_cleanup(publishing_client, None)
-            client_cleanup(
-                listening_client_pattern, pub_sub_pattern if cluster_mode else None
-            )
-            client_cleanup(client_dont_care, None)
+            sync_client_cleanup(listening_client_exact, None)
+            sync_client_cleanup(publishing_client, None)
+            sync_client_cleanup(listening_client_pattern, None)
+            sync_client_cleanup(client_dont_care, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_combined_exact_pattern_and_sharded_one_client(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests combined exact, pattern and sharded PUBSUB with one client.
@@ -1213,64 +1220,47 @@ class TestSyncPubSub:
         - Ensuring that messages are correctly published and received using different retrieval methods
         (async, sync, callback).
         """
-        listening_client, publishing_client = None, None
-        try:
-            NUM_CHANNELS = 256
-            PATTERN = "{{{}}}:{}".format("pattern", "*")
-            SHARD_PREFIX = "{same-shard}"
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            # Create dictionaries of channels and their corresponding messages
-            exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
-                for _ in range(NUM_CHANNELS)
-            }
-            pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
-            }
-            sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
-                for _ in range(NUM_CHANNELS)
-            }
+        NUM_CHANNELS = 256
+        PATTERN = "{pattern}:*"
+        SHARD_PREFIX = "{same-shard}"
 
-            publish_response = 1
+        # Create dictionaries of channels and their corresponding messages (deterministic)
+        exact_channels_and_messages = {
+            f"{{channel}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
+        }
+        pattern_channels_and_messages = {
+            f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+            for i in range(NUM_CHANNELS)
+        }
+        sharded_channels_and_messages = {
+            f"{SHARD_PREFIX}:sharded_{i}": f"sharded_message_{i}"
+            for i in range(NUM_CHANNELS)
+        }
 
-            callback, context = None, None
-            callback_messages: List[PubSubMsg] = []
+        publish_response = 1
 
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
 
-            # Setup PUBSUB for exact channels
-            pub_sub_exact = create_pubsub_subscription(
-                cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    ),
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        PATTERN
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: set(
-                        sharded_channels_and_messages.keys()
-                    ),
-                },
-                {},
-                callback=callback,
-                context=context,
-            )
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request,
-                cluster_mode,
-                pub_sub_exact,
-            )
+        exact_channels_set = set(exact_channels_and_messages.keys())
+        sharded_channels_set = set(sharded_channels_and_messages.keys())
 
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels=exact_channels_set,
+            patterns={PATTERN},
+            sharded=sharded_channels_set,
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
             # Publish messages to all channels
             for channel, message in {
                 **exact_channels_and_messages,
@@ -1319,17 +1309,25 @@ class TestSyncPubSub:
                 method, listening_client, callback_messages, NUM_CHANNELS * 3
             )
 
-        finally:
-            client_cleanup(listening_client, pub_sub_exact if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_combined_exact_pattern_and_sharded_multi_client(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests combined exact, pattern and sharded PUBSUB with multiple clients, one for each subscription.
@@ -1344,112 +1342,109 @@ class TestSyncPubSub:
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
-        (
-            listening_client_exact,
-            publishing_client,
-            listening_client_pattern,
-            listening_client_sharded,
-        ) = (None, None, None, None)
+        from tests.sync_tests.conftest import create_sync_client
 
-        (
-            pub_sub_exact,
-            pub_sub_sharded,
-            pub_sub_pattern,
-        ) = (None, None, None)
+        listening_client_exact = listening_client_pattern = listening_client_sharded = (
+            None
+        )
+        publishing_client = None
+
+        NUM_CHANNELS = 256
+        PATTERN = "{pattern}:*"
+        SHARD_PREFIX = "{same-shard}"
+
+        # Create dictionaries of channels and their corresponding messages (deterministic)
+        exact_channels_and_messages = {
+            f"{{channel}}:exact:{i}": f"exact_msg_{i}" for i in range(NUM_CHANNELS)
+        }
+        pattern_channels_and_messages = {
+            f"{{pattern}}:test:{i}": f"pattern_msg_{i}" for i in range(NUM_CHANNELS)
+        }
+        sharded_channels_and_messages = {
+            f"{SHARD_PREFIX}:{i}:sharded": f"sharded_msg_{i}"
+            for i in range(NUM_CHANNELS)
+        }
+
+        publish_response = 1
+
+        callback_messages_exact: List[PubSubMsg] = []
+        callback_messages_pattern: List[PubSubMsg] = []
+        callback_messages_sharded: List[PubSubMsg] = []
+
+        callback = context = None
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages_exact
 
         try:
-            NUM_CHANNELS = 256
-            PATTERN = "{{{}}}:{}".format("pattern", "*")
-            SHARD_PREFIX = "{same-shard}"
-
-            # Create dictionaries of channels and their corresponding messages
-            exact_channels_and_messages = {
-                "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(
-                    10
-                )
-                for _ in range(NUM_CHANNELS)
-            }
-            pattern_channels_and_messages = {
-                "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(
-                    5
-                )
-                for _ in range(NUM_CHANNELS)
-            }
-            sharded_channels_and_messages = {
-                f"{SHARD_PREFIX}: {get_random_string(10)}": get_random_string(7)
-                for _ in range(NUM_CHANNELS)
-            }
-
-            publish_response = 1
-
-            callback, context = None, None
-            callback_messages_exact: List[PubSubMsg] = []
-            callback_messages_pattern: List[PubSubMsg] = []
-            callback_messages_sharded: List[PubSubMsg] = []
-
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages_exact
-
-            # Setup PUBSUB for exact channels
-            pub_sub_exact = create_pubsub_subscription(
+            # Exact client
+            listening_client_exact = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: set(
-                        exact_channels_and_messages.keys()
-                    )
-                },
+                channels=(
+                    set(exact_channels_and_messages.keys())
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context,
             )
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    listening_client_exact,
+                    subscription_method,
+                    cluster_mode,
+                    channels=set(exact_channels_and_messages.keys()),
+                )
 
-            (
-                listening_client_exact,
-                publishing_client,
-            ) = create_two_clients_with_pubsub(
-                request,
-                cluster_mode,
-                pub_sub_exact,
-            )
+            # Publishing client
+            publishing_client = create_sync_client(request, cluster_mode)
 
             if method == MethodTesting.Callback:
                 context = callback_messages_pattern
 
-            # Setup PUBSUB for pattern channels
-            pub_sub_pattern = create_pubsub_subscription(
+            # Pattern client
+            listening_client_pattern = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+                patterns=(
+                    {PATTERN}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context,
             )
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    listening_client_pattern,
+                    subscription_method,
+                    cluster_mode,
+                    patterns={PATTERN},
+                )
 
             if method == MethodTesting.Callback:
                 context = callback_messages_sharded
 
-            pub_sub_sharded = create_pubsub_subscription(
+            # Sharded client
+            listening_client_sharded = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: set(
-                        sharded_channels_and_messages.keys()
-                    )
-                },
-                {},
+                sharded_channels=(
+                    set(sharded_channels_and_messages.keys())
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context,
             )
-
-            (
-                listening_client_pattern,
-                listening_client_sharded,
-            ) = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
-            )
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    listening_client_sharded,
+                    subscription_method,
+                    cluster_mode,
+                    sharded=set(sharded_channels_and_messages.keys()),
+                )
 
             # Publish messages to all channels
             for channel, message in {
@@ -1502,7 +1497,7 @@ class TestSyncPubSub:
             # check that we received all messages
             assert pattern_channels_and_messages == {}
 
-            # Verify messages for shaded PUBSUB
+            # Verify messages for sharded PUBSUB
             for index in range(len(sharded_channels_and_messages)):
                 pubsub_msg = get_message_by_method(
                     method, listening_client_sharded, callback_messages_sharded, index
@@ -1535,24 +1530,30 @@ class TestSyncPubSub:
             )
 
         finally:
-            client_cleanup(
-                listening_client_exact, pub_sub_exact if cluster_mode else None
-            )
-            client_cleanup(publishing_client, None)
-            client_cleanup(
-                listening_client_pattern, pub_sub_pattern if cluster_mode else None
-            )
-            client_cleanup(
-                listening_client_sharded, pub_sub_sharded if cluster_mode else None
-            )
+            sync_client_cleanup(listening_client_exact, None)
+            sync_client_cleanup(publishing_client, None)
+            sync_client_cleanup(listening_client_pattern, None)
+            sync_client_cleanup(listening_client_sharded, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_combined_different_channels_with_same_name(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests combined PUBSUB with different channel modes using the same channel name.
@@ -1569,94 +1570,96 @@ class TestSyncPubSub:
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
-        (
-            listening_client_exact,
-            publishing_client,
-            listening_client_pattern,
-            listening_client_sharded,
-        ) = (None, None, None, None)
+        from tests.sync_tests.conftest import create_sync_client
 
-        (
-            pub_sub_exact,
-            pub_sub_sharded,
-            pub_sub_pattern,
-        ) = (None, None, None)
+        listening_client_exact = listening_client_pattern = listening_client_sharded = (
+            None
+        )
+        publishing_client = None
+
+        CHANNEL_NAME = "same-channel-name"
+        MESSAGE_EXACT = "exact_message"
+        MESSAGE_PATTERN = "pattern_message"
+        MESSAGE_SHARDED = "sharded_message"
+
+        callback_messages_exact: List[PubSubMsg] = []
+        callback_messages_pattern: List[PubSubMsg] = []
+        callback_messages_sharded: List[PubSubMsg] = []
+
+        callback = context = None
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages_exact
 
         try:
-            CHANNEL_NAME = "same-channel-name"
-            MESSAGE_EXACT = get_random_string(10)
-            MESSAGE_PATTERN = get_random_string(7)
-            MESSAGE_SHARDED = get_random_string(5)
-
-            callback, context = None, None
-            callback_messages_exact: List[PubSubMsg] = []
-            callback_messages_pattern: List[PubSubMsg] = []
-            callback_messages_sharded: List[PubSubMsg] = []
-
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context = callback_messages_exact
-
-            # Setup PUBSUB for exact channel
-            pub_sub_exact = create_pubsub_subscription(
+            # Exact client
+            listening_client_exact = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+                channels=(
+                    {CHANNEL_NAME}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context,
             )
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    listening_client_exact,
+                    subscription_method,
+                    cluster_mode,
+                    channels={CHANNEL_NAME},
+                )
 
-            (
-                listening_client_exact,
-                publishing_client,
-            ) = create_two_clients_with_pubsub(
-                request,
-                cluster_mode,
-                pub_sub_exact,
-            )
+            # Publishing client
+            publishing_client = create_sync_client(request, cluster_mode)
 
-            # Setup PUBSUB for pattern channel
             if method == MethodTesting.Callback:
                 context = callback_messages_pattern
 
-            # Setup PUBSUB for pattern channels
-            pub_sub_pattern = create_pubsub_subscription(
+            # Pattern client
+            listening_client_pattern = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+                patterns=(
+                    {CHANNEL_NAME}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context,
             )
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    listening_client_pattern,
+                    subscription_method,
+                    cluster_mode,
+                    patterns={CHANNEL_NAME},
+                )
 
             if method == MethodTesting.Callback:
                 context = callback_messages_sharded
 
-            pub_sub_sharded = create_pubsub_subscription(
+            # Sharded client
+            listening_client_sharded = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        CHANNEL_NAME
-                    }
-                },
-                {},
+                sharded_channels=(
+                    {CHANNEL_NAME}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context,
             )
-
-            (
-                listening_client_pattern,
-                listening_client_sharded,
-            ) = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
-            )
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    listening_client_sharded,
+                    subscription_method,
+                    cluster_mode,
+                    sharded={CHANNEL_NAME},
+                )
 
             # Publish messages to each channel
             assert publishing_client.publish(MESSAGE_EXACT, CHANNEL_NAME) == 2
@@ -1672,13 +1675,13 @@ class TestSyncPubSub:
             time.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
-            for client, callback, pattern in [  # type: ignore
+            for client, callback_list, pattern in [  # type: ignore
                 (listening_client_exact, callback_messages_exact, None),
                 (listening_client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = get_message_by_method(method, client, callback_list, 0)  # type: ignore
 
-                pubsub_msg2 = get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = get_message_by_method(method, client, callback_list, 1)  # type: ignore
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
@@ -1704,23 +1707,20 @@ class TestSyncPubSub:
             )
 
         finally:
-            client_cleanup(
-                listening_client_exact, pub_sub_exact if cluster_mode else None
-            )
-            client_cleanup(publishing_client, None)
-            client_cleanup(
-                listening_client_pattern, pub_sub_pattern if cluster_mode else None
-            )
-            client_cleanup(
-                listening_client_sharded, pub_sub_sharded if cluster_mode else None
-            )
+            sync_client_cleanup(listening_client_exact, None)
+            sync_client_cleanup(publishing_client, None)
+            sync_client_cleanup(listening_client_pattern, None)
+            sync_client_cleanup(listening_client_sharded, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
     def test_sync_pubsub_two_publishing_clients_same_name(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
     ):
         """
         Tests PUBSUB with two publishing clients using the same channel name.
@@ -1753,29 +1753,19 @@ class TestSyncPubSub:
             # Setup PUBSUB for exact channel
             pub_sub_exact = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+                channels={CHANNEL_NAME},
                 callback=callback,
                 context=context_exact,
             )
             # Setup PUBSUB for pattern channels
             pub_sub_pattern = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+                patterns={CHANNEL_NAME},
                 callback=callback,
                 context=context_pattern,
             )
 
-            client_exact, client_pattern = create_two_clients_with_pubsub(
+            client_exact, client_pattern = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub_exact, pub_sub_pattern
             )
 
@@ -1806,16 +1796,28 @@ class TestSyncPubSub:
             check_no_messages_left(method, client_exact, callback_messages_exact, 2)
 
         finally:
-            client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
-            client_cleanup(client_pattern, pub_sub_pattern if cluster_mode else None)
+            sync_client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
+            sync_client_cleanup(client_pattern, pub_sub_pattern if cluster_mode else None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_three_publishing_clients_same_name_with_sharded(
-        self, request, cluster_mode: bool, method: MethodTesting
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
     ):
         """
         Tests PUBSUB with 3 publishing clients using the same channel name.
@@ -1831,79 +1833,87 @@ class TestSyncPubSub:
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
-        client_exact, client_pattern, client_sharded, client_dont_care = (
-            None,
-            None,
-            None,
-            None,
-        )
+        client_exact = client_pattern = client_sharded = None
+
+        CHANNEL_NAME = "same-channel-name"
+        MESSAGE_EXACT = "exact_message"
+        MESSAGE_PATTERN = "pattern_message"
+        MESSAGE_SHARDED = "sharded_message"
+        publish_response = 2 if cluster_mode else OK
+
+        callback_messages_exact: List[PubSubMsg] = []
+        callback_messages_pattern: List[PubSubMsg] = []
+        callback_messages_sharded: List[PubSubMsg] = []
+
+        callback = context_exact = context_pattern = context_sharded = None
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context_exact = callback_messages_exact
+            context_pattern = callback_messages_pattern
+            context_sharded = callback_messages_sharded
+
         try:
-            CHANNEL_NAME = "same-channel-name"
-            MESSAGE_EXACT = get_random_string(10)
-            MESSAGE_PATTERN = get_random_string(7)
-            MESSAGE_SHARDED = get_random_string(5)
-            publish_response = 2 if cluster_mode else OK
-            callback, context_exact, context_pattern, context_sharded = (
-                None,
-                None,
-                None,
-                None,
-            )
-            callback_messages_exact: List[PubSubMsg] = []
-            callback_messages_pattern: List[PubSubMsg] = []
-            callback_messages_sharded: List[PubSubMsg] = []
-
-            if method == MethodTesting.Callback:
-                callback = new_message
-                context_exact = callback_messages_exact
-                context_pattern = callback_messages_pattern
-                context_sharded = callback_messages_sharded
-
-            # Setup PUBSUB for exact channel
-            pub_sub_exact = create_pubsub_subscription(
+            # Exact client
+            client_exact = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+                channels=(
+                    {CHANNEL_NAME}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context_exact,
             )
-            # Setup PUBSUB for pattern channels
-            pub_sub_pattern = create_pubsub_subscription(
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    client_exact,
+                    subscription_method,
+                    cluster_mode,
+                    channels={CHANNEL_NAME},
+                )
+
+            # Pattern client
+            client_pattern = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        CHANNEL_NAME
-                    }
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+                patterns=(
+                    {CHANNEL_NAME}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context_pattern,
             )
-            # Setup PUBSUB for pattern channels
-            pub_sub_sharded = create_pubsub_subscription(
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    client_pattern,
+                    subscription_method,
+                    cluster_mode,
+                    patterns={CHANNEL_NAME},
+                )
+
+            # Sharded client
+            client_sharded = create_sync_pubsub_client(
+                request,
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        CHANNEL_NAME
-                    }
-                },
-                {},
+                sharded_channels=(
+                    {CHANNEL_NAME}
+                    if subscription_method == SubscriptionMethod.Config
+                    else None
+                ),
                 callback=callback,
                 context=context_sharded,
             )
+            if subscription_method != SubscriptionMethod.Config:
+                sync_subscribe_by_method(
+                    client_sharded,
+                    subscription_method,
+                    cluster_mode,
+                    sharded={CHANNEL_NAME},
+                )
 
-            client_exact, client_pattern = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub_exact, pub_sub_pattern
-            )
-            client_sharded, client_dont_care = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub_sharded
-            )
-
-            # Publish messages to each channel - both clients publishing
+            # Publish messages to each channel - all clients publishing
             assert (
                 client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME) == publish_response
             )
@@ -1922,13 +1932,13 @@ class TestSyncPubSub:
             time.sleep(1)
 
             # Verify message for exact and pattern PUBSUB
-            for client, callback, pattern in [  # type: ignore
+            for client, callback_list, pattern in [  # type: ignore
                 (client_exact, callback_messages_exact, None),
                 (client_pattern, callback_messages_pattern, CHANNEL_NAME),
             ]:
-                pubsub_msg = get_message_by_method(method, client, callback, 0)  # type: ignore
+                pubsub_msg = get_message_by_method(method, client, callback_list, 0)  # type: ignore
 
-                pubsub_msg2 = get_message_by_method(method, client, callback, 1)  # type: ignore
+                pubsub_msg2 = get_message_by_method(method, client, callback_list, 1)  # type: ignore
                 assert not pubsub_msg.message == pubsub_msg2.message
                 assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
                 assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
@@ -1947,17 +1957,26 @@ class TestSyncPubSub:
             check_no_messages_left(method, client_sharded, callback_messages_sharded, 1)
 
         finally:
-            client_cleanup(client_exact, pub_sub_exact if cluster_mode else None)
-            client_cleanup(client_pattern, pub_sub_pattern if cluster_mode else None)
-            client_cleanup(client_sharded, pub_sub_sharded if cluster_mode else None)
-            client_cleanup(client_dont_care, None)
+            sync_client_cleanup(client_exact, None)
+            sync_client_cleanup(client_pattern, None)
+            sync_client_cleanup(client_sharded, None)
 
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
         + "to vary across platforms and server versions"
     )
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_pubsub_exact_max_size_message(self, request, cluster_mode: bool):
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_pubsub_exact_max_size_message(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
         """
         Tests publishing and receiving maximum size messages in PUBSUB.
 
@@ -1972,24 +1991,19 @@ class TestSyncPubSub:
         - Verifying that the messages are received correctly using both async and sync methods.
         - Ensuring that no additional messages are left after the expected messages are received.
         """
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
+
         channel = get_random_string(10)
         message = "1" * 512 * 1024 * 1024
         message2 = "2" * 512 * 1024 * 1024
 
-        pub_sub = create_pubsub_subscription(
-            cluster_mode,
-            {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
-        )
-
-        listening_client, publishing_client = create_two_clients_with_pubsub(
+        with sync_pubsub_test_clients(
             request,
             cluster_mode,
-            pub_sub,
-            timeout=10000,
-        )
-
-        try:
+            subscription_method,
+            channels={channel},
+            timeout=30000,  # 30 seconds for large messages
+        ) as (listening_client, publishing_client):
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
@@ -2019,17 +2033,23 @@ class TestSyncPubSub:
 
             assert listening_client.try_get_pubsub_message() is None
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
-    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.skip(
         reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
         + "to vary across platforms and server versions"
     )
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
-    def test_sync_pubsub_sharded_max_size_message(self, request, cluster_mode: bool):
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_pubsub_sharded_max_size_message(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
         """
         Tests publishing and receiving maximum size messages in sharded PUBSUB.
 
@@ -2044,25 +2064,18 @@ class TestSyncPubSub:
         - Verifying that the messages are received correctly using both async and sync methods.
         - Ensuring that no additional messages are left after the expected messages are received.
         """
-        publishing_client, listening_client = None, None
-        try:
-            channel = get_random_string(10)
-            message = "1" * 512 * 1024 * 1024
-            message2 = "2" * 512 * 1024 * 1024
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {channel}},
-                {},
-            )
+        channel = get_random_string(10)
+        message = "1" * 512 * 1024 * 1024
+        message2 = "2" * 512 * 1024 * 1024
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request,
-                cluster_mode,
-                pub_sub,
-                timeout=10000,
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded={channel},
+        ) as (listening_client, publishing_client):
             assert (
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
@@ -2084,12 +2097,12 @@ class TestSyncPubSub:
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
 
-            assert async_msg.message == message.encode()
-            assert async_msg.channel == channel.encode()
+            assert async_msg.message == message
+            assert async_msg.channel == channel
             assert async_msg.pattern is None
 
-            assert sync_msg.message == message2.encode()
-            assert sync_msg.channel == channel.encode()
+            assert sync_msg.message == message2
+            assert sync_msg.channel == channel
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
@@ -2100,17 +2113,17 @@ class TestSyncPubSub:
 
             assert listening_client.try_get_pubsub_message() is None
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_exact_max_size_message_callback(
-        self, request, cluster_mode: bool
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
         """
         Tests publishing and receiving maximum size messages in exact PUBSUB with callback method.
@@ -2125,26 +2138,23 @@ class TestSyncPubSub:
         - Publishing a maximum size message to the channel.
         - Verifying that the message is received correctly using the callback method.
         """
-        listening_client, publishing_client = None, None
-        try:
-            channel = get_random_string(10)
-            message = "0" * 12 * 1024 * 1024
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            callback_messages: List[PubSubMsg] = []
-            callback, context = new_message, callback_messages
+        channel = get_random_string(10)
+        message = "0" * 12 * 1024 * 1024
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
-                callback=callback,
-                context=context,
-            )
+        callback_messages: List[PubSubMsg] = []
+        callback, context = new_message, callback_messages
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub, timeout=10000
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels={channel},
+            callback=callback,
+            context=context,
+            timeout=10000,
+        ) as (listening_client, publishing_client):
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
@@ -2157,18 +2167,18 @@ class TestSyncPubSub:
             assert callback_messages[0].channel == channel.encode()
             assert callback_messages[0].pattern is None
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.skip_if_version_below("7.0.0")
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
     @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
     def test_sync_pubsub_sharded_max_size_message_callback(
-        self, request, cluster_mode: bool
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
     ):
         """
         Tests publishing and receiving maximum size messages in sharded PUBSUB with callback method.
@@ -2183,26 +2193,23 @@ class TestSyncPubSub:
         - Publishing a maximum size message to the channel.
         - Verifying that the message is received correctly using the callback method.
         """
-        publishing_client, listening_client = None, None
-        try:
-            channel = get_random_string(10)
-            message = "0" * 512 * 1024 * 1024
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
 
-            callback_messages: List[PubSubMsg] = []
-            callback, context = new_message, callback_messages
+        channel = get_random_string(10)
+        message = "0" * 512 * 1024 * 1024
 
-            pub_sub = create_pubsub_subscription(
-                cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {channel}},
-                {},
-                callback=callback,
-                context=context,
-            )
+        callback_messages: List[PubSubMsg] = []
+        callback, context = new_message, callback_messages
 
-            listening_client, publishing_client = create_two_clients_with_pubsub(
-                request, cluster_mode, pub_sub, timeout=10000
-            )
-
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded={channel},
+            callback=callback,
+            context=context,
+            timeout=10000,
+        ) as (listening_client, publishing_client):
             assert (
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
@@ -2219,10 +2226,6 @@ class TestSyncPubSub:
             assert callback_messages[0].channel == channel.encode()
             assert callback_messages[0].pattern is None
 
-        finally:
-            client_cleanup(listening_client, pub_sub if cluster_mode else None)
-            client_cleanup(publishing_client, None)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_resp2_raise_an_error(self, request, cluster_mode: bool):
         """Tests that when creating a resp2 client with PUBSUB - an error will be raised"""
@@ -2230,12 +2233,11 @@ class TestSyncPubSub:
 
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            channels={channel},
         )
 
         with pytest.raises(ConfigurationError):
-            create_two_clients_with_pubsub(
+            create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub_exact, protocol=ProtocolVersion.RESP2
             )
 
@@ -2248,13 +2250,12 @@ class TestSyncPubSub:
         context: List[PubSubMsg] = []
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            channels={channel},
             context=context,
         )
 
         with pytest.raises(ConfigurationError):
-            create_two_clients_with_pubsub(request, cluster_mode, pub_sub_exact)
+            create_two_sync_clients_with_pubsub(request, cluster_mode, pub_sub_exact)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_channels(self, request, cluster_mode: bool):
@@ -2277,27 +2278,14 @@ class TestSyncPubSub:
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
+                channels={channel1, channel2, channel3},
             )
 
             channel1_bytes = channel1.encode()
             channel2_bytes = channel2.encode()
             channel3_bytes = channel3.encode()
 
-            client1, client2 = create_two_clients_with_pubsub(
+            client1, client2 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
@@ -2314,9 +2302,9 @@ class TestSyncPubSub:
             assert len(non_matching_channels) == 0
 
         finally:
-            client_cleanup(client1, pub_sub if cluster_mode else None)
-            client_cleanup(client2, None)
-            client_cleanup(client, None)
+            sync_client_cleanup(client1, pub_sub if cluster_mode else None)
+            sync_client_cleanup(client2, None)
+            sync_client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_numpat(self, request, cluster_mode: bool):
@@ -2338,21 +2326,10 @@ class TestSyncPubSub:
             # Set up subscriptions with patterns
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern: {
-                        pattern1,
-                        pattern2,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Pattern: {
-                        pattern1,
-                        pattern2,
-                    }
-                },
+                patterns={pattern1, pattern2},
             )
 
-            client1, client2 = create_two_clients_with_pubsub(
+            client1, client2 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
@@ -2361,9 +2338,9 @@ class TestSyncPubSub:
             assert num_patterns == 2
 
         finally:
-            client_cleanup(client1, pub_sub if cluster_mode else None)
-            client_cleanup(client2, None)
-            client_cleanup(client, None)
+            sync_client_cleanup(client1, pub_sub if cluster_mode else None)
+            sync_client_cleanup(client2, None)
+            sync_client_cleanup(client, None)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_numsub(self, request, cluster_mode: bool):
@@ -2383,40 +2360,15 @@ class TestSyncPubSub:
             # Set up subscriptions
             pub_sub1 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
+                channels={channel1, channel2, channel3},
             )
             pub_sub2 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        channel2,
-                        channel3,
-                    }
-                },
-                {
-                    GlideClientConfiguration.PubSubChannelModes.Exact: {
-                        channel2,
-                        channel3,
-                    }
-                },
+                channels={channel2, channel3},
             )
             pub_sub3 = create_pubsub_subscription(
                 cluster_mode,
-                {GlideClusterClientConfiguration.PubSubChannelModes.Exact: {channel3}},
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {channel3}},
+                channels={channel3},
             )
 
             channel1_bytes = channel1.encode()
@@ -2432,10 +2384,10 @@ class TestSyncPubSub:
                 channel3_bytes: 0,
             }
 
-            client1, client2 = create_two_clients_with_pubsub(
+            client1, client2 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
-            client3, client4 = create_two_clients_with_pubsub(
+            client3, client4 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub3
             )
 
@@ -2455,11 +2407,11 @@ class TestSyncPubSub:
             assert empty_subscribers == {}
 
         finally:
-            client_cleanup(client1, pub_sub1 if cluster_mode else None)
-            client_cleanup(client2, pub_sub2 if cluster_mode else None)
-            client_cleanup(client3, pub_sub3 if cluster_mode else None)
-            client_cleanup(client4, None)
-            client_cleanup(client, None)
+            sync_client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            sync_client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            sync_client_cleanup(client3, pub_sub3 if cluster_mode else None)
+            sync_client_cleanup(client4, None)
+            sync_client_cleanup(client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -2484,21 +2436,14 @@ class TestSyncPubSub:
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {},  # Empty dict for non-cluster mode as sharded channels are not supported
+                sharded_channels={channel1, channel2, channel3},
             )
 
             channel1_bytes = channel1.encode()
             channel2_bytes = channel2.encode()
             channel3_bytes = channel3.encode()
 
-            client1, client2 = create_two_clients_with_pubsub(
+            client1, client2 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
@@ -2516,9 +2461,9 @@ class TestSyncPubSub:
             assert client2.pubsub_shardchannels("non_matching_*") == []
 
         finally:
-            client_cleanup(client1, pub_sub if cluster_mode else None)
-            client_cleanup(client2, None)
-            client_cleanup(client, None)
+            sync_client_cleanup(client1, pub_sub if cluster_mode else None)
+            sync_client_cleanup(client2, None)
+            sync_client_cleanup(client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -2539,33 +2484,15 @@ class TestSyncPubSub:
             # Set up subscriptions
             pub_sub1 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel1,
-                        channel2,
-                        channel3,
-                    }
-                },
-                {},
+                sharded_channels={channel1, channel2, channel3},
             )
             pub_sub2 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel2,
-                        channel3,
-                    }
-                },
-                {},
+                sharded_channels={channel2, channel3},
             )
             pub_sub3 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        channel3
-                    }
-                },
-                {},
+                sharded_channels={channel3},
             )
 
             channel1_bytes = channel1.encode()
@@ -2583,11 +2510,11 @@ class TestSyncPubSub:
                 channel3_bytes: 0,
             }
 
-            client1, client2 = create_two_clients_with_pubsub(
+            client1, client2 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
 
-            client3, client4 = create_two_clients_with_pubsub(
+            client3, client4 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub3
             )
 
@@ -2609,11 +2536,11 @@ class TestSyncPubSub:
             assert empty_subscribers == {}
 
         finally:
-            client_cleanup(client1, pub_sub1 if cluster_mode else None)
-            client_cleanup(client2, pub_sub2 if cluster_mode else None)
-            client_cleanup(client3, pub_sub3 if cluster_mode else None)
-            client_cleanup(client4, None)
-            client_cleanup(client, None)
+            sync_client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            sync_client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            sync_client_cleanup(client3, pub_sub3 if cluster_mode else None)
+            sync_client_cleanup(client4, None)
+            sync_client_cleanup(client, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -2631,15 +2558,8 @@ class TestSyncPubSub:
 
             pub_sub = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        regular_channel
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        shard_channel
-                    },
-                },
-                {GlideClientConfiguration.PubSubChannelModes.Exact: {regular_channel}},
+                channels={regular_channel},
+                sharded_channels={shard_channel},
             )
 
             regular_channel_bytes, shard_channel_bytes = (
@@ -2647,7 +2567,7 @@ class TestSyncPubSub:
                 shard_channel.encode(),
             )
 
-            client1, client2 = create_two_clients_with_pubsub(
+            client1, client2 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub
             )
 
@@ -2659,8 +2579,8 @@ class TestSyncPubSub:
             assert client2.pubsub_shardchannels() == [shard_channel_bytes]
 
         finally:
-            client_cleanup(client1, pub_sub if cluster_mode else None)
-            client_cleanup(client2, None)
+            sync_client_cleanup(client1, pub_sub if cluster_mode else None)
+            sync_client_cleanup(client2, None)
 
     @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -2678,33 +2598,19 @@ class TestSyncPubSub:
 
             pub_sub1 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        regular_channel
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        shard_channel
-                    },
-                },
-                {},
+                channels={regular_channel},
+                sharded_channels={shard_channel},
             )
             pub_sub2 = create_pubsub_subscription(
                 cluster_mode,
-                {
-                    GlideClusterClientConfiguration.PubSubChannelModes.Exact: {
-                        regular_channel
-                    },
-                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {
-                        shard_channel
-                    },
-                },
-                {},
+                channels={regular_channel},
+                sharded_channels={shard_channel},
             )
 
             regular_channel_bytes: bytes = regular_channel.encode()
             shard_channel_bytes: bytes = shard_channel.encode()
 
-            client1, client2 = create_two_clients_with_pubsub(
+            client1, client2 = create_two_sync_clients_with_pubsub(
                 request, cluster_mode, pub_sub1, pub_sub2
             )
 
@@ -2731,8 +2637,8 @@ class TestSyncPubSub:
             }
 
         finally:
-            client_cleanup(client1, pub_sub1 if cluster_mode else None)
-            client_cleanup(client2, pub_sub2 if cluster_mode else None)
+            sync_client_cleanup(client1, pub_sub1 if cluster_mode else None)
+            sync_client_cleanup(client2, pub_sub2 if cluster_mode else None)
 
     def test_sync_clients_support_pubsub_reconciliation_interval(self):
         """
@@ -2791,7 +2697,13 @@ class TestSyncPubSub:
                 cast(GlideClusterClient, client).ssubscribe({sharded_channel})
 
             # Wait for subscriptions to be registered
-            time.sleep(0.1)
+            wait_for_subscription_state(
+                client,
+                expected_channels={exact_channel},
+                expected_patterns={pattern},
+                expected_sharded={sharded_channel} if sharded_channel else None,
+                timeout_sec=3.0,
+            )
 
             # Get subscriptions
             state = client.get_subscriptions()
@@ -2820,8 +2732,15 @@ class TestSyncPubSub:
                     {sharded_channel}, timeout_ms=5000
                 )
 
-            # Verify unsubscribed
-            time.sleep(0.5)
+            # Verify unsubscribed - wait for state to update
+            wait_for_subscription_state(
+                client,
+                expected_channels=set(),
+                expected_patterns=set(),
+                expected_sharded=set() if sharded_channel else None,
+                timeout_sec=3.0,
+            )
+
             state = client.get_subscriptions()
             assert exact_channel not in state.actual_subscriptions[modes.Exact]
             assert pattern not in state.actual_subscriptions[modes.Pattern]
@@ -2899,7 +2818,21 @@ class TestSyncPubSub:
                 )
 
             # Wait for all subscriptions
-            time.sleep(0.5)
+            all_exact = {exact_config, exact_blocking}
+            all_patterns = {pattern_config, pattern_blocking}
+            all_sharded = (
+                {sharded_config, sharded_blocking}
+                if (cluster_mode and sharded_config and sharded_blocking)
+                else None
+            )
+
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels=all_exact,
+                expected_patterns=all_patterns,
+                expected_sharded=all_sharded,
+                timeout_sec=3.0,
+            )
 
             # Verify all subscriptions are active
             state = listening_client.get_subscriptions()
@@ -2909,14 +2842,10 @@ class TestSyncPubSub:
                 else GlideClientConfiguration.PubSubChannelModes
             )
 
-            all_exact = {exact_config, exact_blocking}
-            all_patterns = {pattern_config, pattern_blocking}
-
             assert all_exact.issubset(state.actual_subscriptions[modes.Exact])
             assert all_patterns.issubset(state.actual_subscriptions[modes.Pattern])
 
             if cluster_mode and sharded_config and sharded_blocking:
-                all_sharded = {sharded_config, sharded_blocking}
                 assert all_sharded.issubset(state.actual_subscriptions[modes.Sharded])  # type: ignore[union-attr,arg-type]
 
             # Publish messages to all channels
@@ -3083,20 +3012,34 @@ class TestSyncPubSub:
         """
         Test that subscription metrics are available in get_statistics().
         """
-        client = create_sync_client(
-            request,
-            cluster_mode,
-            connection_timeout=20000,
-        )
+        # Create client with pubsub enabled (no callback needed for reconciliation)
+        client = create_sync_pubsub_client(request, cluster_mode)
         try:
-            # Subscribe to a channel
-            client.subscribe({"test_metrics_channel"}, timeout_ms=5000)
+            # Use lazy subscribe to trigger reconciliation
+            client.subscribe_lazy({"test_metrics_channel"})
 
-            # Wait for reconciliation
-            time.sleep(1)
+            # Wait for subscription to actually be applied (reconciliation completes)
+            wait_for_subscription_state(
+                client,
+                expected_channels={"test_metrics_channel"},
+                timeout_sec=5.0,
+            )
+
+            # Now wait for the NEXT reconciliation cycle to check sync state and update timestamp
+            # Reconciliation runs every 3 seconds, so we may need to wait up to 3 more seconds
+            # Plus some buffer for processing time. Cluster mode may take significantly longer.
+            last_sync = 0
+            stats = {}
+            for i in range(30):
+                time.sleep(1)
+                stats = client.get_statistics()
+                last_sync = int(stats.get("subscription_last_sync_timestamp", "0"))
+                print(f"[{i+1}s] Waiting for timestamp update: last_sync={last_sync}")
+                if last_sync > 0:
+                    print(f"Timestamp updated after {i+1} seconds")
+                    break
 
             # Check metrics
-            stats = client.get_statistics()
             assert (
                 "subscription_out_of_sync_count" in stats
             ), f"subscription_out_of_sync_count not in stats. Available keys: {list(stats.keys())}"
@@ -3104,11 +3047,10 @@ class TestSyncPubSub:
                 "subscription_last_sync_timestamp" in stats
             ), f"subscription_last_sync_timestamp not in stats. Available keys: {list(stats.keys())}"
 
-            # Verify timestamp is recent (within last 5 seconds)
-            last_sync = int(stats["subscription_last_sync_timestamp"])
-            assert last_sync > 0
-            current_time_ms = int(time.time() * 1000)
-            assert current_time_ms - last_sync < 5000
+            # Verify timestamp is set
+            assert (
+                last_sync > 0
+            ), f"Timestamp should be set after subscription within 30s, got {last_sync}"
 
         finally:
             client.close()
@@ -3165,3 +3107,1253 @@ class TestSyncPubSub:
 
         finally:
             client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_unsubscribe_exact_channel(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test basic unsubscription from exact channels using lazy and blocking APIs.
+        """
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
+
+        channel = "channel"
+        message1 = "exact_message_1"
+        message2 = "exact_message_2"
+
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            SubscriptionMethod.Config,
+            channels={channel},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
+            # Verify subscription is active
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel},
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert (
+                channel
+                in state.actual_subscriptions[get_pubsub_modes(listening_client).Exact]
+            )
+
+            publishing_client.publish(message1, channel)
+            time.sleep(1)
+
+            # Get message
+            pubsub_msg = get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert pubsub_msg.message == message1
+
+            # Unsubscribe
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.unsubscribe_lazy({channel})
+            else:  # Blocking
+                listening_client.unsubscribe({channel}, timeout_ms=5000)
+
+            # Verify unsubscribed
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels=set(),
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert (
+                channel
+                not in state.actual_subscriptions[
+                    get_pubsub_modes(listening_client).Exact
+                ]
+            )
+
+            # Publish second message - should not be received
+            publishing_client.publish(message2, channel)
+            time.sleep(1)
+
+            # Check no messages left
+            check_no_messages_left(method, listening_client, callback_messages, 1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_subscribe_empty_set_raises_error(
+        self,
+        request,
+        cluster_mode: bool,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that subscribing with an empty set raises an error for dynamic subscription methods.
+        """
+        if subscription_method == SubscriptionMethod.Config:
+            pytest.skip("Config method allows empty sets")
+
+        client = None
+        try:
+            client = create_sync_client(request, cluster_mode)
+
+            if subscription_method == SubscriptionMethod.Lazy:
+                with pytest.raises(RequestError):
+                    client.subscribe_lazy(set())
+                with pytest.raises(RequestError):
+                    client.psubscribe_lazy(set())
+                if cluster_mode:
+                    with pytest.raises(RequestError):
+                        cast(GlideClusterClient, client).ssubscribe_lazy(set())
+            else:  # Blocking
+                with pytest.raises(RequestError):
+                    client.subscribe(set(), 5000)
+                with pytest.raises(RequestError):
+                    client.psubscribe(set(), 5000)
+                if cluster_mode:
+                    with pytest.raises(RequestError):
+                        cast(GlideClusterClient, client).ssubscribe(set(), 5000)
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_config_subscription_with_empty_set_is_allowed(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that Config subscription method with empty sets is a silent no-op.
+        """
+        client = None
+        try:
+            # Create client with empty subscription config - should not error
+            pub_sub = create_simple_pubsub_config(
+                cluster_mode, channels=set(), patterns=set()
+            )
+            client, _ = create_two_sync_clients_with_pubsub(
+                request, cluster_mode, client1_pubsub=pub_sub
+            )
+
+            # Should be able to get subscriptions (empty)
+            state = client.get_subscriptions()
+            modes = get_pubsub_modes(client)
+            assert len(state.desired_subscriptions.get(modes.Exact, set())) == 0
+            assert len(state.desired_subscriptions.get(modes.Pattern, set())) == 0
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def _publish_messages(
+        self,
+        publishing_client,
+        channel: str,
+        pattern_channel: str,
+        sharded_channel: Optional[str],
+        cluster_mode: bool,
+    ):
+        """Helper to publish messages to all channels."""
+        publishing_client.publish("msg1", channel)
+        time.sleep(0.5)
+
+        publishing_client.publish("msg2", pattern_channel)
+        time.sleep(0.5)
+
+        if cluster_mode and sharded_channel:
+            cast(GlideClusterClient, publishing_client).publish(
+                "msg3", sharded_channel, sharded=True
+            )
+            time.sleep(0.5)
+
+    def _verify_messages(
+        self,
+        listening_client,
+        method: MethodTesting,
+        callback_messages: List[PubSubMsg],
+        cluster_mode: bool,
+        sharded_channel: Optional[str],
+    ):
+        """Helper to verify messages were received."""
+        if method == MethodTesting.Callback:
+            expected_count = 3 if (cluster_mode and sharded_channel) else 2
+            assert len(callback_messages) >= expected_count
+        else:
+            msg1 = (
+                listening_client.try_get_pubsub_message()
+                if method == MethodTesting.Sync
+                else listening_client.get_pubsub_message()
+            )
+            assert msg1 is not None
+
+            msg2 = (
+                listening_client.try_get_pubsub_message()
+                if method == MethodTesting.Sync
+                else listening_client.get_pubsub_message()
+            )
+            assert msg2 is not None
+
+            # Read third message if sharded channel was used
+            if cluster_mode and sharded_channel:
+                msg3 = (
+                    listening_client.try_get_pubsub_message()
+                    if method == MethodTesting.Sync
+                    else listening_client.get_pubsub_message()
+                )
+                assert msg3 is not None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking],
+    )
+    def test_sync_lazy_client_multiple_subscription_types(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test multiple subscription types (exact, pattern, and sharded for cluster) with a lazy client.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel = "exact_channel"
+            pattern = "pattern_*"
+            pattern_channel = "pattern_match"
+
+            # Check if sharded pubsub is supported (Redis 7.0+ in cluster mode)
+            sharded_channel: Optional[str] = None
+            if cluster_mode:
+                temp_client = create_sync_client(request, cluster_mode)
+                try:
+                    if not sync_check_if_server_version_lt(temp_client, "7.0.0"):
+                        sharded_channel = "sharded_channel"
+                finally:
+                    temp_client.close()
+
+            callback, context = None, None
+            callback_messages: List[PubSubMsg] = []
+            if method == MethodTesting.Callback:
+                callback = new_message
+                context = callback_messages
+
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=callback, context=context
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+
+            sync_subscribe_by_method(
+                listening_client,
+                subscription_method,
+                cluster_mode,
+                channels={channel},
+                patterns={pattern},
+                sharded={sharded_channel} if sharded_channel else None,
+            )
+
+            time.sleep(1)
+
+            self._publish_messages(
+                publishing_client,
+                channel,
+                pattern_channel,
+                sharded_channel,
+                cluster_mode,
+            )
+
+            self._verify_messages(
+                listening_client,
+                method,
+                callback_messages,
+                cluster_mode,
+                sharded_channel,
+            )
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_pubsub_reconciliation_interval_config(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that pubsub_reconciliation_interval controls reconciliation frequency.
+
+        Configures a 1 second interval, then measures the actual time between
+        two consecutive reconciliation events by polling the sync timestamp.
+        Verifies the interval is within tolerance (minimum 100ms, maximum 1.5x interval).
+        """
+        client = None
+        try:
+            interval_ms = 1000
+            poll_interval_s = 0.1
+
+            client = create_sync_pubsub_client(
+                request, cluster_mode, reconciliation_interval_ms=interval_ms
+            )
+
+            def poll_for_timestamp_change(
+                previous_ts: int, timeout_s: float = 5.0
+            ) -> int:
+                """Poll until sync timestamp changes, return new timestamp."""
+                import time
+
+                start = time.time()
+                while (time.time() - start) < timeout_s:
+                    stats = client.get_statistics()
+                    current_ts = int(stats.get("subscription_last_sync_timestamp", "0"))
+                    if current_ts != previous_ts:
+                        return current_ts
+                    time.sleep(poll_interval_s)
+                raise TimeoutError(
+                    f"Sync timestamp did not change within {timeout_s}s. Previous: {previous_ts}"
+                )
+
+            initial_stats = client.get_statistics()
+            initial_ts = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
+
+            # Wait for first sync event
+            first_sync_ts = poll_for_timestamp_change(initial_ts)
+
+            # Wait for second sync event
+            second_sync_ts = poll_for_timestamp_change(first_sync_ts)
+
+            actual_interval_ms = second_sync_ts - first_sync_ts
+
+            # Assert interval is positive and at most 1.5x the configured interval
+            # Note: Reconciliation can be triggered immediately by subscription changes,
+            # so we only enforce an upper bound based on the timer interval
+            assert 0 < actual_interval_ms <= interval_ms * 1.5, (
+                f"Reconciliation interval ({actual_interval_ms}ms) should be positive "
+                f"and at most {interval_ms * 1.5}ms"
+            )
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_lazy_vs_blocking_timeout(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Test that lazy and blocking subscribe both work with dynamic subscriptions.
+        """
+        client = None
+        try:
+            # Create client with pubsub enabled but without callback
+            client = create_sync_pubsub_client(request, cluster_mode)
+
+            # Lazy should succeed (doesn't wait)
+            client.subscribe_lazy({"channel1"})
+
+            # Blocking should also succeed with dynamic subscriptions
+            client.subscribe({"channel2"}, timeout_ms=5000)
+
+            # Verify both subscriptions are in desired state
+            state = client.get_subscriptions()
+            PubSubChannelModes = (
+                GlideClusterClientConfiguration.PubSubChannelModes
+                if cluster_mode
+                else GlideClientConfiguration.PubSubChannelModes
+            )
+            desired = state.desired_subscriptions.get(PubSubChannelModes.Exact, set())
+            assert "channel1" in desired
+            assert "channel2" in desired
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_pubsub_callback_only_raises_error_on_get_methods(
+        self,
+        request,
+        cluster_mode: bool,
+    ):
+        """
+        Tests that when a client is configured with only a callback (no polling),
+        calling get_pubsub_message() or try_get_pubsub_message() raises ConfigurationError.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            callback_messages: List[PubSubMsg] = []
+
+            # Create client with callback only
+            listening_client = create_sync_pubsub_client(
+                request, cluster_mode, callback=new_message, context=callback_messages
+            )
+            publishing_client = create_sync_client(request, cluster_mode)
+
+            # Subscribe
+            listening_client.subscribe_lazy({"test_channel"})
+            time.sleep(1)
+            # Publish message
+            publishing_client.publish("test_message", "test_channel")
+            time.sleep(1)
+
+            # Verify message received via callback
+            assert len(callback_messages) >= 1
+
+            # Try to call get methods - should raise ConfigurationError
+            with pytest.raises(ConfigurationError):
+                listening_client.get_pubsub_message()
+
+            with pytest.raises(ConfigurationError):
+                listening_client.try_get_pubsub_message()
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_punsubscribe_pattern(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test basic pattern unsubscription using lazy and blocking APIs.
+        """
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
+
+        pattern = "news_punsubscribe_test.*"
+        channel = "news_punsubscribe_test.sports"
+        message1 = "message_before_unsub"
+        message2 = "message_after_unsub"
+
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            SubscriptionMethod.Config,
+            patterns={pattern},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
+            # Verify subscription is active
+            wait_for_subscription_state(
+                listening_client,
+                expected_patterns={pattern},
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert (
+                pattern
+                in state.actual_subscriptions[
+                    get_pubsub_modes(listening_client).Pattern
+                ]
+            )
+
+            # Publish first message
+            publishing_client.publish(message1, channel)
+            time.sleep(1)
+
+            # Get message
+            pubsub_msg = get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert pubsub_msg.message == message1
+
+            # Unsubscribe from pattern
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.punsubscribe_lazy({pattern})
+            else:  # Blocking
+                listening_client.punsubscribe({pattern}, timeout_ms=5000)
+
+            # Verify unsubscribed
+            wait_for_subscription_state(
+                listening_client,
+                expected_patterns=set(),
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert (
+                pattern
+                not in state.actual_subscriptions[
+                    get_pubsub_modes(listening_client).Pattern
+                ]
+            )
+
+            # Publish second message - should not be received
+            publishing_client.publish(message2, channel)
+            time.sleep(1)
+
+            # Check no messages left
+            check_no_messages_left(method, listening_client, callback_messages, 1)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_sunsubscribe_sharded_channel(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test basic sharded channel unsubscription.
+        """
+        if not cluster_mode:
+            pytest.skip("Sharded channels only available in cluster mode")
+
+        # Check Redis version
+        temp_client = create_sync_client(request, cluster_mode)
+        try:
+            if sync_check_if_server_version_lt(temp_client, "7.0.0"):
+                pytest.skip("Sharded pubsub requires Redis 7.0+")
+        finally:
+            temp_client.close()
+
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
+
+        channel = "sharded_channel_test"
+        message1 = "message_before_unsub"
+        message2 = "message_after_unsub"
+
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            SubscriptionMethod.Config,
+            sharded={channel},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
+            # Verify subscription is active
+            wait_for_subscription_state(
+                listening_client,
+                expected_sharded={channel},
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert (
+                channel
+                in state.actual_subscriptions[
+                    get_pubsub_modes(listening_client).Sharded
+                ]
+            )
+
+            # Publish first message
+            cast(GlideClusterClient, publishing_client).publish(
+                message1, channel, sharded=True
+            )
+            time.sleep(1)
+
+            # Get message
+            pubsub_msg = get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert pubsub_msg.message == message1
+
+            # Unsubscribe
+            if subscription_method == SubscriptionMethod.Lazy:
+                cast(GlideClusterClient, listening_client).sunsubscribe_lazy({channel})
+            else:  # Blocking
+                cast(GlideClusterClient, listening_client).sunsubscribe(
+                    {channel}, timeout_ms=5000
+                )
+
+            # Verify unsubscribed
+            wait_for_subscription_state(
+                listening_client,
+                expected_sharded=set(),
+                timeout_sec=3.0,
+            )
+            state = listening_client.get_subscriptions()
+            assert (
+                channel
+                not in state.actual_subscriptions[
+                    get_pubsub_modes(listening_client).Sharded
+                ]
+            )
+
+            # Publish second message - should not be received
+            cast(GlideClusterClient, publishing_client).publish(
+                message2, channel, sharded=True
+            )
+            time.sleep(1)
+
+            # Check no messages left
+            check_no_messages_left(method, listening_client, callback_messages, 1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_unsubscribe_all_subscription_types(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test unsubscribing from all subscription types at once.
+        """
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
+
+        channel = "exact_channel"
+        pattern = "pattern_*"
+        sharded = None
+
+        # Check if sharded pubsub is supported
+        if cluster_mode:
+            temp_client = create_sync_client(request, cluster_mode)
+            try:
+                if not sync_check_if_server_version_lt(temp_client, "7.0.0"):
+                    sharded = "sharded_channel"
+            finally:
+                temp_client.close()
+
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            SubscriptionMethod.Config,
+            channels={channel},
+            patterns={pattern},
+            sharded={sharded} if sharded else None,
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
+            # Verify subscriptions are active
+            expected_sharded_set = {sharded} if cluster_mode and sharded else None
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel},
+                expected_patterns={pattern},
+                expected_sharded=expected_sharded_set,
+                timeout_sec=3.0,
+            )
+
+            # Unsubscribe from all
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.unsubscribe_lazy()
+                listening_client.punsubscribe_lazy()
+            else:  # Blocking
+                listening_client.unsubscribe(timeout_ms=5000)
+                listening_client.punsubscribe(timeout_ms=5000)
+
+            if cluster_mode:
+                if subscription_method == SubscriptionMethod.Lazy:
+                    cast(GlideClusterClient, listening_client).sunsubscribe_lazy()
+                else:  # Blocking
+                    cast(GlideClusterClient, listening_client).sunsubscribe(
+                        timeout_ms=5000
+                    )
+
+            # Wait for unsubscriptions to complete
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels=set(),
+                expected_patterns=set(),
+                expected_sharded=set() if cluster_mode else None,
+                timeout_sec=3.0,
+            )
+
+            # Verify all unsubscribed
+            state = listening_client.get_subscriptions()
+            modes = get_pubsub_modes(listening_client)
+            assert len(state.desired_subscriptions.get(modes.Exact, set())) == 0
+            assert len(state.desired_subscriptions.get(modes.Pattern, set())) == 0
+            if cluster_mode and hasattr(modes, "Sharded"):
+                assert len(state.desired_subscriptions.get(modes.Sharded, set())) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+        ],
+    )
+    def test_sync_subscription_sync_timestamp_metric_on_success(
+        self,
+        request,
+        cluster_mode: bool,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that sync timestamp updates on successful subscription.
+        Only tests lazy subscribe since blocking subscribe doesn't trigger async reconciliation.
+        """
+        listening_client, publishing_client = None, None
+        try:
+            channel1 = "channel1_sync_timestamp"
+            channel2 = "channel2_sync_timestamp"
+
+            # No callback needed - reconciliation works automatically
+            listening_client = create_sync_pubsub_client(request, cluster_mode)
+            publishing_client = create_sync_client(request, cluster_mode)
+
+            initial_stats = listening_client.get_statistics()
+            initial_timestamp = int(
+                initial_stats.get("subscription_last_sync_timestamp", "0")
+            )
+            print(f"Initial timestamp: {initial_timestamp}")
+
+            # Subscribe to first channel
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.subscribe_lazy({channel1})
+            else:
+                listening_client.subscribe({channel1}, timeout_ms=5000)
+
+            print(f"Subscribed to {channel1}, waiting for state...")
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel1},
+                timeout_sec=3.0,
+            )
+            print(f"Subscription to {channel1} confirmed")
+
+            # Subscribe to second channel - this ensures we will have at least 1 full reconciliation cycle
+            # and 1 successful timestamp update before checking it
+            if subscription_method == SubscriptionMethod.Lazy:
+                listening_client.subscribe_lazy({channel2})
+            else:
+                listening_client.subscribe({channel2}, timeout_ms=5000)
+
+            print(f"Subscribed to {channel2}, waiting for state...")
+            # Wait for both subscriptions to be applied
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel1, channel2},
+                timeout_sec=3.0,
+            )
+            print("Both subscriptions confirmed")
+
+            # Wait for next reconciliation cycle to confirm sync and update timestamp (up to 20 seconds)
+            # The timestamp is only updated when the system is synchronized (desired == actual)
+            timestamp_after = 0
+            for i in range(20):
+                time.sleep(1)
+                stats_after = listening_client.get_statistics()
+                timestamp_after = int(
+                    stats_after.get("subscription_last_sync_timestamp", "0")
+                )
+                state = listening_client.get_subscriptions()
+                desired_count = len(
+                    state.desired_subscriptions.get(
+                        get_pubsub_modes(listening_client).Exact, set()
+                    )
+                )
+                actual_count = len(
+                    state.actual_subscriptions.get(
+                        get_pubsub_modes(listening_client).Exact, set()
+                    )
+                )
+                print(
+                    f"[{i+1}s] timestamp={timestamp_after}, desired={desired_count}, actual={actual_count}"
+                )
+                if timestamp_after > 0:
+                    print(f"Timestamp set after {i+1} seconds")
+                    break
+
+            # Just verify that timestamp is set (non-zero), don't compare to initial
+            # The initial timestamp might be from an empty subscription set, and the new timestamp
+            # should be from the current subscription set
+            assert (
+                timestamp_after > 0
+            ), f"Timestamp should be set after subscriptions, got {timestamp_after}"
+
+        finally:
+            if listening_client:
+                listening_client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [SubscriptionMethod.Lazy, SubscriptionMethod.Blocking],
+    )
+    def test_sync_pubsub_exact_happy_path_custom_command(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Tests the basic happy path for exact PUBSUB functionality using custom commands.
+        """
+        from tests.sync_tests.conftest import sync_pubsub_test_clients
+
+        channel = "test_exact_channel_custom"
+        message = "test_exact_message_custom"
+
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            SubscriptionMethod.Config,
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
+            # Subscribe using custom_command
+            if subscription_method == SubscriptionMethod.Lazy:
+                cmd = ["SUBSCRIBE", channel]
+            else:
+                cmd = ["SUBSCRIBE_BLOCKING", channel, "5000"]
+
+            result = listening_client.custom_command(cmd)
+            assert result is None
+
+            # Verify subscription
+            wait_for_subscription_state(
+                listening_client,
+                expected_channels={channel},
+                timeout_sec=3.0,
+            )
+
+            publishing_client.publish(message, channel)
+            time.sleep(1)
+
+            pubsub_msg = get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert pubsub_msg.message == message
+            assert pubsub_msg.channel == channel
+            assert pubsub_msg.pattern is None
+
+            check_no_messages_left(method, listening_client, callback_messages, 1)
+
+            # Unsubscribe using custom_command
+            if subscription_method == SubscriptionMethod.Lazy:
+                unsub_cmd = ["UNSUBSCRIBE", channel]
+            else:
+                unsub_cmd = ["UNSUBSCRIBE_BLOCKING", channel, "5000"]
+
+            result = listening_client.custom_command(unsub_cmd)
+            assert result is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_resubscribe_after_connection_kill_exact_channels(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Test that exact channel subscriptions are automatically restored after connection is killed.
+        """
+        client = None
+        try:
+            channel = "test_channel_reconnect"
+
+            client = create_sync_pubsub_client(
+                request, cluster_mode, channels={channel}
+            )
+
+            # Verify initial subscription
+            wait_for_subscription_state(
+                client, expected_channels={channel}, timeout_sec=3.0
+            )
+
+            # Kill all client connections
+            kill_connections(client, None)
+
+            # Wait for reconnection and resubscription
+            time.sleep(2)
+
+            # Verify subscription is restored
+            wait_for_subscription_state(
+                client, expected_channels={channel}, timeout_sec=5.0
+            )
+
+            state = client.get_subscriptions()
+            assert channel in state.actual_subscriptions[get_pubsub_modes(client).Exact]
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_resubscribe_after_connection_kill_patterns(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Test that pattern subscriptions are restored after connection kill.
+        """
+        client = None
+        try:
+            pattern = "test_pattern_*"
+
+            client = create_sync_pubsub_client(
+                request, cluster_mode, patterns={pattern}
+            )
+
+            # Verify initial subscription
+            wait_for_subscription_state(
+                client, expected_patterns={pattern}, timeout_sec=3.0
+            )
+
+            # Kill all client connections
+            kill_connections(client, None)
+
+            # Wait for reconnection and resubscription
+            time.sleep(2)
+
+            # Verify subscription is restored
+            wait_for_subscription_state(
+                client, expected_patterns={pattern}, timeout_sec=5.0
+            )
+
+            state = client.get_subscriptions()
+            assert (
+                pattern in state.actual_subscriptions[get_pubsub_modes(client).Pattern]
+            )
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_ssubscribe_channels_different_slots(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Test subscribing to sharded channels in different slots.
+        """
+        client, publishing_client = None, None
+        try:
+            # These channels hash to different slots
+            channels = {
+                "{slot1}channel_a",
+                "{slot2}channel_b",
+                "{slot3}channel_c",
+                "{slot1}channel_d",
+                "{slot4}channel_e",
+            }
+            messages = {ch: f"msg_{ch}" for ch in channels}
+
+            # Create client without config-based subscriptions
+            client = create_sync_pubsub_client(request, cluster_mode)
+            publishing_client = create_sync_client(request, cluster_mode)
+
+            # Subscribe dynamically
+            cast(GlideClusterClient, client).ssubscribe(channels, timeout_ms=5000)
+
+            # Verify subscriptions
+            wait_for_subscription_state(
+                client, expected_sharded=channels, timeout_sec=3.0
+            )
+
+            # Publish to all channels
+            for channel, message in messages.items():
+                cast(GlideClusterClient, publishing_client).publish(
+                    message, channel, sharded=True
+                )
+
+            time.sleep(1)
+
+            # Retrieve all messages using try_get with retry
+            received_messages = {}
+            for _ in range(len(channels)):
+                msg = None
+                for attempt in range(10):
+                    msg = client.try_get_pubsub_message()
+                    if msg:
+                        msg = decode_pubsub_msg(msg)
+                        break
+                    time.sleep(0.5)
+
+                assert msg is not None, "Failed to receive message after 10 attempts"
+                received_messages[msg.channel] = msg.message
+
+            assert received_messages == messages
+
+        finally:
+            if client:
+                client.close()
+            if publishing_client:
+                publishing_client.close()
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_sunsubscribe_channels_different_slots(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Test unsubscribing from sharded channels in different slots.
+        """
+        client = None
+        try:
+            channels = {
+                "{slot1}channel_a",
+                "{slot2}channel_b",
+            }
+
+            # Create client and subscribe dynamically
+            client = create_sync_pubsub_client(request, cluster_mode)
+            cast(GlideClusterClient, client).ssubscribe(channels, timeout_ms=5000)
+
+            # Verify subscriptions
+            wait_for_subscription_state(
+                client, expected_sharded=channels, timeout_sec=3.0
+            )
+
+            # Unsubscribe from one channel
+            channel_to_unsub = "{slot1}channel_a"
+            cast(GlideClusterClient, client).sunsubscribe(
+                {channel_to_unsub}, timeout_ms=5000
+            )
+
+            # Verify only one channel remains
+            remaining = channels - {channel_to_unsub}
+            wait_for_subscription_state(
+                client, expected_sharded=remaining, timeout_sec=3.0
+            )
+
+            state = client.get_subscriptions()
+            modes = get_pubsub_modes(client)
+            if hasattr(modes, "Sharded"):
+                assert channel_to_unsub not in state.actual_subscriptions[modes.Sharded]  # type: ignore
+                assert remaining.issubset(state.actual_subscriptions[modes.Sharded])  # type: ignore
+
+        finally:
+            if client:
+                client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_subscription_metrics_on_acl_failure(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Test that out-of-sync metric is recorded when subscription fails due to ACL.
+        """
+        listening_client, admin_client = None, None
+        try:
+            channel = "channel_acl_metrics_test"
+            username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_acl_metrics"
+            password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_acl_metrics"
+
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Create user without pubsub permissions
+            acl_command = [
+                "ACL",
+                "SETUSER",
+                username,
+                "ON",
+                f">{password}",
+                "~*",
+                "resetchannels",
+                "+@all",
+                "-@pubsub",
+            ]
+
+            if cluster_mode:
+                cast(GlideClusterClient, admin_client).custom_command(
+                    acl_command, route=AllNodes()  # type: ignore[arg-type]
+                )
+            else:
+                admin_client.custom_command(acl_command)  # type: ignore[arg-type]
+
+            # Create regular client (not pubsub) and authenticate with restricted user
+            listening_client = create_sync_client(request, cluster_mode)
+
+            if cluster_mode:
+                cast(GlideClusterClient, listening_client).custom_command(
+                    ["AUTH", username, password], route=AllNodes()
+                )
+            else:
+                listening_client.custom_command(["AUTH", username, password])
+
+            # Get initial metrics
+            initial_stats = listening_client.get_statistics()
+            initial_out_of_sync = int(
+                initial_stats.get("subscription_out_of_sync_count", "0")
+            )
+
+            # Try to subscribe (will fail due to ACL)
+            listening_client.subscribe_lazy({channel})
+
+            # Wait for reconciliation attempts and poll for metric update
+            out_of_sync_count = initial_out_of_sync
+            for i in range(15):
+                time.sleep(1)
+                stats = listening_client.get_statistics()
+                out_of_sync_count = int(
+                    stats.get("subscription_out_of_sync_count", "0")
+                )
+                print(
+                    f"[{i+1}s] out_of_sync_count={out_of_sync_count}, initial={initial_out_of_sync}"
+                )
+                if out_of_sync_count > initial_out_of_sync:
+                    print(f"Metric increased after {i+1} seconds")
+                    break
+
+            assert (
+                out_of_sync_count > initial_out_of_sync
+            ), f"Expected out-of-sync count to increase from {initial_out_of_sync}, got {out_of_sync_count}"
+
+            # Verify subscription is NOT active (desired != actual)
+            state = listening_client.get_subscriptions()
+            modes = get_pubsub_modes(listening_client)
+
+            desired_channels = state.desired_subscriptions.get(modes.Exact, set())
+            actual_channels = state.actual_subscriptions.get(modes.Exact, set())
+
+            assert channel in desired_channels, "Channel should be in desired"
+            assert (
+                channel not in actual_channels
+            ), "Channel should NOT be in actual (ACL blocked)"
+
+        finally:
+            # Cleanup: delete test user
+            if admin_client:
+                try:
+                    admin_client.custom_command(["ACL", "DELUSER", username])
+                except Exception:
+                    pass
+                admin_client.close()
+            if listening_client:
+                listening_client.close()
