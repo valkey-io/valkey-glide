@@ -278,7 +278,6 @@ shadowJar.dependsOn('copyNativeLib')
 javadoc.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRust')
 compileTestJava.dependsOn('copyNativeLib')
-compileTestJava.dependsOn('copyAllNativeLibs')
 test.dependsOn('buildRust')
 
 sourceSets {
