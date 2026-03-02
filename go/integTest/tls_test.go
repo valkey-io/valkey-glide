@@ -269,6 +269,122 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 	assert.Contains(suite.T(), err.Error(), "failed to read certificate file")
 }
 
+// TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
+func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
+	if !suite.tls {
+		suite.T().Skip("TLS is not enabled, skipping TLS tests")
+	}
+
+	certData, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv4,
+		Port: suite.standaloneHosts[0].Port,
+	}
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	clientConfig := config.NewClientConfiguration().
+		WithAddress(&address).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsWithIPv4AddressSucceeds_Cluster tests TLS connection with IPv4 address
+func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
+	if !suite.tls {
+		suite.T().Skip("TLS is not enabled, skipping TLS tests")
+	}
+
+	certData, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv4,
+		Port: suite.clusterHosts[0].Port,
+	}
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+	advancedConfig := config.NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	clientConfig := config.NewClusterClientConfiguration().
+		WithAddress(&address).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsWithIPv6AddressSucceeds_Standalone tests TLS connection with IPv6 address
+func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
+	if !suite.tls {
+		suite.T().Skip("TLS is not enabled, skipping TLS tests")
+	}
+
+	certData, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv6,
+		Port: suite.standaloneHosts[0].Port,
+	}
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+	advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	clientConfig := config.NewClientConfiguration().
+		WithAddress(&address).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestTlsWithIPv6AddressSucceeds_Cluster tests TLS connection with IPv6 address
+func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
+	if !suite.tls {
+		suite.T().Skip("TLS is not enabled, skipping TLS tests")
+	}
+
+	certData, err := getCaCertificate()
+	require.NoError(suite.T(), err)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv6,
+		Port: suite.clusterHosts[0].Port,
+	}
+
+	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+	advancedConfig := config.NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+
+	clientConfig := config.NewClusterClientConfiguration().
+		WithAddress(&address).
+		WithUseTLS(true).
+		WithAdvancedConfiguration(advancedConfig)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
 // getCaCertificate returns the CA certificate bytes in PEM format.
 // It looks for the certificate in the utils/tls_crts directory.
 func getCaCertificate() ([]byte, error) {
