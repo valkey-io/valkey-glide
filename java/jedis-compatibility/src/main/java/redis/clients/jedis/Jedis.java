@@ -745,6 +745,18 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Get the name of the current connection. This is an alias for {@link #clientGetName()}.
+     *
+     * <p>This method name matches Jedis 5.1.5 naming convention (lowercase 'name').
+     *
+     * @return the connection name, or null if no name is set
+     * @see #clientGetName()
+     */
+    public String clientGetname() {
+        return clientGetName();
+    }
+
+    /**
      * Select a database.
      *
      * @param index the database index
@@ -1368,59 +1380,6 @@ public final class Jedis implements Closeable {
         inTransaction = true;
 
         return new Transaction(this);
-    }
-
-    /**
-     * Executes all commands queued in a transaction block started by {@link #multi()}.
-     *
-     * @return list of replies, one for each command in the transaction
-     * @throws JedisException if not in a transaction or operation fails
-     * @see <a href="https://valkey.io/commands/exec/">valkey.io</a>
-     * @since Valkey 1.2.0
-     */
-    public synchronized List<Object> exec() {
-        checkNotClosed();
-        ensureInitialized();
-
-        if (!inTransaction || currentBatch == null) {
-            throw new JedisException("Not in transaction mode. Call multi() first");
-        }
-
-        try {
-            // Execute the batch using GLIDE
-            Object[] results = glideClient.exec(currentBatch, false).get();
-
-            // Convert array to list for Jedis compatibility
-            return results != null ? Arrays.asList(results) : null;
-        } catch (Exception e) {
-            throw new JedisException("Failed to execute transaction", e);
-        } finally {
-            // Clear transaction state
-            inTransaction = false;
-            currentBatch = null;
-        }
-    }
-
-    /**
-     * Discards all commands queued in a transaction block started by {@link #multi()}.
-     *
-     * @return "OK" if successful
-     * @throws JedisException if not in a transaction or operation fails
-     * @see <a href="https://valkey.io/commands/discard/">valkey.io</a>
-     * @since Valkey 2.0.0
-     */
-    public synchronized String discard() {
-        checkNotClosed();
-
-        if (!inTransaction) {
-            throw new JedisException("Not in transaction mode. Call multi() first");
-        }
-
-        // Clear transaction state
-        inTransaction = false;
-        currentBatch = null;
-
-        return "OK";
     }
 
     /**

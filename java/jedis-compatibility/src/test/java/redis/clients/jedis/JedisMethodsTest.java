@@ -475,6 +475,10 @@ public class JedisMethodsTest {
         // Test clientGetName() exists
         Method clientGetName = jedisClass.getMethod("clientGetName");
         assertEquals(String.class, clientGetName.getReturnType());
+
+        // Test clientGetname() exists (Jedis 5.1.5 naming convention)
+        Method clientGetname = jedisClass.getMethod("clientGetname");
+        assertEquals(String.class, clientGetname.getReturnType());
     }
 
     @Test
