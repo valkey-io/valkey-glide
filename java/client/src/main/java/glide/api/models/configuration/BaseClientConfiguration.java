@@ -78,7 +78,11 @@ public abstract class BaseClientConfiguration {
      */
     private final ProtocolVersion protocol;
 
+    /** Returns the subscription configuration for the client. */
     public abstract BaseSubscriptionConfiguration getSubscriptionConfiguration();
+
+    /** Returns the advanced configuration settings for the client. */
+    public abstract AdvancedBaseClientConfiguration getAdvancedConfiguration();
 
     /**
      * The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).

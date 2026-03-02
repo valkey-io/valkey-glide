@@ -30,13 +30,7 @@ public class CommandManagerDirectBufferTest {
         byte[] bigNumberBytes = bigNumberText.getBytes(StandardCharsets.UTF_8);
 
         ByteBuffer buffer =
-                ByteBuffer.allocate(
-                                1
-                                        + 4
-                                        + (1 + 1)
-                                        + (1 + 8)
-                                        + (1 + 4 + bigNumberBytes.length)
-                                        + (1 + 4))
+                ByteBuffer.allocate(1 + 4 + (1 + 1) + (1 + 8) + (1 + 4 + bigNumberBytes.length) + (1 + 4))
                         .order(ByteOrder.BIG_ENDIAN);
 
         buffer.put((byte) '*');

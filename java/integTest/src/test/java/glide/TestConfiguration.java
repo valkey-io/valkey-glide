@@ -12,12 +12,14 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.semver4j.Semver;
 
 public final class TestConfiguration {
-    public static final String[] STANDALONE_HOSTS =
-            System.getProperty("test.server.standalone", "").split(",");
-    public static final String[] CLUSTER_HOSTS =
-            System.getProperty("test.server.cluster", "").split(",");
-    public static final String[] AZ_CLUSTER_HOSTS =
-            System.getProperty("test.server.azcluster", "").split(",");
+
+    // Server addresses for testing.
+    public static final String[] STANDALONE_HOSTS = getHosts("test.server.standalone");
+    public static final String[] CLUSTER_HOSTS = getHosts("test.server.cluster");
+    public static final String[] STANDALONE_TLS_HOSTS = getHosts("test.server.standalone.tls");
+    public static final String[] CLUSTER_TLS_HOSTS = getHosts("test.server.cluster.tls");
+    public static final String[] AZ_CLUSTER_HOSTS = getHosts("test.server.azcluster");
+
     public static final Semver SERVER_VERSION;
     public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
 
@@ -25,9 +27,11 @@ public final class TestConfiguration {
         Logger.init(Logger.Level.OFF);
         Logger.setLoggerConfig(Logger.Level.OFF);
 
-        System.out.printf("STANDALONE_HOSTS = %s\n", System.getProperty("test.server.standalone", ""));
-        System.out.printf("CLUSTER_HOSTS = %s\n", System.getProperty("test.server.cluster", ""));
-        System.out.printf("AZ_CLUSTER_HOSTS = %s\n", System.getProperty("test.server.azcluster", ""));
+        System.out.printf("STANDALONE_HOSTS = %s\n", String.join(",", STANDALONE_HOSTS));
+        System.out.printf("CLUSTER_HOSTS = %s\n", String.join(",", CLUSTER_HOSTS));
+        System.out.printf("STANDALONE_TLS_HOSTS = %s\n", String.join(",", STANDALONE_TLS_HOSTS));
+        System.out.printf("CLUSTER_TLS_HOSTS = %s\n", String.join(",", CLUSTER_TLS_HOSTS));
+        System.out.printf("AZ_CLUSTER_HOSTS = %s\n", String.join(",", AZ_CLUSTER_HOSTS));
 
         var result = getVersionFromStandalone();
         if (result.getKey() != null) {
@@ -83,5 +87,10 @@ public final class TestConfiguration {
         } catch (Exception e) {
             return Pair.of(null, e);
         }
+    }
+
+    private static String[] getHosts(String propertyKey) {
+        String hostsStr = System.getProperty(propertyKey, "");
+        return hostsStr.split(",");
     }
 }

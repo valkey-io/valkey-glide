@@ -166,6 +166,7 @@ import {
     createLSet,
     createLTrim,
     createLeakedOtelSpan,
+    createOtelSpanWithTraceContext,
     createMGet,
     createMSet,
     createMSetNX,
@@ -1352,7 +1353,16 @@ export class BaseClient {
                     command instanceof command_request.Command
                         ? command_request.RequestType[command.requestType]
                         : "Batch";
-                const pair = createLeakedOtelSpan(commandName);
+                const parentCtx = OpenTelemetry.getParentSpanContext();
+                const pair = parentCtx
+                    ? createOtelSpanWithTraceContext(
+                          commandName,
+                          parentCtx.traceId,
+                          parentCtx.spanId,
+                          parentCtx.traceFlags,
+                          parentCtx.traceState,
+                      )
+                    : createLeakedOtelSpan(commandName);
                 spanPtr = new Long(pair[0], pair[1]);
             }
 
