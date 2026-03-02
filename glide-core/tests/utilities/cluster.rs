@@ -391,14 +391,6 @@ pub async fn setup_cluster_with_replicas(
     ClusterTestBasics { cluster, client }
 }
 
-pub async fn setup_test_basics(use_tls: bool) -> ClusterTestBasics {
-    setup_test_basics_internal(TestConfiguration {
-        use_tls,
-        ..Default::default()
-    })
-    .await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,3 +1,4 @@
+use crate::cache::glide_cache::GlideCache;
 use crate::cluster_slotmap::ReadFromReplicaStrategy;
 #[cfg(feature = "cluster-async")]
 use crate::cluster_topology::{
@@ -48,6 +49,7 @@ struct BuilderParams {
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
     tcp_nodelay: bool,
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 #[derive(Clone)]
@@ -151,6 +153,7 @@ pub struct ClusterParams {
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
     pub(crate) tcp_nodelay: bool,
+    pub(crate) cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl ClusterParams {
@@ -183,6 +186,7 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
             tcp_nodelay: value.tcp_nodelay,
+            cache: value.cache,
         })
     }
 }
@@ -534,6 +538,12 @@ impl ClusterClientBuilder {
     /// Most cluster configurations only support database 0.
     pub fn database_id(mut self, database_id: i64) -> ClusterClientBuilder {
         self.builder_params.database_id = database_id;
+        self
+    }
+
+    /// Sets the cache for the new ClusterClient.
+    pub fn cache(mut self, cache: Option<Arc<dyn GlideCache>>) -> ClusterClientBuilder {
+        self.builder_params.cache = cache;
         self
     }
 
