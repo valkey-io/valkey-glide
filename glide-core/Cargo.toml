@@ -51,7 +51,7 @@ serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 versions = "7"
 strum = "0.26"       
-strum_macros = "0.26"
+strum_macros = "0.28"
 zstd = { version = "0.13" }
 lz4 = { version = "1.28" }
 
