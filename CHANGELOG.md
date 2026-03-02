@@ -38,6 +38,7 @@
 * Java: Fix resource leak in integration tests where clients created via @MethodSource were never closed ([#5347](https://github.com/valkey-io/valkey-glide/issues/5347))
 * Java: Fix hanging issue in AWS Lambda when response exceeds 16KB ([#5081](https://github.com/valkey-io/valkey-glide/issues/5081))
 * Core: break reference cycle in IAM token manager callback ([#5431](https://github.com/valkey-io/valkey-glide/pull/5431))
+* Core: Fixed a bug where permission errors for CLUSTER SLOT command is not surfaced during intial connection ([#5486](https://github.com/valkey-io/valkey-glide/pull/5486))
 
 #### Operational Enhancements
 * Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))
