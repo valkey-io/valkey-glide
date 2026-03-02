@@ -3871,7 +3871,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
      * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
-     * @remarks `BLMOVE` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Valkey Glide Wiki} for more details and best practices.
+     * @remarks `BLMOVE` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands|Valkey GLIDE Documentation} for more details and best practices.
      * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
@@ -7686,7 +7686,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/brpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @remarks `BRPOP` is a blocking command, see [Blocking Commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -7718,7 +7718,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/blpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @remarks `BLPOP` is a blocking command, see [Blocking Commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -8337,7 +8337,7 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
-     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | Valkey Glide Wiki} for more details and best practices.
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands | Valkey GLIDE Documentation} for more details and best practices.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
@@ -8713,7 +8713,7 @@ export class BaseClient {
      * will only execute commands if the watched keys are not modified before execution of the
      * transaction. Executing a transaction will automatically flush all previously watched keys.
      *
-     * @see {@link https://valkey.io/commands/watch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
+     * @see {@link https://valkey.io/commands/watch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey GLIDE Documentation} for more details.
      *
      * @remarks In cluster mode, if keys in `keys` map to different hash slots,
      * the command will be split across these slots and executed separately for each.

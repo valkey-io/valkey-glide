@@ -24,9 +24,9 @@ var _ interfaces.GlideClientCommands = (*Client)(nil)
 // Client used for connection to standalone servers.
 // Use [NewClient] to request a client.
 //
-// For full documentation refer to [Valkey Glide Wiki].
+// For full documentation refer to [Valkey GLIDE Documentation].
 //
-// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#standalone
+// [Valkey GLIDE Documentation]: https://glide.valkey.io/how-to/client-initialization/#standalone
 type Client struct {
 	baseClient
 }
@@ -132,7 +132,7 @@ func (client *Client) ExecWithOptions(
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
 //
-// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
+// See [Valkey GLIDE Documentation] for details on the restrictions and limitations of the custom command API.
 //
 // This function should only be used for single-response commands. Commands that don't return complete response and awaits
 // (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
@@ -147,7 +147,7 @@ func (client *Client) ExecWithOptions(
 //
 //	The returned value for the custom command.
 //
-// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
+// [Valkey GLIDE Documentation]: https://glide.valkey.io/concepts/client-features/custom-commands/
 func (client *Client) CustomCommand(ctx context.Context, args []string) (any, error) {
 	res, err := client.executeCommand(ctx, C.CustomCommand, args)
 	if err != nil {
@@ -941,7 +941,7 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 // Flushes all the previously watched keys for a transaction. Executing a transaction will
 // automatically flush all previously watched keys.
 //
-// See [valkey.io] and [Valkey Glide Wiki] for details.
+// See [valkey.io] and [Valkey GLIDE Documentation] for details.
 //
 // Parameters:
 //
@@ -952,7 +952,7 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 //	A simple "OK" response.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
-// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+// [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
 func (client *Client) Unwatch(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
 	if err != nil {

@@ -158,16 +158,16 @@ macOS:
 === "Python"
     - [Python standalone example][1]
     - [Python cluster example][2]
-    - [Python wiki for examples and further details on TLS, Read strategy, Timeouts and various other configurations][3]
+    - [Python documentation for examples and further details on TLS, Read strategy, Timeouts and various other configurations][3]
 
 === "TypeScript"
     - [TypeScript standalone example][5]
     - [TypeScript cluster example][6]
-    - [TypeScript wiki for examples and further details on TLS, Read strategy, Timeouts and various other configurations][4]
+    - [TypeScript documentation for examples and further details on TLS, Read strategy, Timeouts and various other configurations][4]
 
 [1]: https://github.com/valkey-io/valkey-glide/blob/main/examples/python/standalone_example.py
 [2]: https://github.com/valkey-io/valkey-glide/blob/main/examples/python/cluster_example.py
-[3]: https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper
-[4]: https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper
+[3]: https://glide.valkey.io/getting-started/quickstart/?lang=python
+[4]: https://glide.valkey.io/getting-started/quickstart/?lang=node
 [5]: https://github.com/valkey-io/valkey-glide/blob/main/examples/node/standalone_example.ts
 [6]: https://github.com/valkey-io/valkey-glide/blob/main/examples/node/cluster_example.ts

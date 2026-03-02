@@ -845,7 +845,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     Client used for connection to cluster servers.
     Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster)
+    [Valkey GLIDE Documentation](https://glide.valkey.io/how-to/client-initialization/#cluster)
     """
 
     async def _cluster_scan(
@@ -932,7 +932,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     Client used for connection to standalone servers.
     Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone)
+    [Valkey GLIDE Documentation](https://glide.valkey.io/how-to/client-initialization/#standalone)
     """
 
     async def get_subscriptions(
