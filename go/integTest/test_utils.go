@@ -11,7 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/valkey-io/valkey-glide/go/glide/api"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
 // General function type that deals with context
@@ -171,8 +171,21 @@ func RunWithTimeout(t assert.TestingT, requestedTimeout time.Duration, longTest 
 }
 
 // Verifies that the given client is connected.
-func assertConnected(t *testing.T, client api.BaseClient) {
-	result, err := client.Ping()
+func assertConnected(t *testing.T, client interface{}) {
+	ctx := context.Background()
+	var result interface{}
+	var err error
+
+	switch c := client.(type) {
+	case interfaces.GlideClientCommands:
+		result, err = c.Ping(ctx)
+	case interfaces.GlideClusterClientCommands:
+		result, err = c.Ping(ctx)
+	default:
+		require.Fail(t, "unsupported client type")
+		return
+	}
+
 	require.NoError(t, err)
-	require.Equal(t, "PONG", result.Value())
+	require.Equal(t, "PONG", result)
 }
