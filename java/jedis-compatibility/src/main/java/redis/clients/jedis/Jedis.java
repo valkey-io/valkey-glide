@@ -8569,8 +8569,9 @@ public final class Jedis implements Closeable {
      * }</pre>
      */
     public String configSet(String parameter, String value) {
-        return executeCommandWithGlide(
-                "CONFIG SET", () -> glideClient.configSet(Map.of(parameter, value)).get());
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(parameter, value);
+        return executeCommandWithGlide("CONFIG SET", () -> glideClient.configSet(configMap).get());
     }
 
     /**
