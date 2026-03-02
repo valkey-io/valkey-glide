@@ -105,7 +105,7 @@ blockingSocketTimeoutMillis
 ### Advanced Features
 - **Transactions**: MULTI/EXEC transaction blocks not supported
 - **Pipelining**: Jedis pipelining functionality unavailable
-- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported. For PubSub functionality with message handling, use GLIDE's native dynamic pubsub APIs to subscribe to channels and handle messages at runtime. The compatibility layer only provides `publish()` and `pubsub*()` inspection commands.
+- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported (see [issue #5469](https://github.com/valkey-io/valkey-glide/issues/5469) for planned support). For PubSub functionality with message handling, use GLIDE's native dynamic pubsub APIs to subscribe to channels and handle messages at runtime. The compatibility layer only provides `publish()` and `pubsub*()` inspection commands.
 - **Lua scripting**: EVAL/EVALSHA commands not supported
 - **Modules**: Redis module commands not available
 
