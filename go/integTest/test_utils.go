@@ -6,9 +6,12 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/valkey-io/valkey-glide/go/glide/api"
 )
 
 // General function type that deals with context
@@ -165,4 +168,11 @@ func RunWithTimeout(t assert.TestingT, requestedTimeout time.Duration, longTest 
 		assert.Fail(t, "Timeout exceeded")
 	case <-done:
 	}
+}
+
+// Verifies that the given client is connected.
+func assertConnected(t *testing.T, client api.BaseClient) {
+	result, err := client.Ping()
+	require.NoError(t, err)
+	require.Equal(t, "PONG", result.Value())
 }
