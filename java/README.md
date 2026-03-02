@@ -47,12 +47,16 @@ For developers, please refer to Java's [DEVELOPER.md](./DEVELOPER.md) for furthe
 
 **Java Requirements**
 
-Minimum requirements: JDK 11 or later. Ensure that you have a minimum Java version of JDK 11 installed on your system:
+Minimum requirements: JDK 8 or later. However, **JDK 11 or later is strongly recommended** as Java 8 no longer receives free security updates.
+
+Ensure that you have Java installed on your system:
 
 ```bash
 echo $JAVA_HOME
 java -version
 ```
+
+**Note:** While Java 8 is supported for compatibility with legacy applications, we strongly recommend using JDK 11 or later for production deployments due to ongoing security support.
 
 ### Adding the client to your project
 
@@ -368,12 +372,12 @@ GlideClientConfiguration config = GlideClientConfiguration.builder()
 try (GlideClient client = GlideClient.createClient(config).get()) {
     // Subscribe to channels dynamically
     client.subscribe(Set.of("news", "updates")).get();
-    
+
     // Get subscription state
     var state = client.getSubscriptions().get();
     System.out.println("Desired subscriptions: " + state.desiredSubscriptions);
     System.out.println("Actual subscriptions: " + state.actualSubscriptions);
-    
+
     // Unsubscribe
     client.unsubscribe(Set.of("news")).get();
 }
@@ -387,10 +391,10 @@ Monitor subscription health and reconciliation status using `getStatistics()`:
 try (GlideClient client = GlideClient.createClient(config).get()) {
     // Subscribe to channels
     client.subscribe(Set.of("channel1", "channel2")).get();
-    
+
     // Get statistics
     Map<String, String> stats = client.getStatistics();
-    
+
     // Available metrics:
     // - total_connections: Number of active connections
     // - total_clients: Number of client instances
@@ -402,7 +406,7 @@ try (GlideClient client = GlideClient.createClient(config).get()) {
     // - compression_skipped_count: Times compression was skipped
     // - subscription_out_of_sync_count: Failed reconciliation attempts
     // - subscription_last_sync_timestamp: Last successful sync (milliseconds since epoch)
-    
+
     System.out.println("Out of sync count: " + stats.get("subscription_out_of_sync_count"));
     System.out.println("Last sync timestamp: " + stats.get("subscription_last_sync_timestamp"));
 }
@@ -428,10 +432,10 @@ GlideClusterClientConfiguration config = GlideClusterClientConfiguration.builder
 try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
     // Subscribe to sharded channels
     client.ssubscribe(Set.of("shard-channel-1", "shard-channel-2")).get();
-    
+
     // Get subscription state
     var state = client.getSubscriptions().get();
-    System.out.println("Sharded subscriptions: " + 
+    System.out.println("Sharded subscriptions: " +
         state.actualSubscriptions.get(PubSubChannelMode.Sharded));
 }
 ```

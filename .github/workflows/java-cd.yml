@@ -170,7 +170,7 @@ jobs:
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
-                    
+
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
@@ -179,7 +179,7 @@ jobs:
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-                    
+
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
@@ -314,6 +314,8 @@ jobs:
                 exclude:
                     - host:
                           TARGET: aarch64-unknown-linux-musl
+                    - host:
+                          OS: windows
         runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
         container:
             image: ${{ matrix.host.IMAGE || ''}}
@@ -375,12 +377,14 @@ jobs:
             - name: Start standalone Valkey server
               working-directory: utils
               id: port
+              shell: bash
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
                   echo "PORT=$PORT" >> $GITHUB_OUTPUT
 
             - name: Test deployment
               working-directory: java
+              shell: bash
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
               run: |

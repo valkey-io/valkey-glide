@@ -56,7 +56,7 @@ subprojects {
         toolchain {
             languageVersion.set(JavaLanguageVersion.of(11))
             // Only specify vendor when no JAVA_HOME is set (i.e., no setup-java used)
-            if (!System.getenv("GLIDE_CONTAINER_BUILD") && 
+            if (!System.getenv("GLIDE_CONTAINER_BUILD") &&
                 !System.getenv("JAVA_HOME")) {
                 vendor = JvmVendorSpec.ADOPTIUM // Temurin
             }
@@ -64,6 +64,8 @@ subprojects {
     }
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'
+        // Compile with JDK 11 but target Java 8 bytecode
+        options.release = 8
     }
 
     tasks.withType(Test) {

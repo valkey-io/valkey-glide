@@ -86,7 +86,7 @@ public class ArgsBuilder {
             return;
         }
 
-        var arg = argsMap.keySet().iterator().next();
+        Object arg = argsMap.keySet().iterator().next();
         checkTypeOrThrow(arg);
     }
 

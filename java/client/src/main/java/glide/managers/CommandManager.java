@@ -32,9 +32,11 @@ import glide.api.models.exceptions.RequestException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
 import glide.utils.BufferUtils;
+import glide.utils.Java8Utils;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -51,25 +53,21 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class CommandManager {
 
-    /**
-     * Set of blocking command names (uppercase) that have their own timeout in the command arguments.
-     * These commands should NOT use Java-side timeout - Rust handles their timeout based on the
-     * command's timeout argument.
-     */
     private static final Set<String> BLOCKING_COMMAND_NAMES =
-            Set.of(
-                    "BLPOP",
-                    "BRPOP",
-                    "BLMOVE",
-                    "BZPOPMAX",
-                    "BZPOPMIN",
-                    "BRPOPLPUSH",
-                    "BLMPOP",
-                    "BZMPOP",
-                    "XREAD",
-                    "XREADGROUP",
-                    "WAIT",
-                    "WAITAOF");
+            Collections.unmodifiableSet(
+                    Java8Utils.createSet(
+                            "BLPOP",
+                            "BRPOP",
+                            "BLMOVE",
+                            "BZPOPMAX",
+                            "BZPOPMIN",
+                            "BRPOPLPUSH",
+                            "BLMPOP",
+                            "BZMPOP",
+                            "XREAD",
+                            "XREADGROUP",
+                            "WAIT",
+                            "WAITAOF"));
 
     /** Core client connection. */
     private final GlideCoreClient coreClient;
@@ -310,7 +308,7 @@ public class CommandManager {
             List<GlideString> args,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit script."));
             return errorFuture;
@@ -338,7 +336,7 @@ public class CommandManager {
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -351,7 +349,7 @@ public class CommandManager {
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit script."));
             return errorFuture;
@@ -381,7 +379,7 @@ public class CommandManager {
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -471,7 +469,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit cluster scan."));
             return errorFuture;
@@ -531,7 +529,7 @@ public class CommandManager {
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -636,7 +634,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit command."));
             return errorFuture;
@@ -674,7 +672,7 @@ public class CommandManager {
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -691,7 +689,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit command."));
             return errorFuture;
@@ -727,7 +725,7 @@ public class CommandManager {
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -812,7 +810,7 @@ public class CommandManager {
             Integer timeoutOverrideMs) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit batch."));
             return errorFuture;
@@ -829,7 +827,7 @@ public class CommandManager {
                     .thenApply(responseHandler::apply)
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -1066,7 +1064,7 @@ public class CommandManager {
             spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
         }
 
-        var builder =
+        CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
@@ -1088,7 +1086,7 @@ public class CommandManager {
             spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
         }
 
-        var builder =
+        CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
@@ -1115,7 +1113,8 @@ public class CommandManager {
 
         if (options.isPresent()) {
             BatchOptions opts = options.get();
-            var batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
+            CommandRequestOuterClass.Batch.Builder batchBuilder =
+                    prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
             builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
         } else {
             builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());

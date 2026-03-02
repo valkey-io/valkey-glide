@@ -212,7 +212,7 @@ public class MessageHandler {
                     firstMessagePromiseRequested = true;
                     return firstMessagePromise;
                 }
-                var future = new CompletableFuture<PubSubMessage>();
+                CompletableFuture<PubSubMessage> future = new CompletableFuture<>();
                 future.complete(message);
                 return future;
             }

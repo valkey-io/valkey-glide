@@ -18,7 +18,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
-import java.util.Map;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -204,7 +204,7 @@ public class ClusterClientTests {
 
             // Update server password
             // Kill all other clients to force reconnection
-            assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
+            assertEquals("OK", adminClient.configSet(Collections.singletonMap("requirepass", pwd)).get());
             adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
 
             // Give some time for it to go through
@@ -213,7 +213,7 @@ public class ClusterClientTests {
             // Verify client auto-reconnects with new password
             assertNotNull(testClient.info().get());
         } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", "")).get();
             adminClient.close();
         }
     }
@@ -224,12 +224,12 @@ public class ClusterClientTests {
         // Test Client fails on call to updateConnectionPassword with invalid parameters
         try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
-            var emptyPasswordException =
+            ExecutionException emptyPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
             assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
 
-            var noPasswordException =
+            ExecutionException noPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
             assertInstanceOf(RequestException.class, noPasswordException.getCause());
@@ -239,7 +239,7 @@ public class ClusterClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_no_server_auth() {
-        var pwd = UUID.randomUUID().toString();
+        String pwd = UUID.randomUUID().toString();
 
         try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
@@ -247,7 +247,7 @@ public class ClusterClientTests {
             assertNotNull(testClient.info().get());
 
             // Test that immediate re-authentication fails when no server password is set.
-            var exception =
+            ExecutionException exception =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
             assertInstanceOf(RequestException.class, exception.getCause());
@@ -257,7 +257,7 @@ public class ClusterClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_long() {
-        var pwd = RandomStringUtils.randomAlphabetic(1000);
+        String pwd = RandomStringUtils.randomAlphabetic(1000);
 
         try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
@@ -273,8 +273,8 @@ public class ClusterClientTests {
     @SneakyThrows
     @Test
     public void test_replace_password_immediateAuth_wrong_password() {
-        var pwd = UUID.randomUUID().toString();
-        var notThePwd = UUID.randomUUID().toString();
+        String pwd = UUID.randomUUID().toString();
+        String notThePwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -284,10 +284,10 @@ public class ClusterClientTests {
             assertNotNull(testClient.info().get());
 
             // set the password to something else
-            adminClient.configSet(Map.of("requirepass", notThePwd)).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", notThePwd)).get();
 
             // Test that re-authentication fails when using wrong password.
-            var exception =
+            ExecutionException exception =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
             assertInstanceOf(RequestException.class, exception.getCause());
@@ -295,7 +295,7 @@ public class ClusterClientTests {
             // But using something else password returns OK
             assertEquals(OK, testClient.updateConnectionPassword(notThePwd, true).get());
         } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", "")).get();
             adminClient.close();
         }
     }
@@ -304,9 +304,9 @@ public class ClusterClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -359,9 +359,9 @@ public class ClusterClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_reconnection_with_immediate_auth_with_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -403,9 +403,9 @@ public class ClusterClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -443,9 +443,9 @@ public class ClusterClientTests {
     @SneakyThrows
     @Test
     public void test_update_connection_password_non_valid_auth_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -462,12 +462,12 @@ public class ClusterClientTests {
                                             .build())
                             .get();
 
-            var emptyPasswordException =
+            ExecutionException emptyPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
             assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
 
-            var noPasswordException =
+            ExecutionException noPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
             assertInstanceOf(RequestException.class, noPasswordException.getCause());
