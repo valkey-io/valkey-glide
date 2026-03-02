@@ -63,13 +63,20 @@ blockingSocketTimeoutMillis
 ## Supported Features
 
 ### Core Commands
-- ✅ Basic string operations (GET, SET, MGET, MSET)
-- ✅ Hash operations (HGET, HSET, HMGET, HMSET)
-- ✅ List operations (LPUSH, RPUSH, LPOP, RPOP)
-- ✅ Set operations (SADD, SREM, SMEMBERS, SCARD, SISMEMBER, SMISMEMBER, SPOP, SRANDMEMBER, SMOVE, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SSCAN) via type-safe methods
+- ✅ Basic string operations (GET, SET, MGET, MSET, MSETNX, SETRANGE, GETRANGE, LCS, LCSLEN, LCSIDX)
+- ✅ Hash operations (HGET, HSET, HMGET, HMSET, HRANDFIELD with count and values)
+- ✅ List operations (LPUSH, RPUSH, LPOP with count, RPOP with count, LPOS with count, LMPOP, BLMPOP)
+- ✅ Set operations (SADD, SREM, SMEMBERS, SCARD, SISMEMBER, SMISMEMBER, SPOP with count, SRANDMEMBER with count, SMOVE, SINTER, SINTERCARD, SINTERSTORE, SUNION, SUNIONSTORE, SDIFF, SDIFFSTORE, SSCAN) via type-safe methods
 - ⚠️ Sorted set operations (ZADD, ZREM, ZRANGE) - **Available via `sendCommand()` only**
+- ✅ Stream operations (XADD, XLEN, XDEL, XRANGE, XREVRANGE, XREAD, XTRIM, XGROUP CREATE/DESTROY/SETID, XREADGROUP, XACK, XPENDING, XCLAIM, XAUTOCLAIM, XINFO STREAM/GROUPS/CONSUMERS)
+  - **Note:** `XSETID` is not supported (only `XGROUP SETID` is available)
 - ✅ Key operations (DEL, EXISTS, EXPIRE, TTL)
+- ✅ Sort operations (SORT_RO, SORT with STORE)
+- ✅ Wait operations (WAIT, WAITAOF)
+- ✅ Object introspection (OBJECT ENCODING, OBJECT FREQ, OBJECT IDLETIME, OBJECT REFCOUNT)
+- ✅ Geospatial operations (GEOADD, GEOPOS, GEODIST, GEOHASH, GEOSEARCH, GEOSEARCHSTORE)
 - ✅ Connection commands (PING, ECHO, SELECT, CLIENT ID, CLIENT GETNAME)
+- ✅ Server management commands (INFO, CONFIG GET/SET/REWRITE/RESETSTAT, DBSIZE, FLUSHDB, FLUSHALL, TIME, LASTSAVE, LOLWUT)
 - ✅ ACL commands (ACL LIST, ACL GETUSER, ACL SETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL LOG, ACL LOG RESET, ACL WHOAMI, ACL USERS, ACL SAVE, ACL LOAD, ACL DRYRUN)
 - ✅ Transaction commands (WATCH, UNWATCH, MULTI, EXEC, DISCARD) - **See transaction limitations below**
 - ✅ Scripting commands (EVAL, EVALSHA, SCRIPT LOAD, SCRIPT EXISTS, SCRIPT FLUSH, SCRIPT KILL, SCRIPT DEBUG)
@@ -107,7 +114,6 @@ blockingSocketTimeoutMillis
 - **Pub/Sub**: Redis publish/subscribe not implemented
 - ✅ **Lua scripting**: Full support for EVAL/EVALSHA, SCRIPT management (LOAD, EXISTS, FLUSH, KILL, DEBUG), and Valkey Functions (FCALL/FUNCTION *)
 - **Modules**: Redis module commands not available
-- **Typed sorted set methods**: No dedicated methods like `zadd()`, `zrem()` - use `sendCommand()` instead
 
 ### Configuration Limitations
 - **Complex SSL configurations**: Jedis `JedisClientConfig` SSL parameters cannot be mapped to Valkey GLIDE `GlideClientConfiguration`

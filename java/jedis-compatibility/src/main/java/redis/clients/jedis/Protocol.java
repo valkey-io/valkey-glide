@@ -372,7 +372,7 @@ public class Protocol {
         }
     }
 
-    /** Redis protocol keywords enum based on original Jedis Protocol.Keyword. */
+    /** Redis protocol keywords enum. */
     public enum Keyword implements Rawable {
         AGGREGATE,
         ALPHA,

@@ -196,6 +196,7 @@ type baseClientConfiguration struct {
 	reconnectStrategy *BackoffStrategy
 	lazyConnect       bool
 	DatabaseId        *int `json:"database_id,omitempty"`
+	compressionConfig *CompressionConfiguration
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -248,6 +249,14 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	if config.DatabaseId != nil {
 		request.DatabaseId = uint32(*config.DatabaseId)
+	}
+
+	if config.compressionConfig != nil {
+		compressionPb, err := config.compressionConfig.toProtobuf()
+		if err != nil {
+			return nil, fmt.Errorf("invalid compression configuration: %w", err)
+		}
+		request.CompressionConfig = compressionPb
 	}
 
 	return &request, nil
@@ -461,6 +470,16 @@ func (config *ClientConfiguration) WithDatabaseId(id int) *ClientConfiguration {
 	return config
 }
 
+// WithCompressionConfiguration sets the compression configuration for the client.
+// When configured, values sent to the server will be automatically compressed if they
+// meet the minimum size threshold.
+func (config *ClientConfiguration) WithCompressionConfiguration(
+	compressionConfig *CompressionConfiguration,
+) *ClientConfiguration {
+	config.compressionConfig = compressionConfig
+	return config
+}
+
 // WithAdvancedConfiguration sets the advanced configuration settings for the client.
 func (config *ClientConfiguration) WithAdvancedConfiguration(
 	advancedConfig *AdvancedClientConfiguration,
@@ -646,6 +665,16 @@ func (config *ClusterClientConfiguration) WithReconnectStrategy(
 // WithDatabaseId sets the index of the logical database to connect to.
 func (config *ClusterClientConfiguration) WithDatabaseId(id int) *ClusterClientConfiguration {
 	config.DatabaseId = &id
+	return config
+}
+
+// WithCompressionConfiguration sets the compression configuration for the cluster client.
+// When configured, values sent to the server will be automatically compressed if they
+// meet the minimum size threshold.
+func (config *ClusterClientConfiguration) WithCompressionConfiguration(
+	compressionConfig *CompressionConfiguration,
+) *ClusterClientConfiguration {
+	config.compressionConfig = compressionConfig
 	return config
 }
 
