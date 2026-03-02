@@ -4695,6 +4695,8 @@ public class JedisTest {
 
         String result = jedis.functionFlush();
         assertEquals("OK", result);
+    }
+
     void objectIdletime_string() {
         String key = "objectIdletimeKey_" + UUID.randomUUID();
         jedis.set(key, "value");
