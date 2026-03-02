@@ -1322,7 +1322,7 @@ where
                 // set subscriptions to none, they will be applied upon the topology discovery
 
                 async move {
-                    let result = connect_and_check(
+                    let result = connect_and_check::<C>(
                         &node_addr,
                         params,
                         socket_addr,
@@ -1332,13 +1332,28 @@ where
                     )
                     .await
                     .get_node();
-                    let node_address = if let Some(socket_addr) = socket_addr {
-                        // Use format! to avoid reverse DNS lookup that socket_addr.to_string() performs
-                        let addr = format!("{}:{}", socket_addr.ip(), socket_addr.port());
-                        addr
-                    } else {
-                        node_addr
-                    };
+                    // The PushManager is initialized with connection_info.addr
+                    // (the original hostname, e.g. "localhost:6379"), but the
+                    // ConnectionsMap key uses the resolved IP from socket_addr
+                    // (e.g. "127.0.0.1:6379"). When these differ, align them so
+                    // PubSub synchronization can match subscriptions to nodes.
+                    let (node_address, push_manager_needs_update) =
+                        if let Some(socket_addr) = socket_addr {
+                            let resolved = socket_addr.to_string();
+                            let differs = resolved != node_addr;
+                            (resolved, differs)
+                        } else {
+                            (node_addr, false)
+                        };
+                    if push_manager_needs_update {
+                        if let Ok(ref node) = result {
+                            node.user_connection
+                                .conn
+                                .clone()
+                                .await
+                                .update_push_manager_node_address(node_address.clone());
+                        }
+                    }
                     result.map(|node| (node_address, node))
                 }
             })
@@ -1348,7 +1363,7 @@ where
                     ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
                     None,
                 ),
-                |connections: (ConnectionMap<C>, Option<String>), addr_conn_res| async move {
+                |connections: (ConnectionMap<C>, Option<String>), addr_conn_res: RedisResult<_>| async move {
                     match addr_conn_res {
                         Ok((addr, node)) => {
                             connections.0 .0.insert(addr, node);
@@ -2309,12 +2324,7 @@ where
                                         let conn_lock =
                                             inner.conn_lock.read().expect(MUTEX_READ_ERR);
                                         socket_addresses.find_map(|socket_addr| {
-                                            let addr_str = format!(
-                                                "{}:{}",
-                                                socket_addr.ip(),
-                                                socket_addr.port()
-                                            );
-                                            conn_lock.node_for_address(&addr_str)
+                                            conn_lock.node_for_address(&socket_addr.to_string())
                                         })
                                     },
                                 );
