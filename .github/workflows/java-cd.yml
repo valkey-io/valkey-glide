@@ -115,6 +115,32 @@ jobs:
               run: |
                   rustup target add ${{ matrix.host.TARGET }}
 
+            - name: Install cross-compilation tools for fat JAR
+              if: ${{ matrix.host.TARGET == 'fat-jar' }}
+              shell: bash
+              run: |
+                  # Install cargo-zigbuild for Linux cross-compilation
+                  cargo install cargo-zigbuild
+                  
+                  # Install cargo-xwin for Windows cross-compilation
+                  cargo install cargo-xwin
+                  
+                  # Install zig (required by cargo-zigbuild)
+                  brew install zig
+                  
+                  # Pre-download Windows SDK for cargo-xwin
+                  mkdir -p ~/.xwin
+                  cargo xwin --accept-license splat --output ~/.xwin
+                  
+                  # Add all required Rust targets
+                  rustup target add x86_64-unknown-linux-gnu
+                  rustup target add aarch64-unknown-linux-gnu
+                  rustup target add x86_64-unknown-linux-musl
+                  rustup target add aarch64-unknown-linux-musl
+                  rustup target add x86_64-apple-darwin
+                  rustup target add aarch64-apple-darwin
+                  rustup target add x86_64-pc-windows-msvc
+
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
@@ -165,7 +191,19 @@ jobs:
                     GRADLE_CMD="./gradlew"
                   fi
 
-                  if [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
+                  if [[ "${{ matrix.host.TARGET }}" == "fat-jar" ]]; then
+                    # Build fat JAR with all platform native libraries
+                    $GRADLE_CMD --build-cache :client:buildAllFat -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                    
+                    # Publish fat JAR to Maven local
+                    $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                    
+                    # Build jedis-compatibility with fat JAR dependency
+                    $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  elif [[ "${{ matrix.host.TARGET }}" == *"musl"* ]]; then
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
