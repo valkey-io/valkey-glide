@@ -3,6 +3,7 @@ package glide.internal;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.BaseClient;
+import glide.api.logging.Logger;
 import glide.ffi.resolvers.NativeUtils;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
@@ -42,8 +43,8 @@ public class GlideCoreClient implements AutoCloseable {
                                     break;
                                 } catch (Exception e) {
                                     // Log but don't stop cleanup thread
-                                    glide.api.logging.Logger.log(
-                                            glide.api.logging.Logger.Level.WARN,
+                                    Logger.log(
+                                            Logger.Level.WARN,
                                             "GlideCoreClient-Cleanup",
                                             "Error in cleanup thread: " + e.getMessage());
                                 }

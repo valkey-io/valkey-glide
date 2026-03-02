@@ -63,14 +63,14 @@ public class StandaloneExample {
 
         // Send SET and GET
         CompletableFuture<String> setResponse = client.set("foo", "bar");
-        log(INFO, "app", "Set response is " + setResponse.get());
+        log(INFO, "glide", "Set response is " + setResponse.get());
 
         CompletableFuture<String> getResponse = client.get("foo");
-        log(INFO, "app", "Get response is " + getResponse.get());
+        log(INFO, "glide", "Get response is " + getResponse.get());
 
         // Send PING
         CompletableFuture<String> pong = client.ping();
-        log(INFO, "app", "Ping response is " + pong.get());
+        log(INFO, "glide", "Ping response is " + pong.get());
     }
 
     /**
