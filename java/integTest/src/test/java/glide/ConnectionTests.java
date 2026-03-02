@@ -22,7 +22,8 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.*;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
-import java.util.List;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -43,7 +44,7 @@ public class ConnectionTests {
     @EnumSource(ProtocolVersion.class)
     @SneakyThrows
     public void basic_client(ProtocolVersion protocol) {
-        var regularClient =
+        GlideClient regularClient =
                 GlideClient.createClient(commonClientConfig().protocol(protocol).build()).get();
         regularClient.close();
     }
@@ -52,7 +53,7 @@ public class ConnectionTests {
     @EnumSource(ProtocolVersion.class)
     @SneakyThrows
     public void cluster_client(ProtocolVersion protocol) {
-        var clusterClient =
+        GlideClusterClient clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
                         .get();
         clusterClient.close();
@@ -81,7 +82,7 @@ public class ConnectionTests {
             int requestTimeout,
             BackoffStrategy backoffStrategy) {
         if (clusterMode) {
-            var advancedConfiguration =
+            AdvancedGlideClusterClientConfiguration advancedConfiguration =
                     AdvancedGlideClusterClientConfiguration.builder()
                             .connectionTimeout(connectionTimeout)
                             .build();
@@ -92,7 +93,7 @@ public class ConnectionTests {
                                     .build())
                     .get();
         }
-        var advancedConfiguration =
+        AdvancedGlideClientConfiguration advancedConfiguration =
                 AdvancedGlideClientConfiguration.builder().connectionTimeout(connectionTimeout).build();
         return GlideClient.createClient(
                         commonClientConfig()
@@ -106,7 +107,7 @@ public class ConnectionTests {
     @SneakyThrows
     public BaseClient createClientWithTLSMode(boolean isCluster, boolean useInsecureTLS) {
         if (isCluster) {
-            var advancedConfiguration =
+            AdvancedGlideClusterClientConfiguration advancedConfiguration =
                     AdvancedGlideClusterClientConfiguration.builder()
                             .tlsAdvancedConfiguration(
                                     TlsAdvancedConfiguration.builder().useInsecureTLS(useInsecureTLS).build())
@@ -115,7 +116,7 @@ public class ConnectionTests {
                             commonClusterClientConfig().advancedConfiguration(advancedConfiguration).build())
                     .get();
         }
-        var advancedConfiguration =
+        AdvancedGlideClientConfiguration advancedConfiguration =
                 AdvancedGlideClientConfiguration.builder()
                         .tlsAdvancedConfiguration(
                                 TlsAdvancedConfiguration.builder().useInsecureTLS(useInsecureTLS).build())
@@ -142,7 +143,7 @@ public class ConnectionTests {
         assertEquals(configSetClient.configResetStat().get(), OK);
 
         // Get Replica Count for current cluster
-        var clusterInfo =
+        ClusterValue<Object> clusterInfo =
                 configSetClient
                         .customCommand(
                                 new String[] {"INFO", "REPLICATION"},
@@ -160,7 +161,7 @@ public class ConnectionTests {
         String getCmdstat = String.format("cmdstat_get:calls=%d", 3);
 
         // Setting AZ for all Nodes
-        configSetClient.configSet(Map.of("availability-zone", az), ALL_NODES).get();
+        configSetClient.configSet(Collections.singletonMap("availability-zone", az), ALL_NODES).get();
         configSetClient.close();
 
         // Creating Client with AZ configuration for testing
@@ -170,7 +171,7 @@ public class ConnectionTests {
         Map<String, Map<String, String>> azData = azGetResult.getMultiValue();
 
         // Check that all replicas have the availability zone set to the az
-        for (var entry : azData.entrySet()) {
+        for (Map.Entry<String, Map<String, String>> entry : azData.entrySet()) {
             assertEquals(az, entry.getValue().get("availability-zone"));
         }
 
@@ -209,7 +210,7 @@ public class ConnectionTests {
                 GlideClusterClient.createClient(azClusterClientConfig().requestTimeout(2000).build()).get();
 
         // reset availability zone for all nodes
-        configSetClient.configSet(Map.of("availability-zone", ""), ALL_NODES).get();
+        configSetClient.configSet(Collections.singletonMap("availability-zone", ""), ALL_NODES).get();
         assertEquals(configSetClient.configResetStat().get(), OK);
 
         Long fooSlotKey =
@@ -221,7 +222,7 @@ public class ConnectionTests {
         int convertedKey = Integer.parseInt(fooSlotKey.toString());
         configSetClient
                 .configSet(
-                        Map.of("availability-zone", az),
+                        Collections.singletonMap("availability-zone", az),
                         new RequestRoutingConfiguration.SlotIdRoute(convertedKey, REPLICA))
                 .get();
         configSetClient.close();
@@ -287,9 +288,9 @@ public class ConnectionTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void test_connection_timeout(boolean clusterMode) {
-        var backoffStrategy =
+        BackoffStrategy backoffStrategy =
                 BackoffStrategy.builder().exponentBase(2).factor(100).numOfRetries(1).build();
-        var client = createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy);
+        BaseClient client = createConnectionTimeoutClient(clusterMode, 250, 20000, backoffStrategy);
 
         // Runnable for long-running DEBUG SLEEP command
         Runnable debugSleepTask =
@@ -329,7 +330,7 @@ public class ConnectionTests {
                 () -> {
                     try {
                         Thread.sleep(1000); // Wait to ensure the debug sleep command is running
-                        var timeoutClient =
+                        BaseClient timeoutClient =
                                 createConnectionTimeoutClient(clusterMode, 10000, 250, backoffStrategy);
                         assertEquals(timeoutClient.set("key", "value").get(), "OK");
                         timeoutClient.close();
@@ -342,7 +343,7 @@ public class ConnectionTests {
         ExecutorService executorService = Executors.newFixedThreadPool(3);
         try {
             executorService.invokeAll(
-                    List.of(
+                    Arrays.asList(
                             Executors.callable(debugSleepTask),
                             Executors.callable(failToConnectTask),
                             Executors.callable(connectToClientTask)));
@@ -371,12 +372,14 @@ public class ConnectionTests {
 
         // Reset stats and set all nodes to other_az
         assertEquals(configSetClient.configResetStat().get(), OK);
-        configSetClient.configSet(Map.of("availability-zone", otherAz), ALL_NODES).get();
+        configSetClient
+                .configSet(Collections.singletonMap("availability-zone", otherAz), ALL_NODES)
+                .get();
 
         // Set primary for slot 12182 to az
         configSetClient
                 .configSet(
-                        Map.of("availability-zone", az),
+                        Collections.singletonMap("availability-zone", az),
                         new RequestRoutingConfiguration.SlotIdRoute(12182, PRIMARY))
                 .get();
 
@@ -467,12 +470,14 @@ public class ConnectionTests {
         assertEquals(configSetClient.configResetStat().get(), OK);
 
         // Set ALL nodes to otherAz (us-east-1a)
-        configSetClient.configSet(Map.of("availability-zone", otherAz), ALL_NODES).get();
+        configSetClient
+                .configSet(Collections.singletonMap("availability-zone", otherAz), ALL_NODES)
+                .get();
 
         // Set REPLICA for slot to clientAz (us-east-1b)
         configSetClient
                 .configSet(
-                        Map.of("availability-zone", clientAz),
+                        Collections.singletonMap("availability-zone", clientAz),
                         new RequestRoutingConfiguration.SlotIdRoute(slot, REPLICA))
                 .get();
 
@@ -771,10 +776,12 @@ public class ConnectionTests {
     @Test
     public void test_tcp_nodelay_default_value() {
         // Verify default is null (not set)
-        var standaloneConfig = AdvancedGlideClientConfiguration.builder().build();
+        AdvancedGlideClientConfiguration standaloneConfig =
+                AdvancedGlideClientConfiguration.builder().build();
         assertEquals(null, standaloneConfig.getTcpNoDelay());
 
-        var clusterConfig = AdvancedGlideClusterClientConfiguration.builder().build();
+        AdvancedGlideClusterClientConfiguration clusterConfig =
+                AdvancedGlideClusterClientConfiguration.builder().build();
         assertEquals(null, clusterConfig.getTcpNoDelay());
     }
 
@@ -799,7 +806,7 @@ public class ConnectionTests {
         // Test explicit true
         BaseClient clientTrue;
         if (clusterMode) {
-            var advancedConfig =
+            AdvancedGlideClusterClientConfiguration advancedConfig =
                     AdvancedGlideClusterClientConfiguration.builder().tcpNoDelay(true).build();
             clientTrue =
                     GlideClusterClient.createClient(
@@ -807,7 +814,8 @@ public class ConnectionTests {
                             .get();
             assertEquals("PONG", ((GlideClusterClient) clientTrue).ping().get());
         } else {
-            var advancedConfig = AdvancedGlideClientConfiguration.builder().tcpNoDelay(true).build();
+            AdvancedGlideClientConfiguration advancedConfig =
+                    AdvancedGlideClientConfiguration.builder().tcpNoDelay(true).build();
             clientTrue =
                     GlideClient.createClient(
                                     commonClientConfig().advancedConfiguration(advancedConfig).build())
@@ -821,7 +829,7 @@ public class ConnectionTests {
         // Test explicit false
         BaseClient clientFalse;
         if (clusterMode) {
-            var advancedConfig =
+            AdvancedGlideClusterClientConfiguration advancedConfig =
                     AdvancedGlideClusterClientConfiguration.builder().tcpNoDelay(false).build();
             clientFalse =
                     GlideClusterClient.createClient(
@@ -829,7 +837,8 @@ public class ConnectionTests {
                             .get();
             assertEquals("PONG", ((GlideClusterClient) clientFalse).ping().get());
         } else {
-            var advancedConfig = AdvancedGlideClientConfiguration.builder().tcpNoDelay(false).build();
+            AdvancedGlideClientConfiguration advancedConfig =
+                    AdvancedGlideClientConfiguration.builder().tcpNoDelay(false).build();
             clientFalse =
                     GlideClient.createClient(
                                     commonClientConfig().advancedConfiguration(advancedConfig).build())

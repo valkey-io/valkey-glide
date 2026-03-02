@@ -91,7 +91,7 @@ public class ClusterBatchTests {
                                 STORE_COMMAND_STRING,
                                 "key2")));
 
-        var protobufBatch = batch.getProtobufBatch().build();
+        command_request.CommandRequestOuterClass.Batch protobufBatch = batch.getProtobufBatch().build();
 
         for (int idx = 0; idx < protobufBatch.getCommandsCount(); idx++) {
             Command protobuf = protobufBatch.getCommands(idx);
