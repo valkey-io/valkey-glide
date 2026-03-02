@@ -158,7 +158,7 @@ export type AdvancedGlideClientConfiguration =
  * Client used for connection to standalone servers.
  * Use {@link createClient} to request a client.
  *
- * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone | Valkey Glide Wiki}.
+ * @see For full documentation refer to {@link https://glide.valkey.io/how-to/client-initialization/#standalone | Valkey GLIDE Documentation}.
  */
 export class GlideClient extends BaseClient {
     /**
@@ -261,7 +261,7 @@ export class GlideClient extends BaseClient {
      * **Notes:**
      * - **Atomic Batches - Transactions:** If the transaction fails due to a `WATCH` command, `EXEC` will return `null`.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey GLIDE Documentation} for details on Valkey Transactions.
      *
      * @param batch - A {@link Batch} object containing a list of commands to be executed.
      * @param raiseOnError - Determines how errors are handled within the batch response.
@@ -322,7 +322,7 @@ export class GlideClient extends BaseClient {
      *
      * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
+     * @see {@link https://glide.valkey.io/concepts/client-features/custom-commands/|Valkey GLIDE Documentation} for details on the restrictions and limitations of the custom command API.
      *
      * @param args - A list including the command name and arguments for the custom command.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -947,7 +947,7 @@ export class GlideClient extends BaseClient {
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
      *
-     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
+     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey GLIDE Documentation} for more details.
      *
      * @returns A simple `"OK"` response.
      *

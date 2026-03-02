@@ -239,7 +239,7 @@ python/
 - **Development Setup:** [DEVELOPER.md](./DEVELOPER.md)
 - **Examples:** [../examples/python/](../examples/python/)
 - **API Documentation:** [Valkey GLIDE Python docs](https://valkey.io/valkey-glide/)
-- **Wiki:** [Python wrapper wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper)
+- **Documentation:** [GLIDE Documentation](https://glide.valkey.io/)
 - **Test Suites:** [tests/](./tests/) directory
 - **Async Client:** [glide-async/](./glide-async/) directory
 - **Sync Client:** [glide-sync/](./glide-sync/) directory
