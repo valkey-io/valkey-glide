@@ -16,7 +16,7 @@ import (
 
 // TestTlsWithoutCertificate_Standalone tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	clientConfig := config.NewClientConfiguration().
 		WithAddress(&suite.standaloneHosts[0]).
@@ -29,7 +29,7 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
 
 // TestTlsWithSelfSignedCertificate_Standalone tests standalone client with custom root certificates
 func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	if err != nil {
@@ -57,7 +57,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
 
 // TestTlsWithMultipleCertificates_Standalone tests standalone client with multiple concatenated certificates
 func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	if err != nil {
@@ -89,7 +89,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 
 // TestTlsWithoutCertificate_Cluster tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	clientConfig := config.NewClusterClientConfiguration().
 		WithAddress(&suite.clusterHosts[0]).
@@ -102,7 +102,7 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
 
 // TestTlsWithSelfSignedCertificate_Cluster tests cluster client with custom root certificates
 func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	if err != nil {
@@ -130,7 +130,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
 
 // TestTlsWithMultipleCertificates_Cluster tests cluster client with multiple concatenated certificates
 func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	if err != nil {
@@ -162,7 +162,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
 
 // TestTlsWithEmptyCertificate_Standalone tests that empty certificate array returns an error
 func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
@@ -180,7 +180,7 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
 
 // TestTlsWithEmptyCertificate_Cluster tests that empty certificate array returns an error
 func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
@@ -198,7 +198,7 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
 
 // TestTlsWithInvalidCertificate_Standalone tests that invalid certificate returns an error
 func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
@@ -216,7 +216,7 @@ func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
 
 // TestTlsWithInvalidCertificate_Cluster tests that invalid certificate returns an error
 func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Cluster() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
@@ -251,7 +251,7 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 
 // TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)
@@ -278,7 +278,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 
 // TestTlsWithIPv4AddressSucceeds_Cluster tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)
@@ -305,7 +305,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
 
 // TestTlsWithIPv6AddressSucceeds_Standalone tests TLS connection with IPv6 address
 func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)
@@ -332,7 +332,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
 
 // TestTlsWithIPv6AddressSucceeds_Cluster tests TLS connection with IPv6 address
 func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
-	skipIfTlsNotEnabled(suite)
+	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
 	require.NoError(suite.T(), err)

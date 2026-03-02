@@ -190,9 +190,16 @@ func assertConnected(t *testing.T, client interface{}) {
 	require.Equal(t, "PONG", result)
 }
 
-// Skips the current test if TLS is not enabled.
-func skipIfTlsNotEnabled(suite *GlideTestSuite) {
+// Skips the current test if TLS is disabled.
+func skipIfTlsDisabled(suite *GlideTestSuite) {
 	if !suite.tls {
-		suite.T().Skip("TLS is not enabled, skipping TLS tests")
+		suite.T().Skip("TLS is disabled, skipping TLS tests")
+	}
+}
+
+// Skips the current test if TLS is enabled.
+func skipIfTlsEnabled(suite *GlideTestSuite) {
+	if suite.tls {
+		suite.T().Skip("TLS is enabled, skipping non-TLS tests")
 	}
 }
