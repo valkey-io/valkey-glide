@@ -2,7 +2,12 @@
 
 import pytest
 from glide.glide_client import GlideClient
-from glide_shared.config import GlideClientConfiguration, NodeAddress, ProtocolVersion, ReadFrom
+from glide_shared.config import (
+    GlideClientConfiguration,
+    NodeAddress,
+    ProtocolVersion,
+    ReadFrom,
+)
 from glide_shared.exceptions import RequestError
 
 from tests.async_tests.conftest import create_client
@@ -36,9 +41,10 @@ class TestReadOnlyMode:
                 await client.set("key", "value")
 
             # Verify the error message contains the expected text
-            assert "write commands are not allowed in read-only mode" in str(
-                exc_info.value
-            ).lower()
+            assert (
+                "write commands are not allowed in read-only mode"
+                in str(exc_info.value).lower()
+            )
         finally:
             await client.close()
 
@@ -89,9 +95,10 @@ class TestReadOnlyMode:
             )
 
         # Verify the error message contains the expected text
-        assert "read-only mode is not compatible with azaffinity" in str(
-            exc_info.value
-        ).lower()
+        assert (
+            "read-only mode is not compatible with azaffinity"
+            in str(exc_info.value).lower()
+        )
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -114,9 +121,10 @@ class TestReadOnlyMode:
             )
 
         # Verify the error message contains the expected text
-        assert "read-only mode is not compatible with azaffinity" in str(
-            exc_info.value
-        ).lower()
+        assert (
+            "read-only mode is not compatible with azaffinity"
+            in str(exc_info.value).lower()
+        )
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -163,10 +171,10 @@ class TestReadOnlyMode:
         4. Read commands work on both
         """
         # Get the standalone cluster addresses
-        standalone_cluster = pytest.standalone_cluster
-        assert len(standalone_cluster.nodes_addr) >= 2, (
-            "Standalone cluster should have at least 2 nodes (primary + replica)"
-        )
+        standalone_cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        assert (
+            len(standalone_cluster.nodes_addr) >= 2
+        ), "Standalone cluster should have at least 2 nodes (primary + replica)"
 
         # Node 0 is the primary, Node 1 is the replica (based on cluster_manager.py)
         node_0_addr = standalone_cluster.nodes_addr[0]
@@ -205,16 +213,18 @@ class TestReadOnlyMode:
             # Test write commands are blocked on client connected to node 0
             with pytest.raises(RequestError) as exc_info_0:
                 await client_node_0.set("test_key", "value")
-            assert "write commands are not allowed in read-only mode" in str(
-                exc_info_0.value
-            ).lower()
+            assert (
+                "write commands are not allowed in read-only mode"
+                in str(exc_info_0.value).lower()
+            )
 
             # Test write commands are blocked on client connected to node 1
             with pytest.raises(RequestError) as exc_info_1:
                 await client_node_1.set("test_key", "value")
-            assert "write commands are not allowed in read-only mode" in str(
-                exc_info_1.value
-            ).lower()
+            assert (
+                "write commands are not allowed in read-only mode"
+                in str(exc_info_1.value).lower()
+            )
 
         finally:
             await client_node_0.close()
