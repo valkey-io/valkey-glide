@@ -79,7 +79,6 @@ func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*
 	return glide.NewClusterClient(clientConfig)
 }
 
-
 func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Standalone() {
 	skipIfNotEnabled(suite, false)
 
