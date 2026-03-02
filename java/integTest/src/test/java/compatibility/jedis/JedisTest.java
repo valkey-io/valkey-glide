@@ -26,6 +26,7 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.Transaction;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.args.FlushMode;
@@ -4600,13 +4601,12 @@ public class JedisTest {
         String key2 = "multi_key2_" + UUID.randomUUID();
 
         try {
-            // Start transaction
-            Jedis transaction = jedis.multi();
+            // Start transaction - returns Transaction object in Jedis 5.1.5+
+            Transaction transaction = jedis.multi();
             assertNotNull(transaction);
-            assertSame(jedis, transaction, "multi() should return the same Jedis instance");
 
             // Discard transaction
-            String discardResult = jedis.discard();
+            String discardResult = transaction.discard();
             assertEquals("OK", discardResult);
         } finally {
             jedis.del(key1, key2);
@@ -4623,14 +4623,14 @@ public class JedisTest {
 
         try {
             // Start transaction and queue commands
-            jedis.multi();
+            Transaction transaction = jedis.multi();
 
-            // Note: In the actual GLIDE implementation, commands after multi()
-            // would need to be queued in the transaction batch.
+            // Note: In Jedis 5.1.5+, commands are queued on the Transaction object
+            // and return Response objects that are populated after exec()
             // For now, we test that the API exists and works.
 
             // Discard the transaction for safety
-            jedis.discard();
+            transaction.discard();
         } finally {
             try {
                 jedis.del(key);
@@ -4697,6 +4697,7 @@ public class JedisTest {
         assertEquals("OK", result);
     }
 
+    @Test
     void objectIdletime_string() {
         String key = "objectIdletimeKey_" + UUID.randomUUID();
         jedis.set(key, "value");

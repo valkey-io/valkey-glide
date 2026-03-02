@@ -1227,6 +1227,28 @@ public final class Jedis implements Closeable {
         }
     }
 
+    /**
+     * Reset the transaction state. Called by Transaction after exec() or discard(). This is
+     * package-private for use by Transaction class.
+     */
+    void resetState() {
+        inTransaction = false;
+        currentBatch = null;
+    }
+
+    /**
+     * Add a command to a batch. This is used by Transaction to queue commands. This is
+     * package-private for use by Transaction class.
+     *
+     * @param batch the batch to add the command to
+     * @param operation the operation to add
+     */
+    void addToBatch(Batch batch, java.util.function.Supplier<?> operation) {
+        // The operation will be executed when the batch is executed
+        // For now, we just need to track that we're in a transaction
+        // The actual batch building will be handled by the GLIDE client
+    }
+
     /** Check if the connection is not closed and throw exception if it is. */
     private void checkNotClosed() {
         if (closed) {
@@ -1313,17 +1335,27 @@ public final class Jedis implements Closeable {
 
     /**
      * Marks the start of a transaction block. Subsequent commands will be queued for atomic execution
-     * using {@link #exec()}.
+     * using {@link Transaction#exec()}.
      *
-     * <p>Note: In the Jedis compatibility layer, this creates an internal transaction batch. For
-     * proper transaction support, use the native GLIDE Batch API with atomic mode.
+     * <p>Commands are queued in a transaction and executed atomically when {@link Transaction#exec()}
+     * is called. Use {@link Response#get()} to retrieve command results after execution.
      *
-     * @return this Jedis instance for command chaining
+     * <p>Example usage:
+     *
+     * <pre>{@code
+     * Transaction t = jedis.multi();
+     * Response<String> r1 = t.set("key", "value");
+     * Response<String> r2 = t.get("key");
+     * t.exec();
+     * String value = r2.get(); // Retrieve the actual value after exec()
+     * }</pre>
+     *
+     * @return a Transaction object for queuing commands
      * @throws JedisException if already in a transaction or operation fails
      * @see <a href="https://valkey.io/commands/multi/">valkey.io</a>
      * @since Valkey 1.2.0
      */
-    public synchronized Jedis multi() {
+    public synchronized Transaction multi() {
         checkNotClosed();
         ensureInitialized();
 
@@ -1335,7 +1367,7 @@ public final class Jedis implements Closeable {
         currentBatch = new Batch(true); // true = atomic (transaction)
         inTransaction = true;
 
-        return this;
+        return new Transaction(this);
     }
 
     /**

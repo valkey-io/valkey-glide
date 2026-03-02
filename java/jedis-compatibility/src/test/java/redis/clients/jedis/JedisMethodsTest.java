@@ -499,16 +499,19 @@ public class JedisMethodsTest {
     public void testTransactionMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
-        // Test multi() exists
+        // Test multi() exists and returns Transaction
         Method multi = jedisClass.getMethod("multi");
-        assertEquals(Jedis.class, multi.getReturnType());
+        assertEquals(Transaction.class, multi.getReturnType());
 
-        // Test exec() exists
-        Method exec = jedisClass.getMethod("exec");
+        // Test Transaction class methods exist
+        Class<Transaction> transactionClass = Transaction.class;
+
+        // Test exec() exists on Transaction
+        Method exec = transactionClass.getMethod("exec");
         assertEquals(List.class, exec.getReturnType());
 
-        // Test discard() exists
-        Method discard = jedisClass.getMethod("discard");
+        // Test discard() exists on Transaction
+        Method discard = transactionClass.getMethod("discard");
         assertEquals(String.class, discard.getReturnType());
     }
 
