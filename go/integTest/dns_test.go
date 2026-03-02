@@ -19,8 +19,8 @@ func (suite *GlideTestSuite) skipIfNotEnabled(useTLS bool) {
 		suite.T().Skip("DNS tests are not enabled. Set VALKEY_GLIDE_DNS_TESTS_ENABLED to enable.")
 	}
 
-	if useTLS && !suite.tls {
-		suite.T().Skip("TLS is not enabled, skipping TLS tests")
+	if useTLS {
+		skipIfTlsNotEnabled(suite)
 	}
 }
 
