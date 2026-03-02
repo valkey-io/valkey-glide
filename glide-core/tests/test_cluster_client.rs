@@ -19,9 +19,7 @@ mod cluster_client_tests {
     use redis::{ConnectionAddr, InfoDict, RedisConnectionInfo, Value};
 
     use rstest::rstest;
-    use utilities::cluster::{
-        setup_test_basics_internal, SHORT_CLUSTER_TEST_TIMEOUT,
-    };
+    use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
     use utilities::*;
     use versions::Versioning;
 
@@ -786,7 +784,7 @@ mod cluster_client_tests {
                     || error_msg.contains("no permissions")
                     || error_msg.contains("permission")
                     || error_msg.contains("CLUSTER");
-                
+
                 if !is_acl_error {
                     eprintln!("Warning: Expected ACL-related error, got: {}", error_msg);
                 }

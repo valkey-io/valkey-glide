@@ -3750,25 +3750,23 @@ where
 
     // Check for NOPERM errors early and return immediately if found
     // Note: NOPERM is an ACL error. ACL permissions are applied cluster wide.
-    // If no perm is found it should be surfaced first. 
-    if let Some(noperm_err) = topology_join_results
-        .iter()
-        .find_map(|(_, res)| {
-            res.as_ref()
-                .err()
-                .filter(|err| err.code() == Some("NOPERM"))
-        }){
-        let noperm_err_msg =  noperm_err.to_string();
+    // If no perm is found it should be surfaced first.
+    if let Some(noperm_err) = topology_join_results.iter().find_map(|(_, res)| {
+        res.as_ref()
+            .err()
+            .filter(|err| err.code() == Some("NOPERM"))
+    }) {
+        let noperm_err_msg = noperm_err.to_string();
         return TopologyQueryResult {
             topology_result: Err(RedisError::from((
                 ErrorKind::ResponseError,
                 "User Not Permitted",
-                noperm_err_msg
+                noperm_err_msg,
             ))),
             failed_connections: Some(failed_addresses),
         };
     }
-    
+
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
         res.as_ref()
             .ok()
