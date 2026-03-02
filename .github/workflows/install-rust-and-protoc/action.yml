@@ -20,10 +20,18 @@ inputs:
 runs:
     using: "composite"
     steps:
-        - name: Install Rust toolchain
+        - name: Install Rust toolchain (standard targets)
+          if: ${{ inputs.target != 'fat-jar' }}
           uses: dtolnay/rust-toolchain@stable
           with:
               targets: ${{ inputs.target }}
+              components: rustfmt, clippy
+
+        - name: Install Rust toolchain (fat JAR - all targets)
+          if: ${{ inputs.target == 'fat-jar' }}
+          uses: dtolnay/rust-toolchain@stable
+          with:
+              targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu, x86_64-unknown-linux-musl, aarch64-unknown-linux-musl, x86_64-apple-darwin, aarch64-apple-darwin, x86_64-pc-windows-msvc
               components: rustfmt, clippy
 
         - name: Install protoc (protobuf)

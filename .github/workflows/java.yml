@@ -138,31 +138,22 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   language: java
 
-            - name: Install cross-compilation tools for fat JAR
+            - name: Install cross-compilation tools for fat JAR (cargo-zigbuild, cargo-xwin, zig)
               if: ${{ matrix.host.TARGET == 'fat-jar' }}
               shell: bash
               run: |
                   # Install cargo-zigbuild for Linux cross-compilation
                   cargo install cargo-zigbuild
-                  
+
                   # Install cargo-xwin for Windows cross-compilation
                   cargo install cargo-xwin
-                  
+
                   # Install zig (required by cargo-zigbuild)
                   brew install zig
-                  
+
                   # Pre-download Windows SDK for cargo-xwin
                   mkdir -p ~/.xwin
                   cargo xwin --accept-license splat --output ~/.xwin
-                  
-                  # Add all required Rust targets
-                  rustup target add x86_64-unknown-linux-gnu
-                  rustup target add aarch64-unknown-linux-gnu
-                  rustup target add x86_64-unknown-linux-musl
-                  rustup target add aarch64-unknown-linux-musl
-                  rustup target add x86_64-apple-darwin
-                  rustup target add aarch64-apple-darwin
-                  rustup target add x86_64-pc-windows-msvc
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
