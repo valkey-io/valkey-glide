@@ -28,6 +28,7 @@ import {
 } from "../build-ts";
 import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
+import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
 import {
     batchTest,
     checkFunctionListResponse,
@@ -2008,6 +2009,44 @@ describe("GlideClient", () => {
             expect(await clientFalse.set("key3", "value3")).toBe("OK");
             expect(await clientFalse.get("key3")).toBe("value3");
             clientFalse.close();
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "should connect with IPv4 address",
+        async () => {
+            const address = {
+                host: HOST_ADDRESS_IPV4,
+                port: cluster.ports()[0],
+            };
+            const client = await GlideClient.createClient({
+                addresses: [address],
+            });
+
+            const result = await client.ping();
+            expect(result).toBe("PONG");
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "should connect with IPv6 address",
+        async () => {
+            const address = {
+                host: HOST_ADDRESS_IPV6,
+                port: cluster.ports()[0],
+            };
+            const client = await GlideClient.createClient({
+                addresses: [address],
+            });
+
+            const result = await client.ping();
+            expect(result).toBe("PONG");
+
+            client.close();
         },
         TIMEOUT,
     );
