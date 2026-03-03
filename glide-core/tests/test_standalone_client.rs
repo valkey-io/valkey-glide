@@ -1238,4 +1238,91 @@ mod standalone_client_tests {
             );
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_primary_writes_replica_reads() {
+        // Create a primary mock and a replica mock
+        let servers = create_primary_mock_with_replicas(1);
+        let primary_mock = &servers[0];
+        let replica_mock = &servers[1];
+
+        // Add SET command response to primary
+        let mut set_cmd = redis::cmd("SET");
+        set_cmd.arg("test_key").arg("test_value");
+        primary_mock.add_response(&set_cmd, "+OK\r\n".to_string());
+
+        // Add GET command response to replica (simulating replicated data)
+        let mut get_cmd = redis::cmd("GET");
+        get_cmd.arg("test_key");
+        replica_mock.add_response(&get_cmd, "$10\r\ntest_value\r\n".to_string());
+
+        let addresses = get_mock_addresses(&servers);
+        let primary_address = vec![addresses[0].clone()];
+        let replica_address = vec![addresses[1].clone()];
+
+        block_on_all(async {
+            // Create a normal client connected to the primary for writes
+            let primary_connection_request =
+                create_connection_request(primary_address.as_slice(), &Default::default());
+            let mut primary_client = StandaloneClient::create_client(
+                primary_connection_request.into(),
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Primary client should connect successfully");
+
+            // Create a read-only client connected to the replica for reads
+            let mut replica_connection_request =
+                create_connection_request(replica_address.as_slice(), &Default::default());
+            replica_connection_request.read_only = Some(true);
+            let mut replica_client = StandaloneClient::create_client(
+                replica_connection_request.into(),
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Read-only replica client should connect successfully");
+
+            // Write to primary using normal client
+            let write_result = primary_client.send_command(&set_cmd).await;
+            assert!(
+                write_result.is_ok(),
+                "Write to primary should succeed, got error: {:?}",
+                write_result.err()
+            );
+
+            // Read from replica using read-only client
+            let read_result = replica_client.send_command(&get_cmd).await;
+            assert!(
+                read_result.is_ok(),
+                "Read from replica should succeed in read-only mode, got error: {:?}",
+                read_result.err()
+            );
+            let value = read_result.unwrap();
+            assert_eq!(
+                value,
+                Value::BulkString(b"test_value".to_vec()),
+                "Read value should match written value"
+            );
+
+            // Verify that write commands are blocked on the read-only replica client
+            let blocked_write_result = replica_client.send_command(&set_cmd).await;
+            assert!(
+                blocked_write_result.is_err(),
+                "Write command should be blocked on read-only client"
+            );
+            let err = blocked_write_result.unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("write commands are not allowed in read-only mode"),
+                "Error message should indicate write commands are not allowed, got: {}",
+                err
+            );
+        });
+    }
 }

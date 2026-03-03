@@ -224,126 +224,103 @@ impl StandaloneClient {
         let addresses = connection_request.addresses.clone();
         let read_from_option = connection_request.read_from.clone();
 
-        // Handle connection initialization differently based on read_only mode
-        let (nodes, primary_index, addresses_and_errors) = if read_only {
-            // Read-only mode: skip INFO REPLICATION, treat all nodes as read targets
-            let mut stream = stream::iter(addresses.into_iter())
-                .map(move |address| {
-                    let info = valkey_connection_info.clone();
-                    let retry = retry_strategy;
-                    let sender = push_sender.clone();
-                    let tls = tls_mode.unwrap_or(TlsMode::NoTls);
-                    let discover = discover_az;
-                    let timeout = connection_timeout;
-                    let params = tls_params.clone();
-                    let nodelay = tcp_nodelay;
-                    let sync = pubsub_synchronizer.clone();
-                    async move {
-                        get_connection_without_replication_info(
-                            &address, &retry, &info, tls, &sender, discover, timeout, params,
-                            nodelay, &sync,
-                        )
-                        .await
-                        .map_err(|err| (format!("{}:{}", address.host, address.port), err))
-                    }
-                })
-                .buffer_unordered(node_count);
+        let mut stream = stream::iter(addresses.into_iter())
+            .map(move |address| {
+                let info = valkey_connection_info.clone();
+                let retry = retry_strategy;
+                let sender = push_sender.clone();
+                let tls = tls_mode.unwrap_or(TlsMode::NoTls);
+                let discover = discover_az;
+                let timeout = connection_timeout;
+                let params = tls_params.clone();
+                let nodelay = tcp_nodelay;
+                let sync = pubsub_synchronizer.clone();
+                let skip_replication = read_only;
+                async move {
+                    get_connection_and_replication_info(
+                        &address,
+                        &retry,
+                        &info,
+                        tls,
+                        &sender,
+                        discover,
+                        timeout,
+                        params,
+                        nodelay,
+                        &sync,
+                        skip_replication,
+                    )
+                    .await
+                    .map_err(|err| (format!("{}:{}", address.host, address.port), err))
+                }
+            })
+            .buffer_unordered(node_count);
 
-            let mut nodes = Vec::with_capacity(node_count);
-            let mut addresses_and_errors = Vec::with_capacity(node_count);
-            while let Some(result) = stream.next().await {
-                match result {
-                    Ok(connection) => {
-                        nodes.push(connection);
-                    }
-                    Err((address, (connection, err))) => {
-                        nodes.push(connection);
-                        addresses_and_errors.push((Some(address), err));
+        let mut nodes = Vec::with_capacity(node_count);
+        let mut addresses_and_errors = Vec::with_capacity(node_count);
+        let mut primary_index = if read_only { Some(0) } else { None };
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok((connection, replication_status)) => {
+                    nodes.push(connection);
+                    // Only check for primary in normal mode (when replication_status is Some)
+                    // and the node reports role:master
+                    let is_primary = replication_status
+                        .and_then(|status| redis::from_owned_redis_value::<String>(status).ok())
+                        .is_some_and(|val| val.contains("role:master"));
+
+                    if is_primary {
+                        if let Some(existing_primary) = primary_index {
+                            // More than one primary found
+                            return Err(StandaloneClientConnectionError::PrimaryConflictFound(
+                                format!(
+                                    "Primary nodes: {:?}, {:?}",
+                                    nodes.pop(),
+                                    nodes.get(existing_primary)
+                                ),
+                            ));
+                        }
+                        primary_index = Some(nodes.len().saturating_sub(1));
                     }
                 }
+                Err((address, (connection, err))) => {
+                    nodes.push(connection);
+                    addresses_and_errors.push((Some(address), err));
+                }
             }
+        }
 
+        // Validate we have required connections
+        let primary_index = if read_only {
             // In read-only mode, we need at least one successful connection
-            if nodes.iter().all(|_| false) && !addresses_and_errors.is_empty() {
+            if nodes.is_empty() && !addresses_and_errors.is_empty() {
                 return Err(StandaloneClientConnectionError::FailedConnection(
                     addresses_and_errors,
                 ));
             }
-
-            // Set primary_index to 0 (won't be used for writes in read-only mode)
-            (nodes, 0, addresses_and_errors)
+            0 // primary_index won't be used for writes in read-only mode
         } else {
-            // Normal mode: use INFO REPLICATION to detect primary
-            let mut stream = stream::iter(addresses.into_iter())
-                .map(move |address| {
-                    let info = valkey_connection_info.clone();
-                    let retry = retry_strategy;
-                    let sender = push_sender.clone();
-                    let tls = tls_mode.unwrap_or(TlsMode::NoTls);
-                    let discover = discover_az;
-                    let timeout = connection_timeout;
-                    let params = tls_params.clone();
-                    let nodelay = tcp_nodelay;
-                    let sync = pubsub_synchronizer.clone();
-                    async move {
-                        get_connection_and_replication_info(
-                            &address, &retry, &info, tls, &sender, discover, timeout, params,
-                            nodelay, &sync,
+            // Normal mode requires a primary
+            match primary_index {
+                Some(idx) => idx,
+                None => {
+                    let mut errors = addresses_and_errors;
+                    if errors.is_empty() {
+                        errors.insert(
+                            0,
+                            (
+                                None,
+                                RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "No primary node found",
+                                )),
+                            ),
                         )
-                        .await
-                        .map_err(|err| (format!("{}:{}", address.host, address.port), err))
-                    }
-                })
-                .buffer_unordered(node_count);
-
-            let mut nodes = Vec::with_capacity(node_count);
-            let mut addresses_and_errors = Vec::with_capacity(node_count);
-            let mut primary_index = None;
-            while let Some(result) = stream.next().await {
-                match result {
-                    Ok((connection, replication_status)) => {
-                        nodes.push(connection);
-                        if redis::from_owned_redis_value::<String>(replication_status)
-                            .is_ok_and(|val| val.contains("role:master"))
-                        {
-                            if let Some(primary_index) = primary_index {
-                                // More than one primary found
-                                return Err(StandaloneClientConnectionError::PrimaryConflictFound(
-                                    format!(
-                                        "Primary nodes: {:?}, {:?}",
-                                        nodes.pop(),
-                                        nodes.get(primary_index)
-                                    ),
-                                ));
-                            }
-                            primary_index = Some(nodes.len().saturating_sub(1));
-                        }
-                    }
-                    Err((address, (connection, err))) => {
-                        nodes.push(connection);
-                        addresses_and_errors.push((Some(address), err));
-                    }
+                    };
+                    return Err(StandaloneClientConnectionError::FailedConnection(errors));
                 }
             }
-
-            let Some(primary_index) = primary_index else {
-                let mut errors = addresses_and_errors;
-                if errors.is_empty() {
-                    errors.insert(
-                        0,
-                        (
-                            None,
-                            RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "No primary node found",
-                            )),
-                        ),
-                    )
-                };
-                return Err(StandaloneClientConnectionError::FailedConnection(errors));
-            };
-
-            (nodes, primary_index, addresses_and_errors)
         };
 
         if !addresses_and_errors.is_empty() {
@@ -853,7 +830,8 @@ async fn get_connection_and_replication_info(
     tls_params: Option<redis::TlsConnParams>,
     tcp_nodelay: bool,
     pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
-) -> Result<(ReconnectingConnection, Value), (ReconnectingConnection, RedisError)> {
+    skip_replication_check: bool,
+) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
         *retry_strategy,
@@ -876,51 +854,17 @@ async fn get_connection_and_replication_info(
         }
     };
 
+    // Skip INFO REPLICATION in read-only mode
+    if skip_replication_check {
+        return Ok((reconnecting_connection, None));
+    }
+
     match multiplexed_connection
         .send_packed_command(redis::cmd("INFO").arg("REPLICATION"))
         .await
     {
-        Ok(replication_status) => Ok((reconnecting_connection, replication_status)),
+        Ok(replication_status) => Ok((reconnecting_connection, Some(replication_status))),
         Err(err) => Err((reconnecting_connection, err)),
-    }
-}
-
-/// Creates a connection without sending INFO REPLICATION command.
-/// Used in read-only mode where primary node detection is not needed.
-#[allow(clippy::too_many_arguments)]
-async fn get_connection_without_replication_info(
-    address: &NodeAddress,
-    retry_strategy: &RetryStrategy,
-    connection_info: &redis::RedisConnectionInfo,
-    tls_mode: TlsMode,
-    push_sender: &Option<mpsc::UnboundedSender<PushInfo>>,
-    discover_az: bool,
-    connection_timeout: Duration,
-    tls_params: Option<redis::TlsConnParams>,
-    tcp_nodelay: bool,
-    pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
-) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
-    let reconnecting_connection = ReconnectingConnection::new(
-        address,
-        *retry_strategy,
-        connection_info.clone(),
-        tls_mode,
-        push_sender.clone(),
-        discover_az,
-        connection_timeout,
-        tls_params,
-        tcp_nodelay,
-        pubsub_synchronizer.clone(),
-    )
-    .await?;
-
-    // Verify the connection is working by getting it (but don't send INFO REPLICATION)
-    match reconnecting_connection.get_connection().await {
-        Ok(_) => Ok(reconnecting_connection),
-        Err(err) => {
-            reconnecting_connection.reconnect(ReconnectReason::ConnectionDropped);
-            Err((reconnecting_connection, err))
-        }
     }
 }
 

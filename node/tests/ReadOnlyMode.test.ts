@@ -13,7 +13,6 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import { GlideClient, ProtocolVersion, RequestError } from "../build-ts";
 import {
-    flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -29,9 +28,8 @@ import {
  * - PreferReplica strategy is accepted with read-only mode
  */
 describe("ReadOnlyMode", () => {
-    const testsFailed = 0;
     let cluster: ValkeyCluster;
-    let client: GlideClient;
+    let client: GlideClient | undefined;
 
     beforeAll(async () => {
         const standaloneAddresses: string =
@@ -46,15 +44,13 @@ describe("ReadOnlyMode", () => {
     }, 20000);
 
     afterEach(async () => {
-        await flushAndCloseClient(false, cluster?.getAddresses(), client);
+        // Just close the client - no flush needed for read-only tests
+        client?.close();
+        client = undefined;
     });
 
     afterAll(async () => {
-        if (testsFailed === 0) {
-            await cluster.close();
-        } else {
-            await cluster.close(true);
-        }
+        await cluster.close();
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
