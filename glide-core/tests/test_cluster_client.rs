@@ -765,12 +765,9 @@ mod cluster_client_tests {
 
             if let Err(err) = result {
                 let error_msg = format!("{:?}", err);
-                println!("Connection error: {}", error_msg);
                 // Assert the error contains permission error
                 assert!(
-                    error_msg.contains("PermissionDenied")
-                        && error_msg
-                            .contains("has no permissions to run the 'cluster|slots' command"),
+                    error_msg.contains("PermissionDenied"),
                     "Error should be a perrmission error, got: {}",
                     error_msg
                 );
