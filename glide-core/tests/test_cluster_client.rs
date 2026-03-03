@@ -710,10 +710,9 @@ mod cluster_client_tests {
         if let Ok(client) = redis::Client::open(redis::ConnectionInfo {
             addr: addr.clone(),
             redis: RedisConnectionInfo::default(),
-        })
-            && let Ok(mut connection) = client
-                .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
-                .await
+        }) && let Ok(mut connection) = client
+            .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
+            .await
         {
             let mut cmd = redis::cmd("ACL");
             cmd.arg("DELUSER").arg(username);
