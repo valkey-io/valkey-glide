@@ -132,8 +132,6 @@ impl PushManager {
 
 #[cfg(test)]
 mod tests {
-    use rustls::crypto::cipher::NONCE_LEN;
-
     use super::*;
 
     #[test]

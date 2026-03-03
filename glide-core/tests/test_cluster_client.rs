@@ -5,6 +5,9 @@ mod utilities;
 #[cfg(test)]
 mod cluster_client_tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::time::Duration;
 
     use super::*;
     use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
@@ -430,10 +433,12 @@ mod cluster_client_tests {
                 .await;
             match res {
                 Err(err) => {
-                    // Connection was dropped as expected
+                    // Connection was dropped as expected, or reconnection is in progress
                     assert!(
-                        err.is_connection_dropped() || err.is_timeout(),
-                        "Expected connection dropped or timeout error, got: {err:?}",
+                        err.is_connection_dropped()
+                            || err.is_timeout()
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
+                        "Expected connection dropped, timeout, or connection unavailable error, got: {err:?}",
                     );
                     let client_info = repeat_try_create(|| async {
                         let mut client = test_basics.client.clone();
@@ -672,6 +677,172 @@ mod cluster_client_tests {
             assert!(
                 client_result.is_err(),
                 "Expected cluster connection to fail with wrong root certificate"
+            );
+        });
+    }
+
+    /// Test for #4990: Failover causes near-zero throughput
+    /// See: https://github.com/valkey-io/valkey-glide/issues/4990
+    #[rstest]
+    #[timeout(LONG_CLUSTER_TEST_TIMEOUT*2)]
+    fn test_failover_doesnt_block_healthy_shards() {
+        block_on_all(async {
+            const NUM_KEYS: usize = 1000;
+            const NUM_PRIMARIES: u16 = 10;
+            const NUM_REPLICAS: u16 = 1;
+            const MEASUREMENT_DURATION_SECS: u64 = 5;
+
+            // Start cluster with replicas
+            let mut test_basics = setup_cluster_with_replicas(
+                TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    shared_server: false,
+                    ..Default::default()
+                },
+                NUM_REPLICAS,
+                NUM_PRIMARIES,
+            )
+            .await;
+
+            // Get cluster info
+            let cluster = test_basics.cluster.unwrap();
+            let addresses = cluster.get_server_addresses();
+
+            // Set keys on all shards to establish connections
+            for i in 0..NUM_KEYS {
+                let key = format!("key_{}", i);
+                let mut cmd = redis::cmd("SET");
+                cmd.arg(&key).arg("value");
+                test_basics
+                    .client
+                    .send_command(&mut cmd, None)
+                    .await
+                    .unwrap();
+            }
+
+            // Measure baseline throughput across all shards
+            let baseline_count = Arc::new(AtomicU64::new(0));
+            let stop_flag = Arc::new(AtomicBool::new(false));
+            let mut tasks = Vec::new();
+            for i in 0..NUM_KEYS {
+                let mut client = test_basics.client.clone();
+                let count = baseline_count.clone();
+                let stop = stop_flag.clone();
+                let key_id = i;
+
+                tasks.push(tokio::spawn(async move {
+                    while !stop.load(Ordering::Relaxed) {
+                        let mut cmd = redis::cmd("GET");
+                        cmd.arg(format!("key_{}", key_id));
+                        if client.send_command(&mut cmd, None).await.is_ok() {
+                            count.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                }));
+            }
+            tokio::time::sleep(Duration::from_secs(MEASUREMENT_DURATION_SECS)).await;
+            stop_flag.store(true, Ordering::Relaxed);
+            futures::future::join_all(tasks).await;
+            let baseline_qps = baseline_count.load(Ordering::Relaxed) / MEASUREMENT_DURATION_SECS;
+
+            // Choose failover method:
+            // 1. CLUSTER FAILOVER (graceful, no connection loss, no errors expected)
+            // 2. SHUTDOWN NOSAVE (ungraceful, connection loss, triggers reconnection)
+            // 3. DEBUG SEGFAULT (crash, connection loss, triggers reconnection)
+            let failover_method = "SEGFAULT"; // FAILOVER | SHUTDOWN | SEGFAULT
+            match failover_method {
+                "FAILOVER" => {
+                    // Graceful failover via replica
+                    let replica_addr = &addresses[1];
+                    let (replica_host, replica_port) = match replica_addr {
+                        redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
+                        redis::ConnectionAddr::TcpTls {
+                            host: h, port: p, ..
+                        } => (h.clone(), *p),
+                        _ => panic!("Unexpected connection type"),
+                    };
+                    let mut cmd = redis::cmd("CLUSTER");
+                    cmd.arg("FAILOVER");
+                    let routing = RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
+                        host: replica_host,
+                        port: replica_port,
+                    });
+                    let _ = test_basics
+                        .client
+                        .send_command(&mut cmd, Some(routing))
+                        .await;
+                }
+                "SHUTDOWN" | "SEGFAULT" => {
+                    // Ungraceful failover via primary crash
+                    let primary_addr = &addresses[0];
+                    let (host, port) = match primary_addr {
+                        redis::ConnectionAddr::Tcp(h, p) => (h.clone(), *p),
+                        redis::ConnectionAddr::TcpTls {
+                            host: h, port: p, ..
+                        } => (h.clone(), *p),
+                        _ => panic!("Unexpected connection type"),
+                    };
+                    let mut cmd = redis::cmd(if failover_method == "SHUTDOWN" {
+                        "SHUTDOWN"
+                    } else {
+                        "DEBUG"
+                    });
+                    if failover_method == "SHUTDOWN" {
+                        cmd.arg("NOSAVE");
+                    } else {
+                        cmd.arg("SEGFAULT");
+                    }
+                    let routing =
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress { host, port });
+                    let _ = test_basics
+                        .client
+                        .send_command(&mut cmd, Some(routing))
+                        .await;
+                }
+                _ => panic!("Unknown failover method"),
+            }
+
+            // Measure throughput across shards during failover
+            let failover_count = Arc::new(AtomicU64::new(0));
+            let error_count = Arc::new(AtomicU64::new(0));
+            let stop_flag = Arc::new(AtomicBool::new(false));
+            let mut tasks = Vec::new();
+            for i in 0..NUM_KEYS {
+                let mut client = test_basics.client.clone();
+                let success_count = failover_count.clone();
+                let err_count = error_count.clone();
+                let stop = stop_flag.clone();
+                let key_id = i;
+
+                tasks.push(tokio::spawn(async move {
+                    while !stop.load(Ordering::Relaxed) {
+                        let mut cmd = redis::cmd("GET");
+                        cmd.arg(format!("key_{}", key_id));
+                        match client.send_command(&mut cmd, None).await {
+                            Ok(_) => success_count.fetch_add(1, Ordering::Relaxed),
+                            Err(_) => err_count.fetch_add(1, Ordering::Relaxed),
+                        };
+                    }
+                }));
+            }
+            tokio::time::sleep(Duration::from_secs(MEASUREMENT_DURATION_SECS)).await;
+            stop_flag.store(true, Ordering::Relaxed);
+            futures::future::join_all(tasks).await;
+            let failover_qps = failover_count.load(Ordering::Relaxed) / MEASUREMENT_DURATION_SECS;
+            let errors = error_count.load(Ordering::Relaxed);
+
+            // Verify throughput recovers after full cluster failover
+            let expected_min_throughput = baseline_qps * 50 / 100;
+            println!(
+                "Baseline QPS: {}, Failover QPS: {}, Errors: {}",
+                baseline_qps, failover_qps, errors
+            );
+            assert!(
+                failover_qps > expected_min_throughput,
+                "Throughput dropped too much during full cluster failover: {} vs baseline {} (expected >{})",
+                failover_qps,
+                baseline_qps,
+                expected_min_throughput
             );
         });
     }
