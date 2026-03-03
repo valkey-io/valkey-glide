@@ -676,35 +676,6 @@ mod cluster_client_tests {
         });
     }
 
-    /// Helper function to setup ACL user without CLUSTER permissions
-    async fn setup_restricted_acl_user(
-        addr: &ConnectionAddr,
-        username: &str,
-        password: &str,
-    ) -> Result<(), redis::RedisError> {
-        let client = redis::Client::open(redis::ConnectionInfo {
-            addr: addr.clone(),
-            redis: RedisConnectionInfo::default(),
-        })?;
-
-        let mut connection = client
-            .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
-            .await?;
-
-        // Create user with all permissions EXCEPT cluster commands
-        let mut cmd = redis::cmd("ACL");
-        cmd.arg("SETUSER")
-            .arg(username)
-            .arg("on")
-            .arg("allkeys")
-            .arg("+@all") // Grant all command categories
-            .arg("-cluster") // Explicitly deny cluster commands
-            .arg(format!(">{password}"));
-
-        connection.send_packed_command(&cmd).await?;
-        Ok(())
-    }
-
     /// Helper function to cleanup ACL user
     async fn cleanup_acl_user(addr: &ConnectionAddr, username: &str) {
         if let Ok(client) = redis::Client::open(redis::ConnectionInfo {
@@ -794,6 +765,7 @@ mod cluster_client_tests {
 
             if let Err(err) = result {
                 let error_msg = format!("{:?}", err);
+                println!("Connection error: {}", error_msg);
                 // Assert the error contains permission error
                 assert!(
                     error_msg.contains("PermissionDenied")
