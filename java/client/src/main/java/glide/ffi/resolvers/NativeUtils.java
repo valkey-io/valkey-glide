@@ -91,34 +91,37 @@ public class NativeUtils {
         try {
             Process process = Runtime.getRuntime().exec(new String[] {"ldd", "--version"});
 
-            // Read the output
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader =
-                    new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-
-            // Also read error stream (musl outputs to stderr)
-            try (BufferedReader reader =
-                    new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
+            // Read both stdout and stderr (musl outputs to stderr)
+            String output =
+                    readInputStream(process.getInputStream()) + readInputStream(process.getErrorStream());
 
             process.waitFor();
 
             // Check if output contains "musl" (case-insensitive)
-            return output.toString().toLowerCase().contains("musl");
+            return output.toLowerCase().contains("musl");
 
         } catch (Exception e) {
             // Default to glibc on any exception
             return false;
         }
+    }
+
+    /**
+     * Reads all lines from an InputStream and returns them as a single String.
+     *
+     * @param inputStream The input stream to read from
+     * @return The content as a String with newlines preserved
+     * @throws IOException If an I/O error occurs
+     */
+    private static String readInputStream(InputStream inputStream) throws IOException {
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+        return output.toString();
     }
 
     /**
