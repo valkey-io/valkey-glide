@@ -2,11 +2,12 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { afterEach, beforeAll, describe, expect, it } from "@jest/globals";
+import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { TestTLSConfig, ValkeyCluster } from "../../utils/TestUtils.js";
 import { GlideClient, GlideClusterClient, ProtocolVersion } from "../build-ts";
 import { HOSTNAME_NO_TLS, HOSTNAME_TLS } from "./Constants";
 import {
+    assertConnected,
     getCaCertificateData,
     getClientConfigurationOption,
     getServerVersion,
@@ -89,8 +90,6 @@ async function createClusterClient(
 (isDnsTestsEnabled() ? describe : describe.skip)("DNS Tests - Non-TLS", () => {
     let standaloneServer: ValkeyCluster;
     let clusterServer: ValkeyCluster;
-    let standaloneClient: GlideClient | undefined;
-    let clusterClient: GlideClusterClient | undefined;
 
     beforeAll(async () => {
         standaloneServer = await ValkeyCluster.createCluster(
@@ -107,24 +106,21 @@ async function createClusterClient(
         );
     }, CLUSTER_CREATION_TIMEOUT);
 
-    afterEach(async () => {
-        if (standaloneClient) standaloneClient.close();
-        if (clusterClient) clusterClient.close();
-
-        standaloneClient = undefined;
-        clusterClient = undefined;
+    afterAll(async () => {
+        standaloneServer.close();
+        clusterServer.close();
     });
 
     it(
         "should connect with valid hostname - standalone",
         async () => {
-            standaloneClient = await createClient(
+            const client = await createClient(
                 standaloneServer,
                 HOSTNAME_NO_TLS,
             );
 
-            const result = await standaloneClient.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
+            client.close();
         },
         TIMEOUT,
     );
@@ -142,13 +138,13 @@ async function createClusterClient(
     it(
         "should connect with valid hostname - cluster",
         async () => {
-            clusterClient = await createClusterClient(
+            const client = await createClusterClient(
                 clusterServer,
                 HOSTNAME_NO_TLS,
             );
 
-            const result = await clusterClient.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
+            client.close();
         },
         TIMEOUT,
     );
@@ -167,8 +163,6 @@ async function createClusterClient(
 (isDnsTestsEnabled() ? describe : describe.skip)("DNS Tests - TLS", () => {
     let standaloneServer: ValkeyCluster;
     let clusterServer: ValkeyCluster;
-    let standaloneClient: GlideClient | undefined;
-    let clusterClient: GlideClusterClient | undefined;
 
     beforeAll(async () => {
         const tlsConfig: TestTLSConfig = {
@@ -198,24 +192,18 @@ async function createClusterClient(
         );
     }, CLUSTER_CREATION_TIMEOUT);
 
-    afterEach(async () => {
-        if (standaloneClient) standaloneClient.close();
-        if (clusterClient) clusterClient.close();
-
-        standaloneClient = undefined;
-        clusterClient = undefined;
+    afterAll(async () => {
+        standaloneServer.close();
+        clusterServer.close();
     });
 
     it(
         "should connect with hostname in certificate SAN - standalone",
         async () => {
-            standaloneClient = await createClient(
-                standaloneServer,
-                HOSTNAME_TLS,
-            );
+            const client = await createClient(standaloneServer, HOSTNAME_TLS);
 
-            const result = await standaloneClient.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
+            client.close();
         },
         TIMEOUT,
     );
@@ -233,13 +221,13 @@ async function createClusterClient(
     it(
         "should connect with hostname in certificate SAN - cluster",
         async () => {
-            clusterClient = await createClusterClient(
+            const client = await createClusterClient(
                 clusterServer,
                 HOSTNAME_TLS,
             );
 
-            const result = await clusterClient.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
+            client.close();
         },
         TIMEOUT,
     );

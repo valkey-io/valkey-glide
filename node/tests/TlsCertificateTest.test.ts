@@ -19,6 +19,7 @@ import {
 } from "../build-ts";
 import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
 import {
+    assertConnected,
     getCaCertificateData,
     getClientConfigurationOption,
     getServerVersion,
@@ -492,8 +493,7 @@ describe("TLS with custom certificates", () => {
                     },
                 });
 
-                const result = await standaloneClient.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(standaloneClient);
             },
             TIMEOUT,
         );
@@ -515,8 +515,7 @@ describe("TLS with custom certificates", () => {
                     },
                 });
 
-                const result = await standaloneClient.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(standaloneClient);
             },
             TIMEOUT,
         );
@@ -540,8 +539,7 @@ describe("TLS with custom certificates", () => {
                     },
                 });
 
-                const result = await clusterClient.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(clusterClient);
             },
             TIMEOUT,
         );
@@ -563,8 +561,7 @@ describe("TLS with custom certificates", () => {
                     },
                 });
 
-                const result = await clusterClient.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(clusterClient);
             },
             TIMEOUT,
         );

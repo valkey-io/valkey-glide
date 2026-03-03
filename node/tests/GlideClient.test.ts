@@ -30,6 +30,7 @@ import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
 import {
+    assertConnected,
     batchTest,
     checkFunctionListResponse,
     checkFunctionStatsResponse,
@@ -2024,8 +2025,7 @@ describe("GlideClient", () => {
                 addresses: [address],
             });
 
-            const result = await client.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
 
             client.close();
         },
@@ -2043,8 +2043,7 @@ describe("GlideClient", () => {
                 addresses: [address],
             });
 
-            const result = await client.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
 
             client.close();
         },

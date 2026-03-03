@@ -40,6 +40,7 @@ import {
 import { runBaseTests } from "./SharedTests";
 import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
 import {
+    assertConnected,
     batchTest,
     checkClusterResponse,
     checkFunctionListResponse,
@@ -3208,8 +3209,7 @@ describe("GlideClusterClient", () => {
                 addresses: [address],
             });
 
-            const result = await client.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
 
             client.close();
         },
@@ -3227,8 +3227,7 @@ describe("GlideClusterClient", () => {
                 addresses: [address],
             });
 
-            const result = await client.ping();
-            expect(result).toBe("PONG");
+            await assertConnected(client);
 
             client.close();
         },

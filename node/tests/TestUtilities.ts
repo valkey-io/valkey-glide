@@ -2506,7 +2506,9 @@ export async function startServer(
 /**
  * Asserts that the given client is connected.
  */
-export async function assertConnected(client: GlideClient | GlideClusterClient): Promise<void> {
+export async function assertConnected(
+    client: GlideClient | GlideClusterClient,
+): Promise<void> {
     const result = await client.ping();
     expect(result).toBe("PONG");
 }
