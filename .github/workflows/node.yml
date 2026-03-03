@@ -143,6 +143,15 @@ jobs:
                   npm install
                   npm run build:release
 
+            - name: Configure DNS for tests
+              shell: bash
+              run: |
+                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
+                  127.0.0.1 valkey.glide.test.no_tls.com
+                  ::1 valkey.glide.test.tls.com
+                  ::1 valkey.glide.test.no_tls.com"
+                  echo "$ENTRIES" | sudo tee -a /etc/hosts
+
             - name: Test
               shell: bash
               run: |
@@ -151,6 +160,7 @@ jobs:
               working-directory: ./node
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
+                  VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
             - name: Upload test reports
               if: always()
