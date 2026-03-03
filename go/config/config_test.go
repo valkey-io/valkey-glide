@@ -1185,3 +1185,132 @@ func TestConfig_AllFieldsSetWithCompression(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 }
+
+// ============================================================================
+// Read-Only Mode Tests
+// ============================================================================
+
+func TestConfig_ReadOnly(t *testing.T) {
+	// Test standalone client with read_only enabled
+	config := NewClientConfiguration().WithReadOnly(true)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.ReadOnly)
+	assert.True(t, *result.ReadOnly)
+}
+
+func TestConfig_ReadOnly_DefaultsFalse(t *testing.T) {
+	// Test that read_only defaults to false (not set in protobuf)
+	config := NewClientConfiguration()
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	// When readOnly is false (default), it should not be set in the protobuf
+	assert.Nil(t, result.ReadOnly)
+}
+
+func TestConfig_ReadOnly_ExplicitFalse(t *testing.T) {
+	// Test that explicitly setting read_only to false doesn't set it in protobuf
+	config := NewClientConfiguration().WithReadOnly(false)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	// When readOnly is explicitly false, it should not be set in the protobuf
+	assert.Nil(t, result.ReadOnly)
+}
+
+func TestConfig_ReadOnly_RejectsAzAffinity(t *testing.T) {
+	// Test that read_only with AZ_AFFINITY returns an error
+	config := NewClientConfiguration().
+		WithReadOnly(true).
+		WithReadFrom(AzAffinity).
+		WithClientAZ("us-east-1a")
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "read-only mode is not compatible with AZAffinity")
+}
+
+func TestConfig_ReadOnly_RejectsAzAffinityReplicasAndPrimary(t *testing.T) {
+	// Test that read_only with AZ_AFFINITY_REPLICAS_AND_PRIMARY returns an error
+	config := NewClientConfiguration().
+		WithReadOnly(true).
+		WithReadFrom(AzAffinityReplicaAndPrimary).
+		WithClientAZ("us-east-1a")
+
+	_, err := config.ToProtobuf()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "read-only mode is not compatible with AZAffinity")
+}
+
+func TestConfig_ReadOnly_AcceptsPreferReplica(t *testing.T) {
+	// Test that read_only with PreferReplica is valid
+	config := NewClientConfiguration().
+		WithReadOnly(true).
+		WithReadFrom(PreferReplica)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.ReadOnly)
+	assert.True(t, *result.ReadOnly)
+	assert.Equal(t, protobuf.ReadFrom_PreferReplica, result.ReadFrom)
+}
+
+func TestConfig_ReadOnly_AcceptsPrimary(t *testing.T) {
+	// Test that read_only with Primary ReadFrom is valid
+	// (reads will go to connected nodes treated as replicas)
+	config := NewClientConfiguration().
+		WithReadOnly(true).
+		WithReadFrom(Primary)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.ReadOnly)
+	assert.True(t, *result.ReadOnly)
+	assert.Equal(t, protobuf.ReadFrom_Primary, result.ReadFrom)
+}
+
+func TestConfig_ReadOnly_WithOtherOptions(t *testing.T) {
+	// Test that read_only works alongside other configuration options
+	username := "username"
+	password := "password"
+	timeout := 3 * time.Second
+	clientName := "client name"
+	databaseId := 1
+
+	config := NewClientConfiguration().
+		WithReadOnly(true).
+		WithReadFrom(PreferReplica).
+		WithCredentials(NewServerCredentials(username, password)).
+		WithRequestTimeout(timeout).
+		WithClientName(clientName).
+		WithDatabaseId(databaseId)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.ReadOnly)
+	assert.True(t, *result.ReadOnly)
+	assert.Equal(t, protobuf.ReadFrom_PreferReplica, result.ReadFrom)
+	assert.Equal(t, username, result.AuthenticationInfo.Username)
+	assert.Equal(t, password, result.AuthenticationInfo.Password)
+	assert.Equal(t, uint32(timeout.Milliseconds()), result.RequestTimeout)
+	assert.Equal(t, clientName, result.ClientName)
+	assert.Equal(t, uint32(databaseId), result.DatabaseId)
+}
+
+func TestConfig_ReadOnly_FluentAPI(t *testing.T) {
+	// Test fluent API chaining with read-only mode
+	config := NewClientConfiguration().
+		WithAddress(&NodeAddress{Host: "localhost", Port: 6379}).
+		WithReadOnly(true).
+		WithReadFrom(PreferReplica)
+
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, result.ReadOnly)
+	assert.True(t, *result.ReadOnly)
+	assert.Equal(t, 1, len(result.Addresses))
+	assert.Equal(t, "localhost", result.Addresses[0].Host)
+	assert.Equal(t, uint32(6379), result.Addresses[0].Port)
+}
