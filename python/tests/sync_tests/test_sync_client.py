@@ -481,6 +481,24 @@ class TestCommands:
         assert glide_sync_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_set_get_with_bytearray_and_memoryview(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test that set() accepts bytearray and memoryview values."""
+        key_ba = get_random_string(10)
+        key_mv = get_random_string(10)
+        data = os.urandom(256)
+
+        # bytearray value
+        assert glide_sync_client.set(key_ba, bytearray(data)) == OK
+        assert glide_sync_client.get(key_ba) == data
+
+        # memoryview value
+        assert glide_sync_client.set(key_mv, memoryview(bytearray(data))) == OK
+        assert glide_sync_client.get(key_mv) == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     def test_sync_use_resp3_protocol(self, glide_sync_client: TGlideClient):
         result = cast(Dict[bytes, bytes], glide_sync_client.custom_command(["HELLO"]))

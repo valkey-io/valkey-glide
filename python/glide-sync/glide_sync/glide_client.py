@@ -337,7 +337,7 @@ class BaseClient(CoreCommands):
         for arg in args:
             if isinstance(arg, str):
                 arg_bytes = arg.encode(ENCODING)
-            elif isinstance(arg, bytes):
+            elif isinstance(arg, (bytes, bytearray, memoryview)):
                 arg_bytes = arg
             else:
                 raise TypeError(f"Unsupported argument type: {type(arg)}")
@@ -581,7 +581,7 @@ class BaseClient(CoreCommands):
             for arg in args:
                 if isinstance(arg, str):
                     arg_bytes = arg.encode(ENCODING)
-                elif isinstance(arg, bytes):
+                elif isinstance(arg, (bytes, bytearray, memoryview)):
                     arg_bytes = arg
                 else:
                     raise TypeError(f"Unsupported argument type: {type(arg)}")
