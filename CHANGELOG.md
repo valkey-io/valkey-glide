@@ -25,6 +25,7 @@
 * Go: Add CLUSTER management commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER SLOTS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER MYSHARDID, CLUSTER GETKEYSINSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER LINKS) ([#5206](https://github.com/valkey-io/valkey-glide/issues/5206))
 * Java: Make client java 8 compatible
 * Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
+* CORE: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
 
 #### Fixes
 * CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.
