@@ -4251,16 +4251,16 @@ describe("PubSub", () => {
                 if (subscribeMode === Mode.Lazy) {
                     await listener.subscribeLazy(channels);
                     // Allow time for subscription to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
-                    await listener.subscribe(channels, 5000);
+                    await listener.subscribe(channels, 500);
                 }
 
                 // Publish first message and verify reception
                 expect(await sender.publish(message1, channel)).toBeGreaterThan(
                     0,
                 );
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 const pubsubMsg1 = await listener.getPubSubMessage();
                 expect(pubsubMsg1.message).toEqual(message1);
@@ -4272,9 +4272,9 @@ describe("PubSub", () => {
                     await listener.unsubscribeLazy(channels);
 
                     // Wait for unsubscribe to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 30000));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
-                    await listener.unsubscribe(channels, 30000);
+                    await listener.unsubscribe(channels, 500);
                 }
 
                 // Verify no message in queue before publishing
@@ -4283,7 +4283,7 @@ describe("PubSub", () => {
 
                 // Publish second message AFTER unsubscribe
                 await sender.publish(message2, channel);
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Should not receive message after unsubscribe
                 const msg = listener.tryGetPubSubMessage();
@@ -4357,14 +4357,14 @@ describe("PubSub", () => {
                     await listener.psubscribeLazy(patterns);
 
                     // Allow time for subscription to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
-                    await listener.psubscribe(patterns, 5000);
+                    await listener.psubscribe(patterns, 500);
                 }
 
                 // Publish first message to matching channel and verify reception
                 await sender.publish(message1, channel1);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 const pubsubMsg1 = await listener.getPubSubMessage();
                 expect(pubsubMsg1.message).toEqual(message1);
@@ -4375,9 +4375,9 @@ describe("PubSub", () => {
                 if (unsubscribeMode === Mode.Lazy) {
                     await listener.punsubscribeLazy(patterns);
                     // Wait for unsubscribe to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 30000));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
-                    await listener.punsubscribe(patterns, 30000);
+                    await listener.punsubscribe(patterns, 500);
                 }
 
                 // Verify no message in queue before publishing
@@ -4386,7 +4386,7 @@ describe("PubSub", () => {
 
                 // Publish second message AFTER unsubscribe
                 await sender.publish(message2, channel2);
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Should not receive message after unsubscribe
                 const msg = listener.tryGetPubSubMessage();
@@ -4454,11 +4454,11 @@ describe("PubSub", () => {
                     );
 
                     // Allow time for subscription to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
                     await (listener as GlideClusterClient).ssubscribe(
                         channels,
-                        5000,
+                        500,
                     );
                 }
 
@@ -4470,7 +4470,7 @@ describe("PubSub", () => {
                         true,
                     ),
                 ).toBeGreaterThan(0);
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 const pubsubMsg1 = await listener.getPubSubMessage();
                 expect(pubsubMsg1.message).toEqual(message1);
@@ -4483,11 +4483,11 @@ describe("PubSub", () => {
                         channels,
                     );
                     // Wait for unsubscribe to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 30000));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
                     await (listener as GlideClusterClient).sunsubscribe(
                         channels,
-                        30000,
+                        500,
                     );
                 }
 
@@ -4501,7 +4501,7 @@ describe("PubSub", () => {
                     channel,
                     true,
                 );
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Should not receive message after unsubscribe
                 const msg = listener.tryGetPubSubMessage();
@@ -4577,7 +4577,7 @@ describe("PubSub", () => {
                 }
 
                 // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Publish first message
                 expect(await sender.publish(message1, channel)).toBeGreaterThan(
@@ -4585,7 +4585,7 @@ describe("PubSub", () => {
                 );
 
                 // Allow time for message delivery
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Verify first message received
                 const pubsubMsg1 = await listener.getPubSubMessage();
@@ -4596,11 +4596,11 @@ describe("PubSub", () => {
                 if (unsubscribeMode === Mode.Lazy) {
                     await listener.unsubscribeLazy([channel]);
                 } else {
-                    await listener.unsubscribe([channel], 30000);
+                    await listener.unsubscribe([channel], 500);
                 }
 
                 // Wait for unsubscribe to propagate
-                await new Promise((resolve) => setTimeout(resolve, 5000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Drain any pending messages that were published before unsubscribe
                 while (listener.tryGetPubSubMessage() !== null) {
@@ -4611,7 +4611,7 @@ describe("PubSub", () => {
                 await sender.publish(message2, channel);
 
                 // Allow time for potential message delivery
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Verify no message received after unsubscribe
                 const pubsubMsg2 = listener.tryGetPubSubMessage();
@@ -4688,13 +4688,13 @@ describe("PubSub", () => {
                 }
 
                 // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Publish first message to matching channel
                 await sender.publish(message1, channel);
 
                 // Allow time for message delivery
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Verify first message received
                 const pubsubMsg1 = await listener.getPubSubMessage();
@@ -4706,11 +4706,11 @@ describe("PubSub", () => {
                 if (unsubscribeMode === Mode.Lazy) {
                     await listener.punsubscribeLazy([pattern]);
                 } else {
-                    await listener.punsubscribe([pattern], 30000);
+                    await listener.punsubscribe([pattern], 500);
                 }
 
                 // Wait for unsubscribe to propagate
-                await new Promise((resolve) => setTimeout(resolve, 5000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Drain any pending messages that were published before unsubscribe
                 while (listener.tryGetPubSubMessage() !== null) {
@@ -4721,7 +4721,7 @@ describe("PubSub", () => {
                 await sender.publish(message2, channel);
 
                 // Allow time for potential message delivery
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Verify no message received after unsubscribe
                 const pubsubMsg2 = listener.tryGetPubSubMessage();
@@ -4789,7 +4789,7 @@ describe("PubSub", () => {
                 );
 
                 // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Publish first message to sharded channel
                 expect(
@@ -4801,7 +4801,7 @@ describe("PubSub", () => {
                 ).toBeGreaterThan(0);
 
                 // Allow time for message delivery
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Verify first message received
                 const pubsubMsg1 = await listener.getPubSubMessage();
@@ -4817,12 +4817,12 @@ describe("PubSub", () => {
                 } else {
                     await (listener as GlideClusterClient).sunsubscribe(
                         [channel],
-                        30000,
+                        500,
                     );
                 }
 
                 // Wait for unsubscribe to propagate
-                await new Promise((resolve) => setTimeout(resolve, 5000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Drain any pending messages that were published before unsubscribe
                 while (listener.tryGetPubSubMessage() !== null) {
@@ -4837,7 +4837,7 @@ describe("PubSub", () => {
                 );
 
                 // Allow time for potential message delivery
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Verify no message received after unsubscribe
                 const pubsubMsg2 = listener.tryGetPubSubMessage();
@@ -4918,9 +4918,9 @@ describe("PubSub", () => {
                 if (subscribeMode === Mode.Lazy) {
                     await listener.subscribeLazy([channel]);
                     // Allow time for subscription to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
-                    await listener.subscribe([channel], 5000);
+                    await listener.subscribe([channel], 500);
                 }
 
                 // Publish message
@@ -4929,7 +4929,7 @@ describe("PubSub", () => {
                 );
 
                 // Allow time for message delivery
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Verify callback received the message
                 expect(callbackMessages.length).toBe(1);
@@ -4981,7 +4981,7 @@ describe("PubSub", () => {
                 await client.subscribeLazy([channel]);
 
                 // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Get statistics
                 const stats = (await client.getStatistics()) as Record<
