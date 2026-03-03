@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import command_request.CommandRequestOuterClass;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.scan.ScanOptions;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
@@ -51,7 +52,7 @@ public class StandaloneBatchTests {
                 "key1",
                 SortOptions.builder()
                         .byPattern("byPattern")
-                        .getPatterns(List.of("getPattern1", "getPattern2"))
+                        .getPatterns(Arrays.asList("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -71,7 +72,7 @@ public class StandaloneBatchTests {
                         .alpha()
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
-                        .getPatterns(List.of("getPattern1", "getPattern2"))
+                        .getPatterns(Arrays.asList("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -93,7 +94,7 @@ public class StandaloneBatchTests {
                 "key1",
                 SortOptions.builder()
                         .byPattern("byPattern")
-                        .getPatterns(List.of("getPattern1", "getPattern2"))
+                        .getPatterns(Arrays.asList("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -113,7 +114,7 @@ public class StandaloneBatchTests {
                         .alpha()
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
-                        .getPatterns(List.of("getPattern1", "getPattern2"))
+                        .getPatterns(Arrays.asList("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -136,7 +137,7 @@ public class StandaloneBatchTests {
                 "key2",
                 SortOptions.builder()
                         .byPattern("byPattern")
-                        .getPatterns(List.of("getPattern1", "getPattern2"))
+                        .getPatterns(Arrays.asList("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -159,7 +160,7 @@ public class StandaloneBatchTests {
                         .alpha()
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
-                        .getPatterns(List.of("getPattern1", "getPattern2"))
+                        .getPatterns(Arrays.asList("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -197,7 +198,7 @@ public class StandaloneBatchTests {
                                 TYPE_OPTION_STRING,
                                 ZSET.toString())));
 
-        var protobufBatch = batch.getProtobufBatch().build();
+        command_request.CommandRequestOuterClass.Batch protobufBatch = batch.getProtobufBatch().build();
 
         for (int idx = 0; idx < protobufBatch.getCommandsCount(); idx++) {
             CommandRequestOuterClass.Command protobuf = protobufBatch.getCommands(idx);

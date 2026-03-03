@@ -518,7 +518,7 @@ export type SingleNodeRoute =
  * Client used for connection to cluster servers.
  * Use {@link createClient} to request a client.
  *
- * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#cluster | Valkey Glide Wiki}.
+ * @see For full documentation refer to {@link https://glide.valkey.io/how-to/client-initialization/#cluster | Valkey GLIDE Documentation}.
  */
 export class GlideClusterClient extends BaseClient {
     /**
@@ -730,7 +730,7 @@ export class GlideClusterClient extends BaseClient {
      * Using the same cursor object for multiple iterations may result in unexpected behavior.
      *
      * For more information about the Cluster Scan implementation, see
-     * {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan | Cluster Scan}.
+     * {@link https://glide.valkey.io/concepts/client-features/cluster-scan/ | Cluster Scan}.
      *
      * This method can iterate over all keys in the database from the start of the scan until it ends.
      * The same key may be returned in multiple scan iterations.
@@ -795,7 +795,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Glide for Valkey Wiki} for details on the restrictions and limitations of the custom command API.
+     * @see {@link https://glide.valkey.io/concepts/client-features/custom-commands/|Glide for Valkey Wiki} for details on the restrictions and limitations of the custom command API.
      *
      * @param args - A list including the command name and arguments for the custom command.
      * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}
@@ -830,7 +830,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * - **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot. If keys span different slots, the transaction will fail. If the transaction fails due to a `WATCH` command, `exec` will return `null`.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey GLIDE Documentation} for details on Valkey Transactions.
      *
      * **Retry and Redirection:**
      *
@@ -1812,7 +1812,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided
      *
-     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
+     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey GLIDE Documentation} for more details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns A simple `"OK"` response.
