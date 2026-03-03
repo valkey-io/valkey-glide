@@ -30,6 +30,20 @@ import {
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
+import {
+    Mode,
+    createPubsubClient,
+    getPubsubModes,
+    parseActualSubscriptions,
+    psubscribeByMethod,
+    punsubscribeByMethod,
+    ssubscribeByMethod,
+    subscribeByMethod,
+    sunsubscribeByMethod,
+    unsubscribeByMethod,
+    waitForSubscriptionState,
+    waitForSubscriptionStateIfNeeded,
+} from "./PubSubTestUtilities";
 
 type TGlideClient = GlideClient | GlideClusterClient;
 
@@ -52,14 +66,6 @@ const MethodTesting = {
     Async: 0, // Uses asynchronous subscription method.
     Sync: 1, // Uses synchronous subscription method.
     Callback: 2, // Uses callback-based subscription method.
-};
-
-/**
- * Enumeration for specifying the subscription mode.
- */
-const Mode = {
-    Lazy: 0, // Non-blocking: returns immediately without waiting for confirmation
-    Blocking: 1, // Blocking: waits for subscription confirmation with timeout
 };
 
 const TIMEOUT = 120000;
@@ -284,32 +290,6 @@ describe("PubSub", () => {
         value: Buffer[];
     }
 
-    function parseActualSubscriptions(result: unknown): {
-        exact: Buffer[];
-        pattern: Buffer[];
-        sharded: Buffer[];
-    } {
-        // Result format: ["desired", [{key, value}, ...], "actual", [{key, value}, ...]]
-        const actualArray = (result as unknown[])?.[3] as
-            | SubscriptionEntry[]
-            | undefined;
-
-        if (!Array.isArray(actualArray)) {
-            return { exact: [], pattern: [], sharded: [] };
-        }
-
-        const findChannels = (key: string): Buffer[] => {
-            const entry = actualArray.find((e) => e.key === key);
-            return Array.isArray(entry?.value) ? entry.value : [];
-        };
-
-        return {
-            exact: findChannels("Exact"),
-            pattern: findChannels("Pattern"),
-            sharded: findChannels("Sharded"),
-        };
-    }
-
     async function clientCleanup(
         client: TGlideClient,
         clusterModeSubs?: GlideClusterClientConfiguration.PubSubSubscriptions,
@@ -396,6 +376,44 @@ describe("PubSub", () => {
         [false, MethodTesting.Callback],
     ];
 
+    // Three-dimensional test cases: [cluster_mode, message_read_method, subscription_method]
+    const testCasesWithSubscriptionMethod: [
+        boolean,
+        (typeof MethodTesting)[keyof typeof MethodTesting],
+        number,
+    ][] = [
+        // Cluster mode combinations
+        [true, MethodTesting.Async, Mode.Config],
+        [true, MethodTesting.Async, Mode.Lazy],
+        [true, MethodTesting.Async, Mode.Blocking],
+        [true, MethodTesting.Sync, Mode.Config],
+        [true, MethodTesting.Sync, Mode.Lazy],
+        [true, MethodTesting.Sync, Mode.Blocking],
+        [true, MethodTesting.Callback, Mode.Config],
+        [true, MethodTesting.Callback, Mode.Lazy],
+        [true, MethodTesting.Callback, Mode.Blocking],
+        // Standalone mode combinations
+        [false, MethodTesting.Async, Mode.Config],
+        [false, MethodTesting.Async, Mode.Lazy],
+        [false, MethodTesting.Async, Mode.Blocking],
+        [false, MethodTesting.Sync, Mode.Config],
+        [false, MethodTesting.Sync, Mode.Lazy],
+        [false, MethodTesting.Sync, Mode.Blocking],
+        [false, MethodTesting.Callback, Mode.Config],
+        [false, MethodTesting.Callback, Mode.Lazy],
+        [false, MethodTesting.Callback, Mode.Blocking],
+    ];
+
+    // Two-dimensional test cases for coexistence tests: [cluster_mode, subscription_method]
+    const testCasesCoexistence: [boolean, number][] = [
+        [true, Mode.Config],
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+        [false, Mode.Config],
+        [false, Mode.Lazy],
+        [false, Mode.Blocking],
+    ];
+
     /**
      * Tests the basic happy path for exact PUBSUB functionality.
      *
@@ -405,14 +423,11 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each(testCases)(
-        `pubsub exact happy path test_%p%p`,
-        async (clusterMode, method) => {
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
+    it.each(testCasesWithSubscriptionMethod)(
+        `pubsub exact happy path test_%p_%p_%p`,
+        async (clusterMode, method, subscriptionMethod) => {
             let listeningClient: TGlideClient;
             let publishingClient: TGlideClient;
 
@@ -428,24 +443,49 @@ describe("PubSub", () => {
                     callback = newMessage;
                 }
 
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set([channel as string]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([channel as string]),
-                    },
-                    callback,
-                    context,
-                );
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    options,
-                    getOptions(clusterMode),
-                    pubSub,
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSub = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: new Set([channel as string]),
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                                new Set([channel as string]),
+                        },
+                        callback,
+                        context,
+                    );
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        options,
+                        getOptions(clusterMode),
+                        pubSub,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        options,
+                        getOptions(clusterMode),
+                        createPubSubSubscription(clusterMode, {}, {}, callback, context),
+                    );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClient,
+                        new Set([channel as string]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    new Set([channel as string]),
                 );
 
                 const result = await publishingClient.publish(message, channel);
@@ -474,7 +514,7 @@ describe("PubSub", () => {
                     clientCleanup(publishingClient!),
                     clientCleanup(
                         listeningClient!,
-                        clusterMode ? pubSub! : undefined,
+                        clusterMode ? {} as any : undefined,
                     ),
                 ]);
             }
@@ -491,14 +531,11 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each(testCases)(
-        `pubsub exact happy path binary test_%p%p`,
-        async (clusterMode, method) => {
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
+    it.each(testCasesWithSubscriptionMethod)(
+        `pubsub exact happy path binary test_%p_%p_%p`,
+        async (clusterMode, method, subscriptionMethod) => {
             let listeningClient: TGlideClient;
             let publishingClient: TGlideClient;
 
@@ -514,26 +551,53 @@ describe("PubSub", () => {
                     callback = newMessage;
                 }
 
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set([channel as string]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([channel as string]),
-                    },
-                    callback,
-                    context,
-                );
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    options,
-                    getOptions(clusterMode),
-                    pubSub,
-                    undefined,
-                    Decoder.Bytes,
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSub = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: new Set([channel as string]),
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                                new Set([channel as string]),
+                        },
+                        callback,
+                        context,
+                    );
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        options,
+                        getOptions(clusterMode),
+                        pubSub,
+                        undefined,
+                        Decoder.Bytes,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        options,
+                        getOptions(clusterMode),
+                        createPubSubSubscription(clusterMode, {}, {}, callback, context),
+                        undefined,
+                        Decoder.Bytes,
+                    );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClient,
+                        new Set([channel as string]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    new Set([channel as string]),
                 );
 
                 const result = await publishingClient.publish(message, channel);
@@ -566,7 +630,7 @@ describe("PubSub", () => {
                     clientCleanup(publishingClient!),
                     clientCleanup(
                         listeningClient!,
-                        clusterMode ? pubSub! : undefined,
+                        clusterMode ? {} as any : undefined,
                     ),
                 ]);
             }
@@ -582,14 +646,11 @@ describe("PubSub", () => {
      * can coexist and function correctly.
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each([true, false])(
-        "pubsub exact happy path coexistence test_%p",
-        async (clusterMode) => {
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
+    it.each(testCasesCoexistence)(
+        "pubsub exact happy path coexistence test_%p_%p",
+        async (clusterMode, subscriptionMethod) => {
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
 
@@ -598,23 +659,48 @@ describe("PubSub", () => {
                 const message = getRandomKey() as GlideString;
                 const message2 = getRandomKey() as GlideString;
 
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set([channel as string]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set([channel as string]),
-                    },
-                );
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSub = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: new Set([channel as string]),
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                                new Set([channel as string]),
+                        },
+                    );
 
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        pubSub,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        createPubSubSubscription(clusterMode, {}, {}),
+                    );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClient,
+                        new Set([channel as string]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    new Set([channel as string]),
                 );
 
                 for (const msg of [message, message2]) {
@@ -650,7 +736,7 @@ describe("PubSub", () => {
                     clientCleanup(publishingClient!),
                     clientCleanup(
                         listeningClient!,
-                        clusterMode ? pubSub! : undefined,
+                        clusterMode ? {} as any : undefined,
                     ),
                 ]);
             }
@@ -667,14 +753,11 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each(testCases)(
-        "pubsub exact happy path many channels test_%p_%p",
-        async (clusterMode, method) => {
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
+    it.each(testCasesWithSubscriptionMethod)(
+        "pubsub exact happy path many channels test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             const NUM_CHANNELS = 256;
@@ -698,31 +781,54 @@ describe("PubSub", () => {
                     callback = newMessage;
                 }
 
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(
-                            channelsAndMessages.map((a) => a[0].toString()),
-                        ),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(
-                                channelsAndMessages.map((a) => a[0].toString()),
-                            ),
-                    },
-                    callback,
-                    context,
+                const channelSet = new Set(
+                    channelsAndMessages.map((a) => a[0].toString()),
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSub = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: channelSet,
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                                channelSet,
+                        },
+                        callback,
+                        context,
+                    );
+
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        pubSub,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        createPubSubSubscription(clusterMode, {}, {}, callback, context),
+                    );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClient,
+                        channelSet,
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    channelSet,
                 );
 
                 // Publish messages to each channel
@@ -770,7 +876,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
-                              clusterMode ? pubSub! : undefined,
+                              clusterMode ? {} as any : undefined,
                           )
                         : Promise.resolve(),
                     publishingClient
@@ -791,14 +897,11 @@ describe("PubSub", () => {
      * to ensure that both methods can coexist and function correctly.
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each([true, false])(
-        "pubsub exact happy path many channels coexistence test_%p",
-        async (clusterMode) => {
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
+    it.each(testCasesCoexistence)(
+        "pubsub exact happy path many channels coexistence test_%p_%p",
+        async (clusterMode, subscriptionMethod) => {
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             const NUM_CHANNELS = 256;
@@ -814,29 +917,52 @@ describe("PubSub", () => {
                     channelsAndMessages.push([channel, message]);
                 }
 
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(
-                            channelsAndMessages.map((a) => a[0].toString()),
-                        ),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(
-                                channelsAndMessages.map((a) => a[0].toString()),
-                            ),
-                    },
+                const channelSet = new Set(
+                    channelsAndMessages.map((a) => a[0].toString()),
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSub = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: channelSet,
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                                channelSet,
+                        },
+                    );
+
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        pubSub,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        createPubSubSubscription(clusterMode, {}, {}),
+                    );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClient,
+                        channelSet,
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    channelSet,
                 );
 
                 // Publish messages to each channel
@@ -883,7 +1009,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
-                              clusterMode ? pubSub! : undefined,
+                              clusterMode ? {} as any : undefined,
                           )
                         : Promise.resolve(),
                     publishingClient
@@ -896,7 +1022,7 @@ describe("PubSub", () => {
     );
 
     /**
-     * Test sharded PUBSUB functionality with different message retrieval methods.
+     * Test sharded PUBSUB functionality with different message retrieval methods and subscription modes.
      *
      * This test covers the sharded PUBSUB flow using three different methods:
      * Async, Sync, and Callback. It verifies that a message published to a
@@ -904,22 +1030,25 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription mode (Config, Lazy, Blocking).
      */
     it.each([
-        [true, MethodTesting.Async],
-        [true, MethodTesting.Sync],
-        [true, MethodTesting.Callback],
+        [true, MethodTesting.Async, Mode.Config],
+        [true, MethodTesting.Async, Mode.Lazy],
+        [true, MethodTesting.Async, Mode.Blocking],
+        [true, MethodTesting.Sync, Mode.Config],
+        [true, MethodTesting.Sync, Mode.Lazy],
+        [true, MethodTesting.Sync, Mode.Blocking],
+        [true, MethodTesting.Callback, Mode.Config],
+        [true, MethodTesting.Callback, Mode.Lazy],
+        [true, MethodTesting.Callback, Mode.Blocking],
     ])(
-        "sharded pubsub test_%p_%p",
-        async (clusterMode, method) => {
+        "sharded pubsub test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const minVersion = "7.0.0";
 
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             const channel = getRandomKey() as GlideString;
@@ -935,24 +1064,91 @@ describe("PubSub", () => {
                     callback = newMessage;
                 }
 
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set([channel as string]),
-                    },
-                    {},
-                    callback,
-                    context,
+                // Create listening client based on subscription method
+                if (subscriptionMethod === Mode.Config) {
+                    // Config mode: create client with subscriptions configured
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        new Set([channel as string]),
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        cmeCluster.ports().map((port) => ({
+                            host: "localhost",
+                            port,
+                        })),
+                    );
+                } else {
+                    // Lazy/Blocking mode: create client with callback but no initial subscriptions
+                    if (method === MethodTesting.Callback) {
+                        // For callback mode, we need to create a client with callback configured
+                        // but without initial subscriptions
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            new Set(),  // Empty set for exact channels
+                            new Set(),  // Empty set for patterns
+                            new Set(),  // Empty set for sharded channels
+                            callback,
+                            context,
+                            undefined,
+                            undefined,
+                            cmeCluster.ports().map((port) => ({
+                                host: "localhost",
+                                port,
+                            })),
+                        );
+                    } else {
+                        // For async/sync modes, create client without subscriptions or callback
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            cmeCluster.ports().map((port) => ({
+                                host: "localhost",
+                                port,
+                            })),
+                        );
+                    }
+
+                    // Subscribe dynamically
+                    await ssubscribeByMethod(
+                        listeningClient as GlideClusterClient,
+                        new Set([channel as string]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined,
+                    undefined,
+                    new Set([channel as string]),
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
+                // Create publishing client
+                publishingClient = await createPubsubClient(
                     clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    cmeCluster.ports().map((port) => ({
+                        host: "localhost",
+                        port,
+                    })),
                 );
 
                 const result = await (
@@ -981,10 +1177,7 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClient
-                        ? clientCleanup(
-                              listeningClient,
-                              clusterMode ? pubSub! : undefined,
-                          )
+                        ? clientCleanup(listeningClient)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
@@ -996,7 +1189,7 @@ describe("PubSub", () => {
     );
 
     /**
-     * Test sharded PUBSUB with co-existence of multiple messages.
+     * Test sharded PUBSUB with co-existence of multiple messages and subscription modes.
      *
      * This test verifies the behavior of sharded PUBSUB when multiple messages are published
      * to the same sharded channel. It ensures that both async and sync methods of message retrieval
@@ -1005,18 +1198,21 @@ describe("PubSub", () => {
      * It covers the scenario where messages are published to a sharded channel and received using
      * both async and sync methods. This ensures that the asynchronous and synchronous message
      * retrieval methods can coexist without interfering with each other and operate as expected.
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscriptionMethod - Specifies the subscription mode (Config, Lazy, Blocking).
      */
-    it(
-        "sharded pubsub co-existence test",
-        async () => {
+    it.each([
+        [true, Mode.Config],
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+    ])(
+        "sharded pubsub co-existence test_%p_%p",
+        async (clusterMode, subscriptionMethod) => {
             const minVersion = "7.0.0";
 
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             const channel = getRandomKey() as GlideString;
@@ -1024,22 +1220,71 @@ describe("PubSub", () => {
             const message2 = getRandomKey() as GlideString;
 
             try {
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    true,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set([channel as string]),
-                    },
-                    {},
+                // Create listening client based on subscription method
+                if (subscriptionMethod === Mode.Config) {
+                    // Config mode: create client with subscriptions configured
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        new Set([channel as string]),
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        cmeCluster.ports().map((port) => ({
+                            host: "localhost",
+                            port,
+                        })),
+                    );
+                } else {
+                    // Lazy/Blocking mode: create client without subscriptions
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        cmeCluster.ports().map((port) => ({
+                            host: "localhost",
+                            port,
+                        })),
+                    );
+
+                    // Subscribe dynamically
+                    await ssubscribeByMethod(
+                        listeningClient as GlideClusterClient,
+                        new Set([channel as string]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined,
+                    undefined,
+                    new Set([channel as string]),
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
-                    true,
-                    getOptions(true),
-                    getOptions(true),
-                    pubSub,
+                // Create publishing client
+                publishingClient = await createPubsubClient(
+                    clusterMode,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    cmeCluster.ports().map((port) => ({
+                        host: "localhost",
+                        port,
+                    })),
                 );
 
                 let result = await (
@@ -1078,7 +1323,7 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClient
-                        ? clientCleanup(listeningClient, pubSub!)
+                        ? clientCleanup(listeningClient)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
@@ -1090,7 +1335,7 @@ describe("PubSub", () => {
     );
 
     /**
-     * Test sharded PUBSUB with multiple channels and different message retrieval methods.
+     * Test sharded PUBSUB with multiple channels, different message retrieval methods, and subscription modes.
      *
      * This test verifies the behavior of sharded PUBSUB when multiple messages are published
      * across multiple sharded channels. It covers three different message retrieval methods:
@@ -1098,22 +1343,25 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription mode (Config, Lazy, Blocking).
      */
     it.each([
-        [true, MethodTesting.Async],
-        [true, MethodTesting.Sync],
-        [true, MethodTesting.Callback],
+        [true, MethodTesting.Async, Mode.Config],
+        [true, MethodTesting.Async, Mode.Lazy],
+        [true, MethodTesting.Async, Mode.Blocking],
+        [true, MethodTesting.Sync, Mode.Config],
+        [true, MethodTesting.Sync, Mode.Lazy],
+        [true, MethodTesting.Sync, Mode.Blocking],
+        [true, MethodTesting.Callback, Mode.Config],
+        [true, MethodTesting.Callback, Mode.Lazy],
+        [true, MethodTesting.Callback, Mode.Blocking],
     ])(
-        "sharded pubsub many channels test_%p_%p",
-        async (clusterMode, method) => {
+        "sharded pubsub many channels test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const minVersion = "7.0.0";
 
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
 
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             const NUM_CHANNELS = 256;
@@ -1138,30 +1386,96 @@ describe("PubSub", () => {
                     callback = newMessage;
                 }
 
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set(
-                            channelsAndMessages.map((a) => a[0].toString()),
-                        ),
-                    },
-                    {},
-                    callback,
-                    context,
+                const shardedChannels = new Set(
+                    channelsAndMessages.map((a) => a[0].toString()),
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
+                // Create listening client based on subscription method
+                if (subscriptionMethod === Mode.Config) {
+                    // Config mode: create client with subscriptions configured
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        shardedChannels,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        cmeCluster.ports().map((port) => ({
+                            host: "localhost",
+                            port,
+                        })),
+                    );
+                } else {
+                    // Lazy/Blocking mode: create client with callback but no initial subscriptions
+                    if (method === MethodTesting.Callback) {
+                        // For callback mode, we need to create a client with callback configured
+                        // but without initial subscriptions
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            new Set(),  // Empty set for exact channels
+                            new Set(),  // Empty set for patterns
+                            new Set(),  // Empty set for sharded channels
+                            callback,
+                            context,
+                            undefined,
+                            undefined,
+                            cmeCluster.ports().map((port) => ({
+                                host: "localhost",
+                                port,
+                            })),
+                        );
+                    } else {
+                        // For async/sync modes, create client without subscriptions or callback
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            undefined,
+                            cmeCluster.ports().map((port) => ({
+                                host: "localhost",
+                                port,
+                            })),
+                        );
+                    }
+
+                    // Subscribe dynamically
+                    await ssubscribeByMethod(
+                        listeningClient as GlideClusterClient,
+                        shardedChannels,
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined,
+                    undefined,
+                    shardedChannels,
                 );
 
-                // Wait for subscriptions to be established in cluster mode
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                // Create publishing client
+                publishingClient = await createPubsubClient(
+                    clusterMode,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    cmeCluster.ports().map((port) => ({
+                        host: "localhost",
+                        port,
+                    })),
+                );
 
                 // Publish messages to each channel
                 for (const [channel, message] of channelsAndMessages) {
@@ -1203,10 +1517,7 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClient
-                        ? clientCleanup(
-                              listeningClient,
-                              clusterMode ? pubSub! : undefined,
-                          )
+                        ? clientCleanup(listeningClient)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
@@ -1225,20 +1536,17 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each(testCases)(
-        "pubsub pattern test_%p_%p",
-        async (clusterMode, method) => {
+    it.each(testCasesWithSubscriptionMethod)(
+        "pubsub pattern test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const PATTERN = `{{channel}}:*`;
             const channels: [GlideString, GlideString][] = [
                 [`{{channel}}:${getRandomKey()}`, getRandomKey()],
                 [`{{channel}}:${getRandomKey()}`, getRandomKey()],
             ];
 
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
 
@@ -1251,28 +1559,65 @@ describe("PubSub", () => {
             }
 
             try {
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Pattern]: new Set([PATTERN]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
-                    },
-                    callback,
-                    context,
+                const options = getOptions(clusterMode);
+
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined, // no exact channels
+                        new Set([PATTERN]), // patterns
+                        undefined, // no sharded channels
+                        callback,
+                        context,
+                        options.protocol,
+                        undefined,
+                        options.addresses as Array<{ host: string; port: number }>,
+                    );
+                } else {
+                    // Lazy/Blocking mode: create client with callback but no initial subscriptions
+                    if (method === MethodTesting.Callback) {
+                        // For callback mode, we need to create a client with callback configured
+                        // but without initial subscriptions
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            new Set(),  // Empty set for exact channels
+                            new Set(),  // Empty set for patterns
+                            new Set(),  // Empty set for sharded channels
+                            callback,
+                            context,
+                            options.protocol,
+                            undefined,
+                            options.addresses as Array<{ host: string; port: number }>,
+                        );
+                    } else {
+                        // For async/sync modes, create client without subscriptions or callback
+                        listeningClient = clusterMode
+                            ? await GlideClusterClient.createClient(options)
+                            : await GlideClient.createClient(options);
+                    }
+
+                    // Subscribe dynamically
+                    await psubscribeByMethod(
+                        listeningClient,
+                        new Set([PATTERN]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined, // no exact channels
+                    new Set([PATTERN]), // patterns
+                    undefined, // no sharded channels
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
-                );
+                // Create publishing client
+                publishingClient = clusterMode
+                    ? await GlideClusterClient.createClient(options)
+                    : await GlideClient.createClient(options);
 
                 // Publish messages to each channel
                 for (const [channel, message] of channels) {
@@ -1312,10 +1657,7 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClient
-                        ? clientCleanup(
-                              listeningClient,
-                              clusterMode ? pubSub! : undefined,
-                          )
+                        ? clientCleanup(listeningClient)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
@@ -1334,44 +1676,63 @@ describe("PubSub", () => {
      * can coexist and function correctly.
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each([true, false])(
-        "pubsub pattern coexistence test_%p",
-        async (clusterMode) => {
+    it.each(testCasesCoexistence)(
+        "pubsub pattern coexistence test_%p_%p",
+        async (clusterMode, subscriptionMethod) => {
             const PATTERN = `{{channel}}:*`;
             const channels: [GlideString, GlideString][] = [
                 [`{{channel}}:${getRandomKey()}`, getRandomKey()],
                 [`{{channel}}:${getRandomKey()}`, getRandomKey()],
             ];
 
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
 
             try {
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Pattern]: new Set([PATTERN]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
-                    },
+                const options = getOptions(clusterMode);
+
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined, // no exact channels
+                        new Set([PATTERN]), // patterns
+                        undefined, // no sharded channels
+                        undefined, // no callback
+                        undefined, // no context
+                        options.protocol,
+                        undefined,
+                        options.addresses as Array<{ host: string; port: number }>,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions
+                    listeningClient = clusterMode
+                        ? await GlideClusterClient.createClient(options)
+                        : await GlideClient.createClient(options);
+
+                    // Subscribe dynamically
+                    await psubscribeByMethod(
+                        listeningClient,
+                        new Set([PATTERN]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined, // no exact channels
+                    new Set([PATTERN]), // patterns
+                    undefined, // no sharded channels
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
-                );
+                // Create publishing client
+                publishingClient = clusterMode
+                    ? await GlideClusterClient.createClient(options)
+                    : await GlideClient.createClient(options);
 
                 // Publish messages to each channel
                 for (const [channel, message] of channels) {
@@ -1415,10 +1776,7 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClient
-                        ? clientCleanup(
-                              listeningClient,
-                              clusterMode ? pubSub! : undefined,
-                          )
+                        ? clientCleanup(listeningClient)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
@@ -1438,10 +1796,11 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each(testCases)(
-        "pubsub pattern many channels test_%p",
-        async (clusterMode, method) => {
+    it.each(testCasesWithSubscriptionMethod)(
+        "pubsub pattern many channels test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const NUM_CHANNELS = 256;
             const PATTERN = "{{channel}}:*";
             const channels: [GlideString, GlideString][] = [];
@@ -1452,10 +1811,6 @@ describe("PubSub", () => {
                 channels.push([channel, message]);
             }
 
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             let context: PubSubMsg[] | null = null;
@@ -1467,28 +1822,65 @@ describe("PubSub", () => {
             }
 
             try {
-                // Create PUBSUB subscription for the test
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Pattern]: new Set([PATTERN]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
-                    },
-                    callback,
-                    context,
+                const options = getOptions(clusterMode);
+
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined, // no exact channels
+                        new Set([PATTERN]), // patterns
+                        undefined, // no sharded channels
+                        callback,
+                        context,
+                        options.protocol,
+                        undefined,
+                        options.addresses as Array<{ host: string; port: number }>,
+                    );
+                } else {
+                    // Lazy/Blocking mode: create client with callback but no initial subscriptions
+                    if (method === MethodTesting.Callback) {
+                        // For callback mode, we need to create a client with callback configured
+                        // but without initial subscriptions
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            new Set(),  // Empty set for exact channels
+                            new Set(),  // Empty set for patterns
+                            new Set(),  // Empty set for sharded channels
+                            callback,
+                            context,
+                            options.protocol,
+                            undefined,
+                            options.addresses as Array<{ host: string; port: number }>,
+                        );
+                    } else {
+                        // For async/sync modes, create client without subscriptions or callback
+                        listeningClient = clusterMode
+                            ? await GlideClusterClient.createClient(options)
+                            : await GlideClient.createClient(options);
+                    }
+
+                    // Subscribe dynamically
+                    await psubscribeByMethod(
+                        listeningClient,
+                        new Set([PATTERN]),
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined, // no exact channels
+                    new Set([PATTERN]), // patterns
+                    undefined, // no sharded channels
                 );
 
-                // Create clients for listening and publishing
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
-                );
+                // Create publishing client
+                publishingClient = clusterMode
+                    ? await GlideClusterClient.createClient(options)
+                    : await GlideClient.createClient(options);
 
                 // Publish messages to each channel
                 for (const [channel, message] of channels) {
@@ -1534,10 +1926,7 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClient
-                        ? clientCleanup(
-                              listeningClient,
-                              clusterMode ? pubSub! : undefined,
-                          )
+                        ? clientCleanup(listeningClient)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
@@ -1559,10 +1948,11 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each(testCases)(
-        "pubsub combined exact and pattern test_%p_%p",
-        async (clusterMode, method) => {
+    it.each(testCasesWithSubscriptionMethod)(
+        "pubsub combined exact and pattern test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const NUM_CHANNELS = 256;
             const PATTERN = "{{pattern}}:*";
 
@@ -1588,10 +1978,6 @@ describe("PubSub", () => {
                 ...patternChannelsAndMessages,
             ];
 
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             let context: PubSubMsg[] | null = null;
@@ -1603,38 +1989,71 @@ describe("PubSub", () => {
             }
 
             try {
-                // Setup PUBSUB for exact channels and pattern
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(
-                            exactChannelsAndMessages.map((a) =>
-                                a[0].toString(),
-                            ),
-                        ),
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Pattern]: new Set([PATTERN]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(
-                                exactChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
-                            ),
-                        [GlideClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
-                    },
-                    callback,
-                    context,
+                const exactChannelsSet = new Set(
+                    exactChannelsAndMessages.map((a) => a[0].toString()),
                 );
+                const patternSet = new Set([PATTERN]);
 
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSub = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: exactChannelsSet,
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Pattern]: patternSet,
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                                exactChannelsSet,
+                            [GlideClientConfiguration.PubSubChannelModes
+                                .Pattern]: patternSet,
+                        },
+                        callback,
+                        context,
+                    );
+
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        pubSub,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        createPubSubSubscription(
+                            clusterMode,
+                            {},
+                            {},
+                            callback,
+                            context,
+                        ),
+                    );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClient,
+                        exactChannelsSet,
+                        subscriptionMethod,
+                    );
+                    await psubscribeByMethod(
+                        listeningClient,
+                        patternSet,
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    exactChannelsSet,
+                    patternSet,
                 );
 
                 // Publish messages to all channels
@@ -1688,7 +2107,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
-                              clusterMode ? pubSub! : undefined,
+                              clusterMode ? ({} as any) : undefined,
                           )
                         : Promise.resolve(),
                     publishingClient
@@ -1713,10 +2132,11 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
-    it.each(testCases)(
-        "pubsub combined exact and pattern multiple clients test_%p_%p",
-        async (clusterMode, method) => {
+    it.each(testCasesWithSubscriptionMethod)(
+        "pubsub combined exact and pattern multiple clients test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const NUM_CHANNELS = 256;
             const PATTERN = "{{pattern}}:*";
 
@@ -1742,14 +2162,6 @@ describe("PubSub", () => {
                 ...patternChannelsAndMessages,
             ];
 
-            let pubSubExact:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
-            let pubSubPattern:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClientExact: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             let listeningClientPattern: TGlideClient | null = null;
@@ -1765,60 +2177,119 @@ describe("PubSub", () => {
             }
 
             try {
-                // Setup PUBSUB for exact channels
-                pubSubExact = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(
-                            exactChannelsAndMessages.map((a) =>
-                                a[0].toString(),
+                const exactChannelsSet = new Set(
+                    exactChannelsAndMessages.map((a) => a[0].toString()),
+                );
+                const patternSet = new Set([PATTERN]);
+
+                // Create listening client for exact channels
+                if (subscriptionMethod === Mode.Config) {
+                    // Config mode: create client with subscriptions
+                    const pubSubExact = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: exactChannelsSet,
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                                exactChannelsSet,
+                        },
+                        callback,
+                        contextExact,
+                    );
+
+                    [listeningClientExact, publishingClient] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            pubSubExact,
+                        );
+                } else {
+                    // Lazy/Blocking mode: create client without subscriptions, then subscribe dynamically
+                    [listeningClientExact, publishingClient] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            createPubSubSubscription(
+                                clusterMode,
+                                {},
+                                {},
+                                callback,
+                                contextExact,
                             ),
-                        ),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                            new Set(
-                                exactChannelsAndMessages.map((a) =>
-                                    a[0].toString(),
-                                ),
+                        );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClientExact,
+                        exactChannelsSet,
+                        subscriptionMethod,
+                    );
+                }
+
+                // Create listening client for pattern channels
+                if (subscriptionMethod === Mode.Config) {
+                    // Config mode: create client with subscriptions
+                    const pubSubPattern = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Pattern]: patternSet,
+                        },
+                        {
+                            [GlideClientConfiguration.PubSubChannelModes
+                                .Pattern]: patternSet,
+                        },
+                        callback,
+                        contextPattern,
+                    );
+
+                    [listeningClientPattern, clientDontCare] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            pubSubPattern,
+                        );
+                } else {
+                    // Lazy/Blocking mode: create client without subscriptions, then subscribe dynamically
+                    [listeningClientPattern, clientDontCare] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            createPubSubSubscription(
+                                clusterMode,
+                                {},
+                                {},
+                                callback,
+                                contextPattern,
                             ),
-                    },
-                    callback,
-                    contextExact,
-                );
+                        );
 
-                [listeningClientExact, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSubExact,
-                );
+                    // Subscribe dynamically based on subscription method
+                    await psubscribeByMethod(
+                        listeningClientPattern,
+                        patternSet,
+                        subscriptionMethod,
+                    );
+                }
 
-                // Setup PUBSUB for pattern channels
-                pubSubPattern = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Pattern]: new Set([PATTERN]),
-                    },
-                    {
-                        [GlideClientConfiguration.PubSubChannelModes.Pattern]:
-                            new Set([PATTERN]),
-                    },
-                    callback,
-                    contextPattern,
+                // Wait for subscriptions to be established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClientExact,
+                    subscriptionMethod,
+                    exactChannelsSet,
                 );
-
-                [listeningClientPattern, clientDontCare] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSubPattern,
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClientPattern,
+                    subscriptionMethod,
+                    undefined,
+                    patternSet,
                 );
-
-                // Wait for subscriptions to be established in cluster mode
-                await new Promise((resolve) => setTimeout(resolve, 1000));
 
                 // Publish messages to all channels
                 for (const [channel, message] of allChannelsAndMessages) {
@@ -1893,16 +2364,10 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClientExact
-                        ? clientCleanup(
-                              listeningClientExact,
-                              clusterMode ? pubSubExact! : undefined,
-                          )
+                        ? clientCleanup(listeningClientExact)
                         : Promise.resolve(),
                     listeningClientPattern
-                        ? clientCleanup(
-                              listeningClientPattern,
-                              clusterMode ? pubSubPattern! : undefined,
-                          )
+                        ? clientCleanup(listeningClientPattern)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
@@ -1928,14 +2393,21 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
     it.each([
-        [true, MethodTesting.Async],
-        [true, MethodTesting.Sync],
-        [true, MethodTesting.Callback],
+        [true, MethodTesting.Async, Mode.Config],
+        [true, MethodTesting.Async, Mode.Lazy],
+        [true, MethodTesting.Async, Mode.Blocking],
+        [true, MethodTesting.Sync, Mode.Config],
+        [true, MethodTesting.Sync, Mode.Lazy],
+        [true, MethodTesting.Sync, Mode.Blocking],
+        [true, MethodTesting.Callback, Mode.Config],
+        [true, MethodTesting.Callback, Mode.Lazy],
+        [true, MethodTesting.Callback, Mode.Blocking],
     ])(
-        "pubsub combined exact, pattern, and sharded test_%p_%p",
-        async (clusterMode, method) => {
+        "pubsub combined exact, pattern, and sharded test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const minVersion = "7.0.0";
 
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
@@ -1965,10 +2437,6 @@ describe("PubSub", () => {
             }
 
             const publishResponse = 1;
-            let pubSub:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
             let context: PubSubMsg[] | null = null;
@@ -1980,39 +2448,78 @@ describe("PubSub", () => {
             }
 
             try {
-                // Setup PUBSUB for exact, pattern, and sharded channels
-                pubSub = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(
-                            exactChannelsAndMessages.map((a) =>
-                                a[0].toString(),
-                            ),
-                        ),
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Pattern]: new Set([PATTERN]),
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set(
-                            shardedChannelsAndMessages.map((a) =>
-                                a[0].toString(),
-                            ),
-                        ),
-                    },
-                    {},
-                    callback,
-                    context,
+                const exactChannelsSet = new Set(
+                    exactChannelsAndMessages.map((a) => a[0].toString()),
+                );
+                const patternSet = new Set([PATTERN]);
+                const shardedChannelsSet = new Set(
+                    shardedChannelsAndMessages.map((a) => a[0].toString()),
                 );
 
-                [listeningClient, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSub,
-                );
+                // For Config mode, create client with subscriptions at creation time
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSub = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: exactChannelsSet,
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Pattern]: patternSet,
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Sharded]: shardedChannelsSet,
+                        },
+                        {},
+                        callback,
+                        context,
+                    );
 
-                // Wait for subscriptions to be established in cluster mode
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        pubSub,
+                    );
+                } else {
+                    // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                    [listeningClient, publishingClient] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        createPubSubSubscription(
+                            clusterMode,
+                            {},
+                            {},
+                            callback,
+                            context,
+                        ),
+                    );
+
+                    // Subscribe dynamically based on subscription method
+                    await subscribeByMethod(
+                        listeningClient,
+                        exactChannelsSet,
+                        subscriptionMethod,
+                    );
+                    await psubscribeByMethod(
+                        listeningClient,
+                        patternSet,
+                        subscriptionMethod,
+                    );
+                    await ssubscribeByMethod(
+                        listeningClient as GlideClusterClient,
+                        shardedChannelsSet,
+                        subscriptionMethod,
+                    );
+                }
+
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    exactChannelsSet,
+                    patternSet,
+                    shardedChannelsSet,
+                );
 
                 // Publish messages to exact and pattern channels
                 for (const [channel, message] of [
@@ -2077,7 +2584,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
-                              clusterMode ? pubSub! : undefined,
+                              clusterMode ? ({} as any) : undefined,
                           )
                         : Promise.resolve(),
                     publishingClient
@@ -2103,14 +2610,21 @@ describe("PubSub", () => {
      *
      * @param clusterMode - Indicates if the test should be run in cluster mode.
      * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
      */
     it.each([
-        [true, MethodTesting.Async],
-        [true, MethodTesting.Sync],
-        [true, MethodTesting.Callback],
+        [true, MethodTesting.Async, Mode.Config],
+        [true, MethodTesting.Async, Mode.Lazy],
+        [true, MethodTesting.Async, Mode.Blocking],
+        [true, MethodTesting.Sync, Mode.Config],
+        [true, MethodTesting.Sync, Mode.Lazy],
+        [true, MethodTesting.Sync, Mode.Blocking],
+        [true, MethodTesting.Callback, Mode.Config],
+        [true, MethodTesting.Callback, Mode.Lazy],
+        [true, MethodTesting.Callback, Mode.Blocking],
     ])(
-        "pubsub combined exact, pattern, and sharded multi-client test_%p_%p",
-        async (clusterMode, method) => {
+        "pubsub combined exact, pattern, and sharded multi-client test_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
             const minVersion = "7.0.0";
 
             if (cmeCluster.checkIfServerVersionLessThan(minVersion)) return;
@@ -2145,20 +2659,6 @@ describe("PubSub", () => {
             let listeningClientSharded: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
 
-            let pubSubExact:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
-            let pubSubPattern:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
-            let pubSubSharded:
-                | GlideClusterClientConfiguration.PubSubSubscriptions
-                | GlideClientConfiguration.PubSubSubscriptions
-                | null = null;
-
-            let context: PubSubMsg[] | null = null;
             let callback;
 
             const callbackMessagesExact: PubSubMsg[] = [];
@@ -2167,79 +2667,150 @@ describe("PubSub", () => {
 
             if (method === MethodTesting.Callback) {
                 callback = newMessage;
-                context = callbackMessagesExact;
             }
 
             try {
-                // Setup PUBSUB for exact channels
-                pubSubExact = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Exact]: new Set(
-                            exactChannelsAndMessages.map((a) =>
-                                a[0].toString(),
+                const exactChannelsSet = new Set(
+                    exactChannelsAndMessages.map((a) => a[0].toString()),
+                );
+                const patternSet = new Set([PATTERN]);
+                const shardedChannelsSet = new Set(
+                    shardedChannelsAndMessages.map((a) => a[0].toString()),
+                );
+
+                // Create listening client for exact channels
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSubExact = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Exact]: exactChannelsSet,
+                        },
+                        {},
+                        callback,
+                        callbackMessagesExact,
+                    );
+
+                    [listeningClientExact, publishingClient] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            pubSubExact,
+                        );
+                } else {
+                    [listeningClientExact, publishingClient] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            createPubSubSubscription(
+                                clusterMode,
+                                {},
+                                {},
+                                callback,
+                                callbackMessagesExact,
                             ),
-                        ),
-                    },
-                    {},
-                    callback,
-                    context,
-                );
+                        );
 
-                [listeningClientExact, publishingClient] = await createClients(
-                    clusterMode,
-                    getOptions(clusterMode),
-                    getOptions(clusterMode),
-                    pubSubExact,
-                );
-
-                if (method === MethodTesting.Callback) {
-                    context = callbackMessagesPattern;
+                    await subscribeByMethod(
+                        listeningClientExact,
+                        exactChannelsSet,
+                        subscriptionMethod,
+                    );
                 }
 
-                // Setup PUBSUB for pattern channels
-                pubSubPattern = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Pattern]: new Set([PATTERN]),
-                    },
-                    {},
-                    callback,
-                    context,
-                );
+                // Create listening client for pattern channels
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSubPattern = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Pattern]: patternSet,
+                        },
+                        {},
+                        callback,
+                        callbackMessagesPattern,
+                    );
 
-                if (method === MethodTesting.Callback) {
-                    context = callbackMessagesSharded;
+                    [listeningClientPattern, listeningClientSharded] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            pubSubPattern,
+                        );
+                } else {
+                    [listeningClientPattern, listeningClientSharded] =
+                        await createClients(
+                            clusterMode,
+                            getOptions(clusterMode),
+                            getOptions(clusterMode),
+                            createPubSubSubscription(
+                                clusterMode,
+                                {},
+                                {},
+                                callback,
+                                callbackMessagesPattern,
+                            ),
+                        );
+
+                    await psubscribeByMethod(
+                        listeningClientPattern,
+                        patternSet,
+                        subscriptionMethod,
+                    );
                 }
 
-                pubSubSharded = createPubSubSubscription(
-                    clusterMode,
-                    {
-                        [GlideClusterClientConfiguration.PubSubChannelModes
-                            .Sharded]: new Set(
-                            shardedChannelsAndMessages.map((a) =>
-                                a[0].toString(),
-                            ),
-                        ),
-                    },
-                    {},
-                    callback,
-                    context,
-                );
+                // Create listening client for sharded channels
+                if (subscriptionMethod === Mode.Config) {
+                    const pubSubSharded = createPubSubSubscription(
+                        clusterMode,
+                        {
+                            [GlideClusterClientConfiguration.PubSubChannelModes
+                                .Sharded]: shardedChannelsSet,
+                        },
+                        {},
+                        callback,
+                        callbackMessagesSharded,
+                    );
 
-                [listeningClientPattern, listeningClientSharded] =
-                    await createClients(
+                    // Replace listeningClientSharded with a new client
+                    listeningClientSharded.close();
+                    [listeningClientSharded] = await createClients(
                         clusterMode,
                         getOptions(clusterMode),
                         getOptions(clusterMode),
-                        pubSubPattern,
                         pubSubSharded,
                     );
+                } else {
+                    // listeningClientSharded already created, just subscribe
+                    await ssubscribeByMethod(
+                        listeningClientSharded as GlideClusterClient,
+                        shardedChannelsSet,
+                        subscriptionMethod,
+                    );
+                }
 
-                // Wait for subscriptions to be established in cluster mode
-                await new Promise((resolve) => setTimeout(resolve, 1000));
+                // Verify subscriptions are established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClientExact,
+                    subscriptionMethod,
+                    exactChannelsSet,
+                );
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClientPattern,
+                    subscriptionMethod,
+                    undefined,
+                    patternSet,
+                );
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClientSharded,
+                    subscriptionMethod,
+                    undefined,
+                    undefined,
+                    shardedChannelsSet,
+                );
 
                 // Publish messages to exact and pattern channels
                 for (const [channel, message] of [
@@ -2339,25 +2910,16 @@ describe("PubSub", () => {
                 // Cleanup clients
                 await Promise.all([
                     listeningClientExact
-                        ? clientCleanup(
-                              listeningClientExact,
-                              clusterMode ? pubSubExact! : undefined,
-                          )
+                        ? clientCleanup(listeningClientExact)
                         : Promise.resolve(),
                     publishingClient
                         ? clientCleanup(publishingClient)
                         : Promise.resolve(),
                     listeningClientPattern
-                        ? clientCleanup(
-                              listeningClientPattern,
-                              clusterMode ? pubSubPattern! : undefined,
-                          )
+                        ? clientCleanup(listeningClientPattern)
                         : Promise.resolve(),
                     listeningClientSharded
-                        ? clientCleanup(
-                              listeningClientSharded,
-                              clusterMode ? pubSubSharded! : undefined,
-                          )
+                        ? clientCleanup(listeningClientSharded)
                         : Promise.resolve(),
                 ]);
             }
@@ -3029,15 +3591,12 @@ describe("PubSub", () => {
          * - Ensuring that no additional messages are left after the expected messages are received.
          *
          * @param clusterMode - Indicates if the test should be run in cluster mode.
+         * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+         * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
          */
-        it.each([true, false])(
-            "test pubsub exact max size message_%p",
-            async (clusterMode) => {
-                let pubSub:
-                    | GlideClusterClientConfiguration.PubSubSubscriptions
-                    | GlideClientConfiguration.PubSubSubscriptions
-                    | null = null;
-
+        it.each(testCasesWithSubscriptionMethod)(
+            "test pubsub exact max size message_%p_%p_%p",
+            async (clusterMode, method, subscriptionMethod) => {
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
 
@@ -3047,23 +3606,54 @@ describe("PubSub", () => {
                 const message2 = generateLargeMessage("2", 512 * 1024 * 10);
 
                 try {
-                    pubSub = createPubSubSubscription(
-                        clusterMode,
-                        {
-                            [GlideClusterClientConfiguration.PubSubChannelModes
-                                .Exact]: new Set([channel]),
-                        },
-                        {
-                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                                new Set([channel]),
-                        },
-                    );
+                    let context: PubSubMsg[] | null = null;
+                    let callback;
 
-                    [listeningClient, publishingClient] = await createClients(
-                        clusterMode,
-                        getOptions(clusterMode),
-                        getOptions(clusterMode),
-                        pubSub,
+                    if (method === MethodTesting.Callback) {
+                        context = [];
+                        callback = newMessage;
+                    }
+
+                    // For Config mode, create client with subscriptions at creation time
+                    if (subscriptionMethod === Mode.Config) {
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            new Set([channel]),
+                            undefined,
+                            undefined,
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+                    } else {
+                        // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            undefined,
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+
+                        // Subscribe dynamically based on subscription method
+                        await subscribeByMethod(
+                            listeningClient,
+                            new Set([channel]),
+                            subscriptionMethod,
+                        );
+                    }
+
+                    // Verify subscriptions are established
+                    await waitForSubscriptionStateIfNeeded(
+                        listeningClient,
+                        subscriptionMethod,
+                        new Set([channel]),
                     );
 
                     let result = await publishingClient.publish(
@@ -3084,34 +3674,41 @@ describe("PubSub", () => {
                     // Allow the message to propagate
                     await new Promise((resolve) => setTimeout(resolve, 15000));
 
-                    const asyncMsg = await listeningClient.getPubSubMessage();
-                    expect(asyncMsg.message).toEqual(Buffer.from(message));
-                    expect(asyncMsg.channel).toEqual(Buffer.from(channel));
-                    expect(asyncMsg.pattern).toBeNull();
+                    const firstMsg = await getMessageByMethod(
+                        method,
+                        listeningClient,
+                        context,
+                        0,
+                    );
+                    expect(firstMsg!.message).toEqual(Buffer.from(message));
+                    expect(firstMsg!.channel).toEqual(Buffer.from(channel));
+                    expect(firstMsg!.pattern).toBeNull();
 
-                    const syncMsg = listeningClient.tryGetPubSubMessage();
-                    expect(syncMsg).not.toBeNull();
-                    expect(syncMsg!.message).toEqual(Buffer.from(message2));
-                    expect(syncMsg!.channel).toEqual(Buffer.from(channel));
-                    expect(syncMsg!.pattern).toBeNull();
+                    const secondMsg = await getMessageByMethod(
+                        method,
+                        listeningClient,
+                        context,
+                        1,
+                    );
+                    expect(secondMsg).not.toBeNull();
+                    expect(secondMsg!.message).toEqual(Buffer.from(message2));
+                    expect(secondMsg!.channel).toEqual(Buffer.from(channel));
+                    expect(secondMsg!.pattern).toBeNull();
 
                     // Assert there are no messages to read
                     await checkNoMessagesLeft(
-                        MethodTesting.Async,
+                        method,
                         listeningClient,
+                        context,
+                        2,
                     );
-                    expect(listeningClient.tryGetPubSubMessage()).toBeNull();
                 } finally {
                     await Promise.all([
-                        listeningClient
-                            ? clientCleanup(
-                                  listeningClient,
-                                  clusterMode ? pubSub! : undefined,
-                              )
-                            : Promise.resolve(),
-                        publishingClient
-                            ? clientCleanup(publishingClient)
-                            : Promise.resolve(),
+                        clientCleanup(publishingClient!),
+                        clientCleanup(
+                            listeningClient!,
+                            clusterMode ? {} as any : undefined,
+                        ),
                     ]);
                 }
             },
@@ -3133,16 +3730,14 @@ describe("PubSub", () => {
          * - Ensuring that no additional messages are left after the expected messages are received.
          *
          * @param clusterMode - Indicates if the test should be run in cluster mode.
+         * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+         * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
          */
-        it.each([true])(
-            "test pubsub sharded max size message_%p",
-            async (clusterMode) => {
+        it.each(testCasesWithSubscriptionMethod)(
+            "test pubsub sharded max size message_%p_%p_%p",
+            async (clusterMode, method, subscriptionMethod) => {
+                if (!clusterMode) return; // Sharded PubSub is cluster-only
                 if (cmeCluster.checkIfServerVersionLessThan("7.0.0")) return;
-
-                let pubSub:
-                    | GlideClusterClientConfiguration.PubSubSubscriptions
-                    | GlideClientConfiguration.PubSubSubscriptions
-                    | null = null;
 
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
@@ -3152,20 +3747,56 @@ describe("PubSub", () => {
                 const message2 = generateLargeMessage("2", 512 * 1024 * 1024); // 512MB message
 
                 try {
-                    pubSub = createPubSubSubscription(
-                        clusterMode,
-                        {
-                            [GlideClusterClientConfiguration.PubSubChannelModes
-                                .Sharded]: new Set([channel]),
-                        },
-                        {},
-                    );
+                    let context: PubSubMsg[] | null = null;
+                    let callback;
 
-                    [listeningClient, publishingClient] = await createClients(
-                        clusterMode,
-                        getOptions(clusterMode),
-                        getOptions(clusterMode),
-                        pubSub,
+                    if (method === MethodTesting.Callback) {
+                        context = [];
+                        callback = newMessage;
+                    }
+
+                    // For Config mode, create client with subscriptions at creation time
+                    if (subscriptionMethod === Mode.Config) {
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            new Set([channel]),
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+                    } else {
+                        // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            undefined,
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+
+                        // Subscribe dynamically based on subscription method
+                        await ssubscribeByMethod(
+                            listeningClient as GlideClusterClient,
+                            new Set([channel]),
+                            subscriptionMethod,
+                        );
+                    }
+
+                    // Verify subscriptions are established
+                    await waitForSubscriptionStateIfNeeded(
+                        listeningClient,
+                        subscriptionMethod,
+                        undefined,
+                        undefined,
+                        new Set([channel]),
                     );
 
                     expect(
@@ -3187,35 +3818,42 @@ describe("PubSub", () => {
                     // Allow the message to propagate
                     await new Promise((resolve) => setTimeout(resolve, 15000));
 
-                    const asyncMsg = await listeningClient.getPubSubMessage();
-                    const syncMsg = listeningClient.tryGetPubSubMessage();
-                    expect(syncMsg).not.toBeNull();
+                    const firstMsg = await getMessageByMethod(
+                        method,
+                        listeningClient,
+                        context,
+                        0,
+                    );
+                    const secondMsg = await getMessageByMethod(
+                        method,
+                        listeningClient,
+                        context,
+                        1,
+                    );
+                    expect(secondMsg).not.toBeNull();
 
-                    expect(asyncMsg.message).toEqual(Buffer.from(message));
-                    expect(asyncMsg.channel).toEqual(Buffer.from(channel));
-                    expect(asyncMsg.pattern).toBeNull();
+                    expect(firstMsg!.message).toEqual(Buffer.from(message));
+                    expect(firstMsg!.channel).toEqual(Buffer.from(channel));
+                    expect(firstMsg!.pattern).toBeNull();
 
-                    expect(syncMsg!.message).toEqual(Buffer.from(message2));
-                    expect(syncMsg!.channel).toEqual(Buffer.from(channel));
-                    expect(syncMsg!.pattern).toBeNull();
+                    expect(secondMsg!.message).toEqual(Buffer.from(message2));
+                    expect(secondMsg!.channel).toEqual(Buffer.from(channel));
+                    expect(secondMsg!.pattern).toBeNull();
 
                     // Assert there are no messages to read
                     await checkNoMessagesLeft(
-                        MethodTesting.Async,
+                        method,
                         listeningClient,
+                        context,
+                        2,
                     );
-                    expect(listeningClient.tryGetPubSubMessage()).toBeNull();
                 } finally {
                     await Promise.all([
-                        listeningClient
-                            ? clientCleanup(
-                                  listeningClient,
-                                  clusterMode ? pubSub! : undefined,
-                              )
-                            : Promise.resolve(),
-                        publishingClient
-                            ? clientCleanup(publishingClient)
-                            : Promise.resolve(),
+                        clientCleanup(publishingClient!),
+                        clientCleanup(
+                            listeningClient!,
+                            clusterMode ? {} as any : undefined,
+                        ),
                     ]);
                 }
             },
@@ -3236,15 +3874,12 @@ describe("PubSub", () => {
          * - Verifying that the message is received correctly using the callback method.
          *
          * @param clusterMode - Indicates if the test should be run in cluster mode.
+         * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+         * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
          */
-        it.each([true, false])(
-            "test pubsub exact max size message callback_%p",
-            async (clusterMode) => {
-                let pubSub:
-                    | GlideClusterClientConfiguration.PubSubSubscriptions
-                    | GlideClientConfiguration.PubSubSubscriptions
-                    | null = null;
-
+        it.each(testCasesWithSubscriptionMethod)(
+            "test pubsub exact max size message callback_%p_%p_%p",
+            async (clusterMode, method, subscriptionMethod) => {
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
                 const channel = getRandomKey();
@@ -3252,27 +3887,54 @@ describe("PubSub", () => {
                 const message = generateLargeMessage("0", 12 * 1024 * 1024); // 12MB message
 
                 try {
-                    const callbackMessages: PubSubMsg[] = [];
-                    const callback = newMessage;
+                    let context: PubSubMsg[] | null = null;
+                    let callback;
 
-                    pubSub = createPubSubSubscription(
-                        clusterMode,
-                        {
-                            [GlideClusterClientConfiguration.PubSubChannelModes
-                                .Exact]: new Set([channel]),
-                        },
-                        {
-                            [GlideClientConfiguration.PubSubChannelModes.Exact]:
-                                new Set([channel]),
-                        },
-                        callback,
-                    );
+                    if (method === MethodTesting.Callback) {
+                        context = [];
+                        callback = newMessage;
+                    }
 
-                    [listeningClient, publishingClient] = await createClients(
-                        clusterMode,
-                        getOptions(clusterMode),
-                        getOptions(clusterMode),
-                        pubSub,
+                    // For Config mode, create client with subscriptions at creation time
+                    if (subscriptionMethod === Mode.Config) {
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            new Set([channel]),
+                            undefined,
+                            undefined,
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+                    } else {
+                        // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            undefined,
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+
+                        // Subscribe dynamically based on subscription method
+                        await subscribeByMethod(
+                            listeningClient,
+                            new Set([channel]),
+                            subscriptionMethod,
+                        );
+                    }
+
+                    // Verify subscriptions are established
+                    await waitForSubscriptionStateIfNeeded(
+                        listeningClient,
+                        subscriptionMethod,
+                        new Set([channel]),
                     );
 
                     const result = await publishingClient.publish(
@@ -3287,28 +3949,35 @@ describe("PubSub", () => {
                     // Allow the message to propagate
                     await new Promise((resolve) => setTimeout(resolve, 15000));
 
-                    expect(callbackMessages.length).toEqual(1);
+                    const pubsubMessage = await getMessageByMethod(
+                        method,
+                        listeningClient,
+                        context,
+                        0,
+                    );
 
-                    expect(callbackMessages[0].message).toEqual(
+                    expect(pubsubMessage!.message).toEqual(
                         Buffer.from(message),
                     );
-                    expect(callbackMessages[0].channel).toEqual(
+                    expect(pubsubMessage!.channel).toEqual(
                         Buffer.from(channel),
                     );
-                    expect(callbackMessages[0].pattern).toBeNull();
+                    expect(pubsubMessage!.pattern).toBeNull();
+
                     // Assert no messages left
-                    expect(callbackMessages.length).toEqual(1);
+                    await checkNoMessagesLeft(
+                        method,
+                        listeningClient,
+                        context,
+                        1,
+                    );
                 } finally {
                     await Promise.all([
-                        listeningClient
-                            ? clientCleanup(
-                                  listeningClient,
-                                  clusterMode ? pubSub! : undefined,
-                              )
-                            : Promise.resolve(),
-                        publishingClient
-                            ? clientCleanup(publishingClient)
-                            : Promise.resolve(),
+                        clientCleanup(publishingClient!),
+                        clientCleanup(
+                            listeningClient!,
+                            clusterMode ? {} as any : undefined,
+                        ),
                     ]);
                 }
             },
@@ -3329,15 +3998,14 @@ describe("PubSub", () => {
          * - Verifying that the messages are received correctly using callbacl method.
          *
          * @param clusterMode - Indicates if the test should be run in cluster mode.
+         * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
+         * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
          */
-        it.each([true])(
-            "test pubsub sharded max size message callback_%p",
-            async (clusterMode) => {
+        it.each(testCasesWithSubscriptionMethod)(
+            "test pubsub sharded max size message callback_%p_%p_%p",
+            async (clusterMode, method, subscriptionMethod) => {
+                if (!clusterMode) return; // Sharded PubSub is cluster-only
                 if (cmeCluster.checkIfServerVersionLessThan("7.0.0")) return;
-                let pubSub:
-                    | GlideClusterClientConfiguration.PubSubSubscriptions
-                    | GlideClientConfiguration.PubSubSubscriptions
-                    | null = null;
 
                 let listeningClient: TGlideClient | undefined;
                 let publishingClient: TGlideClient | undefined;
@@ -3346,24 +4014,56 @@ describe("PubSub", () => {
                 const message = generateLargeMessage("0", 512 * 1024 * 1024); // 512MB message
 
                 try {
-                    const callbackMessages: PubSubMsg[] = [];
-                    const callback = newMessage;
+                    let context: PubSubMsg[] | null = null;
+                    let callback;
 
-                    pubSub = createPubSubSubscription(
-                        clusterMode,
-                        {
-                            [GlideClusterClientConfiguration.PubSubChannelModes
-                                .Sharded]: new Set([channel]),
-                        },
-                        {},
-                        callback,
-                    );
+                    if (method === MethodTesting.Callback) {
+                        context = [];
+                        callback = newMessage;
+                    }
 
-                    [listeningClient, publishingClient] = await createClients(
-                        clusterMode,
-                        getOptions(clusterMode),
-                        getOptions(clusterMode),
-                        pubSub,
+                    // For Config mode, create client with subscriptions at creation time
+                    if (subscriptionMethod === Mode.Config) {
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            new Set([channel]),
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+                    } else {
+                        // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
+                        listeningClient = await createPubsubClient(
+                            clusterMode,
+                            undefined,
+                            undefined,
+                            undefined,
+                            callback,
+                            context,
+                        );
+                        publishingClient = await createPubsubClient(
+                            clusterMode,
+                        );
+
+                        // Subscribe dynamically based on subscription method
+                        await ssubscribeByMethod(
+                            listeningClient as GlideClusterClient,
+                            new Set([channel]),
+                            subscriptionMethod,
+                        );
+                    }
+
+                    // Verify subscriptions are established
+                    await waitForSubscriptionStateIfNeeded(
+                        listeningClient,
+                        subscriptionMethod,
+                        undefined,
+                        undefined,
+                        new Set([channel]),
                     );
 
                     expect(
@@ -3377,29 +4077,35 @@ describe("PubSub", () => {
                     // Allow the message to propagate
                     await new Promise((resolve) => setTimeout(resolve, 15000));
 
-                    expect(callbackMessages.length).toEqual(1);
+                    const pubsubMessage = await getMessageByMethod(
+                        method,
+                        listeningClient,
+                        context,
+                        0,
+                    );
 
-                    expect(callbackMessages[0].message).toEqual(
+                    expect(pubsubMessage!.message).toEqual(
                         Buffer.from(message),
                     );
-                    expect(callbackMessages[0].channel).toEqual(
+                    expect(pubsubMessage!.channel).toEqual(
                         Buffer.from(channel),
                     );
-                    expect(callbackMessages[0].pattern).toBeNull();
+                    expect(pubsubMessage!.pattern).toBeNull();
 
                     // Assert no messages left
-                    expect(callbackMessages.length).toEqual(1);
+                    await checkNoMessagesLeft(
+                        method,
+                        listeningClient,
+                        context,
+                        1,
+                    );
                 } finally {
                     await Promise.all([
-                        listeningClient
-                            ? clientCleanup(
-                                  listeningClient,
-                                  clusterMode ? pubSub! : undefined,
-                              )
-                            : Promise.resolve(),
-                        publishingClient
-                            ? clientCleanup(publishingClient)
-                            : Promise.resolve(),
+                        clientCleanup(publishingClient!),
+                        clientCleanup(
+                            listeningClient!,
+                            clusterMode ? {} as any : undefined,
+                        ),
                     ]);
                 }
             },
@@ -5070,6 +5776,774 @@ describe("PubSub", () => {
             } finally {
                 if (client) {
                     client.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Helper function to kill connections to the server.
+     * This triggers reconnection and resubscription behavior.
+     *
+     * @param client - The client to use for sending CLIENT KILL command
+     * @param killType - Type of connections to kill ("normal" or null for all)
+     * @param skipMe - Whether to skip the calling client ("yes" or "no")
+     */
+    async function killConnections(
+        client: TGlideClient,
+        killType: string | null = "normal",
+        skipMe: string = "yes",
+    ): Promise<void> {
+        const cmd: (string | Buffer)[] = ["CLIENT", "KILL"];
+
+        if (killType !== null) {
+            cmd.push("TYPE", killType);
+        }
+
+        cmd.push("SKIPME", skipMe);
+
+        if (client instanceof GlideClusterClient) {
+            await client.customCommand(cmd, { route: "allNodes" });
+        } else {
+            await client.customCommand(cmd);
+        }
+    }
+
+    /**
+     * Tests the basic happy path for exact PUBSUB functionality using custom commands.
+     *
+     * This test mirrors test_pubsub_exact_happy_path but uses customCommand to send
+     * SUBSCRIBE (lazy) or SUBSCRIBE_BLOCKING (blocking) commands directly.
+     * Config mode is not tested as it doesn't use custom commands.
+     */
+    it.each(testCasesWithSubscriptionMethod.filter(([_, __, subMethod]) => subMethod !== Mode.Config))(
+        "test_pubsub_exact_happy_path_custom_command_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
+            let listeningClient: TGlideClient | null = null;
+            let publishingClient: TGlideClient | null = null;
+
+            try {
+                const channel = "test_exact_channel_custom";
+                const message = "test_exact_message_custom";
+
+                const callbackMessages: PubSubMsg[] = [];
+                const callback =
+                    method === MethodTesting.Callback ? newMessage : undefined;
+                const context =
+                    method === MethodTesting.Callback
+                        ? callbackMessages
+                        : undefined;
+
+                // Create client with callback only (no config-based subscriptions)
+                listeningClient = await createPubsubClient(
+                    clusterMode,
+                    undefined,
+                    undefined,
+                    undefined,
+                    callback,
+                    context,
+                    undefined,
+                    undefined,
+                    clusterMode
+                        ? cmeCluster.ports().map((port) => ({
+                              host: "localhost",
+                              port,
+                          }))
+                        : cmdCluster.ports().map((port) => ({
+                              host: "localhost",
+                              port,
+                          })),
+                );
+
+                if (clusterMode) {
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Subscribe using customCommand
+                let cmd: (string | Buffer)[];
+
+                if (subscriptionMethod === Mode.Lazy) {
+                    // SUBSCRIBE is the lazy (non-blocking) command
+                    cmd = ["SUBSCRIBE", channel];
+                } else {
+                    // SUBSCRIBE_BLOCKING takes channels followed by timeout_ms
+                    const timeoutMs = 500;
+                    cmd = ["SUBSCRIBE_BLOCKING", channel, timeoutMs.toString()];
+                }
+
+                const subscribeResult = await listeningClient.customCommand(cmd);
+                expect(subscribeResult).toBeNull();
+
+                // Verify subscription is established
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    new Set([channel]),
+                );
+
+                const publishResult = await publishingClient.publish(
+                    message,
+                    channel,
+                );
+
+                if (clusterMode) {
+                    expect(publishResult).toBe(1);
+                }
+
+                // Allow the message to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const pubsubMsg = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    0,
+                );
+
+                expect(pubsubMsg).not.toBeNull();
+                expect(pubsubMsg!.message).toBe(message);
+                expect(pubsubMsg!.channel).toBe(channel);
+                expect(pubsubMsg!.pattern).toBeNull();
+
+                await checkNoMessagesLeft(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    1,
+                );
+
+                // Unsubscribe using customCommand
+                let unsubCmd: (string | Buffer)[];
+
+                if (subscriptionMethod === Mode.Lazy) {
+                    // UNSUBSCRIBE is the lazy (non-blocking) command
+                    unsubCmd = ["UNSUBSCRIBE", channel];
+                } else {
+                    // UNSUBSCRIBE_BLOCKING takes channels followed by timeout_ms
+                    const timeoutMs = 5000;
+                    unsubCmd = [
+                        "UNSUBSCRIBE_BLOCKING",
+                        channel,
+                        timeoutMs.toString(),
+                    ];
+                }
+
+                const unsubscribeResult =
+                    await listeningClient.customCommand(unsubCmd);
+                expect(unsubscribeResult).toBeNull();
+
+                // Verify unsubscription
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    new Set(),
+                );
+            } finally {
+                if (listeningClient) {
+                    await clientCleanup(
+                        listeningClient,
+                        clusterMode ? ({} as any) : undefined,
+                    );
+                }
+
+                if (publishingClient) {
+                    publishingClient.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Test that exact channel subscriptions are automatically restored after connection kill.
+     */
+    it.each(testCasesWithSubscriptionMethod)(
+        "test_resubscribe_after_connection_kill_exact_channels_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
+            let listeningClient: TGlideClient | null = null;
+            let publishingClient: TGlideClient | null = null;
+
+            try {
+                const channel = "reconnect_exact_channel_test";
+                const messageBefore = "message_before_kill";
+                const messageAfter = "message_after_kill";
+
+                const callbackMessages: PubSubMsg[] = [];
+                const callback =
+                    method === MethodTesting.Callback ? newMessage : undefined;
+                const context =
+                    method === MethodTesting.Callback
+                        ? callbackMessages
+                        : undefined;
+
+                if (subscriptionMethod === Mode.Config) {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        new Set([channel]),
+                        undefined,
+                        undefined,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        clusterMode
+                            ? cmeCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              }))
+                            : cmdCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              })),
+                    );
+                } else {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        undefined,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        clusterMode
+                            ? cmeCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              }))
+                            : cmdCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              })),
+                    );
+                    await subscribeByMethod(
+                        listeningClient,
+                        new Set([channel]),
+                        subscriptionMethod,
+                    );
+                }
+
+                if (clusterMode) {
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    new Set([channel]),
+                );
+
+                // Verify subscription works before kill
+                await publishingClient.publish(messageBefore, channel);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const msgBefore = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    0,
+                );
+                expect(msgBefore).not.toBeNull();
+                expect(msgBefore!.message).toBe(messageBefore);
+                expect(msgBefore!.channel).toBe(channel);
+
+                // Kill connections - this should trigger reconnection
+                await killConnections(publishingClient, null);
+
+                // Give some time for connection to reconnect
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Wait for subscriptions to be re-established
+                await waitForSubscriptionState(
+                    listeningClient,
+                    new Set([channel]),
+                );
+
+                // Verify subscription still works after reconnection
+                await publishingClient.publish(messageAfter, channel);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const msgAfter = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    1,
+                );
+                expect(msgAfter).not.toBeNull();
+                expect(msgAfter!.message).toBe(messageAfter);
+                expect(msgAfter!.channel).toBe(channel);
+
+                await checkNoMessagesLeft(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    2,
+                );
+            } finally {
+                if (listeningClient) {
+                    await clientCleanup(
+                        listeningClient,
+                        clusterMode ? ({} as any) : undefined,
+                    );
+                }
+
+                if (publishingClient) {
+                    publishingClient.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Test that pattern subscriptions are automatically restored after connection kill.
+     */
+    it.each(testCasesWithSubscriptionMethod)(
+        "test_resubscribe_after_connection_kill_patterns_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
+            let listeningClient: TGlideClient | null = null;
+            let publishingClient: TGlideClient | null = null;
+
+            try {
+                const pattern = "news_reconnect_pattern.*";
+                const channel = "news_reconnect_pattern.sports";
+                const messageBefore = "message_before_kill";
+                const messageAfter = "message_after_kill";
+
+                const callbackMessages: PubSubMsg[] = [];
+                const callback =
+                    method === MethodTesting.Callback ? newMessage : undefined;
+                const context =
+                    method === MethodTesting.Callback
+                        ? callbackMessages
+                        : undefined;
+
+                if (subscriptionMethod === Mode.Config) {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        new Set([pattern]),
+                        undefined,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        clusterMode
+                            ? cmeCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              }))
+                            : cmdCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              })),
+                    );
+                } else {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        undefined,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        clusterMode
+                            ? cmeCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              }))
+                            : cmdCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              })),
+                    );
+                    await psubscribeByMethod(
+                        listeningClient,
+                        new Set([pattern]),
+                        subscriptionMethod,
+                    );
+                }
+
+                if (clusterMode) {
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined,
+                    new Set([pattern]),
+                );
+
+                // Verify subscription works before kill
+                await publishingClient.publish(messageBefore, channel);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const msgBefore = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    0,
+                );
+                expect(msgBefore).not.toBeNull();
+                expect(msgBefore!.message).toBe(messageBefore);
+                expect(msgBefore!.channel).toBe(channel);
+                expect(msgBefore!.pattern).toBe(pattern);
+
+                // Kill connections
+                await killConnections(publishingClient, null);
+
+                // Give some time for connection to reconnect
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                await waitForSubscriptionState(
+                    listeningClient,
+                    undefined,
+                    new Set([pattern]),
+                );
+
+                // Verify subscription still works after reconnection
+                await publishingClient.publish(messageAfter, channel);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const msgAfter = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    1,
+                );
+                expect(msgAfter).not.toBeNull();
+                expect(msgAfter!.message).toBe(messageAfter);
+                expect(msgAfter!.channel).toBe(channel);
+                expect(msgAfter!.pattern).toBe(pattern);
+
+                await checkNoMessagesLeft(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    2,
+                );
+            } finally {
+                if (listeningClient) {
+                    await clientCleanup(
+                        listeningClient,
+                        clusterMode ? ({} as any) : undefined,
+                    );
+                }
+
+                if (publishingClient) {
+                    publishingClient.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Test that sharded subscriptions are automatically restored after connection kill.
+     * Only runs in cluster mode (Valkey 7.0+).
+     */
+    it.each(testCasesWithSubscriptionMethod.filter(([clusterMode]) => clusterMode))(
+        "test_resubscribe_after_connection_kill_sharded_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
+            const version = await getServerVersion([
+                cmeCluster.getAddresses()[0],
+            ]);
+
+            if (version < "7.0.0") {
+                return;
+            }
+
+            let listeningClient: GlideClusterClient | null = null;
+            let publishingClient: GlideClusterClient | null = null;
+
+            try {
+                const channel = "sharded_reconnect_test_channel";
+                const messageBefore = "message_before_kill";
+                const messageAfter = "message_after_kill";
+
+                const callbackMessages: PubSubMsg[] = [];
+                const callback =
+                    method === MethodTesting.Callback ? newMessage : undefined;
+                const context =
+                    method === MethodTesting.Callback
+                        ? callbackMessages
+                        : undefined;
+
+                if (subscriptionMethod === Mode.Config) {
+                    listeningClient = (await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        new Set([channel]),
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        cmeCluster.ports().map((port) => ({
+                            host: "localhost",
+                            port,
+                        })),
+                    )) as GlideClusterClient;
+                } else {
+                    listeningClient = (await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        undefined,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        cmeCluster.ports().map((port) => ({
+                            host: "localhost",
+                            port,
+                        })),
+                    )) as GlideClusterClient;
+                    await ssubscribeByMethod(
+                        listeningClient,
+                        new Set([channel]),
+                        subscriptionMethod,
+                    );
+                }
+
+                publishingClient = await GlideClusterClient.createClient(
+                    getOptions(clusterMode),
+                );
+
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    undefined,
+                    undefined,
+                    new Set([channel]),
+                );
+
+                // Verify subscription works before kill
+                await publishingClient.publish(messageBefore, channel, true);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const msgBefore = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    0,
+                );
+                expect(msgBefore).not.toBeNull();
+                expect(msgBefore!.message).toBe(messageBefore);
+                expect(msgBefore!.channel).toBe(channel);
+
+                // Kill connections
+                await killConnections(publishingClient, null);
+
+                // Give some time for connection to reconnect
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                await waitForSubscriptionState(
+                    listeningClient,
+                    undefined,
+                    undefined,
+                    new Set([channel]),
+                );
+
+                // Verify subscription still works after reconnection
+                await publishingClient.publish(messageAfter, channel, true);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                const msgAfter = await getMessageByMethod(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    1,
+                );
+                expect(msgAfter).not.toBeNull();
+                expect(msgAfter!.message).toBe(messageAfter);
+                expect(msgAfter!.channel).toBe(channel);
+
+                await checkNoMessagesLeft(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    2,
+                );
+            } finally {
+                if (listeningClient) {
+                    await clientCleanup(listeningClient, {} as any);
+                }
+
+                if (publishingClient) {
+                    publishingClient.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Test that 256 exact channel subscriptions are automatically restored after connection kill.
+     */
+    it.each(testCasesWithSubscriptionMethod)(
+        "test_resubscribe_after_connection_kill_many_exact_channels_%p_%p_%p",
+        async (clusterMode, method, subscriptionMethod) => {
+            let listeningClient: TGlideClient | null = null;
+            let publishingClient: TGlideClient | null = null;
+
+            try {
+                const NUM_CHANNELS = 256;
+                const channels = new Set(
+                    Array.from(
+                        { length: NUM_CHANNELS },
+                        (_, i) => `{reconnect_exact_${i}}channel`,
+                    ),
+                );
+                const messageAfter = "message_after_kill";
+
+                const callbackMessages: PubSubMsg[] = [];
+                const callback =
+                    method === MethodTesting.Callback ? newMessage : undefined;
+                const context =
+                    method === MethodTesting.Callback
+                        ? callbackMessages
+                        : undefined;
+
+                if (subscriptionMethod === Mode.Config) {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        channels,
+                        undefined,
+                        undefined,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        clusterMode
+                            ? cmeCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              }))
+                            : cmdCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              })),
+                    );
+                } else {
+                    listeningClient = await createPubsubClient(
+                        clusterMode,
+                        undefined,
+                        undefined,
+                        undefined,
+                        callback,
+                        context,
+                        undefined,
+                        undefined,
+                        clusterMode
+                            ? cmeCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              }))
+                            : cmdCluster.ports().map((port) => ({
+                                  host: "localhost",
+                                  port,
+                              })),
+                    );
+                    await subscribeByMethod(
+                        listeningClient,
+                        channels,
+                        subscriptionMethod,
+                    );
+                }
+
+                if (clusterMode) {
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    subscriptionMethod,
+                    channels,
+                );
+
+                // Kill connections
+                await killConnections(publishingClient, null);
+
+                // Give time for reconnect
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Wait for resubscription
+                await waitForSubscriptionState(listeningClient, channels, undefined, undefined, 5000);
+
+                // Publish to all channels after reconnection
+                for (const channel of channels) {
+                    await publishingClient.publish(messageAfter, channel);
+                }
+
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+
+                // Verify all messages received
+                const receivedChannels = new Set<string>();
+
+                for (let index = 0; index < NUM_CHANNELS; index++) {
+                    const msg = await getMessageByMethod(
+                        method,
+                        listeningClient,
+                        callbackMessages,
+                        index,
+                    );
+                    expect(msg).not.toBeNull();
+                    expect(msg!.message).toBe(messageAfter);
+                    expect(msg!.pattern).toBeNull();
+                    receivedChannels.add(msg!.channel as string);
+                }
+
+                expect(receivedChannels.size).toBe(channels.size);
+
+                // Verify all channels received messages
+                for (const channel of channels) {
+                    expect(receivedChannels.has(channel)).toBe(true);
+                }
+
+                await checkNoMessagesLeft(
+                    method,
+                    listeningClient,
+                    callbackMessages,
+                    NUM_CHANNELS,
+                );
+            } finally {
+                if (listeningClient) {
+                    await clientCleanup(
+                        listeningClient,
+                        clusterMode ? ({} as any) : undefined,
+                    );
+                }
+
+                if (publishingClient) {
+                    publishingClient.close();
                 }
             }
         },
