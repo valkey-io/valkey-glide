@@ -186,6 +186,14 @@ import {
     createPubSubChannels,
     createPubSubNumPat,
     createPubSubNumSub,
+    createPSubscribe,
+    createPSubscribeLazy,
+    createPUnsubscribe,
+    createPUnsubscribeLazy,
+    createSubscribe,
+    createSubscribeLazy,
+    createUnsubscribe,
+    createUnsubscribeLazy,
     createRPop,
     createRPush,
     createRPushX,
@@ -390,6 +398,28 @@ export type StreamEntryDataType = Record<string, [GlideString, GlideString][]>;
  * Union type that can store either a number or positive/negative infinity.
  */
 export type Score = number | "+inf" | "-inf";
+
+/**
+ * Constant representing "all channels" for unsubscribe operations.
+ * Use this to unsubscribe from all channel subscriptions at once.
+ *
+ * @example
+ * ```typescript
+ * await client.unsubscribeLazy(ALL_CHANNELS);
+ * ```
+ */
+export const ALL_CHANNELS = null;
+
+/**
+ * Constant representing "all patterns" for punsubscribe operations.
+ * Use this to unsubscribe from all pattern subscriptions at once.
+ *
+ * @example
+ * ```typescript
+ * await client.punsubscribeLazy(ALL_PATTERNS);
+ * ```
+ */
+export const ALL_PATTERNS = null;
 
 /**
  * Data type which represents sorted sets data for input parameter of ZADD command,
@@ -937,6 +967,33 @@ export interface AdvancedBaseClientConfiguration {
      * - If not explicitly set, a default value of `true` will be used by the Rust core.
      */
     tcpNoDelay?: boolean;
+
+    /**
+     * The interval in milliseconds between PubSub subscription reconciliation attempts.
+     *
+     * The reconciliation process ensures that the client's desired subscriptions match
+     * the actual subscriptions on the server. This is useful when subscriptions may have
+     * been lost due to network issues or server restarts.
+     *
+     * If not explicitly set, the Rust core will use its default reconciliation interval.
+     *
+     * @remarks
+     * - Must be a positive integer representing milliseconds.
+     * - The reconciliation process runs automatically in the background.
+     * - A lower interval provides faster recovery from subscription issues but increases overhead.
+     * - A higher interval reduces overhead but may delay recovery from subscription issues.
+     *
+     * @example
+     * ```typescript
+     * const config: GlideClientConfiguration = {
+     *   addresses: [{ host: "localhost", port: 6379 }],
+     *   advancedConfiguration: {
+     *     pubsubReconciliationIntervalMs: 5000 // Reconcile every 5 seconds
+     *   }
+     * };
+     * ```
+     */
+    pubsubReconciliationIntervalMs?: number;
 }
 
 /**
@@ -1627,13 +1684,11 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
-            throw new ConfigurationError(
-                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
-            );
-        }
-
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        // only throw error if BOTH config exists AND callback exists
+        if (
+            this.isPubsubConfigured(this.config!) &&
+            this.getPubsubCallbackAndContext(this.config!)[0]
+        ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
@@ -1652,13 +1707,11 @@ export class BaseClient {
             );
         }
 
-        if (!this.isPubsubConfigured(this.config!)) {
-            throw new ConfigurationError(
-                "The operation will never complete since there was no pubsbub subscriptions applied to the client.",
-            );
-        }
-
-        if (this.getPubsubCallbackAndContext(this.config!)[0]) {
+        // only throw error if BOTH config exists AND callback exists
+        if (
+            this.isPubsubConfigured(this.config!) &&
+            this.getPubsubCallbackAndContext(this.config!)[0]
+        ) {
             throw new ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback.",
             );
@@ -9240,6 +9293,12 @@ export class BaseClient {
             request.tcpNodelay = options.tcpNoDelay;
         }
 
+        // Set PubSub reconciliation interval if explicitly configured
+        if (options.pubsubReconciliationIntervalMs !== undefined) {
+            request.pubsubReconciliationIntervalMs =
+                options.pubsubReconciliationIntervalMs;
+        }
+
         // Apply TLS configuration if present
         if (options.tlsAdvancedConfiguration) {
             // request.tlsMode is either SecureTls or InsecureTls here
@@ -9478,6 +9537,276 @@ export class BaseClient {
         const refresh = command_request.RefreshIamToken.create({});
         const response = await this.createRefreshIamTokenPromise(refresh);
         return response; // "OK"
+    }
+
+    /**
+     * Subscribes the client to the specified channels (non-blocking).
+     * Returns immediately without waiting for subscription confirmation.
+     *
+     * @see {@link https://valkey.io/commands/subscribe/|valkey.io} for details.
+     *
+     * @param channels - A collection of channel names to subscribe to.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
+     *
+     * @example
+     * ```typescript
+     * await client.subscribeLazy(new Set(["news", "updates"]));
+     * ```
+     */
+    public async subscribeLazy(
+        channels: Iterable<GlideString>,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = Array.from(channels);
+        return this.createWritePromise(
+            createSubscribeLazy(channelsArray),
+            options,
+        );
+    }
+
+    /**
+     * Subscribes the client to the specified channels (blocking).
+     * Waits for subscription confirmation or until timeout.
+     *
+     * @see {@link https://valkey.io/commands/subscribe/|valkey.io} for details.
+     *
+     * @param channels - A collection of channel names to subscribe to.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when subscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * // Wait up to 5 seconds
+     * await client.subscribe(new Set(["news"]), 5000);
+     * // Wait indefinitely
+     * await client.subscribe(new Set(["news"]), 0);
+     * ```
+     */
+    public async subscribe(
+        channels: Iterable<GlideString>,
+        timeoutMs: number,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = Array.from(channels);
+        return this.createWritePromise(
+            createSubscribe(channelsArray, timeoutMs),
+            options,
+        );
+    }
+
+    /**
+     * Subscribes the client to the specified patterns (non-blocking).
+     * Returns immediately without waiting for subscription confirmation.
+     *
+     * @see {@link https://valkey.io/commands/psubscribe/|valkey.io} for details.
+     *
+     * @param patterns - An array of glob-style patterns to subscribe to.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
+     *
+     * @example
+     * ```typescript
+     * await client.psubscribeLazy(["news.*", "updates.*"]);
+     * ```
+     */
+    public async psubscribeLazy(
+        patterns: Iterable<GlideString>,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const patternsArray = Array.from(patterns);
+        return this.createWritePromise(
+            createPSubscribeLazy(patternsArray),
+            options,
+        );
+    }
+
+    /**
+     * Subscribes the client to the specified patterns (blocking).
+     * Waits for subscription confirmation or until timeout.
+     *
+     * @see {@link https://valkey.io/commands/psubscribe/|valkey.io} for details.
+     *
+     * @param patterns - An array of glob-style patterns to subscribe to.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when subscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * await client.psubscribe(["news.*"], 5000);
+     * ```
+     */
+    public async psubscribe(
+        patterns: Iterable<GlideString>,
+        timeoutMs: number,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const patternsArray = Array.from(patterns);
+        return this.createWritePromise(
+            createPSubscribe(patternsArray, timeoutMs),
+            options,
+        );
+    }
+
+    /**
+     * Unsubscribes the client from the specified channels (non-blocking).
+     * Pass null or ALL_CHANNELS to unsubscribe from all exact channels.
+     *
+     * @see {@link https://valkey.io/commands/unsubscribe/|valkey.io} for details.
+     *
+     * @param channels - Channel names to unsubscribe from, or null for all channels.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
+     *
+     * @example
+     * ```typescript
+     * await client.unsubscribeLazy(new Set(["news"]));
+     * // Unsubscribe from all channels
+     * await client.unsubscribeLazy(ALL_CHANNELS);
+     * ```
+     */
+    public async unsubscribeLazy(
+        channels?: Iterable<GlideString> | null,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = channels ? Array.from(channels) : undefined;
+        return this.createWritePromise(
+            createUnsubscribeLazy(channelsArray),
+            options,
+        );
+    }
+
+    /**
+     * Unsubscribes the client from the specified channels (blocking).
+     * Pass null or ALL_CHANNELS to unsubscribe from all exact channels.
+     *
+     * @see {@link https://valkey.io/commands/unsubscribe/|valkey.io} for details.
+     *
+     * @param channels - Channel names to unsubscribe from, or null for all channels.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when unsubscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * await client.unsubscribe(new Set(["news"]), 5000);
+     * // Unsubscribe from all channels with timeout
+     * await client.unsubscribe(ALL_CHANNELS, 5000);
+     * ```
+     */
+    public async unsubscribe(
+        channels: Iterable<GlideString> | null,
+        timeoutMs: number,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const channelsArray = channels ? Array.from(channels) : [];
+        return this.createWritePromise(
+            createUnsubscribe(channelsArray, timeoutMs),
+            options,
+        );
+    }
+
+    /**
+     * Unsubscribes the client from the specified patterns (non-blocking).
+     * Pass null or ALL_PATTERNS to unsubscribe from all patterns.
+     *
+     * @see {@link https://valkey.io/commands/punsubscribe/|valkey.io} for details.
+     *
+     * @param patterns - Pattern names to unsubscribe from, or null for all patterns.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves immediately.
+     *
+     * @example
+     * ```typescript
+     * await client.punsubscribeLazy(new Set(["news.*"]));
+     * // Unsubscribe from all patterns
+     * await client.punsubscribeLazy(ALL_PATTERNS);
+     * ```
+     */
+    public async punsubscribeLazy(
+        patterns?: Iterable<GlideString> | null,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const patternsArray = patterns ? Array.from(patterns) : undefined;
+        return this.createWritePromise(
+            createPUnsubscribeLazy(patternsArray),
+            options,
+        );
+    }
+
+    /**
+     * Unsubscribes the client from the specified patterns (blocking).
+     * Pass null or ALL_PATTERNS to unsubscribe from all patterns.
+     *
+     * @see {@link https://valkey.io/commands/punsubscribe/|valkey.io} for details.
+     *
+     * @param patterns - Pattern names to unsubscribe from, or null for all patterns.
+     * @param timeoutMs - Maximum time in milliseconds to wait. Use 0 for indefinite wait.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns A promise that resolves when unsubscription is confirmed or timeout occurs.
+     *
+     * @example
+     * ```typescript
+     * await client.punsubscribe(new Set(["news.*"]), 5000);
+     * // Unsubscribe from all patterns with timeout
+     * await client.punsubscribe(ALL_PATTERNS, 5000);
+     * ```
+     */
+    public async punsubscribe(
+        patterns: Iterable<GlideString> | null,
+        timeoutMs: number,
+        options?: DecoderOption,
+    ): Promise<void> {
+        const patternsArray = patterns ? Array.from(patterns) : [];
+        return this.createWritePromise(
+            createPUnsubscribe(patternsArray, timeoutMs),
+            options,
+        );
+    }
+
+    /**
+     * @internal
+     * Helper method to parse GetSubscriptions response from Rust core.
+     * Converts array response to structured object with desired and actual subscriptions.
+     *
+     * @param response - The response array from Rust core with format:
+     *   ["desired", { mode: [channels...] }, "actual", { mode: [channels...] }]
+     * @returns Parsed subscription state with desired and actual subscriptions
+     */
+    protected parseGetSubscriptionsResponse<T extends number>(
+        response: unknown[],
+    ): {
+        desiredSubscriptions: Partial<Record<T, Set<GlideString>>>;
+        actualSubscriptions: Partial<Record<T, Set<GlideString>>>;
+    } {
+        // Response format: ["desired", {...}, "actual", {...}]
+        if (!Array.isArray(response) || response.length !== 4) {
+            throw new Error(
+                `Invalid GetSubscriptions response format: expected array of length 4, got ${response}`,
+            );
+        }
+
+        const desiredData = response[1] as Record<string, GlideString[]>;
+        const actualData = response[3] as Record<string, GlideString[]>;
+
+        const desiredSubscriptions: Partial<Record<T, Set<GlideString>>> = {};
+        const actualSubscriptions: Partial<Record<T, Set<GlideString>>> = {};
+
+        // Parse desired subscriptions
+        for (const [mode, channels] of Object.entries(desiredData)) {
+            const modeKey = parseInt(mode) as T;
+            desiredSubscriptions[modeKey] = new Set(channels);
+        }
+
+        // Parse actual subscriptions
+        for (const [mode, channels] of Object.entries(actualData)) {
+            const modeKey = parseInt(mode) as T;
+            actualSubscriptions[modeKey] = new Set(channels);
+        }
+
+        return { desiredSubscriptions, actualSubscriptions };
     }
 
     /**
