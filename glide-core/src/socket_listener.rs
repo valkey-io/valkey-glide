@@ -329,6 +329,10 @@ async fn send_command(
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
+    if let Some(ref span) = cmd.span() {
+        set_db_attributes(span, &cmd, &client);
+    }
+
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
 
     // Process command arguments for compression if compression is enabled
@@ -496,6 +500,7 @@ async fn invoke_script(
     args: Option<Vec<Bytes>>,
     mut client: Client,
     routing: Option<RoutingInfo>,
+    command_span: Option<GlideSpan>,
 ) -> ClientUsageResult<Value> {
     // convert Vec<bytes> to vec<[u8]>
     let keys: Vec<&[u8]> = keys
@@ -506,6 +511,24 @@ async fn invoke_script(
         .as_ref()
         .map(|keys| keys.iter().map(|e| e.as_ref()).collect())
         .unwrap_or_default();
+
+    if let Some(ref span) = command_span {
+        set_db_connection_attributes(span, &client);
+        span.set_attribute("db.operation.name", "EVALSHA");
+        // Build db.query.text following Java OTel convention:
+        // show hash and keys, mask args (which may contain sensitive values).
+        let mut parts: Vec<String> = Vec::with_capacity(3 + keys.len() + args.len());
+        parts.push("EVALSHA".to_string());
+        parts.push(hash.to_string());
+        parts.push(keys.len().to_string());
+        for key in &keys {
+            parts.push(String::from_utf8_lossy(key).into_owned());
+        }
+        for _ in &args {
+            parts.push("?".to_string());
+        }
+        span.set_attribute("db.query.text", parts.join(" "));
+    }
 
     client
         .invoke_script(&hash, &keys, &args, routing)
@@ -704,7 +727,7 @@ fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
     span.set_attribute("db.namespace", client.db_namespace().to_string());
 }
 
-/// Sets OTel DB semantic convention attributes on a span.
+/// Sets OTel DB semantic convention attributes on a single command span.
 fn set_db_attributes(span: &GlideSpan, cmd: &Cmd, client: &Client) {
     set_db_connection_attributes(span, client);
 
@@ -716,6 +739,36 @@ fn set_db_attributes(span: &GlideSpan, cmd: &Cmd, client: &Client) {
     if let Some(query_text) = serialize_query_text(cmd) {
         span.set_attribute("db.query.text", query_text);
     }
+}
+
+/// Sets OTel DB semantic convention attributes on a batch (pipeline/transaction) span.
+/// `db.query.text` is a newline-joined serialization of all commands.
+/// `db.operation.name` is `PIPELINE <cmd>` if all commands are the same, otherwise `PIPELINE`.
+fn set_db_batch_attributes(span: &GlideSpan, cmds: &[Cmd], client: &Client) {
+    set_db_connection_attributes(span, client);
+
+    let mut query_texts: Vec<String> = Vec::with_capacity(cmds.len());
+    let mut cmd_names: Vec<String> = Vec::with_capacity(cmds.len());
+
+    for cmd in cmds {
+        if let Some(text) = serialize_query_text(cmd) {
+            query_texts.push(text);
+        }
+        if let Some(redis::Arg::Simple(name_bytes)) = cmd.args_iter().next() {
+            cmd_names.push(String::from_utf8_lossy(name_bytes).into_owned());
+        }
+    }
+
+    if !query_texts.is_empty() {
+        span.set_attribute("db.query.text", query_texts.join("\n"));
+    }
+
+    let op_name = if !cmd_names.is_empty() && cmd_names.iter().all(|n| n == &cmd_names[0]) {
+        format!("PIPELINE {}", cmd_names[0])
+    } else {
+        "PIPELINE".to_string()
+    };
+    span.set_attribute("db.operation.name", op_name);
 }
 
 async fn send_batch(
@@ -732,6 +785,8 @@ async fn send_batch(
         pipeline.atomic();
     }
 
+    let mut redis_cmds: Vec<Cmd> = Vec::with_capacity(request.commands.len());
+
     for command in request.commands {
         let mut redis_cmd = get_redis_command(&command)?;
 
@@ -744,6 +799,14 @@ async fn send_batch(
             );
         }
 
+        redis_cmds.push(redis_cmd);
+    }
+
+    if let Some(ref span) = pipeline.span() {
+        set_db_batch_attributes(span, &redis_cmds, client);
+    }
+
+    for redis_cmd in redis_cmds {
         pipeline.add_command(redis_cmd);
     }
 
@@ -890,9 +953,6 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
                                 Ok(routes) => {
                                     cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
-                                    if let Some(ref span) = cmd.span() {
-                                        set_db_attributes(span, &cmd, &client);
-                                    }
                                     send_command(cmd, client, routes).await
                                 }
                                 Err(e) => Err(e),
@@ -905,9 +965,6 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             Ok(routes) => {
                                 let otel_command_span =
                                     get_unsafe_span_from_ptr(request.root_span_ptr);
-                                if let Some(ref span) = otel_command_span {
-                                    set_db_connection_attributes(span, &client);
-                                }
                                 send_batch(batch, &mut client, routes, otel_command_span).await
                             }
                             Err(e) => Err(e),
@@ -916,12 +973,14 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                     command_request::Command::ScriptInvocation(script) => {
                         match get_route(request.route.0, None) {
                             Ok(routes) => {
+                                let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
                                 invoke_script(
                                     script.hash,
                                     Some(script.keys),
                                     Some(script.args),
                                     client,
                                     routes,
+                                    otel_span,
                                 )
                                 .await
                             }
@@ -937,7 +996,9 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                             .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
                         match get_route(request.route.0, None) {
                             Ok(routes) => {
-                                invoke_script(script.hash, keys, args, client, routes).await
+                                let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
+                                invoke_script(script.hash, keys, args, client, routes, otel_span)
+                                    .await
                             }
                             Err(e) => Err(e),
                         }
@@ -1660,5 +1721,175 @@ mod tests {
             masking_pattern("set"),
             MaskingPattern::ShowFirst(1)
         ));
+    }
+
+    // --- batch (pipeline) db.query.text ---
+
+    #[test]
+    fn test_batch_query_text_multiple_commands() {
+        // Multiple different commands → newline-joined db.query.text
+        let cmds = vec![
+            make_cmd("SET", &["key1", "val1"]),
+            make_cmd("GET", &["key2"]),
+            make_cmd("HSET", &["hash1", "field", "value"]),
+        ];
+
+        let mut query_texts: Vec<String> = Vec::new();
+        let mut cmd_names: Vec<String> = Vec::new();
+
+        for cmd in &cmds {
+            if let Some(text) = serialize_query_text(cmd) {
+                query_texts.push(text);
+            }
+            if let Some(redis::Arg::Simple(name_bytes)) = cmd.args_iter().next() {
+                cmd_names.push(String::from_utf8_lossy(name_bytes).into_owned());
+            }
+        }
+
+        let joined = query_texts.join("\n");
+        assert_eq!(joined, "SET key1 ?\nGET key2\nHSET hash1 field ?");
+
+        // Mixed commands → "PIPELINE" (no suffix)
+        assert!(!cmd_names.iter().all(|n| n == &cmd_names[0]));
+    }
+
+    #[test]
+    fn test_batch_query_text_same_commands() {
+        // All same command → "PIPELINE GET"
+        let cmds = vec![
+            make_cmd("GET", &["key1"]),
+            make_cmd("GET", &["key2"]),
+            make_cmd("GET", &["key3"]),
+        ];
+
+        let mut query_texts: Vec<String> = Vec::new();
+        let mut cmd_names: Vec<String> = Vec::new();
+
+        for cmd in &cmds {
+            if let Some(text) = serialize_query_text(cmd) {
+                query_texts.push(text);
+            }
+            if let Some(redis::Arg::Simple(name_bytes)) = cmd.args_iter().next() {
+                cmd_names.push(String::from_utf8_lossy(name_bytes).into_owned());
+            }
+        }
+
+        let joined = query_texts.join("\n");
+        assert_eq!(joined, "GET key1\nGET key2\nGET key3");
+
+        // All same → "PIPELINE GET"
+        assert!(cmd_names.iter().all(|n| n == &cmd_names[0]));
+        let op_name = format!("PIPELINE {}", cmd_names[0]);
+        assert_eq!(op_name, "PIPELINE GET");
+    }
+
+    #[test]
+    fn test_batch_query_text_with_masking() {
+        // Batch with commands that use different masking patterns
+        let cmds = vec![
+            make_cmd("AUTH", &["password123"]),          // MaskAll
+            make_cmd("SET", &["key", "secret-val"]),     // ShowFirst(1)
+            make_cmd("MSET", &["k1", "v1", "k2", "v2"]), // InterleavedKeyValue
+        ];
+
+        let mut query_texts: Vec<String> = Vec::new();
+        for cmd in &cmds {
+            if let Some(text) = serialize_query_text(cmd) {
+                query_texts.push(text);
+            }
+        }
+
+        let joined = query_texts.join("\n");
+        assert_eq!(joined, "AUTH ?\nSET key ?\nMSET k1 ? k2 ?");
+    }
+
+    // --- invoke_script db.query.text ---
+
+    #[test]
+    fn test_invoke_script_query_text_with_keys_and_args() {
+        // EVALSHA <hash> <numkeys> key1 key2 ? ?
+        let hash = "abc123def456";
+        let keys: Vec<&[u8]> = vec![b"user:1", b"user:2"];
+        let args: Vec<&[u8]> = vec![b"secret-val1", b"secret-val2"];
+
+        let mut parts: Vec<String> = Vec::with_capacity(3 + keys.len() + args.len());
+        parts.push("EVALSHA".to_string());
+        parts.push(hash.to_string());
+        parts.push(keys.len().to_string());
+        for key in &keys {
+            parts.push(String::from_utf8_lossy(key).into_owned());
+        }
+        for _ in &args {
+            parts.push("?".to_string());
+        }
+
+        let query_text = parts.join(" ");
+        assert_eq!(query_text, "EVALSHA abc123def456 2 user:1 user:2 ? ?");
+    }
+
+    #[test]
+    fn test_invoke_script_query_text_keys_only() {
+        // Script with keys but no args
+        let hash = "sha1hash";
+        let keys: Vec<&[u8]> = vec![b"mykey"];
+        let args: Vec<&[u8]> = vec![];
+
+        let mut parts: Vec<String> = Vec::with_capacity(3 + keys.len() + args.len());
+        parts.push("EVALSHA".to_string());
+        parts.push(hash.to_string());
+        parts.push(keys.len().to_string());
+        for key in &keys {
+            parts.push(String::from_utf8_lossy(key).into_owned());
+        }
+        for _ in &args {
+            parts.push("?".to_string());
+        }
+
+        let query_text = parts.join(" ");
+        assert_eq!(query_text, "EVALSHA sha1hash 1 mykey");
+    }
+
+    #[test]
+    fn test_invoke_script_query_text_no_keys_no_args() {
+        // Script with no keys and no args
+        let hash = "emptyscript";
+        let keys: Vec<&[u8]> = vec![];
+        let args: Vec<&[u8]> = vec![];
+
+        let mut parts: Vec<String> = Vec::with_capacity(3 + keys.len() + args.len());
+        parts.push("EVALSHA".to_string());
+        parts.push(hash.to_string());
+        parts.push(keys.len().to_string());
+        for key in &keys {
+            parts.push(String::from_utf8_lossy(key).into_owned());
+        }
+        for _ in &args {
+            parts.push("?".to_string());
+        }
+
+        let query_text = parts.join(" ");
+        assert_eq!(query_text, "EVALSHA emptyscript 0");
+    }
+
+    #[test]
+    fn test_invoke_script_query_text_args_only() {
+        // Script with args but no keys
+        let hash = "argsonly";
+        let keys: Vec<&[u8]> = vec![];
+        let args: Vec<&[u8]> = vec![b"arg1", b"arg2", b"arg3"];
+
+        let mut parts: Vec<String> = Vec::with_capacity(3 + keys.len() + args.len());
+        parts.push("EVALSHA".to_string());
+        parts.push(hash.to_string());
+        parts.push(keys.len().to_string());
+        for key in &keys {
+            parts.push(String::from_utf8_lossy(key).into_owned());
+        }
+        for _ in &args {
+            parts.push("?".to_string());
+        }
+
+        let query_text = parts.join(" ");
+        assert_eq!(query_text, "EVALSHA argsonly 0 ? ? ?");
     }
 }
