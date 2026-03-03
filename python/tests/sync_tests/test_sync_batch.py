@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import os
 import re
 import time
 from datetime import date, timedelta
@@ -74,6 +75,29 @@ def exec_batch(
 
 @pytest.mark.anyio
 class TestSyncBatch:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_batch_set_with_bytearray_and_memoryview(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test that batch set() accepts bytearray and memoryview values."""
+        key_ba = get_random_string(10)
+        key_mv = get_random_string(10)
+        data = os.urandom(256)
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        batch.set(key_ba, bytearray(data))
+        batch.set(key_mv, memoryview(bytearray(data)))
+        result = exec_batch(glide_sync_client, batch)
+        assert result == [OK, OK]
+
+        assert glide_sync_client.get(key_ba) == data
+        assert glide_sync_client.get(key_mv) == data
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_transaction_with_different_slots(
