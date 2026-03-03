@@ -535,27 +535,105 @@ fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> 
 enum MaskingPattern {
     /// Show all arguments. Used for read commands (GET, DEL, KEYS, etc.).
     ShowAll,
-    /// Mask all arguments. Used for commands with entirely sensitive args (AUTH, ECHO).
+    /// Mask all arguments. Used for commands with entirely sensitive args (AUTH, ECHO)
+    /// and as the default for any unlisted command.
     MaskAll,
     /// Show the first N arguments, mask the rest. Used for commands where the key
-    /// (and optionally field) is safe but the value is sensitive (SET=1, HSET=2, etc.).
+    /// (and optionally field/TTL) is safe but the value is sensitive (SET=1, SETEX=2, etc.).
     ShowFirst(usize),
     /// Interleaved key-value pairs: show even-indexed args (keys), mask odd-indexed
-    /// args (values). Used for MSET and MSETNX.
+    /// args (values). Used for MSET and MSETNX where remaining args are key/value pairs.
     InterleavedKeyValue,
+    /// Show the first N arguments (e.g., key), then interleave the rest as field/value
+    /// pairs: show even-indexed (field), mask odd-indexed (value). Used for HSET, HMSET.
+    ShowFirstThenInterleave(usize),
 }
 
 /// Returns the masking pattern for a given command.
+///
+/// The default is [`MaskingPattern::MaskAll`] to prevent accidental credential leakage
+/// from commands not explicitly listed here (e.g., `CONFIG SET requirepass`,
+/// `ACL SETUSER`, `MIGRATE`, `HELLO` with AUTH).
 fn masking_pattern(cmd_name: &str) -> MaskingPattern {
     match cmd_name.to_ascii_uppercase().as_str() {
-        "ECHO" | "AUTH" => MaskingPattern::MaskAll,
+        // -- MaskAll: all arguments are sensitive --
+        "AUTH" | "ECHO" | "HELLO" => MaskingPattern::MaskAll,
+
+        // -- ShowFirst(1): only key/channel visible --
+        // Note: ZADD has optional flags (NX|XX|GT|LT|CH|INCR) before score/member pairs,
+        // making it hard to fit a more granular pattern. ShowFirst(1) is the safe choice.
         "APPEND" | "GETSET" | "LPUSH" | "LPUSHX" | "PFADD" | "PUBLISH" | "RPUSH" | "RPUSHX"
-        | "SADD" | "SET" | "SETEX" | "SETNX" | "PSETEX" | "SPUBLISH" | "XADD" | "ZADD" => {
+        | "SADD" | "SET" | "SETNX" | "SPUBLISH" | "XADD" | "ZADD" => {
             MaskingPattern::ShowFirst(1)
         }
-        "HSET" | "HMSET" | "HSETNX" | "LSET" | "LINSERT" | "LPOS" => MaskingPattern::ShowFirst(2),
+
+        // -- ShowFirst(2): key + TTL/field visible, value masked --
+        "SETEX" | "PSETEX" | "HSETNX" | "LSET" | "LPOS" => MaskingPattern::ShowFirst(2),
+
+        // LINSERT key BEFORE|AFTER pivot element — key, keyword, pivot are non-sensitive
+        "LINSERT" => MaskingPattern::ShowFirst(3),
+
+        // -- InterleavedKeyValue: args are directly key/value pairs --
         "MSET" | "MSETNX" => MaskingPattern::InterleavedKeyValue,
-        _ => MaskingPattern::ShowAll,
+
+        // -- ShowFirstThenInterleave: key visible, then field/value pairs interleaved --
+        "HSET" | "HMSET" => MaskingPattern::ShowFirstThenInterleave(1),
+
+        // -- ShowAll: all arguments are non-sensitive (keys, patterns, indices, etc.) --
+        // Note: commands with subcommands that may carry credentials (CONFIG, ACL,
+        // CLIENT, DEBUG, HELLO, MIGRATE, CLUSTER) are intentionally omitted here
+        // so they fall through to the MaskAll default.
+        //
+        // String
+        "DECR" | "DECRBY" | "GET" | "GETBIT" | "GETDEL" | "GETEX" | "GETRANGE"
+        | "INCR" | "INCRBY" | "INCRBYFLOAT" | "MGET" | "STRLEN" | "SUBSTR"
+        // Bitmap
+        | "BITCOUNT" | "BITFIELD" | "BITFIELD_RO" | "BITOP" | "BITPOS"
+        // Key
+        | "COPY" | "DEL" | "DUMP" | "EXISTS" | "EXPIRE" | "EXPIREAT" | "EXPIRETIME"
+        | "KEYS" | "MOVE" | "OBJECT" | "PERSIST" | "PEXPIRE" | "PEXPIREAT"
+        | "PEXPIRETIME" | "PTTL" | "RANDOMKEY" | "RENAME" | "RENAMENX" | "SCAN"
+        | "SORT" | "SORT_RO" | "TOUCH" | "TTL" | "TYPE" | "UNLINK" | "WAIT" | "WAITAOF"
+        | "WATCH" | "UNWATCH"
+        // Hash (read)
+        | "HDEL" | "HEXISTS" | "HGET" | "HGETALL" | "HINCRBY" | "HINCRBYFLOAT"
+        | "HKEYS" | "HLEN" | "HMGET" | "HRANDFIELD" | "HSCAN" | "HSTRLEN" | "HVALS"
+        // List (read/structural)
+        | "LINDEX" | "LLEN" | "LMOVE" | "LMPOP" | "LPOP" | "LRANGE" | "LREM" | "LTRIM"
+        | "RPOP" | "RPOPLPUSH"
+        // Set
+        | "SCARD" | "SDIFF" | "SDIFFSTORE" | "SINTER" | "SINTERCARD" | "SINTERSTORE"
+        | "SISMEMBER" | "SMEMBERS" | "SMISMEMBER" | "SMOVE" | "SPOP" | "SRANDMEMBER"
+        | "SREM" | "SSCAN" | "SUNION" | "SUNIONSTORE"
+        // Sorted Set (read/structural)
+        | "ZCARD" | "ZCOUNT" | "ZDIFF" | "ZDIFFSTORE" | "ZINCRBY" | "ZINTER"
+        | "ZINTERCARD" | "ZINTERSTORE" | "ZLEXCOUNT" | "ZMPOP" | "ZMSCORE"
+        | "ZPOPMAX" | "ZPOPMIN" | "ZRANDMEMBER" | "ZRANGE" | "ZRANGEBYLEX"
+        | "ZRANGEBYSCORE" | "ZRANGESTORE" | "ZRANK" | "ZREM" | "ZREMRANGEBYLEX"
+        | "ZREMRANGEBYRANK" | "ZREMRANGEBYSCORE" | "ZREVRANGE" | "ZREVRANGEBYLEX"
+        | "ZREVRANGEBYSCORE" | "ZREVRANK" | "ZSCAN" | "ZSCORE" | "ZUNION" | "ZUNIONSTORE"
+        // Geo (read)
+        | "GEODIST" | "GEOHASH" | "GEOPOS" | "GEORADIUS" | "GEORADIUS_RO"
+        | "GEORADIUSBYMEMBER" | "GEORADIUSBYMEMBER_RO" | "GEOSEARCH" | "GEOSEARCHSTORE"
+        // HyperLogLog
+        | "PFCOUNT" | "PFMERGE"
+        // Stream (read/structural)
+        | "XACK" | "XCLAIM" | "XDEL" | "XGROUP" | "XINFO" | "XLEN" | "XPENDING"
+        | "XRANGE" | "XREAD" | "XREADGROUP" | "XREVRANGE" | "XTRIM"
+        // Server (non-sensitive)
+        | "COMMAND" | "DBSIZE" | "FLUSHALL" | "FLUSHDB" | "INFO" | "LOLWUT"
+        | "PING" | "RESET" | "SELECT" | "SLOWLOG" | "SWAPDB" | "TIME"
+        // Pub/Sub (read/structural)
+        | "PUBSUB"
+        // Transaction
+        | "DISCARD" | "EXEC" | "MULTI"
+        // Scripting (structural)
+        | "SCRIPT" | "FUNCTION" => MaskingPattern::ShowAll,
+
+        // Default: mask everything for safety. Any unlisted command (including
+        // credential-bearing ones like CONFIG SET requirepass, ACL SETUSER,
+        // MIGRATE with auth password) will have all arguments masked.
+        _ => MaskingPattern::MaskAll,
     }
 }
 
@@ -593,6 +671,17 @@ fn serialize_query_text(cmd: &Cmd) -> Option<String> {
                     parts.push(arg.clone());
                 } else {
                     parts.push("?".to_string());
+                }
+            }
+        }
+        MaskingPattern::ShowFirstThenInterleave(n) => {
+            let n = n.min(remaining.len());
+            parts.extend_from_slice(&remaining[..n]);
+            for (i, arg) in remaining[n..].iter().enumerate() {
+                if i % 2 == 0 {
+                    parts.push(arg.clone()); // field name
+                } else {
+                    parts.push("?".to_string()); // value
                 }
             }
         }
@@ -1337,6 +1426,8 @@ mod tests {
 
     /// (command, args, expected db.query.text)
     const QUERY_TEXT_CASES: &[(&str, &[&str], &str)] = &[
+        // -- No args --
+        ("PING", &[], "PING"),
         // -- MaskAll: all arguments are sensitive --
         // AUTH <password>
         ("AUTH", &["s3cret!"], "AUTH ?"),
@@ -1363,17 +1454,17 @@ mod tests {
             &["lock:resource", "owner-id"],
             "SETNX lock:resource ?",
         ),
-        // SETEX key seconds value
+        // SETEX key seconds value — TTL is non-sensitive
         (
             "SETEX",
             &["cache:page:home", "300", "<html>..."],
-            "SETEX cache:page:home ? ?",
+            "SETEX cache:page:home 300 ?",
         ),
-        // PSETEX key milliseconds value
+        // PSETEX key milliseconds value — TTL is non-sensitive
         (
             "PSETEX",
             &["ratelimit:user:42", "1500", "1"],
-            "PSETEX ratelimit:user:42 ? ?",
+            "PSETEX ratelimit:user:42 1500 ?",
         ),
         // APPEND key value
         (
@@ -1447,7 +1538,7 @@ mod tests {
             &["stream:events", "*", "action", "login", "user", "alice"],
             "XADD stream:events ? ? ? ? ?",
         ),
-        // -- ShowFirst(2): key + field visible, value masked --
+        // -- ShowFirstThenInterleave(1): key visible, then field/value pairs --
         // HSET key field value
         (
             "HSET",
@@ -1458,13 +1549,13 @@ mod tests {
         (
             "HSET",
             &["user:1001", "email", "a@b.com", "name", "Alice"],
-            "HSET user:1001 email ? ? ?",
+            "HSET user:1001 email ? name ?",
         ),
         // HMSET key field value [field value ...]
         (
             "HMSET",
             &["product:500", "price", "29.99", "stock", "150"],
-            "HMSET product:500 price ? ? ?",
+            "HMSET product:500 price ? stock ?",
         ),
         // HSETNX key field value
         (
@@ -1482,7 +1573,7 @@ mod tests {
         (
             "LINSERT",
             &["playlist", "BEFORE", "track:5", "track:new"],
-            "LINSERT playlist BEFORE ? ?",
+            "LINSERT playlist BEFORE track:5 ?",
         ),
         // LPOS key element [RANK rank] [COUNT count]
         (
@@ -1536,9 +1627,21 @@ mod tests {
             &["0", "MATCH", "user:*", "COUNT", "100"],
             "SCAN 0 MATCH user:* COUNT 100",
         ),
-        // -- Edge cases --
-        // Unknown/future command defaults to ShowAll
-        ("CUSTOMCMD", &["arg1", "arg2"], "CUSTOMCMD arg1 arg2"),
+        // -- MaskAll by default: unknown/credential-bearing commands --
+        // Unknown command defaults to MaskAll for safety
+        ("CUSTOMCMD", &["arg1", "arg2"], "CUSTOMCMD ? ?"),
+        // CONFIG SET requirepass — password must not leak
+        ("CONFIG", &["SET", "requirepass", "s3cret"], "CONFIG ? ? ?"),
+        // ACL SETUSER — tokens must not leak
+        ("ACL", &["SETUSER", "admin", ">password"], "ACL ? ? ?"),
+        // MIGRATE — contains auth password argument
+        (
+            "MIGRATE",
+            &["host", "6379", "key", "0", "5000", "AUTH", "s3cret"],
+            "MIGRATE ? ? ? ? ? ? ?",
+        ),
+        // HELLO with AUTH — password must not leak
+        ("HELLO", &["3", "AUTH", "user", "pass"], "HELLO ? ? ? ?"),
     ];
 
     #[test]
@@ -1551,31 +1654,11 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_query_text_no_args() {
-        let cmd = redis::cmd("PING");
-        let result = serialize_query_text(&cmd).unwrap();
-        assert_eq!(result, "PING");
-    }
-
-    #[test]
     fn test_masking_pattern_case_insensitive() {
+        // to_ascii_uppercase() is applied internally, one case is sufficient
         assert!(matches!(
             masking_pattern("set"),
             MaskingPattern::ShowFirst(1)
         ));
-        assert!(matches!(
-            masking_pattern("Set"),
-            MaskingPattern::ShowFirst(1)
-        ));
-        assert!(matches!(
-            masking_pattern("hset"),
-            MaskingPattern::ShowFirst(2)
-        ));
-        assert!(matches!(masking_pattern("auth"), MaskingPattern::MaskAll));
-        assert!(matches!(
-            masking_pattern("mset"),
-            MaskingPattern::InterleavedKeyValue
-        ));
-        assert!(matches!(masking_pattern("get"), MaskingPattern::ShowAll));
     }
 }
