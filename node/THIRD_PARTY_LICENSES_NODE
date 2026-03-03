@@ -2065,7 +2065,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: aws-lc-rs:1.16.0
+Package: aws-lc-rs:1.16.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2287,7 +2287,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: aws-lc-sys:0.37.1
+Package: aws-lc-sys:0.38.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -22521,7 +22521,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: ipnet:2.11.0
+Package: ipnet:2.12.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -44439,7 +44439,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-macros:2.6.0
+Package: tokio-macros:2.6.1
 
 The following copyrights and licenses were found in the source code of this package:
 
