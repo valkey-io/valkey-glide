@@ -827,14 +827,14 @@ mod cluster_client_tests {
                     .await
                     .unwrap();
 
-                // Create user with all permissions EXCEPT cluster slots
+                // Create user with all permissions EXCEPT cluster commands
                 let mut cmd = redis::cmd("ACL");
                 cmd.arg("SETUSER")
                     .arg(username)
                     .arg("on")
                     .arg("allkeys")
                     .arg("+@all")
-                    .arg("-cluster|slots") // Deny cluster slots command specifically
+                    .arg("-cluster") // Redis 6.2 does not support -cluster|slots type syntax.
                     .arg(format!(">{password}"));
 
                 connection.send_packed_command(&cmd).await.unwrap();
