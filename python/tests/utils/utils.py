@@ -653,6 +653,7 @@ def create_sync_client_config(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     inflight_requests_limit: Optional[int] = None,
+    read_only: bool = False,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -719,6 +720,7 @@ def create_sync_client_config(
             reconnect_strategy=reconnect_strategy,
             lazy_connect=lazy_connect,
             compression=compression_config,
+            read_only=read_only,
         )
 
 
