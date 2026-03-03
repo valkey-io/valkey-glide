@@ -151,8 +151,8 @@ jobs:
                   # Install zig (required by cargo-zigbuild)
                   brew install zig
 
-                  # Pre-download Windows SDK for cargo-xwin
-                  cargo xwin download --accept-license
+                  # Pre-cache Windows SDK for cargo-xwin (for offline builds)
+                  cargo xwin cache xwin
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
