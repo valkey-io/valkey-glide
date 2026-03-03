@@ -798,7 +798,7 @@ mod cluster_client_tests {
     #[rstest]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     #[serial_test::serial]
-    fn test_cluster_connection_succeeds_with_cluster_permission() {
+    fn test_cluster_connection_fails_with_permission_denied() {
         block_on_all(async {
             // Setup a cluster with default (unrestricted) access
             let test_basics = setup_test_basics_internal(TestConfiguration {
@@ -871,7 +871,8 @@ mod cluster_client_tests {
                 let error_msg = format!("{:?}", err);
                 // Assert the error contains permission error
                 assert!(
-                    error_msg.contains("User Not Permitted"),
+                    error_msg.contains("PermissionDenied")
+                    && error_msg.contains("has no permissions to run the 'cluster|slots' command"),
                     "Error should be a perrmission error, got: {}",
                     error_msg
                 );
