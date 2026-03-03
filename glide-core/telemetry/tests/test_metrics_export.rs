@@ -161,7 +161,10 @@ fn validate_histogram_f64(
 // Metric Creator Functions
 // ============================================================================
 
-fn create_gauge_u64_metrics(metric_name: &str, value: u64) -> ResourceMetrics {
+fn create_gauge_metrics<T>(metric_name: &str, value: T) -> ResourceMetrics
+where
+    T: Copy + Send + Sync + std::fmt::Debug + 'static,
+{
     let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
     let gauge = Gauge {
         data_points: vec![DataPoint {
@@ -174,7 +177,7 @@ fn create_gauge_u64_metrics(metric_name: &str, value: u64) -> ResourceMetrics {
     };
     let metric = Metric {
         name: metric_name.to_string().into(),
-        description: "Test u64 gauge metric".into(),
+        description: "Test gauge metric".into(),
         unit: "1".into(),
         data: Box::new(gauge),
     };
@@ -190,65 +193,10 @@ fn create_gauge_u64_metrics(metric_name: &str, value: u64) -> ResourceMetrics {
     }
 }
 
-fn create_gauge_i64_metrics(metric_name: &str, value: i64) -> ResourceMetrics {
-    let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
-    let gauge = Gauge {
-        data_points: vec![DataPoint {
-            attributes: vec![KeyValue::new("test_attr", "test_value")],
-            start_time: None,
-            time: Some(SystemTime::now()),
-            value,
-            exemplars: vec![],
-        }],
-    };
-    let metric = Metric {
-        name: metric_name.to_string().into(),
-        description: "Test i64 gauge metric".into(),
-        unit: "1".into(),
-        data: Box::new(gauge),
-    };
-    let scope = InstrumentationScope::builder("test_scope")
-        .with_version("1.0.0")
-        .build();
-    ResourceMetrics {
-        resource,
-        scope_metrics: vec![ScopeMetrics {
-            scope,
-            metrics: vec![metric],
-        }],
-    }
-}
-
-fn create_gauge_f64_metrics(metric_name: &str, value: f64) -> ResourceMetrics {
-    let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
-    let gauge = Gauge {
-        data_points: vec![DataPoint {
-            attributes: vec![KeyValue::new("test_attr", "test_value")],
-            start_time: None,
-            time: Some(SystemTime::now()),
-            value,
-            exemplars: vec![],
-        }],
-    };
-    let metric = Metric {
-        name: metric_name.to_string().into(),
-        description: "Test f64 gauge metric".into(),
-        unit: "1".into(),
-        data: Box::new(gauge),
-    };
-    let scope = InstrumentationScope::builder("test_scope")
-        .with_version("1.0.0")
-        .build();
-    ResourceMetrics {
-        resource,
-        scope_metrics: vec![ScopeMetrics {
-            scope,
-            metrics: vec![metric],
-        }],
-    }
-}
-
-fn create_sum_u64_metrics(metric_name: &str, value: u64) -> ResourceMetrics {
+fn create_sum_metrics<T>(metric_name: &str, value: T, is_monotonic: bool) -> ResourceMetrics
+where
+    T: Copy + Send + Sync + std::fmt::Debug + 'static,
+{
     let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
     let sum = Sum {
         data_points: vec![DataPoint {
@@ -259,11 +207,11 @@ fn create_sum_u64_metrics(metric_name: &str, value: u64) -> ResourceMetrics {
             exemplars: vec![],
         }],
         temporality: Temporality::Cumulative,
-        is_monotonic: true,
+        is_monotonic,
     };
     let metric = Metric {
         name: metric_name.to_string().into(),
-        description: "Test u64 sum metric".into(),
+        description: "Test sum metric".into(),
         unit: "1".into(),
         data: Box::new(sum),
     };
@@ -279,69 +227,19 @@ fn create_sum_u64_metrics(metric_name: &str, value: u64) -> ResourceMetrics {
     }
 }
 
-fn create_sum_i64_metrics(metric_name: &str, value: i64) -> ResourceMetrics {
-    let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
-    let sum = Sum {
-        data_points: vec![DataPoint {
-            attributes: vec![KeyValue::new("test_attr", "test_value")],
-            start_time: Some(SystemTime::now()),
-            time: Some(SystemTime::now()),
-            value,
-            exemplars: vec![],
-        }],
-        temporality: Temporality::Cumulative,
-        is_monotonic: false,
-    };
-    let metric = Metric {
-        name: metric_name.to_string().into(),
-        description: "Test i64 sum metric".into(),
-        unit: "1".into(),
-        data: Box::new(sum),
-    };
-    let scope = InstrumentationScope::builder("test_scope")
-        .with_version("1.0.0")
-        .build();
-    ResourceMetrics {
-        resource,
-        scope_metrics: vec![ScopeMetrics {
-            scope,
-            metrics: vec![metric],
-        }],
-    }
-}
-
-fn create_sum_f64_metrics(metric_name: &str, value: f64) -> ResourceMetrics {
-    let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
-    let sum = Sum {
-        data_points: vec![DataPoint {
-            attributes: vec![KeyValue::new("test_attr", "test_value")],
-            start_time: Some(SystemTime::now()),
-            time: Some(SystemTime::now()),
-            value,
-            exemplars: vec![],
-        }],
-        temporality: Temporality::Cumulative,
-        is_monotonic: true,
-    };
-    let metric = Metric {
-        name: metric_name.to_string().into(),
-        description: "Test f64 sum metric".into(),
-        unit: "1".into(),
-        data: Box::new(sum),
-    };
-    let scope = InstrumentationScope::builder("test_scope")
-        .with_version("1.0.0")
-        .build();
-    ResourceMetrics {
-        resource,
-        scope_metrics: vec![ScopeMetrics {
-            scope,
-            metrics: vec![metric],
-        }],
-    }
-}
-
-fn create_histogram_f64_metrics(metric_name: &str, sum: f64, count: u64) -> ResourceMetrics {
+fn create_histogram_metrics<T>(
+    metric_name: &str,
+    sum: T,
+    count: u64,
+    unit: &str,
+    bounds: Vec<f64>,
+    bucket_counts: Vec<u64>,
+    min: Option<T>,
+    max: Option<T>,
+) -> ResourceMetrics
+where
+    T: Copy + Send + Sync + std::fmt::Debug + 'static,
+{
     let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
     let histogram = Histogram {
         data_points: vec![opentelemetry_sdk::metrics::data::HistogramDataPoint {
@@ -349,10 +247,10 @@ fn create_histogram_f64_metrics(metric_name: &str, sum: f64, count: u64) -> Reso
             start_time: SystemTime::now(),
             time: SystemTime::now(),
             count,
-            bounds: vec![0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0],
-            bucket_counts: vec![1, 2, 3, 4, 5, 6, 7, 8],
-            min: Some(0.5),
-            max: Some(99.9),
+            bounds,
+            bucket_counts,
+            min,
+            max,
             sum,
             exemplars: vec![],
         }],
@@ -360,78 +258,8 @@ fn create_histogram_f64_metrics(metric_name: &str, sum: f64, count: u64) -> Reso
     };
     let metric = Metric {
         name: metric_name.to_string().into(),
-        description: "Test f64 histogram metric".into(),
-        unit: "ms".into(),
-        data: Box::new(histogram),
-    };
-    let scope = InstrumentationScope::builder("test_scope")
-        .with_version("1.0.0")
-        .build();
-    ResourceMetrics {
-        resource,
-        scope_metrics: vec![ScopeMetrics {
-            scope,
-            metrics: vec![metric],
-        }],
-    }
-}
-
-fn create_histogram_u64_metrics(metric_name: &str, sum: u64, count: u64) -> ResourceMetrics {
-    let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
-    let histogram = Histogram {
-        data_points: vec![opentelemetry_sdk::metrics::data::HistogramDataPoint {
-            attributes: vec![KeyValue::new("test_attr", "test_value")],
-            start_time: SystemTime::now(),
-            time: SystemTime::now(),
-            count,
-            bounds: vec![0.0, 10.0, 50.0, 100.0, 500.0],
-            bucket_counts: vec![5, 10, 15, 20, 25, 30],
-            min: Some(1),
-            max: Some(999),
-            sum,
-            exemplars: vec![],
-        }],
-        temporality: Temporality::Cumulative,
-    };
-    let metric = Metric {
-        name: metric_name.to_string().into(),
-        description: "Test u64 histogram metric".into(),
-        unit: "bytes".into(),
-        data: Box::new(histogram),
-    };
-    let scope = InstrumentationScope::builder("test_scope")
-        .with_version("1.0.0")
-        .build();
-    ResourceMetrics {
-        resource,
-        scope_metrics: vec![ScopeMetrics {
-            scope,
-            metrics: vec![metric],
-        }],
-    }
-}
-
-fn create_histogram_i64_metrics(metric_name: &str, sum: i64, count: u64) -> ResourceMetrics {
-    let resource = Resource::new(vec![KeyValue::new("service.name", "test_service")]);
-    let histogram = Histogram {
-        data_points: vec![opentelemetry_sdk::metrics::data::HistogramDataPoint {
-            attributes: vec![KeyValue::new("test_attr", "test_value")],
-            start_time: SystemTime::now(),
-            time: SystemTime::now(),
-            count,
-            bounds: vec![0.0, 10.0, 50.0, 100.0],
-            bucket_counts: vec![3, 7, 12, 18, 25],
-            min: Some(-50),
-            max: Some(150),
-            sum,
-            exemplars: vec![],
-        }],
-        temporality: Temporality::Cumulative,
-    };
-    let metric = Metric {
-        name: metric_name.to_string().into(),
-        description: "Test i64 histogram metric".into(),
-        unit: "delta".into(),
+        description: "Test histogram metric".into(),
+        unit: unit.to_string().into(),
         data: Box::new(histogram),
     };
     let scope = InstrumentationScope::builder("test_scope")
@@ -455,7 +283,7 @@ async fn test_gauge_u64_export_success() {
     run_metric_export_test(
         "gauge_u64",
         "test.gauge.u64",
-        create_gauge_u64_metrics("test.gauge.u64", 12345),
+        create_gauge_metrics("test.gauge.u64", 12345u64),
         validate_u64(12345),
     )
     .await;
@@ -467,7 +295,7 @@ async fn test_gauge_u64_large_values() {
     run_metric_export_test(
         "gauge_u64_large",
         "subscription.last_sync_timestamp",
-        create_gauge_u64_metrics("subscription.last_sync_timestamp", timestamp),
+        create_gauge_metrics("subscription.last_sync_timestamp", timestamp),
         validate_u64(timestamp),
     )
     .await;
@@ -478,7 +306,7 @@ async fn test_gauge_u64_zero_value() {
     run_metric_export_test(
         "gauge_u64_zero",
         "test.gauge.zero",
-        create_gauge_u64_metrics("test.gauge.zero", 0),
+        create_gauge_metrics("test.gauge.zero", 0u64),
         validate_u64(0),
     )
     .await;
@@ -489,7 +317,7 @@ async fn test_gauge_u64_max_value() {
     run_metric_export_test(
         "gauge_u64_max",
         "test.gauge.max",
-        create_gauge_u64_metrics("test.gauge.max", u64::MAX),
+        create_gauge_metrics("test.gauge.max", u64::MAX),
         validate_u64(u64::MAX),
     )
     .await;
@@ -516,7 +344,7 @@ async fn test_gauge_i64_export_success() {
     run_metric_export_test(
         "gauge_i64",
         "test.gauge.i64",
-        create_gauge_i64_metrics("test.gauge.i64", -12345),
+        create_gauge_metrics("test.gauge.i64", -12345i64),
         validate_i64(-12345),
     )
     .await;
@@ -527,7 +355,7 @@ async fn test_gauge_i64_positive_value() {
     run_metric_export_test(
         "gauge_i64_positive",
         "test.gauge.i64.positive",
-        create_gauge_i64_metrics("test.gauge.i64.positive", 54321),
+        create_gauge_metrics("test.gauge.i64.positive", 54321i64),
         validate_i64(54321),
     )
     .await;
@@ -538,7 +366,7 @@ async fn test_gauge_i64_zero_value() {
     run_metric_export_test(
         "gauge_i64_zero",
         "test.gauge.i64.zero",
-        create_gauge_i64_metrics("test.gauge.i64.zero", 0),
+        create_gauge_metrics("test.gauge.i64.zero", 0i64),
         validate_i64(0),
     )
     .await;
@@ -550,7 +378,7 @@ async fn test_gauge_i64_min_max_values() {
     run_metric_export_test(
         "gauge_i64_min",
         "test.gauge.i64.min",
-        create_gauge_i64_metrics("test.gauge.i64.min", i64::MIN),
+        create_gauge_metrics("test.gauge.i64.min", i64::MIN),
         validate_i64(i64::MIN),
     )
     .await;
@@ -559,7 +387,7 @@ async fn test_gauge_i64_min_max_values() {
     run_metric_export_test(
         "gauge_i64_max",
         "test.gauge.i64.max",
-        create_gauge_i64_metrics("test.gauge.i64.max", i64::MAX),
+        create_gauge_metrics("test.gauge.i64.max", i64::MAX),
         validate_i64(i64::MAX),
     )
     .await;
@@ -574,7 +402,7 @@ async fn test_gauge_f64_export_success() {
     run_metric_export_test(
         "gauge_f64",
         "test.gauge.f64",
-        create_gauge_f64_metrics("test.gauge.f64", 123.456),
+        create_gauge_metrics("test.gauge.f64", 123.456f64),
         validate_f64(123.456, 0.001),
     )
     .await;
@@ -585,7 +413,7 @@ async fn test_gauge_f64_negative_value() {
     run_metric_export_test(
         "gauge_f64_negative",
         "test.gauge.f64.negative",
-        create_gauge_f64_metrics("test.gauge.f64.negative", -987.654),
+        create_gauge_metrics("test.gauge.f64.negative", -987.654f64),
         validate_f64(-987.654, 0.001),
     )
     .await;
@@ -596,7 +424,7 @@ async fn test_gauge_f64_zero_value() {
     run_metric_export_test(
         "gauge_f64_zero",
         "test.gauge.f64.zero",
-        create_gauge_f64_metrics("test.gauge.f64.zero", 0.0),
+        create_gauge_metrics("test.gauge.f64.zero", 0.0f64),
         validate_f64(0.0, 0.0001),
     )
     .await;
@@ -607,7 +435,7 @@ async fn test_gauge_f64_small_value() {
     run_metric_export_test(
         "gauge_f64_small",
         "test.gauge.f64.small",
-        create_gauge_f64_metrics("test.gauge.f64.small", 0.000001),
+        create_gauge_metrics("test.gauge.f64.small", 0.000001f64),
         validate_f64(0.000001, 0.0000001),
     )
     .await;
@@ -618,7 +446,7 @@ async fn test_gauge_f64_large_value() {
     run_metric_export_test(
         "gauge_f64_large",
         "test.gauge.f64.large",
-        create_gauge_f64_metrics("test.gauge.f64.large", 1234567890.123456),
+        create_gauge_metrics("test.gauge.f64.large", 1234567890.123456f64),
         validate_f64(1234567890.123456, 0.001),
     )
     .await;
@@ -633,7 +461,7 @@ async fn test_sum_u64_export_success() {
     run_metric_export_test(
         "sum_u64",
         "test.sum.u64",
-        create_sum_u64_metrics("test.sum.u64", 54321),
+        create_sum_metrics("test.sum.u64", 54321u64, true),
         validate_u64(54321),
     )
     .await;
@@ -645,7 +473,7 @@ async fn test_sum_u64_large_values() {
     run_metric_export_test(
         "sum_u64_large",
         "test.sum.u64.large",
-        create_sum_u64_metrics("test.sum.u64.large", large_value),
+        create_sum_metrics("test.sum.u64.large", large_value, true),
         validate_u64(large_value),
     )
     .await;
@@ -660,7 +488,7 @@ async fn test_sum_i64_export_success() {
     run_metric_export_test(
         "sum_i64",
         "test.sum.i64",
-        create_sum_i64_metrics("test.sum.i64", -12345),
+        create_sum_metrics("test.sum.i64", -12345i64, false),
         validate_i64(-12345),
     )
     .await;
@@ -671,7 +499,7 @@ async fn test_sum_i64_positive_value() {
     run_metric_export_test(
         "sum_i64_positive",
         "test.sum.i64.positive",
-        create_sum_i64_metrics("test.sum.i64.positive", 99999),
+        create_sum_metrics("test.sum.i64.positive", 99999i64, false),
         validate_i64(99999),
     )
     .await;
@@ -686,7 +514,7 @@ async fn test_sum_f64_export_success() {
     run_metric_export_test(
         "sum_f64",
         "test.sum.f64",
-        create_sum_f64_metrics("test.sum.f64", 123.456),
+        create_sum_metrics("test.sum.f64", 123.456f64, true),
         validate_f64(123.456, 0.001),
     )
     .await;
@@ -697,7 +525,7 @@ async fn test_sum_f64_small_value() {
     run_metric_export_test(
         "sum_f64_small",
         "test.sum.f64.small",
-        create_sum_f64_metrics("test.sum.f64.small", 0.000001),
+        create_sum_metrics("test.sum.f64.small", 0.000001f64, true),
         validate_f64(0.000001, 0.0000001),
     )
     .await;
@@ -712,7 +540,16 @@ async fn test_histogram_f64_export_success() {
     run_metric_export_test(
         "histogram_f64",
         "test.histogram.f64",
-        create_histogram_f64_metrics("test.histogram.f64", 1234.56, 100),
+        create_histogram_metrics(
+            "test.histogram.f64",
+            1234.56f64,
+            100,
+            "ms",
+            vec![0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0],
+            vec![1, 2, 3, 4, 5, 6, 7, 8],
+            Some(0.5f64),
+            Some(99.9f64),
+        ),
         validate_histogram_f64(1234.56, 100, 0.01),
     )
     .await;
@@ -723,7 +560,16 @@ async fn test_histogram_f64_bounds() {
     run_metric_export_test(
         "histogram_f64_bounds",
         "test.histogram.bounds",
-        create_histogram_f64_metrics("test.histogram.bounds", 500.0, 50),
+        create_histogram_metrics(
+            "test.histogram.bounds",
+            500.0f64,
+            50,
+            "ms",
+            vec![0.0, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0],
+            vec![1, 2, 3, 4, 5, 6, 7, 8],
+            Some(0.5f64),
+            Some(99.9f64),
+        ),
         |json| {
             let data_point = &json["scope_metrics"][0]["metrics"][0]["data_points"][0];
             let bounds = data_point["bounds"].as_array().expect("Should have bounds");
@@ -744,7 +590,16 @@ async fn test_histogram_u64_export_success() {
     run_metric_export_test(
         "histogram_u64",
         "test.histogram.u64",
-        create_histogram_u64_metrics("test.histogram.u64", 50000, 200),
+        create_histogram_metrics(
+            "test.histogram.u64",
+            50000u64,
+            200,
+            "bytes",
+            vec![0.0, 10.0, 50.0, 100.0, 500.0],
+            vec![5, 10, 15, 20, 25, 30],
+            Some(1u64),
+            Some(999u64),
+        ),
         validate_histogram_u64(50000, 200),
     )
     .await;
@@ -756,7 +611,16 @@ async fn test_histogram_u64_large_values() {
     run_metric_export_test(
         "histogram_u64_large",
         "test.histogram.u64.large",
-        create_histogram_u64_metrics("test.histogram.u64.large", large_sum, 1000),
+        create_histogram_metrics(
+            "test.histogram.u64.large",
+            large_sum,
+            1000,
+            "bytes",
+            vec![0.0, 10.0, 50.0, 100.0, 500.0],
+            vec![5, 10, 15, 20, 25, 30],
+            Some(1u64),
+            Some(999u64),
+        ),
         validate_histogram_u64(large_sum, 1000),
     )
     .await;
@@ -771,7 +635,16 @@ async fn test_histogram_i64_export_success() {
     run_metric_export_test(
         "histogram_i64",
         "test.histogram.i64",
-        create_histogram_i64_metrics("test.histogram.i64", -5000, 75),
+        create_histogram_metrics(
+            "test.histogram.i64",
+            -5000i64,
+            75,
+            "delta",
+            vec![0.0, 10.0, 50.0, 100.0],
+            vec![3, 7, 12, 18, 25],
+            Some(-50i64),
+            Some(150i64),
+        ),
         validate_histogram_i64(-5000, 75),
     )
     .await;
@@ -782,7 +655,16 @@ async fn test_histogram_i64_positive_sum() {
     run_metric_export_test(
         "histogram_i64_positive",
         "test.histogram.i64.positive",
-        create_histogram_i64_metrics("test.histogram.i64.positive", 8888, 150),
+        create_histogram_metrics(
+            "test.histogram.i64.positive",
+            8888i64,
+            150,
+            "delta",
+            vec![0.0, 10.0, 50.0, 100.0],
+            vec![3, 7, 12, 18, 25],
+            Some(-50i64),
+            Some(150i64),
+        ),
         validate_histogram_i64(8888, 150),
     )
     .await;
@@ -802,7 +684,7 @@ async fn test_regression_subscription_last_sync_timestamp() {
     run_metric_export_test(
         "subscription_timestamp",
         "glide.pubsub.subscription.last_sync_timestamp",
-        create_gauge_u64_metrics("glide.pubsub.subscription.last_sync_timestamp", timestamp),
+        create_gauge_metrics("glide.pubsub.subscription.last_sync_timestamp", timestamp),
         |json| {
             let value = json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"]
                 .as_u64()
