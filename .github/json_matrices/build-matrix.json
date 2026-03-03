@@ -91,16 +91,5 @@
         "PACKAGE_MANAGERS": ["maven"],
         "languages": ["java"],
         "run": "always"
-    },
-    {
-        "OS": "macos",
-        "NAMED_OS": "darwin",
-        "RUNNER": "macos-15",
-        "ARCH": "arm64",
-        "TARGET": "fat-jar",
-        "PACKAGE_MANAGERS": ["maven"],
-        "run": "always",
-        "languages": ["java"],
-        "comment": "Fat JAR build with all platform native libraries via cross-compilation on macOS"
     }
 ]

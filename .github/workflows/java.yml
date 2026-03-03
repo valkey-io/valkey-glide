@@ -138,22 +138,6 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   language: java
 
-            - name: Install cross-compilation tools for fat JAR (cargo-zigbuild, cargo-xwin, zig)
-              if: ${{ matrix.host.TARGET == 'fat-jar' }}
-              shell: bash
-              run: |
-                  # Install cargo-zigbuild for Linux cross-compilation
-                  cargo install cargo-zigbuild
-
-                  # Install cargo-xwin for Windows cross-compilation
-                  cargo install cargo-xwin
-
-                  # Install zig (required by cargo-zigbuild)
-                  brew install zig
-
-                  # Pre-cache Windows SDK for cargo-xwin (for offline builds)
-                  cargo xwin cache xwin
-
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
@@ -197,17 +181,7 @@ jobs:
               working-directory: java
               shell: bash
               run: |
-                  if [[ "${{ matrix.host.TARGET }}" == "fat-jar" ]]; then
-                      # Build fat JAR with all platforms
-                      ./gradlew --build-cache :client:buildAllFat --info
-                      
-                      # Verify fat JAR contents
-                      echo "Verifying fat JAR structure..."
-                      JAR_FILE=$(find client/build/libs -name "valkey-glide-*.jar" ! -name "*-sources.jar" ! -name "*-javadoc.jar" | head -n 1)
-                      echo "Found JAR: $JAR_FILE"
-                      echo "JAR size: $(du -h "$JAR_FILE" | cut -f1)"
-                      jar tf "$JAR_FILE" | grep "natives/" || echo "Warning: No natives/ directory found"
-                  elif [[ "${{ matrix.host.OS }}" == "windows" ]]; then
+                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
                       if [[ "${{ matrix.java }}" == "8" ]]; then
                           ./gradlew.bat --build-cache --continue build test -x javadoc -PtestJava8=true
                       else

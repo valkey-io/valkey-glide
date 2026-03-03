@@ -133,58 +133,6 @@ tasks.register('buildRust', Exec) {
     environment CARGO_TERM_COLOR: 'always'
 }
 
-tasks.register('buildRustAllPlatforms') {
-    description = 'Cross-compile Rust for all supported platforms'
-    group = 'build'
-    
-    doLast {
-        def platforms = [
-            'x86_64-unknown-linux-gnu.2.17',
-            'aarch64-unknown-linux-gnu.2.17',
-            'x86_64-unknown-linux-musl',
-            'aarch64-unknown-linux-musl',
-            'x86_64-apple-darwin',
-            'aarch64-apple-darwin',
-            'x86_64-pc-windows-msvc'
-        ]
-        
-        platforms.each { target ->
-            println "Building Rust for target: ${target}"
-            
-            def command
-            def env = [CARGO_TERM_COLOR: 'always']
-            
-            if (target.contains('linux') && !target.contains('musl')) {
-                // Linux glibc targets - use cargo-zigbuild with glibc 2.17
-                command = ['cargo', 'zigbuild', '--target', target, '--release']
-            } else if (target.contains('musl')) {
-                // Linux musl targets - use cargo-zigbuild with static linking disabled
-                command = ['cargo', 'zigbuild', '--target', target, '--release']
-                env.RUSTFLAGS = '-C target-feature=-crt-static'
-            } else if (target.contains('windows')) {
-                // Windows targets - use cargo-xwin for cross-compilation
-                command = ['cargo', 'xwin', 'build', '--target', target, '--release']
-            } else if (target.contains('darwin')) {
-                // macOS targets - use cargo build (native compilation)
-                command = ['cargo', 'build', '--target', target, '--release']
-            } else {
-                // Fallback
-                def rustTarget = target
-                if (target.endsWith('.2.17')) {
-                    rustTarget = target.replace('.2.17', '')
-                }
-                command = ['cargo', 'build', '--target', rustTarget, '--release']
-            }
-            
-            exec {
-                commandLine command
-                workingDir project.rootDir
-                environment env
-            }
-        }
-    }
-}
-
 tasks.register('buildWithRust') {
     dependsOn 'buildRust'
     finalizedBy 'build'
@@ -198,13 +146,6 @@ tasks.register('buildWithProto') {
 tasks.register('buildAll') {
     dependsOn 'protobuf', 'buildRust'
     finalizedBy 'build'
-}
-
-tasks.register('buildAllFat') {
-    description = 'Build fat JAR with all platform native libraries'
-    group = 'build'
-    dependsOn 'protobuf', 'buildRustAllPlatforms'
-    finalizedBy 'shadowJarFat'
 }
 
 compileJava.dependsOn('protobuf')
@@ -245,32 +186,6 @@ tasks.register('copyNativeLib', Copy) {
     from sourceDir
     include "*.dylib", "*.so", "*.dll"
     into "${sourceSets.main.output.resourcesDir}/${jarPath}"
-}
-
-tasks.register('copyAllNativeLibs', Copy) {
-    description = 'Copy all native libraries from all platforms to JAR resources'
-    group = 'build'
-    dependsOn 'buildRustAllPlatforms'
-    
-    // Define platform mappings: Rust target -> JAR path
-    def platforms = [
-        'x86_64-unknown-linux-gnu': 'linux/x86_64',
-        'aarch64-unknown-linux-gnu': 'linux/aarch64',
-        'x86_64-unknown-linux-musl': 'linux_musl/x86_64',
-        'aarch64-unknown-linux-musl': 'linux_musl/aarch64',
-        'x86_64-apple-darwin': 'osx/x86_64',
-        'aarch64-apple-darwin': 'osx/aarch64',
-        'x86_64-pc-windows-msvc': 'windows/x86_64'
-    ]
-    
-    platforms.each { rustTarget, jarPath ->
-        from("${projectDir}/../target/${rustTarget}/release/") {
-            include '*.so', '*.dylib', '*.dll'
-            into "natives/${jarPath}"
-        }
-    }
-    
-    into sourceSets.main.output.resourcesDir
 }
 
 delombok.dependsOn('compileJava')
@@ -398,51 +313,28 @@ shadowJar {
     // Relocate protobuf to avoid version conflicts
     relocate 'com.google.protobuf', 'glide.com.google.protobuf'
 
-    // Keep the same classifier as regular jar
-    if (
-        (project.hasProperty('target') && project.target.contains("musl")) ||
-        (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
-        ) {
-        archiveClassifier = "linux_musl-${osdetector.arch}"
+    // Only skip classifier if explicitly building an uber JAR
+    def isUberJarBuild = System.getenv("UBER_JAR_BUILD") == "true"
+    
+    // Only add platform classifier for single-platform builds
+    if (!isUberJarBuild) {
+        if (
+            (project.hasProperty('target') && project.target.contains("musl")) ||
+            (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
+            ) {
+            archiveClassifier = "linux_musl-${osdetector.arch}"
+        } else {
+            archiveClassifier = osdetector.classifier
+        }
     } else {
-        archiveClassifier = osdetector.classifier
+        // Uber JAR - no classifier
+        archiveClassifier = ''
     }
 
     // Important configurations from original shadow setup
     excludes.remove("module-info.class")
     mergeServiceFiles()
     minimize()
-}
-
-// Fat JAR task - contains all platform native libraries
-tasks.register('shadowJarFat', com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
-    description = 'Create fat JAR with all platform native libraries'
-    group = 'build'
-    
-    // Use the main source set
-    from sourceSets.main.output
-    
-    // Include all runtime dependencies
-    configurations = [project.configurations.runtimeClasspath]
-    
-    // Relocate protobuf to avoid version conflicts
-    relocate 'com.google.protobuf', 'glide.com.google.protobuf'
-    
-    // No classifier for fat JAR
-    archiveClassifier = ''
-    
-    // Aggressive compression for size optimization
-    entryCompression = org.gradle.api.tasks.bundling.ZipEntryCompression.DEFLATED
-    zip64 = true
-    
-    // Important configurations from original shadow setup
-    excludes.remove("module-info.class")
-    mergeServiceFiles()
-    minimize()
-    
-    // Depend on copying all native libraries
-    dependsOn 'copyAllNativeLibs'
-    
 }
 
 // Make shadowJar the default artifact
