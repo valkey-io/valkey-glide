@@ -10,7 +10,6 @@ import {
     expect,
     it,
 } from "@jest/globals";
-import * as fs from "fs";
 import { TestTLSConfig, ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     GlideClient,
@@ -19,6 +18,7 @@ import {
     ProtocolVersion,
 } from "../build-ts";
 import {
+    getCaCertificateData,
     getClientConfigurationOption,
     getServerVersion,
 } from "./TestUtilities";
@@ -74,10 +74,7 @@ describe("TLS with custom certificates", () => {
         );
 
         // Read CA certificate after servers start (certificates now exist)
-        const glideHomeDir =
-            process.env.GLIDE_HOME_DIR || process.cwd() + "/..";
-        const caCertPath = `${glideHomeDir}/utils/tls_crts/ca.crt`;
-        caCertData = fs.readFileSync(caCertPath);
+        caCertData = getCaCertificateData();
 
         // Small delay to ensure cluster is fully ready after TLS setup
         await new Promise((resolve) => setTimeout(resolve, 1000));
