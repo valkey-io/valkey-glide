@@ -17,6 +17,7 @@ import {
     Logger,
     ProtocolVersion,
 } from "../build-ts";
+import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
 import {
     getCaCertificateData,
     getClientConfigurationOption,
@@ -468,6 +469,102 @@ describe("TLS with custom certificates", () => {
                 ).rejects.toThrow(
                     "TLS advanced configuration cannot be set when useTLS is disabled.",
                 );
+            },
+            TIMEOUT,
+        );
+    });
+
+    describe("Standalone TLS with IP addresses", () => {
+        it(
+            "should connect with IPv4 address",
+            async () => {
+                const address = {
+                    host: HOST_ADDRESS_IPV4,
+                    port: standaloneCluster.ports()[0],
+                };
+                standaloneClient = await GlideClient.createClient({
+                    addresses: [address],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: caCertData,
+                        },
+                    },
+                });
+
+                const result = await standaloneClient.ping();
+                expect(result).toBe("PONG");
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "should connect with IPv6 address",
+            async () => {
+                const address = {
+                    host: HOST_ADDRESS_IPV6,
+                    port: standaloneCluster.ports()[0],
+                };
+                standaloneClient = await GlideClient.createClient({
+                    addresses: [address],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: caCertData,
+                        },
+                    },
+                });
+
+                const result = await standaloneClient.ping();
+                expect(result).toBe("PONG");
+            },
+            TIMEOUT,
+        );
+    });
+
+    describe("Cluster TLS with IP addresses", () => {
+        it(
+            "should connect with IPv4 address",
+            async () => {
+                const address = {
+                    host: HOST_ADDRESS_IPV4,
+                    port: clusterModeCluster.getAddresses()[0][1],
+                };
+                clusterClient = await GlideClusterClient.createClient({
+                    addresses: [address],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: caCertData,
+                        },
+                    },
+                });
+
+                const result = await clusterClient.ping();
+                expect(result).toBe("PONG");
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "should connect with IPv6 address",
+            async () => {
+                const address = {
+                    host: HOST_ADDRESS_IPV6,
+                    port: clusterModeCluster.getAddresses()[0][1],
+                };
+                clusterClient = await GlideClusterClient.createClient({
+                    addresses: [address],
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: caCertData,
+                        },
+                    },
+                });
+
+                const result = await clusterClient.ping();
+                expect(result).toBe("PONG");
             },
             TIMEOUT,
         );
