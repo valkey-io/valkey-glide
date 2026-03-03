@@ -15,6 +15,7 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
+import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -1924,20 +1925,21 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
-        // Wait for function to replicate to replica, retrying if needed
-        ExecutionException fcallReplicaException = null;
-        for (int i = 0; i < 20 && fcallReplicaException == null; i++) {
-            try {
-                clusterClient.fcall(funcName, replicaRoute).get();
-                Thread.sleep(100); // Function not yet on replica, wait and retry
-            } catch (ExecutionException e) {
-                if (e.getCause() instanceof RequestException
-                        && e.getCause().getMessage().toLowerCase().contains("readonly")) {
-                    fcallReplicaException = e;
-                }
-            }
-        }
-        assertNotNull(fcallReplicaException, "Expected readonly error from replica");
+        // FUNCTION LOAD goes to all primaries, but replication to replicas is async.
+        // Use WAIT on the specific primary whose replica we'll query to ensure the
+        // function has been replicated before we attempt to call it on the replica.
+        long replicaCount = getReplicaCount(clusterClient, primaryRoute);
+        clusterClient
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .get();
+
+        // fcall on a replica should fail with a readonly error, because the function
+        // is not flagged as read-only
+        ExecutionException fcallReplicaException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
+        assertInstanceOf(RequestException.class, fcallReplicaException.getCause());
+        assertTrue(fcallReplicaException.getCause().getMessage().toLowerCase().contains("readonly"));
 
         // fcall_ro also fails on replica
         ExecutionException fcallReadOnlyReplicaException =
@@ -1964,6 +1966,11 @@ public class CommandTests {
         code = generateLuaLibCode(libName, Collections.singletonMap(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
+
+        // Wait for the updated function to replicate to the replica
+        clusterClient
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .get();
 
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
@@ -1994,20 +2001,21 @@ public class CommandTests {
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
-        // Wait for function to replicate to replica, retrying if needed
-        ExecutionException fcallReplicaException = null;
-        for (int i = 0; i < 20 && fcallReplicaException == null; i++) {
-            try {
-                clusterClient.fcall(funcName, replicaRoute).get();
-                Thread.sleep(100); // Function not yet on replica, wait and retry
-            } catch (ExecutionException e) {
-                if (e.getCause() instanceof RequestException
-                        && e.getCause().getMessage().toLowerCase().contains("readonly")) {
-                    fcallReplicaException = e;
-                }
-            }
-        }
-        assertNotNull(fcallReplicaException, "Expected readonly error from replica");
+        // FUNCTION LOAD goes to all primaries, but replication to replicas is async.
+        // Use WAIT on the specific primary whose replica we'll query to ensure the
+        // function has been replicated before we attempt to call it on the replica.
+        long replicaCount = getReplicaCount(clusterClient, primaryRoute);
+        clusterClient
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .get();
+
+        // fcall on a replica should fail with a readonly error, because the function
+        // is not flagged as read-only
+        ExecutionException fcallReplicaException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
+        assertInstanceOf(RequestException.class, fcallReplicaException.getCause());
+        assertTrue(fcallReplicaException.getCause().getMessage().toLowerCase().contains("readonly"));
 
         // fcall_ro also fails on replica
         ExecutionException fcallReadOnlyReplicaException =
@@ -2034,6 +2042,11 @@ public class CommandTests {
         code = generateLuaLibCode(libName, createMap(funcNameRO, "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
+
+        // Wait for the updated function to replicate to the replica
+        clusterClient
+                .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
+                .get();
 
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(gs(funcNameRO), replicaRoute).get().getSingleValue());
@@ -2628,7 +2641,6 @@ public class CommandTests {
                 generateLuaLibCode(
                         libname1, createMap(name1, "return args[1]", name2, "return #args"), true);
         assertEquals(libname1, clusterClient.functionLoad(code, true).get());
-        Map<String, Object>[] flist = clusterClient.functionList(true).get();
 
         final byte[] dump = clusterClient.functionDump().get();
 
