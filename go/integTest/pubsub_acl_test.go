@@ -19,7 +19,9 @@ type StatisticsProvider interface {
 // waitForOutOfSyncIncrease waits for the subscription_out_of_sync_count metric to increase
 // from the initial value. Returns the new count and whether it increased.
 func waitForOutOfSyncIncrease(
-	t interface{ Logf(format string, args ...interface{}) },
+	t interface {
+		Logf(format string, args ...interface{})
+	},
 	client StatisticsProvider,
 	initialOutOfSync uint64,
 	timeoutSeconds int,
