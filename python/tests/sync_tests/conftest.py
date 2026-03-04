@@ -140,6 +140,7 @@ def create_sync_client(
     root_pem_cacerts: Optional[bytes] = None,
     client_cert_pem: Optional[bytes] = None,
     client_key_pem: Optional[bytes] = None,
+    read_only: bool = False,
 ) -> TSyncGlideClient:
     # Create sync client
     config = create_sync_client_config(
@@ -166,6 +167,7 @@ def create_sync_client(
         root_pem_cacerts=root_pem_cacerts,
         client_cert_pem=client_cert_pem,
         client_key_pem=client_key_pem,
+        read_only=read_only,
     )
     if cluster_mode:
         return SyncGlideClusterClient.create(config)
