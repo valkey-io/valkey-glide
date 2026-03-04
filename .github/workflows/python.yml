@@ -167,17 +167,9 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Configure DNS for tests
-              shell: bash
-              run: |
-                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
-                  127.0.0.1 valkey.glide.test.no_tls.com
-                  ::1 valkey.glide.test.tls.com
-                  ::1 valkey.glide.test.no_tls.com"
-                  if [[ "${{ matrix.host.OS }}" == "windows" ]]; then
-                      echo "$ENTRIES" >> /c/Windows/System32/drivers/etc/hosts
-                  else
-                      echo "$ENTRIES" | sudo tee -a /etc/hosts
-                  fi
+              uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
 
             - name: Test with pytest
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
@@ -432,13 +424,9 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
 
             - name: Configure DNS for tests
-              shell: bash
-              run: |
-                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
-                  127.0.0.1 valkey.glide.test.no_tls.com
-                  ::1 valkey.glide.test.tls.com
-                  ::1 valkey.glide.test.no_tls.com"
-                  echo "$ENTRIES" | tee -a /etc/hosts
+              uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
 
             - name: Test with pytest (asyncio only)
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
