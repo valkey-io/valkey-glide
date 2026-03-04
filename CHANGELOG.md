@@ -6,7 +6,7 @@
     * Node: Drop support for Node.js 16.x and 18.x. Minimum supported version is now Node.js 20.x.
 
 #### Changes
-* Java: add uber JAR cross-compilation support for multi-platform builds ([5484](https://github.com/valkey-io/valkey-glide/issues/5484))
+* Java: Add uber JAR support for multi-platform builds ([5484](https://github.com/valkey-io/valkey-glide/issues/5484))
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
