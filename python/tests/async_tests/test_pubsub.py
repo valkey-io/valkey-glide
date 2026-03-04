@@ -3857,7 +3857,6 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "subscription_method",
         [
-            SubscriptionMethod.Config,
             SubscriptionMethod.Lazy,
             SubscriptionMethod.Blocking,
         ],

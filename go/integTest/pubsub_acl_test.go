@@ -11,6 +11,34 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
+// StatisticsProvider is an interface for clients that can provide statistics
+type StatisticsProvider interface {
+	GetStatistics() map[string]int64
+}
+
+// waitForOutOfSyncIncrease waits for the subscription_out_of_sync_count metric to increase
+// from the initial value. Returns the new count and whether it increased.
+func waitForOutOfSyncIncrease(
+	t interface{ Logf(format string, args ...interface{}) },
+	client StatisticsProvider,
+	initialOutOfSync int64,
+	timeoutSeconds int,
+) (int64, bool) {
+	outOfSyncCount := initialOutOfSync
+	for i := 0; i < timeoutSeconds; i++ {
+		time.Sleep(1 * time.Second)
+		stats := client.GetStatistics()
+		outOfSyncCount = stats["subscription_out_of_sync_count"]
+		if t != nil {
+			t.Logf("[%ds] out_of_sync=%d, initial=%d", i+1, outOfSyncCount, initialOutOfSync)
+		}
+		if outOfSyncCount > initialOutOfSync {
+			return outOfSyncCount, true
+		}
+	}
+	return outOfSyncCount, outOfSyncCount > initialOutOfSync
+}
+
 // TestSubscriptionMetricsOnACLFailure tests that out-of-sync metric increments on ACL failure
 func (suite *GlideTestSuite) TestSubscriptionMetricsOnACLFailure() {
 	ctx := context.Background()
@@ -47,17 +75,8 @@ func (suite *GlideTestSuite) TestSubscriptionMetricsOnACLFailure() {
 	assert.NoError(suite.T(), err) // Lazy doesn't fail immediately
 
 	// Wait for reconciliation attempts
-	outOfSyncCount := initialOutOfSync
-	for i := 0; i < 15; i++ {
-		time.Sleep(1 * time.Second)
-		stats := listeningClient.GetStatistics()
-		outOfSyncCount = stats["subscription_out_of_sync_count"]
-		suite.T().Logf("[%ds] out_of_sync=%d, initial=%d", i+1, outOfSyncCount, initialOutOfSync)
-		if outOfSyncCount > initialOutOfSync {
-			break
-		}
-	}
-
+	outOfSyncCount, increased := waitForOutOfSyncIncrease(suite.T(), listeningClient, initialOutOfSync, 15)
+	assert.True(suite.T(), increased, "Out-of-sync count should increase")
 	assert.Greater(suite.T(), outOfSyncCount, initialOutOfSync, "Out-of-sync count should increase")
 
 	// Verify subscription NOT in actual (ACL blocked)
@@ -91,16 +110,7 @@ func (suite *GlideTestSuite) TestSubscriptionMetricsOnACLFailure() {
 	err = clusterListening.SubscribeLazy(ctx, []string{channel})
 	assert.NoError(suite.T(), err)
 
-	outOfSyncCount = initialOutOfSync
-	for i := 0; i < 15; i++ {
-		time.Sleep(1 * time.Second)
-		stats := clusterListening.GetStatistics()
-		outOfSyncCount = stats["subscription_out_of_sync_count"]
-		if outOfSyncCount > initialOutOfSync {
-			break
-		}
-	}
-
+	outOfSyncCount, _ = waitForOutOfSyncIncrease(nil, clusterListening, initialOutOfSync, 15)
 	assert.Greater(suite.T(), outOfSyncCount, initialOutOfSync)
 }
 
@@ -138,16 +148,7 @@ func (suite *GlideTestSuite) TestSubscriptionMetricsRepeatedFailures() {
 	assert.NoError(suite.T(), err)
 
 	// Wait for reconciliation attempts
-	outOfSyncCount := initialOutOfSync
-	for i := 0; i < 15; i++ {
-		time.Sleep(1 * time.Second)
-		stats := listeningClient.GetStatistics()
-		outOfSyncCount = stats["subscription_out_of_sync_count"]
-		suite.T().Logf("[%ds] out_of_sync=%d", i+1, outOfSyncCount)
-		if outOfSyncCount > initialOutOfSync {
-			break
-		}
-	}
+	outOfSyncCount, _ := waitForOutOfSyncIncrease(suite.T(), listeningClient, initialOutOfSync, 15)
 
 	// Metric should increment (failures are batched)
 	assert.Greater(suite.T(), outOfSyncCount, initialOutOfSync)
@@ -186,15 +187,6 @@ func (suite *GlideTestSuite) TestSubscriptionMetricsRepeatedFailures() {
 	err = clusterListening.SubscribeLazy(ctx, []string{channel1, channel2})
 	assert.NoError(suite.T(), err)
 
-	outOfSyncCount = initialOutOfSync
-	for i := 0; i < 15; i++ {
-		time.Sleep(1 * time.Second)
-		stats := clusterListening.GetStatistics()
-		outOfSyncCount = stats["subscription_out_of_sync_count"]
-		if outOfSyncCount > initialOutOfSync {
-			break
-		}
-	}
-
+	outOfSyncCount, _ = waitForOutOfSyncIncrease(nil, clusterListening, initialOutOfSync, 15)
 	assert.Greater(suite.T(), outOfSyncCount, initialOutOfSync)
 }

@@ -2872,7 +2872,7 @@ class TestSyncPubSub:
                 request, cluster_mode, reconciliation_interval_ms=interval_ms
             )
 
-            def poll_for_timestamp_change(
+            def sync_poll_for_timestamp_change(
                 previous_ts: int, timeout_s: float = 5.0
             ) -> int:
                 """Poll until sync timestamp changes, return new timestamp."""
@@ -2893,10 +2893,10 @@ class TestSyncPubSub:
             initial_ts = int(initial_stats.get("subscription_last_sync_timestamp", "0"))
 
             # Wait for first sync event
-            first_sync_ts = poll_for_timestamp_change(initial_ts)
+            first_sync_ts = sync_poll_for_timestamp_change(initial_ts)
 
             # Wait for second sync event
-            second_sync_ts = poll_for_timestamp_change(first_sync_ts)
+            second_sync_ts = sync_poll_for_timestamp_change(first_sync_ts)
 
             actual_interval_ms = second_sync_ts - first_sync_ts
 
@@ -3853,5 +3853,285 @@ class TestSyncPubSub:
                 except Exception:
                     pass
                 admin_client.close()
+            if listening_client:
+                listening_client.close()
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_resubscribe_after_connection_kill_sharded(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that sharded subscriptions are automatically restored after connection kill.
+        """
+        channel = "sharded_reconnect_test_channel"
+        message_before = "message_before_kill"
+        message_after = "message_after_kill"
+
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded={channel},
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_sharded={channel},
+                timeout_sec=3.0,
+            )
+
+            # Verify subscription works before kill
+            cast(GlideClusterClient, publishing_client).publish(
+                message_before, channel, sharded=True
+            )
+            time.sleep(1)
+
+            msg_before = sync_get_message_by_method(
+                method, listening_client, callback_messages, 0
+            )
+            assert msg_before.message == message_before
+            assert msg_before.channel == channel
+
+            # Kill connections - this should trigger reconnection
+            kill_connections(publishing_client, None)
+
+            # Give some time for connection to reconnect
+            time.sleep(2)
+
+            # Wait for subscriptions to be re-established (need to poll since reconnection is async)
+            sync_wait_for_subscription_state(
+                listening_client, expected_sharded={channel}, timeout_sec=5.0
+            )
+
+            # Verify subscription still works after reconnection
+            cast(GlideClusterClient, publishing_client).publish(
+                message_after, channel, sharded=True
+            )
+            time.sleep(1)
+
+            msg_after = sync_get_message_by_method(
+                method, listening_client, callback_messages, 1
+            )
+            assert msg_after.message == message_after
+            assert msg_after.channel == channel
+
+            sync_check_no_messages_left(method, listening_client, callback_messages, 2)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "method",
+        [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback],
+    )
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_resubscribe_after_connection_kill_many_exact_channels(
+        self,
+        request,
+        cluster_mode: bool,
+        method: MethodTesting,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that 256 exact channel subscriptions are automatically restored after connection kill.
+        """
+        NUM_CHANNELS = 256
+        channels = {f"{{reconnect_exact_{i}}}channel" for i in range(NUM_CHANNELS)}
+        message_after = "message_after_kill"
+
+        callback, context = None, None
+        callback_messages: List[PubSubMsg] = []
+        if method == MethodTesting.Callback:
+            callback = new_message
+            context = callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels=channels,
+            callback=callback,
+            context=context,
+        ) as (listening_client, publishing_client):
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels=channels,
+                timeout_sec=3.0,
+            )
+
+            # Kill connections
+            kill_connections(publishing_client, None)
+
+            # Give time for reconnect
+            time.sleep(2)
+
+            # Wait for resubscription (need to poll since reconnection is async)
+            sync_wait_for_subscription_state(
+                listening_client,
+                expected_channels=channels,
+                timeout_sec=5.0,
+            )
+
+            # Publish to all channels after reconnection
+            for channel in channels:
+                publishing_client.publish(message_after, channel)
+
+            time.sleep(2)
+
+            # Verify all messages received
+            received_channels: set = set()
+            for index in range(NUM_CHANNELS):
+                msg = sync_get_message_by_method(
+                    method, listening_client, callback_messages, index
+                )
+                assert msg.message == message_after
+                assert msg.pattern is None
+                received_channels.add(msg.channel)
+
+            assert received_channels == channels, "Not all channels received messages"
+
+            sync_check_no_messages_left(
+                method, listening_client, callback_messages, NUM_CHANNELS
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_subscription_metrics_repeated_reconciliation_failures(
+        self,
+        request,
+        cluster_mode: bool,
+        subscription_method: SubscriptionMethod,
+    ):
+        """
+        Test that out-of-sync metric increments on repeated reconciliation failures.
+        since Config subscriptions happen at client creation before AUTH.
+        """
+        listening_client, admin_client = None, None
+        try:
+            channel1 = "channel1_repeated_failures"
+            channel2 = "channel2_repeated_failures"
+            username = f"{PubSubTestConstants.ACL_TEST_USERNAME_PREFIX}_repeated"
+            password = f"{PubSubTestConstants.ACL_TEST_PASSWORD_PREFIX}_repeated"
+            interval_ms = 500
+
+            admin_client = create_sync_client(request, cluster_mode)
+
+            # Create user WITHOUT pubsub permissions
+            acl_create_command = [
+                "ACL",
+                "SETUSER",
+                username,
+                "ON",
+                f">{password}",
+                "~*",
+                "resetchannels",
+                "+@all",
+                "-@pubsub",
+            ]
+
+            if cluster_mode:
+                cast(GlideClusterClient, admin_client).custom_command(
+                    acl_create_command, route=AllNodes()
+                )
+            else:
+                admin_client.custom_command(acl_create_command)
+
+            listening_client = create_sync_pubsub_client(
+                request,
+                cluster_mode,
+                reconciliation_interval_ms=interval_ms,
+            )
+
+            if cluster_mode:
+                cast(GlideClusterClient, listening_client).custom_command(
+                    ["AUTH", username, password], route=AllNodes()
+                )
+            else:
+                listening_client.custom_command(["AUTH", username, password])
+
+            initial_stats = listening_client.get_statistics()
+            initial_out_of_sync = int(
+                initial_stats.get("subscription_out_of_sync_count", "0")
+            )
+
+            channels = [channel1, channel2]
+
+            for channel in channels:
+                try:
+                    sync_subscribe_by_method(
+                        listening_client,
+                        subscription_method,
+                        cluster_mode,
+                        channels={channel},
+                        timeout_ms=2000,
+                    )
+                except Exception:
+                    # Expected - ACL blocks subscription, blocking method times out
+                    pass
+
+            # Wait for at least 2 reconciliation cycles (2 * 500ms = 1000ms + buffer)
+            time.sleep(1.5)
+
+            # Check that out-of-sync metric increased
+            stats = listening_client.get_statistics()
+            out_of_sync_count = int(stats.get("subscription_out_of_sync_count", "0"))
+
+            # Should have at least 2 out-of-sync events (one per failed reconciliation)
+            assert out_of_sync_count >= initial_out_of_sync + 2, (
+                f"Expected at least 2 out-of-sync events, "
+                f"got {out_of_sync_count - initial_out_of_sync}"
+            )
+
+        finally:
+            if admin_client:
+                acl_delete_command = ["ACL", "DELUSER", username]
+                try:
+                    if cluster_mode:
+                        cast(GlideClusterClient, admin_client).custom_command(
+                            acl_delete_command, route=AllNodes()
+                        )
+                    else:
+                        admin_client.custom_command(acl_delete_command)
+                except Exception:
+                    pass
+                admin_client.close()
+
             if listening_client:
                 listening_client.close()

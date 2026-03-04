@@ -1071,12 +1071,6 @@ def sync_pubsub_test_clients(
             sync_client_cleanup(listening_client, None)
         sync_client_cleanup(publishing_client, None)
 
-
-# ============================================================================
-# Sync-specific message retrieval helpers
-# ============================================================================
-
-
 def sync_get_message_by_method(
     method: MessageReadMethod,
     client,

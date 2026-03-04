@@ -74,8 +74,6 @@ EXCLUDED_TESTS = {
     ],
     "sync_only": [
         "test_sync_fork",
-        # Sync-specific dynamic PubSub tests and helpers
-        "poll_for_timestamp_change",
     ],
 }
 
