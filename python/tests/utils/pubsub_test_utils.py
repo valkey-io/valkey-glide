@@ -16,7 +16,7 @@ else:
 
 import anyio
 import pytest
-from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
+from glide.glide_client import GlideClusterClient, TGlideClient
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
     GlideClientConfiguration,
@@ -49,6 +49,10 @@ class MessageReadMethod(IntEnum):
     "Uses synchronous try_get_pubsub_message() method."
     Callback = 2
     "Uses callback-based subscription method."
+
+
+# Alias for backward compatibility with sync tests
+MethodTesting = MessageReadMethod
 
 
 # Type alias for PubSubChannelModes
@@ -767,7 +771,6 @@ def create_sync_pubsub_client(
     Create a sync client with pubsub configuration.
     Convenience wrapper similar to async create_pubsub_client.
     """
-    from glide_sync import TGlideClient as TSyncGlideClient
     from tests.sync_tests.conftest import create_sync_client
 
     has_subscriptions = channels or patterns or sharded_channels
@@ -991,7 +994,11 @@ def sync_pubsub_test_clients(
                 context=context,
             )
             listening_client, publishing_client = create_two_sync_clients_with_pubsub(
-                request, cluster_mode, pub_sub, timeout=timeout, lazy_connect=lazy_connect
+                request,
+                cluster_mode,
+                pub_sub,
+                timeout=timeout,
+                lazy_connect=lazy_connect,
             )
         else:  # Lazy or Blocking
             # For Lazy/Blocking with callback, create client with empty subscriptions
@@ -1063,3 +1070,252 @@ def sync_pubsub_test_clients(
         else:
             sync_client_cleanup(listening_client, None)
         sync_client_cleanup(publishing_client, None)
+
+
+# ============================================================================
+# Sync-specific message retrieval helpers
+# ============================================================================
+
+
+def sync_get_message_by_method(
+    method: MessageReadMethod,
+    client,
+    messages: Optional[List[PubSubMsg]] = None,
+    index: Optional[int] = None,
+) -> PubSubMsg:
+    """
+    Get a pubsub message using the specified read method (sync version).
+
+    Args:
+        method: How to read the message (Async, Sync, or Callback)
+        client: The sync client to read from
+        messages: List of messages from callback (required for Callback method)
+        index: Index in messages list (required for Callback method)
+
+    Returns:
+        Decoded PubSubMsg
+    """
+    if method == MessageReadMethod.Async:
+        return decode_pubsub_msg(client.get_pubsub_message())
+    elif method == MessageReadMethod.Sync:
+        return decode_pubsub_msg(client.try_get_pubsub_message())
+    assert messages and (index is not None)
+    return decode_pubsub_msg(messages[index])
+
+
+def sync_check_no_messages_left(
+    method: MessageReadMethod,
+    client,
+    callback: Optional[List[Any]] = None,
+    expected_callback_messages_count: int = 0,
+) -> None:
+    """
+    Verify there are no more messages to read (sync version).
+
+    Args:
+        method: The read method being used
+        client: The sync client to check
+        callback: Callback message list (for Callback method)
+        expected_callback_messages_count: Expected number of messages in callback list
+
+    Raises:
+        AssertionError if there are unexpected messages
+    """
+    import pytest
+
+    from tests.utils.utils import run_sync_func_with_timeout_in_thread
+
+    if method == MessageReadMethod.Async:
+        # assert there are no messages to read
+        with pytest.raises(TimeoutError):
+            run_sync_func_with_timeout_in_thread(
+                lambda: client.get_pubsub_message(),  # This blocks indefinitely
+                timeout=3.0,
+            )
+    elif method == MessageReadMethod.Sync:
+        assert client.try_get_pubsub_message() is None
+    else:
+        assert callback is not None
+        assert len(callback) == expected_callback_messages_count
+
+
+def sync_wait_for_subscription_state(
+    client,
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+    timeout_sec: float = 3.0,
+    check_actual: bool = True,
+) -> None:
+    """
+    Poll for subscription state to match expected channels/patterns (sync version).
+
+    Args:
+        client: The sync client to check
+        expected_channels: Expected exact channels (None to skip check, empty set to check for no channels)
+        expected_patterns: Expected pattern channels (None to skip check, empty set to check for no patterns)
+        expected_sharded: Expected sharded channels (None to skip check, empty set to check for no sharded)
+        timeout_sec: Maximum time to wait in seconds
+        check_actual: If True, check actual_subscriptions; if False, check desired_subscriptions
+    """
+    import time
+
+    modes = get_pubsub_modes(client)
+    start_time = time.time()
+
+    while time.time() - start_time < timeout_sec:
+        state = client.get_subscriptions()
+        subs = (
+            state.actual_subscriptions if check_actual else state.desired_subscriptions
+        )
+
+        # For each subscription type, check if it matches expected
+        # If expected is None, skip the check
+        # If expected is empty set, check that actual is also empty
+        # If expected is non-empty set, check that expected is subset of actual
+        channels_match = (
+            expected_channels is None
+            or (len(expected_channels) == 0 and len(subs[modes.Exact]) == 0)
+            or (
+                len(expected_channels) > 0
+                and expected_channels.issubset(subs[modes.Exact])
+            )
+        )
+        patterns_match = (
+            expected_patterns is None
+            or (len(expected_patterns) == 0 and len(subs[modes.Pattern]) == 0)
+            or (
+                len(expected_patterns) > 0
+                and expected_patterns.issubset(subs[modes.Pattern])
+            )
+        )
+        sharded_match = (
+            expected_sharded is None
+            or not hasattr(modes, "Sharded")
+            or (len(expected_sharded) == 0 and len(subs.get(modes.Sharded, set())) == 0)  # type: ignore[union-attr,arg-type]
+            or (len(expected_sharded) > 0 and expected_sharded.issubset(subs.get(modes.Sharded, set())))  # type: ignore[union-attr,arg-type]
+        )
+
+        if channels_match and patterns_match and sharded_match:
+            return
+
+        time.sleep(0.1)
+
+    # Final check with detailed error
+    state = client.get_subscriptions()
+    subs = state.actual_subscriptions if check_actual else state.desired_subscriptions
+
+    if expected_channels is not None:
+        if len(expected_channels) == 0 and len(subs[modes.Exact]) > 0:
+            raise AssertionError(f"Expected no channels but found {subs[modes.Exact]}")
+        elif len(expected_channels) > 0 and not expected_channels.issubset(
+            subs[modes.Exact]
+        ):
+            raise AssertionError(
+                f"Expected channels {expected_channels} not in {subs[modes.Exact]}"
+            )
+
+    if expected_patterns is not None:
+        if len(expected_patterns) == 0 and len(subs[modes.Pattern]) > 0:
+            raise AssertionError(
+                f"Expected no patterns but found {subs[modes.Pattern]}"
+            )
+        elif len(expected_patterns) > 0 and not expected_patterns.issubset(
+            subs[modes.Pattern]
+        ):
+            raise AssertionError(
+                f"Expected patterns {expected_patterns} not in {subs[modes.Pattern]}"
+            )
+
+    if expected_sharded is not None and hasattr(modes, "Sharded"):
+        sharded_subs = subs.get(modes.Sharded, set())  # type: ignore[union-attr,arg-type]
+        if len(expected_sharded) == 0 and len(sharded_subs) > 0:
+            raise AssertionError(
+                f"Expected no sharded channels but found {sharded_subs}"
+            )
+        elif len(expected_sharded) > 0 and not expected_sharded.issubset(sharded_subs):
+            raise AssertionError(
+                f"Expected sharded {expected_sharded} not in {sharded_subs}"
+            )
+
+
+def sync_wait_for_subscription_state_if_needed(
+    client,
+    subscription_method: SubscriptionMethod,
+    expected_channels: Optional[Set[str]] = None,
+    expected_patterns: Optional[Set[str]] = None,
+    expected_sharded: Optional[Set[str]] = None,
+    timeout_sec: float = 5.0,
+) -> None:
+    """
+    Wait for subscription state based on subscription method (sync version).
+
+    - Lazy: wait/poll until state matches (with timeout)
+    - Blocking and Config: verify immediately (should already be established)
+
+    This mirrors the async wait_for_subscription_state_if_needed function.
+    For Blocking and Config methods, subscriptions should be established immediately,
+    so we only assert rather than wait - this ensures we catch API contract violations.
+
+    Args:
+        client: The sync client to check
+        subscription_method: The method used to subscribe
+        expected_channels: Expected exact channels
+        expected_patterns: Expected pattern channels
+        expected_sharded: Expected sharded channels
+        timeout_sec: Maximum time to wait (only used for Lazy method)
+    """
+    from glide_sync import GlideClusterClient as SyncGlideClusterClient
+
+    # Lazy subscriptions may need time to reconcile
+    if subscription_method == SubscriptionMethod.Lazy:
+        sync_wait_for_subscription_state(
+            client,
+            expected_channels=expected_channels,
+            expected_patterns=expected_patterns,
+            expected_sharded=expected_sharded,
+            timeout_sec=timeout_sec,
+        )
+        return
+
+    # Blocking and Config should already be established - verify immediately
+    state = client.get_subscriptions()
+    actual = state.actual_subscriptions
+
+    # Define empty set with proper type
+    empty_set: Set[str] = set()
+
+    if isinstance(client, SyncGlideClusterClient):
+        ClusterModes = GlideClusterClientConfiguration.PubSubChannelModes
+
+        if expected_channels is not None:
+            actual_channels = actual.get(ClusterModes.Exact, empty_set)
+            assert (
+                actual_channels == expected_channels
+            ), f"Expected channels {expected_channels}, got {actual_channels}"
+
+        if expected_patterns is not None:
+            actual_patterns = actual.get(ClusterModes.Pattern, empty_set)
+            assert (
+                actual_patterns == expected_patterns
+            ), f"Expected patterns {expected_patterns}, got {actual_patterns}"
+
+        if expected_sharded is not None:
+            actual_sharded = actual.get(ClusterModes.Sharded, empty_set)
+            assert (
+                actual_sharded == expected_sharded
+            ), f"Expected sharded {expected_sharded}, got {actual_sharded}"
+    else:
+        StandaloneModes = GlideClientConfiguration.PubSubChannelModes
+
+        if expected_channels is not None:
+            actual_channels = actual.get(StandaloneModes.Exact, empty_set)
+            assert (
+                actual_channels == expected_channels
+            ), f"Expected channels {expected_channels}, got {actual_channels}"
+
+        if expected_patterns is not None:
+            actual_patterns = actual.get(StandaloneModes.Pattern, empty_set)
+            assert (
+                actual_patterns == expected_patterns
+            ), f"Expected patterns {expected_patterns}, got {actual_patterns}"

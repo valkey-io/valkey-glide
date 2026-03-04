@@ -75,15 +75,6 @@ EXCLUDED_TESTS = {
     "sync_only": [
         "test_sync_fork",
         # Sync-specific dynamic PubSub tests and helpers
-        "test_dynamic_subscribe_and_get_subscriptions",
-        "test_subscribe_with_timeout",
-        "test_unsubscribe_all",
-        "test_subscription_metrics",
-        "test_sync_clients_support_pubsub_reconciliation_interval",
-        "check_no_messages_left",
-        "create_simple_pubsub_config",
-        "get_message_by_method",
-        "wait_for_subscription_state",
         "poll_for_timestamp_change",
     ],
 }

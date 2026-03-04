@@ -1,10 +1,8 @@
 import json
 import random
 import string
-import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from enum import IntEnum
 from typing import (
     Any,
     Callable,
@@ -18,12 +16,6 @@ from typing import (
     cast,
 )
 
-if sys.version_info >= (3, 10):
-    from typing import TypeAlias
-else:
-    from typing_extensions import TypeAlias
-
-import anyio
 import pytest
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
@@ -46,7 +38,6 @@ from glide_shared.commands.core_options import (
     FlushMode,
     InfoSection,
     InsertPosition,
-    PubSubMsg,
 )
 from glide_shared.commands.sorted_set import (
     AggregationType,
@@ -1800,5 +1791,3 @@ async def create_client_with_retry(config, max_retries: int = 3):
             base_delay = 2**i
             jitter = base_delay * random.uniform(-0.25, 0.25)
             time.sleep(base_delay + jitter)
-
-

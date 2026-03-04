@@ -3536,7 +3536,7 @@ class TestPubSub:
             await pubsub_client_cleanup(listening_client)
             await pubsub_client_cleanup(publishing_client)
 
-    #@pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.skip_if_version_below("7.0.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize(
         "message_read_method",
@@ -3591,6 +3591,7 @@ class TestPubSub:
             callback=callback,
             context=context,
             timeout=10000,
+            lazy_connect=True,
         ) as (listening_client, publishing_client):
             # Wait for all subscriptions to be established
             await wait_for_subscription_state_if_needed(
