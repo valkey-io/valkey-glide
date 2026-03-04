@@ -114,8 +114,8 @@ async function createClusterClient(
     }, CLUSTER_CREATION_TIMEOUT);
 
     afterAll(async () => {
-        standaloneServer.close();
-        clusterServer.close();
+        await standaloneServer.close();
+        await clusterServer.close();
     });
 
     it(
@@ -200,8 +200,8 @@ async function createClusterClient(
     }, CLUSTER_CREATION_TIMEOUT);
 
     afterAll(async () => {
-        standaloneServer.close();
-        clusterServer.close();
+        await standaloneServer.close();
+        await clusterServer.close();
     });
 
     it(
