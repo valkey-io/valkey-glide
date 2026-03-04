@@ -1,7 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.TestConfiguration.HOST_ADDRESS_IPV4;
+import static glide.TestConfiguration.HOST_ADDRESS_IPV6;
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
@@ -15,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -416,6 +420,34 @@ public class StandaloneClientTests {
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void testStandaloneConnectWithIpv4Succeeds() {
+        Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
+        NodeAddress address = NodeAddress.builder().host(HOST_ADDRESS_IPV4).port(port).build();
+
+        glide.api.models.configuration.GlideClientConfiguration config =
+                commonClientConfig().address(address).build();
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            glide.TestUtilities.assertConnected(client);
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void testStandaloneConnectWithIpv6Succeeds() {
+        Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
+        NodeAddress address = NodeAddress.builder().host(HOST_ADDRESS_IPV6).port(port).build();
+
+        glide.api.models.configuration.GlideClientConfiguration config =
+                commonClientConfig().address(address).build();
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            glide.TestUtilities.assertConnected(client);
         }
     }
 }
