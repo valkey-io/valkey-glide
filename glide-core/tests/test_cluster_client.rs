@@ -10,7 +10,7 @@ mod cluster_client_tests {
     use crate::test_constants::{HOST_IPV4, HOST_IPV6};
     use crate::utilities::{
         cluster::{
-            RedisCluster, LONG_CLUSTER_TEST_TIMEOUT, SHORT_CLUSTER_TEST_TIMEOUT,
+            LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
             setup_cluster_with_replicas, setup_test_basics_internal,
         },
         *,

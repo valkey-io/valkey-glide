@@ -10,7 +10,10 @@ mod utilities;
 #[cfg(test)]
 mod dns_tests {
     use crate::test_constants::{HOSTNAME_NO_TLS, HOSTNAME_TLS};
-    use crate::utilities::{cluster::{RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT}, *};
+    use crate::utilities::{
+        cluster::{RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT},
+        *,
+    };
     use glide_core::{
         client::{Client, StandaloneClient},
         connection_request::TlsMode,
