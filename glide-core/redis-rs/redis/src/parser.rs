@@ -51,6 +51,7 @@ fn err_parser(line: &str) -> ServerError {
         "MASTERDOWN" => ServerErrorKind::MasterDown,
         "READONLY" => ServerErrorKind::ReadOnly,
         "NOTBUSY" => ServerErrorKind::NotBusy,
+        "NOPERM" => ServerErrorKind::PermissionDenied,
         code => {
             return ServerError::ExtensionError {
                 code: code.to_string(),

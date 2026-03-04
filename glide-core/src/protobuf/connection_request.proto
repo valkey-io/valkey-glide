@@ -107,6 +107,7 @@ message ConnectionRequest {
     bytes client_key = 23;
     optional bool tcp_nodelay = 24;
     optional uint32 pubsub_reconciliation_interval_ms = 25;
+    optional bool read_only = 26;
 }
 
 message ConnectionRetryStrategy {
