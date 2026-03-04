@@ -613,12 +613,14 @@ impl ClusterClient {
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        pipeline_buffer_size: Option<usize>,
     ) -> RedisResult<cluster_async::ClusterConnection> {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
             push_sender,
             pubsub_synchronizer,
+            pipeline_buffer_size,
         )
         .await
     }
@@ -655,6 +657,7 @@ impl ClusterClient {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
+            None,
             None,
             None,
         )
