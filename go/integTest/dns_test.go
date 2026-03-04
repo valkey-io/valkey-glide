@@ -11,6 +11,9 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
+// DNS resolution tests.
+// See DEVELOPER.md#dns-tests for instructions on how to run them locally.
+
 const hostnameInvalid = "nonexistent.invalid"
 
 // Skips the current test if DNS tests are not enabled or if
