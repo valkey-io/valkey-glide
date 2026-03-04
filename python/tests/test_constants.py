@@ -4,7 +4,7 @@
 Shared test constants.
 """
 
-# Host names and addresss for tests.
+# Host names and addresses for tests.
 # See 'cluster_manager.py' for details.
 HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 HOSTNAME_NO_TLS: str = "valkey.glide.test.no_tls.com"
