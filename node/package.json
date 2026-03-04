@@ -118,17 +118,20 @@
         "access": "public"
     },
     "engines": {
-        "node": ">=20"
+        "node": ">=16"
     },
     "napi": {
-        "binaryName": "valkey-glide",
-        "targets": [
-            "x86_64-apple-darwin",
-            "aarch64-apple-darwin",
-            "x86_64-unknown-linux-gnu",
-            "aarch64-unknown-linux-gnu",
-            "x86_64-unknown-linux-musl",
-            "aarch64-unknown-linux-musl"
-        ]
+        "name": "valkey-glide",
+        "triples": {
+            "defaults": false,
+            "additional": [
+                "x86_64-apple-darwin",
+                "aarch64-apple-darwin",
+                "x86_64-unknown-linux-gnu",
+                "aarch64-unknown-linux-gnu",
+                "x86_64-unknown-linux-musl",
+                "aarch64-unknown-linux-musl"
+            ]
+        }
     }
 }
