@@ -3,7 +3,6 @@
 package integTest
 
 const (
-
 	// Host names and addresses for tests.
 	// See 'cluster_manager.py' for details.
 	HostnameTLS     = "valkey.glide.test.tls.com"
