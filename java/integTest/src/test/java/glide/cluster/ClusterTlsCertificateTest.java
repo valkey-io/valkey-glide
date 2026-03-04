@@ -21,6 +21,7 @@ import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -116,7 +117,7 @@ public class ClusterTlsCertificateTest {
         Integer port = clusterNodes.get(0).getPort();
         NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
         GlideClusterClientConfiguration config =
-                TestUtilities.createClusterConfigWithRootCert(caCert, List.of(address));
+                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(address));
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
             TestUtilities.assertConnected(client);
