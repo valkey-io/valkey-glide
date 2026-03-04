@@ -11,6 +11,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterBatch;
 import glide.api.models.GlideString;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.Timeout;
 
 @Timeout(30) // seconds
 public class ClusterSlotManagementCommandsTests {
+
+    private static final long MAX_CLUSTER_SLOT = 16383;
 
     private static GlideClusterClient client;
 
@@ -41,12 +44,16 @@ public class ClusterSlotManagementCommandsTests {
     public void clusterKeySlot_returns_correct_slot() {
         // Test with string key
         long slot1 = client.clusterKeySlot("mykey").get();
-        assertTrue(slot1 >= 0 && slot1 <= 16383, "Slot should be in valid range 0-16383");
+        assertTrue(
+                slot1 >= 0 && slot1 <= MAX_CLUSTER_SLOT,
+                "Slot should be in valid range 0-" + MAX_CLUSTER_SLOT);
         assertEquals(14687, slot1, "Key 'mykey' should map to slot 14687");
 
         // Test with another key
         long slot2 = client.clusterKeySlot("key123").get();
-        assertTrue(slot2 >= 0 && slot2 <= 16383, "Slot should be in valid range 0-16383");
+        assertTrue(
+                slot2 >= 0 && slot2 <= MAX_CLUSTER_SLOT,
+                "Slot should be in valid range 0-" + MAX_CLUSTER_SLOT);
 
         // Same key should always map to same slot
         long slot1Again = client.clusterKeySlot("mykey").get();
@@ -58,7 +65,9 @@ public class ClusterSlotManagementCommandsTests {
     public void clusterKeySlot_binary_key() {
         GlideString binaryKey = gs("binary_key");
         long slot = client.clusterKeySlot(binaryKey).get();
-        assertTrue(slot >= 0 && slot <= 16383, "Slot should be in valid range 0-16383");
+        assertTrue(
+                slot >= 0 && slot <= MAX_CLUSTER_SLOT,
+                "Slot should be in valid range 0-" + MAX_CLUSTER_SLOT);
 
         // Verify consistency
         long slot2 = client.clusterKeySlot(binaryKey).get();
@@ -195,7 +204,7 @@ public class ClusterSlotManagementCommandsTests {
         assertNotNull(results[0]);
         assertTrue(results[0] instanceof Long);
         long slot = (Long) results[0];
-        assertTrue(slot >= 0 && slot <= 16383);
+        assertTrue(slot >= 0 && slot <= MAX_CLUSTER_SLOT);
 
         // Verify clusterCountKeysInSlot result
         assertNotNull(results[1]);
@@ -232,23 +241,11 @@ public class ClusterSlotManagementCommandsTests {
     @SneakyThrows
     @Test
     public void clusterCountKeysInSlot_all_slots() {
-        // Count keys across all possible slots
-        long totalKeys = 0;
-        int nonEmptySlots = 0;
-
-        // Sample a few slots to avoid long test runtime
+        // Sample slots across the range to verify clusterCountKeysInSlot returns non-negative for each
         for (long slot = 0; slot < 16384; slot += 1000) {
             long count = client.clusterCountKeysInSlot(slot).get();
             assertTrue(count >= 0, "Count should be non-negative for slot " + slot);
-            totalKeys += count;
-            if (count > 0) {
-                nonEmptySlots++;
-            }
         }
-
-        // In a cluster with data, we expect some non-empty slots
-        System.out.println(
-                "Sampled slots: found " + totalKeys + " keys across " + nonEmptySlots + " non-empty slots");
     }
 
     @SneakyThrows
@@ -258,20 +255,20 @@ public class ClusterSlotManagementCommandsTests {
         String key1 = "concurrent_key1_" + UUID.randomUUID().toString();
         String key2 = "concurrent_key2_" + UUID.randomUUID().toString();
 
-        java.util.concurrent.CompletableFuture<Long> future1 = client.clusterKeySlot(key1);
-        java.util.concurrent.CompletableFuture<Long> future2 = client.clusterKeySlot(key2);
-        java.util.concurrent.CompletableFuture<Long> future3 = client.clusterCountKeysInSlot(12345);
+        CompletableFuture<Long> future1 = client.clusterKeySlot(key1);
+        CompletableFuture<Long> future2 = client.clusterKeySlot(key2);
+        CompletableFuture<Long> future3 = client.clusterCountKeysInSlot(12345);
 
         // Wait for all to complete
-        java.util.concurrent.CompletableFuture.allOf(future1, future2, future3).get();
+        CompletableFuture.allOf(future1, future2, future3).get();
 
         // Verify all completed successfully
         long slot1 = future1.get();
         long slot2 = future2.get();
         long count = future3.get();
 
-        assertTrue(slot1 >= 0 && slot1 <= 16383);
-        assertTrue(slot2 >= 0 && slot2 <= 16383);
+        assertTrue(slot1 >= 0 && slot1 <= MAX_CLUSTER_SLOT);
+        assertTrue(slot2 >= 0 && slot2 <= MAX_CLUSTER_SLOT);
         assertTrue(count >= 0);
     }
 
@@ -294,7 +291,8 @@ public class ClusterSlotManagementCommandsTests {
         for (String key : specialKeys) {
             long slot = client.clusterKeySlot(key).get();
             assertTrue(
-                    slot >= 0 && slot <= 16383, "Key '" + key + "' should map to valid slot, got: " + slot);
+                    slot >= 0 && slot <= MAX_CLUSTER_SLOT,
+                    "Key '" + key + "' should map to valid slot, got: " + slot);
         }
     }
 

@@ -17,6 +17,7 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -540,18 +541,17 @@ public class ClusterManagementCommandsTests {
         int numRequests = 10;
 
         @SuppressWarnings("unchecked")
-        java.util.concurrent.CompletableFuture<String>[] futures =
-                new java.util.concurrent.CompletableFuture[numRequests];
+        CompletableFuture<String>[] futures = new CompletableFuture[numRequests];
 
         for (int i = 0; i < numRequests; i++) {
             futures[i] = client.clusterInfo();
         }
 
         // Wait for all to complete
-        java.util.concurrent.CompletableFuture.allOf(futures).get();
+        CompletableFuture.allOf(futures).get();
 
         // Verify all responses are valid
-        for (java.util.concurrent.CompletableFuture<String> future : futures) {
+        for (CompletableFuture<String> future : futures) {
             String info = future.get();
             assertNotNull(info);
             assertTrue(info.contains("cluster_state:"));
