@@ -9,6 +9,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 **Primary Languages Present:** Rust, Java, Python, Node.js/TypeScript, Go
 
 **Key Components:**
+
 - `glide-core/` - Core Rust implementation with async client logic
 - `ffi/` - Foreign Function Interface layer for language interoperability
 - `java/` - Java client bindings with Gradle build system
@@ -28,6 +29,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 **Key Features:** Multi-slot command handling, PubSub auto-reconnection, cluster scan, OpenTelemetry integration
 
 **Supported Engine Versions:**
+
 | Engine Type | 6.2 | 7.0 | 7.1 | 7.2 | 8.0 | 8.1 |
 |-------------|-----|-----|-----|-----|-----|-----|
 | Valkey      | -   | -   | -   | ✓   | ✓   | ✓   |
@@ -36,6 +38,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 ## Build and Test Rules (Agents)
 
 ### Preferred (Make Targets)
+
 ```bash
 # Build all language bindings
 make all
@@ -66,6 +69,7 @@ make help          # List available targets
 ### Raw Equivalents Per Stack
 
 **Rust (glide-core):**
+
 ```bash
 cd glide-core
 cargo build --release
@@ -76,6 +80,7 @@ cargo fmt
 ```
 
 **Java:**
+
 ```bash
 cd java
 ./gradlew :client:buildAllRelease
@@ -84,6 +89,7 @@ cd java
 ```
 
 **Python:**
+
 ```bash
 cd python
 python3 dev.py build --mode release
@@ -92,6 +98,7 @@ python3 dev.py lint
 ```
 
 **Node.js/TypeScript:**
+
 ```bash
 cd node
 npm install
@@ -101,6 +108,7 @@ npx run lint:fix
 ```
 
 **Go:**
+
 ```bash
 cd go
 make build
@@ -111,6 +119,7 @@ go test ./...
 ```
 
 **Benchmarks:**
+
 ```bash
 # Rust benchmarks
 cd glide-core && cargo bench
@@ -147,7 +156,7 @@ git rebase -i HEAD~n --signoff
 
 Use conventional commit format for all commit messages:
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -162,6 +171,7 @@ Use conventional commit format for all commit messages:
 ## Guardrails & Policies
 
 ### Generated Outputs (Never Commit)
+
 - `target/` - Rust build artifacts
 - `node_modules/` - Node.js dependencies
 - `.build/` - Make build cache
@@ -173,10 +183,12 @@ Use conventional commit format for all commit messages:
 - Language-specific build directories per `.gitignore`
 
 ### Cross-Language Changes
+
 - Follow semantic versioning for breaking changes
 - Test changes across affected language bindings
 
 ### Security & Code Quality
+
 - Never commit secrets, credentials, or API keys
 - Follow SECURITY.md for vulnerability reporting
 - Run lint/format targets before committing
@@ -185,7 +197,7 @@ Use conventional commit format for all commit messages:
 
 ## Project Structure (Essential)
 
-```
+```text
 valkey-glide/
 ├── glide-core/          # Core Rust implementation
 ├── ffi/                 # Foreign Function Interface layer
