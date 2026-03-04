@@ -135,6 +135,24 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Advanced configuration settings for the client.
      */
     advancedConfiguration?: AdvancedGlideClientConfiguration;
+    /**
+     * When true, enables read-only mode for the standalone client.
+     *
+     * In read-only mode:
+     * - The client skips primary node detection (INFO REPLICATION command)
+     * - All connected nodes are treated as valid read targets
+     * - Write commands are blocked and will return an error
+     * - The default ReadFrom strategy becomes PreferReplica if not explicitly set
+     *
+     * This is useful for connecting to replica-only deployments or when you want to
+     * prevent accidental write operations.
+     *
+     * Note: read-only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
+     * read strategies.
+     *
+     * Defaults to false.
+     */
+    readOnly?: boolean;
 };
 
 /**
@@ -176,6 +194,11 @@ export class GlideClient extends BaseClient {
                 options.advancedConfiguration,
                 configuration,
             );
+        }
+
+        // Set read-only mode if specified
+        if (options.readOnly !== undefined) {
+            configuration.readOnly = options.readOnly;
         }
 
         return configuration;

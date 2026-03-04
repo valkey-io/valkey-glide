@@ -77,7 +77,7 @@ class Logger:
         if not log_level.value.is_lower(Logger.logger_level):
             return
         if err:
-            message = f"{message}: {traceback.format_exception(err)}"
+            message = f"{message}: {traceback.format_exception(type(err), err, err.__traceback__)}"
         py_log(log_level.value, log_identifier, message)
 
     @classmethod

@@ -10,6 +10,7 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.PeriodicChecksConfig;
@@ -378,6 +379,14 @@ public class ConnectionManager {
                         if (advanced != null && advanced.getPubsubReconciliationIntervalMs() != null) {
                             requestBuilder.setPubsubReconciliationIntervalMs(
                                     advanced.getPubsubReconciliationIntervalMs());
+                        }
+
+                        // Set read-only mode for standalone clients
+                        if (configuration instanceof GlideClientConfiguration) {
+                            GlideClientConfiguration standaloneConfig = (GlideClientConfiguration) configuration;
+                            if (standaloneConfig.isReadOnly()) {
+                                requestBuilder.setReadOnly(true);
+                            }
                         }
 
                         // Build and serialize to bytes
