@@ -17,12 +17,14 @@ runs:
     using: composite
     steps:
         - shell: bash
+          env:
+              OS: ${{ inputs.os }}
           run: |
               ENTRIES="127.0.0.1 valkey.glide.test.tls.com
               127.0.0.1 valkey.glide.test.no_tls.com
               ::1 valkey.glide.test.tls.com
               ::1 valkey.glide.test.no_tls.com"
-              if [[ "${{ inputs.os }}" == "windows" ]]; then
+              if [[ "$OS" == "windows" ]]; then
                   echo "$ENTRIES" >> /c/Windows/System32/drivers/etc/hosts
               else
                   echo "$ENTRIES" | sudo tee -a /etc/hosts
