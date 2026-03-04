@@ -16,6 +16,9 @@ import {
     GlideClient,
     GlideClusterClient,
     Logger,
+    loadClientCertificateFromFile,
+    loadClientPrivateKeyFromFile,
+    loadRootCertificatesFromFile,
     ProtocolVersion,
 } from "../build-ts";
 import {
@@ -38,6 +41,9 @@ describe("TLS with custom certificates", () => {
     let standaloneClient: GlideClient | undefined;
     let clusterClient: GlideClusterClient | undefined;
     let caCertData: Buffer;
+    let caCertPath: string;
+    let serverCertPath: string;
+    let serverKeyPath: string;
 
     beforeAll(async () => {
         // Use insecure TLS only for getServerVersion during startup
@@ -76,7 +82,9 @@ describe("TLS with custom certificates", () => {
         // Read CA certificate after servers start (certificates now exist)
         const glideHomeDir =
             process.env.GLIDE_HOME_DIR || process.cwd() + "/..";
-        const caCertPath = `${glideHomeDir}/utils/tls_crts/ca.crt`;
+        caCertPath = `${glideHomeDir}/utils/tls_crts/ca.crt`;
+        serverCertPath = `${glideHomeDir}/utils/tls_crts/server.crt`;
+        serverKeyPath = `${glideHomeDir}/utils/tls_crts/server.key`;
         caCertData = fs.readFileSync(caCertPath);
 
         // Small delay to ensure cluster is fully ready after TLS setup
@@ -189,6 +197,29 @@ describe("TLS with custom certificates", () => {
                     advancedConfiguration: {
                         tlsAdvancedConfiguration: {
                             rootCertificates: certString,
+                        },
+                    },
+                });
+
+                const result = await standaloneClient.ping();
+                expect(result).toBe("PONG");
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "should connect with certificate loaded from file helper",
+            async () => {
+                const certData = loadRootCertificatesFromFile(caCertPath);
+
+                standaloneClient = await GlideClient.createClient({
+                    ...getTlsClientConfigurationOption(
+                        standaloneCluster.getAddresses(),
+                    ),
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: certData,
                         },
                     },
                 });
@@ -323,6 +354,34 @@ describe("TLS with custom certificates", () => {
                     advancedConfiguration: {
                         tlsAdvancedConfiguration: {
                             insecure: true,
+                        },
+                    },
+                });
+
+                const result = await clusterClient.ping();
+                expect(result).toBe("PONG");
+            },
+            TIMEOUT,
+        );
+
+        it(
+            "should connect with all TLS materials loaded from file helpers",
+            async () => {
+                const rootCert = loadRootCertificatesFromFile(caCertPath);
+                const clientCert =
+                    loadClientCertificateFromFile(serverCertPath);
+                const clientKey = loadClientPrivateKeyFromFile(serverKeyPath);
+
+                clusterClient = await GlideClusterClient.createClient({
+                    ...getTlsClientConfigurationOption(
+                        clusterModeCluster.getAddresses(),
+                    ),
+                    useTLS: true,
+                    advancedConfiguration: {
+                        tlsAdvancedConfiguration: {
+                            rootCertificates: rootCert,
+                            clientCertificate: clientCert,
+                            clientPrivateKey: clientKey,
                         },
                     },
                 });
