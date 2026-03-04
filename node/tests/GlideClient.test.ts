@@ -2026,7 +2026,6 @@ describe("GlideClient", () => {
             });
 
             await assertConnected(client);
-
             client.close();
         },
         TIMEOUT,
@@ -2044,7 +2043,6 @@ describe("GlideClient", () => {
             });
 
             await assertConnected(client);
-
             client.close();
         },
         TIMEOUT,

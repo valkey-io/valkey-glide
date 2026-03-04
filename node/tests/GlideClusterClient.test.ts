@@ -3210,7 +3210,6 @@ describe("GlideClusterClient", () => {
             });
 
             await assertConnected(client);
-
             client.close();
         },
         TIMEOUT,
@@ -3228,7 +3227,6 @@ describe("GlideClusterClient", () => {
             });
 
             await assertConnected(client);
-
             client.close();
         },
         TIMEOUT,
