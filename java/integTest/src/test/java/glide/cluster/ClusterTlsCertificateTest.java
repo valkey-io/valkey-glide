@@ -21,10 +21,11 @@ import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ClusterTlsCertificateTest {
 
@@ -109,24 +110,13 @@ public class ClusterTlsCertificateTest {
                 });
     }
 
-    @Test
-    void testClusterTlsWithIpv4Succeeds() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6})
+    void testClusterTlsWithIpAddressSucceeds(String ipAddress) throws Exception {
         Integer port = clusterNodes.get(0).getPort();
-        NodeAddress ipv4Node = NodeAddress.builder().host(HOST_ADDRESS_IPV4).port(port).build();
+        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
         GlideClusterClientConfiguration config =
-                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(ipv4Node));
-
-        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
-            TestUtilities.assertConnected(client);
-        }
-    }
-
-    @Test
-    void testClusterTlsWithIpv6Succeeds() throws Exception {
-        Integer port = clusterNodes.get(0).getPort();
-        NodeAddress ipv6Node = NodeAddress.builder().host(HOST_ADDRESS_IPV6).port(port).build();
-        GlideClusterClientConfiguration config =
-                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(ipv6Node));
+                TestUtilities.createClusterConfigWithRootCert(caCert, List.of(address));
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
             TestUtilities.assertConnected(client);
