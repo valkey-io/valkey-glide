@@ -13,7 +13,7 @@ import (
 
 // StatisticsProvider is an interface for clients that can provide statistics
 type StatisticsProvider interface {
-	GetStatistics() map[string]int64
+	GetStatistics() map[string]uint64
 }
 
 // waitForOutOfSyncIncrease waits for the subscription_out_of_sync_count metric to increase
@@ -21,9 +21,9 @@ type StatisticsProvider interface {
 func waitForOutOfSyncIncrease(
 	t interface{ Logf(format string, args ...interface{}) },
 	client StatisticsProvider,
-	initialOutOfSync int64,
+	initialOutOfSync uint64,
 	timeoutSeconds int,
-) (int64, bool) {
+) (uint64, bool) {
 	outOfSyncCount := initialOutOfSync
 	for i := 0; i < timeoutSeconds; i++ {
 		time.Sleep(1 * time.Second)

@@ -231,10 +231,11 @@ class TestSyncPubSub:
                 pubsub_msg = sync_get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels_and_messages.keys()
-                assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels_and_messages.keys()
+                assert pubsub_msg.message == channels_and_messages[channel_str]
                 assert pubsub_msg.pattern is None
-                del channels_and_messages[pubsub_msg.channel]
+                del channels_and_messages[channel_str]
 
             # check that we received all messages
             assert channels_and_messages == {}
@@ -294,10 +295,11 @@ class TestSyncPubSub:
                 method = MethodTesting.Async if index % 2 else MethodTesting.Sync
                 pubsub_msg = sync_get_message_by_method(method, listening_client)
 
-                assert pubsub_msg.channel in channels_and_messages.keys()
-                assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels_and_messages.keys()
+                assert pubsub_msg.message == channels_and_messages[channel_str]
                 assert pubsub_msg.pattern is None
-                del channels_and_messages[pubsub_msg.channel]
+                del channels_and_messages[channel_str]
 
             # check that we received all messages
             assert channels_and_messages == {}
@@ -519,10 +521,11 @@ class TestSyncPubSub:
                 pubsub_msg = sync_get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels_and_messages.keys()
-                assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels_and_messages.keys()
+                assert pubsub_msg.message == channels_and_messages[channel_str]
                 assert pubsub_msg.pattern is None
-                del channels_and_messages[pubsub_msg.channel]
+                del channels_and_messages[channel_str]
 
             # check that we received all messages
             assert channels_and_messages == {}
@@ -591,10 +594,11 @@ class TestSyncPubSub:
                 pubsub_msg = sync_get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels.keys()
-                assert pubsub_msg.message == channels[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels.keys()
+                assert pubsub_msg.message == channels[channel_str]
                 assert pubsub_msg.pattern == PATTERN
-                del channels[pubsub_msg.channel]
+                del channels[channel_str]
 
             # check that we received all messages
             assert channels == {}
@@ -646,10 +650,11 @@ class TestSyncPubSub:
                 method = MethodTesting.Async if index % 2 else MethodTesting.Sync
                 pubsub_msg = sync_get_message_by_method(method, listening_client)
 
-                assert pubsub_msg.channel in channels.keys()
-                assert pubsub_msg.message == channels[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels.keys()
+                assert pubsub_msg.message == channels[channel_str]
                 assert pubsub_msg.pattern == PATTERN
-                del channels[pubsub_msg.channel]
+                del channels[channel_str]
 
             # check that we received all messages
             assert channels == {}
@@ -723,10 +728,11 @@ class TestSyncPubSub:
                 pubsub_msg = sync_get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
-                assert pubsub_msg.channel in channels.keys()
-                assert pubsub_msg.message == channels[pubsub_msg.channel]
+                channel_str = cast(str, pubsub_msg.channel)
+                assert channel_str in channels.keys()
+                assert pubsub_msg.message == channels[channel_str]
                 assert pubsub_msg.pattern == PATTERN
-                del channels[pubsub_msg.channel]
+                del channels[channel_str]
 
             # check that we received all messages
             assert channels == {}
@@ -813,17 +819,16 @@ class TestSyncPubSub:
                 pubsub_msg = sync_get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
+                channel_str = cast(str, pubsub_msg.channel)
                 pattern = (
                     PATTERN
-                    if pubsub_msg.channel in pattern_channels_and_messages.keys()
+                    if channel_str in pattern_channels_and_messages.keys()
                     else None
                 )
-                assert pubsub_msg.channel in all_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message == all_channels_and_messages[pubsub_msg.channel]
-                )
+                assert channel_str in all_channels_and_messages.keys()
+                assert pubsub_msg.message == all_channels_and_messages[channel_str]
                 assert pubsub_msg.pattern == pattern
-                del all_channels_and_messages[pubsub_msg.channel]
+                del all_channels_and_messages[channel_str]
 
             # check that we received all messages
             assert all_channels_and_messages == {}
@@ -923,13 +928,13 @@ class TestSyncPubSub:
                     pubsub_msg = sync_get_message_by_method(
                         method, listening_client_exact, callback_messages, index
                     )
-                    assert pubsub_msg.channel in exact_channels_and_messages.keys()
+                    channel_str = cast(str, pubsub_msg.channel)
+                    assert channel_str in exact_channels_and_messages.keys()
                     assert (
-                        pubsub_msg.message
-                        == exact_channels_and_messages[pubsub_msg.channel]
+                        pubsub_msg.message == exact_channels_and_messages[channel_str]
                     )
                     assert pubsub_msg.pattern is None
-                    del exact_channels_and_messages[pubsub_msg.channel]
+                    del exact_channels_and_messages[channel_str]
 
                 # check that we received all messages
                 assert exact_channels_and_messages == {}
@@ -942,13 +947,13 @@ class TestSyncPubSub:
                         callback_messages_pattern,
                         index,
                     )
-                    assert pubsub_msg.channel in pattern_channels_and_messages.keys()
+                    channel_str = cast(str, pubsub_msg.channel)
+                    assert channel_str in pattern_channels_and_messages.keys()
                     assert (
-                        pubsub_msg.message
-                        == pattern_channels_and_messages[pubsub_msg.channel]
+                        pubsub_msg.message == pattern_channels_and_messages[channel_str]
                     )
                     assert pubsub_msg.pattern == PATTERN
-                    del pattern_channels_and_messages[pubsub_msg.channel]
+                    del pattern_channels_and_messages[channel_str]
 
                 # check that we received all messages
                 assert pattern_channels_and_messages == {}
@@ -1063,17 +1068,16 @@ class TestSyncPubSub:
                 pubsub_msg = sync_get_message_by_method(
                     method, listening_client, callback_messages, index
                 )
+                channel_str = cast(str, pubsub_msg.channel)
                 pattern = (
                     PATTERN
-                    if pubsub_msg.channel in pattern_channels_and_messages.keys()
+                    if channel_str in pattern_channels_and_messages.keys()
                     else None
                 )
-                assert pubsub_msg.channel in all_channels_and_messages.keys()
-                assert (
-                    pubsub_msg.message == all_channels_and_messages[pubsub_msg.channel]
-                )
+                assert channel_str in all_channels_and_messages.keys()
+                assert pubsub_msg.message == all_channels_and_messages[channel_str]
                 assert pubsub_msg.pattern == pattern
-                del all_channels_and_messages[pubsub_msg.channel]
+                del all_channels_and_messages[channel_str]
 
             # check that we received all messages
             assert all_channels_and_messages == {}
@@ -1203,13 +1207,14 @@ class TestSyncPubSub:
                             callback_messages_exact,
                             index,
                         )
-                        assert pubsub_msg.channel in exact_channels_and_messages.keys()
+                        channel_str = cast(str, pubsub_msg.channel)
+                        assert channel_str in exact_channels_and_messages.keys()
                         assert (
                             pubsub_msg.message
-                            == exact_channels_and_messages[pubsub_msg.channel]
+                            == exact_channels_and_messages[channel_str]
                         )
                         assert pubsub_msg.pattern is None
-                        del exact_channels_and_messages[pubsub_msg.channel]
+                        del exact_channels_and_messages[channel_str]
 
                     # check that we received all messages
                     assert exact_channels_and_messages == {}
@@ -1222,15 +1227,14 @@ class TestSyncPubSub:
                             callback_messages_pattern,
                             index,
                         )
-                        assert (
-                            pubsub_msg.channel in pattern_channels_and_messages.keys()
-                        )
+                        channel_str = cast(str, pubsub_msg.channel)
+                        assert channel_str in pattern_channels_and_messages.keys()
                         assert (
                             pubsub_msg.message
-                            == pattern_channels_and_messages[pubsub_msg.channel]
+                            == pattern_channels_and_messages[channel_str]
                         )
                         assert pubsub_msg.pattern == PATTERN
-                        del pattern_channels_and_messages[pubsub_msg.channel]
+                        del pattern_channels_and_messages[channel_str]
 
                     # check that we received all messages
                     assert pattern_channels_and_messages == {}
@@ -1243,15 +1247,14 @@ class TestSyncPubSub:
                             callback_messages_sharded,
                             index,
                         )
-                        assert (
-                            pubsub_msg.channel in sharded_channels_and_messages.keys()
-                        )
+                        channel_str = cast(str, pubsub_msg.channel)
+                        assert channel_str in sharded_channels_and_messages.keys()
                         assert (
                             pubsub_msg.message
-                            == sharded_channels_and_messages[pubsub_msg.channel]
+                            == sharded_channels_and_messages[channel_str]
                         )
                         assert pubsub_msg.pattern is None
-                        del sharded_channels_and_messages[pubsub_msg.channel]
+                        del sharded_channels_and_messages[channel_str]
 
                     # check that we received all messages
                     assert sharded_channels_and_messages == {}
@@ -2391,8 +2394,19 @@ class TestSyncPubSub:
             listening_client = create_sync_client(
                 request,
                 cluster_mode,
-                cluster_mode_pubsub=pubsub_config if cluster_mode else None,
-                standalone_mode_pubsub=pubsub_config if not cluster_mode else None,
+                cluster_mode_pubsub=(
+                    cast(
+                        GlideClusterClientConfiguration.PubSubSubscriptions,
+                        pubsub_config,
+                    )
+                    if cluster_mode
+                    else None
+                ),
+                standalone_mode_pubsub=(
+                    cast(GlideClientConfiguration.PubSubSubscriptions, pubsub_config)
+                    if not cluster_mode
+                    else None
+                ),
             )
             publishing_client = create_sync_client(request, cluster_mode)
 
@@ -4068,10 +4082,11 @@ class TestSyncPubSub:
 
             if cluster_mode:
                 cast(GlideClusterClient, admin_client).custom_command(
-                    acl_create_command, route=AllNodes()
+                    acl_create_command,  # type: ignore[arg-type]
+                    route=AllNodes(),
                 )
             else:
-                admin_client.custom_command(acl_create_command)
+                admin_client.custom_command(acl_create_command)  # type: ignore[arg-type]
 
             listening_client = create_sync_pubsub_client(
                 request,
@@ -4084,7 +4099,7 @@ class TestSyncPubSub:
                     ["AUTH", username, password], route=AllNodes()
                 )
             else:
-                listening_client.custom_command(["AUTH", username, password])
+                listening_client.custom_command(["AUTH", username, password])  # type: ignore[arg-type]
 
             initial_stats = listening_client.get_statistics()
             initial_out_of_sync = int(
@@ -4125,10 +4140,11 @@ class TestSyncPubSub:
                 try:
                     if cluster_mode:
                         cast(GlideClusterClient, admin_client).custom_command(
-                            acl_delete_command, route=AllNodes()
+                            acl_delete_command,  # type: ignore[arg-type]
+                            route=AllNodes(),
                         )
                     else:
-                        admin_client.custom_command(acl_delete_command)
+                        admin_client.custom_command(acl_delete_command)  # type: ignore[arg-type]
                 except Exception:
                     pass
                 admin_client.close()

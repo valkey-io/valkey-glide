@@ -23,6 +23,11 @@ from glide_shared.config import (
     GlideClusterClientConfiguration,
     ProtocolVersion,
 )
+from glide_sync.glide_client import GlideClient as SyncGlideClient
+from glide_sync.glide_client import GlideClusterClient as SyncGlideClusterClient
+
+# Type alias for any glide client (async or sync)
+AnyGlideClient: TypeAlias = Union[TGlideClient, SyncGlideClient, SyncGlideClusterClient]
 
 
 class SubscriptionMethod(IntEnum):
@@ -97,11 +102,9 @@ def wait_for_messages(
 
 
 def get_pubsub_modes(
-    client: TGlideClient,
+    client: AnyGlideClient,
 ) -> Any:
     """Get the appropriate PubSubChannelModes enum for the client type."""
-    from glide_sync import GlideClusterClient as SyncGlideClusterClient
-
     if isinstance(client, (GlideClusterClient, SyncGlideClusterClient)):
         return GlideClusterClientConfiguration.PubSubChannelModes
     return GlideClientConfiguration.PubSubChannelModes
@@ -1070,6 +1073,7 @@ def sync_pubsub_test_clients(
         else:
             sync_client_cleanup(listening_client, None)
         sync_client_cleanup(publishing_client, None)
+
 
 def sync_get_message_by_method(
     method: MessageReadMethod,
