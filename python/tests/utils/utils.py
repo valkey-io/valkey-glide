@@ -553,6 +553,7 @@ def create_client_config(
     tls_insecure: Optional[bool] = None,
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
+    reconciliation_interval_ms: Optional[int] = None,
     root_pem_cacerts: Optional[bytes] = None,
     client_cert_pem: Optional[bytes] = None,
     client_key_pem: Optional[bytes] = None,
