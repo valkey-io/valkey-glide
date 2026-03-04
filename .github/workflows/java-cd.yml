@@ -214,9 +214,128 @@ jobs:
                       java/bundle*.jar
                       java/jedis-bundle*.jar
 
+            - name: Upload native library for uber JAR assembly
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: native-lib-${{ matrix.host.TARGET }}
+                  path: java/client/build/resources/main/natives/**/*
+
+    create-uber-jar:
+        needs: [set-release-version, create-binaries-to-publish]
+        if: github.repository_owner == 'valkey-io'
+        timeout-minutes: 25
+        runs-on: ubuntu-latest
+        env:
+            JAVA_VERSION: "11"
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: ${{ env.JAVA_VERSION }}
+
+            - name: Download all native library artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: native-lib-*
+                  path: native-libs-downloaded
+
+            - name: List downloaded artifacts
+              run: |
+                  echo "Downloaded native library artifacts:"
+                  find native-libs-downloaded -type f
+
+            - name: Organize native libraries for uber JAR
+              shell: bash
+              run: |
+                  # Create the target directory
+                  mkdir -p java/client/build/resources/main
+
+                  # Copy all native libraries from downloaded artifacts
+                  # Structure: native-libs-downloaded/native-lib-{TARGET}/natives/{platform}/{arch}/*.{so,dylib,dll}
+                  cp -r native-libs-downloaded/native-lib-*/natives java/client/build/resources/main/ || true
+
+                  # Merge all natives directories into one
+                  find native-libs-downloaded -type d -name "natives" -exec cp -r {}/* java/client/build/resources/main/natives/ \;
+
+                  echo "Native libraries organized:"
+                  find java/client/build/resources/main/natives -type f
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-uber-jar-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-cd-
+                      ${{ runner.os }}-gradle-
+
+            - name: Create secret key ring file for all Java submodules
+              working-directory: java/client
+              shell: bash
+              run: |
+                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
+                  if [ -d ../jedis-compatibility ]; then
+                    cp ./secring.gpg ../jedis-compatibility/secring.gpg
+                  fi
+              env:
+                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
+
+            - name: Build uber JAR (no Rust compilation needed)
+              working-directory: java
+              shell: bash
+              env:
+                  GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+                  UBER_JAR_BUILD: "true"
+              run: |
+                  # Build uber JAR without platform classifier
+                  # We set UBER_JAR_BUILD env var to signal build.gradle to skip classifier
+                  ./gradlew --build-cache :client:shadowJar :client:javadocJar :client:sourcesJar \
+                  -x buildRust -x copyNativeLib \
+                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
+                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+                  # Manually publish to Maven local with correct structure
+                  ./gradlew --build-cache :client:publishToMavenLocal \
+                  -x buildRust -x copyNativeLib -x shadowJar -x javadocJar -x sourcesJar \
+                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
+                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+            - name: Bundle uber JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
+                  cd $src_folder
+                  jar -cvf bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $src_folder/bundle.jar bundle-uber-jar.jar
+
+            - name: Upload uber JAR artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: java-uber-jar
+                  path: java/bundle-uber-jar.jar
+
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [set-release-version, create-binaries-to-publish]
+        needs:
+            [set-release-version, create-binaries-to-publish, create-uber-jar]
         runs-on: ubuntu-latest
         outputs:
             DEPLOYMENT_ID: ${{ steps.maven-deployment.outputs.DEPLOYMENT_ID }}

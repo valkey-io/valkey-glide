@@ -153,18 +153,39 @@ clean.dependsOn('cleanProtobuf', 'cleanRust')
 
 tasks.register('copyNativeLib', Copy) {
     def target
+    def jarPath = ""  // Initialize to empty string
+    def sourceDir
+    
     if (project.hasProperty('target')) {
         target = project.target
-        from "${projectDir}/../target/${target}/release/"
+        sourceDir = "${projectDir}/../target/${target}/release/"
+        // Map target to JAR path
+        if (target.contains('linux') && !target.contains('musl')) {
+            jarPath = "natives/linux/${arch}"
+        } else if (target.contains('musl')) {
+            jarPath = "natives/linux_musl/${arch}"
+        } else if (target.contains('darwin')) {
+            jarPath = "natives/osx/${arch}"
+        } else if (target.contains('windows')) {
+            jarPath = "natives/windows/${arch}"
+        }
     } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
+        jarPath = "natives/linux/${arch}"
+        sourceDir = "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
     } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
-    } else {
-        from "${projectDir}/../target/release/"
+        jarPath = "natives/linux_musl/${arch}"
+        sourceDir = "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
+    } else if (osdetector.os == 'osx') {
+        jarPath = "natives/osx/${arch}"
+        sourceDir = "${projectDir}/../target/release/"
+    } else if (osdetector.os == 'windows') {
+        jarPath = "natives/windows/${arch}"
+        sourceDir = "${projectDir}/../target/release/"
     }
+    
+    from sourceDir
     include "*.dylib", "*.so", "*.dll"
-    into sourceSets.main.output.resourcesDir
+    into "${sourceSets.main.output.resourcesDir}/${jarPath}"
 }
 
 delombok.dependsOn('compileJava')
@@ -292,14 +313,22 @@ shadowJar {
     // Relocate protobuf to avoid version conflicts
     relocate 'com.google.protobuf', 'glide.com.google.protobuf'
 
-    // Keep the same classifier as regular jar
-    if (
-        (project.hasProperty('target') && project.target.contains("musl")) ||
-        (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
-        ) {
-        archiveClassifier = "linux_musl-${osdetector.arch}"
+    // Only skip classifier if explicitly building an uber JAR
+    def isUberJarBuild = System.getenv("UBER_JAR_BUILD") == "true"
+    
+    // Only add platform classifier for single-platform builds
+    if (!isUberJarBuild) {
+        if (
+            (project.hasProperty('target') && project.target.contains("musl")) ||
+            (osdetector.os == 'linux' && osdetector.release.id == 'alpine')
+            ) {
+            archiveClassifier = "linux_musl-${osdetector.arch}"
+        } else {
+            archiveClassifier = osdetector.classifier
+        }
     } else {
-        archiveClassifier = osdetector.classifier
+        // Uber JAR - no classifier
+        archiveClassifier = ''
     }
 
     // Important configurations from original shadow setup
