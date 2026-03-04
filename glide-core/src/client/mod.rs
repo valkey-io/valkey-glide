@@ -1635,9 +1635,15 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    let pipeline_buffer_size = request.inflight_requests_limit.map(|v| v as usize);
+    let pipeline_buffer_size = request
+        .inflight_requests_limit
+        .unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS) as usize;
     let mut con = client
-        .get_async_connection(push_sender, Some(pubsub_synchronizer), pipeline_buffer_size)
+        .get_async_connection(
+            push_sender,
+            Some(pubsub_synchronizer),
+            Some(pipeline_buffer_size),
+        )
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,

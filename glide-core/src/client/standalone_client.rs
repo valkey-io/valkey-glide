@@ -225,7 +225,8 @@ impl StandaloneClient {
         let read_from_option = connection_request.read_from.clone();
         let pipeline_buffer_size = connection_request
             .inflight_requests_limit
-            .map(|v| v as usize);
+            .unwrap_or(super::DEFAULT_MAX_INFLIGHT_REQUESTS)
+            as usize;
 
         let mut stream = stream::iter(addresses.into_iter())
             .map(move |address| {
@@ -239,7 +240,7 @@ impl StandaloneClient {
                 let nodelay = tcp_nodelay;
                 let sync = pubsub_synchronizer.clone();
                 let skip_replication = read_only;
-                let buf_size = pipeline_buffer_size;
+                let buf_size = Some(pipeline_buffer_size);
                 async move {
                     get_connection_and_replication_info(
                         &address,
