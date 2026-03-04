@@ -21,7 +21,7 @@ const HOSTNAME_INVALID = "nonexistent.invalid";
  * Returns true if DNS tests are enabled via the VALKEY_GLIDE_DNS_TESTS_ENABLED environment variable.
  */
 const isDnsTestsEnabled = () =>
-    process.env.VALKEY_GLIDE_DNS_TESTS_ENABLED ? true : false;
+    process.env.VALKEY_GLIDE_DNS_TESTS_ENABLED !== undefined;
 
 /**
  * Creates a standalone client connected to the given server with the specified hostname.
