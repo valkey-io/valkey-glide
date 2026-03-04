@@ -37,6 +37,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.PubSubState;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
@@ -2870,8 +2871,7 @@ public class PubSubTests {
             adminClient
                     .customCommand(
                             new String[] {"ACL", "DELUSER", username},
-                            glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute
-                                    .ALL_NODES)
+                            SimpleMultiNodeRoute.ALL_NODES)
                     .get();
         }
     }

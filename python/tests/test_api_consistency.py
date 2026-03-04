@@ -68,10 +68,7 @@ EXCLUDED_TESTS = {
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
     ],
-    "sync_only": [
-        "test_sync_fork",
-        "sync_poll_for_timestamp_change"
-    ],
+    "sync_only": ["test_sync_fork", "sync_poll_for_timestamp_change"],
 }
 
 EXCLUDED_TESTS_FILENAMES = {
