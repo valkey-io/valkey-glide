@@ -65,15 +65,12 @@ EXCLUDED_TESTS = {
         "decode_pubsub_msg",
         "assert_pubsub_messages",
         "poll_for_timestamp_change",
-        # Tests removed from sync as redundant (covered by async)
-        "test_resubscribe_after_connection_kill_many_exact_channels",
-        "test_resubscribe_after_connection_kill_sharded",
-        "test_subscription_metrics_repeated_reconciliation_failures",
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
     ],
     "sync_only": [
         "test_sync_fork",
+        "sync_poll_for_timestamp_change"
     ],
 }
 
