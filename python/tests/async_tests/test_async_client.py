@@ -597,19 +597,14 @@ class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
     async def test_connect_with_ip_address_succeeds(
-        self, request, cluster_mode: bool, ip_address: str
+        self, cluster_mode: bool, ip_address: str
     ):
         """Test connection with IPv4 and IPv6 addresses."""
         cluster = pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
-
         port = cluster.nodes_addr[0].port
         address = NodeAddress(ip_address, port)
 
-        client = await create_client(
-            request=request,
-            cluster_mode=cluster_mode,
-            addresses=[address],
-        )
+        client = await create_client(cluster_mode=cluster_mode, addresses=[address])
 
         await assert_connected(client)
         await client.close()
