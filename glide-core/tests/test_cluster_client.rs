@@ -625,12 +625,7 @@ mod cluster_client_tests {
                 .await
                 .expect("Failed to create cluster client with custom root cert");
 
-            // Verify connection works by sending a command
-            let ping_result = client.send_command(&mut redis::cmd("PING"), None).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 
