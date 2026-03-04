@@ -611,9 +611,7 @@ class TestGlideClients:
             addresses=[address],
         )
 
-        result = await client.ping()
-        assert result == b"PONG"
-
+        await assert_connected(client)
         await client.close()
 
 
@@ -12272,7 +12270,7 @@ class TestScripts:
             cluster_client = await GlideClusterClient.create(cluster_config)
             try:
                 # Verify client can connect and execute commands
-                assert await cluster_client.ping() == b"PONG"
+                await assert_connected(cluster_client)
                 assert await cluster_client.set("key", "value") == "OK"
                 assert await cluster_client.get("key") == b"value"
                 # Clean up test key
@@ -12289,7 +12287,7 @@ class TestScripts:
             standalone_client = await GlideClient.create(standalone_config)
             try:
                 # Verify client can connect and execute commands
-                assert await standalone_client.ping() == b"PONG"
+                await assert_connected(standalone_client)
                 assert await standalone_client.set("key", "value") == "OK"
                 assert await standalone_client.get("key") == b"value"
                 # Clean up test key

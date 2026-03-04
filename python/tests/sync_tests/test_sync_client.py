@@ -107,6 +107,7 @@ from glide_sync.sync_commands.script import Script
 from tests.sync_tests.conftest import create_sync_client
 from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
 from tests.utils.utils import (
+    assert_connected_sync,
     check_function_list_response,
     check_function_stats_response,
     compare_maps,
@@ -492,9 +493,7 @@ class TestGlideClients:
             addresses=[address],
         )
 
-        result = client.ping()
-        assert result == b"PONG"
-
+        assert_connected_sync(client)
         client.close()
 
 
@@ -12077,7 +12076,7 @@ class TestSyncScripts:
             cluster_client = GlideClusterClient.create(cluster_config)
             try:
                 # Verify client can connect and execute commands
-                assert cluster_client.ping() == b"PONG"
+                assert_connected_sync(cluster_client)
                 assert cluster_client.set("key", "value") == "OK"
                 assert cluster_client.get("key") == b"value"
                 # Clean up test key
@@ -12094,7 +12093,7 @@ class TestSyncScripts:
             standalone_client = GlideClient.create(standalone_config)
             try:
                 # Verify client can connect and execute commands
-                assert standalone_client.ping() == b"PONG"
+                assert_connected_sync(standalone_client)
                 assert standalone_client.set("key", "value") == "OK"
                 assert standalone_client.get("key") == b"value"
                 # Clean up test key
