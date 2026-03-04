@@ -935,6 +935,35 @@ mod standalone_client_tests {
         });
     }
 
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_connection_with_ip_address_succeeds(#[values(HOST_IPV4, HOST_IPV6)] host: &str) {
+        block_on_all(async move {
+            let ip_addr = redis::ConnectionAddr::Tcp(host.to_string(), get_available_port());
+
+            let _server = RedisServer::new_with_addr_and_modules(ip_addr.clone(), &[]);
+
+            // Wait to ensure server is ready before connecting.
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+
+            let connection_request = create_connection_request(
+                &[ip_addr],
+                &TestConfiguration {
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with IP address");
+
+            assert_connected(&mut client).await;
+        });
+    }
+
     // ==================== Read-Only Mode Tests ====================
 
     /// Creates mock responses for a replica-only server (no primary detection needed)
