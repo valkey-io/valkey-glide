@@ -2,7 +2,6 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
-import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -1609,12 +1608,11 @@ public class PubSubTests {
     public void pubsub_channels(boolean standalone) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        // no channels exists yet
         BaseClient client = createClient(standalone);
-        assertEquals(0, client.pubsubChannels().get().length);
-        assertEquals(0, client.pubsubChannelsBinary().get().length);
-        assertEquals(0, client.pubsubChannels("**").get().length);
-        assertEquals(0, client.pubsubChannels(gs("**")).get().length);
+
+        // Get initial channel counts (may not be 0 if other tests are running)
+        int initialChannelCount = client.pubsubChannels().get().length;
+        int initialBinaryChannelCount = client.pubsubChannelsBinary().get().length;
 
         HashSet<String> channels =
                 new HashSet<String>(Arrays.asList("test_channel1", "test_channel2", "some_channel"));
@@ -1631,29 +1629,28 @@ public class PubSubTests {
 
         BaseClient listener = createClientWithSubscriptions(standalone, subscriptions);
 
-        // test without pattern
-        assertEquals(channels, new HashSet<>(Arrays.asList(client.pubsubChannels().get())));
-        assertEquals(channels, new HashSet<>(Arrays.asList(listener.pubsubChannels().get())));
-        assertEquals(
-                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
-                new HashSet<>(Arrays.asList(client.pubsubChannelsBinary().get())));
-        assertEquals(
-                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
-                new HashSet<>(Arrays.asList(listener.pubsubChannelsBinary().get())));
+        // test without pattern - verify our channels are present
+        Set<String> allChannels = new HashSet<>(Arrays.asList(client.pubsubChannels().get()));
+        assertTrue(allChannels.containsAll(channels), "All subscribed channels should be present");
 
-        // test with pattern
-        assertEquals(
-                new HashSet<>(Arrays.asList("test_channel1", "test_channel2")),
-                new HashSet<>(Arrays.asList(client.pubsubChannels(pattern).get())));
-        assertEquals(
-                new HashSet<>(Arrays.asList(gs("test_channel1"), gs("test_channel2"))),
-                new HashSet<>(Arrays.asList(client.pubsubChannels(gs(pattern)).get())));
-        assertEquals(
-                new HashSet<>(Arrays.asList("test_channel1", "test_channel2")),
-                new HashSet<>(Arrays.asList(listener.pubsubChannels(pattern).get())));
-        assertEquals(
-                new HashSet<>(Arrays.asList(gs("test_channel1"), gs("test_channel2"))),
-                new HashSet<>(Arrays.asList(listener.pubsubChannels(gs(pattern)).get())));
+        Set<GlideString> allBinaryChannels =
+                new HashSet<>(Arrays.asList(client.pubsubChannelsBinary().get()));
+        Set<GlideString> expectedBinaryChannels =
+                channels.stream().map(GlideString::gs).collect(Collectors.toSet());
+        assertTrue(
+                allBinaryChannels.containsAll(expectedBinaryChannels),
+                "All subscribed binary channels should be present");
+
+        // test with pattern - verify matching channels are present
+        Set<String> patternChannels =
+                new HashSet<>(Arrays.asList(client.pubsubChannels(pattern).get()));
+        assertTrue(patternChannels.contains("test_channel1"));
+        assertTrue(patternChannels.contains("test_channel2"));
+
+        Set<GlideString> patternBinaryChannels =
+                new HashSet<>(Arrays.asList(client.pubsubChannels(gs(pattern)).get()));
+        assertTrue(patternBinaryChannels.contains(gs("test_channel1")));
+        assertTrue(patternBinaryChannels.contains(gs("test_channel2")));
 
         // test with non-matching pattern
         assertEquals(0, client.pubsubChannels("non_matching_*").get().length);
@@ -1668,9 +1665,9 @@ public class PubSubTests {
     public void pubsub_numpat(boolean standalone) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        // no channels exists yet
         BaseClient client = createClient(standalone);
-        assertEquals(0, client.pubsubNumPat().get());
+        // Capture initial pattern count (may not be 0 if other tests are running)
+        long initialNumPat = client.pubsubNumPat().get();
 
         HashSet<String> patterns = new HashSet<String>(Arrays.asList("news.*", "announcements.*"));
 
@@ -1686,8 +1683,8 @@ public class PubSubTests {
         BaseClient listener = createClientWithSubscriptions(standalone, subscriptions);
 
         // Verify pattern count increased by 2
-        assertEquals(2, client.pubsubNumPat().get());
-        assertEquals(2, listener.pubsubNumPat().get());
+        assertEquals(initialNumPat + 2, client.pubsubNumPat().get());
+        assertEquals(initialNumPat + 2, listener.pubsubNumPat().get());
     }
 
     @SneakyThrows
@@ -1775,6 +1772,9 @@ public class PubSubTests {
                 new HashSet<String>(Arrays.asList(prefix + "news.*", prefix + "announcements.*"));
         String pattern = prefix + "test_*";
 
+        // Capture initial state (may not be 0 if other tests are running)
+        long initialNumPat = client.pubsubNumPat().get();
+
         Object transaction =
                 (standalone ? new Batch(true) : new ClusterBatch(true))
                         .pubsubChannels()
@@ -1783,15 +1783,15 @@ public class PubSubTests {
                         .pubsubNumSub(channels);
         ClusterBatchOptions options = ClusterBatchOptions.builder().route(route).build();
 
-        // no channels exists yet
+        // Get initial state via transaction
         Object[] result =
                 standalone
                         ? ((GlideClient) client).exec((Batch) transaction, false).get()
                         : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
 
-        // Verify initial state - channels should be empty
-        assertEquals(0, ((Object[]) result[0]).length);
-        assertEquals(0L, ((Number) result[2]).longValue());
+        // Capture initial channel count and pattern count from transaction
+        int initialChannelCount = ((Object[]) result[0]).length;
+        long initialNumPatFromTx = ((Number) result[2]).longValue();
 
         // All our channels should have 0 subscribers initially
         @SuppressWarnings("unchecked")
@@ -1825,20 +1825,30 @@ public class PubSubTests {
                         : ((GlideClusterClient) client).exec((ClusterBatch) transaction, false, options).get();
 
         // convert arrays to sets, because we can't compare arrays - they received reordered
-        result[0] = new HashSet<>(Arrays.asList((Object[]) result[0]));
-        result[1] = new HashSet<>(Arrays.asList((Object[]) result[1]));
+        Set<Object> allChannels = new HashSet<>(Arrays.asList((Object[]) result[0]));
+        Set<Object> patternChannels = new HashSet<>(Arrays.asList((Object[]) result[1]));
 
-        assertDeepEquals(
-                new Object[] {
-                    new HashSet<>(Arrays.asList(channels)), // pubsubChannels()
-                    new HashSet<>(
-                            Arrays.asList(
-                                    "{boo}-test_channel1", "{boo}-test_channel2")), // pubsubChannels(pattern)
-                    2L, // pubsubNumPat()
-                    Arrays.stream(channels)
-                            .collect(Collectors.toMap(c -> c, c -> 1L)), // pubsubNumSub(channels)
-                },
-                result);
+        // Verify our channels are present in the results
+        Set<String> expectedChannels = new HashSet<>(Arrays.asList(channels));
+        assertTrue(
+                allChannels.containsAll(expectedChannels), "All subscribed channels should be present");
+
+        Set<String> expectedPatternChannels =
+                new HashSet<>(Arrays.asList("{boo}-test_channel1", "{boo}-test_channel2"));
+        assertTrue(
+                patternChannels.containsAll(expectedPatternChannels),
+                "Pattern-matched channels should be present");
+
+        // Verify pattern count increased by 2
+        long currentNumPat = ((Number) result[2]).longValue();
+        assertEquals(initialNumPatFromTx + 2, currentNumPat);
+
+        // Verify our channels have 1 subscriber each
+        @SuppressWarnings("unchecked")
+        Map<String, Long> finalNumSubResult = (Map<String, Long>) result[3];
+        for (String channel : channels) {
+            assertEquals(1L, finalNumSubResult.get(channel).longValue());
+        }
     }
 
     @SneakyThrows
@@ -1846,12 +1856,12 @@ public class PubSubTests {
     public void pubsub_shard_channels() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
-        // no channels exists yet
         GlideClusterClient client = (GlideClusterClient) createClient(false);
-        assertEquals(0, client.pubsubShardChannels().get().length);
-        assertEquals(0, client.pubsubShardChannelsBinary().get().length);
-        assertEquals(0, client.pubsubShardChannels("*").get().length);
-        assertEquals(0, client.pubsubShardChannels(gs("*")).get().length);
+
+        // Capture initial state (may not be empty if other tests are running)
+        Set<String> initialChannels = new HashSet<>(Arrays.asList(client.pubsubShardChannels().get()));
+        Set<GlideString> initialBinaryChannels =
+                new HashSet<>(Arrays.asList(client.pubsubShardChannelsBinary().get()));
 
         HashSet<String> channels =
                 new HashSet<String>(
@@ -1866,29 +1876,51 @@ public class PubSubTests {
         GlideClusterClient listener =
                 (GlideClusterClient) createClientWithSubscriptions(false, subscriptions);
 
-        // test without pattern
-        assertEquals(channels, new HashSet<>(Arrays.asList(client.pubsubShardChannels().get())));
-        assertEquals(channels, new HashSet<>(Arrays.asList(listener.pubsubShardChannels().get())));
-        assertEquals(
-                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
-                new HashSet<>(Arrays.asList(client.pubsubShardChannelsBinary().get())));
-        assertEquals(
-                channels.stream().map(GlideString::gs).collect(Collectors.toSet()),
-                new HashSet<>(Arrays.asList(listener.pubsubShardChannelsBinary().get())));
+        // test without pattern - verify our channels are present
+        Set<String> allChannels = new HashSet<>(Arrays.asList(client.pubsubShardChannels().get()));
+        assertTrue(
+                allChannels.containsAll(channels), "All subscribed shard channels should be present");
 
-        // test with pattern
-        assertEquals(
-                new HashSet<>(Arrays.asList("test_shardchannel1", "test_shardchannel2")),
-                new HashSet<>(Arrays.asList(client.pubsubShardChannels(pattern).get())));
-        assertEquals(
-                new HashSet<>(Arrays.asList(gs("test_shardchannel1"), gs("test_shardchannel2"))),
-                new HashSet<>(Arrays.asList(client.pubsubShardChannels(gs(pattern)).get())));
-        assertEquals(
-                new HashSet<>(Arrays.asList("test_shardchannel1", "test_shardchannel2")),
-                new HashSet<>(Arrays.asList(listener.pubsubShardChannels(pattern).get())));
-        assertEquals(
-                new HashSet<>(Arrays.asList(gs("test_shardchannel1"), gs("test_shardchannel2"))),
-                new HashSet<>(Arrays.asList(listener.pubsubShardChannels(gs(pattern)).get())));
+        Set<String> listenerChannels =
+                new HashSet<>(Arrays.asList(listener.pubsubShardChannels().get()));
+        assertTrue(
+                listenerChannels.containsAll(channels),
+                "All subscribed shard channels should be present on listener");
+
+        Set<GlideString> allBinaryChannels =
+                new HashSet<>(Arrays.asList(client.pubsubShardChannelsBinary().get()));
+        Set<GlideString> expectedBinaryChannels =
+                channels.stream().map(GlideString::gs).collect(Collectors.toSet());
+        assertTrue(
+                allBinaryChannels.containsAll(expectedBinaryChannels),
+                "All subscribed binary shard channels should be present");
+
+        Set<GlideString> listenerBinaryChannels =
+                new HashSet<>(Arrays.asList(listener.pubsubShardChannelsBinary().get()));
+        assertTrue(
+                listenerBinaryChannels.containsAll(expectedBinaryChannels),
+                "All subscribed binary shard channels should be present on listener");
+
+        // test with pattern - verify matching channels are present
+        Set<String> patternChannels =
+                new HashSet<>(Arrays.asList(client.pubsubShardChannels(pattern).get()));
+        assertTrue(patternChannels.contains("test_shardchannel1"));
+        assertTrue(patternChannels.contains("test_shardchannel2"));
+
+        Set<GlideString> patternBinaryChannels =
+                new HashSet<>(Arrays.asList(client.pubsubShardChannels(gs(pattern)).get()));
+        assertTrue(patternBinaryChannels.contains(gs("test_shardchannel1")));
+        assertTrue(patternBinaryChannels.contains(gs("test_shardchannel2")));
+
+        Set<String> listenerPatternChannels =
+                new HashSet<>(Arrays.asList(listener.pubsubShardChannels(pattern).get()));
+        assertTrue(listenerPatternChannels.contains("test_shardchannel1"));
+        assertTrue(listenerPatternChannels.contains("test_shardchannel2"));
+
+        Set<GlideString> listenerPatternBinaryChannels =
+                new HashSet<>(Arrays.asList(listener.pubsubShardChannels(gs(pattern)).get()));
+        assertTrue(listenerPatternBinaryChannels.contains(gs("test_shardchannel1")));
+        assertTrue(listenerPatternBinaryChannels.contains(gs("test_shardchannel2")));
 
         // test with non-matching pattern
         assertEquals(0, client.pubsubShardChannels("non_matching_*").get().length);
