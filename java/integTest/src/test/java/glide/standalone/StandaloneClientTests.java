@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
@@ -29,6 +30,8 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(20) // seconds
 public class StandaloneClientTests {
@@ -423,28 +426,13 @@ public class StandaloneClientTests {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6})
     @SneakyThrows
-    @Test
-    public void testStandaloneConnectWithIpv4Succeeds() {
+    public void testStandaloneConnectWithIpAddressSucceeds(String ipAddress) {
         Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
-        NodeAddress address = NodeAddress.builder().host(HOST_ADDRESS_IPV4).port(port).build();
-
-        glide.api.models.configuration.GlideClientConfiguration config =
-                commonClientConfig().address(address).build();
-
-        try (GlideClient client = GlideClient.createClient(config).get()) {
-            glide.TestUtilities.assertConnected(client);
-        }
-    }
-
-    @SneakyThrows
-    @Test
-    public void testStandaloneConnectWithIpv6Succeeds() {
-        Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
-        NodeAddress address = NodeAddress.builder().host(HOST_ADDRESS_IPV6).port(port).build();
-
-        glide.api.models.configuration.GlideClientConfiguration config =
-                commonClientConfig().address(address).build();
+        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
+        GlideClientConfiguration config = commonClientConfig().address(address).build();
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
             glide.TestUtilities.assertConnected(client);
