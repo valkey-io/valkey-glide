@@ -150,14 +150,9 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
-            - name: Configure DNS for tests
-              shell: bash
-              run: |
-                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
-                  127.0.0.1 valkey.glide.test.no_tls.com
-                  ::1 valkey.glide.test.tls.com
-                  ::1 valkey.glide.test.no_tls.com"
-                  echo "$ENTRIES" | sudo tee -a /etc/hosts
+            - uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
 
             - name: Install & build & test
               working-directory: go
@@ -328,14 +323,9 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
-            - name: Configure DNS for tests
-              shell: bash
-              run: |
-                  ENTRIES="127.0.0.1 valkey.glide.test.tls.com
-                  127.0.0.1 valkey.glide.test.no_tls.com
-                  ::1 valkey.glide.test.tls.com
-                  ::1 valkey.glide.test.no_tls.com"
-                  echo "$ENTRIES" | tee -a /etc/hosts
+            - uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
 
             - name: Install & build & test
               working-directory: go
