@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+mod test_constants;
 mod utilities;
 
 #[macro_export]
@@ -467,8 +468,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // If the client is successfully created, try sending a command
-                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(result.is_ok(), "PING command should succeed: {result:?}");
+                    assert_connected(&mut client).await;
                 }
                 Err(err) => {
                     // In case of failure, print error and assert that it is not a non-connection/auth error
@@ -589,8 +589,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // If the client is successfully created, try sending a command
-                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(result.is_ok(), "PING command should succeed: {result:?}");
+                    assert_connected(&mut client).await;
                 }
                 Err(err) => {
                     // In case of failure, print error and assert that it is not a non-connection/auth error

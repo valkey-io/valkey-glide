@@ -1,0 +1,31 @@
+name: Setup DNS Tests
+description: Configure host file entries for DNS tests
+
+inputs:
+    os:
+        description: The current operating system
+        required: true
+        # See 'build-matrix.json'
+        type: choice
+        options:
+            - ubuntu
+            - amazon-linux
+            - macos
+            - windows
+
+runs:
+    using: composite
+    steps:
+        - shell: bash
+          env:
+              OS: ${{ inputs.os }}
+          run: |
+              ENTRIES="127.0.0.1 valkey.glide.test.tls.com
+              127.0.0.1 valkey.glide.test.no_tls.com
+              ::1 valkey.glide.test.tls.com
+              ::1 valkey.glide.test.no_tls.com"
+              if [[ "$OS" == "windows" ]]; then
+                  echo "$ENTRIES" >> /c/Windows/System32/drivers/etc/hosts
+              else
+                  echo "$ENTRIES" | sudo tee -a /etc/hosts
+              fi
