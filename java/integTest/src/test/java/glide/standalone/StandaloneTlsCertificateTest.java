@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.TestConfiguration.HOST_ADDRESS_IPV4;
+import static glide.TestConfiguration.HOST_ADDRESS_IPV6;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -106,7 +108,8 @@ public class StandaloneTlsCertificateTest {
 
     @Test
     void testStandaloneTlsWithIpv4Succeeds() throws ExecutionException, InterruptedException {
-        NodeAddress ipv4Node = NodeAddress.builder().host("127.0.0.1").port(nodeAddr.getPort()).build();
+        Integer port = nodeAddr.getPort();
+        NodeAddress ipv4Node = NodeAddress.builder().host(HOST_ADDRESS_IPV4).port(port).build();
         GlideClientConfiguration config =
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv4Node);
 
@@ -117,7 +120,8 @@ public class StandaloneTlsCertificateTest {
 
     @Test
     void testStandaloneTlsWithIpv6Succeeds() throws ExecutionException, InterruptedException {
-        NodeAddress ipv6Node = NodeAddress.builder().host("::1").port(nodeAddr.getPort()).build();
+        Integer port = nodeAddr.getPort();
+        NodeAddress ipv6Node = NodeAddress.builder().host(HOST_ADDRESS_IPV6).port(port).build();
         GlideClientConfiguration config =
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv6Node);
 
