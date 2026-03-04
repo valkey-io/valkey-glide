@@ -24,9 +24,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * DNS resolution tests.
  *
- * <p>
- * See <a href="../../../../../../DEVELOPER.md#dns-tests">DNS Tests</a> for
- * setup instructions.
+ * <p>See <a href="../../../../../../DEVELOPER.md#dns-tests">DNS Tests</a> for setup instructions.
  */
 @Timeout(10)
 @EnabledIfEnvironmentVariable(named = "VALKEY_GLIDE_DNS_TESTS_ENABLED", matches = ".*")
