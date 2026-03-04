@@ -1,10 +1,5 @@
 ## 2.3
 
-#### Breaking Changes
-
-* Node: Remove support for EOL Node.js 16.x and 18.x ([#5276](https://github.com/valkey-io/valkey-glide/issues/5276))
-    * Node: Drop support for Node.js 16.x and 18.x. Minimum supported version is now Node.js 20.x.
-
 #### Changes
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
