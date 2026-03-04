@@ -2,26 +2,15 @@
 
 //! DNS resolution tests.
 //!
-//! These tests require host file entries and environment variable:
-//!
-//! Host file entries:
-//! - 127.0.0.1 valkey.glide.test.tls.com
-//! - 127.0.0.1 valkey.glide.test.no_tls.com
-//! - ::1 valkey.glide.test.tls.com
-//! - ::1 valkey.glide.test.no_tls.com
-//!
-//! Environment variable:
-//! - VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+//! To run these tests locally, see the DNS Tests section in [README.md](../README.md#dns-tests).
 
 mod test_constants;
 mod utilities;
 
-use test_constants::*;
-
 #[cfg(test)]
 mod dns_tests {
-    use super::*;
-    use crate::utilities::{cluster::RedisCluster, cluster::SHORT_CLUSTER_TEST_TIMEOUT, *};
+    use crate::test_constants::{HOSTNAME_NO_TLS, HOSTNAME_TLS};
+    use crate::utilities::{cluster::{RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT}, *};
     use glide_core::{
         client::{Client, StandaloneClient},
         connection_request::TlsMode,
