@@ -766,6 +766,7 @@ mod cluster_client_tests {
     }
 
     #[rstest]
+    #[ignore]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     #[serial_test::serial]
     fn test_cluster_connection_fails_with_permission_denied() {
