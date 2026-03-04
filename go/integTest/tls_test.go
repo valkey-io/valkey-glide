@@ -16,6 +16,7 @@ import (
 
 // TestTlsWithoutCertificate_Standalone tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	clientConfig := config.NewClientConfiguration().
@@ -29,6 +30,7 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
 
 // TestTlsWithSelfSignedCertificate_Standalone tests standalone client with custom root certificates
 func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
@@ -57,6 +59,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
 
 // TestTlsWithMultipleCertificates_Standalone tests standalone client with multiple concatenated certificates
 func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
@@ -89,6 +92,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 
 // TestTlsWithoutCertificate_Cluster tests that connection fails without providing certificates
 func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	clientConfig := config.NewClusterClientConfiguration().
@@ -102,6 +106,7 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
 
 // TestTlsWithSelfSignedCertificate_Cluster tests cluster client with custom root certificates
 func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
@@ -130,6 +135,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
 
 // TestTlsWithMultipleCertificates_Cluster tests cluster client with multiple concatenated certificates
 func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
@@ -162,6 +168,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
 
 // TestTlsWithEmptyCertificate_Standalone tests that empty certificate array returns an error
 func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	emptyCerts := []byte{}
@@ -180,6 +187,7 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
 
 // TestTlsWithEmptyCertificate_Cluster tests that empty certificate array returns an error
 func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	emptyCerts := []byte{}
@@ -198,6 +206,7 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
 
 // TestTlsWithInvalidCertificate_Standalone tests that invalid certificate returns an error
 func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
@@ -216,6 +225,7 @@ func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
 
 // TestTlsWithInvalidCertificate_Cluster tests that invalid certificate returns an error
 func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
@@ -251,6 +261,7 @@ func (suite *GlideTestSuite) TestTlsLoadCertificateFromFile() {
 
 // TestTlsWithIPv4AddressSucceeds_Standalone tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
@@ -278,6 +289,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 
 // TestTlsWithIPv4AddressSucceeds_Cluster tests TLS connection with IPv4 address
 func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
@@ -305,6 +317,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
 
 // TestTlsWithIPv6AddressSucceeds_Standalone tests TLS connection with IPv6 address
 func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()
@@ -332,6 +345,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
 
 // TestTlsWithIPv6AddressSucceeds_Cluster tests TLS connection with IPv6 address
 func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
 	certData, err := getCaCertificate()

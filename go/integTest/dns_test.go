@@ -23,6 +23,7 @@ func skipIfNotEnabled(suite *GlideTestSuite, useTLS bool) {
 		suite.T().Skip("DNS tests are not enabled. Set VALKEY_GLIDE_DNS_TESTS_ENABLED to enable.")
 	}
 
+	// TODO #5509: TLS tests do not currently run as part of CI.
 	if useTLS {
 		skipIfTlsDisabled(suite)
 	} else {
