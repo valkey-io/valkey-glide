@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use opentelemetry_sdk::metrics::MetricError;
 use opentelemetry_sdk::metrics::MetricResult;
 use opentelemetry_sdk::metrics::Temporality;
+use opentelemetry_sdk::metrics::data::Metric;
 use opentelemetry_sdk::metrics::data::ResourceMetrics;
 use opentelemetry_sdk::metrics::data::{Gauge, Histogram, Sum};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
@@ -120,7 +121,7 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
         scope.insert("scope".to_owned(), Value::Object(scope_info));
 
         // Add metrics
-        let mut metrics = Vec::new();
+        let mut metrics_array = Vec::new();
         for metric in scope_metric.metrics.iter() {
             let mut metric_obj = Map::new();
             metric_obj.insert("name".to_owned(), Value::String(metric.name.to_string()));
@@ -130,111 +131,170 @@ fn to_json(metrics: &ResourceMetrics) -> Result<Value, MetricError> {
             );
             metric_obj.insert("unit".to_owned(), Value::String(metric.unit.to_string()));
 
-            // Add data points
-            let mut data_points = Vec::new();
-
-            let aggregation = metric.data.as_ref() as &dyn Any;
-            if let Some(sum) = aggregation.downcast_ref::<Sum<u64>>() {
-                for point in sum.data_points.iter() {
-                    let mut dp = Map::new();
-                    dp.insert("value".to_owned(), Value::Number(point.value.into()));
-                    let start_time = point
-                        .start_time
-                        .ok_or_else(|| MetricError::Other("Missing start time".to_string()))?;
-                    let start_time: DateTime<Utc> = start_time.into();
-                    dp.insert(
-                        "start_time".to_owned(),
-                        Value::String(start_time.timestamp_micros().to_string()),
-                    );
-
-                    let time = point
-                        .time
-                        .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
-                    let time: DateTime<Utc> = time.into();
-                    dp.insert(
-                        "time".to_owned(),
-                        Value::String(time.timestamp_micros().to_string()),
-                    );
-
-                    dp.insert(
-                        "attributes".to_owned(),
-                        attributes_to_json(&point.attributes),
-                    );
-                    data_points.push(Value::Object(dp));
-                }
-            } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<f64>>() {
-                for point in gauge.data_points.iter() {
-                    let mut dp = Map::new();
-                    dp.insert("value".to_owned(), Value::String(point.value.to_string()));
-                    let time = point
-                        .time
-                        .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
-                    let time: DateTime<Utc> = time.into();
-                    dp.insert(
-                        "time".to_owned(),
-                        Value::String(time.timestamp_micros().to_string()),
-                    );
-
-                    dp.insert(
-                        "attributes".to_owned(),
-                        attributes_to_json(&point.attributes),
-                    );
-                    data_points.push(Value::Object(dp));
-                }
-            } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<f64>>() {
-                for point in histogram.data_points.iter() {
-                    let mut dp = Map::new();
-                    dp.insert("count".to_owned(), Value::Number(point.count.into()));
-                    dp.insert("sum".to_owned(), Value::String(point.sum.to_string()));
-
-                    // Add bucket counts
-                    let bucket_counts: Vec<Value> = point
-                        .bucket_counts
-                        .iter()
-                        .map(|&count| Value::Number(count.into()))
-                        .collect();
-                    dp.insert("bucket_counts".to_owned(), Value::Array(bucket_counts));
-
-                    // Add bounds
-                    let bounds: Vec<Value> = point
-                        .bounds
-                        .iter()
-                        .map(|&bound| Value::String(bound.to_string()))
-                        .collect();
-                    dp.insert("bounds".to_owned(), Value::Array(bounds));
-
-                    let start_time: DateTime<Utc> = point.start_time.into();
-                    dp.insert(
-                        "start_time".to_owned(),
-                        Value::String(start_time.timestamp_micros().to_string()),
-                    );
-                    let time: DateTime<Utc> = point.time.into();
-                    dp.insert(
-                        "time".to_owned(),
-                        Value::String(time.timestamp_micros().to_string()),
-                    );
-
-                    dp.insert(
-                        "attributes".to_owned(),
-                        attributes_to_json(&point.attributes),
-                    );
-                    data_points.push(Value::Object(dp));
-                }
-            } else {
-                return Err(MetricError::Other(format!(
-                    "Unsupported metric type: {:?}",
-                    metric.data.as_ref().type_id()
-                )));
-            }
+            // Serialize data points using helper functions
+            let data_points = serialize_metric_data(metric)?;
             metric_obj.insert("data_points".to_owned(), Value::Array(data_points));
-            metrics.push(Value::Object(metric_obj));
+            metrics_array.push(Value::Object(metric_obj));
         }
-        scope.insert("metrics".to_owned(), Value::Array(metrics));
+        scope.insert("metrics".to_owned(), Value::Array(metrics_array));
         scope_metrics.push(Value::Object(scope));
     }
     root.insert("scope_metrics".to_owned(), Value::Array(scope_metrics));
 
     Ok(Value::Object(root))
+}
+
+/// Serialize metric data points based on the aggregation type
+fn serialize_metric_data(metric: &Metric) -> Result<Vec<Value>, MetricError> {
+    let aggregation = metric.data.as_ref() as &dyn Any;
+
+    // Try each supported type
+    if let Some(sum) = aggregation.downcast_ref::<Sum<u64>>() {
+        serialize_sum_data_points(sum, |v: u64| Value::Number(v.into()))
+    } else if let Some(sum) = aggregation.downcast_ref::<Sum<i64>>() {
+        serialize_sum_data_points(sum, |v: i64| Value::Number(v.into()))
+    } else if let Some(sum) = aggregation.downcast_ref::<Sum<f64>>() {
+        serialize_sum_data_points(sum, |v: f64| Value::String(v.to_string()))
+    } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<u64>>() {
+        serialize_gauge_data_points(gauge, |v: u64| Value::Number(v.into()))
+    } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<i64>>() {
+        serialize_gauge_data_points(gauge, |v: i64| Value::Number(v.into()))
+    } else if let Some(gauge) = aggregation.downcast_ref::<Gauge<f64>>() {
+        serialize_gauge_data_points(gauge, |v: f64| Value::String(v.to_string()))
+    } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<f64>>() {
+        serialize_histogram_data_points(histogram, |v: f64| Value::String(v.to_string()))
+    } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<u64>>() {
+        serialize_histogram_data_points(histogram, |v: u64| Value::Number(v.into()))
+    } else if let Some(histogram) = aggregation.downcast_ref::<Histogram<i64>>() {
+        serialize_histogram_data_points(histogram, |v: i64| Value::Number(v.into()))
+    } else {
+        Err(MetricError::Other(format!(
+            "Unsupported metric type for metric '{}': {:?}",
+            metric.name,
+            metric.data.as_ref().type_id()
+        )))
+    }
+}
+
+/// Generic helper to serialize Sum data points
+fn serialize_sum_data_points<T>(
+    sum: &Sum<T>,
+    value_serializer: impl Fn(T) -> Value,
+) -> Result<Vec<Value>, MetricError>
+where
+    T: Copy,
+{
+    let mut data_points = Vec::new();
+    for point in sum.data_points.iter() {
+        let mut dp = Map::new();
+        dp.insert("value".to_owned(), value_serializer(point.value));
+
+        let start_time = point
+            .start_time
+            .ok_or_else(|| MetricError::Other("Missing start time".to_string()))?;
+        let start_time: DateTime<Utc> = start_time.into();
+        dp.insert(
+            "start_time".to_owned(),
+            Value::String(start_time.timestamp_micros().to_string()),
+        );
+
+        let time = point
+            .time
+            .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
+        let time: DateTime<Utc> = time.into();
+        dp.insert(
+            "time".to_owned(),
+            Value::String(time.timestamp_micros().to_string()),
+        );
+
+        dp.insert(
+            "attributes".to_owned(),
+            attributes_to_json(&point.attributes),
+        );
+        data_points.push(Value::Object(dp));
+    }
+    Ok(data_points)
+}
+
+/// Generic helper to serialize Gauge data points
+fn serialize_gauge_data_points<T>(
+    gauge: &Gauge<T>,
+    value_serializer: impl Fn(T) -> Value,
+) -> Result<Vec<Value>, MetricError>
+where
+    T: Copy,
+{
+    let mut data_points = Vec::new();
+    for point in gauge.data_points.iter() {
+        let mut dp = Map::new();
+        dp.insert("value".to_owned(), value_serializer(point.value));
+
+        let time = point
+            .time
+            .ok_or_else(|| MetricError::Other("Missing time".to_string()))?;
+        let time: DateTime<Utc> = time.into();
+        dp.insert(
+            "time".to_owned(),
+            Value::String(time.timestamp_micros().to_string()),
+        );
+
+        dp.insert(
+            "attributes".to_owned(),
+            attributes_to_json(&point.attributes),
+        );
+        data_points.push(Value::Object(dp));
+    }
+    Ok(data_points)
+}
+
+/// Generic helper to serialize Histogram data points
+fn serialize_histogram_data_points<T>(
+    histogram: &Histogram<T>,
+    value_serializer: impl Fn(T) -> Value,
+) -> Result<Vec<Value>, MetricError>
+where
+    T: Copy,
+{
+    let mut data_points = Vec::new();
+    for point in histogram.data_points.iter() {
+        let mut dp = Map::new();
+        dp.insert("count".to_owned(), Value::Number(point.count.into()));
+        dp.insert("sum".to_owned(), value_serializer(point.sum));
+
+        // Bucket counts are always u64 in the OTel SDK, independent of T
+        let bucket_counts: Vec<Value> = point
+            .bucket_counts
+            .iter()
+            .map(|&count| Value::Number(count.into()))
+            .collect();
+        dp.insert("bucket_counts".to_owned(), Value::Array(bucket_counts));
+
+        // Bounds are always f64 in the OTel SDK, independent of T — serialized as strings for precision
+        let bounds: Vec<Value> = point
+            .bounds
+            .iter()
+            .map(|&bound| Value::String(bound.to_string()))
+            .collect();
+        dp.insert("bounds".to_owned(), Value::Array(bounds));
+
+        let start_time: DateTime<Utc> = point.start_time.into();
+        dp.insert(
+            "start_time".to_owned(),
+            Value::String(start_time.timestamp_micros().to_string()),
+        );
+        let time: DateTime<Utc> = point.time.into();
+        dp.insert(
+            "time".to_owned(),
+            Value::String(time.timestamp_micros().to_string()),
+        );
+
+        dp.insert(
+            "attributes".to_owned(),
+            attributes_to_json(&point.attributes),
+        );
+        data_points.push(Value::Object(dp));
+    }
+    Ok(data_points)
 }
 
 // Helper function to convert attributes to JSON
