@@ -101,9 +101,9 @@ import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -118,8 +118,8 @@ import response.ResponseOuterClass.Response;
  * Use {@link #createClient} to request a client.
  *
  * @see For full documentation refer to <a
- *     href="https://github.com/valkey-io/valkey-glide/wiki/Java-Wrapper#cluster">Valkey Glide
- *     Wiki</a>.
+ *     href="https://glide.valkey.io/how-to/client-initialization/#cluster">Valkey GLIDE
+ *     Documentation</a>.
  */
 public class GlideClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
@@ -223,7 +223,7 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        var data =
+        Object data =
                 handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
         if (data instanceof Map) {
             return ClusterValue.ofMultiValue((Map<String, Object>) data);
@@ -239,7 +239,7 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        var data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
+        Object data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
         if (data instanceof Map) {
             return ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) data);
         }
@@ -726,7 +726,7 @@ public class GlideClusterClient extends BaseClient
             // each `Object` is a `Map<String, Object>[]` actually
             Map<String, Object> info = handleMapResponse(response);
             Map<String, Map<String, Object>[]> data = new LinkedHashMap<>();
-            for (var nodeInfo : info.entrySet()) {
+            for (Map.Entry<String, Object> nodeInfo : info.entrySet()) {
                 data.put(nodeInfo.getKey(), handleFunctionListResponse((Object[]) nodeInfo.getValue()));
             }
             return ClusterValue.ofMultiValue(data);
@@ -744,7 +744,7 @@ public class GlideClusterClient extends BaseClient
             // each `Object` is a `Map<GlideString, Object>[]` actually
             Map<GlideString, Object> info = handleBinaryStringMapResponse(response);
             Map<GlideString, Map<GlideString, Object>[]> data = new LinkedHashMap<>();
-            for (var nodeInfo : info.entrySet()) {
+            for (Map.Entry<GlideString, Object> nodeInfo : info.entrySet()) {
                 data.put(
                         nodeInfo.getKey(), handleFunctionListResponseBinary((Object[]) nodeInfo.getValue()));
             }
@@ -1081,10 +1081,10 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Object> invokeScript(@NonNull Script script, @NonNull Route route) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
-                    script, List.of(), route, this::handleBinaryObjectOrNullResponse);
+                    script, Collections.emptyList(), route, this::handleBinaryObjectOrNullResponse);
         } else {
             return commandManager.submitScript(
-                    script, List.of(), route, this::handleObjectOrNullResponse);
+                    script, Collections.emptyList(), route, this::handleObjectOrNullResponse);
         }
     }
 

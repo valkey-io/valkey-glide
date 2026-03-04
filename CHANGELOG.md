@@ -1,10 +1,5 @@
 ## 2.3
 
-#### Breaking Changes
-
-* Node: Remove support for EOL Node.js 16.x and 18.x ([#5276](https://github.com/valkey-io/valkey-glide/issues/5276))
-    * Node: Drop support for Node.js 16.x and 18.x. Minimum supported version is now Node.js 20.x.
-
 #### Changes
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
@@ -23,6 +18,9 @@
 * CORE: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
 * CORE: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
 * Go: Add CLUSTER management commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER SLOTS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER MYSHARDID, CLUSTER GETKEYSINSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER LINKS) ([#5206](https://github.com/valkey-io/valkey-glide/issues/5206))
+* Java: Make client java 8 compatible
+* Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
+* CORE: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
 * JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER SLOTS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 
 #### Fixes
@@ -37,6 +35,7 @@
 * Java: Fix resource leak in integration tests where clients created via @MethodSource were never closed ([#5347](https://github.com/valkey-io/valkey-glide/issues/5347))
 * Java: Fix hanging issue in AWS Lambda when response exceeds 16KB ([#5081](https://github.com/valkey-io/valkey-glide/issues/5081))
 * Core: break reference cycle in IAM token manager callback ([#5431](https://github.com/valkey-io/valkey-glide/pull/5431))
+* Core: Fixed a bug where permission errors for CLUSTER SLOTS command is not surfaced during initial connection ([#5486](https://github.com/valkey-io/valkey-glide/pull/5486))
 
 #### Operational Enhancements
 * Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))

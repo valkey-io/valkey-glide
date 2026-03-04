@@ -15,6 +15,8 @@ import static glide.api.models.commands.scan.ScanOptions.ObjectType.SET;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STREAM;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.STRING;
 import static glide.api.models.commands.scan.ScanOptions.ObjectType.ZSET;
+import static glide.utils.Java8Utils.createMap;
+import static glide.utils.Java8Utils.repeat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,6 +41,7 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,7 +93,7 @@ public class BatchTests {
     @SneakyThrows
     @SuppressWarnings("unchecked")
     public static void teardown() {
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClient>) client.get()[0]).getPayload().close();
         }
     }
@@ -100,7 +103,7 @@ public class BatchTests {
     @SuppressWarnings("unchecked")
     public void cleanup() {
         // Flush all databases to ensure clean state between tests
-        for (var client : clients) {
+        for (Arguments client : clients) {
             ((Named<GlideClient>) client.get()[0]).getPayload().flushall().get();
         }
     }
@@ -242,8 +245,8 @@ public class BatchTests {
         }
 
         int length = 1 << 25; // 33mb
-        String key = "0".repeat(length);
-        String value = "0".repeat(length);
+        String key = repeat("0", length);
+        String value = repeat("0", length);
 
         Batch batch = new Batch(isAtomic);
         batch.set(key, value);
@@ -294,9 +297,9 @@ public class BatchTests {
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
     public void lastsave(GlideClient client, boolean isAtomic) {
-        var yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
+        Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
 
-        var response = client.exec(new Batch(isAtomic).lastsave(), true).get();
+        Object[] response = client.exec(new Batch(isAtomic).lastsave(), true).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
@@ -310,15 +313,15 @@ public class BatchTests {
         String oldPolicy = client.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
         try {
             Batch batch = new Batch(isAtomic);
-            batch.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            batch.configSet(Collections.singletonMap(maxmemoryPolicy, "allkeys-lfu"));
             batch.set(objectFreqKey, "");
             batch.objectFreq(objectFreqKey);
-            var response = client.exec(batch, true).get();
+            Object[] response = client.exec(batch, true).get();
             assertEquals(OK, response[0]);
             assertEquals(OK, response[1]);
             assertTrue((long) response[2] >= 0L);
         } finally {
-            client.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
+            client.configSet(Collections.singletonMap(maxmemoryPolicy, oldPolicy)).get();
         }
     }
 
@@ -330,7 +333,7 @@ public class BatchTests {
         Batch batch = new Batch(isAtomic);
         batch.set(objectIdletimeKey, "");
         batch.objectIdletime(objectIdletimeKey);
-        var response = client.exec(batch, true).get();
+        Object[] response = client.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -343,7 +346,7 @@ public class BatchTests {
         Batch batch = new Batch(isAtomic);
         batch.set(objectRefcountKey, "");
         batch.objectRefcount(objectRefcountKey);
-        var response = client.exec(batch, true).get();
+        Object[] response = client.exec(batch, true).get();
         assertEquals(OK, response[0]);
         assertTrue((long) response[1] >= 0L);
     }
@@ -355,7 +358,7 @@ public class BatchTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.2.0"));
         String zSetKey1 = "{key}:zsetKey1-" + UUID.randomUUID();
         Batch batch = new Batch(isAtomic);
-        batch.zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0));
+        batch.zadd(zSetKey1, createMap("one", 1.0, "two", 2.0, "three", 3.0));
         batch.zrankWithScore(zSetKey1, "one");
         batch.zrevrankWithScore(zSetKey1, "one");
 
@@ -564,15 +567,15 @@ public class BatchTests {
     public void sort_and_sortReadOnly(GlideClient client, boolean isAtomic) {
         Batch batch1 = new Batch(isAtomic);
         Batch batch2 = new Batch(isAtomic);
-        var prefix = UUID.randomUUID();
+        UUID prefix = UUID.randomUUID();
         String genericKey1 = "{GenericKey}-1-" + prefix;
         String genericKey2 = "{GenericKey}-2-" + prefix;
         String[] ascendingListByAge = new String[] {"Bob", "Alice"};
         String[] descendingListByAge = new String[] {"Alice", "Bob"};
 
         batch1
-                .hset(prefix + "user:1", Map.of("name", "Alice", "age", "30"))
-                .hset(prefix + "user:2", Map.of("name", "Bob", "age", "25"))
+                .hset(prefix + "user:1", createMap("name", "Alice", "age", "30"))
+                .hset(prefix + "user:2", createMap("name", "Bob", "age", "25"))
                 .lpush(genericKey1, new String[] {"2", "1"})
                 .sort(
                         genericKey1,
@@ -605,7 +608,7 @@ public class BatchTests {
                                 .build())
                 .lrange(genericKey2, 0, -1);
 
-        var expectedResults =
+        Object[] expectedResults =
                 new Object[] {
                     2L, // hset(prefix + "user:1", ...);
                     2L, // hset(prefix + "user:2", ...);
@@ -676,7 +679,7 @@ public class BatchTests {
         assertEquals(OK, client.flushall().get());
         // setup
         String key = UUID.randomUUID().toString();
-        Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
+        Map<String, String> msetMap = Collections.singletonMap(key, UUID.randomUUID().toString());
         assertEquals(OK, client.mset(msetMap).get());
 
         String cursor = "0";
@@ -699,7 +702,7 @@ public class BatchTests {
         assertEquals(OK, client.flushall().get());
         // setup
         String key = UUID.randomUUID().toString();
-        Map<String, String> msetMap = Map.of(key, UUID.randomUUID().toString());
+        Map<String, String> msetMap = Collections.singletonMap(key, UUID.randomUUID().toString());
         assertEquals(OK, client.mset(msetMap).get());
 
         GlideString cursor = gs("0");
@@ -724,7 +727,7 @@ public class BatchTests {
         Batch setupBatch = new Batch(isAtomic);
 
         Map<ScanOptions.ObjectType, String> typeKeys =
-                Map.of(
+                createMap(
                         STRING, "{string}-" + UUID.randomUUID(),
                         LIST, "{list}-" + UUID.randomUUID(),
                         SET, "{set}-" + UUID.randomUUID(),
@@ -735,14 +738,17 @@ public class BatchTests {
         setupBatch.set(typeKeys.get(STRING), UUID.randomUUID().toString());
         setupBatch.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
         setupBatch.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
-        setupBatch.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
+        setupBatch.zadd(
+                typeKeys.get(ZSET), Collections.singletonMap(UUID.randomUUID().toString(), 1.0));
         setupBatch.hset(
-                typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(HASH),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         setupBatch.xadd(
-                typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(STREAM),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         assertNotNull(client.exec(setupBatch, true).get());
 
-        for (var type : ScanOptions.ObjectType.values()) {
+        for (ScanOptions.ObjectType type : ScanOptions.ObjectType.values()) {
             ScanOptions options = ScanOptions.builder().type(type).count(99L).build();
 
             String cursor = "0";
@@ -785,7 +791,7 @@ public class BatchTests {
         Batch setupBatch = new Batch(isAtomic).withBinaryOutput();
 
         Map<ScanOptions.ObjectType, GlideString> typeKeys =
-                Map.of(
+                createMap(
                         STRING, gs("{string}-" + UUID.randomUUID()),
                         LIST, gs("{list}-" + UUID.randomUUID()),
                         SET, gs("{set}-" + UUID.randomUUID()),
@@ -796,16 +802,19 @@ public class BatchTests {
         setupBatch.set(typeKeys.get(STRING), UUID.randomUUID().toString());
         setupBatch.lpush(typeKeys.get(LIST), new String[] {UUID.randomUUID().toString()});
         setupBatch.sadd(typeKeys.get(SET), new String[] {UUID.randomUUID().toString()});
-        setupBatch.zadd(typeKeys.get(ZSET), Map.of(UUID.randomUUID().toString(), 1.0));
+        setupBatch.zadd(
+                typeKeys.get(ZSET), Collections.singletonMap(UUID.randomUUID().toString(), 1.0));
         setupBatch.hset(
-                typeKeys.get(HASH), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(HASH),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         setupBatch.xadd(
-                typeKeys.get(STREAM), Map.of(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+                typeKeys.get(STREAM),
+                Collections.singletonMap(UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         assertNotNull(client.exec(setupBatch, true).get());
 
         final GlideString initialCursor = gs("0");
 
-        for (var type : ScanOptions.ObjectType.values()) {
+        for (ScanOptions.ObjectType type : ScanOptions.ObjectType.values()) {
             ScanOptions options = ScanOptions.builder().type(type).count(99L).build();
 
             GlideString cursor = initialCursor;
@@ -872,7 +881,8 @@ public class BatchTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String libName = "mylib";
         String funcName = "myfun";
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+        String code =
+                generateLuaLibCode(libName, Collections.singletonMap(funcName, "return args[1]"), true);
 
         // Setup
         client.functionLoad(code, true).get();
@@ -896,7 +906,7 @@ public class BatchTests {
         Batch batch = new Batch(isAtomic);
         final String streamKey = "{streamKey}-" + UUID.randomUUID();
         LinkedHashMap<String, Object> expectedStreamInfo =
-                new LinkedHashMap<>() {
+                new LinkedHashMap<String, Object>() {
                     {
                         put("radix-tree-keys", 1L);
                         put("radix-tree-nodes", 2L);
@@ -908,7 +918,7 @@ public class BatchTests {
                     }
                 };
         LinkedHashMap<String, Object> expectedStreamFullInfo =
-                new LinkedHashMap<>() {
+                new LinkedHashMap<String, Object>() {
                     {
                         put("radix-tree-keys", 1L);
                         put("radix-tree-nodes", 2L);
@@ -920,7 +930,10 @@ public class BatchTests {
                 };
 
         batch
-                .xadd(streamKey, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
+                .xadd(
+                        streamKey,
+                        Collections.singletonMap("field1", "value1"),
+                        StreamAddOptions.builder().id("0-1").build())
                 .xinfoStream(streamKey)
                 .xinfoStreamFull(streamKey);
 
@@ -937,7 +950,8 @@ public class BatchTests {
 
         assertDeepEquals(
                 new Object[] {
-                    "0-1", // xadd(streamKey, Map.of("field1", "value1"), ... .id("0-1").build());
+                    "0-1", // xadd(streamKey, Collections.singletonMap("field1", "value1"), ...
+                    // .id("0-1").build());
                     expectedStreamInfo, // xinfoStream(streamKey)
                     expectedStreamFullInfo, // xinfoStreamFull(streamKey)
                 },
@@ -951,11 +965,11 @@ public class BatchTests {
         String key = UUID.randomUUID().toString();
         client.set(key, "_").get();
         // use dump to ensure that we have non-string convertible bytes
-        var bytes = client.dump(gs(key)).get();
+        byte[] bytes = client.dump(gs(key)).get();
 
-        var batch = new Batch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
+        Batch batch = new Batch(isAtomic).withBinaryOutput().set(gs(key), gs(bytes)).get(gs(key));
 
-        var responses = client.exec(batch, true).get();
+        Object[] responses = client.exec(batch, true).get();
 
         assertDeepEquals(
                 new Object[] {
