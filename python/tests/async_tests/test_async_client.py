@@ -268,7 +268,7 @@ class TestGlideClients:
             with pytest.raises(RequestError) as e:
                 # This client isn't authorized to perform SET
                 await testuser_client.set("foo", "bar")
-            assert "NOPERM" in str(e)
+            assert "PermissionDenied" in str(e)
             await testuser_client.close()
         finally:
             # Delete this user
