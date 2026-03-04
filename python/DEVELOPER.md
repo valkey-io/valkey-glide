@@ -243,6 +243,29 @@ source .env/bin/activate
 pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
+### DNS Tests
+
+To run [async](tests/async_tests/test_dns.py) and [sync](tests/async_tests/test_sync_dns.py) DNS tests locally:
+
+1. Add the following entries to your hosts file:
+   - Linux/macOS: `/etc/hosts`
+   - Windows: `C:\Windows\System32\drivers\etc\hosts`
+
+   ```text
+   127.0.0.1 valkey.glide.test.tls.com
+   127.0.0.1 valkey.glide.test.no_tls.com
+   ::1 valkey.glide.test.tls.com
+   ::1 valkey.glide.test.no_tls.com
+   ```
+
+2. Set the environment variable:
+
+   ```bash
+   export VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+   ```
+
+If the environment variable is not set, DNS tests will be skipped.
+
 ## Protobuf
 ---
 During the initial build, Python protobuf files were created in `python/glide-shared/glide_shared/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
@@ -295,10 +318,10 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
 
 ### Async Client (`valkey-glide`)
 
-1. **Stage shared code**  
+1. **Stage shared code**
    Before packaging, we copy the `glide-shared/glide_shared` package directory into the `glide-async/python/` folder. This ensures the shared code is included in the final wheel.
 
-2. **Make it discoverable**  
+2. **Make it discoverable**
    In `glide-async/pyproject.toml`, we add the appropriate `include` rule under `[tool.maturin]` to make sure the copied files are bundled with the wheel. For example:
    ```toml
    include = ["python/glide_shared/**/*.py"]
@@ -316,7 +339,7 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
     ```
 ### Sync Client (`valkey-glide-sync`)
 
-1. **Vendoring dependencies (for both sdist and wheel)**  
+1. **Vendoring dependencies (for both sdist and wheel)**
    During the build process (for both source distributions and wheels), we vendor (copy) all required Rust crates and Python modules into the `glide-sync` directory.
    This includes:
    - ffi
@@ -332,13 +355,13 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
    - The resulting shared object file (e.g. `libglide_ffi.so`) is copied into the `glide-sync/glide_sync/` directory.
    - We then build the Python package, either as a wheel or as an sdist.
 
-3. **Multiplatform packaging for PyPI**  
-   To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.  
-   This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).  
-   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.  
+3. **Multiplatform packaging for PyPI**
+   To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.
+   This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).
+   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.
    This allows the tool to copy the full project context into the container.
 
-5. **Local testing**  
+4. **Local testing**
    You can building a wheel and install it locally using:
    ```bash
    python dev.py build --client sync --wheel
