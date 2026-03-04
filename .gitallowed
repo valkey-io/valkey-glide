@@ -1,0 +1,2 @@
+# Allow GitHub Actions secrets template syntax in workflow files only
+[.]github/workflows/[^:]+[:].*secrets[.][A-Z_]+
