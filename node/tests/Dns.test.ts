@@ -24,6 +24,21 @@ const isDnsTestsEnabled = () =>
     process.env.VALKEY_GLIDE_DNS_TESTS_ENABLED !== undefined;
 
 /**
+ * Creates base configuration for connecting to a server with the specified hostname.
+ *
+ * @param server - The ValkeyCluster server instance
+ * @param hostname - The hostname to connect to
+ * @returns Base client configuration
+ */
+function createBaseConfig(server: ValkeyCluster, hostname: string) {
+    const port = server.ports()[0];
+    const address = [hostname, port] as [string, number];
+    return {
+        ...getClientConfigurationOption([address], ProtocolVersion.RESP3),
+    };
+}
+
+/**
  * Creates a standalone client connected to the given server with the specified hostname.
  *
  * @param server - The ValkeyCluster server instance
@@ -34,11 +49,7 @@ async function createClient(
     server: ValkeyCluster,
     hostname: string,
 ): Promise<GlideClient> {
-    const port = server.ports()[0];
-    const address = [hostname, port] as [string, number];
-    const baseConfig = {
-        ...getClientConfigurationOption([address], ProtocolVersion.RESP3),
-    };
+    const baseConfig = createBaseConfig(server, hostname);
 
     if (server.isTls()) {
         return await GlideClient.createClient({
@@ -66,11 +77,7 @@ async function createClusterClient(
     server: ValkeyCluster,
     hostname: string,
 ): Promise<GlideClusterClient> {
-    const port = server.ports()[0];
-    const address = [hostname, port] as [string, number];
-    const baseConfig = {
-        ...getClientConfigurationOption([address], ProtocolVersion.RESP3),
-    };
+    const baseConfig = createBaseConfig(server, hostname);
 
     if (server.isTls()) {
         return await GlideClusterClient.createClient({
