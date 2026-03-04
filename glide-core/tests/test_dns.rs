@@ -24,6 +24,9 @@ mod dns_tests {
     static TLS_PATHS: Lazy<TlsFilePaths> = Lazy::new(|| build_tls_file_paths(&TLS_TEMPDIR));
     static CA_CERT_BYTES: Lazy<Vec<u8>> = Lazy::new(|| TLS_PATHS.read_ca_cert_as_bytes());
 
+    // ==================== Helper Methods ======================
+
+    /// Returns the port from the given connection address.
     fn extract_port(addr: &redis::ConnectionAddr) -> u16 {
         match addr {
             redis::ConnectionAddr::Tcp(_, p) => *p,

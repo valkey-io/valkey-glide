@@ -7,8 +7,14 @@ mod utilities;
 mod cluster_client_tests {
     use std::collections::HashMap;
 
-    use super::*;
-    use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
+    use crate::test_constants::{HOST_IPV4, HOST_IPV6};
+    use crate::utilities::{
+        cluster::{
+            RedisCluster, LONG_CLUSTER_TEST_TIMEOUT, SHORT_CLUSTER_TEST_TIMEOUT,
+            setup_cluster_with_replicas, setup_test_basics_internal,
+        },
+        *,
+    };
     use glide_core::{
         client::Client,
         connection_request::{
@@ -23,10 +29,6 @@ mod cluster_client_tests {
         },
     };
     use rstest::rstest;
-    use utilities::cluster::{
-        RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal,
-    };
-    use utilities::*;
     use versions::Versioning;
 
     fn count_primary_or_replica(value: &str) -> (u16, u16) {
@@ -676,7 +678,7 @@ mod cluster_client_tests {
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_ip_address_succeeds(
-        #[values(test_constants::HOST_IPV4, test_constants::HOST_IPV6)] host: &str,
+        #[values(HOST_IPV4, HOST_IPV6)] host: &str,
     ) {
         block_on_all(async move {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
