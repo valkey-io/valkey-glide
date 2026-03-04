@@ -3,6 +3,7 @@ package glide.api.models.commands;
 
 import glide.api.commands.GenericBaseCommands;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.Singular;
 import lombok.experimental.SuperBuilder;
@@ -65,15 +66,15 @@ public class SortOptions extends SortBaseOptions {
      * @return a String array that holds the sub commands and their arguments.
      */
     public String[] toArgs() {
-        List<String> optionArgs = new ArrayList<>(List.of(super.toArgs()));
+        List<String> optionArgs = new ArrayList<>(Arrays.asList(super.toArgs()));
 
         if (byPattern != null) {
-            optionArgs.addAll(List.of(BY_COMMAND_STRING, byPattern));
+            optionArgs.addAll(Arrays.asList(BY_COMMAND_STRING, byPattern));
         }
 
         if (getPatterns != null) {
             getPatterns.stream()
-                    .forEach(getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern)));
+                    .forEach(getPattern -> optionArgs.addAll(Arrays.asList(GET_COMMAND_STRING, getPattern)));
         }
 
         return optionArgs.toArray(new String[0]);

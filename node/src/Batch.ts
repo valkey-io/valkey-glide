@@ -1492,7 +1492,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see {@link https://valkey.io/commands/blmove/|valkey.io} for details.
      * @remarks When in cluster mode, both `source` and `destination` must map to the same hash slot.
-     * @remarks `BLMOVE` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands|Valkey Glide Wiki} for more details and best practices.
+     * @remarks `BLMOVE` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands|Valkey GLIDE Documentation} for more details and best practices.
      * @remarks Since Valkey version 6.2.0.
      *
      * @param source - The key to the source list.
@@ -2836,7 +2836,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
     /** Executes a single command, without checking inputs. Every part of the command, including subcommands,
      *  should be added as a separate value in args.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
+     * @see {@link https://glide.valkey.io/concepts/client-features/custom-commands/|Valkey GLIDE Documentation} for details on the restrictions and limitations of the custom command API.
      *
      * Command Response - A response from Valkey with an `Object`.
      */
@@ -3456,7 +3456,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see {@link https://valkey.io/commands/brpop/|valkey.io} for details.
-     * @remarks `BRPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @remarks `BRPOP` is a blocking command, see [Blocking Commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -3474,7 +3474,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
      * @see {@link https://valkey.io/commands/blpop/|valkey.io} for details.
-     * @remarks `BLPOP` is a blocking command, see [Blocking Commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands) for more details and best practices.
+     * @remarks `BLPOP` is a blocking command, see [Blocking Commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands) for more details and best practices.
      *
      * @param keys - The `keys` of the lists to pop from.
      * @param timeout - The `timeout` in seconds.
@@ -3988,7 +3988,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * to pop from any of the given sorted sets. `BZMPOP` is the blocking variant of {@link zmpop}.
      *
      * @see {@link https://valkey.io/commands/bzmpop/|valkey.io} for details.
-     * @remarks `BZMPOP` is a client blocking command, see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands | Valkey Glide Wiki} for more details and best practices.
+     * @remarks `BZMPOP` is a client blocking command, see {@link https://glide.valkey.io/how-to/connection-management/#blocking-commands | Valkey GLIDE Documentation} for more details and best practices.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param keys - The keys of the sorted sets.
