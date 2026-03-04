@@ -9,6 +9,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -211,7 +212,7 @@ public class ArrayTransformUtils {
             U score = clazz.cast(entry.getValue());
             innerMap.put(subKey, score);
         }
-        return Map.of(key, innerMap);
+        return Collections.singletonMap(key, innerMap);
     }
 
     /**
@@ -239,7 +240,7 @@ public class ArrayTransformUtils {
             U score = clazz.cast(entry.getValue());
             innerMap.put(subKey, score);
         }
-        return Map.of(key, innerMap);
+        return Collections.singletonMap(key, innerMap);
     }
 
     /**
@@ -391,13 +392,13 @@ public class ArrayTransformUtils {
         List<GlideString> keysList = new ArrayList<>();
         List<GlideString> valuesList = new ArrayList<>();
 
-        for (var entry : args.entrySet()) {
+        for (Map.Entry<?, ?> entry : args.entrySet()) {
             keysList.add(GlideString.of(entry.getKey()));
             valuesList.add(GlideString.of(entry.getValue()));
         }
 
         return concatenateArrays(
-                keysList.toArray(GlideString[]::new), valuesList.toArray(GlideString[]::new));
+                keysList.toArray(new GlideString[0]), valuesList.toArray(new GlideString[0]));
     }
 
     /**
