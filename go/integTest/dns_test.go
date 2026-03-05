@@ -1,5 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// DNS resolution tests.
+// See DEVELOPER.md#dns-tests for instructions on how to run them locally.
+
 package integTest
 
 import (
@@ -10,9 +13,6 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
-
-// DNS resolution tests.
-// See DEVELOPER.md#dns-tests for instructions on how to run them locally.
 
 const hostnameInvalid = "nonexistent.invalid"
 

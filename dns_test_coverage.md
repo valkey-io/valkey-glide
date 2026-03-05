@@ -181,3 +181,44 @@ All clients now use consistent constant names with the same values:
 ### Test Execution
 
 DNS tests require environment variable `VALKEY_GLIDE_DNS_TESTS_ENABLED` to be set and are skipped by default in CI.
+
+**Documentation Consistency:**
+
+All clients now have consistent documentation:
+1. ✅ **"DNS Tests" section in DEVELOPER.md** (or README.md for Rust) with:
+   - Link to test file(s)
+   - Host file setup instructions
+   - Environment variable setup
+2. ✅ **Test file documentation** with:
+   - "DNS resolution tests" description
+   - Link back to DEVELOPER.md/README.md setup instructions
+
+| Client | DEVELOPER.md Section | Test File Documentation |
+|--------|---------------------|------------------------|
+| Java | ✅ `java/DEVELOPER.md#dns-tests` | ✅ `DnsTest.java` links to `DEVELOPER.md#dns-tests` |
+| Python | ✅ `python/DEVELOPER.md#dns-tests` | ✅ `test_dns.py` and `test_sync_dns.py` link to `DEVELOPER.md#dns-tests` |
+| Node.js | ✅ `node/DEVELOPER.md#dns-tests` | ✅ `Dns.test.ts` links to `DEVELOPER.md#dns-tests` |
+| Go | ✅ `go/DEVELOPER.md#dns-tests` | ✅ `dns_test.go` links to `DEVELOPER.md#dns-tests` |
+| Rust | ✅ `glide-core/README.md#dns-tests` | ✅ `test_dns.rs` links to `README.md#dns-tests` |
+
+**CI/CD Integration:**
+
+All client workflows have DNS tests enabled with:
+1. **`setup-dns-tests` action** - Configures `/etc/hosts` entries for test hostnames
+2. **`VALKEY_GLIDE_DNS_TESTS_ENABLED="1"`** - Environment variable to enable DNS tests
+
+| Client | Workflow File | DNS Setup | Env Var |
+|--------|---------------|-----------|---------|
+| Java | `.github/workflows/java.yml` | ✅ `.github/actions/setup-dns-tests` | ✅ `VALKEY_GLIDE_DNS_TESTS_ENABLED="1"` |
+| Python | `.github/workflows/python.yml` | ✅ `.github/actions/setup-dns-tests` | ✅ `VALKEY_GLIDE_DNS_TESTS_ENABLED="1"` |
+| Node.js | `.github/workflows/node.yml` | ✅ `.github/actions/setup-dns-tests` | ✅ `VALKEY_GLIDE_DNS_TESTS_ENABLED="1"` |
+| Go | `.github/workflows/go.yml` | ✅ `.github/actions/setup-dns-tests` | ✅ `VALKEY_GLIDE_DNS_TESTS_ENABLED="1"` |
+| Rust | `.github/workflows/rust.yml` | ✅ `.github/actions/setup-dns-tests` | ✅ `VALKEY_GLIDE_DNS_TESTS_ENABLED="1"` |
+
+The `setup-dns-tests` action adds the following entries to the hosts file:
+```
+127.0.0.1 valkey.glide.test.tls.com
+127.0.0.1 valkey.glide.test.no_tls.com
+::1 valkey.glide.test.tls.com
+::1 valkey.glide.test.no_tls.com
+```
