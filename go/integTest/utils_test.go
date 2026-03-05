@@ -15,38 +15,37 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
 
-// Default connection and request timeouts.
+// Default connection and request timeouts for testing.
+// Use increased timeouts to reduce flakiness.
 const (
 	requestTimeout    = 5 * time.Second
 	connectionTimeout = 10 * time.Second
 )
 
-// buildBaseAdvancedClientConfiguration returns an advanced client configuration with standard test timeouts.
-func buildBaseAdvancedClientConfiguration() *config.AdvancedClientConfiguration {
+// Builds and returns a default advanced client configuration for testing.
+func defaultAdvancedClientConfig() *config.AdvancedClientConfiguration {
 	return config.NewAdvancedClientConfiguration().
 		WithConnectionTimeout(connectionTimeout)
 }
 
-// buildBaseAdvancedClusterClientConfiguration returns an advanced cluster client configuration with standard test timeouts.
-func buildBaseAdvancedClusterClientConfiguration() *config.AdvancedClusterClientConfiguration {
+// Builds and returns a default advanced cluster client configuration for testing.
+func defaultAdvancedClusterClientConfig() *config.AdvancedClusterClientConfiguration {
 	return config.NewAdvancedClusterClientConfiguration().
 		WithConnectionTimeout(connectionTimeout)
 }
 
-// buildBaseClientConfiguration builds and returns a default standalone client configuration for testing.
-func buildBaseClientConfiguration(suite *GlideTestSuite) *config.ClientConfiguration {
+// Builds and returns a default client configuration for testing.
+func defaultClientConfig() *config.ClientConfiguration {
 	return config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0]).
 		WithRequestTimeout(requestTimeout).
-		WithAdvancedConfiguration(buildBaseAdvancedClientConfiguration())
+		WithAdvancedConfiguration(defaultAdvancedClientConfig())
 }
 
-// buildBaseClusterClientConfiguration builds and returns a default cluster client configuration for testing.
-func buildBaseClusterClientConfiguration(suite *GlideTestSuite) *config.ClusterClientConfiguration {
+// Builds and returns a default cluster client configuration for testing.
+func defaultClusterClientConfig() *config.ClusterClientConfiguration {
 	return config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0]).
 		WithRequestTimeout(requestTimeout).
-		WithAdvancedConfiguration(buildBaseAdvancedClusterClientConfiguration())
+		WithAdvancedConfiguration(defaultAdvancedClusterClientConfig())
 }
 
 // General function type that deals with context

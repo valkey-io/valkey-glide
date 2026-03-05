@@ -45,30 +45,22 @@ func createDedicatedClient(
 	lazyConnect bool,
 ) (interfaces.BaseClientCommands, error) {
 	if clusterMode {
-		cfg := config.NewClusterClientConfiguration()
-		for _, addr := range addresses {
-			cfg.WithAddress(&addr)
-		}
+		cfg := defaultClusterClientConfig().
+			WithLazyConnect(lazyConnect)
 
-		cfg.WithRequestTimeout(3 * time.Second)
-		advCfg := config.NewAdvancedClusterClientConfiguration()
-		advCfg.WithConnectionTimeout(3 * time.Second)
-		cfg.WithAdvancedConfiguration(advCfg)
-		cfg.WithLazyConnect(lazyConnect)
+		for i := range addresses {
+			cfg.WithAddress(&addresses[i])
+		}
 
 		return glide.NewClusterClient(cfg)
 	}
 
-	cfg := config.NewClientConfiguration()
-	for _, addr := range addresses {
-		cfg.WithAddress(&addr)
-	}
+	cfg := defaultClientConfig().
+		WithLazyConnect(lazyConnect)
 
-	cfg.WithRequestTimeout(3 * time.Second)
-	advCfg := config.NewAdvancedClientConfiguration()
-	advCfg.WithConnectionTimeout(3 * time.Second)
-	cfg.WithAdvancedConfiguration(advCfg)
-	cfg.WithLazyConnect(lazyConnect)
+	for i := range addresses {
+		cfg.WithAddress(&addresses[i])
+	}
 
 	return glide.NewClient(cfg)
 }
@@ -137,9 +129,8 @@ func getExpectedNewConnections(ctx context.Context, client interfaces.BaseClient
 }
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
-	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0])
-	client, err := glide.NewClient(config)
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0])
+	client, err := glide.NewClient(clientConfig)
 
 	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
@@ -162,10 +153,9 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
-	config := config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0])
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0])
 
-	client, err := glide.NewClusterClient(config)
+	client, err := glide.NewClusterClient(clientConfig)
 
 	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
@@ -426,7 +416,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
 		Port: suite.standaloneHosts[0].Port,
 	}
 
-	clientConfig := config.NewClientConfiguration().WithAddress(&address)
+	clientConfig := defaultClientConfig().WithAddress(&address)
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -446,7 +436,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
 		Port: suite.clusterHosts[0].Port,
 	}
 
-	clientConfig := config.NewClusterClientConfiguration().WithAddress(&address)
+	clientConfig := defaultClusterClientConfig().WithAddress(&address)
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -465,7 +455,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
 		Port: suite.standaloneHosts[0].Port,
 	}
 
-	clientConfig := config.NewClientConfiguration().WithAddress(&address)
+	clientConfig := defaultClientConfig().WithAddress(&address)
 
 	client, err := glide.NewClient(clientConfig)
 	require.NoError(suite.T(), err)
@@ -484,7 +474,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
 		Port: suite.clusterHosts[0].Port,
 	}
 
-	clientConfig := config.NewClusterClientConfiguration().WithAddress(&address)
+	clientConfig := defaultClusterClientConfig().WithAddress(&address)
 
 	client, err := glide.NewClusterClient(clientConfig)
 	require.NoError(suite.T(), err)

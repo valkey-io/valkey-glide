@@ -38,20 +38,19 @@ func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool)
 		Port: suite.standaloneHosts[0].Port,
 	}
 
-	clientConfig := config.NewClientConfiguration().WithAddress(&address)
+	clientConfig := defaultClientConfig().WithAddress(&address)
 
 	if useTLS {
-		certData, err := getCaCertificate()
+		clientConfig.WithUseTLS(true)
+
+        certData, err := getCaCertificate()
 		if err != nil {
 			return nil, err
 		}
 
-		tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-		advancedConfig := config.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
-
-		clientConfig = clientConfig.
-			WithUseTLS(true).
-			WithAdvancedConfiguration(advancedConfig)
+        tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+		advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
+		clientConfig.WithAdvancedConfiguration(advancedConfig)
 	}
 
 	return glide.NewClient(clientConfig)
@@ -64,20 +63,20 @@ func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*
 		Port: suite.clusterHosts[0].Port,
 	}
 
-	clientConfig := config.NewClusterClientConfiguration().WithAddress(&address)
+	clientConfig := defaultClusterClientConfig().WithAddress(&address)
 
 	if useTLS {
-		certData, err := getCaCertificate()
+		clientConfig.WithUseTLS(true)
+
+        certData, err := getCaCertificate()
 		if err != nil {
 			return nil, err
 		}
 
 		tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-		advancedConfig := config.NewAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+		advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-		clientConfig = clientConfig.
-			WithUseTLS(true).
-			WithAdvancedConfiguration(advancedConfig)
+		clientConfig.WithAdvancedConfiguration(advancedConfig)
 	}
 
 	return glide.NewClusterClient(clientConfig)

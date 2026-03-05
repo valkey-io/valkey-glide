@@ -17,7 +17,7 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
-	clientConfig := buildBaseClientConfiguration(suite).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
         WithUseTLS(true)
 
 	_, err := glide.NewClient(clientConfig)
@@ -35,9 +35,9 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := buildBaseAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClientConfiguration(suite).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -64,9 +64,9 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 	multipleCerts = append(multipleCerts, certData...)
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(multipleCerts)
-	advancedConfig := buildBaseAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClientConfiguration(suite).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -83,7 +83,7 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Cluster() {
 	// TODO #5509: TLS tests do not currently run as part of CI.
 	skipIfTlsDisabled(suite)
 
-	clientConfig := buildBaseClusterClientConfiguration(suite).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(true)
 
 	_, err := glide.NewClusterClient(clientConfig)
@@ -101,9 +101,9 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := buildBaseAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClusterClientConfiguration(suite).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -130,9 +130,9 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
 	multipleCerts = append(multipleCerts, certData...)
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(multipleCerts)
-	advancedConfig := buildBaseAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClusterClientConfiguration(suite).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -151,9 +151,9 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Standalone() {
 
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
-	advancedConfig := buildBaseAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClientConfiguration(suite).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -168,9 +168,9 @@ func (suite *GlideTestSuite) TestTlsWithEmptyCertificate_Cluster() {
 
 	emptyCerts := []byte{}
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(emptyCerts)
-	advancedConfig := buildBaseAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClusterClientConfiguration(suite).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -185,9 +185,9 @@ func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Standalone() {
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
-	advancedConfig := buildBaseAdvancedClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClientConfiguration(suite).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -202,9 +202,9 @@ func (suite *GlideTestSuite) TestTlsWithInvalidCertificate_Cluster() {
 
 	invalidCert := []byte("-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(invalidCert)
-	advancedConfig := buildBaseAdvancedClusterClientConfiguration().WithTlsConfiguration(tlsConfig)
+	advancedConfig := defaultAdvancedClusterClientConfig().WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClusterClientConfiguration(suite).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
 
@@ -243,10 +243,10 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := buildBaseAdvancedClientConfiguration().
+	advancedConfig := defaultAdvancedClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClientConfiguration(suite).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
@@ -272,10 +272,10 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := buildBaseAdvancedClusterClientConfiguration().
+	advancedConfig := defaultAdvancedClusterClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClusterClientConfiguration(suite).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
@@ -301,10 +301,10 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := buildBaseAdvancedClientConfiguration().
+	advancedConfig := defaultAdvancedClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClientConfiguration(suite).
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
@@ -330,10 +330,10 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
 	}
 
 	tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
-	advancedConfig := buildBaseAdvancedClusterClientConfiguration().
+	advancedConfig := defaultAdvancedClusterClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := buildBaseClusterClientConfiguration(suite).
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
