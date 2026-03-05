@@ -1,8 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-import static glide.TestConfiguration.HOSTNAME_NO_TLS;
-import static glide.TestConfiguration.HOSTNAME_TLS;
+import static glide.Constants.HOSTNAME_NO_TLS;
+import static glide.Constants.HOSTNAME_TLS;
 import static glide.TestUtilities.*;
 import static org.junit.jupiter.api.Assertions.*;
 

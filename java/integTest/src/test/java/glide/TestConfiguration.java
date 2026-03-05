@@ -20,13 +20,6 @@ public final class TestConfiguration {
     public static final String[] CLUSTER_TLS_HOSTS = getHosts("test.server.cluster.tls");
     public static final String[] AZ_CLUSTER_HOSTS = getHosts("test.server.azcluster");
 
-    // Host names and addresses for tests.
-    // See 'cluster_manager.py' for details.
-    public static final String HOSTNAME_TLS = "valkey.glide.test.tls.com";
-    public static final String HOSTNAME_NO_TLS = "valkey.glide.test.no_tls.com";
-    public static final String HOST_ADDRESS_IPV4 = "127.0.0.1";
-    public static final String HOST_ADDRESS_IPV6 = "::1";
-
     public static final Semver SERVER_VERSION;
     public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
 

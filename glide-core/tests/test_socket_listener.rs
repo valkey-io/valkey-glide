@@ -2,7 +2,7 @@
 
 #![cfg(feature = "socket-layer")]
 
-mod test_constants;
+mod constants;
 mod utilities;
 
 use glide_core::*;

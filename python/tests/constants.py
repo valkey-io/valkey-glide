@@ -8,5 +8,5 @@ Shared test constants.
 # See 'cluster_manager.py' for details.
 HOSTNAME_TLS: str = "valkey.glide.test.tls.com"
 HOSTNAME_NO_TLS: str = "valkey.glide.test.no_tls.com"
-HOST_ADDRESS_IPV4: str = "127.0.0.1"
-HOST_ADDRESS_IPV6: str = "::1"
+IP_ADDRESS_V4: str = "127.0.0.1"
+IP_ADDRESS_V6: str = "::1"

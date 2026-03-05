@@ -2,8 +2,8 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_HOSTS;
-import static glide.TestConfiguration.HOST_ADDRESS_IPV4;
-import static glide.TestConfiguration.HOST_ADDRESS_IPV6;
+import static glide.Constants.IP_ADDRESS_V4;
+import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.deleteAclUser;
@@ -485,7 +485,7 @@ public class ClusterClientTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6})
+    @ValueSource(strings = {IP_ADDRESS_V4, IP_ADDRESS_V6})
     @SneakyThrows
     public void testClusterConnectWithIpAddressSucceeds(String ipAddress) {
         Integer port = Integer.parseInt(CLUSTER_HOSTS[0].split(":")[1]);

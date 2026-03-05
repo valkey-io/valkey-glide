@@ -1,8 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
-import static glide.TestConfiguration.HOST_ADDRESS_IPV4;
-import static glide.TestConfiguration.HOST_ADDRESS_IPV6;
+import static glide.Constants.IP_ADDRESS_V4;
+import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -109,7 +109,7 @@ public class StandaloneTlsCertificateTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6})
+    @ValueSource(strings = {IP_ADDRESS_V4, IP_ADDRESS_V6})
     void testStandaloneTlsWithIpAddressSucceeds(String ipAddress)
             throws ExecutionException, InterruptedException {
         Integer port = nodeAddr.getPort();
