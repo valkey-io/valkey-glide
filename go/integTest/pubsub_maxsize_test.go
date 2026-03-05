@@ -18,7 +18,7 @@ func (suite *GlideTestSuite) TestPubSubMaxSizeMessageStandalone() {
 	largeMsg := strings.Repeat("a", 1024*1024)
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClient()
@@ -45,7 +45,7 @@ func (suite *GlideTestSuite) TestPubSubMaxSizeMessageCallback() {
 	largeMsg := strings.Repeat("b", 1024*1024)
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClient()
@@ -75,7 +75,7 @@ func (suite *GlideTestSuite) TestShardedMaxSizeMessage() {
 	largeMsg := strings.Repeat("c", 1024*1024)
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ShardedMode}}
-	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(ClusterClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClusterClient()

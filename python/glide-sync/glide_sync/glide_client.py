@@ -105,16 +105,13 @@ class BaseClient(CoreCommands):
             },
         )
 
-        if self._config._is_pubsub_configured():
-            # If in subscribed mode, create a callback that will be called by the FFI layer
-            # for handling push notifications. This callback would either call the user callback (if provided),
-            # or append the messaged to the the `_pubsub_queue`
-            python_callback = self._create_push_handle_callback()
-            pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
-            # Store reference to prevent garbage collection
-            self._pubsub_callback_ref = pubsub_callback
-        else:
-            pubsub_callback = self._ffi.cast("PubSubCallback", 0)
+        # Always create pubsub callback to support dynamic subscriptions
+        # This ensures messages are always handled by the wrapper, whether they originate
+        # from configured subscriptions or from dynamic subscriptions added at runtime
+        python_callback = self._create_push_handle_callback()
+        pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
+        # Store reference to prevent garbage collection
+        self._pubsub_callback_ref = pubsub_callback
 
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
@@ -769,11 +766,6 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        if not self._config._is_pubsub_configured():
-            raise ConfigurationError(
-                "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
-            )
-
         if self._config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(
                 "The operation will never succeed since messages will be passed to the configured callback."
@@ -791,9 +783,6 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-
-        if not self._config._is_pubsub_configured():
-            raise ConfigurationError("No pubsub subscriptions configured")
 
         if self._config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(
