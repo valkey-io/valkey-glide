@@ -802,7 +802,7 @@ mod cluster_client_tests {
                 create_connection_request(&addresses, &restricted_configuration);
 
             // Increase connection timeout to 10 seconds to allow retries to complete
-            connection_request.connection_timeout = 10000;
+            connection_request.connection_timeout = 10_000;
 
             // Reconnect with the restricted user.
             let result = Client::new(connection_request.into(), None).await;

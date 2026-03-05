@@ -2111,9 +2111,12 @@ where
                 Self::refresh_slots(inner.clone(), curr_retry, trigger)
                     .await
                     .map_err(|err| {
-                        if err.kind() == ErrorKind::AllConnectionsUnavailable
-                            || err.kind() == ErrorKind::PermissionDenied
-                        {
+                        if matches!(
+                            err.kind(),
+                            ErrorKind::AllConnectionsUnavailable
+                                | ErrorKind::PermissionDenied
+                                | ErrorKind::AuthenticationFailed
+                        ) {
                             RetryError::permanent(err)
                         } else {
                             RetryError::transient(err)
@@ -3750,10 +3753,9 @@ where
             }),
     );
 
-    // Check for NOPERM errors early and return immediately if found
+    // Check for PermissionDenied errors (NOPERM) and return early if found
     // Note: NOPERM is an ACL error. ACL permissions are expected to be applied cluster wide.
-    // If NOPERM is found it should be surfaced first.
-    // Other errors are passed to the existing flow.
+    // If NOPERM is found it should be surfaced first, otherwise we continue.
     if let Some(noperm_err) = topology_join_results.iter().find_map(|(_, res)| {
         res.as_ref()
             .err()
