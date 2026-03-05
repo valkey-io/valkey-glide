@@ -3751,7 +3751,7 @@ where
     );
 
     // Check for NOPERM errors early and return immediately if found
-    // Note: NOPERM is an ACL error. ACL permissions are applied cluster wide.
+    // Note: NOPERM is an ACL error. ACL permissions are expected to be applied cluster wide.
     // If NOPERM is found it should be surfaced first.
     // Other errors are passed to the existing flow.
     if let Some(noperm_err) = topology_join_results.iter().find_map(|(_, res)| {
