@@ -96,6 +96,7 @@ source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
 ```
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 </details>
@@ -113,6 +114,7 @@ source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
 ```
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 </details>
@@ -183,7 +185,7 @@ cd valkey-glide
 
 After installing prerequisites and cloning the repository, you can build the async Python client using the `dev.py` CLI utility that can be found in the root `python/` directory.
 
-### Examples:
+### Examples
 
 ```bash
 # Build the async client in release mode
@@ -320,6 +322,7 @@ python3 dev.py lint --check
 ### Rust Linters
 
 For Rust code, run manually:
+
 ```bash
 rustup component add clippy rustfmt
 cargo clippy --all-features --all-targets -- -D warnings
@@ -384,6 +387,7 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
    This allows the tool to copy the full project context into the container.
 
 4. **Local testing**
+
    You can building a wheel and install it locally using:
 
    ```bash
