@@ -255,6 +255,29 @@ source .env/bin/activate
 pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
+### DNS Tests
+
+To run [async](tests/async_tests/test_dns.py) and [sync](tests/async_tests/test_sync_dns.py) DNS tests locally:
+
+1. Add the following entries to your hosts file:
+   - Linux/macOS: `/etc/hosts`
+   - Windows: `C:\Windows\System32\drivers\etc\hosts`
+
+   ```text
+   127.0.0.1 valkey.glide.test.tls.com
+   127.0.0.1 valkey.glide.test.no_tls.com
+   ::1 valkey.glide.test.tls.com
+   ::1 valkey.glide.test.no_tls.com
+   ```
+
+2. Set the environment variable:
+
+   ```bash
+   export VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+   ```
+
+If the environment variable is not set, DNS tests will be skipped.
+
 ## Protobuf
 
 ---
