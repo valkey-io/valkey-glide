@@ -2111,7 +2111,9 @@ where
                 Self::refresh_slots(inner.clone(), curr_retry, trigger)
                     .await
                     .map_err(|err| {
-                        if err.kind() == ErrorKind::AllConnectionsUnavailable {
+                        if err.kind() == ErrorKind::AllConnectionsUnavailable
+                            || err.kind() == ErrorKind::PermissionDenied
+                        {
                             RetryError::permanent(err)
                         } else {
                             RetryError::transient(err)
