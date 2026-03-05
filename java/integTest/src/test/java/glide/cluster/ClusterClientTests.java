@@ -1,9 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.Constants.IP_ADDRESS_V4;
 import static glide.Constants.IP_ADDRESS_V6;
+import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.deleteAclUser;

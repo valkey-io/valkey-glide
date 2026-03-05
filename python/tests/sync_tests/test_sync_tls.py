@@ -8,8 +8,8 @@ from glide_shared.config import (
 )
 from glide_sync.glide_client import TGlideClient
 
-from tests.sync_tests.conftest import create_sync_client
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
+from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
     assert_connected_sync,
     create_sync_client_config,

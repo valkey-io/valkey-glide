@@ -104,8 +104,8 @@ from glide_sync import (
 from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide_sync.sync_commands.script import Script
 
-from tests.sync_tests.conftest import create_sync_client
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
+from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
     assert_connected_sync,
     check_function_list_response,

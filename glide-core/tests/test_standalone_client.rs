@@ -891,7 +891,9 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_tls_connection_with_ip_address_succeeds(#[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str) {
+    fn test_tls_connection_with_ip_address_succeeds(
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
+    ) {
         block_on_all(async move {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
             let tls_paths = build_tls_file_paths(&tempdir);
@@ -938,7 +940,9 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_connection_with_ip_address_succeeds(#[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str) {
+    fn test_connection_with_ip_address_succeeds(
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
+    ) {
         block_on_all(async move {
             let ip_addr = redis::ConnectionAddr::Tcp(host.to_string(), get_available_port());
 
