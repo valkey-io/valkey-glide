@@ -150,10 +150,15 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
+            - uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
+
             - name: Install & build & test
               working-directory: go
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
@@ -318,10 +323,15 @@ jobs:
               run: |
                   ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
 
+            - uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
+
             - name: Install & build & test
               working-directory: go
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
+                  VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools

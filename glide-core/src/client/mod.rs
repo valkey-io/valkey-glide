@@ -1336,39 +1336,23 @@ impl Client {
     /// IAM token refresh callback function
     ///
     /// On new token, spawns a task that write-locks the `Client` and calls
-    /// `update_connection_password(Some(new_token), true)`.
-    ///
-    /// Uses a **Weak** reference to break the reference cycle between Client and IAMTokenManager.
+    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
+    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
     fn iam_callback(
-        client_weak: std::sync::Weak<tokio::sync::RwLock<Client>>,
+        client_arc: Arc<tokio::sync::RwLock<Client>>,
     ) -> impl Fn(String) + Send + 'static {
         move |new_token: String| {
-            let client_weak = client_weak.clone();
+            let client_arc = Arc::clone(&client_arc);
             tokio::spawn(async move {
-                // Try to upgrade Weak to Arc - this will fail if Client has been dropped
-                if let Some(client_arc) = client_weak.upgrade() {
-                    let mut client = client_arc.write().await;
-                    let result = client
-                        .update_connection_password(Some(new_token.clone()), true)
-                        .await;
+                let mut client = client_arc.write().await;
+                let result = client
+                    .update_connection_password(Some(new_token.clone()), true)
+                    .await;
 
-                    if let Err(e) = result {
-                        log_error(
-                            "IAM token refresh",
-                            format!(
-                                "Failed to update connection password with immediate auth: {e}"
-                            ),
-                        );
-                    } else {
-                        log_debug(
-                            "IAM token refresh",
-                            "Successfully updated connection password",
-                        );
-                    }
-                } else {
-                    log_debug(
+                if let Err(e) = result {
+                    log_error(
                         "IAM token refresh",
-                        "Client has been dropped, skipping password update",
+                        format!("Failed to update connection password with immediate auth: {e}"),
                     );
                 }
             });
@@ -1377,18 +1361,17 @@ impl Client {
 
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
-    /// Uses a **Weak** reference to the client in the refresh callback to avoid reference cycles.
+    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
+    /// can always reach the client. (Note: this can create a retain cycle unless you
+    /// stop the refresh task and drop the manager explicitly.)
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
         client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
     ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
-                log_debug("IAM", "Creating IAM token manager with Weak reference");
-
-                // Use Weak reference to break reference cycle
-                let client_weak = Arc::downgrade(&client_arc);
-                let iam_callback = Self::iam_callback(client_weak);
+                // Set up callback to update connection password when token refreshes
+                let iam_callback = Self::iam_callback(std::sync::Arc::clone(&client_arc));
 
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
@@ -1402,7 +1385,6 @@ impl Client {
                 {
                     Ok(mut token_manager) => {
                         token_manager.start_refresh_task();
-                        log_info("IAM", "IAM token manager started successfully");
                         Some(std::sync::Arc::new(token_manager))
                     }
                     Err(e) => {

@@ -4,39 +4,39 @@ This document describes how to set up your development environment to build and 
 
 The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
-
 ## 📁 Python Project Structure
+
 ---
 
 The `python/` directory contains three separate components:
 
-
 #### 🔹 glide-async/
--	Purpose: Async client for Valkey, implemented as a hybrid Python/Rust project.
--	Rust bindings: via PyO3, defined in `valkey-glide/python/glide-async/src/lib.rs`.
--	Communication Layer: Communicates with Glide's Rust core using a Unix Domain Socket (UDS).
--	Import path: `import glide`
--	PyPI package name: `valkey-glide`
--	Build backend: Maturin (Rust-based)
 
+- Purpose: Async client for Valkey, implemented as a hybrid Python/Rust project.
+- Rust bindings: via PyO3, defined in `valkey-glide/python/glide-async/src/lib.rs`.
+- Communication Layer: Communicates with Glide's Rust core using a Unix Domain Socket (UDS).
+- Import path: `import glide`
+- PyPI package name: `valkey-glide`
+- Build backend: Maturin (Rust-based)
 
 #### 🔹 glide-sync/
--	Purpose: Sync client for Valkey, implemented via CFFI, built with setuptools.
--	Rust bindings: via CFFI, defined in `valkey-glide/ffi/src/lib.rs`.
--	Communication Layer: Communicates with Glide's Rust core via direct FFI.
--	Import path: `import glide_sync`
--	PyPI package name: `valkey-glide-sync`
--	Build backend: setuptools (C-based)
 
+- Purpose: Sync client for Valkey, implemented via CFFI, built with setuptools.
+- Rust bindings: via CFFI, defined in `valkey-glide/ffi/src/lib.rs`.
+- Communication Layer: Communicates with Glide's Rust core via direct FFI.
+- Import path: `import glide_sync`
+- PyPI package name: `valkey-glide-sync`
+- Build backend: setuptools (C-based)
 
 #### 🔹 glide-shared/
--	Purpose: Shared Python logic used by both clients — includes command builders, exceptions, constants, protobuf message handling, and more.
--	Import path: `import glide_shared`
--	Installation: Installed locally via `pip install valkey-glide/python/glide-shared` during each client’s build process. Not published separately to PyPI.
 
+- Purpose: Shared Python logic used by both clients — includes command builders, exceptions, constants, protobuf message handling, and more.
+- Import path: `import glide_shared`
+- Installation: Installed locally via `pip install valkey-glide/python/glide-shared` during each client’s build process. Not published separately to PyPI.
 
 ### 🧱 High-Level Folder Structure
-```
+
+```text
 python/
 ├── glide-async/            # Async client (PyO3 + Maturin)
 │   ├── Cargo.toml
@@ -55,16 +55,16 @@ ffi/
 ```
 
 ### 📦 Packaging and Installation Notes
--	During development, `glide_shared` must be installed locally (editable or standard install).
--	Each client is built and released independently, with its own isolated package name and pyproject.toml.
--	Shared logic remains fully decoupled from both clients and reusable between them.
 
+- During development, `glide_shared` must be installed locally (editable or standard install).
+- Each client is built and released independently, with its own isolated package name and pyproject.toml.
+- Shared logic remains fully decoupled from both clients and reusable between them.
 
 ## Prerequisites
+
 ---
 
 Before building the package from source, make sure that you have installed the listed dependencies below:
-
 
 - python3 virtualenv
 - git
@@ -96,6 +96,7 @@ source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
 ```
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 </details>
@@ -113,6 +114,7 @@ source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
 ```
+
 Continue with **Install protobuf compiler** and **Install `ziglang` and `zigbuild`** below.
 
 </details>
@@ -165,6 +167,7 @@ cargo install --locked cargo-zigbuild
 </details>
 
 ## Cloning the Repository
+
 ---
 
 To begin development, clone the repository:
@@ -177,11 +180,12 @@ cd valkey-glide
 ```
 
 ## Build
+
 ---
 
 After installing prerequisites and cloning the repository, you can build the async Python client using the `dev.py` CLI utility that can be found in the root `python/` directory.
 
-### Examples:
+### Examples
 
 ```bash
 # Build the async client in release mode
@@ -191,26 +195,31 @@ python3 dev.py build --client async --mode release
 > These commands handle environment setup, dependency installation, and consistent build logic.
 
 ### Notes on Build Modes
+
 - Use `--mode debug` (default) when developing or debugging.
 - Use `--mode release` when measuring performance or preparing production builds.
 
 Run the following to see all available commands:
+
 ```bash
 python3 dev.py --help
 ```
 
 ## Tests
+
 ---
 
 Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`).
 See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 
 You can run all tests from the root `python/` directory using:
+
 ```bash
 python3 dev.py test
 ```
 
 To pass additional arguments to `pytest`, use the `--args` flag:
+
 ```bash
 # Run a specific test
 python3 dev.py test --args -k <test_name>
@@ -223,11 +232,13 @@ python3 dev.py test --args \
 ```
 
 ## Manually Running Tests
+
 ---
 
 If needed, you can invoke `pytest` directly from the root `python/` directory for custom workflows:
 
 ### Run all tests manually
+
 ```bash
 source .env/bin/activate
 pytest -v
@@ -238,12 +249,37 @@ pytest -v
 Python GLIDE supports both trio and asyncio. Pass the `--async-backend` flag to `pytest` with either `trio`, `asyncio` or `uvloop` to run tests on the specified async backend. You can pass multiple async backends to run tests on all of them.
 
 Example:
+
 ```bash
 source .env/bin/activate
 pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
+### DNS Tests
+
+To run [async](tests/async_tests/test_dns.py) and [sync](tests/async_tests/test_sync_dns.py) DNS tests locally:
+
+1. Add the following entries to your hosts file:
+   - Linux/macOS: `/etc/hosts`
+   - Windows: `C:\Windows\System32\drivers\etc\hosts`
+
+   ```text
+   127.0.0.1 valkey.glide.test.tls.com
+   127.0.0.1 valkey.glide.test.no_tls.com
+   ::1 valkey.glide.test.tls.com
+   ::1 valkey.glide.test.no_tls.com
+   ```
+
+2. Set the environment variable:
+
+   ```bash
+   export VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+   ```
+
+If the environment variable is not set, DNS tests will be skipped.
+
 ## Protobuf
+
 ---
 During the initial build, Python protobuf files were created in `python/glide-shared/glide_shared/protobuf`. If modifications are made to the protobuf definition files (`.proto` files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files.
 
@@ -256,30 +292,37 @@ python3 dev.py protobuf
 This generates `.py` and `.pyi` interface files for type checking and places them in the `python/glide-shared/glide_shared/protobuf` folder.
 
 ## Linters
+
 ---
 
 Development on the Python wrapper may involve changes in either the Python or Rust code. Each language has distinct linter tests that must be passed before committing changes.
 
 ### Python Linters
+
 This project uses the following Python linters and formatters:
+
 - `isort`
 - `black`
 - `flake8`
 - `mypy`
 
 To check formatting and run static analysis for Python code, use the `dev.py` utility from the root `python/` directory:
+
 ```bash
 python3 dev.py lint
 ```
 
 By default, this will auto-fix formatting issues using isort and black.
 If you want to only check formatting without modifying any files, pass the --check flag:
+
 ```bash
 python3 dev.py lint --check
 ```
 
 ### Rust Linters
+
 For Rust code, run manually:
+
 ```bash
 rustup component add clippy rustfmt
 cargo clippy --all-features --all-targets -- -D warnings
@@ -289,20 +332,23 @@ cargo fmt --manifest-path ./Cargo.toml --all
 > These are not included in the `dev.py` utility and should be run separately from the `python` root folder.
 
 ## Packaging
+
 ---
 
 This section explains how the `valkey-glide` (async client) and `valkey-glide-sync` (sync client) packages are built into Python wheels for local use and PyPI publishing.
 
 ### Async Client (`valkey-glide`)
 
-1. **Stage shared code**  
+1. **Stage shared code**
    Before packaging, we copy the `glide-shared/glide_shared` package directory into the `glide-async/python/` folder. This ensures the shared code is included in the final wheel.
 
-2. **Make it discoverable**  
+2. **Make it discoverable**
    In `glide-async/pyproject.toml`, we add the appropriate `include` rule under `[tool.maturin]` to make sure the copied files are bundled with the wheel. For example:
+
    ```toml
    include = ["python/glide_shared/**/*.py"]
    ```
+
 3. **Build the wheel**
     We use `maturin build` from the `glide-async` directory to create a Python wheel that includes the compiled Rust extension and all Python code.
 
@@ -311,12 +357,14 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
 
 5. **Local testing**
     You can test building a wheel and installing it locally using:
+
     ```bash
     python dev.py build --client async --wheel
     ```
+
 ### Sync Client (`valkey-glide-sync`)
 
-1. **Vendoring dependencies (for both sdist and wheel)**  
+1. **Vendoring dependencies (for both sdist and wheel)**
    During the build process (for both source distributions and wheels), we vendor (copy) all required Rust crates and Python modules into the `glide-sync` directory.
    This includes:
    - ffi
@@ -332,19 +380,22 @@ This section explains how the `valkey-glide` (async client) and `valkey-glide-sy
    - The resulting shared object file (e.g. `libglide_ffi.so`) is copied into the `glide-sync/glide_sync/` directory.
    - We then build the Python package, either as a wheel or as an sdist.
 
-3. **Multiplatform packaging for PyPI**  
-   To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.  
-   This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).  
-   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.  
+3. **Multiplatform packaging for PyPI**
+   To support building wheels for multiple platforms (Linux, macOS, and different Python versions), we use the [`cibuildwheel`](https://github.com/pypa/cibuildwheel) tool.
+   This tool installs all required Python versions and runs the build inside isolated Docker containers (e.g., manylinux2014).
+   Because the sync client depends on external Rust code (`glide-core`, `ffi`, `logger_core`), we run `cibuildwheel` from the **project root** and specify `python/glide-sync` as the build target.
    This allows the tool to copy the full project context into the container.
 
-5. **Local testing**  
+4. **Local testing**
+
    You can building a wheel and install it locally using:
+
    ```bash
    python dev.py build --client sync --wheel
    ```
 
 ## Documentation
+
 ---
 
 > **NOTE:**  We are currently in process of switching our documentation tool from `sphinx` to `mkdocs`. Currently the files located in `python/docs` are required for `sphinx`'s CI validation step (`docs-test`) as they are the configuration files for how `sphinx` works in documenting Valkey GLIDE. Once we switch to `mkdocs`, `sphinx` related files and validation should be removed, and `mkdocs`'s files and validation should be used instead.
@@ -589,15 +640,15 @@ Format: `` `text <link>`_ ``
 
 Example: `` `SORT <https://valkey.io/commands/sort/>`_ ``
 
-
 ## Recommended extensions for VS Code
+
 ---
 
--   [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
--   [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)
--   [Black Formatter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
--   [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
--   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- [Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
+- [isort](https://marketplace.visualstudio.com/items?itemName=ms-python.isort)
+- [Black Formatter](https://marketplace.visualstudio.com/items?itemName=ms-python.black-formatter)
+- [Flake8](https://marketplace.visualstudio.com/items?itemName=ms-python.flake8)
+- [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
 
 ## Community Support and Feedback
 
