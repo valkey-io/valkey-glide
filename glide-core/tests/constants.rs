@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-//! Shared test constants for Valkey GLIDE Rust core tests.
+//! Common constants for testing.
 #![allow(dead_code)]
 
 // Host names and addresses for tests.

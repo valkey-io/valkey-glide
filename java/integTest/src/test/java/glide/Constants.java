@@ -2,8 +2,7 @@
 package glide;
 
 /**
- * Test constants for DNS resolution and IP address connectivity tests. See 'cluster_manager.py' for
- * details on hostname setup.
+ * Common constants for testing.
  */
 public final class Constants {
 
