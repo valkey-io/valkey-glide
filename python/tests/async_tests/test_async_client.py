@@ -102,7 +102,9 @@ from glide_shared.routes import (
 )
 
 from tests.async_tests.conftest import create_client
+from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
 from tests.utils.utils import (
+    assert_connected,
     check_function_list_response,
     check_function_stats_response,
     check_if_server_version_lt,
@@ -590,8 +592,22 @@ class TestGlideClients:
             with anyio.fail_after(0.1):
                 await glide_client.blpop(["random_key"], timeout=2)
 
-        # Ensure client can still perform a simple operation
-        assert await glide_client.set(get_random_string(10), "value") == OK
+        await assert_connected(glide_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
+    async def test_connect_with_ip_address_succeeds(
+        self, cluster_mode: bool, ip_address: str
+    ):
+        """Test connection with IPv4 and IPv6 addresses."""
+        cluster = pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        port = cluster.nodes_addr[0].port
+        address = NodeAddress(ip_address, port)
+
+        client = await create_client(cluster_mode=cluster_mode, addresses=[address])
+
+        await assert_connected(client)
+        await client.close()
 
 
 @pytest.mark.anyio
@@ -12249,7 +12265,7 @@ class TestScripts:
             cluster_client = await GlideClusterClient.create(cluster_config)
             try:
                 # Verify client can connect and execute commands
-                assert await cluster_client.ping() == b"PONG"
+                await assert_connected(cluster_client)
                 assert await cluster_client.set("key", "value") == "OK"
                 assert await cluster_client.get("key") == b"value"
                 # Clean up test key
@@ -12266,7 +12282,7 @@ class TestScripts:
             standalone_client = await GlideClient.create(standalone_config)
             try:
                 # Verify client can connect and execute commands
-                assert await standalone_client.ping() == b"PONG"
+                await assert_connected(standalone_client)
                 assert await standalone_client.set("key", "value") == "OK"
                 assert await standalone_client.get("key") == b"value"
                 # Clean up test key
