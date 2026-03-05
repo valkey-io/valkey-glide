@@ -11,8 +11,43 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 )
+
+// Default connection and request timeouts.
+const (
+	requestTimeout    = 5 * time.Second
+	connectionTimeout = 10 * time.Second
+)
+
+// buildBaseAdvancedClientConfiguration returns an advanced client configuration with standard test timeouts.
+func buildBaseAdvancedClientConfiguration() *config.AdvancedClientConfiguration {
+	return config.NewAdvancedClientConfiguration().
+		WithConnectionTimeout(connectionTimeout)
+}
+
+// buildBaseAdvancedClusterClientConfiguration returns an advanced cluster client configuration with standard test timeouts.
+func buildBaseAdvancedClusterClientConfiguration() *config.AdvancedClusterClientConfiguration {
+	return config.NewAdvancedClusterClientConfiguration().
+		WithConnectionTimeout(connectionTimeout)
+}
+
+// buildBaseClientConfiguration builds and returns a default standalone client configuration for testing.
+func buildBaseClientConfiguration(suite *GlideTestSuite) *config.ClientConfiguration {
+	return config.NewClientConfiguration().
+		WithAddress(&suite.standaloneHosts[0]).
+		WithRequestTimeout(requestTimeout).
+		WithAdvancedConfiguration(buildBaseAdvancedClientConfiguration())
+}
+
+// buildBaseClusterClientConfiguration builds and returns a default cluster client configuration for testing.
+func buildBaseClusterClientConfiguration(suite *GlideTestSuite) *config.ClusterClientConfiguration {
+	return config.NewClusterClientConfiguration().
+		WithAddress(&suite.clusterHosts[0]).
+		WithRequestTimeout(requestTimeout).
+		WithAdvancedConfiguration(buildBaseAdvancedClusterClientConfiguration())
+}
 
 // General function type that deals with context
 type contextFn func(context.Context)
