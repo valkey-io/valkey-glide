@@ -14,7 +14,7 @@ Valkey General Language Independent Driver for the Enterprise (GLIDE) is the off
 
 ## Documentation
 
-See GLIDE's Node.js [documentation site](https://glide.valkey.io/languages/nodejs).  
+See GLIDE's Node.js [documentation site](https://glide.valkey.io/languages/nodejs).
 
 ## Supported Engine Versions
 

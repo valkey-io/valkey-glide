@@ -59,15 +59,18 @@ export class ValkeyCluster {
     private addresses: [string, number][];
     private clusterFolder: string | undefined;
     private version: string;
+    private tls: boolean;
 
     private constructor(
         version: string,
         addresses: [string, number][],
+        tls: boolean,
         clusterFolder?: string,
     ) {
         this.addresses = addresses;
         this.clusterFolder = clusterFolder;
         this.version = version;
+        this.tls = tls;
     }
 
     public static createCluster(
@@ -131,6 +134,7 @@ export class ValkeyCluster {
                                     new ValkeyCluster(
                                         ver,
                                         addresses,
+                                        tls,
                                         clusterFolder,
                                     ),
                             ),
@@ -148,9 +152,10 @@ export class ValkeyCluster {
             addresses: [string, number][],
             clusterMode: boolean,
         ) => Promise<string>,
+        tls: boolean = false,
     ): Promise<ValkeyCluster> {
         return getVersionCallback(addresses, cluster_mode).then(
-            (ver) => new ValkeyCluster(ver, addresses, ""),
+            (ver) => new ValkeyCluster(ver, addresses, tls, ""),
         );
     }
 
@@ -164,6 +169,10 @@ export class ValkeyCluster {
 
     public getVersion(): string {
         return this.version;
+    }
+
+    public isTls(): boolean {
+        return this.tls;
     }
 
     public checkIfServerVersionLessThan(minVersion: string): boolean {
