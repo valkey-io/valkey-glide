@@ -43,12 +43,12 @@ func (suite *GlideTestSuite) buildStandaloneClient(hostname string, useTLS bool)
 	if useTLS {
 		clientConfig.WithUseTLS(true)
 
-        certData, err := getCaCertificate()
+		certData, err := getCaCertificate()
 		if err != nil {
 			return nil, err
 		}
 
-        tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
+		tlsConfig := config.NewTlsConfiguration().WithRootCertificates(certData)
 		advancedConfig := defaultAdvancedClientConfig().WithTlsConfiguration(tlsConfig)
 		clientConfig.WithAdvancedConfiguration(advancedConfig)
 	}
@@ -68,7 +68,7 @@ func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*
 	if useTLS {
 		clientConfig.WithUseTLS(true)
 
-        certData, err := getCaCertificate()
+		certData, err := getCaCertificate()
 		if err != nil {
 			return nil, err
 		}

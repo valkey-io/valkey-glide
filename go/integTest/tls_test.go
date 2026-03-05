@@ -18,7 +18,7 @@ func (suite *GlideTestSuite) TestTlsWithoutCertificate_Standalone() {
 	skipIfTlsDisabled(suite)
 
 	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
-        WithUseTLS(true)
+		WithUseTLS(true)
 
 	_, err := glide.NewClient(clientConfig)
 	assert.Error(suite.T(), err, "Expected connection to fail without certificate")
