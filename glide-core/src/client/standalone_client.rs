@@ -223,10 +223,8 @@ impl StandaloneClient {
         let read_only = connection_request.read_only;
         let addresses = connection_request.addresses.clone();
         let read_from_option = connection_request.read_from.clone();
-        let pipeline_buffer_size = connection_request
-            .inflight_requests_limit
-            .unwrap_or(super::DEFAULT_MAX_INFLIGHT_REQUESTS)
-            as usize;
+        let pipeline_buffer_size =
+            super::resolve_pipeline_buffer_size(connection_request.inflight_requests_limit);
 
         let mut stream = stream::iter(addresses.into_iter())
             .map(move |address| {

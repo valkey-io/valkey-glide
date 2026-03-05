@@ -62,6 +62,12 @@ pub const FINISHED_SCAN_CURSOR: &str = "finished";
 /// The value of 1000 provides a buffer for bursts while still allowing full utilization of the maximum request rate.
 pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 
+/// Resolves the pipeline buffer size from the optional inflight requests limit.
+/// When not set, defaults to `DEFAULT_MAX_INFLIGHT_REQUESTS` (1000).
+pub(crate) fn resolve_pipeline_buffer_size(inflight_requests_limit: Option<u32>) -> usize {
+    inflight_requests_limit.unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS) as usize
+}
+
 /// The connection check interval is currently not exposed to the user via ConnectionRequest,
 /// as improper configuration could negatively impact performance or pub/sub resiliency.
 /// A 3-second interval provides a reasonable balance between connection validation
@@ -1635,9 +1641,7 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    let pipeline_buffer_size = request
-        .inflight_requests_limit
-        .unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS) as usize;
+    let pipeline_buffer_size = resolve_pipeline_buffer_size(request.inflight_requests_limit);
     let mut con = client
         .get_async_connection(
             push_sender,
@@ -2519,5 +2523,18 @@ mod tests {
         assert_eq!(username, None);
         assert_eq!(password, None);
         assert_eq!(client_name, None);
+    }
+
+    #[test]
+    fn test_resolve_pipeline_buffer_size_defaults_to_max_inflight_requests() {
+        assert_eq!(
+            super::resolve_pipeline_buffer_size(None),
+            super::DEFAULT_MAX_INFLIGHT_REQUESTS as usize
+        );
+    }
+
+    #[test]
+    fn test_resolve_pipeline_buffer_size_uses_provided_value() {
+        assert_eq!(super::resolve_pipeline_buffer_size(Some(500)), 500);
     }
 }
