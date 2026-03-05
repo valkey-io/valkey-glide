@@ -21,6 +21,7 @@ from glide_sync.logger import Level as LogLevel
 from glide_sync.logger import Logger
 
 from tests.utils.cluster import ValkeyCluster
+from tests.utils.pubsub_test_utils import sync_pubsub_test_clients  # noqa: F401
 from tests.utils.utils import (
     DEFAULT_SYNC_TEST_LOG_LEVEL,
     INITIAL_PASSWORD,
@@ -137,6 +138,7 @@ def create_sync_client(
     lazy_connect: Optional[bool] = False,
     enable_compression: Optional[bool] = None,
     inflight_requests_limit: Optional[int] = None,
+    reconciliation_interval_ms: Optional[int] = None,
     root_pem_cacerts: Optional[bytes] = None,
     client_cert_pem: Optional[bytes] = None,
     client_key_pem: Optional[bytes] = None,
@@ -164,6 +166,7 @@ def create_sync_client(
         lazy_connect=lazy_connect,
         enable_compression=enable_compression,
         inflight_requests_limit=inflight_requests_limit,
+        reconciliation_interval_ms=reconciliation_interval_ms,
         root_pem_cacerts=root_pem_cacerts,
         client_cert_pem=client_cert_pem,
         client_key_pem=client_key_pem,

@@ -16,7 +16,7 @@ func (suite *GlideTestSuite) TestPubSubExactCoexistence() {
 	channel := "coexist_test"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClient()
@@ -53,7 +53,7 @@ func (suite *GlideTestSuite) TestPubSubPatternCoexistence() {
 	channel := "news.sports"
 
 	channels := []ChannelDefn{{Channel: pattern, Mode: PatternMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClient()
@@ -87,7 +87,7 @@ func (suite *GlideTestSuite) TestPubSubMaxSizeMessage() {
 	largeMsg := strings.Repeat("a", 1024*1024)
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClient()
@@ -113,7 +113,7 @@ func (suite *GlideTestSuite) TestPubSubCustomCommand() {
 	channel := "custom_cmd_test"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	publisher := suite.defaultClient()

@@ -1457,8 +1457,66 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
+    def ssubscribe_lazy(self, channels: Set[str]) -> None:
+        """
+        Subscribe to sharded channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
+
+        Note:
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
+
+        Args:
+            channels: A set of sharded channel names to subscribe to.
+
+        Returns: None
+
+        Examples:
+            >>> client.ssubscribe_lazy({"shard_channel1"})
+            >>> # Subscription request sent, not waiting for confirmation
+            >>>
+            >>> # Multiple sharded channels
+            >>> client.ssubscribe_lazy({"shard_channel1", "shard_channel2"})
+        """
+        self._execute_command(RequestType.SSubscribe, list(channels))
+
+    def sunsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from sharded channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+
+        Args:
+            channels: A set of sharded channel names to unsubscribe from.
+                    If None or ALL_SHARDED_CHANNELS, unsubscribes from all sharded channels.
+
+        Returns: None
+
+        Examples:
+            >>> client.sunsubscribe_lazy({"shard_channel1"})
+            >>> # Unsubscribe request sent, not waiting for confirmation
+            >>>
+            >>> # Unsubscribe from all sharded channels
+            >>> client.sunsubscribe_lazy()
+        """
+        args: List[Union[str, bytes]] = list(channels) if channels else []
+        self._execute_command(RequestType.SUnsubscribe, args)
+
     def ssubscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
-        """Subscribe to sharded channels (blocking)."""
+        """
+        Subscribe to sharded channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of sharded channel names to subscribe to.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely.
+        """
         if timeout_ms < 0:
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
@@ -1471,6 +1529,9 @@ class ClusterCommands(CoreCommands):
     ) -> None:
         """
         Unsubscribe from sharded channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
 
         Args:
             channels: A set of sharded channel names to unsubscribe from.

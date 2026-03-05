@@ -16,11 +16,11 @@ func (suite *GlideTestSuite) TestChannelSeparation() {
 	channel2 := "channel_b"
 
 	channels1 := []ChannelDefn{{Channel: channel1, Mode: ExactMode}}
-	receiver1 := suite.CreatePubSubReceiver(StandaloneClient, channels1, 1, false, suite.T())
+	receiver1 := suite.CreatePubSubReceiver(StandaloneClient, channels1, 1, false, ConfigMethod, suite.T())
 	defer receiver1.Close()
 
 	channels2 := []ChannelDefn{{Channel: channel2, Mode: ExactMode}}
-	receiver2 := suite.CreatePubSubReceiver(StandaloneClient, channels2, 2, false, suite.T())
+	receiver2 := suite.CreatePubSubReceiver(StandaloneClient, channels2, 2, false, ConfigMethod, suite.T())
 	defer receiver2.Close()
 
 	publisher := suite.defaultClient()
@@ -70,10 +70,10 @@ func (suite *GlideTestSuite) TestMultipleClientsOneChannel() {
 	channel := "shared_channel"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver1 := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver1 := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver1.Close()
 
-	receiver2 := suite.CreatePubSubReceiver(StandaloneClient, channels, 2, false, suite.T())
+	receiver2 := suite.CreatePubSubReceiver(StandaloneClient, channels, 2, false, ConfigMethod, suite.T())
 	defer receiver2.Close()
 
 	publisher := suite.defaultClient()
