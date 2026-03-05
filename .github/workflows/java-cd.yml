@@ -253,14 +253,17 @@ jobs:
               shell: bash
               run: |
                   # Create the target directory
-                  mkdir -p java/client/build/resources/main
+                  mkdir -p java/client/build/resources/main/natives
 
                   # Copy all native libraries from downloaded artifacts
-                  # Structure: native-libs-downloaded/native-lib-{TARGET}/natives/{platform}/{arch}/*.{so,dylib,dll}
-                  cp -r native-libs-downloaded/native-lib-*/natives java/client/build/resources/main/ || true
-
-                  # Merge all natives directories into one
-                  find native-libs-downloaded -type d -name "natives" -exec cp -r {}/* java/client/build/resources/main/natives/ \;
+                  # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
+                  # Each artifact contains platform/arch subdirectories directly
+                  for artifact_dir in native-libs-downloaded/native-lib-*; do
+                      if [ -d "$artifact_dir" ]; then
+                          echo "Processing $artifact_dir"
+                          cp -r "$artifact_dir"/* java/client/build/resources/main/natives/ 2>/dev/null || true
+                      fi
+                  done
 
                   echo "Native libraries organized:"
                   find java/client/build/resources/main/natives -type f
