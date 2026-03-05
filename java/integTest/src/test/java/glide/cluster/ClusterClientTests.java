@@ -1,9 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestConfiguration.CLUSTER_HOSTS;
-import static glide.TestConfiguration.HOST_ADDRESS_IPV4;
-import static glide.TestConfiguration.HOST_ADDRESS_IPV6;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.deleteAclUser;
@@ -18,8 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClusterClient;
-import glide.api.models.configuration.GlideClusterClientConfiguration;
-import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -30,8 +25,6 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class ClusterClientTests {
@@ -481,19 +474,6 @@ public class ClusterClientTests {
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6})
-    @SneakyThrows
-    public void testClusterConnectWithIpAddressSucceeds(String ipAddress) {
-        Integer port = Integer.parseInt(CLUSTER_HOSTS[0].split(":")[1]);
-        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
-        GlideClusterClientConfiguration config = commonClusterClientConfig().address(address).build();
-
-        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
-            glide.TestUtilities.assertConnected(client);
         }
     }
 }

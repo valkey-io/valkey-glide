@@ -1,8 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
-import static glide.TestConfiguration.HOST_ADDRESS_IPV4;
-import static glide.TestConfiguration.HOST_ADDRESS_IPV6;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -25,8 +23,6 @@ import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 public class ClusterTlsCertificateTest {
 
@@ -111,13 +107,24 @@ public class ClusterTlsCertificateTest {
                 });
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6})
-    void testClusterTlsWithIpAddressSucceeds(String ipAddress) throws Exception {
-        Integer port = clusterNodes.get(0).getPort();
-        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
+    @Test
+    void testClusterTlsWithIpv4Succeeds() throws Exception {
+        NodeAddress ipv4Node =
+                NodeAddress.builder().host("127.0.0.1").port(clusterNodes.get(0).getPort()).build();
         GlideClusterClientConfiguration config =
-                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(address));
+                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(ipv4Node));
+
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            TestUtilities.assertConnected(client);
+        }
+    }
+
+    @Test
+    void testClusterTlsWithIpv6Succeeds() throws Exception {
+        NodeAddress ipv6Node =
+                NodeAddress.builder().host("::1").port(clusterNodes.get(0).getPort()).build();
+        GlideClusterClientConfiguration config =
+                TestUtilities.createClusterConfigWithRootCert(caCert, Collections.singletonList(ipv6Node));
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
             TestUtilities.assertConnected(client);
