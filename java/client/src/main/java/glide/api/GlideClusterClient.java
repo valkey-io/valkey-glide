@@ -3,6 +3,12 @@ package glide.api;
 
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -53,6 +59,7 @@ import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 
+import glide.api.commands.ClusterManagementClusterCommands;
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.PubSubClusterCommands;
@@ -112,7 +119,8 @@ public class GlideClusterClient extends BaseClient
                 ServerManagementClusterCommands,
                 ScriptingAndFunctionsClusterCommands,
                 TransactionsClusterCommands,
-                PubSubClusterCommands {
+                PubSubClusterCommands,
+                ClusterManagementClusterCommands {
 
     /** Constructor using ClientParams from BaseClient. */
     protected GlideClusterClient(ClientBuilder builder) {
@@ -1701,5 +1709,108 @@ public class GlideClusterClient extends BaseClient
 
                     return new PubSubStateImpl<>(desired, actual);
                 });
+    }
+
+    @Override
+    public CompletableFuture<String> clusterInfo() {
+        return commandManager.submitNewCommand(ClusterInfo, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterInfo(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterInfo,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterNodes() {
+        return commandManager.submitNewCommand(ClusterNodes, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterNodes(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterNodes,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clusterShards() {
+        return commandManager.submitNewCommand(ClusterShards, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[]>> clusterShards(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterShards,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleArrayResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clusterLinks() {
+        return commandManager.submitNewCommand(ClusterLinks, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[]>> clusterLinks(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterLinks,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleArrayResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterMyId() {
+        return commandManager.submitNewCommand(ClusterMyId, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterMyId(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterMyId,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterMyShardId() {
+        return commandManager.submitNewCommand(
+                ClusterMyShardId, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterMyShardId(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterMyShardId,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 }
