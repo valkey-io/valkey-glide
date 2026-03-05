@@ -318,7 +318,6 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 	// Test TCP_NODELAY configuration for both standalone and cluster modes
 	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
-		ctx := context.Background()
 		_, isCluster := client.(interfaces.GlideClusterClientCommands)
 
 		// Start a dedicated server
