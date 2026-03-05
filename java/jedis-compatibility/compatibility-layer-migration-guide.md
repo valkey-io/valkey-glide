@@ -107,9 +107,29 @@ blockingSocketTimeoutMillis
 
 ### Advanced Features
 - ⚠️ **Transactions**: Basic MULTI/EXEC/DISCARD/WATCH/UNWATCH supported, but with limitations:
-  - Commands after `multi()` are NOT automatically queued (differs from standard Jedis behavior)
-  - For full transaction support, use native GLIDE Batch API with atomic mode
-  - `watch()` and `unwatch()` work as expected for conditional execution
+  - After `multi()`, you must use the returned **Transaction** object to queue commands (e.g. `t.set()`, `t.get()`). Calling `jedis.set()` or other Jedis methods directly does **not** queue to the transaction.
+  - For commands not yet exposed on `Transaction`, or for pipeline (non-atomic) batching, use the native GLIDE Batch API with the same connection.
+  - `watch()` and `unwatch()` work as expected for conditional execution.
+
+  **Transaction usage (compat layer):**
+
+  ```java
+  Transaction t = jedis.multi();
+  Response<String> r1 = t.set("key", "value");
+  Response<String> r2 = t.get("key");
+  List<Object> results = t.exec();
+  String value = r2.get(); // retrieve after exec()
+  ```
+
+  **Native GLIDE Batch API** (for commands not on Transaction, or non-atomic pipeline; use a `GlideClient` instance):
+
+  ```java
+  Batch batch = new Batch(true)  // true = atomic transaction
+      .set("key1", "value1")
+      .get("key1");
+  Object[] results = glideClient.exec(batch, false).get();
+  ```
+
 - **Pipelining**: Jedis pipelining functionality unavailable (use GLIDE Batch API instead)
 - **Pub/Sub**: Redis publish/subscribe not implemented
 - ✅ **Lua scripting**: Full support for EVAL/EVALSHA, SCRIPT management (LOAD, EXISTS, FLUSH, KILL, DEBUG), and Valkey Functions (FCALL/FUNCTION *)

@@ -4,7 +4,6 @@ package redis.clients.jedis;
 import static glide.utils.Java8Utils.createMap;
 
 import glide.api.GlideClient;
-import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
@@ -187,9 +186,8 @@ public final class Jedis implements Closeable {
     private volatile boolean closed = false;
     private volatile boolean lazyInitialized = false; // New field to track initialization
 
-    // Transaction support
-    private volatile Batch currentBatch = null; // Tracks current transaction/batch
-    private volatile boolean inTransaction = false; // Tracks if we're in a MULTI/EXEC transaction
+    // Transaction support (Transaction owns its Batch; we only track multi() state)
+    private volatile boolean inTransaction = false;
 
     // Store connection parameters for lazy initialization (nullable for pooled connections)
     private final String host;
@@ -1247,20 +1245,6 @@ public final class Jedis implements Closeable {
      */
     void resetState() {
         inTransaction = false;
-        currentBatch = null;
-    }
-
-    /**
-     * Add a command to a batch. This is used by Transaction to queue commands. This is
-     * package-private for use by Transaction class.
-     *
-     * @param batch the batch to add the command to
-     * @param operation the operation to add
-     */
-    void addToBatch(Batch batch, java.util.function.Supplier<?> operation) {
-        // The operation will be executed when the batch is executed
-        // For now, we just need to track that we're in a transaction
-        // The actual batch building will be handled by the GLIDE client
     }
 
     /** Check if the connection is not closed and throw exception if it is. */
@@ -1377,8 +1361,7 @@ public final class Jedis implements Closeable {
             throw new JedisException("Already in transaction mode");
         }
 
-        // Create a new atomic batch for the transaction
-        currentBatch = new Batch(true); // true = atomic (transaction)
+        // Transaction owns its own Batch; we only track inTransaction to prevent nested multi()
         inTransaction = true;
 
         return new Transaction(this);

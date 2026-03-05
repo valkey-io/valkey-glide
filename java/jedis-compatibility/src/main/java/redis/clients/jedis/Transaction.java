@@ -15,7 +15,9 @@ import redis.clients.jedis.exceptions.JedisException;
  * A transaction implementation that queues Redis commands for atomic execution.
  *
  * <p>This class provides Jedis-compatible transaction support backed by GLIDE's Batch API. Commands
- * are queued and executed atomically when {@link #exec()} is called.
+ * are queued on this object and executed atomically when {@link #exec()} is called. You must use
+ * the returned Transaction (e.g. {@code t.set()}, {@code t.get()}) to queue commands; calling
+ * methods on the Jedis instance after {@code multi()} does not add to the transaction.
  *
  * <p>Example usage:
  *
@@ -129,7 +131,7 @@ public class Transaction implements Closeable {
         Response<T> response = new Response<>(builder);
         pipelinedResponses.add(response);
 
-        // Execute the command through Jedis which will add it to the batch
+        // Add the command to the batch (GLIDE Batch API)
         try {
             commandExecutor.execute();
         } catch (Exception e) {
@@ -241,7 +243,7 @@ public class Transaction implements Closeable {
         return appendCommand(
                 BuilderFactory.STRING,
                 () -> {
-                    jedis.addToBatch(batch, () -> jedis.getGlideClient().set(key, value));
+                    batch.set(key, value);
                     return null;
                 });
     }
@@ -256,7 +258,7 @@ public class Transaction implements Closeable {
         return appendCommand(
                 BuilderFactory.STRING,
                 () -> {
-                    jedis.addToBatch(batch, () -> jedis.getGlideClient().get(key));
+                    batch.get(key);
                     return null;
                 });
     }
@@ -271,7 +273,7 @@ public class Transaction implements Closeable {
         return appendCommand(
                 BuilderFactory.LONG,
                 () -> {
-                    jedis.addToBatch(batch, () -> jedis.getGlideClient().del(keys));
+                    batch.del(keys);
                     return null;
                 });
     }
