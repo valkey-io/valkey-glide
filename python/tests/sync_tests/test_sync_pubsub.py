@@ -2846,7 +2846,14 @@ class TestSyncPubSub:
             timeout=10000,
             lazy_connect=True,
         ) as (listening_client, publishing_client):
-            time.sleep(1)
+            # Wait for subscriptions to be established
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={channel},
+                expected_patterns={pattern},
+                expected_sharded={sharded_channel} if sharded_channel else None,
+            )
 
             self._publish_messages(
                 publishing_client,

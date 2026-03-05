@@ -143,6 +143,11 @@ jobs:
                   npm install
                   npm run build:release
 
+            - name: Configure DNS for tests
+              uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
+
             - name: Test
               shell: bash
               run: |
@@ -151,6 +156,7 @@ jobs:
               working-directory: ./node
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-node.html
+                  VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
             - name: Upload test reports
               if: always()

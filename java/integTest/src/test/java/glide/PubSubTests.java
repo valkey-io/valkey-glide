@@ -2816,21 +2816,13 @@ public class PubSubTests {
                     "+@all",
                     "-@pubsub"
                 };
-        adminClient
-                .customCommand(
-                        aclCmd,
-                        glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute
-                                .ALL_NODES)
-                .get();
+        adminClient.customCommand(aclCmd, SimpleMultiNodeRoute.ALL_NODES).get();
 
         try {
             // Create listening client with empty subscription config and authenticate
             GlideClusterClient listeningClient = createClusterListenerClient();
             listeningClient
-                    .customCommand(
-                            new String[] {"AUTH", username, password},
-                            glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute
-                                    .ALL_NODES)
+                    .customCommand(new String[] {"AUTH", username, password}, SimpleMultiNodeRoute.ALL_NODES)
                     .get();
 
             // Get initial metrics
@@ -2869,9 +2861,7 @@ public class PubSubTests {
             }
         } finally {
             adminClient
-                    .customCommand(
-                            new String[] {"ACL", "DELUSER", username},
-                            SimpleMultiNodeRoute.ALL_NODES)
+                    .customCommand(new String[] {"ACL", "DELUSER", username}, SimpleMultiNodeRoute.ALL_NODES)
                     .get();
         }
     }

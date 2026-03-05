@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
@@ -44,30 +45,22 @@ func createDedicatedClient(
 	lazyConnect bool,
 ) (interfaces.BaseClientCommands, error) {
 	if clusterMode {
-		cfg := config.NewClusterClientConfiguration()
-		for _, addr := range addresses {
-			cfg.WithAddress(&addr)
-		}
+		cfg := defaultClusterClientConfig().
+			WithLazyConnect(lazyConnect)
 
-		cfg.WithRequestTimeout(3 * time.Second)
-		advCfg := config.NewAdvancedClusterClientConfiguration()
-		advCfg.WithConnectionTimeout(3 * time.Second)
-		cfg.WithAdvancedConfiguration(advCfg)
-		cfg.WithLazyConnect(lazyConnect)
+		for i := range addresses {
+			cfg.WithAddress(&addresses[i])
+		}
 
 		return glide.NewClusterClient(cfg)
 	}
 
-	cfg := config.NewClientConfiguration()
-	for _, addr := range addresses {
-		cfg.WithAddress(&addr)
-	}
+	cfg := defaultClientConfig().
+		WithLazyConnect(lazyConnect)
 
-	cfg.WithRequestTimeout(3 * time.Second)
-	advCfg := config.NewAdvancedClientConfiguration()
-	advCfg.WithConnectionTimeout(3 * time.Second)
-	cfg.WithAdvancedConfiguration(advCfg)
-	cfg.WithLazyConnect(lazyConnect)
+	for i := range addresses {
+		cfg.WithAddress(&addresses[i])
+	}
 
 	return glide.NewClient(cfg)
 }
@@ -136,9 +129,8 @@ func getExpectedNewConnections(ctx context.Context, client interfaces.BaseClient
 }
 
 func (suite *GlideTestSuite) TestStandaloneConnect() {
-	config := config.NewClientConfiguration().
-		WithAddress(&suite.standaloneHosts[0])
-	client, err := glide.NewClient(config)
+	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0])
+	client, err := glide.NewClient(clientConfig)
 
 	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
@@ -161,10 +153,9 @@ func (suite *GlideTestSuite) TestClusterConnect() {
 }
 
 func (suite *GlideTestSuite) TestClusterConnect_singlePort() {
-	config := config.NewClusterClientConfiguration().
-		WithAddress(&suite.clusterHosts[0])
+	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0])
 
-	client, err := glide.NewClusterClient(config)
+	client, err := glide.NewClusterClient(clientConfig)
 
 	suite.NoError(err)
 	assert.NotNil(suite.T(), client)
@@ -310,18 +301,7 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 			"Lazy client should not connect before the first command")
 
 		// Send the first command using the lazy client
-		var result interface{}
-		if isCluster {
-			clusterClient := lazyClient.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := lazyClient.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-
-		// Assert PING success for both modes
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), lazyClient)
 
 		// Check client count after the first command
 		clientsAfterFirstCommand, err := getClientCount(ctx, monitoringClient)
@@ -338,7 +318,6 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 	// Test TCP_NODELAY configuration for both standalone and cluster modes
 	suite.runWithTimeoutClients(func(client interfaces.BaseClientCommands) {
-		ctx := context.Background()
 		_, isCluster := client.(interfaces.GlideClusterClientCommands)
 
 		// Start a dedicated server
@@ -373,16 +352,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		defer clientWithTcpNoDelayTrue.Close()
 
 		// Verify client can connect and execute commands
-		var result interface{}
-		if isCluster {
-			clusterClient := clientWithTcpNoDelayTrue.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := clientWithTcpNoDelayTrue.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), clientWithTcpNoDelayTrue)
 
 		// Test with TCP_NODELAY disabled (false)
 		var clientWithTcpNoDelayFalse interfaces.BaseClientCommands
@@ -409,15 +379,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		defer clientWithTcpNoDelayFalse.Close()
 
 		// Verify client can connect and execute commands
-		if isCluster {
-			clusterClient := clientWithTcpNoDelayFalse.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := clientWithTcpNoDelayFalse.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), clientWithTcpNoDelayFalse)
 
 		// Test with TCP_NODELAY not set (default behavior)
 		var clientWithDefaultTcpNoDelay interfaces.BaseClientCommands
@@ -438,14 +400,84 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		defer clientWithDefaultTcpNoDelay.Close()
 
 		// Verify client can connect and execute commands
-		if isCluster {
-			clusterClient := clientWithDefaultTcpNoDelay.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := clientWithDefaultTcpNoDelay.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), clientWithDefaultTcpNoDelay)
 	})
+}
+
+// TestConnectWithIPv4AddressSucceeds_Standalone tests non-TLS connection with IPv4 address
+func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
+	// See 'tls_test.go' for corresponding TLS-enabled test.
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsEnabled(suite)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv4,
+		Port: suite.standaloneHosts[0].Port,
+	}
+
+	clientConfig := defaultClientConfig().WithAddress(&address)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+// TestConnectWithIPv4AddressSucceeds_Cluster tests non-TLS connection with IPv4 address
+func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
+	// See 'tls_test.go' for corresponding TLS-enabled test.
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsEnabled(suite)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv4,
+		Port: suite.clusterHosts[0].Port,
+	}
+
+	clientConfig := defaultClusterClientConfig().WithAddress(&address)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
+	// See 'tls_test.go' for corresponding TLS-enabled test.
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsEnabled(suite)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv6,
+		Port: suite.standaloneHosts[0].Port,
+	}
+
+	clientConfig := defaultClientConfig().WithAddress(&address)
+
+	client, err := glide.NewClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
+}
+
+func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
+	// See 'tls_test.go' for corresponding TLS-enabled test.
+	// TODO #5509: TLS tests do not currently run as part of CI.
+	skipIfTlsEnabled(suite)
+
+	address := config.NodeAddress{
+		Host: HostAddressIPv6,
+		Port: suite.clusterHosts[0].Port,
+	}
+
+	clientConfig := defaultClusterClientConfig().WithAddress(&address)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	defer client.Close()
+
+	assertConnected(suite.T(), client)
 }

@@ -114,8 +114,8 @@ def acl_glide_sync_client(
 
 
 def create_sync_client(
-    request,
-    cluster_mode: bool,
+    request=None,
+    cluster_mode: bool = False,
     credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
@@ -139,6 +139,9 @@ def create_sync_client(
     enable_compression: Optional[bool] = None,
     inflight_requests_limit: Optional[int] = None,
     reconciliation_interval_ms: Optional[int] = None,
+    root_pem_cacerts: Optional[bytes] = None,
+    client_cert_pem: Optional[bytes] = None,
+    client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
 ) -> TSyncGlideClient:
     # Create sync client
@@ -164,6 +167,9 @@ def create_sync_client(
         enable_compression=enable_compression,
         inflight_requests_limit=inflight_requests_limit,
         reconciliation_interval_ms=reconciliation_interval_ms,
+        root_pem_cacerts=root_pem_cacerts,
+        client_cert_pem=client_cert_pem,
+        client_key_pem=client_key_pem,
         read_only=read_only,
     )
     if cluster_mode:
