@@ -82,9 +82,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Standalone() {
 	require.NotNil(suite.T(), client)
 	defer client.Close()
 
-	result, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result)
+	assertConnected(suite.T(), client)
 }
 
 // TestTlsWithMultipleCertificates_Standalone tests standalone client with multiple concatenated certificates
@@ -113,9 +111,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Standalone() {
 	require.NotNil(suite.T(), client)
 	defer client.Close()
 
-	result, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result)
+	assertConnected(suite.T(), client)
 }
 
 // TestTlsWithoutCertificate_Cluster tests that connection fails without providing certificates
@@ -152,9 +148,7 @@ func (suite *GlideTestSuite) TestTlsWithSelfSignedCertificate_Cluster() {
 	require.NotNil(suite.T(), client)
 	defer client.Close()
 
-	result, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result)
+	assertConnected(suite.T(), client)
 }
 
 // TestTlsWithMultipleCertificates_Cluster tests cluster client with multiple concatenated certificates
@@ -183,9 +177,7 @@ func (suite *GlideTestSuite) TestTlsWithMultipleCertificates_Cluster() {
 	require.NotNil(suite.T(), client)
 	defer client.Close()
 
-	result, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result)
+	assertConnected(suite.T(), client)
 }
 
 // TestTlsWithEmptyCertificate_Standalone tests that empty certificate array returns an error

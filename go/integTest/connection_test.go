@@ -311,18 +311,7 @@ func (suite *GlideTestSuite) TestLazyConnectionEstablishesOnFirstCommand() {
 			"Lazy client should not connect before the first command")
 
 		// Send the first command using the lazy client
-		var result interface{}
-		if isCluster {
-			clusterClient := lazyClient.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := lazyClient.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-
-		// Assert PING success for both modes
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), lazyClient)
 
 		// Check client count after the first command
 		clientsAfterFirstCommand, err := getClientCount(ctx, monitoringClient)
@@ -374,16 +363,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		defer clientWithTcpNoDelayTrue.Close()
 
 		// Verify client can connect and execute commands
-		var result interface{}
-		if isCluster {
-			clusterClient := clientWithTcpNoDelayTrue.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := clientWithTcpNoDelayTrue.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), clientWithTcpNoDelayTrue)
 
 		// Test with TCP_NODELAY disabled (false)
 		var clientWithTcpNoDelayFalse interfaces.BaseClientCommands
@@ -410,15 +390,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		defer clientWithTcpNoDelayFalse.Close()
 
 		// Verify client can connect and execute commands
-		if isCluster {
-			clusterClient := clientWithTcpNoDelayFalse.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := clientWithTcpNoDelayFalse.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), clientWithTcpNoDelayFalse)
 
 		// Test with TCP_NODELAY not set (default behavior)
 		var clientWithDefaultTcpNoDelay interfaces.BaseClientCommands
@@ -439,15 +411,7 @@ func (suite *GlideTestSuite) TestTcpNoDelayConfiguration() {
 		defer clientWithDefaultTcpNoDelay.Close()
 
 		// Verify client can connect and execute commands
-		if isCluster {
-			clusterClient := clientWithDefaultTcpNoDelay.(interfaces.GlideClusterClientCommands)
-			result, err = clusterClient.Ping(ctx)
-		} else {
-			glideClient := clientWithDefaultTcpNoDelay.(interfaces.GlideClientCommands)
-			result, err = glideClient.Ping(ctx)
-		}
-		suite.NoError(err)
-		suite.Equal("PONG", result)
+		assertConnected(suite.T(), clientWithDefaultTcpNoDelay)
 	})
 }
 
