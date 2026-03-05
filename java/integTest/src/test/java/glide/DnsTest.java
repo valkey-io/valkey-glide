@@ -22,17 +22,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * Tests for client behavior when connecting with hostnames.
+ * DNS resolution tests.
  *
- * <p>To run these tests, you need to add the following mappings to your hosts file then set the
- * environment variable {@code VALKEY_GLIDE_DNS_TESTS_ENABLED}:
- *
- * <ul>
- *   <li>{@code 127.0.0.1 valkey.glide.test.tls.com}
- *   <li>{@code 127.0.0.1 valkey.glide.test.no_tls.com}
- *   <li>{@code ::1 valkey.glide.test.tls.com}
- *   <li>{@code ::1 valkey.glide.test.no_tls.com}
- * </ul>
+ * <p>See <a href="../../../../../../DEVELOPER.md#dns-tests">DNS Tests</a> for setup instructions.
  */
 @Timeout(10)
 @EnabledIfEnvironmentVariable(named = "VALKEY_GLIDE_DNS_TESTS_ENABLED", matches = ".*")

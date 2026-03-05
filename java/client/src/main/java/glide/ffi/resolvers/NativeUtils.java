@@ -43,23 +43,126 @@ public class NativeUtils {
             return;
         }
 
-        String glideLib = "/libglide_rs";
         try {
-            String osName = System.getProperty("os.name").toLowerCase();
-            if (osName.contains("mac")) {
-                NativeUtils.loadLibraryFromJar(glideLib + ".dylib");
-            } else if (osName.contains("linux")) {
-                NativeUtils.loadLibraryFromJar(glideLib + ".so");
-            } else if (osName.contains("windows")) {
-                NativeUtils.loadLibraryFromJar("/glide_rs.dll");
-            } else {
-                throw new UnsupportedOperationException(
-                        "OS not supported. Glide is only available on Mac OS, Linux, and Windows systems.");
-            }
+            String osName = System.getProperty("os.name");
+            String osArch = System.getProperty("os.arch");
+            String libraryPath = detectNativeLibraryPath(osName, osArch);
+            loadLibraryFromJar(libraryPath);
             glideLibLoaded = true; // Mark as loaded after successful load
-        } catch (java.io.IOException e) {
-            e.printStackTrace();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load Glide native library", e);
         }
+    }
+
+    /**
+     * Normalizes architecture identifiers to canonical forms.
+     *
+     * @param osArch The architecture string from System.getProperty("os.arch")
+     * @return Normalized architecture string ("x86_64" or "aarch64")
+     * @throws UnsupportedOperationException If the architecture is not supported
+     */
+    private static String normalizeArch(String osArch) {
+        String arch = osArch.toLowerCase();
+
+        // Normalize x86_64 variants
+        if (arch.equals("amd64") || arch.equals("x86_64")) {
+            return "x86_64";
+        }
+
+        // Normalize aarch64 variants
+        if (arch.equals("aarch64") || arch.equals("arm64")) {
+            return "aarch64";
+        }
+
+        throw new UnsupportedOperationException(
+                "Unsupported architecture: "
+                        + osArch
+                        + ". "
+                        + "Supported architectures: x86_64 (amd64), aarch64 (arm64)");
+    }
+
+    /**
+     * Detects whether the Linux system uses musl or glibc. Executes "ldd --version" and checks for
+     * "musl" in the output.
+     *
+     * @return true if musl is detected, false otherwise (defaults to glibc on any error)
+     */
+    private static boolean isMuslLibc() {
+        try {
+            Process process = Runtime.getRuntime().exec(new String[] {"ldd", "--version"});
+
+            // Read both stdout and stderr (musl outputs to stderr)
+            String output =
+                    readInputStream(process.getInputStream()) + readInputStream(process.getErrorStream());
+
+            process.waitFor();
+
+            // Check if output contains "musl" (case-insensitive)
+            return output.toLowerCase().contains("musl");
+
+        } catch (Exception e) {
+            // Default to glibc on any exception
+            return false;
+        }
+    }
+
+    /**
+     * Reads all lines from an InputStream and returns them as a single String.
+     *
+     * @param inputStream The input stream to read from
+     * @return The content as a String with newlines preserved
+     * @throws IOException If an I/O error occurs
+     */
+    private static String readInputStream(InputStream inputStream) throws IOException {
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append("\n");
+            }
+        }
+        return output.toString();
+    }
+
+    /**
+     * Detects the runtime platform and constructs the native library path.
+     *
+     * @param osName The operating system name from System.getProperty("os.name")
+     * @param osArch The architecture from System.getProperty("os.arch")
+     * @return The resource path within the JAR (e.g., "/natives/linux/x86_64/libglide_rs.so")
+     * @throws UnsupportedOperationException If the platform is not supported
+     */
+    private static String detectNativeLibraryPath(String osName, String osArch) {
+        String os = osName.toLowerCase();
+        String arch = normalizeArch(osArch);
+
+        String osPath;
+        String libraryFile;
+
+        if (os.contains("linux")) {
+            // Detect musl vs glibc
+            if (isMuslLibc()) {
+                osPath = "linux_musl";
+            } else {
+                osPath = "linux";
+            }
+            libraryFile = "libglide_rs.so";
+        } else if (os.contains("mac") || os.contains("darwin")) {
+            osPath = "osx";
+            libraryFile = "libglide_rs.dylib";
+        } else if (os.contains("windows")) {
+            osPath = "windows";
+            libraryFile = "glide_rs.dll";
+        } else {
+            throw new UnsupportedOperationException(
+                    String.format(
+                            "Unsupported platform: OS=%s, Architecture=%s. "
+                                    + "Supported platforms: Linux (x86_64, aarch64, glibc/musl), "
+                                    + "macOS (x86_64, aarch64), Windows (x86_64)",
+                            osName, osArch));
+        }
+
+        return String.format("/natives/%s/%s/%s", osPath, arch, libraryFile);
     }
 
     /**
@@ -110,16 +213,29 @@ public class NativeUtils {
         try (InputStream is = NativeUtils.class.getResourceAsStream(path)) {
             if (is == null) {
                 cleanupTempFile(temp);
-                throw new FileNotFoundException("File " + path + " was not found inside JAR.");
+                throw new FileNotFoundException(
+                        String.format(
+                                "Native library not found in JAR at path: %s. "
+                                        + "This may indicate a build configuration issue or missing platform support.",
+                                path));
             }
             Files.copy(is, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             cleanupTempFile(temp);
-            throw e;
+            throw new IOException(
+                    String.format(
+                            "Failed to extract native library to temporary location: %s", temp.getAbsolutePath()),
+                    e);
         }
 
         try {
             System.load(temp.getAbsolutePath());
+        } catch (UnsatisfiedLinkError e) {
+            throw new RuntimeException(
+                    String.format(
+                            "Failed to load native library from: %s. System error: %s",
+                            temp.getAbsolutePath(), e.getMessage()),
+                    e);
         } finally {
             if (isPosixCompliant()) {
                 // Assume POSIX compliant file system, can be deleted after loading
