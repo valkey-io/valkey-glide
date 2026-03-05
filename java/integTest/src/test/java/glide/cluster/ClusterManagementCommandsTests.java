@@ -35,6 +35,34 @@ public class ClusterManagementCommandsTests {
 
     private static GlideClusterClient client;
 
+    /**
+     * Count total slots from a shard's slots field. Supports both formats: flat list of integers
+     * [start1, end1, start2, end2, ...] (Valkey 9.0+) and nested list of [start,end] arrays (older).
+     */
+    private static long countSlotsFromShard(Object[] slots) {
+        if (slots == null || slots.length == 0) {
+            return 0;
+        }
+        long total = 0;
+        // Flat format: each element is Long (start, end pairs)
+        if (slots[0] instanceof Number) {
+            for (int i = 0; i < slots.length; i += 2) {
+                long start = ((Number) slots[i]).longValue();
+                long end = ((Number) slots[i + 1]).longValue();
+                total += (end - start + 1);
+            }
+            return total;
+        }
+        // Nested format: each element is Object[] {start, end}
+        for (Object slotRangeObj : slots) {
+            Object[] slotRange = (Object[]) slotRangeObj;
+            long start = ((Number) slotRange[0]).longValue();
+            long end = ((Number) slotRange[1]).longValue();
+            total += (end - start + 1);
+        }
+        return total;
+    }
+
     @BeforeAll
     @SneakyThrows
     public static void setUp() {
@@ -480,17 +508,14 @@ public class ClusterManagementCommandsTests {
                 knownNodes, nodesCount, "Node count should match between cluster info and cluster nodes");
 
         // Verify all slots are covered using clusterShards
+        // Slots format: Valkey 9.0+ uses flat list [start1, end1, start2, end2, ...]; older may use
+        // nested [[start,end], ...]. Both are supported.
         long totalSlots = 0;
         for (Object shardObj : shardsOutput) {
             @SuppressWarnings("unchecked")
             Map<String, Object> shard = (Map<String, Object>) shardObj;
             Object[] slots = (Object[]) shard.get("slots");
-            for (Object slotRangeObj : slots) {
-                Object[] slotRange = (Object[]) slotRangeObj;
-                long start = (Long) slotRange[0];
-                long end = (Long) slotRange[1];
-                totalSlots += (end - start + 1);
-            }
+            totalSlots += countSlotsFromShard(slots);
         }
 
         assertEquals(TOTAL_CLUSTER_SLOTS, totalSlots, "All 16384 slots should be assigned");
