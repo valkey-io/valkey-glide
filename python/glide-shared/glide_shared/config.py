@@ -871,6 +871,17 @@ class GlideClientConfiguration(BaseClientConfiguration):
             When enabled, the client will automatically compress values for set-type commands and decompress
             values for get-type commands. This can reduce bandwidth usage and storage requirements.
             If not set, compression is disabled.
+        read_only (bool): When True, enables read-only mode for the standalone client.
+            In read-only mode:
+            - The client skips primary node detection (INFO REPLICATION command)
+            - Write commands are blocked and will return an error
+            - All connected nodes are treated as valid read targets
+            - If no ReadFrom strategy is specified, defaults to PreferReplica
+            This is useful for connecting to replica-only deployments or when you want to
+            prevent accidental write operations.
+            Note: read_only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
+            read strategies.
+            Defaults to False.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -929,6 +940,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
+        read_only: bool = False,
     ):
         super().__init__(
             addresses=addresses,
@@ -947,12 +959,16 @@ class GlideClientConfiguration(BaseClientConfiguration):
             compression=compression,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
+        self.read_only = read_only
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
         assert cluster_mode is False
         request = super()._create_a_protobuf_conn_request(cluster_mode)
+
+        # Set read_only mode
+        request.read_only = self.read_only
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
