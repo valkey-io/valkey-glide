@@ -246,7 +246,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	advancedConfig := defaultAdvancedClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
@@ -275,7 +275,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
 	advancedConfig := defaultAdvancedClusterClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
@@ -304,7 +304,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
 	advancedConfig := defaultAdvancedClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClientConfig().WithAddress(&suite.standaloneHosts[0]).
+	clientConfig := defaultClientConfig().
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
@@ -333,7 +333,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
 	advancedConfig := defaultAdvancedClusterClientConfig().
 		WithTlsConfiguration(tlsConfig)
 
-	clientConfig := defaultClusterClientConfig().WithAddress(&suite.clusterHosts[0]).
+	clientConfig := defaultClusterClientConfig().
 		WithAddress(&address).
 		WithUseTLS(true).
 		WithAdvancedConfiguration(advancedConfig)
