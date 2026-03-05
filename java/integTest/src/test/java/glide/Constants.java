@@ -1,9 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
-/**
- * Common constants for testing.
- */
+/** Common constants for testing. */
 public final class Constants {
 
     // Host names and addresses for tests.
