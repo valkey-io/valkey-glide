@@ -1337,33 +1337,42 @@ impl Client {
     ///
     /// On new token, spawns a task that write-locks the `Client` and calls
     /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
-    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
+    /// Creates a callback for IAM token refresh that updates the client's connection password.
+    /// Uses a **weak** reference to avoid circular dependencies that would prevent cleanup.
     fn iam_callback(
         client_arc: Arc<tokio::sync::RwLock<Client>>,
     ) -> impl Fn(String) + Send + 'static {
+        // Downgrade to Weak to avoid circular reference:
+        // Client → IAMTokenManager → Callback → (Weak) Client
+        let client_weak = Arc::downgrade(&client_arc);
+        
         move |new_token: String| {
-            let client_arc = Arc::clone(&client_arc);
-            tokio::spawn(async move {
-                let mut client = client_arc.write().await;
-                let result = client
-                    .update_connection_password(Some(new_token.clone()), true)
-                    .await;
+            // Try to upgrade the weak reference
+            if let Some(client_arc) = client_weak.upgrade() {
+                tokio::spawn(async move {
+                    let mut client = client_arc.write().await;
+                    let result = client
+                        .update_connection_password(Some(new_token.clone()), true)
+                        .await;
 
-                if let Err(e) = result {
-                    log_error(
-                        "IAM token refresh",
-                        format!("Failed to update connection password with immediate auth: {e}"),
-                    );
-                }
-            });
+                    if let Err(e) = result {
+                        log_error(
+                            "IAM token refresh",
+                            format!("Failed to update connection password with immediate auth: {e}"),
+                        );
+                    }
+                });
+            } else {
+                // Client has been dropped, no need to update password
+                log_debug("IAM token refresh", "Client has been dropped, skipping password update");
+            }
         }
     }
 
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
-    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
-    /// can always reach the client. (Note: this can create a retain cycle unless you
-    /// stop the refresh task and drop the manager explicitly.)
+    /// Uses a **weak** reference in the refresh callback to avoid circular dependencies.
+    /// The callback will gracefully handle the case where the client has been dropped.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
         client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
