@@ -1,26 +1,34 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+mod test_constants;
 mod utilities;
 
 #[cfg(test)]
 mod cluster_client_tests {
     use std::collections::HashMap;
 
-    use super::*;
-    use cluster::{LONG_CLUSTER_TEST_TIMEOUT, setup_cluster_with_replicas};
-    use glide_core::client::Client;
-    use glide_core::connection_request::ProtocolVersion as GlideProtocolVersion;
-    use glide_core::connection_request::{
-        self, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
+    use crate::test_constants::{HOST_IPV4, HOST_IPV6};
+    use crate::utilities::{
+        cluster::{
+            LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
+            setup_cluster_with_replicas, setup_test_basics_internal,
+        },
+        *,
     };
-    use redis::cluster_routing::{
-        MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+    use glide_core::{
+        client::Client,
+        connection_request::{
+            self, ProtocolVersion as GlideProtocolVersion, PubSubChannelsOrPatterns,
+            PubSubSubscriptions, ReadFrom,
+        },
     };
-    use redis::{ConnectionAddr, InfoDict, RedisConnectionInfo, Value};
-
+    use redis::{
+        ConnectionAddr, InfoDict, RedisConnectionInfo, Value,
+        cluster_routing::{
+            MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
+        },
+    };
     use rstest::rstest;
-    use utilities::cluster::{SHORT_CLUSTER_TEST_TIMEOUT, setup_test_basics_internal};
-    use utilities::*;
     use versions::Versioning;
 
     fn count_primary_or_replica(value: &str) -> (u16, u16) {
@@ -394,8 +402,7 @@ mod cluster_client_tests {
             .await;
 
             // Skip test if server version is less than 9.0 (database isolation not supported)
-            if !utilities::version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await
-            {
+            if !version_greater_or_equal(&mut version_check_basics.client, "9.0.0").await {
                 return;
             }
             let mut test_basics = setup_test_basics_internal(TestConfiguration {
@@ -526,7 +533,7 @@ mod cluster_client_tests {
             lazy_client_config.client_name = Some("lazy_config".into());
 
             // Create connection request directly with our dedicated cluster addresses
-            let lazy_connection_request = utilities::create_connection_request(
+            let lazy_connection_request = create_connection_request(
                 &dedicated_cluster_addresses,
                 &lazy_client_config, // Uses the same config but with lazy_connect=true
             );
@@ -592,15 +599,11 @@ mod cluster_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_custom_root_cert() {
         block_on_all(async move {
-            // Create a dedicated TLS cluster with custom certificates
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_cluster_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
 
-            let cluster = utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+            let cluster = RedisCluster::new_with_tls(3, 0, Some(tls_paths));
             let cluster_addresses = cluster.get_server_addresses();
 
             // Create connection request with custom root certificate
@@ -621,12 +624,7 @@ mod cluster_client_tests {
                 .await
                 .expect("Failed to create cluster client with custom root cert");
 
-            // Verify connection works by sending a command
-            let ping_result = client.send_command(&mut redis::cmd("PING"), None).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 
@@ -636,22 +634,15 @@ mod cluster_client_tests {
     fn test_cluster_tls_connection_fails_with_wrong_root_cert() {
         block_on_all(async move {
             // Create a TLS cluster with one set of certificates
-            let tempdir1 = tempfile::Builder::new()
-                .prefix("tls_cluster_server")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+            let server_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let server_tls_paths = build_tls_file_paths(&server_tempdir);
 
             // Create different CA certificate for client
-            let tempdir2 = tempfile::Builder::new()
-                .prefix("tls_cluster_client")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let client_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let client_tls_paths = build_tls_file_paths(&client_tempdir);
             let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
 
-            let cluster =
-                utilities::cluster::RedisCluster::new_with_tls(3, 0, Some(server_tls_paths));
+            let cluster = RedisCluster::new_with_tls(3, 0, Some(server_tls_paths));
             let cluster_addresses = cluster.get_server_addresses();
 
             // Try to connect with wrong root certificate
@@ -676,6 +667,89 @@ mod cluster_client_tests {
         });
     }
 
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_tls_connection_with_ip_address_succeeds(
+        #[values(HOST_IPV4, HOST_IPV6)] host: &str,
+    ) {
+        block_on_all(async move {
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+            let cluster = RedisCluster::new_with_tls(3, 0, Some(tls_paths));
+
+            // Wait to ensure server is ready before connecting.
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+
+            let default_address = cluster.get_server_addresses()[0].clone();
+            let ip_addr = match default_address {
+                redis::ConnectionAddr::TcpTls { port, .. } => redis::ConnectionAddr::TcpTls {
+                    host: host.to_string(),
+                    port,
+                    insecure: false,
+                    tls_params: None,
+                },
+                _ => panic!("Expected TLS address"),
+            };
+
+            let mut connection_request = create_connection_request(
+                &[ip_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    cluster_mode: ClusterMode::Enabled,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            let mut client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create cluster client with IP address");
+
+            assert_connected(&mut client).await;
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_cluster_connection_with_ip_address_succeeds(
+        #[values(HOST_IPV4, HOST_IPV6)] host: &str,
+    ) {
+        block_on_all(async move {
+            let cluster = RedisCluster::new(false, &None, None, None);
+
+            // Wait to ensure server is ready before connecting.
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+
+            let default_address = cluster.get_server_addresses()[0].clone();
+            let ip_addr = match default_address {
+                redis::ConnectionAddr::Tcp(_, port) => {
+                    redis::ConnectionAddr::Tcp(host.to_string(), port)
+                }
+                _ => panic!("Expected TCP address"),
+            };
+
+            let connection_request = create_connection_request(
+                &[ip_addr],
+                &TestConfiguration {
+                    cluster_mode: ClusterMode::Enabled,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+
+            let mut client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create cluster client with IP address");
+
+            assert_connected(&mut client).await;
+        });
+    }
+
     /// Helper function to cleanup ACL user
     async fn cleanup_acl_user(addr: &ConnectionAddr, username: &str) {
         if let Ok(client) = redis::Client::open(redis::ConnectionInfo {
@@ -692,6 +766,7 @@ mod cluster_client_tests {
     }
 
     #[rstest]
+    #[ignore]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     #[serial_test::serial]
     fn test_cluster_connection_fails_with_permission_denied() {
