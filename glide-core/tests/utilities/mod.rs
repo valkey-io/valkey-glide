@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![allow(dead_code)]
-use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6, HOSTNAME_TLS};
+use crate::constants::{HOSTNAME_TLS, IP_ADDRESS_V4, IP_ADDRESS_V6};
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
