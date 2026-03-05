@@ -624,8 +624,11 @@ impl MultiplexedConnection {
         let codec = ValueCodec::default()
             .framed(stream)
             .and_then(|msg| async move { msg });
-        let (mut pipeline, driver) =
-            Pipeline::new(codec, glide_connection_options.disconnect_notifier, glide_connection_options.pipeline_buffer_size);
+        let (mut pipeline, driver) = Pipeline::new(
+            codec,
+            glide_connection_options.disconnect_notifier,
+            glide_connection_options.pipeline_buffer_size,
+        );
         let driver = Box::pin(driver);
         let pm = PushManager::new(
             glide_connection_options.push_sender,
