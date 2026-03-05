@@ -485,18 +485,28 @@ class TestCommands:
     def test_sync_set_get_with_bytearray_and_memoryview(
         self, glide_sync_client: TGlideClient
     ):
-        """Test that set() accepts bytearray and memoryview values."""
-        key_ba = get_random_string(10)
-        key_mv = get_random_string(10)
+        """Test that set() accepts bytearray and memoryview keys and values."""
         data = os.urandom(256)
 
         # bytearray value
+        key_ba = get_random_string(10)
         assert glide_sync_client.set(key_ba, bytearray(data)) == OK
         assert glide_sync_client.get(key_ba) == data
 
         # memoryview value
+        key_mv = get_random_string(10)
         assert glide_sync_client.set(key_mv, memoryview(bytearray(data))) == OK
         assert glide_sync_client.get(key_mv) == data
+
+        # bytearray key
+        key_ba_key = bytearray(b"ba_key_" + os.urandom(8))
+        assert glide_sync_client.set(key_ba_key, b"value1") == OK
+        assert glide_sync_client.get(key_ba_key) == b"value1"
+
+        # memoryview key
+        key_mv_key = memoryview(bytearray(b"mv_key_" + os.urandom(8)))
+        assert glide_sync_client.set(key_mv_key, b"value2") == OK
+        assert glide_sync_client.get(key_mv_key) == b"value2"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])

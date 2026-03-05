@@ -80,9 +80,11 @@ class TestSyncBatch:
     def test_sync_batch_set_with_bytearray_and_memoryview(
         self, glide_sync_client: TGlideClient
     ):
-        """Test that batch set() accepts bytearray and memoryview values."""
+        """Test that batch set() accepts bytearray and memoryview keys and values."""
         key_ba = get_random_string(10)
         key_mv = get_random_string(10)
+        key_ba_key = bytearray(b"ba_batch_" + os.urandom(8))
+        key_mv_key = memoryview(bytearray(b"mv_batch_" + os.urandom(8)))
         data = os.urandom(256)
 
         batch = (
@@ -92,11 +94,15 @@ class TestSyncBatch:
         )
         batch.set(key_ba, bytearray(data))
         batch.set(key_mv, memoryview(bytearray(data)))
+        batch.set(key_ba_key, b"value1")
+        batch.set(key_mv_key, b"value2")
         result = exec_batch(glide_sync_client, batch)
-        assert result == [OK, OK]
+        assert result == [OK, OK, OK, OK]
 
         assert glide_sync_client.get(key_ba) == data
         assert glide_sync_client.get(key_mv) == data
+        assert glide_sync_client.get(key_ba_key) == b"value1"
+        assert glide_sync_client.get(key_mv_key) == b"value2"
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
