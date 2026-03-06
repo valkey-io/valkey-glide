@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None, None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -138,12 +138,14 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        pipeline_buffer_size: Option<usize>,
     ) -> RedisResult<ClusterConnection<C>> {
         ClusterConnInner::new(
             initial_nodes,
             cluster_params,
             push_sender,
             pubsub_synchronizer,
+            pipeline_buffer_size,
         )
         .await
         .map(|inner| {
@@ -189,7 +191,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None, None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -1175,6 +1177,7 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        pipeline_buffer_size: Option<usize>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1201,6 +1204,7 @@ where
             connection_retry_strategy: Some(connection_retry_strategy),
             tcp_nodelay: cluster_params.tcp_nodelay,
             pubsub_synchronizer,
+            pipeline_buffer_size,
         };
 
         let connections = Self::create_initial_connections(

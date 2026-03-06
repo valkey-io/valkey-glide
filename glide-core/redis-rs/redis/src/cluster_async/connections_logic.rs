@@ -195,6 +195,7 @@ where
             connection_retry_strategy: None,
             tcp_nodelay: params.tcp_nodelay,
             pubsub_synchronizer: None,
+            pipeline_buffer_size: None,
         },
     )
     .await

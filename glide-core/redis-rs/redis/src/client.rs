@@ -103,6 +103,9 @@ pub struct GlideConnectionOptions {
     pub tcp_nodelay: bool,
     /// Optional PubSub synchronizer for managing subscription state
     pub pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
+    /// Buffer size for the internal pipeline mpsc channel.
+    /// When None, defaults to 50.
+    pub pipeline_buffer_size: Option<usize>,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`
