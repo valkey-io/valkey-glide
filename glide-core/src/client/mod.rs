@@ -805,22 +805,23 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            let client = self.get_or_initialize_client().await?;
-
-            if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
-                return result;
-            }
-
-            // let expected_type = expected_type_for_cmd(cmd);
+            // Get request timeout early
             let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
                 Ok(request_timeout) => request_timeout,
                 Err(err) => return Err(err),
             };
 
-            // Clone compression_manager reference before moving into async block
-            let compression_manager = self.compression_manager.clone();
+            // Wrap entire operation (connection + command) in single timeout
+            run_with_timeout(request_timeout, async move {
+                let client = self.get_or_initialize_client().await?;
 
-            let result = run_with_timeout(request_timeout, async move {
+                if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
+                    return result;
+                }
+
+                // Clone compression_manager reference before moving into async block
+                let compression_manager = self.compression_manager.clone();
+
                 let expected_type = expected_type_for_cmd(cmd);
                 let value  = match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
@@ -903,10 +904,7 @@ impl Client {
                     self.handle_hello_command(cmd).await?;
                 }
                 Ok(value)
-            })
-            .await?;
-
-            Ok(result)
+            }).await
         })
     }
 
@@ -928,31 +926,33 @@ impl Client {
         scan_state_cursor: &'a ScanStateRC,
         cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<Value> {
-        // Clone arguments before the async block (ScanStateRC is Arc, clone is cheap)
         let scan_state_cursor_clone = scan_state_cursor.clone();
-        let cluster_scan_args_clone = cluster_scan_args.clone(); // Assuming ClusterScanArgs is Clone
+        let cluster_scan_args_clone = cluster_scan_args.clone();
 
-        // Check and initialize if lazy *inside* the async block
-        let client = self.get_or_initialize_client().await?;
+        // Include connection acquisition in timeout
+        let client =
+            run_with_timeout(Some(self.request_timeout), self.get_or_initialize_client()).await?;
 
-        match client {
-            ClientWrapper::Standalone(_) => {
-                unreachable!("Cluster scan is not supported in standalone mode")
+        run_with_timeout(Some(self.request_timeout), async move {
+            match client {
+                ClientWrapper::Standalone(_) => {
+                    unreachable!("Cluster scan is not supported in standalone mode")
+                }
+                ClientWrapper::Cluster { mut client } => {
+                    let (cursor, keys) = client
+                        .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone)
+                        .await?;
+                    let cluster_cursor_id = if cursor.is_finished() {
+                        Value::BulkString(FINISHED_SCAN_CURSOR.into())
+                    } else {
+                        Value::BulkString(insert_cluster_scan_cursor(cursor).into())
+                    };
+                    Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
+                }
+                ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
             }
-            ClientWrapper::Cluster { mut client } => {
-                let (cursor, keys) = client
-                    .cluster_scan(scan_state_cursor_clone, cluster_scan_args_clone) // Use clones
-                    .await?;
-                let cluster_cursor_id = if cursor.is_finished() {
-                    Value::BulkString(FINISHED_SCAN_CURSOR.into()) // Use constant
-                } else {
-                    Value::BulkString(insert_cluster_scan_cursor(cursor).into())
-                };
-                Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
-            }
-            // Lazy case is now handled by the initial check
-            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
-        }
+        })
+        .await
     }
 
     fn get_transaction_values(
@@ -1039,57 +1039,53 @@ impl Client {
         raise_on_error: bool,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            let client = self.get_or_initialize_client().await?;
+            let timeout_duration = to_duration(transaction_timeout, self.request_timeout);
+
+            // Include connection acquisition in timeout
+            let client =
+                run_with_timeout(Some(timeout_duration), self.get_or_initialize_client()).await?;
 
             let command_count = pipeline.cmd_iter().count();
-            // The offset is set to command_count + 1 to account for:
-            // 1. The first command, which is the "MULTI" command, that returns "OK"
-            // 2. The "QUEUED" responses for each of the commands in the pipeline (before EXEC)
-            // After these initial responses (OK and QUEUED), we expect a single response,
-            // which is an array containing the results of all the commands in the pipeline.
             let offset = command_count + 1;
 
-            run_with_timeout(
-                Some(to_duration(transaction_timeout, self.request_timeout)),
-                async move {
-                    match client {
-                        ClientWrapper::Standalone(mut client) => {
-                            let values = client.send_pipeline(pipeline, offset, 1).await?;
-                            Client::get_transaction_values(
-                                pipeline,
-                                values,
-                                command_count,
-                                offset,
-                                raise_on_error,
-                            )
-                        }
-                        ClientWrapper::Cluster { mut client } => {
-                            let values = match routing {
-                                Some(RoutingInfo::SingleNode(route)) => {
-                                    client
-                                        .route_pipeline(pipeline, offset, 1, Some(route), None)
-                                        .await?
-                                }
-                                _ => {
-                                    client
-                                        .req_packed_commands(pipeline, offset, 1, None)
-                                        .await?
-                                }
-                            };
-                            Client::get_transaction_values(
-                                pipeline,
-                                values,
-                                command_count,
-                                offset,
-                                raise_on_error,
-                            )
-                        }
-                        ClientWrapper::Lazy(_) => {
-                            unreachable!("Lazy client should have been initialized")
-                        }
+            run_with_timeout(Some(timeout_duration), async move {
+                match client {
+                    ClientWrapper::Standalone(mut client) => {
+                        let values = client.send_pipeline(pipeline, offset, 1).await?;
+                        Client::get_transaction_values(
+                            pipeline,
+                            values,
+                            command_count,
+                            offset,
+                            raise_on_error,
+                        )
                     }
-                },
-            )
+                    ClientWrapper::Cluster { mut client } => {
+                        let values = match routing {
+                            Some(RoutingInfo::SingleNode(route)) => {
+                                client
+                                    .route_pipeline(pipeline, offset, 1, Some(route), None)
+                                    .await?
+                            }
+                            _ => {
+                                client
+                                    .req_packed_commands(pipeline, offset, 1, None)
+                                    .await?
+                            }
+                        };
+                        Client::get_transaction_values(
+                            pipeline,
+                            values,
+                            command_count,
+                            offset,
+                            raise_on_error,
+                        )
+                    }
+                    ClientWrapper::Lazy(_) => {
+                        unreachable!("Lazy client should have been initialized")
+                    }
+                }
+            })
             .await
         })
     }
@@ -1116,8 +1112,6 @@ impl Client {
         pipeline_retry_strategy: PipelineRetryStrategy,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
-            let client = self.get_or_initialize_client().await?;
-
             let command_count = pipeline.cmd_iter().count();
             if pipeline.is_empty() {
                 return Err(RedisError::from((
@@ -1126,50 +1120,53 @@ impl Client {
                 )));
             }
 
-            run_with_timeout(
-                Some(to_duration(pipeline_timeout, self.request_timeout)),
-                async move {
-                    let values = match client {
-                        ClientWrapper::Standalone(mut client) => {
-                            client.send_pipeline(pipeline, 0, command_count).await
-                        }
+            let timeout_duration = to_duration(pipeline_timeout, self.request_timeout);
 
-                        ClientWrapper::Cluster { mut client } => match routing {
-                            Some(RoutingInfo::SingleNode(route)) => {
-                                client
-                                    .route_pipeline(
-                                        pipeline,
-                                        0,
-                                        command_count,
-                                        Some(route),
-                                        Some(pipeline_retry_strategy),
-                                    )
-                                    .await
-                            }
-                            _ => {
-                                client
-                                    .req_packed_commands(
-                                        pipeline,
-                                        0,
-                                        command_count,
-                                        Some(pipeline_retry_strategy),
-                                    )
-                                    .await
-                            }
-                        },
-                        ClientWrapper::Lazy(_) => {
-                            unreachable!("Lazy client should have been initialized")
-                        }
-                    }?;
+            // Include connection acquisition in timeout
+            let client =
+                run_with_timeout(Some(timeout_duration), self.get_or_initialize_client()).await?;
 
-                    Client::convert_pipeline_values_to_expected_types(
-                        pipeline,
-                        values,
-                        command_count,
-                        raise_on_error,
-                    )
-                },
-            )
+            run_with_timeout(Some(timeout_duration), async move {
+                let values = match client {
+                    ClientWrapper::Standalone(mut client) => {
+                        client.send_pipeline(pipeline, 0, command_count).await
+                    }
+
+                    ClientWrapper::Cluster { mut client } => match routing {
+                        Some(RoutingInfo::SingleNode(route)) => {
+                            client
+                                .route_pipeline(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(route),
+                                    Some(pipeline_retry_strategy),
+                                )
+                                .await
+                        }
+                        _ => {
+                            client
+                                .req_packed_commands(
+                                    pipeline,
+                                    0,
+                                    command_count,
+                                    Some(pipeline_retry_strategy),
+                                )
+                                .await
+                        }
+                    },
+                    ClientWrapper::Lazy(_) => {
+                        unreachable!("Lazy client should have been initialized")
+                    }
+                }?;
+
+                Client::convert_pipeline_values_to_expected_types(
+                    pipeline,
+                    values,
+                    command_count,
+                    raise_on_error,
+                )
+            })
             .await
         })
     }
