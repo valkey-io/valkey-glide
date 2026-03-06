@@ -760,10 +760,23 @@ fn create_client_internal(
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
 
     // Check if IAM authentication is configured
+    // MessageField is a tuple struct where .0 gives Option<T>
+    logger_core::log_debug(
+        "FFI create_client",
+        format!("Checking IAM: auth_info present: {}", request.authentication_info.is_some()),
+    );
+    
+    if let Some(ref auth) = request.authentication_info.0 {
+        logger_core::log_debug(
+            "FFI create_client",
+            format!("Auth info found - iam_credentials present: {}", auth.iam_credentials.0.is_some()),
+        );
+    }
+    
     let needs_iam = request
         .authentication_info
         .as_ref()
-        .and_then(|auth| auth.iam_credentials.as_ref())
+        .and_then(|auth| auth.iam_credentials.0.as_ref())
         .is_some();
 
     logger_core::log_debug(
