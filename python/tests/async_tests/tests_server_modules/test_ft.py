@@ -234,7 +234,7 @@ class TestFt:
                     NumericField("$.a", "a"),
                     NumericField("$.b", "b"),
                 ],
-                options=FtCreateOptions(DataType.JSON),
+                options=FtCreateOptions(DataType.JSON, prefixes=[json_prefix]),
             )
             == OK
         )
@@ -1195,3 +1195,112 @@ class TestFt:
         # Drop all indexes.
         assert await ft.dropindex(glide_client, index_name) == OK
         assert await ft.dropindex(glide_client, index_name_string) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_nocontent(self, glide_client: GlideClusterClient):
+        prefix = "{nocontent-search-" + str(uuid.uuid4()) + "}:"
+        key1 = prefix + "1"
+        key2 = prefix + "2"
+        index = prefix + "idx"
+        vec_field = "vec"
+
+        vector1 = array.array("f", [1.0, 0.0]).tobytes()
+        vector2 = array.array("f", [0.0, 1.0]).tobytes()
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[
+                    VectorField(
+                        name=vec_field,
+                        algorithm=VectorAlgorithm.FLAT,
+                        attributes=VectorFieldAttributesFlat(
+                            dimensions=2,
+                            distance_metric=DistanceMetricType.L2,
+                            type=VectorType.FLOAT32,
+                        ),
+                    )
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+        assert await glide_client.hset(key1, {vec_field: vector1}) == 1
+        assert await glide_client.hset(key2, {vec_field: vector2}) == 1
+        time.sleep(self.sleep_wait_time)
+
+        knn_query = f"*=>[KNN 2 @{vec_field} $query_vec]"
+        result = await ft.search(
+            glide_client,
+            index,
+            knn_query,
+            options=FtSearchOptions(
+                params={"query_vec": vector1},
+                nocontent=True,
+            ),
+        )
+        # NOCONTENT: count is 2, each doc entry has an empty fields map
+        assert result[0] == 2
+        result_map = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
+        for doc_fields in result_map.values():
+            assert doc_fields == {}
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_dialect(self, glide_client: GlideClusterClient):
+        prefix = "{dialect-search-" + str(uuid.uuid4()) + "}:"
+        key1 = prefix + "1"
+        index = prefix + "idx"
+        vec_field = "vec"
+
+        vector1 = array.array("f", [1.0, 0.0]).tobytes()
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[
+                    VectorField(
+                        name=vec_field,
+                        algorithm=VectorAlgorithm.FLAT,
+                        attributes=VectorFieldAttributesFlat(
+                            dimensions=2,
+                            distance_metric=DistanceMetricType.L2,
+                            type=VectorType.FLOAT32,
+                        ),
+                    )
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+        assert await glide_client.hset(key1, {vec_field: vector1}) == 1
+        time.sleep(self.sleep_wait_time)
+
+        # DIALECT 2 is the only supported dialect in valkey-search 1.1
+        knn_query = f"*=>[KNN 1 @{vec_field} $query_vec]"
+        result = await ft.search(
+            glide_client,
+            index,
+            knn_query,
+            options=FtSearchOptions(
+                params={"query_vec": vector1},
+                dialect=2,
+            ),
+        )
+        assert result[0] == 1
+        result_map = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
+        assert len(result_map) == 1
+        # Verify the returned document has field content
+        for doc_fields in result_map.values():
+            assert len(doc_fields) > 0
+
+        assert await ft.dropindex(glide_client, index) == OK

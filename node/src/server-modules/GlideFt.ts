@@ -824,6 +824,11 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
 
     const args: GlideString[] = [];
 
+    // NOCONTENT
+    if (options.nocontent) {
+        args.push("NOCONTENT");
+    }
+
     // RETURN
     if (options.returnFields) {
         const returnFields: GlideString[] = [];
@@ -865,6 +870,11 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
     // COUNT
     if (options.count) {
         args.push("COUNT");
+    }
+
+    // DIALECT
+    if (options.dialect !== undefined) {
+        args.push("DIALECT", options.dialect.toString());
     }
 
     return args;

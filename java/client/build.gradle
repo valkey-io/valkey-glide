@@ -30,7 +30,7 @@ configurations {
 }
 
 dependencies {
-    implementation group: 'com.google.protobuf', name:'protobuf-java', version: '4.29.1'
+    implementation group: 'com.google.protobuf', name:'protobuf-java', version: '4.34.0'
 
     shadow group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 

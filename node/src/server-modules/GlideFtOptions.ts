@@ -247,6 +247,12 @@ export type FtSearchOptions = {
      * the parameter name.
      */
     params?: GlideRecord<GlideString>;
+
+    /** If true, returns only document IDs without field content. Equivalent to RETURN 0. */
+    nocontent?: boolean;
+
+    /** Query dialect version. Only dialect 2 is supported in valkey-search 1.1. */
+    dialect?: number;
 } & (
     | {
           /**

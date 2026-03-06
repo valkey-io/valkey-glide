@@ -16,6 +16,8 @@ import org.apache.commons.lang3.tuple.Pair;
 @Builder
 public class FTSearchOptions {
 
+    @Builder.Default private final boolean nocontent = false;
+
     @Builder.Default private final Map<GlideString, GlideString> identifiers = new HashMap<>();
 
     /** Query timeout in milliseconds. */
@@ -31,13 +33,19 @@ public class FTSearchOptions {
      */
     @Builder.Default private final Map<GlideString, GlideString> params = new HashMap<>();
 
+    /** Query dialect version. Only dialect 2 is supported in valkey-search 1.1. */
+    private final Integer dialect;
+
     // TODO maxstale?
-    // dialect is no-op
 
     /** Convert to module API. */
     public GlideString[] toArgs() {
         ArrayList<GlideString> args = new ArrayList<GlideString>();
+        if (nocontent) {
+            args.add(gs("NOCONTENT"));
+        }
         if (!identifiers.isEmpty()) {
+            int returnIndex = args.size();
             args.add(gs("RETURN"));
             int tokenCount = 0;
             for (Map.Entry<GlideString, GlideString> pair : identifiers.entrySet()) {
@@ -49,7 +57,7 @@ public class FTSearchOptions {
                     args.add(pair.getValue());
                 }
             }
-            args.add(1, gs(Integer.toString(tokenCount)));
+            args.add(returnIndex + 1, gs(Integer.toString(tokenCount)));
         }
         if (timeout != null) {
             args.add(gs("TIMEOUT"));
@@ -72,6 +80,10 @@ public class FTSearchOptions {
         if (count) {
             args.add(gs("COUNT"));
         }
+        if (dialect != null) {
+            args.add(gs("DIALECT"));
+            args.add(gs(dialect.toString()));
+        }
         return args.toArray(new GlideString[0]);
     }
 
@@ -81,6 +93,10 @@ public class FTSearchOptions {
         void limit(Pair<Integer, Integer> limit) {}
 
         void count(boolean count) {}
+
+        void nocontent(boolean nocontent) {}
+
+        void dialect(Integer dialect) {}
 
         void identifiers(Map<GlideString, GlideString> identifiers) {}
 
@@ -135,6 +151,23 @@ public class FTSearchOptions {
         public FTSearchOptionsBuilder count() {
             this.count$value = true;
             this.count$set = true;
+            return this;
+        }
+
+        /** Once set, the query will return only document IDs without any field content. */
+        public FTSearchOptionsBuilder nocontent() {
+            this.nocontent$value = true;
+            this.nocontent$set = true;
+            return this;
+        }
+
+        /**
+         * Set the query dialect version.
+         *
+         * @param dialect The dialect version (currently, only dialect 2 is supported in valkey-search).
+         */
+        public FTSearchOptionsBuilder dialect(int dialect) {
+            this.dialect = dialect;
             return this;
         }
     }
