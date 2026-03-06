@@ -3276,6 +3276,156 @@ describe("Server Module Tests", () => {
             },
         );
 
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.SEARCH with NOCONTENT on HASH",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const prefix = "{" + getRandomKey() + "}:";
+                const index = prefix + "index";
+                const query = "*=>[KNN 2 @VEC $query_vec]";
+
+                // setup a hash index with a 2D HNSW vector field
+                expect(
+                    await GlideFt.create(
+                        client,
+                        index,
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "vec",
+                                alias: "VEC",
+                                attributes: {
+                                    algorithm: "HNSW",
+                                    distanceMetric: "L2",
+                                    dimensions: 2,
+                                },
+                            },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        },
+                    ),
+                ).toEqual("OK");
+
+                const binaryValue1 = Buffer.alloc(8);
+                expect(
+                    await client.hset(Buffer.from(prefix + "0"), [
+                        { field: "vec", value: binaryValue1 },
+                    ]),
+                ).toEqual(1);
+
+                const binaryValue2: Buffer = Buffer.alloc(8);
+                binaryValue2[6] = 0x80;
+                binaryValue2[7] = 0xbf;
+                expect(
+                    await client.hset(Buffer.from(prefix + "1"), [
+                        { field: "vec", value: binaryValue2 },
+                    ]),
+                ).toEqual(1);
+
+                // let server digest the data and update index
+                const sleep = new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+                await sleep;
+
+                const result: FtSearchReturnType = await GlideFt.search(
+                    client,
+                    index,
+                    query,
+                    {
+                        params: [{ key: "query_vec", value: binaryValue1 }],
+                        nocontent: true,
+                    },
+                );
+
+                // NOCONTENT returns count and keys with empty value arrays
+                expect(result[0]).toEqual(2);
+
+                for (const doc of result[1]) {
+                    expect(doc.value).toEqual([]);
+                }
+
+                await GlideFt.dropindex(client, index);
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.SEARCH with DIALECT on HASH",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const prefix = "{" + getRandomKey() + "}:";
+                const index = prefix + "index";
+                const query = "*=>[KNN 1 @VEC $query_vec]";
+
+                // setup a hash index with a 2D HNSW vector field
+                expect(
+                    await GlideFt.create(
+                        client,
+                        index,
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "vec",
+                                alias: "VEC",
+                                attributes: {
+                                    algorithm: "HNSW",
+                                    distanceMetric: "L2",
+                                    dimensions: 2,
+                                },
+                            },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        },
+                    ),
+                ).toEqual("OK");
+
+                const binaryValue1 = Buffer.alloc(8);
+                expect(
+                    await client.hset(Buffer.from(prefix + "0"), [
+                        { field: "vec", value: binaryValue1 },
+                    ]),
+                ).toEqual(1);
+
+                // let server digest the data and update index
+                const sleep = new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+                await sleep;
+
+                const result: FtSearchReturnType = await GlideFt.search(
+                    client,
+                    index,
+                    query,
+                    {
+                        decoder: Decoder.Bytes,
+                        params: [{ key: "query_vec", value: binaryValue1 }],
+                        dialect: 2,
+                    },
+                );
+
+                // DIALECT 2 returns count and documents with field content
+                expect(result[0]).toEqual(1);
+                expect(result[1].length).toEqual(1);
+                expect(result[1][0].value.length).toBeGreaterThan(0);
+
+                await GlideFt.dropindex(client, index);
+            },
+        );
+
         it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
