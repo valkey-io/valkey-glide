@@ -763,8 +763,13 @@ fn create_client_internal(
     let needs_iam = request
         .authentication_info
         .as_ref()
-        .and_then(|auth| auth.iam_credentials.0.as_ref())
+        .and_then(|auth| auth.iam_credentials.as_ref())
         .is_some();
+
+    logger_core::log_debug(
+        "FFI create_client",
+        format!("IAM detection: needs_iam={}", needs_iam),
+    );
 
     // Create client - use new_with_arc for IAM to keep Arc alive
     let (client, client_arc_for_iam) = if needs_iam {
