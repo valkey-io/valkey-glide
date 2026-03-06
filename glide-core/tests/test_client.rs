@@ -46,9 +46,9 @@ pub(crate) mod shared_client_tests {
     };
 
     #[cfg(feature = "iam_tests")]
-    const ELASTICACHE_CLUSTER_IAM_ENDPOINT: &str = "elasticache-cluster-iam.endpoint"; // Replace with your cluster endpoint
+    const ELASTICACHE_CLUSTER_IAM_ENDPOINT: &str = "affonsov-elasticache-nra7gl.serverless.use1.cache.amazonaws.com"; // ElastiCache serverless endpoint
     #[cfg(feature = "iam_tests")]
-    const ELASTICACHE_STANDALONE_IAM_ENDPOINT: &str = "elasticache-standalone-iam.endpoint"; // Replace with your standalone endpoint
+    const ELASTICACHE_STANDALONE_IAM_ENDPOINT: &str = "affonsov-elasticache-nra7gl.serverless.use1.cache.amazonaws.com"; // ElastiCache serverless endpoint
     #[cfg(feature = "iam_tests")]
     const MEMORYDB_CLUSTER_IAM_ENDPOINT: &str = "memorydb-cluster-iam.endpoint"; // Replace with your cluster endpoint
 
@@ -933,18 +933,12 @@ pub(crate) mod shared_client_tests {
         block_on_all(async {
             remove_test_credentials();
 
-            let cluster_name = if use_cluster {
-                "iam-auth-test"
-            } else {
-                "iam-auth-standalone"
-            };
-            let username = "iam-auth";
+            let cluster_name = "affonsov-elasticache";
+            let username = "iam-auth";  // Correct IAM username
             let region = "us-east-1";
-            let endpoint = if use_cluster {
-                ELASTICACHE_CLUSTER_IAM_ENDPOINT
-            } else {
-                ELASTICACHE_STANDALONE_IAM_ENDPOINT
-            };
+            let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT;
+
+            println!("Testing IAM with cluster_mode={}", use_cluster);
 
             // Use the provided endpoint and port
             let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
@@ -960,13 +954,20 @@ pub(crate) mod shared_client_tests {
                 ServiceType::ELASTICACHE,
             );
 
+            println!("Creating client...");
+
+
             // Attempt to create client with IAM authentication
             let client_result = Client::new(connection_request.into(), None).await;
 
+            println!("Client creation result: {:?}", client_result.is_ok());
+
             match client_result {
                 Ok(mut client) => {
+                    println!("Client created successfully, sending PING...");
                     // Test initial connection with PING
                     let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
+                    println!("Initial PING result: {:?}", initial_ping);
                     assert!(
                         initial_ping.is_ok(),
                         "Initial PING should succeed: {initial_ping:?}"
@@ -3012,6 +3013,60 @@ pub(crate) mod shared_client_tests {
                         "Client ID should change after reconnection if command succeeds"
                     );
                 }
+            }
+        });
+    }
+
+    #[cfg(feature = "iam_tests")]
+    #[rstest]
+    #[serial_test::serial]
+    fn test_iam_token_auto_refresh_short_interval() {
+        block_on_all(async {
+            remove_test_credentials();
+
+            let cluster_name = "affonsov-elasticache";
+            let username = "iam-auth";
+            let region = "us-east-1";
+            let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT;
+            let refresh_interval = 900; // 15 minutes
+
+            println!("Testing IAM auto-refresh with {}s interval", refresh_interval);
+            println!("Test will run indefinitely, sending PING every 30s until failure");
+
+            let address = redis::ConnectionAddr::Tcp(endpoint.to_string(), 6379);
+
+            let connection_request = create_iam_connection_request(
+                &[address],
+                cluster_name,
+                username,
+                region,
+                Some(refresh_interval),
+                false,
+                ServiceType::ELASTICACHE,
+            );
+
+            println!("Creating client...");
+            let mut client = Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create client");
+
+            println!("Client created. Starting continuous PING loop...");
+            
+            let mut iteration = 0;
+            loop {
+                iteration += 1;
+                
+                println!("[Iteration {}] Sending PING at {:?}...", iteration, std::time::SystemTime::now());
+                
+                match client.send_command(&mut redis::cmd("PING"), None).await {
+                    Ok(_) => println!("[Iteration {}] PING succeeded", iteration),
+                    Err(e) => {
+                        println!("[Iteration {}] PING FAILED: {}", iteration, e);
+                        panic!("Test failed at iteration {} after error: {}", iteration, e);
+                    }
+                }
+                
+                tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
             }
         });
     }
