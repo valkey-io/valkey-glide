@@ -167,6 +167,8 @@ const (
 	// robin manner, prioritizing local replicas, then the local primary, and falling back to any
 	// replica or the primary if needed.
 	AzAffinityReplicaAndPrimary
+	// ReadFromAllNodes - Spread the read requests between all nodes (primary and replicas) in a round-robin manner.
+	ReadFromAllNodes
 )
 
 func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
@@ -180,6 +182,10 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 
 	if readFrom == AzAffinityReplicaAndPrimary {
 		return protobuf.ReadFrom_AZAffinityReplicasAndPrimary
+	}
+
+	if readFrom == ReadFromAllNodes {
+		return protobuf.ReadFrom_AllNodes
 	}
 
 	return protobuf.ReadFrom_Primary

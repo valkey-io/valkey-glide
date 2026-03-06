@@ -14,6 +14,90 @@ from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import get_first_result
 
 
+class TestSyncReadFromStrategy:
+    def _get_num_replicas(self, client: GlideClusterClient) -> int:
+        info_replicas = get_first_result(
+            client.info([InfoSection.REPLICATION])
+        ).decode()
+        match = re.search(r"connected_slaves:(\d+)", info_replicas)
+        if match:
+            return int(match.group(1))
+        else:
+            raise ValueError(
+                "Could not find the number of replicas in the INFO REPLICATION response"
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_all_nodes_routes_to_primary_and_replicas(
+        self,
+        request,
+        cluster_mode: bool,
+        protocol: ProtocolVersion,
+    ):
+        """Test that ALL_NODES strategy distributes reads equally across ALL nodes (primary and replicas)"""
+        client = create_sync_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            read_from=ReadFrom.ALL_NODES,
+            request_timeout=2000,
+        )
+        assert type(client) is GlideClusterClient
+        assert client.config_resetstat() == OK
+
+        # Use more calls to ensure statistical significance
+        GET_CALLS = 60
+        for _ in range(GET_CALLS):
+            client.get("foo")
+
+        info_result = cast(
+            Mapping[bytes, bytes],
+            client.info([InfoSection.ALL], AllNodes()),
+        )
+
+        # Count calls per individual node
+        node_calls = []
+        total_get_calls = 0
+        primary_calls = 0
+        replica_calls = 0
+
+        for value in info_result.values():
+            info_str = value.decode()
+            is_primary = "role:master" in info_str
+            get_calls_match = re.search(r"cmdstat_get:calls=(\d+)", info_str)
+
+            if get_calls_match:
+                get_calls = int(get_calls_match.group(1))
+                node_calls.append(get_calls)
+                total_get_calls += get_calls
+                
+                if is_primary:
+                    primary_calls += get_calls
+                else:
+                    replica_calls += get_calls
+
+        # Verify total calls match expected
+        assert total_get_calls == GET_CALLS, f"Expected {GET_CALLS} total calls, got {total_get_calls}"
+        
+        # Verify both primary and replicas received calls
+        assert primary_calls > 0, f"Primary should receive calls with ALL_NODES strategy. Primary: {primary_calls}, Replicas: {replica_calls}"
+        assert replica_calls > 0, f"Replicas should receive calls with ALL_NODES strategy. Primary: {primary_calls}, Replicas: {replica_calls}"
+        
+        # Verify fair distribution - each node should get roughly equal calls
+        expected_calls_per_node = GET_CALLS // len(node_calls)
+        tolerance = max(3, expected_calls_per_node // 3)  # Allow 33% variance or minimum 3
+        
+        for calls in node_calls:
+            assert calls > 0, f"All nodes should receive calls with ALL_NODES strategy. Node calls: {node_calls}"
+            assert abs(calls - expected_calls_per_node) <= tolerance, (
+                f"Node calls should be roughly equal. Expected ~{expected_calls_per_node} per node, "
+                f"got {node_calls}, tolerance: ±{tolerance}"
+            )
+
+        client.close()
+
+
 # @pytest.mark.usefixtures("multiple_replicas_cluster")
 class TestSyncAZAffinity:
     def _get_num_replicas(self, client: GlideClusterClient) -> int:
