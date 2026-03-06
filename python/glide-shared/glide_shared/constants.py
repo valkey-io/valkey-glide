@@ -77,7 +77,7 @@ TJsonResponse = Union[T, List[Optional[T]]]
 #
 # For more information, see: https://redis.io/docs/data-types/json/path/ .
 TJsonUniversalResponse = Union[T, List[T]]
-TEncodable = Union[str, bytes]
+TEncodable = Union[str, bytes, bytearray, memoryview]
 TFunctionListResponse = List[
     Mapping[
         bytes,
