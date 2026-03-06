@@ -41,7 +41,7 @@
 //! - Invalid routing scenarios
 
 use crate::aio::ConnectionLike;
-use crate::cluster_async::{ClusterConnInner, Connect, InnerCore, RefreshPolicy, MUTEX_READ_ERR};
+use crate::cluster_async::{ClusterConnInner, Connect, InnerCore, RefreshPolicy};
 use crate::cluster_routing::SlotAddr;
 use crate::cluster_topology::SLOT_SIZE;
 use crate::{cmd, from_redis_value, ErrorKind, RedisError, RedisResult, Value};
@@ -401,7 +401,8 @@ impl ScanState {
         let mut new_scanned_slots_map: SlotsBitsArray = [0; BITS_ARRAY_SIZE as usize];
         let new_cursor = 0;
         let address =
-            next_address_to_scan(core, 0, &mut new_scanned_slots_map, allow_non_covered_slots)?;
+            next_address_to_scan(core, 0, &mut new_scanned_slots_map, allow_non_covered_slots)
+                .await?;
 
         match address {
             NextNodeResult::AllSlotsCompleted => Ok(ScanState::create_finished_state()),
@@ -441,7 +442,9 @@ impl ScanState {
             next_slot,
             &mut scanned_slots_map,
             allow_non_covered_slots,
-        ) {
+        )
+        .await
+        {
             Ok(NextNodeResult::Address(new_address)) => {
                 let new_epoch = core.address_epoch(&new_address).await.unwrap_or(0);
                 Ok(ScanState::new(
@@ -538,7 +541,7 @@ enum NextNodeResult {
 ///
 /// * `C`: The connection type that must implement `ConnectionLike`, `Connect`, `Clone`, `Send`, `Sync`, and `'static`.
 ///
-fn next_address_to_scan<C>(
+async fn next_address_to_scan<C>(
     core: &InnerCore<C>,
     mut slot: u16,
     scanned_slots_map: &mut SlotsBitsArray,
@@ -555,7 +558,7 @@ where
         if let Some(addr) = core
             .conn_lock
             .read()
-            .expect(MUTEX_READ_ERR)
+            .await
             .slot_map
             .node_address_for_slot(slot, SlotAddr::ReplicaRequired)
         {
@@ -753,7 +756,9 @@ where
         next_slot,
         &mut scanned_slots_map,
         cluster_scan_args.allow_non_covered_slots,
-    ) {
+    )
+    .await
+    {
         Ok(NextNodeResult::Address(new_address)) => {
             let new_epoch = core.address_epoch(&new_address).await.unwrap_or(0);
             Ok(Some(ScanState::new(

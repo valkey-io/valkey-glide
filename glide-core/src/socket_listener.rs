@@ -5,7 +5,7 @@ use crate::client::Client;
 use crate::client::get_or_init_runtime;
 use crate::compression::process_command_args_for_compression;
 
-use crate::cluster_scan_container::get_cluster_scan_cursor;
+use crate::cluster_scan_container::get_cluster_scan_cursor_async;
 use crate::command_request::{
     Batch, ClusterScan, Command, CommandRequest, Routes, SlotTypes, command, command_request,
 };
@@ -467,7 +467,7 @@ async fn cluster_scan(cluster_scan: ClusterScan, mut client: Client) -> ClientUs
     let cluster_scan_cursor = if cursor.is_empty() {
         ScanStateRC::new()
     } else {
-        get_cluster_scan_cursor(cursor)?
+        get_cluster_scan_cursor_async(cursor).await?
     };
     let mut cluster_scan_args_builder =
         ClusterScanArgs::builder().allow_non_covered_slots(cluster_scan.allow_non_covered_slots);
