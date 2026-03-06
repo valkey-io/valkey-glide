@@ -1887,6 +1887,15 @@ impl Client {
         request: ConnectionRequest,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
+        // IAM authentication requires keeping the client in an Arc to prevent memory leaks
+        // Use Client::new_with_arc() instead for IAM-enabled clients
+        if request.authentication_info.as_ref().and_then(|auth| auth.iam_config.as_ref()).is_some() {
+            return Err(ConnectionError::Configuration(
+                "IAM authentication requires using Client::new_with_arc() instead of Client::new() to prevent memory leaks. \
+                 The Arc must be kept alive by the caller (e.g., FFI layer) for the IAM callback to function correctly.".to_string()
+            ));
+        }
+
         // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
         let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
 
@@ -1931,7 +1940,7 @@ impl Client {
             )
             .await;
 
-            // Create the Client first without IAM token manager
+            // Create the Client (no IAM support in this method)
             let client = Self {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
@@ -1939,33 +1948,8 @@ impl Client {
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
-                self_weak: std::sync::Weak::new(), // Placeholder, will be set below
+                self_weak: std::sync::Weak::new(), // Empty for non-IAM clients
             };
-
-            let client_arc = Arc::new(RwLock::new(client));
-
-            // Store the weak self-reference in the client
-            {
-                let mut client_guard = client_arc.write().await;
-                client_guard.self_weak = Arc::downgrade(&client_arc);
-            }
-
-            // Create IAM token manager if needed, passing the client's self-reference
-            let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                let self_weak = {
-                    let client_guard = client_arc.read().await;
-                    client_guard.self_weak.clone()
-                };
-                Self::create_iam_token_manager(auth_info, self_weak).await
-            } else {
-                None
-            };
-
-            // Update the client with the IAM token manager
-            {
-                let mut client_guard = client_arc.write().await;
-                client_guard.iam_token_manager = iam_token_manager.clone();
-            }
 
             let is_lazy = request.lazy_connect;
             let internal_client = if is_lazy {
@@ -1974,21 +1958,21 @@ impl Client {
                     push_sender,
                 }))
             } else if request.cluster_mode_enabled {
-                let client = create_cluster_client(
+                let cluster_client = create_cluster_client(
                     request,
                     push_sender,
-                    iam_token_manager.as_ref(),
+                    None, // No IAM support in Client::new()
                     pubsub_synchronizer.clone(),
                 )
                 .await
                 .map_err(ConnectionError::Cluster)?;
-                ClientWrapper::Cluster { client }
+                ClientWrapper::Cluster { client: cluster_client }
             } else {
                 ClientWrapper::Standalone(
                     StandaloneClient::create_client(
                         request,
                         push_sender,
-                        iam_token_manager.as_ref(),
+                        None, // No IAM support in Client::new()
                         Some(pubsub_synchronizer.clone()),
                     )
                     .await
@@ -2014,12 +1998,6 @@ impl Client {
                     );
                 }
             }
-
-            // Return the client from the Arc
-            let client = {
-                let client_guard = client_arc.read().await;
-                client_guard.clone()
-            };
 
             Ok(client)
         })
