@@ -336,8 +336,6 @@ async fn send_command(
         set_db_attributes(span, &cmd, &client);
     }
 
-    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
-
     // Process command arguments for compression if compression is enabled
     if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
         log_warn(
@@ -354,9 +352,6 @@ async fn send_command(
         .await
         .map_err(|err| err.into());
 
-    if let Some(c) = child_span {
-        c.end()
-    };
     res
 }
 
@@ -525,23 +520,6 @@ async fn invoke_script(
         .map_err(|err| err.into())
 }
 
-/// Creates a child span for telemetry if telemetry is enabled
-fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Option<GlideSpan> {
-    // Early return if no parent span is provided
-    let parent_span = span?;
-
-    match parent_span.add_span(name) {
-        Ok(child_span) => Some(child_span),
-        Err(error_msg) => {
-            log_error(
-                "OpenTelemetry error",
-                format!("Failed to create child span with name `{name}`. Error: {error_msg:?}"),
-            );
-            None
-        }
-    }
-}
-
 async fn send_batch(
     request: Batch,
     client: &mut Client,
@@ -550,8 +528,6 @@ async fn send_batch(
 ) -> ClientUsageResult<Value> {
     let mut pipeline = redis::Pipeline::with_capacity(request.commands.capacity());
     pipeline.set_pipeline_span(command_span);
-    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
-
     if request.is_atomic {
         pipeline.atomic();
     }
@@ -624,9 +600,6 @@ async fn send_batch(
         Err(e) => Err(e),
     };
 
-    if let Some(c) = child_span {
-        c.end()
-    };
     processed_res
 }
 
