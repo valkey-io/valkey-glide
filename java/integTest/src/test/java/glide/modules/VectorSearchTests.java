@@ -319,6 +319,145 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
+    public void ft_search_nocontent() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", "VEC", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        String key1 = prefix + "0";
+        String key2 = prefix + "1";
+
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(key1),
+                                createMap(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .get());
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(key2),
+                                createMap(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0,
+                                                    (byte) 0x80,
+                                                    (byte) 0xBF
+                                                })))
+                        .get());
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        FTSearchOptions options =
+                FTSearchOptions.builder()
+                        .nocontent()
+                        .params(
+                                createMap(
+                                        gs("query_vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .build();
+        String query = "*=>[KNN 2 @VEC $query_vec]";
+        Object[] ftsearch = FT.search(client, index, query, options).get();
+
+        assertArrayEquals(
+                new Object[] {2L, createMap(gs(key1), createMap(), gs(key2), createMap())}, ftsearch);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_dialect() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("vec", "VEC", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        String key1 = prefix + "0";
+
+        assertEquals(
+                1L,
+                client
+                        .hset(
+                                gs(key1),
+                                createMap(
+                                        gs("vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .get());
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        FTSearchOptions options =
+                FTSearchOptions.builder()
+                        .dialect(2)
+                        .params(
+                                createMap(
+                                        gs("query_vec"),
+                                        gs(
+                                                new byte[] {
+                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
+                                                    (byte) 0
+                                                })))
+                        .addReturnField("vec")
+                        .build();
+        String query = "*=>[KNN 1 @VEC $query_vec]";
+        Object[] ftsearch = FT.search(client, index, query, options).get();
+
+        assertEquals(2, ftsearch.length);
+        assertEquals(1L, ftsearch[0]);
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Map<GlideString, GlideString>> docs =
+                (Map<GlideString, Map<GlideString, GlideString>>) ftsearch[1];
+        assertEquals(1, docs.size());
+        assertTrue(docs.containsKey(gs(key1)));
+        assertFalse(docs.get(gs(key1)).isEmpty());
+    }
+
+    @SneakyThrows
+    @Test
     public void ft_drop_and_ft_list() {
         GlideString index = gs(UUID.randomUUID().toString());
         assertEquals(

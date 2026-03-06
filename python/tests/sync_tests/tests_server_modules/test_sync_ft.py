@@ -1213,3 +1213,112 @@ class TestSyncFt:
         # Drop all indexes.
         assert ft.dropindex(glide_sync_client, index_name) == OK
         assert ft.dropindex(glide_sync_client, index_name_string) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_ft_search_nocontent(self, glide_sync_client: GlideClusterClient):
+        prefix = "{nocontent-search-" + str(uuid.uuid4()) + "}:"
+        key1 = prefix + "1"
+        key2 = prefix + "2"
+        index = prefix + "idx"
+        vec_field = "vec"
+
+        vector1 = array.array("f", [1.0, 0.0]).tobytes()
+        vector2 = array.array("f", [0.0, 1.0]).tobytes()
+
+        assert (
+            ft.create(
+                glide_sync_client,
+                index,
+                schema=[
+                    VectorField(
+                        name=vec_field,
+                        algorithm=VectorAlgorithm.FLAT,
+                        attributes=VectorFieldAttributesFlat(
+                            dimensions=2,
+                            distance_metric=DistanceMetricType.L2,
+                            type=VectorType.FLOAT32,
+                        ),
+                    )
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+        assert glide_sync_client.hset(key1, {vec_field: vector1}) == 1
+        assert glide_sync_client.hset(key2, {vec_field: vector2}) == 1
+        time.sleep(self.sleep_wait_time)
+
+        knn_query = f"*=>[KNN 2 @{vec_field} $query_vec]"
+        result = ft.search(
+            glide_sync_client,
+            index,
+            knn_query,
+            options=FtSearchOptions(
+                params={"query_vec": vector1},
+                nocontent=True,
+            ),
+        )
+        # NOCONTENT: count is 2, each doc entry has an empty fields map
+        assert result[0] == 2
+        result_map = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
+        for doc_fields in result_map.values():
+            assert doc_fields == {}
+
+        assert ft.dropindex(glide_sync_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_ft_search_dialect(self, glide_sync_client: GlideClusterClient):
+        prefix = "{dialect-search-" + str(uuid.uuid4()) + "}:"
+        key1 = prefix + "1"
+        index = prefix + "idx"
+        vec_field = "vec"
+
+        vector1 = array.array("f", [1.0, 0.0]).tobytes()
+
+        assert (
+            ft.create(
+                glide_sync_client,
+                index,
+                schema=[
+                    VectorField(
+                        name=vec_field,
+                        algorithm=VectorAlgorithm.FLAT,
+                        attributes=VectorFieldAttributesFlat(
+                            dimensions=2,
+                            distance_metric=DistanceMetricType.L2,
+                            type=VectorType.FLOAT32,
+                        ),
+                    )
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+        assert glide_sync_client.hset(key1, {vec_field: vector1}) == 1
+        time.sleep(self.sleep_wait_time)
+
+        # DIALECT 2 is the only supported dialect in valkey-search 1.1
+        knn_query = f"*=>[KNN 1 @{vec_field} $query_vec]"
+        result = ft.search(
+            glide_sync_client,
+            index,
+            knn_query,
+            options=FtSearchOptions(
+                params={"query_vec": vector1},
+                dialect=2,
+            ),
+        )
+        assert result[0] == 1
+        result_map = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
+        assert len(result_map) == 1
+        # Verify the returned document has field content
+        for doc_fields in result_map.values():
+            assert len(doc_fields) > 0
+
+        assert ft.dropindex(glide_sync_client, index) == OK
