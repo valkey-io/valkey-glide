@@ -259,6 +259,9 @@ pub struct Client {
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    // Weak self-reference for IAM callback - allows callback to access this Client instance
+    // without creating a circular reference. The strong Arc is kept alive by the FFI layer.
+    self_weak: std::sync::Weak<tokio::sync::RwLock<Self>>,
 }
 
 async fn run_with_timeout<T>(
@@ -1920,13 +1923,24 @@ impl Client {
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
+                self_weak: std::sync::Weak::new(), // Placeholder, will be set below
             };
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            // Create IAM token manager if needed, passing a weak Arc to prevent circular reference
+            // Store the weak self-reference in the client
+            {
+                let mut client_guard = client_arc.write().await;
+                client_guard.self_weak = Arc::downgrade(&client_arc);
+            }
+
+            // Create IAM token manager if needed, passing the client's self-reference
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, Arc::downgrade(&client_arc)).await
+                let self_weak = {
+                    let client_guard = client_arc.read().await;
+                    client_guard.self_weak.clone()
+                };
+                Self::create_iam_token_manager(auth_info, self_weak).await
             } else {
                 None
             };
@@ -2068,13 +2082,24 @@ impl Client {
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
+                self_weak: std::sync::Weak::new(), // Placeholder, will be set below
             };
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            // Create IAM token manager with WEAK reference to prevent circular reference
+            // Store the weak self-reference in the client
+            {
+                let mut client_guard = client_arc.write().await;
+                client_guard.self_weak = Arc::downgrade(&client_arc);
+            }
+
+            // Create IAM token manager with the client's self-reference
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, Arc::downgrade(&client_arc)).await
+                let self_weak = {
+                    let client_guard = client_arc.read().await;
+                    client_guard.self_weak.clone()
+                };
+                Self::create_iam_token_manager(auth_info, self_weak).await
             } else {
                 None
             };

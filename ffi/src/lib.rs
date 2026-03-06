@@ -425,8 +425,8 @@ pub struct ClientAdapter {
 struct CommandExecutionCore {
     client: GlideClient,
     client_type: ClientType,
-    // Keep the Arc alive for IAM callback to prevent memory leak
-    // This is only populated when IAM authentication is configured
+    // Keep Arc alive for IAM callback - the client above is cloned from this Arc
+    // The client's self_weak field points to this Arc, allowing the callback to work
     #[allow(dead_code)]
     client_arc_for_iam: Option<Arc<tokio::sync::RwLock<GlideClient>>>,
 }
@@ -766,9 +766,8 @@ fn create_client_internal(
         .and_then(|auth| auth.iam_credentials.0.as_ref())
         .is_some();
 
-    // Create client with or without Arc based on IAM requirement
+    // Create client - use new_with_arc for IAM to keep Arc alive
     let (client, client_arc_for_iam) = if needs_iam {
-        // Use new_with_arc for IAM clients to keep Arc alive
         let client_arc = runtime
             .block_on(GlideClient::new_with_arc(
                 ConnectionRequest::from(request),
@@ -776,7 +775,8 @@ fn create_client_internal(
             ))
             .map_err(|err| err.to_string())?;
 
-        // Extract client for command execution while keeping Arc alive
+        // Clone client from Arc for command execution
+        // The cloned client's self_weak field points to client_arc
         let client = {
             let guard = runtime.block_on(client_arc.read());
             guard.clone()
@@ -784,7 +784,6 @@ fn create_client_internal(
 
         (client, Some(client_arc))
     } else {
-        // Use regular new() for non-IAM clients (better performance)
         let client = runtime
             .block_on(GlideClient::new(
                 ConnectionRequest::from(request),
