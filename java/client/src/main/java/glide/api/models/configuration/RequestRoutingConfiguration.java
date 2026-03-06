@@ -125,7 +125,7 @@ public class RequestRoutingConfiguration {
          *
          * @param host The endpoint of the node. If <code>port</code> is not provided, should be in the
          *     <code>"address:port"</code> format, where <code>address</code> is the preferred endpoint
-         *     as shown in the output of the <code>CLUSTER SLOTS</code> command.
+         *     as shown in the output of the <code>CLUSTER SHARDS</code> command.
          * @param port The port to access the node. If port is not provided, <code>host</code> is
          *     assumed to be in the format <code>"address:port"</code>.
          */

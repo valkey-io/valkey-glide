@@ -14,7 +14,7 @@ func (suite *GlideTestSuite) TestSubscriptionSyncTimestampMetricOnSuccess() {
 	channel := "sync_timestamp_test"
 
 	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
+	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
 	defer receiver.Close()
 
 	// Get initial statistics

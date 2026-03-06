@@ -1,6 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from glide_shared import (
+    ALL_CHANNELS,
+    ALL_PATTERNS,
+    ALL_SHARDED_CHANNELS,
     OK,
     TOK,
     AdvancedGlideClientConfiguration,
@@ -160,9 +163,6 @@ from .logger import Level as LogLevel
 from .logger import Logger
 from .opentelemetry import OpenTelemetry
 from .sync_commands import (
-    ALL_CHANNELS,
-    ALL_PATTERNS,
-    ALL_SHARDED_CHANNELS,
     ft,
     glide_json,
 )
