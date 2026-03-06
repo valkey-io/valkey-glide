@@ -51,6 +51,7 @@ EXCLUDED_TESTS = {
         "test_statistics",
         "test_UDS_socket_connection_failure",
         "test_cancelled_request_handled_gracefully",
+        "test_client_usable_after_cancelled_commands",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         # Dynamic PubSub tests helper functions
