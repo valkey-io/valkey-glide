@@ -1,5 +1,8 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// DNS resolution tests.
+// See DEVELOPER.md#dns-tests for instructions on how to run them locally.
+
 package integTest
 
 import (
@@ -10,9 +13,6 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
-
-// DNS resolution tests.
-// See DEVELOPER.md#dns-tests for instructions on how to run them locally.
 
 const hostnameInvalid = "nonexistent.invalid"
 
@@ -85,7 +85,7 @@ func (suite *GlideTestSuite) buildClusterClient(hostname string, useTLS bool) (*
 func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Standalone() {
 	skipIfNotEnabled(suite, false)
 
-	client, err := suite.buildStandaloneClient(HostnameNoTLS, false)
+	client, err := suite.buildStandaloneClient(HOSTNAME_NO_TLS, false)
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -95,7 +95,7 @@ func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Standalone(
 func (suite *GlideTestSuite) TestDnsConnectWithValidHostnameSucceeds_Cluster() {
 	skipIfNotEnabled(suite, false)
 
-	client, err := suite.buildClusterClient(HostnameNoTLS, false)
+	client, err := suite.buildClusterClient(HOSTNAME_NO_TLS, false)
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -119,7 +119,7 @@ func (suite *GlideTestSuite) TestDnsConnectWithInvalidHostnameFails_Cluster() {
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Standalone() {
 	skipIfNotEnabled(suite, true)
 
-	client, err := suite.buildStandaloneClient(HostnameTLS, true)
+	client, err := suite.buildStandaloneClient(HOSTNAME_TLS, true)
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -129,7 +129,7 @@ func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Standal
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Cluster() {
 	skipIfNotEnabled(suite, true)
 
-	client, err := suite.buildClusterClient(HostnameTLS, true)
+	client, err := suite.buildClusterClient(HOSTNAME_TLS, true)
 	require.NoError(suite.T(), err)
 	defer client.Close()
 
@@ -139,13 +139,13 @@ func (suite *GlideTestSuite) TestDnsTlsWithHostnameInCertificateSucceeds_Cluster
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameNotInCertificateFails_Standalone() {
 	skipIfNotEnabled(suite, true)
 
-	_, err := suite.buildStandaloneClient(HostnameNoTLS, true)
+	_, err := suite.buildStandaloneClient(HOSTNAME_NO_TLS, true)
 	assert.Error(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestDnsTlsWithHostnameNotInCertificateFails_Cluster() {
 	skipIfNotEnabled(suite, true)
 
-	_, err := suite.buildClusterClient(HostnameNoTLS, true)
+	_, err := suite.buildClusterClient(HOSTNAME_NO_TLS, true)
 	assert.Error(suite.T(), err)
 }

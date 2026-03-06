@@ -257,7 +257,7 @@ pytest -v --async-backend=trio --async-backend=asyncio
 
 ### DNS Tests
 
-To run [async](tests/async_tests/test_dns.py) and [sync](tests/async_tests/test_sync_dns.py) DNS tests locally:
+To run [async](tests/async_tests/test_dns.py) and [sync](tests/sync_tests/test_sync_dns.py) DNS tests locally:
 
 1. Add the following entries to your hosts file:
    - Linux/macOS: `/etc/hosts`

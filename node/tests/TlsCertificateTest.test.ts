@@ -17,7 +17,7 @@ import {
     Logger,
     ProtocolVersion,
 } from "../build-ts";
-import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
+import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
     assertConnected,
     getCaCertificateData,
@@ -480,7 +480,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv4 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV4,
+                    host: IP_ADDRESS_V4,
                     port: standaloneCluster.ports()[0],
                 };
                 standaloneClient = await GlideClient.createClient({
@@ -502,7 +502,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv6 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV6,
+                    host: IP_ADDRESS_V6,
                     port: standaloneCluster.ports()[0],
                 };
                 standaloneClient = await GlideClient.createClient({
@@ -526,7 +526,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv4 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV4,
+                    host: IP_ADDRESS_V4,
                     port: clusterModeCluster.getAddresses()[0][1],
                 };
                 clusterClient = await GlideClusterClient.createClient({
@@ -548,7 +548,7 @@ describe("TLS with custom certificates", () => {
             "should connect with IPv6 address",
             async () => {
                 const address = {
-                    host: HOST_ADDRESS_IPV6,
+                    host: IP_ADDRESS_V6,
                     port: clusterModeCluster.getAddresses()[0][1],
                 };
                 clusterClient = await GlideClusterClient.createClient({

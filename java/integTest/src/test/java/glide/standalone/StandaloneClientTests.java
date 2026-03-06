@@ -1,7 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.Constants.IP_ADDRESS_V4;
+import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
@@ -15,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.GlideClient;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -25,6 +30,8 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(20) // seconds
 public class StandaloneClientTests {
@@ -416,6 +423,19 @@ public class StandaloneClientTests {
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {IP_ADDRESS_V4, IP_ADDRESS_V6})
+    @SneakyThrows
+    public void testStandaloneConnectWithIpAddressSucceeds(String ipAddress) {
+        Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
+        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
+        GlideClientConfiguration config = commonClientConfig().address(address).build();
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            glide.TestUtilities.assertConnected(client);
         }
     }
 }
