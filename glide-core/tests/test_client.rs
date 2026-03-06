@@ -3046,9 +3046,18 @@ pub(crate) mod shared_client_tests {
             );
 
             println!("Creating client...");
-            let mut client = Client::new(connection_request.into(), None)
+
+            // IAM clients must use new_with_arc() to keep the Arc alive for the callback
+            let client_arc = Client::new_with_arc(connection_request.into(), None)
                 .await
                 .expect("Failed to create client");
+            
+            // For testing, we can clone the client from the Arc
+            // In production (FFI layer), the Arc is kept alive in CommandExecutionCore
+            let mut client = {
+                let guard = client_arc.read().await;
+                guard.clone()
+            };
 
             println!("Client created. Starting continuous PING loop...");
             
