@@ -1182,6 +1182,65 @@ pub unsafe extern "C-unwind" fn command(
     route_bytes_len: usize,
     span_ptr: u64,
 ) -> *mut CommandResult {
+    unsafe {
+        command_with_buffer(
+            client_adapter_ptr,
+            request_id,
+            command_type,
+            arg_count,
+            args,
+            args_len,
+            route_bytes,
+            route_bytes_len,
+            std::ptr::null_mut(),
+            0,
+            span_ptr,
+        )
+    }
+}
+
+/// Executes a command, optionally copying a BulkString response directly into a
+/// caller-provided buffer instead of returning it as a heap-allocated value.
+///
+/// When `response_buf` is null (and `response_buf_len` is 0), behaves identically
+/// to [`command`] — the response flows through the normal `execute_request` path.
+///
+/// When `response_buf` is non-null, the response is written directly into the buffer:
+/// - `response.int_value` = number of bytes written, or -1 for Nil.
+/// - Errors if the value exceeds `response_buf_len` or the response type is not
+///   BulkString/Nil.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`std::sync::Arc::from_raw`].
+/// * `request_id` must be a request ID from the foreign language and must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `arg_count` the number of elements in `args` and `args_len`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `arg_count` must be 0 if `args` and `args_len` are null.
+/// * `args` and `args_len` must either be both null or be both not null.
+/// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * When non-null, `response_buf` must point to a writable buffer of at least `response_buf_len` bytes.
+/// * `response_buf_len` must be 0 if `response_buf` is null.
+/// * `span_ptr` is a valid pointer to [`Arc<GlideSpan>`], a span created by [`create_otel_span`] or `0`. The span must be valid until the command is finished.
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn command_with_buffer(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    command_type: RequestType,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+    response_buf: *mut u8,
+    response_buf_len: usize,
+    span_ptr: u64,
+) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
         Arc::increment_strong_count(client_adapter_ptr);
@@ -1239,6 +1298,7 @@ pub unsafe extern "C-unwind" fn command(
             cmd.arg(command_arg);
         }
     }
+
     if span_ptr != 0 {
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
@@ -1269,7 +1329,23 @@ pub unsafe extern "C-unwind" fn command(
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
     let client_for_release = client_adapter.core.client.clone();
-    let result = client_adapter.execute_request(request_id, async move {
+
+    if response_buf.is_null() {
+        // Normal path: delegate to execute_request (supports both async and sync clients)
+        let result = client_adapter.execute_request(request_id, async move {
+            let routing_info = get_route(route, Some(&cmd))?;
+            let result = client.send_command(&mut cmd, routing_info).await;
+            client_for_release.release_inflight_request();
+            result
+        });
+        if let Ok(span) = child_span {
+            span.end();
+        }
+        return result;
+    }
+
+    // Buffer path: block_on, then copy BulkString directly into caller's buffer
+    let value_result = client_adapter.runtime.block_on(async move {
         let routing_info = get_route(route, Some(&cmd))?;
         let result = client.send_command(&mut cmd, routing_info).await;
         client_for_release.release_inflight_request();
@@ -1278,7 +1354,72 @@ pub unsafe extern "C-unwind" fn command(
     if let Ok(span) = child_span {
         span.end();
     }
-    result
+    unsafe { copy_value_to_buffer(value_result, response_buf, response_buf_len) }
+}
+
+/// Copies a command result value into a caller-provided buffer.
+///
+/// For `BulkString` responses, the data is copied into `buf` and a `CommandResult`
+/// with `response.int_value` set to the number of bytes written is returned.
+/// For `Nil` responses, `response.int_value` is set to -1.
+/// For any other response type, or if the value exceeds `buf_len`, an error is returned.
+///
+/// # Safety
+///
+/// * `buf` must point to a writable buffer of at least `buf_len` bytes.
+/// * `buf` must remain valid for the duration of this call.
+unsafe fn copy_value_to_buffer(
+    result: RedisResult<Value>,
+    buf: *mut u8,
+    buf_len: usize,
+) -> *mut CommandResult {
+    match result {
+        Ok(Value::BulkString(data)) => {
+            if data.len() > buf_len {
+                let err = RedisError::from((
+                    ErrorKind::ClientError,
+                    "Value size exceeds buffer capacity",
+                    format!(
+                        "value is {} bytes but buffer is {} bytes",
+                        data.len(),
+                        buf_len
+                    ),
+                ));
+                return create_error_result_with_redis_error(err);
+            }
+            unsafe {
+                std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
+            }
+            let response = CommandResponse {
+                response_type: ResponseType::Int,
+                int_value: data.len() as c_long,
+                ..Default::default()
+            };
+            Box::into_raw(Box::new(CommandResult {
+                response: Box::into_raw(Box::new(response)),
+                command_error: std::ptr::null_mut(),
+            }))
+        }
+        Ok(Value::Nil) => {
+            let response = CommandResponse {
+                response_type: ResponseType::Int,
+                int_value: -1,
+                ..Default::default()
+            };
+            Box::into_raw(Box::new(CommandResult {
+                response: Box::into_raw(Box::new(response)),
+                command_error: std::ptr::null_mut(),
+            }))
+        }
+        Ok(_) => {
+            let err = RedisError::from((
+                ErrorKind::TypeError,
+                "Unexpected response type for buffer write",
+            ));
+            create_error_result_with_redis_error(err)
+        }
+        Err(err) => create_error_result_with_redis_error(err),
+    }
 }
 
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.

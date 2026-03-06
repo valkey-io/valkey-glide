@@ -70,6 +70,7 @@ class CoreCommands(Protocol):
         request_type: RequestType.ValueType,
         args: List[TEncodable],
         route: Optional[Route] = ...,
+        response_buffer: Optional[memoryview] = ...,
     ) -> TResult: ...
 
     def _execute_batch(
@@ -236,7 +237,9 @@ class CoreCommands(Protocol):
             args.extend(expiry.get_cmd_args())
         return cast(Optional[bytes], self._execute_command(RequestType.Set, args))
 
-    def get(self, key: TEncodable) -> Optional[bytes]:
+    def get(
+        self, key: TEncodable, buffer: Optional[memoryview] = None
+    ) -> Optional[Union[bytes, int]]:
         """
         Get the value associated with the given key, or null if no such value exists.
 
@@ -244,18 +247,33 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to retrieve from the database.
+            buffer (Optional[memoryview]): If provided, the value is copied directly into
+                this writable buffer instead of allocating a new Python bytes object.
+                When a buffer is provided, returns the number of bytes written (int),
+                or -1 if the key does not exist.
 
         Returns:
-            Optional[bytes]: If the key exists, returns the value of the key as a byte string.
+            Optional[bytes]: If no buffer is provided and the key exists, returns the value
+                as a byte string. Returns None if the key does not exist.
+            int: If a buffer is provided, returns the number of bytes written, or -1 if
+                the key does not exist.
 
-            Otherwise, return None.
+        Raises:
+            TypeError: If buffer is provided but is read-only.
+            RequestError: If buffer is provided and the value is larger than the buffer.
 
         Example:
             >>> client.get("key")
                 b'value'
+            >>> buf = bytearray(1024)
+            >>> client.get("key", buffer=memoryview(buf))
+                5
         """
         args: List[TEncodable] = [key]
-        return cast(Optional[bytes], self._execute_command(RequestType.Get, args))
+        return cast(
+            Optional[Union[bytes, int]],
+            self._execute_command(RequestType.Get, args, response_buffer=buffer),
+        )
 
     def getdel(self, key: TEncodable) -> Optional[bytes]:
         """

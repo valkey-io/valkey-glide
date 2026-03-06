@@ -392,11 +392,14 @@ class BaseClient(CoreCommands):
         request_type: RequestType.ValueType,
         args: List[TEncodable],
         route: Optional[Route] = None,
+        response_buffer: Optional[memoryview] = None,
     ) -> TResult:
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+        if response_buffer is not None and response_buffer.readonly:
+            raise TypeError("response_buffer must be writable")
         client_adapter_ptr = self._core_client
         if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
@@ -420,17 +423,33 @@ class BaseClient(CoreCommands):
             # Route bytes should be kept alive in the scope of the FFI call
             route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-            result = self._lib.command(
-                client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
-                0,  # Request ID - placeholder for sync clients (used for async callbacks)
-                request_type,  # Request type (e.g., GET or SET)
-                len(args),  # Number of arguments
-                c_args,  # Array of argument pointers
-                c_lengths,  # Array of argument lengths
-                route_ptr,  # Pointer to protobuf-encoded routing information (NULL if no routing)
-                route_len,  # Length of the routing data in bytes (0 if no routing)
-                span,  # Span pointer for tracing
-            )
+            if response_buffer is not None:
+                buf_ptr = self._ffi.from_buffer(response_buffer)
+                result = self._lib.command_with_buffer(
+                    client_adapter_ptr,
+                    0,
+                    request_type,
+                    len(args),
+                    c_args,
+                    c_lengths,
+                    route_ptr,
+                    route_len,
+                    buf_ptr,
+                    len(response_buffer),
+                    span,
+                )
+            else:
+                result = self._lib.command(
+                    client_adapter_ptr,
+                    0,
+                    request_type,
+                    len(args),
+                    c_args,
+                    c_lengths,
+                    route_ptr,
+                    route_len,
+                    span,
+                )
         finally:
             # Drop span if it was created
             if span != 0:
