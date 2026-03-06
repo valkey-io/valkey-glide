@@ -1335,24 +1335,35 @@ impl Client {
 
     /// IAM token refresh callback function
     ///
-    /// On new token, spawns a task that write-locks the `Client` and calls
-    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
-    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
+    /// On new token, spawns a task that attempts to upgrade the weak reference,
+    /// write-locks the `Client`, and calls `update_connection_password(Some(new_token), true)`.
+    /// Uses a weak `Weak<RwLock<Client>>` to prevent circular reference memory leaks.
+    ///
+    /// If the Client has been dropped, the callback silently does nothing.
     fn iam_callback(
-        client_arc: Arc<tokio::sync::RwLock<Client>>,
+        client_weak: std::sync::Weak<tokio::sync::RwLock<Client>>,
     ) -> impl Fn(String) + Send + 'static {
         move |new_token: String| {
-            let client_arc = Arc::clone(&client_arc);
+            let client_weak = client_weak.clone();
             tokio::spawn(async move {
-                let mut client = client_arc.write().await;
-                let result = client
-                    .update_connection_password(Some(new_token.clone()), true)
-                    .await;
+                // Try to upgrade the weak reference
+                if let Some(client_arc) = client_weak.upgrade() {
+                    let mut client = client_arc.write().await;
+                    let result = client
+                        .update_connection_password(Some(new_token.clone()), true)
+                        .await;
 
-                if let Err(e) = result {
-                    log_error(
+                    if let Err(e) = result {
+                        log_error(
+                            "IAM token refresh",
+                            format!("Failed to update connection password with immediate auth: {e}"),
+                        );
+                    }
+                } else {
+                    // Client was already dropped - this is expected during shutdown
+                    log_debug(
                         "IAM token refresh",
-                        format!("Failed to update connection password with immediate auth: {e}"),
+                        "Client already dropped, skipping password update",
                     );
                 }
             });
@@ -1361,17 +1372,17 @@ impl Client {
 
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
-    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
-    /// can always reach the client. (Note: this can create a retain cycle unless you
-    /// stop the refresh task and drop the manager explicitly.)
+    /// Uses a **weak** `Weak<RwLock<Client>>` in the refresh callback to prevent
+    /// circular reference memory leaks. The caller must keep the Arc alive for
+    /// the callback to function properly.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-        client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
+        client_weak: std::sync::Weak<tokio::sync::RwLock<Client>>,
     ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
                 // Set up callback to update connection password when token refreshes
-                let iam_callback = Self::iam_callback(std::sync::Arc::clone(&client_arc));
+                let iam_callback = Self::iam_callback(client_weak);
 
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
@@ -1913,9 +1924,9 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            // Create IAM token manager if needed, passing a strong Arc to the callback
+            // Create IAM token manager if needed, passing a weak Arc to prevent circular reference
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, Arc::clone(&client_arc)).await
+                Self::create_iam_token_manager(auth_info, Arc::downgrade(&client_arc)).await
             } else {
                 None
             };
@@ -1981,6 +1992,149 @@ impl Client {
             };
 
             Ok(client)
+        })
+        .await
+        .map_err(|_| ConnectionError::Timeout)?
+    }
+
+    /// Create a new Client wrapped in Arc<RwLock<>> for IAM authentication support.
+    ///
+    /// This method is specifically designed for clients that need IAM authentication,
+    /// which requires keeping the Client wrapped in an Arc to allow the IAM callback
+    /// to update connection passwords. The Arc is kept alive by the caller (typically
+    /// the FFI layer) to prevent the circular reference memory leak.
+    ///
+    /// For non-IAM clients, use `Client::new()` instead for better performance.
+    ///
+    /// # Arguments
+    /// * `request` - Connection configuration
+    /// * `push_sender` - Optional channel for push notifications
+    ///
+    /// # Returns
+    /// * `Ok(Arc<RwLock<Client>>)` - Wrapped client ready for IAM authentication
+    /// * `Err(ConnectionError)` - If connection fails
+    pub async fn new_with_arc(
+        request: ConnectionRequest,
+        push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+    ) -> Result<Arc<RwLock<Self>>, ConnectionError> {
+        // Add buffer to connection_timeout to allow inner connection logic to fully execute before the outer timeout triggers
+        let client_creation_timeout = request.get_connection_timeout() + Duration::from_millis(500);
+
+        log_info(
+            "Connection configuration (with Arc for IAM)",
+            sanitized_request_string(&request),
+        );
+        let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
+        let inflight_requests_limit = request
+            .inflight_requests_limit
+            .unwrap_or(DEFAULT_MAX_INFLIGHT_REQUESTS);
+        let inflight_requests_allowed = Arc::new(AtomicIsize::new(
+            inflight_requests_limit.try_into().unwrap(),
+        ));
+
+        // Create compression manager from configuration
+        let compression_manager = create_compression_manager(request.compression_config.clone())?;
+
+        let reconciliation_interval = match request.pubsub_reconciliation_interval_ms {
+            Some(ms) if ms > 0 => Some(Duration::from_millis(ms as u64)),
+            _ => None,
+        };
+
+        tokio::time::timeout(client_creation_timeout, async move {
+            // Create shared, thread-safe wrapper for the internal client that starts as lazy
+            let internal_client_arc =
+                Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(LazyClient {
+                    config: request.clone(),
+                    push_sender: push_sender.clone(),
+                }))));
+
+            let initial_subscriptions = request.pubsub_subscriptions.clone();
+
+            let pubsub_synchronizer = create_pubsub_synchronizer(
+                push_sender.clone(),
+                initial_subscriptions,
+                request.cluster_mode_enabled,
+                Arc::downgrade(&internal_client_arc),
+                reconciliation_interval,
+                request_timeout,
+            )
+            .await;
+
+            // Create the Client first without IAM token manager
+            let client = Self {
+                internal_client: internal_client_arc.clone(),
+                request_timeout,
+                inflight_requests_allowed,
+                compression_manager: compression_manager.clone(),
+                iam_token_manager: None,
+                pubsub_synchronizer: pubsub_synchronizer.clone(),
+            };
+
+            let client_arc = Arc::new(RwLock::new(client));
+
+            // Create IAM token manager with WEAK reference to prevent circular reference
+            let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
+                Self::create_iam_token_manager(auth_info, Arc::downgrade(&client_arc)).await
+            } else {
+                None
+            };
+
+            // Update the client with the IAM token manager
+            {
+                let mut client_guard = client_arc.write().await;
+                client_guard.iam_token_manager = iam_token_manager.clone();
+            }
+
+            let is_lazy = request.lazy_connect;
+            let internal_client = if is_lazy {
+                ClientWrapper::Lazy(Box::new(LazyClient {
+                    config: request,
+                    push_sender,
+                }))
+            } else if request.cluster_mode_enabled {
+                let client = create_cluster_client(
+                    request,
+                    push_sender,
+                    iam_token_manager.as_ref(),
+                    pubsub_synchronizer.clone(),
+                )
+                .await
+                .map_err(ConnectionError::Cluster)?;
+                ClientWrapper::Cluster { client }
+            } else {
+                ClientWrapper::Standalone(
+                    StandaloneClient::create_client(
+                        request,
+                        push_sender,
+                        iam_token_manager.as_ref(),
+                        Some(pubsub_synchronizer.clone()),
+                    )
+                    .await
+                    .map_err(ConnectionError::Standalone)?,
+                )
+            };
+
+            // Update the internal client with the actual client
+            {
+                let mut guard = internal_client_arc.write().await;
+                *guard = internal_client;
+            }
+
+            if !is_lazy {
+                pubsub_synchronizer.trigger_reconciliation();
+                if let Err(e) = pubsub_synchronizer.wait_for_sync(0, None, None, None).await {
+                    log_error(
+                        "Client::new_with_arc",
+                        format!(
+                            "Failed to establish initial subscriptions within timeout: {:?}",
+                            e
+                        ),
+                    );
+                }
+            }
+
+            // Return the Arc - caller must keep it alive to prevent IAM callback memory leak
+            Ok(client_arc)
         })
         .await
         .map_err(|_| ConnectionError::Timeout)?

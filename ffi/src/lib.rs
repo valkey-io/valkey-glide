@@ -425,6 +425,10 @@ pub struct ClientAdapter {
 struct CommandExecutionCore {
     client: GlideClient,
     client_type: ClientType,
+    // Keep the Arc alive for IAM callback to prevent memory leak
+    // This is only populated when IAM authentication is configured
+    #[allow(dead_code)]
+    client_arc_for_iam: Option<Arc<tokio::sync::RwLock<GlideClient>>>,
 }
 
 impl ClientAdapter {
@@ -755,17 +759,47 @@ fn create_client_internal(
     // Always create push channels to support dynamic pubsub
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let client = runtime
-        .block_on(GlideClient::new(
-            ConnectionRequest::from(request),
-            Some(push_tx),
-        ))
-        .map_err(|err| err.to_string())?;
+    // Check if IAM authentication is configured
+    let needs_iam = request
+        .authentication_info
+        .as_ref()
+        .and_then(|auth| auth.iam_credentials.0.as_ref())
+        .is_some();
+
+    // Create client with or without Arc based on IAM requirement
+    let (client, client_arc_for_iam) = if needs_iam {
+        // Use new_with_arc for IAM clients to keep Arc alive
+        let client_arc = runtime
+            .block_on(GlideClient::new_with_arc(
+                ConnectionRequest::from(request),
+                Some(push_tx),
+            ))
+            .map_err(|err| err.to_string())?;
+
+        // Extract client for command execution while keeping Arc alive
+        let client = {
+            let guard = runtime.block_on(client_arc.read());
+            guard.clone()
+        };
+
+        (client, Some(client_arc))
+    } else {
+        // Use regular new() for non-IAM clients (better performance)
+        let client = runtime
+            .block_on(GlideClient::new(
+                ConnectionRequest::from(request),
+                Some(push_tx),
+            ))
+            .map_err(|err| err.to_string())?;
+
+        (client, None)
+    };
 
     // Create the client adapter that will be returned and used as conn_ptr
     let core = Arc::new(CommandExecutionCore {
         client,
         client_type,
+        client_arc_for_iam,
     });
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
