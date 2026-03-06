@@ -2,7 +2,9 @@ use crate::Telemetry;
 use logger_core::log_warn;
 use once_cell::sync::OnceCell;
 use opentelemetry::global::ObjectSafeSpan;
-use opentelemetry::trace::{SpanKind, TraceContextExt, TraceError};
+use opentelemetry::trace::{
+    SpanContext, SpanId, SpanKind, TraceContextExt, TraceError, TraceFlags, TraceId, TraceState,
+};
 use opentelemetry::{global, trace::Tracer};
 use opentelemetry_otlp::{MetricExporter, Protocol, WithExportConfig};
 use opentelemetry_sdk::export::trace::SpanExporter;
@@ -12,6 +14,7 @@ use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::trace::{BatchConfig, BatchSpanProcessor, TracerProvider};
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
+use std::str::FromStr;
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
@@ -240,6 +243,53 @@ impl GlideSpanInner {
         })
     }
 
+    /// Create a new span as a child of a remote span context identified by raw hex IDs.
+    ///
+    /// This is used for cross-process context propagation, e.g. when a Node.js OTel SDK
+    /// passes its active span context to the Rust core.
+    pub fn new_with_remote_context(
+        name: &str,
+        trace_id_hex: &str,
+        span_id_hex: &str,
+        trace_flags: u8,
+        trace_state: Option<&str>,
+    ) -> Result<Self, TraceError> {
+        let trace_id = TraceId::from_hex(trace_id_hex)
+            .map_err(|_| TraceError::from(format!("Invalid trace_id hex: {trace_id_hex}")))?;
+        let span_id = SpanId::from_hex(span_id_hex)
+            .map_err(|_| TraceError::from(format!("Invalid span_id hex: {span_id_hex}")))?;
+
+        let trace_state = match trace_state {
+            Some(s) => TraceState::from_str(s)
+                .map_err(|_| TraceError::from(format!("Invalid trace_state: {s}")))?,
+            None => TraceState::default(),
+        };
+
+        let remote_span_context = SpanContext::new(
+            trace_id,
+            span_id,
+            TraceFlags::new(trace_flags),
+            true, // is_remote
+            trace_state,
+        );
+
+        let parent_context =
+            opentelemetry::Context::new().with_remote_span_context(remote_span_context);
+
+        let tracer = global::tracer(TRACE_SCOPE);
+        let span = Arc::new(RwLock::new(
+            tracer
+                .span_builder(name.to_string())
+                .with_kind(SpanKind::Client)
+                .start_with_context(&tracer, &parent_context),
+        ));
+        Ok(GlideSpanInner {
+            span,
+            #[cfg(test)]
+            reference_count: Arc::new(AtomicUsize::new(1)),
+        })
+    }
+
     /// Attach event with name and list of attributes to this span.
     pub fn add_event(&self, name: &str, attributes: Option<&Vec<(&str, &str)>>) {
         let attributes: Vec<opentelemetry::KeyValue> = if let Some(attributes) = attributes {
@@ -348,6 +398,25 @@ impl GlideSpan {
         GlideSpan {
             inner: GlideSpanInner::new(name),
         }
+    }
+
+    /// Create a new span as a child of a remote span context identified by raw hex IDs.
+    pub fn new_with_remote_context(
+        name: &str,
+        trace_id_hex: &str,
+        span_id_hex: &str,
+        trace_flags: u8,
+        trace_state: Option<&str>,
+    ) -> Result<Self, TraceError> {
+        Ok(GlideSpan {
+            inner: GlideSpanInner::new_with_remote_context(
+                name,
+                trace_id_hex,
+                span_id_hex,
+                trace_flags,
+                trace_state,
+            )?,
+        })
     }
 
     /// Attach event with name to this span.
@@ -1033,6 +1102,17 @@ mod tests {
         s.parse::<u64>().unwrap()
     }
 
+    /// Helper function to find a metric by name in the metrics array
+    fn find_metric_by_name<'a>(
+        metric_json: &'a serde_json::Value,
+        metric_name: &str,
+    ) -> Option<&'a serde_json::Value> {
+        metric_json["scope_metrics"][0]["metrics"]
+            .as_array()?
+            .iter()
+            .find(|m| m["name"] == metric_name)
+    }
+
     async fn init_otel() -> Result<(), GlideOTELError> {
         let config = GlideOpenTelemetryConfigBuilder::default()
             .with_flush_interval(Duration::from_millis(2000))
@@ -1092,29 +1172,40 @@ mod tests {
                 .filter(|l| !l.trim().is_empty())
                 .collect();
 
-            assert!(
-                lines.len() == 3 || lines.len() == 4,
-                "Expected 3 or 4 lines, got {}. file content: {file_content:?}",
-                lines.len()
-            );
+            // Parse all spans and find the ones we created by name
+            let mut network_span: Option<serde_json::Value> = None;
+            let mut root_span_1: Option<serde_json::Value> = None;
+            let mut root_span_2: Option<serde_json::Value> = None;
 
-            // Adjust base index if there are only 3 lines (no header line)
-            let base = if lines.len() == 3 { 0 } else { 1 };
+            for line in lines {
+                if let Ok(span) = serde_json::from_str::<serde_json::Value>(line) {
+                    match span["name"].as_str() {
+                        Some("Network_Span") if network_span.is_none() => network_span = Some(span),
+                        Some("Root_Span_1") if span["status"] == "Ok" && root_span_1.is_none() => {
+                            root_span_1 = Some(span)
+                        }
+                        Some("Root_Span_2") if root_span_2.is_none() => root_span_2 = Some(span),
+                        _ => {}
+                    }
+                }
+            }
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[base]).unwrap();
-            assert_eq!(span_json["name"], "Network_Span");
-            let network_span_id = span_json["span_id"].to_string();
-            let network_span_start_time = string_property_to_u64(&span_json, "start_time");
-            let network_span_end_time = string_property_to_u64(&span_json, "end_time");
+            let network_span = network_span.expect("Network_Span not found");
+            let root_span_1 = root_span_1.expect("Root_Span_1 not found");
+            let root_span_2 = root_span_2.expect("Root_Span_2 not found");
+
+            // Verify Network_Span timing
+            let network_span_id = network_span["span_id"].to_string();
+            let network_span_start_time = string_property_to_u64(&network_span, "start_time");
+            let network_span_end_time = string_property_to_u64(&network_span, "end_time");
 
             // Because of the sleep above, the network span should be at least 100ms (units are microseconds)
             assert!(network_span_end_time - network_span_start_time >= 100_000);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[base + 1]).unwrap();
-            assert_eq!(span_json["name"], "Root_Span_1");
-            assert_eq!(span_json["links"].as_array().unwrap().len(), 1); // we expect 1 child
-            let root_1_span_start_time = string_property_to_u64(&span_json, "start_time");
-            let root_1_span_end_time = string_property_to_u64(&span_json, "end_time");
+            // Verify Root_Span_1 has the network span as a child
+            assert_eq!(root_span_1["links"].as_array().unwrap().len(), 1); // we expect 1 child
+            let root_1_span_start_time = string_property_to_u64(&root_span_1, "start_time");
+            let root_1_span_end_time = string_property_to_u64(&root_span_1, "end_time");
 
             // The network span started *after* its parent
             assert!(network_span_start_time >= root_1_span_start_time);
@@ -1122,12 +1213,11 @@ mod tests {
             // The parent span ends *after* the child span (by at least 100ms)
             assert!(root_1_span_end_time - network_span_end_time >= 100_000);
 
-            let child_span_id = span_json["links"][0]["span_id"].to_string();
+            let child_span_id = root_span_1["links"][0]["span_id"].to_string();
             assert_eq!(child_span_id, network_span_id);
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[base + 2]).unwrap();
-            assert_eq!(span_json["name"], "Root_Span_2");
-            assert_eq!(span_json["events"].as_array().unwrap().len(), 2); // we expect 2 events
+            // Verify Root_Span_2 has 2 events
+            assert_eq!(root_span_2["events"].as_array().unwrap().len(), 2); // we expect 2 events
         });
     }
 
@@ -1203,20 +1293,15 @@ mod tests {
                 .collect();
 
             let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["name"],
-                "glide.retry_attempts"
-            );
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                1
-            );
+            let retry_metric = find_metric_by_name(&metric_json, "glide.retry_attempts")
+                .expect("glide.retry_attempts metric not found");
+            assert_eq!(retry_metric["data_points"][0]["value"], 1);
+
             let metric_json: serde_json::Value =
                 serde_json::from_str(lines[lines.len() - 1]).unwrap();
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                3
-            );
+            let retry_metric = find_metric_by_name(&metric_json, "glide.retry_attempts")
+                .expect("glide.retry_attempts metric not found");
+            assert_eq!(retry_metric["data_points"][0]["value"], 3);
         });
     }
 
@@ -1241,20 +1326,15 @@ mod tests {
                 .collect();
 
             let metric_json: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["name"],
-                "glide.moved_errors"
-            );
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                1
-            );
+            let moved_metric = find_metric_by_name(&metric_json, "glide.moved_errors")
+                .expect("glide.moved_errors metric not found");
+            assert_eq!(moved_metric["data_points"][0]["value"], 1);
+
             let metric_json: serde_json::Value =
                 serde_json::from_str(lines[lines.len() - 1]).unwrap();
-            assert_eq!(
-                metric_json["scope_metrics"][0]["metrics"][0]["data_points"][0]["value"],
-                3
-            );
+            let moved_metric = find_metric_by_name(&metric_json, "glide.moved_errors")
+                .expect("glide.moved_errors metric not found");
+            assert_eq!(moved_metric["data_points"][0]["value"], 3);
         });
     }
 
@@ -1294,11 +1374,28 @@ mod tests {
                 .filter(|l| !l.trim().is_empty())
                 .collect();
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[1]).unwrap();
-            assert_eq!(span_json["status"], "Ok");
+            // Find the specific spans by name and status
+            let mut ok_span: Option<serde_json::Value> = None;
+            let mut error_span: Option<serde_json::Value> = None;
 
-            let span_json: serde_json::Value = serde_json::from_str(lines[2]).unwrap();
-            let status = span_json["status"].as_str().unwrap_or("");
+            for line in lines {
+                if let Ok(span) = serde_json::from_str::<serde_json::Value>(line) {
+                    if span["name"] == "Root_Span_1" && span["status"] == "Ok" {
+                        ok_span = Some(span);
+                    } else if span["name"] == "Root_Span_2" {
+                        let status = span["status"].as_str().unwrap_or("");
+                        if status.starts_with("Error") {
+                            error_span = Some(span);
+                        }
+                    }
+                }
+            }
+
+            let ok_span = ok_span.expect("Root_Span_1 with Ok status not found");
+            assert_eq!(ok_span["status"], "Ok");
+
+            let error_span = error_span.expect("Root_Span_2 with Error status not found");
+            let status = error_span["status"].as_str().unwrap_or("");
             assert!(status.starts_with("Error"));
             assert!(status.contains("simple error"));
         });
@@ -1544,6 +1641,60 @@ mod tests {
                 error_msg.contains("failed validation checks"),
                 "Error message should mention validation failure"
             );
+        });
+    }
+
+    #[test]
+    fn test_new_with_remote_context_valid_inputs() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+
+            let result = GlideSpanInner::new_with_remote_context(
+                "remote_child",
+                "0af7651916cd43dd8448eb211c80319c", // valid 32-char hex trace ID
+                "b7ad6b7169203331",                 // valid 16-char hex span ID
+                1,                                  // trace flags
+                None,
+            );
+            assert!(result.is_ok(), "Valid inputs should return Ok");
+
+            let span = result.unwrap();
+            span.end();
+        });
+    }
+
+    #[test]
+    fn test_new_with_remote_context_invalid_trace_id() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+
+            let result = GlideSpanInner::new_with_remote_context(
+                "remote_child",
+                "not_valid_hex",
+                "b7ad6b7169203331",
+                1,
+                None,
+            );
+            assert!(result.is_err(), "Invalid trace_id should return Err");
+        });
+    }
+
+    #[test]
+    fn test_new_with_remote_context_invalid_span_id() {
+        let rt = shared_runtime();
+        rt.block_on(async {
+            init_otel().await.unwrap();
+
+            let result = GlideSpanInner::new_with_remote_context(
+                "remote_child",
+                "0af7651916cd43dd8448eb211c80319c",
+                "zzzzzzzzzzzzzzzz", // 16 chars but not valid hex
+                1,
+                None,
+            );
+            assert!(result.is_err(), "Invalid span_id should return Err");
         });
     }
 

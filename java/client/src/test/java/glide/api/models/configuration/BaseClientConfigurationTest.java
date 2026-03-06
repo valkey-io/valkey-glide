@@ -105,8 +105,9 @@ public class BaseClientConfigurationTest {
 
     @Test
     public void testPubsubReconciliationIntervalMs_zero_throws() {
-        var builder = AdvancedGlideClientConfiguration.builder();
-        var exception =
+        AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder builder =
+                AdvancedGlideClientConfiguration.builder();
+        IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class, () -> builder.pubsubReconciliationIntervalMs(0));
         assertEquals("pubsubReconciliationIntervalMs must be positive, got: 0", exception.getMessage());
@@ -114,8 +115,9 @@ public class BaseClientConfigurationTest {
 
     @Test
     public void testPubsubReconciliationIntervalMs_negative_throws() {
-        var builder = AdvancedGlideClientConfiguration.builder();
-        var exception =
+        AdvancedGlideClientConfiguration.AdvancedGlideClientConfigurationBuilder builder =
+                AdvancedGlideClientConfiguration.builder();
+        IllegalArgumentException exception =
                 assertThrows(
                         IllegalArgumentException.class, () -> builder.pubsubReconciliationIntervalMs(-1));
         assertEquals(

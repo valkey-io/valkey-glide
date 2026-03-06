@@ -36,11 +36,11 @@ public class FTSearchOptions {
 
     /** Convert to module API. */
     public GlideString[] toArgs() {
-        var args = new ArrayList<GlideString>();
+        ArrayList<GlideString> args = new ArrayList<GlideString>();
         if (!identifiers.isEmpty()) {
             args.add(gs("RETURN"));
             int tokenCount = 0;
-            for (var pair : identifiers.entrySet()) {
+            for (Map.Entry<GlideString, GlideString> pair : identifiers.entrySet()) {
                 tokenCount++;
                 args.add(pair.getKey());
                 if (pair.getValue() != null) {
@@ -72,7 +72,7 @@ public class FTSearchOptions {
         if (count) {
             args.add(gs("COUNT"));
         }
-        return args.toArray(GlideString[]::new);
+        return args.toArray(new GlideString[0]);
     }
 
     public static class FTSearchOptionsBuilder {

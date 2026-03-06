@@ -73,8 +73,7 @@ import org.apache.commons.lang3.ArrayUtils;
  * Use {@link #createClient} to request a client.
  *
  * @see For full documentation refer to <a
- *     href="https://github.com/valkey-io/valkey-glide/wiki/Java-Wrapper#standalone">Valkey Glide
- *     Wiki</a>.
+ *     href="https://glide.valkey.io/how-to/client-initialization/">Valkey GLIDE Documentation</a>.
  */
 public class GlideClient extends BaseClient
         implements GenericCommands,
@@ -606,7 +605,8 @@ public class GlideClient extends BaseClient
                 GetSubscriptions,
                 EMPTY_STRING_ARRAY,
                 response -> {
-                    Object[] parsed = (Object[]) parseSubscriptionState(response);
+                    Object[] arr = handleArrayResponse(response);
+                    Object[] parsed = (Object[]) parseSubscriptionState(arr);
                     @SuppressWarnings("unchecked")
                     Map<String, Object[]> desiredMap = (Map<String, Object[]>) parsed[0];
                     @SuppressWarnings("unchecked")

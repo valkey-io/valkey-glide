@@ -91,6 +91,8 @@ pub enum ErrorKind {
     ParseError,
     /// The authentication with the server failed.
     AuthenticationFailed,
+    /// User lacks permission for the requested operation (ACL).
+    PermissionDenied,
     /// Operation failed because of a type mismatch.
     TypeError,
     /// A script execution was aborted.
@@ -176,6 +178,7 @@ pub enum ServerErrorKind {
     MasterDown,
     ReadOnly,
     NotBusy,
+    PermissionDenied,
 }
 
 #[derive(PartialEq, Debug, Clone, Display)]
@@ -207,6 +210,7 @@ impl ServerError {
                 ServerErrorKind::MasterDown => "MASTERDOWN",
                 ServerErrorKind::ReadOnly => "READONLY",
                 ServerErrorKind::NotBusy => "NOTBUSY",
+                ServerErrorKind::PermissionDenied => "NOPERM",
             },
         }
     }
@@ -277,7 +281,8 @@ map_error_kinds!(
     CrossSlot,
     MasterDown,
     ReadOnly,
-    NotBusy
+    NotBusy,
+    PermissionDenied
 );
 
 impl From<RedisError> for ServerError {
@@ -918,6 +923,7 @@ impl RedisError {
             ErrorKind::MasterDown => Some("MASTERDOWN"),
             ErrorKind::ReadOnly => Some("READONLY"),
             ErrorKind::NotBusy => Some("NOTBUSY"),
+            ErrorKind::PermissionDenied => Some("NOPERM"),
             _ => match self.repr {
                 ErrorRepr::ExtensionError(ref code, _) => Some(code),
                 _ => None,
@@ -930,6 +936,7 @@ impl RedisError {
         match self.kind() {
             ErrorKind::ResponseError => "response error",
             ErrorKind::AuthenticationFailed => "authentication failed",
+            ErrorKind::PermissionDenied => "permission denied",
             ErrorKind::TypeError => "type error",
             ErrorKind::ExecAbortError => "script execution aborted",
             ErrorKind::BusyLoadingError => "busy loading",
@@ -1126,6 +1133,7 @@ impl RedisError {
             ErrorKind::BusyLoadingError => RetryMethod::WaitAndRetryOnPrimaryRedirectOnReplica,
 
             ErrorKind::ResponseError => RetryMethod::NoRetry,
+            ErrorKind::PermissionDenied => RetryMethod::NoRetry,
             ErrorKind::ReadOnly => RetryMethod::RefreshSlotsAndRetry,
             ErrorKind::ExtensionError => RetryMethod::NoRetry,
             ErrorKind::ExecAbortError => RetryMethod::NoRetry,

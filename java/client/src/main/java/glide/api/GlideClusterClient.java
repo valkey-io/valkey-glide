@@ -3,6 +3,12 @@ package glide.api;
 
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -53,6 +59,7 @@ import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 
+import glide.api.commands.ClusterManagementClusterCommands;
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.PubSubClusterCommands;
@@ -86,9 +93,9 @@ import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -103,8 +110,8 @@ import response.ResponseOuterClass.Response;
  * Use {@link #createClient} to request a client.
  *
  * @see For full documentation refer to <a
- *     href="https://github.com/valkey-io/valkey-glide/wiki/Java-Wrapper#cluster">Valkey Glide
- *     Wiki</a>.
+ *     href="https://glide.valkey.io/how-to/client-initialization/#cluster">Valkey GLIDE
+ *     Documentation</a>.
  */
 public class GlideClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
@@ -112,7 +119,8 @@ public class GlideClusterClient extends BaseClient
                 ServerManagementClusterCommands,
                 ScriptingAndFunctionsClusterCommands,
                 TransactionsClusterCommands,
-                PubSubClusterCommands {
+                PubSubClusterCommands,
+                ClusterManagementClusterCommands {
 
     /** Constructor using ClientParams from BaseClient. */
     protected GlideClusterClient(ClientBuilder builder) {
@@ -207,7 +215,7 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        var data =
+        Object data =
                 handleValkeyResponse(Object.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
         if (data instanceof Map) {
             return ClusterValue.ofMultiValue((Map<String, Object>) data);
@@ -223,7 +231,7 @@ public class GlideClusterClient extends BaseClient
         if (response.hasConstantResponse()) {
             return ClusterValue.ofSingleValue(handleStringResponse(response));
         }
-        var data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
+        Object data = handleValkeyResponse(Object.class, EnumSet.noneOf(ResponseFlags.class), response);
         if (data instanceof Map) {
             return ClusterValue.ofMultiValueBinary((Map<GlideString, Object>) data);
         }
@@ -710,7 +718,7 @@ public class GlideClusterClient extends BaseClient
             // each `Object` is a `Map<String, Object>[]` actually
             Map<String, Object> info = handleMapResponse(response);
             Map<String, Map<String, Object>[]> data = new LinkedHashMap<>();
-            for (var nodeInfo : info.entrySet()) {
+            for (Map.Entry<String, Object> nodeInfo : info.entrySet()) {
                 data.put(nodeInfo.getKey(), handleFunctionListResponse((Object[]) nodeInfo.getValue()));
             }
             return ClusterValue.ofMultiValue(data);
@@ -728,7 +736,7 @@ public class GlideClusterClient extends BaseClient
             // each `Object` is a `Map<GlideString, Object>[]` actually
             Map<GlideString, Object> info = handleBinaryStringMapResponse(response);
             Map<GlideString, Map<GlideString, Object>[]> data = new LinkedHashMap<>();
-            for (var nodeInfo : info.entrySet()) {
+            for (Map.Entry<GlideString, Object> nodeInfo : info.entrySet()) {
                 data.put(
                         nodeInfo.getKey(), handleFunctionListResponseBinary((Object[]) nodeInfo.getValue()));
             }
@@ -1065,10 +1073,10 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<Object> invokeScript(@NonNull Script script, @NonNull Route route) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
-                    script, List.of(), route, this::handleBinaryObjectOrNullResponse);
+                    script, Collections.emptyList(), route, this::handleBinaryObjectOrNullResponse);
         } else {
             return commandManager.submitScript(
-                    script, List.of(), route, this::handleObjectOrNullResponse);
+                    script, Collections.emptyList(), route, this::handleObjectOrNullResponse);
         }
     }
 
@@ -1475,7 +1483,7 @@ public class GlideClusterClient extends BaseClient
     }
 
     /**
-     * Subscribes the client to the specified sharded channels.
+     * Subscribes the client to the specified sharded channels and doesn't wait for confirmation.
      *
      * <p>Sharded pubsub (available in Redis 7.0+) allows messages to be published to specific cluster
      * shards, reducing overhead compared to cluster-wide pubsub.
@@ -1489,7 +1497,7 @@ public class GlideClusterClient extends BaseClient
      *
      * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details
      */
-    public CompletableFuture<Void> ssubscribe(Set<String> channels) {
+    public CompletableFuture<Void> ssubscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 SSubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -1655,7 +1663,8 @@ public class GlideClusterClient extends BaseClient
                 GetSubscriptions,
                 EMPTY_STRING_ARRAY,
                 response -> {
-                    Object[] parsed = (Object[]) parseSubscriptionState(response);
+                    Object[] arr = handleArrayResponse(response);
+                    Object[] parsed = (Object[]) parseSubscriptionState(arr);
                     @SuppressWarnings("unchecked")
                     Map<String, Object[]> desiredMap = (Map<String, Object[]>) parsed[0];
                     @SuppressWarnings("unchecked")
@@ -1700,5 +1709,108 @@ public class GlideClusterClient extends BaseClient
 
                     return new PubSubStateImpl<>(desired, actual);
                 });
+    }
+
+    @Override
+    public CompletableFuture<String> clusterInfo() {
+        return commandManager.submitNewCommand(ClusterInfo, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterInfo(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterInfo,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterNodes() {
+        return commandManager.submitNewCommand(ClusterNodes, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterNodes(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterNodes,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clusterShards() {
+        return commandManager.submitNewCommand(ClusterShards, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[]>> clusterShards(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterShards,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleArrayResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> clusterLinks() {
+        return commandManager.submitNewCommand(ClusterLinks, new String[0], this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object[]>> clusterLinks(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterLinks,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleArrayResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterMyId() {
+        return commandManager.submitNewCommand(ClusterMyId, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterMyId(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterMyId,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterMyShardId() {
+        return commandManager.submitNewCommand(
+                ClusterMyShardId, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> clusterMyShardId(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClusterMyShardId,
+                new String[0],
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 }
