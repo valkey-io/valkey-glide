@@ -865,10 +865,8 @@ pub unsafe extern "C-unwind" fn create_client(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn close_client(client_adapter_ptr: *const c_void) {
     assert!(!client_adapter_ptr.is_null());
-    // Reconstruct the Arc from the raw pointer and let it drop naturally.
-    // This properly decrements the reference count and frees the ClientAdapter.
-    let _client_adapter = unsafe { Arc::from_raw(client_adapter_ptr as *const ClientAdapter) };
-    // _client_adapter is dropped here, which will drop all contained resources
+    // This will bring the strong count down to 0 once all client requests are done.
+    unsafe { Arc::decrement_strong_count(client_adapter_ptr as *const ClientAdapter) };
 }
 
 /// Deallocates a `ConnectionResponse`.

@@ -459,12 +459,8 @@ impl Drop for IAMTokenManager {
         // Signal shutdown to the background task
         self.shutdown_notify.notify_one();
 
-        // Abort the background task if it exists
-        // Note: We can't await in Drop, but we can abort the task
-        // which will cause it to stop immediately
-        if let Some(task) = self.refresh_task.take() {
-            task.abort();
-        }
+        // Note: We can't await in Drop, so the task cleanup happens in stop_refresh_task()
+        // or will be handled by the tokio runtime when the JoinHandle is dropped
     }
 }
 
