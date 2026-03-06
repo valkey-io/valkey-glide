@@ -347,12 +347,10 @@ async fn send_command(
         );
     }
 
-    let res = client
+    client
         .send_command(&mut cmd, routing)
         .await
-        .map_err(|err| err.into());
-
-    res
+        .map_err(|err| err.into())
 }
 
 /// Process a command for compression by extracting arguments and applying compression
@@ -583,7 +581,7 @@ async fn send_batch(
     };
 
     // Process response for decompression if needed
-    let processed_res = match res {
+    match res {
         Ok(value) => {
             match process_batch_response_for_decompression(value.clone(), client) {
                 Ok(processed_value) => Ok(processed_value),
@@ -598,9 +596,7 @@ async fn send_batch(
             }
         }
         Err(e) => Err(e),
-    };
-
-    processed_res
+    }
 }
 
 fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> ClientUsageResult<SlotAddr> {
