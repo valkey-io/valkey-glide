@@ -21,6 +21,7 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.ScoreFilter;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
@@ -184,6 +185,9 @@ public final class Jedis implements Closeable {
     private Pool<Jedis> dataSource; // Following original Jedis pattern
     private volatile boolean closed = false;
     private volatile boolean lazyInitialized = false; // New field to track initialization
+
+    // Transaction support (Transaction owns its Batch; we only track multi() state)
+    private volatile boolean inTransaction = false;
 
     // Store connection parameters for lazy initialization (nullable for pooled connections)
     private final String host;
@@ -686,6 +690,73 @@ public final class Jedis implements Closeable {
     }
 
     /**
+     * Echoes the provided message back.
+     *
+     * @param message the message to echo
+     * @return the echoed message
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/echo/">valkey.io</a>
+     * @since Valkey 1.0.0
+     */
+    public String echo(String message) {
+        return executeCommandWithGlide("ECHO", () -> glideClient.echo(message).get());
+    }
+
+    /**
+     * Echoes the provided message back (binary version).
+     *
+     * @param message the message to echo
+     * @return the echoed message
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/echo/">valkey.io</a>
+     * @since Valkey 1.0.0
+     */
+    public byte[] echo(final byte[] message) {
+        return executeCommandWithGlide(
+                "ECHO",
+                () -> {
+                    GlideString result = glideClient.echo(GlideString.of(message)).get();
+                    return result.getBytes();
+                });
+    }
+
+    /**
+     * Returns the current connection ID.
+     *
+     * @return the connection ID
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/client-id/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public long clientId() {
+        return executeCommandWithGlide("CLIENT ID", () -> glideClient.clientId().get());
+    }
+
+    /**
+     * Gets the name of the current connection.
+     *
+     * @return the connection name, or null if no name is set
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/client-getname/">valkey.io</a>
+     * @since Valkey 2.6.9
+     */
+    public String clientGetName() {
+        return executeCommandWithGlide("CLIENT GETNAME", () -> glideClient.clientGetName().get());
+    }
+
+    /**
+     * Get the name of the current connection. This is an alias for {@link #clientGetName()}.
+     *
+     * <p>This method name matches Jedis 5.1.5 naming convention (lowercase 'name').
+     *
+     * @return the connection name, or null if no name is set
+     * @see #clientGetName()
+     */
+    public String clientGetname() {
+        return clientGetName();
+    }
+
+    /**
      * Select a database.
      *
      * @param index the database index
@@ -702,6 +773,20 @@ public final class Jedis implements Closeable {
         // the constructor for this to work.
 
         return "OK";
+    }
+
+    /**
+     * Executes a custom command without checking inputs. Every part of the command, including the
+     * command name and subcommands, should be added as a separate value in the args array.
+     *
+     * @param args the command and its arguments
+     * @return the result of the command execution
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/">valkey.io</a>
+     * @since Valkey 1.0.0
+     */
+    public Object customCommand(String... args) {
+        return executeCommandWithGlide("CUSTOM", () -> glideClient.customCommand(args).get());
     }
 
     /**
@@ -1154,6 +1239,14 @@ public final class Jedis implements Closeable {
         }
     }
 
+    /**
+     * Reset the transaction state. Called by Transaction after exec() or discard(). This is
+     * package-private for use by Transaction class.
+     */
+    void resetState() {
+        inTransaction = false;
+    }
+
     /** Check if the connection is not closed and throw exception if it is. */
     private void checkNotClosed() {
         if (closed) {
@@ -1188,6 +1281,90 @@ public final class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException(operationName + " operation failed", e);
         }
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction.
+     *
+     * @param keys the keys to watch
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a>
+     * @since Valkey 2.2.0
+     */
+    public String watch(String... keys) {
+        return executeCommandWithGlide("WATCH", () -> glideClient.watch(keys).get());
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction (binary version).
+     *
+     * @param keys the keys to watch
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a>
+     * @since Valkey 2.2.0
+     */
+    public String watch(byte[]... keys) {
+        return executeCommandWithGlide(
+                "WATCH",
+                () -> {
+                    GlideString[] glideKeys = new GlideString[keys.length];
+                    for (int i = 0; i < keys.length; i++) {
+                        glideKeys[i] = GlideString.of(keys[i]);
+                    }
+                    return glideClient.watch(glideKeys).get();
+                });
+    }
+
+    /**
+     * Flushes all the previously watched keys for a transaction.
+     *
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a>
+     * @since Valkey 2.2.0
+     */
+    public String unwatch() {
+        return executeCommandWithGlide("UNWATCH", () -> glideClient.unwatch().get());
+    }
+
+    /**
+     * Marks the start of a transaction block. Subsequent commands will be queued for atomic execution
+     * using {@link Transaction#exec()}.
+     *
+     * <p>Commands are queued in a transaction and executed atomically when {@link Transaction#exec()}
+     * is called. Use {@link Response#get()} to retrieve command results after execution.
+     *
+     * <p>Example usage:
+     *
+     * <pre>{@code
+     * Transaction t = jedis.multi();
+     * Response<String> r1 = t.set("key", "value");
+     * Response<String> r2 = t.get("key");
+     * t.exec();
+     * String value = r2.get(); // Retrieve the actual value after exec()
+     * }</pre>
+     *
+     * @return a Transaction object for queuing commands
+     * @throws JedisException if already in a transaction or operation fails
+     * @see <a href="https://valkey.io/commands/multi/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public synchronized Transaction multi() {
+        checkNotClosed();
+        ensureInitialized();
+
+        if (inTransaction) {
+            throw new JedisException("Already in transaction mode");
+        }
+
+        // Transaction owns its own Batch; we only track inTransaction to prevent nested multi()
+        inTransaction = true;
+
+        return new Transaction(this);
     }
 
     /**
@@ -4444,7 +4621,12 @@ public final class Jedis implements Closeable {
         }
 
         try {
-            return glideClient.customCommand(glideArgs).get();
+            Object result = glideClient.customCommand(glideArgs).get();
+            // Convert GlideString to String for Jedis compatibility
+            if (result instanceof GlideString) {
+                return ((GlideString) result).toString();
+            }
+            return result;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("Command " + commandName + " execution failed", e);
         }
@@ -8945,6 +9127,50 @@ public final class Jedis implements Closeable {
      */
     public String scriptKill() {
         return executeCommandWithGlide("SCRIPT KILL", () -> glideClient.scriptKill().get());
+    }
+
+    /**
+     * Returns the original source code of a script in the script cache.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @return the source code of the script, or null if the script is not found
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/script-show/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public String scriptShow(String sha1) {
+        return executeCommandWithGlide("SCRIPT SHOW", () -> glideClient.scriptShow(sha1).get());
+    }
+
+    /**
+     * Returns the original source code of a script in the script cache (binary version).
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @return the source code of the script, or null if the script is not found
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/script-show/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public byte[] scriptShow(byte[] sha1) {
+        return executeCommandWithGlide(
+                "SCRIPT SHOW",
+                () -> {
+                    GlideString result = glideClient.scriptShow(GlideString.of(sha1)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Sets the debug mode for subsequent scripts executed with EVAL. Available modes: YES, NO, SYNC.
+     *
+     * @param mode the script debug mode
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/script-debug/">valkey.io</a>
+     * @since Valkey 3.2.0
+     */
+    public String scriptDebug(ScriptDebugMode mode) {
+        return executeCommandWithGlide("SCRIPT DEBUG", () -> glideClient.scriptDebug(mode).get());
     }
 
     /**
