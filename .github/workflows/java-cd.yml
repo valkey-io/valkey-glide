@@ -252,21 +252,22 @@ jobs:
             - name: Organize native libraries for uber JAR
               shell: bash
               run: |
-                  # Create the target directory
-                  mkdir -p java/client/build/resources/main/natives
+                  # Create staging directory for native libraries
+                  mkdir -p java/client/build/native-libs-staging
 
                   # Copy all native libraries from downloaded artifacts
                   # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
-                  # Each artifact contains platform/arch subdirectories directly
+                  # Target structure: java/client/build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
                   for artifact_dir in native-libs-downloaded/native-lib-*; do
                       if [ -d "$artifact_dir" ]; then
                           echo "Processing $artifact_dir"
-                          cp -r "$artifact_dir"/* java/client/build/resources/main/natives/ 2>/dev/null || true
+                          # Copy preserving the platform/arch structure under a 'natives' directory
+                          cp -r "$artifact_dir"/* java/client/build/native-libs-staging/natives/ 2>/dev/null || true
                       fi
                   done
 
-                  echo "Native libraries organized:"
-                  find java/client/build/resources/main/natives -type f
+                  echo "Native libraries staged:"
+                  find java/client/build/native-libs-staging -type f
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -303,17 +304,10 @@ jobs:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
                   UBER_JAR_BUILD: "true"
               run: |
-                  # Build uber JAR without platform classifier
-                  # We set UBER_JAR_BUILD env var to signal build.gradle to skip classifier
-                  ./gradlew --build-cache :client:shadowJar :client:javadocJar :client:sourcesJar \
-                  -x buildRust -x copyNativeLib \
-                  -Psigning.secretKeyRingFile=secring.gpg \
-                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
-                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-
-                  # Manually publish to Maven local with correct structure
+                  # Build uber JAR and publish to Maven local in one step
+                  # UBER_JAR_BUILD env var signals build.gradle to use copyAllNativeLibs
                   ./gradlew --build-cache :client:publishToMavenLocal \
-                  -x buildRust -x copyNativeLib -x shadowJar -x javadocJar -x sourcesJar \
+                  -x buildRust -x copyNativeLib \
                   -Psigning.secretKeyRingFile=secring.gpg \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
