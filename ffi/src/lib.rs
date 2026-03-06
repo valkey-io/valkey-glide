@@ -768,6 +768,10 @@ fn create_client_internal(
 
     // Create client - use new_with_arc for IAM to keep Arc alive
     let (client, client_arc_for_iam) = if needs_iam {
+        logger_core::log_debug(
+            "FFI create_client",
+            "IAM detected - creating client with Arc",
+        );
         let client_arc = runtime
             .block_on(GlideClient::new_with_arc(
                 ConnectionRequest::from(request),
@@ -775,12 +779,22 @@ fn create_client_internal(
             ))
             .map_err(|err| err.to_string())?;
 
+        logger_core::log_debug(
+            "FFI create_client",
+            format!("Created Arc with strong_count: {}", Arc::strong_count(&client_arc)),
+        );
+
         // Clone client from Arc for command execution
         // The cloned client's self_weak field points to client_arc
         let client = {
             let guard = runtime.block_on(client_arc.read());
             guard.clone()
         };
+
+        logger_core::log_debug(
+            "FFI create_client",
+            format!("Cloned client, Arc strong_count now: {}", Arc::strong_count(&client_arc)),
+        );
 
         (client, Some(client_arc))
     } else {
@@ -798,8 +812,16 @@ fn create_client_internal(
     let core = Arc::new(CommandExecutionCore {
         client,
         client_type,
-        client_arc_for_iam,
+        client_arc_for_iam: client_arc_for_iam.clone(),
     });
+
+    if let Some(ref arc) = client_arc_for_iam {
+        logger_core::log_debug(
+            "FFI create_client",
+            format!("Stored Arc in CommandExecutionCore, strong_count: {}", Arc::strong_count(arc)),
+        );
+    }
+
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
         runtime,

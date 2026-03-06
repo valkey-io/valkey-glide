@@ -1349,8 +1349,19 @@ impl Client {
         move |new_token: String| {
             let client_weak = client_weak.clone();
             tokio::spawn(async move {
+                // Debug: Check Arc strong count before upgrade attempt
+                let strong_count = client_weak.strong_count();
+                log_debug(
+                    "IAM token refresh",
+                    format!("Attempting to upgrade weak reference (strong_count: {})", strong_count),
+                );
+
                 // Try to upgrade the weak reference
                 if let Some(client_arc) = client_weak.upgrade() {
+                    log_debug(
+                        "IAM token refresh",
+                        "Successfully upgraded weak reference, updating password",
+                    );
                     let mut client = client_arc.write().await;
                     let result = client
                         .update_connection_password(Some(new_token.clone()), true)
@@ -1361,12 +1372,17 @@ impl Client {
                             "IAM token refresh",
                             format!("Failed to update connection password with immediate auth: {e}"),
                         );
+                    } else {
+                        log_debug(
+                            "IAM token refresh",
+                            "Successfully updated connection password",
+                        );
                     }
                 } else {
                     // Client was already dropped - this is expected during shutdown
                     log_debug(
                         "IAM token refresh",
-                        "Client already dropped, skipping password update",
+                        format!("Client already dropped (strong_count was: {}), skipping password update", strong_count),
                     );
                 }
             });
@@ -2501,6 +2517,7 @@ mod tests {
             iam_token_manager: None,
             compression_manager: None,
             pubsub_synchronizer,
+            self_weak: std::sync::Weak::new(), // Empty weak reference for tests
         }
     }
 
