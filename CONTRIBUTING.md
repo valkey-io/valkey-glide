@@ -25,7 +25,7 @@ To send us a pull request, please:
 
 1. Fork the repository.
 2. Modify the source; please focus on the specific change you are contributing. If you also reformat all the code, it will be hard for us to focus on your change.
-3. Ensure local tests pass.
+3. Ensure local tests pass. You can use [Docker-based test runners](#running-tests-with-docker) for a quick setup without installing dependencies manually.
 4. Commit to your fork using clear commit messages, merge or squash commits as necessary.
 5. Send us a pull request, answering any default questions in the pull request interface.
 6. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
@@ -42,6 +42,24 @@ Looking at the existing issues is a great way to find something to contribute on
 -   [Node](./node/DEVELOPER.md)
 -   [Python](./python/DEVELOPER.md)
 -   [Go](./go/DEVELOPER.md)
+
+## Running Tests with Docker
+
+If you have Docker installed, you can run integration tests without setting up Rust, protoc, or Valkey locally. This uses [Docker Bake](https://docs.docker.com/build/bake/) to build a shared base image with all dependencies, then a language-specific test image on top.
+
+```bash
+# Build and load the test image (first run downloads dependencies, subsequent runs use cache)
+docker buildx bake -f docker-bake.test.hcl node-test --load
+
+# Run all tests
+docker run --rm node-test
+
+# Run a specific test file or pattern
+docker run --rm -e TEST_FILE=GlideClient.test.ts node-test
+docker run --rm -e TEST_PATTERN="ping" node-test
+```
+
+Available targets: `node-test`, `python-test`, `glide-core-test`, `ffi-test`. See `docker-bake.test.hcl` for full usage examples.
 
 ## Code of Conduct
 This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
