@@ -1,0 +1,8 @@
+.git
+**/target
+**/node_modules
+**/build-ts
+**/*.tsbuildinfo
+**/__pycache__
+**/*.egg-info
+**/.env
