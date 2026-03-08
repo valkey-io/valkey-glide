@@ -1043,13 +1043,7 @@ fn valkey_value_to_command_response(
 ) -> RedisResult<CommandResponse> {
     let mut command_response = CommandResponse::default();
     let result: RedisResult<CommandResponse> = match value {
-        Value::Nil => {
-            if response_buf.is_some() {
-                command_response.response_type = ResponseType::Int;
-                command_response.int_value = -1;
-            }
-            Ok(command_response)
-        }
+        Value::Nil => Ok(command_response),
         Value::SimpleString(text) => {
             let vec: Vec<u8> = text.into_bytes();
             let (vec_ptr, len) = convert_vec_to_pointer(vec);
@@ -1074,8 +1068,11 @@ fn valkey_value_to_command_response(
                 unsafe {
                     std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
                 }
-                command_response.response_type = ResponseType::Int;
-                command_response.int_value = data.len() as c_long;
+                let len_str = data.len().to_string().into_bytes();
+                let (vec_ptr, len) = convert_vec_to_pointer(len_str);
+                command_response.string_value = vec_ptr as *mut c_char;
+                command_response.string_value_len = len;
+                command_response.response_type = ResponseType::String;
                 Ok(command_response)
             } else {
                 let (vec_ptr, len) = convert_vec_to_pointer(data);

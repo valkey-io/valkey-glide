@@ -398,11 +398,14 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        if response_buffer is not None and response_buffer.readonly:
-            raise TypeError("response_buffer must be writable")
         client_adapter_ptr = self._core_client
         if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
+        if response_buffer:
+            if response_buffer.readonly:
+                raise TypeError("response_buffer must be writable")
+            if not response_buffer.c_contiguous:
+                raise TypeError("response_buffer must be C-contiguous")
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
         from .opentelemetry import OpenTelemetry
@@ -423,33 +426,25 @@ class BaseClient(CoreCommands):
             # Route bytes should be kept alive in the scope of the FFI call
             route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-            if response_buffer is not None:
-                buf_ptr = self._ffi.from_buffer(response_buffer)
-                result = self._lib.command_with_buffer(
-                    client_adapter_ptr,
-                    0,
-                    request_type,
-                    len(args),
-                    c_args,
-                    c_lengths,
-                    route_ptr,
-                    route_len,
-                    buf_ptr,
-                    len(response_buffer),
-                    span,
-                )
-            else:
-                result = self._lib.command(
-                    client_adapter_ptr,
-                    0,
-                    request_type,
-                    len(args),
-                    c_args,
-                    c_lengths,
-                    route_ptr,
-                    route_len,
-                    span,
-                )
+            buf_ptr = (
+                self._ffi.from_buffer(response_buffer)
+                if response_buffer
+                else self._ffi.NULL
+            )
+            buf_len = len(response_buffer) if response_buffer else 0
+            result = self._lib.command_with_buffer(
+                client_adapter_ptr,
+                0,
+                request_type,
+                len(args),
+                c_args,
+                c_lengths,
+                route_ptr,
+                route_len,
+                buf_ptr,
+                buf_len,
+                span,
+            )
         finally:
             # Drop span if it was created
             if span != 0:
