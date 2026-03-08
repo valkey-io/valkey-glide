@@ -1,0 +1,49 @@
+# Dockerfile for running Python integration tests locally.
+# Replicates the CI pipeline (python.yml).
+# Base image (Rust + protoc + python3 + Valkey) provided via docker-bake.test.hcl.
+#
+# Usage (from repo root):
+#   docker buildx bake python-test
+#   docker run --rm python-test
+#   docker run --rm -e TEST_ARGS="-k test_ping" python-test
+
+FROM base
+
+# pip needs these for building wheels (maturin, cffi, etc.)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3-dev python3-venv pip && \
+    rm -rf /var/lib/apt/lists/*
+
+# L1: Rust dependency cache — copy manifests first, then fetch
+COPY python/glide-async/Cargo.toml python/glide-async/
+COPY ffi/Cargo.toml ffi/
+COPY glide-core/Cargo.toml glide-core/
+COPY glide-core/redis-rs/Cargo.toml glide-core/redis-rs/
+COPY glide-core/redis-rs/redis/Cargo.toml glide-core/redis-rs/redis/
+COPY glide-core/telemetry/Cargo.toml glide-core/telemetry/
+COPY logger_core/Cargo.toml logger_core/
+RUN mkdir -p python/glide-async/src && echo "" > python/glide-async/src/lib.rs && \
+    mkdir -p ffi/src && echo "" > ffi/src/lib.rs && \
+    mkdir -p glide-core/src && echo "" > glide-core/src/lib.rs && \
+    mkdir -p glide-core/redis-rs/redis/src && echo "" > glide-core/redis-rs/redis/src/lib.rs && \
+    mkdir -p glide-core/telemetry/src && echo "" > glide-core/telemetry/src/lib.rs && \
+    mkdir -p logger_core/src && echo "" > logger_core/src/lib.rs
+RUN cd python/glide-async && cargo fetch && \
+    cd ../../ffi && cargo fetch
+
+# L2: Python dependency cache
+COPY python/dev_requirements.txt python/
+RUN python3 -m venv python/.env && \
+    python/.env/bin/pip install --no-cache-dir -r python/dev_requirements.txt
+
+# L3: Full source → build
+COPY . .
+RUN cd python && python3 dev.py build --no-cache
+
+# Optional: TEST_ARGS to pass extra args to pytest (e.g. "-k test_ping").
+CMD ["bash", "-c", "\
+  cd python && \
+  python3 dev.py test --args --async-backend=asyncio \
+    --html=pytest_report.html --self-contained-html \
+    $TEST_ARGS \
+"]
