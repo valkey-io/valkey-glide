@@ -283,6 +283,7 @@ pub(crate) struct MethodCache {
     async_handle_table_class: GlobalRef,
     complete_callback_method: JStaticMethodID,
     complete_error_with_code_method: JStaticMethodID,
+    fail_all_method: JStaticMethodID,
 }
 
 static METHOD_CACHE: std::sync::OnceLock<Mutex<Option<MethodCache>>> = std::sync::OnceLock::new();
@@ -320,10 +321,15 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
             anyhow::anyhow!("Failed to get completeCallbackWithErrorCode method ID: {e}")
         })?;
 
+    let fail_all_method = env
+        .get_static_method_id(&class, "failAllWithError", "(Ljava/lang/String;)V")
+        .map_err(|e| anyhow::anyhow!("Failed to get failAllWithError method ID: {e}"))?;
+
     let method_cache = MethodCache {
         async_handle_table_class: global_class,
         complete_callback_method,
         complete_error_with_code_method,
+        fail_all_method,
     };
 
     // Store in cache
@@ -442,12 +448,15 @@ fn process_callback_job(
             }
         },
         Err(e) => {
-            log::error!("JNI environment attachment failed: {e}");
+            log::error!(
+                "JNI attach failed for callback {callback_id}, future will timeout: {e}"
+            );
         }
     }
 }
 
 /// Enqueue callback job to dedicated workers.
+/// If the channel is dead (all workers terminated), sweeps all pending futures with error.
 pub fn complete_callback(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
@@ -455,9 +464,50 @@ pub fn complete_callback(
     binary_mode: bool,
 ) {
     let sender = init_callback_workers();
-    if let Err(e) = sender.send((jvm, callback_id, result, binary_mode)) {
-        log::error!("Callback queue send failed: {e}");
+    if let Err(e) = sender.send((jvm.clone(), callback_id, result, binary_mode)) {
+        log::error!("Callback channel dead, sweeping all pending futures: {e}");
+        // Workers are dead — sweep the entire AsyncRegistry table
+        if let Ok(mut env) = jvm.attach_current_thread_as_daemon() {
+            fail_all_pending_futures(
+                &mut env,
+                "Native callback workers terminated — all pending requests failed",
+            );
+        } else {
+            log::error!(
+                "FATAL: Cannot attach to JVM to sweep futures — all pending requests will hang"
+            );
+        }
     }
+}
+
+/// Fail all pending futures in AsyncRegistry by calling failAllWithError from Java.
+/// Used when fatal infrastructure failures are detected (channel dead, native panic).
+pub fn fail_all_pending_futures(env: &mut JNIEnv, error_msg: &str) {
+    let cache = match get_method_cache(env) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Cannot sweep futures — failed to get method cache: {e}");
+            return;
+        }
+    };
+    let _ = env.push_local_frame(4);
+    let msg = match env.new_string(error_msg) {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("Cannot sweep futures — failed to create error string: {e}");
+            let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+            return;
+        }
+    };
+    let _ = unsafe {
+        env.call_static_method_unchecked(
+            &cache.async_handle_table_class,
+            cache.fail_all_method,
+            signature::ReturnType::Primitive(signature::Primitive::Void),
+            &[JValue::Object(&msg).as_jni()],
+        )
+    };
+    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
 }
 
 /// Complete Java CompletableFuture with success result using cached method IDs.
