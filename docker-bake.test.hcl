@@ -15,6 +15,9 @@
 //   docker buildx bake glide-core-test --load
 //   docker run --rm glide-core-test
 //   docker run --rm -e TEST_ARGS="--test test_client" glide-core-test
+//
+//   docker buildx bake ffi-test --load
+//   docker run --rm ffi-test
 
 target "base" {
   dockerfile = "Dockerfile.test"
@@ -46,4 +49,13 @@ target "glide-core-test" {
     base = "target:base"
   }
   tags = ["glide-core-test"]
+}
+
+target "ffi-test" {
+  dockerfile = "ffi/Dockerfile.test"
+  context    = "."
+  contexts = {
+    base = "target:base"
+  }
+  tags = ["ffi-test"]
 }
