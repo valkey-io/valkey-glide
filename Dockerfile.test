@@ -7,7 +7,7 @@
 
 FROM ghcr.io/valkey-io/valkey:9.0.3@sha256:2bce660b767cb62c8c0ea020e94a230093be63dbd6af4f21b044960517a5842d AS valkey
 
-FROM rust:1-trixie
+FROM rust:1.94.0-trixie@sha256:0e6da0c8f06f25e9591f21c0f741cd4ff1086e271c3330f29f6e4e95869c7843
 
 ARG DEBIAN_FRONTEND=noninteractive
 
