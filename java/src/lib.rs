@@ -1470,10 +1470,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
 ) {
     let completed = handle_panics(
         move || {
-            let command_request =
-                parse_request_bytes(&mut env, &request_bytes, callback_id)?;
-            let jvm =
-                get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")?;
+            let command_request = parse_request_bytes(&mut env, &request_bytes, callback_id)?;
+            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")?;
 
             let handle_id = client_ptr as u64;
             get_runtime().spawn(execute_command_request_and_complete(
@@ -1629,8 +1627,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 ) {
     let completed = handle_panics(
         move || {
-            let command_request =
-                parse_request_bytes(&mut env, &batch_request_bytes, callback_id)?;
+            let command_request = parse_request_bytes(&mut env, &batch_request_bytes, callback_id)?;
 
             // Extract optional root span pointer from the request (if provided by Java)
             let root_span_ptr_opt = command_request.root_span_ptr;
@@ -1650,8 +1647,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
             };
 
             let handle_id = client_ptr as u64;
-            let jvm =
-                get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")?;
+            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")?;
 
             get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -1798,8 +1794,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
 ) {
     let completed = handle_panics(
         move || {
-            let command_request =
-                parse_request_bytes(&mut env, &request_bytes, callback_id)?;
+            let command_request = parse_request_bytes(&mut env, &request_bytes, callback_id)?;
             let jvm =
                 get_jvm_or_complete_error(&mut env, callback_id, "executeBinaryCommandAsync")?;
 
@@ -1839,8 +1834,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
 ) {
     let completed = handle_panics(
         move || {
-            let jvm =
-                get_jvm_or_complete_error(&mut env, callback_id, "executeScriptAsync")?;
+            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeScriptAsync")?;
 
             // Extract script hash
             let hash_str = match env.get_string(&hash) {
@@ -2118,11 +2112,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
             let handle_id = _client_ptr as u64;
             let do_immediate = immediate_auth != 0;
 
-            let jvm = get_jvm_or_complete_error(
-                &mut env,
-                callback_id,
-                "updateConnectionPassword",
-            )?;
+            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "updateConnectionPassword")?;
 
             get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -2175,8 +2165,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_refreshIamToken(
         move || {
             let handle_id = client_ptr as u64;
 
-            let jvm =
-                get_jvm_or_complete_error(&mut env, callback_id, "refreshIamToken")?;
+            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "refreshIamToken")?;
 
             get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -2232,11 +2221,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
 ) {
     let completed = handle_panics(
         move || {
-            let jvm = get_jvm_or_complete_error(
-                &mut env,
-                callback_id,
-                "executeClusterScanAsync",
-            )?;
+            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeClusterScanAsync")?;
 
             // Extract cursor ID (null-safe: null means initial cursor)
             let cursor_str = if cursor_id.is_null() {

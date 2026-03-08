@@ -390,12 +390,7 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
                         };
 
                         // Process callback with pre-attached env
-                        process_callback_job_with_env(
-                            &mut env,
-                            callback_id,
-                            result,
-                            binary_mode,
-                        );
+                        process_callback_job_with_env(&mut env, callback_id, result, binary_mode);
                     }
                 })
                 .expect("Failed to spawn callback worker thread");
@@ -447,9 +442,7 @@ fn process_callback_job_with_env(
                         error_code,
                         &error_msg,
                     ) {
-                        log::error!(
-                            "JNI error completion failed for callback {callback_id}: {e2}"
-                        );
+                        log::error!("JNI error completion failed for callback {callback_id}: {e2}");
                     }
                 }
             }
