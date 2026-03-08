@@ -417,17 +417,26 @@ fn process_callback_job(
 
                 match java_result {
                     Ok(java_result) => {
-                        let _ = complete_java_callback(&mut env, callback_id, &java_result);
+                        if let Err(e) = complete_java_callback(&mut env, callback_id, &java_result)
+                        {
+                            log::error!(
+                                "JNI completion failed for callback {callback_id}: {e}"
+                            );
+                        }
                     }
                     Err(e) => {
                         let error_code = 0;
                         let error_msg = format!("Response conversion failed: {e}");
-                        let _ = complete_java_callback_with_error_code(
+                        if let Err(e2) = complete_java_callback_with_error_code(
                             &mut env,
                             callback_id,
                             error_code,
                             &error_msg,
-                        );
+                        ) {
+                            log::error!(
+                                "JNI error completion failed for callback {callback_id}: {e2}"
+                            );
+                        }
                     }
                 }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
@@ -439,12 +448,16 @@ fn process_callback_job(
 
                 let error_code = error_type(&server_err) as i32;
                 let error_msg = error_message(&server_err);
-                let _ = complete_java_callback_with_error_code(
+                if let Err(e) = complete_java_callback_with_error_code(
                     &mut env,
                     callback_id,
                     error_code,
                     &error_msg,
-                );
+                ) {
+                    log::error!(
+                        "JNI error completion failed for callback {callback_id}: {e}"
+                    );
+                }
             }
         },
         Err(e) => {
