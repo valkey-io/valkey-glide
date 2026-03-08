@@ -239,7 +239,7 @@ class CoreCommands(Protocol):
 
     def get(
         self, key: TEncodable, buffer: Optional[memoryview] = None
-    ) -> Optional[Union[bytes, int]]:
+    ) -> Optional[bytes]:
         """
         Get the value associated with the given key, or null if no such value exists.
 
@@ -249,14 +249,13 @@ class CoreCommands(Protocol):
             key (TEncodable): The key to retrieve from the database.
             buffer (Optional[memoryview]): If provided, the value is copied directly into
                 this writable buffer instead of allocating a new Python bytes object.
-                When a buffer is provided, returns the number of bytes written (int),
-                or -1 if the key does not exist.
+                When a buffer is provided, returns the number of bytes written as a
+                bytes string (e.g. b'4096'), or None if the key does not exist.
 
         Returns:
-            Optional[bytes]: If no buffer is provided and the key exists, returns the value
-                as a byte string. Returns None if the key does not exist.
-            int: If a buffer is provided, returns the number of bytes written, or -1 if
-                the key does not exist.
+            Optional[bytes]: If the key exists, returns the value as a byte string (no buffer)
+                or the number of bytes written as a byte string (with buffer).
+                Returns None if the key does not exist.
 
         Raises:
             TypeError: If buffer is provided but is read-only.
@@ -267,13 +266,15 @@ class CoreCommands(Protocol):
                 b'value'
             >>> buf = bytearray(1024)
             >>> client.get("key", buffer=memoryview(buf))
-                5
+                b'5'
         """
         args: List[TEncodable] = [key]
-        return cast(
-            Optional[Union[bytes, int]],
-            self._execute_command(RequestType.Get, args, response_buffer=buffer),
-        )
+        result = self._execute_command(RequestType.Get, args, response_buffer=buffer)
+        if buffer is not None:
+            if result == -1:
+                return None
+            return str(result).encode()
+        return cast(Optional[bytes], result)
 
     def getdel(self, key: TEncodable) -> Optional[bytes]:
         """

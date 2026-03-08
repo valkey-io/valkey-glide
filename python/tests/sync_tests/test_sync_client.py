@@ -515,7 +515,7 @@ class TestCommands:
 
         buf = bytearray(4096)
         n = glide_sync_client.get(key, buffer=memoryview(buf))
-        assert n == 4096
+        assert n == b"4096"
         assert buf == data
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -523,11 +523,11 @@ class TestCommands:
     def test_sync_get_into_buffer_nonexistent_key(
         self, glide_sync_client: TGlideClient
     ):
-        """Test get with buffer returns -1 for missing key."""
+        """Test get with buffer returns None for missing key."""
         key = get_random_string(10)
         buf = bytearray(64)
         n = glide_sync_client.get(key, buffer=memoryview(buf))
-        assert n == -1
+        assert n is None
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -539,7 +539,7 @@ class TestCommands:
 
         buf = bytearray(4096)
         n = glide_sync_client.get(key, buffer=memoryview(buf))
-        assert n == 100
+        assert n == b"100"
         assert buf[:100] == data
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
