@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import os
 import platform
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -627,8 +628,6 @@ class TestCommands:
         self, glide_client: TGlideClient
     ):
         """Test that set() accepts bytearray and memoryview keys and values."""
-        import os
-
         data = os.urandom(256)
 
         # bytearray value

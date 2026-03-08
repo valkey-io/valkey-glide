@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import os
 import platform
 import re
 import time
@@ -82,8 +83,6 @@ class TestBatch:
         self, glide_client: TGlideClient
     ):
         """Test that batch set() accepts bytearray and memoryview keys and values."""
-        import os
-
         key_ba = get_random_string(10)
         key_mv = get_random_string(10)
         key_ba_key = bytearray(b"ba_batch_" + os.urandom(8))
