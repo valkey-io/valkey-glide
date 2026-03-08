@@ -71,7 +71,7 @@ EXCLUDED_TESTS = {
     "sync_only": [
         "test_sync_fork",
         "sync_poll_for_timestamp_change",
-        # get_into_buffer — sync-only FFI path, no async equivalent
+        # get() with buffer — sync-only FFI path, no async equivalent
         "test_sync_get_into_buffer",
         "test_sync_get_into_buffer_nonexistent_key",
         "test_sync_get_into_buffer_larger_buffer",

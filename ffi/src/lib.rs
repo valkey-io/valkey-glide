@@ -1053,7 +1053,7 @@ fn valkey_value_to_command_response(
             Ok(command_response)
         }
         Value::BulkString(data) => {
-            if let Some((buf, buf_len)) = response_buf {
+            let data = if let Some((buf, buf_len)) = response_buf {
                 if data.len() > buf_len {
                     return Err(RedisError::from((
                         ErrorKind::ClientError,
@@ -1065,22 +1065,20 @@ fn valkey_value_to_command_response(
                         ),
                     )));
                 }
+                // Copy data directly into the caller's buffer; the command response
+                // will carry the number of bytes written instead of the data itself.
                 unsafe {
                     std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
                 }
-                let len_str = data.len().to_string().into_bytes();
-                let (vec_ptr, len) = convert_vec_to_pointer(len_str);
-                command_response.string_value = vec_ptr as *mut c_char;
-                command_response.string_value_len = len;
-                command_response.response_type = ResponseType::String;
-                Ok(command_response)
+                data.len().to_string().into_bytes()
             } else {
-                let (vec_ptr, len) = convert_vec_to_pointer(data);
-                command_response.string_value = vec_ptr as *mut c_char;
-                command_response.string_value_len = len;
-                command_response.response_type = ResponseType::String;
-                Ok(command_response)
-            }
+                data
+            };
+            let (vec_ptr, len) = convert_vec_to_pointer(data);
+            command_response.string_value = vec_ptr as *mut c_char;
+            command_response.string_value_len = len;
+            command_response.response_type = ResponseType::String;
+            Ok(command_response)
         }
         Value::VerbatimString { format: _, text } => {
             let vec: Vec<u8> = text.into_bytes();
@@ -1256,9 +1254,8 @@ pub unsafe extern "C-unwind" fn command(
 /// to [`command`] — the response flows through the normal `execute_request` path.
 ///
 /// When `response_buf` is non-null, the response is written directly into the buffer:
-/// - `response.int_value` = number of bytes written, or -1 for Nil.
-/// - Errors if the value exceeds `response_buf_len` or the response type is not
-///   BulkString/Nil.
+/// - `response.string_value` = number of bytes written as a string, or Nil response for missing keys.
+/// - Errors if the value exceeds `response_buf_len`.
 ///
 /// # Safety
 ///
