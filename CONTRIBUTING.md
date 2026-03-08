@@ -37,7 +37,7 @@ To send us a pull request, please:
 
 1. Fork the repository.
 2. Modify the source; please focus on the specific change you are contributing. If you also reformat all the code, it will be hard for us to focus on your change.
-3. Ensure local tests pass.
+3. Ensure local tests pass. You can use [Docker-based test runners](#running-tests-with-docker) for a quick setup without installing dependencies manually.
 4. Commit to your fork using clear commit messages, merge or squash commits as necessary.
    - All commits require a DCO signoff (`git commit -s -m "message"`) and should follow the [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>(<scope>): <description>`. To add a signoff to an existing commit: `git commit --amend --signoff --no-edit`.
    - All commits must be cryptographically signed so they show as "Verified" on GitHub. Use GPG or SSH signing by configuring `git config commit.gpgsign true`. To sign a commit: `git commit -S -s -m "message"`. See [GitHub's guide on signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) for setup instructions.
@@ -66,6 +66,24 @@ You can filter issues by language-specific labels to find work relevant to your 
 Before you begin working on an issue, leave a comment expressing your intent to work on it. This lets maintainers and other contributors know the issue is being actively worked on and prevents duplicate effort. A simple comment like _"I'd like to work on this"_ is enough.
 
 For detailed instructions on forking, cloning, and setting up your local environment, see the [Picking Up Issues Guide](./PICKING_UP_ISSUES.md).
+
+## Running Tests with Docker
+
+If you have Docker installed, you can run integration tests without setting up Rust, protoc, or Valkey locally. This uses [Docker Bake](https://docs.docker.com/build/bake/) to build a shared base image with all dependencies, then a language-specific test image on top.
+
+```bash
+# Build and load the test image (first run downloads dependencies, subsequent runs use cache)
+docker buildx bake -f docker-bake.test.hcl node-test --load
+
+# Run all tests
+docker run --rm node-test
+
+# Run a specific test file or pattern
+docker run --rm -e TEST_FILE=GlideClient.test.ts node-test
+docker run --rm -e TEST_PATTERN="ping" node-test
+```
+
+Available targets: `node-test`, `python-test`, `glide-core-test`, `ffi-test`. See `docker-bake.test.hcl` for full usage examples.
 
 ## Code of Conduct
 This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
