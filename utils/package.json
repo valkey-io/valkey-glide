@@ -12,6 +12,7 @@
     "author": "",
     "license": "Apache-2.0",
     "devDependencies": {
+        "@types/eslint__js": "^8.42.3",
         "@types/node": "22",
         "@types/semver": "^7",
         "prettier": "^3"

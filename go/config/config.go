@@ -323,6 +323,10 @@ type ClientConfiguration struct {
 	baseClientConfiguration
 	subscriptionConfig *StandaloneSubscriptionConfig
 	AdvancedClientConfiguration
+	// readOnly enables read-only mode for the standalone client.
+	// When enabled, the client will skip primary node detection during connection initialization
+	// and will reject write commands. This is useful for connecting to replica-only deployments.
+	readOnly bool
 }
 
 // NewClientConfiguration returns a [ClientConfiguration] with default configuration settings. For further
@@ -337,6 +341,16 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		return nil, err
 	}
 	request.ClusterModeEnabled = false
+
+	// Handle read-only mode validation and configuration
+	if config.readOnly {
+		// Validate that read-only mode is not combined with AZAffinity strategies
+		if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
+			request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+			return nil, errors.New("read-only mode is not compatible with AZAffinity strategies")
+		}
+		request.ReadOnly = &config.readOnly
+	}
 
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
@@ -493,6 +507,18 @@ func (config *ClientConfiguration) WithSubscriptionConfig(
 	subscriptionConfig *StandaloneSubscriptionConfig,
 ) *ClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
+	return config
+}
+
+// WithReadOnly enables read-only mode for the standalone client.
+// When enabled, the client will skip primary node detection during connection initialization
+// and will reject write commands. This is useful for connecting to replica-only deployments.
+//
+// Note: Read-only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
+// read strategies. Attempting to use these combinations will result in an error during
+// client creation.
+func (config *ClientConfiguration) WithReadOnly(readOnly bool) *ClientConfiguration {
+	config.readOnly = readOnly
 	return config
 }
 

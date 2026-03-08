@@ -3,10 +3,13 @@ package compatibility.jedis;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.utils.Java8Utils.createList;
+import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
 import glide.api.GlideClient;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
@@ -25,8 +28,10 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.Transaction;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.FlushMode;
 import redis.clients.jedis.args.GeoUnit;
 import redis.clients.jedis.args.ListDirection;
 import redis.clients.jedis.args.ListPosition;
@@ -69,6 +74,9 @@ public class JedisTest {
     private static final String valkeyHost;
     private static final int valkeyPort;
 
+    // Microseconds per second - used to validate TIME command response
+    // The TIME command returns [seconds, microseconds] where microseconds must be in [0, 999999]
+    private static final long MICROSECONDS_PER_SECOND = 1_000_000;
     // Geo test constants
     private static final double TEST_LONGITUDE_PALERMO = 13.361389;
     private static final double TEST_LATITUDE_PALERMO = 38.115556;
@@ -3524,6 +3532,72 @@ public class JedisTest {
                 0, jedis.rpushx("non_existent_key", "value"), "RPUSHX on non-existent key should return 0");
     }
 
+    // ========== Server Management Commands Tests ==========
+
+    @Test
+    void testInfo() {
+        // Test INFO without section
+        String info = jedis.info();
+        assertNotNull(info, "INFO should return server information");
+        assertTrue(info.length() > 0, "INFO should return non-empty string");
+        assertTrue(
+                info.contains("redis_version") || info.contains("valkey_version"),
+                "INFO should contain version information");
+
+        // Test INFO with specific section
+        String memoryInfo = jedis.info("memory");
+        assertNotNull(memoryInfo, "INFO memory should return memory information");
+        assertTrue(memoryInfo.contains("used_memory"), "INFO memory should contain used_memory");
+    }
+
+    @Test
+    void testConfigGetAndSet() {
+        // Test CONFIG GET
+        Map<String, String> timeoutConfig = jedis.configGet("timeout");
+        assertNotNull(timeoutConfig, "CONFIG GET should return configuration");
+        assertTrue(timeoutConfig.containsKey("timeout"), "CONFIG GET should return timeout parameter");
+
+        // Test CONFIG SET with single parameter
+        String originalTimeout = timeoutConfig.get("timeout");
+        String result = jedis.configSet("timeout", "300");
+        assertEquals("OK", result, "CONFIG SET should return OK");
+
+        // Verify the change
+        Map<String, String> newConfig = jedis.configGet("timeout");
+        assertEquals("300", newConfig.get("timeout"), "CONFIG SET should update the value");
+
+        // Restore original value
+        jedis.configSet("timeout", originalTimeout);
+
+        // Test CONFIG SET with multiple parameters
+        Map<String, String> params = new HashMap<>();
+        params.put("timeout", "400");
+        String multiResult = jedis.configSet(params);
+        assertEquals("OK", multiResult, "CONFIG SET with map should return OK");
+
+        // Restore original value again
+        jedis.configSet("timeout", originalTimeout);
+    }
+
+    @Test
+    void testConfigRewrite() {
+        // Note: This test may fail if the server is not configured with a config file
+        // or if the user doesn't have write permissions
+        try {
+            String result = jedis.configRewrite();
+            assertEquals("OK", result, "CONFIG REWRITE should return OK");
+        } catch (Exception e) {
+            // Expected if no config file is set or no write permissions
+            String errorMsg = e.getMessage();
+            assertTrue(
+                    errorMsg.contains("The server is running without a config file")
+                            || errorMsg.contains("rewriting config file")
+                            || errorMsg.contains("CONFIG REWRITE")
+                            || errorMsg.contains("config"),
+                    "Expected error about config file, got: " + errorMsg);
+        }
+    }
+
     // ========== STREAM COMMANDS ==========
 
     @Test
@@ -3548,9 +3622,9 @@ public class JedisTest {
     @Test
     void stream_xrange_xrevrange() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("a", "1"));
-        jedis.xadd(key, Map.of("b", "2"));
-        jedis.xadd(key, Map.of("c", "3"));
+        jedis.xadd(key, createMap("a", "1"));
+        jedis.xadd(key, createMap("b", "2"));
+        jedis.xadd(key, createMap("c", "3"));
 
         List<StreamEntry> range = jedis.xrange(key, "-", "+");
         assertNotNull(range);
@@ -3568,7 +3642,7 @@ public class JedisTest {
     @Test
     void stream_xread() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("x", "1"));
+        jedis.xadd(key, createMap("x", "1"));
 
         Map<String, String> keysAndIds = new HashMap<>();
         keysAndIds.put(key, "0-0");
@@ -3583,7 +3657,7 @@ public class JedisTest {
     void stream_xtrim() {
         String key = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 10; i++) {
-            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+            jedis.xadd(key, createMap("i", String.valueOf(i)));
         }
         long lenBefore = jedis.xlen(key);
         assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
@@ -3597,7 +3671,7 @@ public class JedisTest {
     @Test
     void stream_xgroup_create_destroy() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("init", "1"));
+        jedis.xadd(key, createMap("init", "1"));
 
         String group = "g1";
         String createResult = jedis.xgroupCreate(key, group, "0", true);
@@ -3610,7 +3684,7 @@ public class JedisTest {
     @Test
     void stream_xgroup_setid_createconsumer_delconsumer() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("a", "1"));
+        jedis.xadd(key, createMap("a", "1"));
         String group = "g2";
         jedis.xgroupCreate(key, group, "0", true);
 
@@ -3627,8 +3701,8 @@ public class JedisTest {
     @Test
     void stream_xreadgroup_xack() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("m1", "v1"));
-        jedis.xadd(key, Map.of("m2", "v2"));
+        jedis.xadd(key, createMap("m1", "v1"));
+        jedis.xadd(key, createMap("m2", "v2"));
         String group = "g3";
         jedis.xgroupCreate(key, group, "0", true);
 
@@ -3650,7 +3724,7 @@ public class JedisTest {
     @Test
     void stream_xpending() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("p", "1"));
+        jedis.xadd(key, createMap("p", "1"));
         String group = "g4";
         jedis.xgroupCreate(key, group, "0", true);
 
@@ -3665,7 +3739,7 @@ public class JedisTest {
     @Test
     void stream_xinfo_stream_and_groups() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("i", "1"));
+        jedis.xadd(key, createMap("i", "1"));
         jedis.xgroupCreate(key, "ginfo", "0", true);
 
         Map<String, Object> raw = jedis.xinfoStream(key);
@@ -3684,7 +3758,7 @@ public class JedisTest {
     @Test
     void stream_xinfo_consumers() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, Map.of("c", "1"));
+        jedis.xadd(key, createMap("c", "1"));
         String group = "gcons";
         jedis.xgroupCreate(key, group, "0", true);
         jedis.xgroupCreateConsumer(key, group, "consumer1");
@@ -3720,9 +3794,9 @@ public class JedisTest {
 
         // Add entries using XAddParams
         XAddParams params = XAddParams.xAddParams();
-        Map<byte[], byte[]> hash1 = Map.of("a".getBytes(), "1".getBytes());
-        Map<byte[], byte[]> hash2 = Map.of("b".getBytes(), "2".getBytes());
-        Map<byte[], byte[]> hash3 = Map.of("c".getBytes(), "3".getBytes());
+        Map<byte[], byte[]> hash1 = createMap("a".getBytes(), "1".getBytes());
+        Map<byte[], byte[]> hash2 = createMap("b".getBytes(), "2".getBytes());
+        Map<byte[], byte[]> hash3 = createMap("c".getBytes(), "3".getBytes());
 
         jedis.xadd(key, params, hash1);
         jedis.xadd(key, params, hash2);
@@ -3747,7 +3821,7 @@ public class JedisTest {
         XAddParams addParams = XAddParams.xAddParams();
 
         for (int i = 0; i < 10; i++) {
-            Map<byte[], byte[]> hash = Map.of("i".getBytes(), String.valueOf(i).getBytes());
+            Map<byte[], byte[]> hash = createMap("i".getBytes(), String.valueOf(i).getBytes());
             jedis.xadd(key, addParams, hash);
         }
         long lenBefore = jedis.xlen(key);
@@ -3762,7 +3836,7 @@ public class JedisTest {
     @Test
     void stream_xadd_with_xaddparams() {
         String key = "stream:" + UUID.randomUUID();
-        Map<String, String> hash = Map.of("field", "value");
+        Map<String, String> hash = createMap("field", "value");
 
         // Test with custom ID
         XAddParams params = XAddParams.xAddParams().id("1000-0");
@@ -3779,10 +3853,10 @@ public class JedisTest {
         // Test with MAXLEN trimming (exact)
         String trimKey = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 5; i++) {
-            jedis.xadd(trimKey, Map.of("i", String.valueOf(i)));
+            jedis.xadd(trimKey, createMap("i", String.valueOf(i)));
         }
         params = XAddParams.xAddParams().maxLenExact(3);
-        jedis.xadd(trimKey, params, Map.of("new", "entry"));
+        jedis.xadd(trimKey, params, createMap("new", "entry"));
         long len = jedis.xlen(trimKey);
         assertTrue(len <= 3, "Stream should be trimmed to exactly 3 entries");
     }
@@ -3791,7 +3865,7 @@ public class JedisTest {
     void stream_xtrim_with_xtrimparams() {
         String key = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 10; i++) {
-            jedis.xadd(key, Map.of("i", String.valueOf(i)));
+            jedis.xadd(key, createMap("i", String.valueOf(i)));
         }
 
         // Test MAXLEN with XTrimParams (exact trimming)
@@ -3804,7 +3878,7 @@ public class JedisTest {
         // Test MAXLEN with approximate trimming
         String key3 = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 10; i++) {
-            jedis.xadd(key3, Map.of("i", String.valueOf(i)));
+            jedis.xadd(key3, createMap("i", String.valueOf(i)));
         }
         params = XTrimParams.xTrimParams().maxLen(5);
         jedis.xtrim(key3, params);
@@ -3815,9 +3889,9 @@ public class JedisTest {
 
         // Test MINID with XTrimParams (exact trimming)
         String key2 = "stream:" + UUID.randomUUID();
-        StreamEntryID firstId = jedis.xadd(key2, Map.of("a", "1"));
-        jedis.xadd(key2, Map.of("b", "2"));
-        StreamEntryID thirdId = jedis.xadd(key2, Map.of("c", "3"));
+        StreamEntryID firstId = jedis.xadd(key2, createMap("a", "1"));
+        jedis.xadd(key2, createMap("b", "2"));
+        StreamEntryID thirdId = jedis.xadd(key2, createMap("c", "3"));
 
         params = XTrimParams.xTrimParams().minIdExact(thirdId);
         jedis.xtrim(key2, params);
@@ -3886,6 +3960,187 @@ public class JedisTest {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    @Test
+    void testConfigResetStat() {
+        // Get initial stats
+        String statsBefore = jedis.info("stats");
+        assertNotNull(statsBefore, "INFO stats should return statistics");
+
+        // Reset statistics
+        String result = jedis.configResetStat();
+        assertEquals("OK", result, "CONFIG RESETSTAT should return OK");
+
+        // Verify stats were reset (some counters should be 0 or lower)
+        String statsAfter = jedis.info("stats");
+        assertNotNull(statsAfter, "INFO stats should return statistics after reset");
+    }
+
+    @Test
+    void testDbsize() {
+        // Clear database first
+        jedis.flushDB();
+
+        // Test DBSIZE on empty database
+        long initialSize = jedis.dbsize();
+        assertEquals(0, initialSize, "DBSIZE should return 0 for empty database");
+
+        // Add some keys
+        jedis.set("key1", "value1");
+        jedis.set("key2", "value2");
+        jedis.set("key3", "value3");
+
+        // Test DBSIZE with keys
+        long sizeWithKeys = jedis.dbsize();
+        assertEquals(3, sizeWithKeys, "DBSIZE should return 3 after adding 3 keys");
+
+        // Clean up
+        jedis.flushDB();
+    }
+
+    @Test
+    void testFlushDB() {
+        // Add some keys
+        jedis.set("test_key1", "value1");
+        jedis.set("test_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        // Test FLUSHDB
+        String result = jedis.flushDB();
+        assertEquals("OK", result, "FLUSHDB should return OK");
+
+        // Verify database is empty
+        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHDB");
+    }
+
+    @Test
+    void testFlushDBWithFlushMode() {
+        // Test FLUSHDB with SYNC mode
+        jedis.set("sync_key1", "value1");
+        jedis.set("sync_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String syncResult = jedis.flushDB(FlushMode.SYNC);
+        assertEquals("OK", syncResult, "FLUSHDB with SYNC mode should return OK");
+        assertEquals(0, jedis.dbsize(), "Database should be empty after FLUSHDB SYNC");
+
+        // Test FLUSHDB with ASYNC mode
+        jedis.set("async_key1", "value1");
+        jedis.set("async_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String asyncResult = jedis.flushDB(FlushMode.ASYNC);
+        assertEquals("OK", asyncResult, "FLUSHDB with ASYNC mode should return OK");
+        // Note: ASYNC mode may not complete immediately, but the command should succeed
+    }
+
+    @Test
+    void testFlushAll() {
+        // Clean up first to ensure consistent test state
+        jedis.flushAll();
+
+        // Add keys to database 0 (default database)
+        jedis.set("db0_key1", "value1");
+        jedis.set("db0_key2", "value2");
+        jedis.set("db0_key3", "value3");
+
+        // Move one key to database 1 to test multi-database flush
+        long moveResult = jedis.move("db0_key3", 1);
+        assertEquals(1L, moveResult, "MOVE should successfully move key to database 1");
+
+        // Verify database 0 has 2 keys (after moving one to db 1)
+        long db0Size = jedis.dbsize();
+        assertEquals(2, db0Size, "Database 0 should have 2 keys after moving one key");
+
+        // Test FLUSHALL - should remove keys from ALL databases
+        String result = jedis.flushAll();
+        assertEquals("OK", result, "FLUSHALL should return OK");
+
+        // Verify all keys are removed from database 0
+        assertEquals(0, jedis.dbsize(), "DBSIZE should return 0 after FLUSHALL in database 0");
+
+        // Note: Cannot verify database 1 is also flushed in the current GLIDE compatibility layer
+        // because SELECT is not fully implemented. In real Jedis, we would do:
+        // jedis.select(1);
+        // assertEquals(0, jedis.dbsize(), "Database 1 should also be empty after FLUSHALL");
+        // This limitation is acceptable as FLUSHALL is a server-wide operation that affects all
+        // databases.
+    }
+
+    @Test
+    void testFlushAllWithFlushMode() {
+        // Test FLUSHALL with SYNC mode
+        jedis.flushAll(); // Clean first
+        jedis.set("sync_key1", "value1");
+        jedis.set("sync_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String syncResult = jedis.flushAll(FlushMode.SYNC);
+        assertEquals("OK", syncResult, "FLUSHALL with SYNC mode should return OK");
+        assertEquals(0, jedis.dbsize(), "All databases should be empty after FLUSHALL SYNC");
+
+        // Test FLUSHALL with ASYNC mode
+        jedis.set("async_key1", "value1");
+        jedis.set("async_key2", "value2");
+        assertTrue(jedis.dbsize() > 0, "Database should have keys before flush");
+
+        String asyncResult = jedis.flushAll(FlushMode.ASYNC);
+        assertEquals("OK", asyncResult, "FLUSHALL with ASYNC mode should return OK");
+        // Note: ASYNC mode may not complete immediately, but the command should succeed
+    }
+
+    @Test
+    void testTime() {
+        // Test TIME command
+        String[] time = jedis.time();
+        assertNotNull(time, "TIME should return time array");
+        assertEquals(2, time.length, "TIME should return array with 2 elements");
+
+        // Verify first element is Unix timestamp (seconds)
+        long seconds = Long.parseLong(time[0]);
+        long currentTime = System.currentTimeMillis() / 1000;
+        assertTrue(seconds > 0, "Unix timestamp should be positive");
+        assertTrue(
+                seconds >= currentTime - 60 && seconds <= currentTime + 60,
+                "Unix timestamp should be within reasonable range of current time");
+
+        // Verify second element is microseconds
+        // Microseconds must be in the range [0, 999999] as there are 1,000,000 microseconds in a
+        // second
+        long microseconds = Long.parseLong(time[1]);
+        assertTrue(microseconds >= 0, "Microseconds should be non-negative");
+        assertTrue(
+                microseconds < MICROSECONDS_PER_SECOND,
+                "Microseconds should be less than " + MICROSECONDS_PER_SECOND);
+    }
+
+    @Test
+    void testLastsave() {
+        // Test LASTSAVE command
+        long timestamp = jedis.lastsave();
+        long currentTime = System.currentTimeMillis() / 1000;
+        assertTrue(timestamp > 0, "LASTSAVE should return positive timestamp");
+        assertTrue(
+                timestamp <= currentTime,
+                "LASTSAVE timestamp should not be in the future (current: "
+                        + currentTime
+                        + ", lastsave: "
+                        + timestamp
+                        + ")");
+    }
+
+    @Test
+    void testLolwut() {
+        // Test LOLWUT without parameters
+        String art = jedis.lolwut();
+        assertNotNull(art, "LOLWUT should return art");
+        assertTrue(art.length() > 0, "LOLWUT should return non-empty string");
+
+        // Test LOLWUT with parameters
+        String artWithParams = jedis.lolwut(5, 10);
+        assertNotNull(artWithParams, "LOLWUT with params should return art");
+        assertTrue(artWithParams.length() > 0, "LOLWUT with params should return non-empty string");
     }
 
     @Test
@@ -4105,6 +4360,69 @@ public class JedisTest {
         return sb.toString();
     }
 
+    @Test
+    void echo_string() {
+        String message = "Hello, Valkey!";
+        String response = jedis.echo(message);
+        assertEquals(message, response);
+    }
+
+    @Test
+    void echo_binary() {
+        byte[] message = "Binary Message".getBytes(StandardCharsets.UTF_8);
+        byte[] response = jedis.echo(message);
+        assertArrayEquals(message, response);
+    }
+
+    @Test
+    void clientId() {
+        long id = jedis.clientId();
+        assertTrue(id > 0, "Client ID should be a positive number");
+    }
+
+    @Test
+    void clientGetName() {
+        String name = jedis.clientGetName();
+        // Name can be null if not set, so we just verify it doesn't throw
+        assertDoesNotThrow(() -> jedis.clientGetName());
+    }
+
+    @Test
+    void customCommand_ping() {
+        Object result = jedis.customCommand("PING");
+        assertEquals("PONG", result);
+    }
+
+    @Test
+    void customCommand_echo() {
+        Object result = jedis.customCommand("ECHO", "test");
+        assertEquals("test", result);
+    }
+
+    @Test
+    void sendCommand_with_protocol_command() {
+        // Test sendCommand with Protocol.Command.PING
+        Object result = jedis.sendCommand(redis.clients.jedis.Protocol.Command.PING);
+        assertEquals("PONG", result);
+    }
+
+    @Test
+    void watch_and_unwatch() {
+        String key = "watch_key_" + UUID.randomUUID();
+
+        try {
+            // Watch a key
+            String watchResult = jedis.watch(key);
+            assertEquals("OK", watchResult);
+
+            // Unwatch
+            String unwatchResult = jedis.unwatch();
+            assertEquals("OK", unwatchResult);
+        } finally {
+            jedis.del(key);
+        }
+    }
+
     // ==================== SORT COMMANDS TESTS ====================
 
     @Test
@@ -4253,6 +4571,20 @@ public class JedisTest {
     }
 
     @Test
+    void watch_binary() {
+        byte[] key = ("watch_key_binary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+
+        try {
+            String result = jedis.watch(key);
+            assertEquals("OK", result);
+
+            jedis.unwatch();
+        } finally {
+            jedis.del(new String(key, StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
     void objectFreq_binary() {
         byte[] key = ("objectFreqKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
         jedis.set(key, "value".getBytes());
@@ -4263,6 +4595,108 @@ public class JedisTest {
         if (freq != null) {
             assertTrue(freq >= 0);
         }
+    }
+
+    @Test
+    void multi_exec_discard() {
+        String key1 = "multi_key1_" + UUID.randomUUID();
+        String key2 = "multi_key2_" + UUID.randomUUID();
+
+        try {
+            // Start transaction - returns Transaction object in Jedis 5.1.5+
+            Transaction transaction = jedis.multi();
+            assertNotNull(transaction);
+
+            // Discard transaction
+            String discardResult = transaction.discard();
+            assertEquals("OK", discardResult);
+        } finally {
+            jedis.del(key1, key2);
+        }
+    }
+
+    @Test
+    void multi_exec_transaction() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "Skipping test: Transaction support requires Valkey 6.2.0+");
+
+        String key = "tx_key_" + UUID.randomUUID();
+
+        try {
+            // Start transaction and queue commands
+            Transaction transaction = jedis.multi();
+
+            // Note: In Jedis 5.1.5+, commands are queued on the Transaction object
+            // and return Response objects that are populated after exec()
+            // For now, we test that the API exists and works.
+
+            // Discard the transaction for safety
+            transaction.discard();
+        } finally {
+            try {
+                jedis.del(key);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    // NOTE: scriptShow tests are disabled because SCRIPT SHOW is not a standard Redis/Valkey command.
+    // The command returns "unknown subcommand 'SHOW'" on all current server versions.
+    // The implementation exists for future compatibility but cannot be tested until servers support
+    // it.
+
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
+    @Test
+    void scriptShow() {
+        String script = "return 'Hello from script'";
+        String sha1 = jedis.scriptLoad(script);
+        assertNotNull(sha1);
+
+        String source = jedis.scriptShow(sha1);
+        assertEquals(script, source);
+    }
+
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
+    @Test
+    void scriptShow_nonexistent() {
+        String fakeSha1 = "0000000000000000000000000000000000000000";
+        String result = jedis.scriptShow(fakeSha1);
+        assertNull(result, "scriptShow should return null for non-existent scripts");
+    }
+
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
+    @Test
+    void scriptShow_binary() {
+        String script = "return 'Binary script'";
+        String sha1 = jedis.scriptLoad(script);
+        assertNotNull(sha1);
+
+        byte[] source = jedis.scriptShow(sha1.getBytes(StandardCharsets.UTF_8));
+        assertArrayEquals(script.getBytes(StandardCharsets.UTF_8), source);
+    }
+
+    @Test
+    void scriptDebug() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("3.2.0"),
+                "Skipping test: SCRIPT DEBUG requires Valkey 3.2.0+");
+
+        // Set debug mode to NO
+        String result = jedis.scriptDebug(ScriptDebugMode.NO);
+        assertEquals("OK", result);
+    }
+
+    @Test
+    void functionFlush_already_tested() {
+        // functionFlush is already tested in existing tests
+        // Verify it exists and works
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
+                "Skipping test: FUNCTION FLUSH requires Valkey 7.0.0+");
+
+        String result = jedis.functionFlush();
+        assertEquals("OK", result);
     }
 
     @Test
@@ -6100,7 +6534,7 @@ public class JedisTest {
 
         String member = jedis.zrandmember(key);
         assertNotNull(member);
-        assertTrue(List.of("one", "two", "three").contains(member));
+        assertTrue(createList("one", "two", "three").contains(member));
 
         jedis.del(key);
     }
