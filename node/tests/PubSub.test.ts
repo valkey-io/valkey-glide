@@ -464,7 +464,13 @@ describe("PubSub", () => {
                         clusterMode,
                         options,
                         getOptions(clusterMode),
-                        createPubSubSubscription(clusterMode, {}, {}, callback, context),
+                        createPubSubSubscription(
+                            clusterMode,
+                            {},
+                            {},
+                            callback,
+                            context,
+                        ),
                     );
 
                     // Subscribe dynamically based on subscription method
@@ -509,7 +515,7 @@ describe("PubSub", () => {
                     clientCleanup(
                         listeningClient!,
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        clusterMode ? {} as any : undefined,
+                        clusterMode ? ({} as any) : undefined,
                     ),
                 ]);
             }
@@ -575,7 +581,13 @@ describe("PubSub", () => {
                         clusterMode,
                         options,
                         getOptions(clusterMode),
-                        createPubSubSubscription(clusterMode, {}, {}, callback, context),
+                        createPubSubSubscription(
+                            clusterMode,
+                            {},
+                            {},
+                            callback,
+                            context,
+                        ),
                         undefined,
                         Decoder.Bytes,
                     );
@@ -626,7 +638,7 @@ describe("PubSub", () => {
                     clientCleanup(
                         listeningClient!,
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        clusterMode ? {} as any : undefined,
+                        clusterMode ? ({} as any) : undefined,
                     ),
                 ]);
             }
@@ -733,7 +745,7 @@ describe("PubSub", () => {
                     clientCleanup(
                         listeningClient!,
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        clusterMode ? {} as any : undefined,
+                        clusterMode ? ({} as any) : undefined,
                     ),
                 ]);
             }
@@ -810,7 +822,13 @@ describe("PubSub", () => {
                         clusterMode,
                         getOptions(clusterMode),
                         getOptions(clusterMode),
-                        createPubSubSubscription(clusterMode, {}, {}, callback, context),
+                        createPubSubSubscription(
+                            clusterMode,
+                            {},
+                            {},
+                            callback,
+                            context,
+                        ),
                     );
 
                     // Subscribe dynamically based on subscription method
@@ -874,7 +892,7 @@ describe("PubSub", () => {
                         ? clientCleanup(
                               listeningClient,
                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                              clusterMode ? {} as any : undefined,
+                              clusterMode ? ({} as any) : undefined,
                           )
                         : Promise.resolve(),
                     publishingClient
@@ -1008,7 +1026,7 @@ describe("PubSub", () => {
                         ? clientCleanup(
                               listeningClient,
                               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                              clusterMode ? {} as any : undefined,
+                              clusterMode ? ({} as any) : undefined,
                           )
                         : Promise.resolve(),
                     publishingClient
@@ -1087,9 +1105,9 @@ describe("PubSub", () => {
                         // but without initial subscriptions
                         listeningClient = await createPubsubClient(
                             clusterMode,
-                            new Set(),  // Empty set for exact channels
-                            new Set(),  // Empty set for patterns
-                            new Set(),  // Empty set for sharded channels
+                            new Set(), // Empty set for exact channels
+                            new Set(), // Empty set for patterns
+                            new Set(), // Empty set for sharded channels
                             callback,
                             context,
                             undefined,
@@ -1413,9 +1431,9 @@ describe("PubSub", () => {
                         // but without initial subscriptions
                         listeningClient = await createPubsubClient(
                             clusterMode,
-                            new Set(),  // Empty set for exact channels
-                            new Set(),  // Empty set for patterns
-                            new Set(),  // Empty set for sharded channels
+                            new Set(), // Empty set for exact channels
+                            new Set(), // Empty set for patterns
+                            new Set(), // Empty set for sharded channels
                             callback,
                             context,
                             undefined,
@@ -1580,14 +1598,17 @@ describe("PubSub", () => {
                         // but without initial subscriptions
                         listeningClient = await createPubsubClient(
                             clusterMode,
-                            new Set(),  // Empty set for exact channels
-                            new Set(),  // Empty set for patterns
-                            new Set(),  // Empty set for sharded channels
+                            new Set(), // Empty set for exact channels
+                            new Set(), // Empty set for patterns
+                            new Set(), // Empty set for sharded channels
                             callback,
                             context,
                             options.protocol,
                             undefined,
-                            options.addresses as { host: string; port: number }[],
+                            options.addresses as {
+                                host: string;
+                                port: number;
+                            }[],
                         );
                     } else {
                         // For async/sync modes, create client without subscriptions or callback
@@ -1843,14 +1864,17 @@ describe("PubSub", () => {
                         // but without initial subscriptions
                         listeningClient = await createPubsubClient(
                             clusterMode,
-                            new Set(),  // Empty set for exact channels
-                            new Set(),  // Empty set for patterns
-                            new Set(),  // Empty set for sharded channels
+                            new Set(), // Empty set for exact channels
+                            new Set(), // Empty set for patterns
+                            new Set(), // Empty set for sharded channels
                             callback,
                             context,
                             options.protocol,
                             undefined,
-                            options.addresses as { host: string; port: number }[],
+                            options.addresses as {
+                                host: string;
+                                port: number;
+                            }[],
                         );
                     } else {
                         // For async/sync modes, create client without subscriptions or callback
@@ -2742,19 +2766,18 @@ describe("PubSub", () => {
                             pubSubPattern,
                         );
                 } else {
-                    [listeningClientPattern] =
-                        await createClients(
+                    [listeningClientPattern] = await createClients(
+                        clusterMode,
+                        getOptions(clusterMode),
+                        getOptions(clusterMode),
+                        createPubSubSubscription(
                             clusterMode,
-                            getOptions(clusterMode),
-                            getOptions(clusterMode),
-                            createPubSubSubscription(
-                                clusterMode,
-                                {},
-                                {},
-                                callback,
-                                callback ? callbackMessagesPattern : undefined,
-                            ),
-                        );
+                            {},
+                            {},
+                            callback,
+                            callback ? callbackMessagesPattern : undefined,
+                        ),
+                    );
 
                     await psubscribeByMethod(
                         listeningClientPattern,
@@ -3640,9 +3663,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
                     } else {
                         // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
                         listeningClient = await createPubsubClient(
@@ -3653,9 +3675,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
 
                         // Subscribe dynamically based on subscription method
                         await subscribeByMethod(
@@ -3724,7 +3745,7 @@ describe("PubSub", () => {
                         clientCleanup(
                             listeningClient!,
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            clusterMode ? {} as any : undefined,
+                            clusterMode ? ({} as any) : undefined,
                         ),
                     ]);
                 }
@@ -3782,9 +3803,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
                     } else {
                         // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
                         listeningClient = await createPubsubClient(
@@ -3795,9 +3815,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
 
                         // Subscribe dynamically based on subscription method
                         await ssubscribeByMethod(
@@ -3870,7 +3889,7 @@ describe("PubSub", () => {
                         clientCleanup(
                             listeningClient!,
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            clusterMode ? {} as any : undefined,
+                            clusterMode ? ({} as any) : undefined,
                         ),
                     ]);
                 }
@@ -3923,9 +3942,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
                     } else {
                         // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
                         listeningClient = await createPubsubClient(
@@ -3936,9 +3954,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
 
                         // Subscribe dynamically based on subscription method
                         await subscribeByMethod(
@@ -3995,7 +4012,7 @@ describe("PubSub", () => {
                         clientCleanup(
                             listeningClient!,
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            clusterMode ? {} as any : undefined,
+                            clusterMode ? ({} as any) : undefined,
                         ),
                     ]);
                 }
@@ -4051,9 +4068,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
                     } else {
                         // For Lazy/Blocking modes, create client without subscriptions, then subscribe dynamically
                         listeningClient = await createPubsubClient(
@@ -4064,9 +4080,8 @@ describe("PubSub", () => {
                             callback,
                             context,
                         );
-                        publishingClient = await createPubsubClient(
-                            clusterMode,
-                        );
+                        publishingClient =
+                            await createPubsubClient(clusterMode);
 
                         // Subscribe dynamically based on subscription method
                         await ssubscribeByMethod(
@@ -4124,7 +4139,7 @@ describe("PubSub", () => {
                         clientCleanup(
                             listeningClient!,
                             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            clusterMode ? {} as any : undefined,
+                            clusterMode ? ({} as any) : undefined,
                         ),
                     ]);
                 }
@@ -4996,7 +5011,11 @@ describe("PubSub", () => {
                 expect(pubsubMsg1.pattern).toBeNull();
 
                 // Dynamically unsubscribe from channel using helper
-                await unsubscribeByMethod(listener, channelsSet, unsubscribeMode);
+                await unsubscribeByMethod(
+                    listener,
+                    channelsSet,
+                    unsubscribeMode,
+                );
 
                 // Wait for unsubscribe to propagate (for Lazy mode)
                 if (unsubscribeMode === Mode.Lazy) {
@@ -5329,7 +5348,11 @@ describe("PubSub", () => {
                 expect(pubsubMsg1.channel).toEqual(channel);
 
                 // Dynamically unsubscribe from pre-configured channel using helper
-                await unsubscribeByMethod(listener, channelsSet, unsubscribeMode);
+                await unsubscribeByMethod(
+                    listener,
+                    channelsSet,
+                    unsubscribeMode,
+                );
 
                 // Wait for unsubscribe to propagate
                 if (unsubscribeMode === Mode.Lazy) {
@@ -5842,8 +5865,12 @@ describe("PubSub", () => {
      * SUBSCRIBE (lazy) or SUBSCRIBE_BLOCKING (blocking) commands directly.
      * Config mode is not tested as it doesn't use custom commands.
      */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    it.each(testCasesWithSubscriptionMethod.filter(([_, __, subMethod]) => subMethod !== Mode.Config))(
+    it.each(
+        testCasesWithSubscriptionMethod.filter(
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            ([_, __, subMethod]) => subMethod !== Mode.Config,
+        ),
+    )(
         "test_pubsub_exact_happy_path_custom_command_%p_%p_%p",
         async (clusterMode, method, subscriptionMethod) => {
             let listeningClient: TGlideClient | null = null;
@@ -5904,7 +5931,8 @@ describe("PubSub", () => {
                     cmd = ["SUBSCRIBE_BLOCKING", channel, timeoutMs.toString()];
                 }
 
-                const subscribeResult = await listeningClient.customCommand(cmd);
+                const subscribeResult =
+                    await listeningClient.customCommand(cmd);
                 expect(subscribeResult).toBeNull();
 
                 // Verify subscription is established
@@ -6292,7 +6320,9 @@ describe("PubSub", () => {
      * Test that sharded subscriptions are automatically restored after connection kill.
      * Only runs in cluster mode (Valkey 7.0+).
      */
-    it.each(testCasesWithSubscriptionMethod.filter(([clusterMode]) => clusterMode))(
+    it.each(
+        testCasesWithSubscriptionMethod.filter(([clusterMode]) => clusterMode),
+    )(
         "test_resubscribe_after_connection_kill_sharded_%p_%p_%p",
         async (clusterMode, method, subscriptionMethod) => {
             const version = await getServerVersion([
@@ -6526,7 +6556,13 @@ describe("PubSub", () => {
                 await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 // Wait for resubscription
-                await waitForSubscriptionState(listeningClient, channels, undefined, undefined, 5000);
+                await waitForSubscriptionState(
+                    listeningClient,
+                    channels,
+                    undefined,
+                    undefined,
+                    5000,
+                );
 
                 // Publish to all channels after reconnection
                 for (const channel of channels) {
@@ -6647,11 +6683,12 @@ describe("PubSub", () => {
 
                 // Authenticate with restricted user
                 if (clusterMode) {
-                    await (
-                        listeningClient as GlideClusterClient
-                    ).customCommand(["AUTH", username, password], {
-                        route: "allNodes",
-                    });
+                    await (listeningClient as GlideClusterClient).customCommand(
+                        ["AUTH", username, password],
+                        {
+                            route: "allNodes",
+                        },
+                    );
                 } else {
                     await listeningClient.customCommand([
                         "AUTH",
@@ -6684,11 +6721,10 @@ describe("PubSub", () => {
                 await new Promise((resolve) => setTimeout(resolve, 1000));
 
                 // Check that out-of-sync metric increased (reconciliation failed)
-                const stats =
-                    (await listeningClient.getStatistics()) as Record<
-                        string,
-                        string
-                    >;
+                const stats = (await listeningClient.getStatistics()) as Record<
+                    string,
+                    string
+                >;
                 const outOfSyncCount = parseInt(
                     stats["subscription_out_of_sync_count"] || "0",
                 );
@@ -6732,7 +6768,9 @@ describe("PubSub", () => {
                     finalStats["subscription_last_sync_timestamp"] || "0",
                 );
 
-                expect(finalSyncTimestamp).toBeGreaterThan(initialSyncTimestamp);
+                expect(finalSyncTimestamp).toBeGreaterThan(
+                    initialSyncTimestamp,
+                );
             } finally {
                 // Cleanup ACL user
                 if (adminClient) {
@@ -6832,11 +6870,12 @@ describe("PubSub", () => {
 
                 // Authenticate with restricted user
                 if (clusterMode) {
-                    await (
-                        listeningClient as GlideClusterClient
-                    ).customCommand(["AUTH", username, password], {
-                        route: "allNodes",
-                    });
+                    await (listeningClient as GlideClusterClient).customCommand(
+                        ["AUTH", username, password],
+                        {
+                            route: "allNodes",
+                        },
+                    );
                 } else {
                     await listeningClient.customCommand([
                         "AUTH",
@@ -6874,11 +6913,10 @@ describe("PubSub", () => {
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Check that out-of-sync increased multiple times
-                const stats =
-                    (await listeningClient.getStatistics()) as Record<
-                        string,
-                        string
-                    >;
+                const stats = (await listeningClient.getStatistics()) as Record<
+                    string,
+                    string
+                >;
                 const outOfSyncCount = parseInt(
                     stats["subscription_out_of_sync_count"] || "0",
                 );
@@ -7351,9 +7389,11 @@ describe("PubSub", () => {
 
                 for (const [channel, message, isSharded] of messagesToPublish) {
                     if (isSharded) {
-                        await (
-                            publishingClient as GlideClusterClient
-                        ).publish(message, channel, true);
+                        await (publishingClient as GlideClusterClient).publish(
+                            message,
+                            channel,
+                            true,
+                        );
                     } else {
                         await publishingClient.publish(message, channel);
                     }

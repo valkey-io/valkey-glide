@@ -91,23 +91,31 @@ export async function waitForSubscriptionState(
     expectedSharded?: Set<string>,
     timeoutMs = 5000,
     pollInterval = 100,
-): Promise<{ channels: Set<string>; patterns: Set<string>; sharded: Set<string> }> {
+): Promise<{
+    channels: Set<string>;
+    patterns: Set<string>;
+    sharded: Set<string>;
+}> {
     const startTime = Date.now();
-    let lastActualState: { channels: Set<string>; patterns: Set<string>; sharded: Set<string> } | null = null;
+    let lastActualState: {
+        channels: Set<string>;
+        patterns: Set<string>;
+        sharded: Set<string>;
+    } | null = null;
 
     while (true) {
         const elapsed = Date.now() - startTime;
 
         if (elapsed > timeoutMs) {
             let errorMsg = `Subscription state not reached within ${timeoutMs}ms.\n`;
-            errorMsg += `Expected - channels: ${expectedChannels ? Array.from(expectedChannels).join(', ') : 'N/A'}, `;
-            errorMsg += `patterns: ${expectedPatterns ? Array.from(expectedPatterns).join(', ') : 'N/A'}, `;
-            errorMsg += `sharded: ${expectedSharded ? Array.from(expectedSharded).join(', ') : 'N/A'}\n`;
+            errorMsg += `Expected - channels: ${expectedChannels ? Array.from(expectedChannels).join(", ") : "N/A"}, `;
+            errorMsg += `patterns: ${expectedPatterns ? Array.from(expectedPatterns).join(", ") : "N/A"}, `;
+            errorMsg += `sharded: ${expectedSharded ? Array.from(expectedSharded).join(", ") : "N/A"}\n`;
 
             if (lastActualState) {
-                errorMsg += `Actual - channels: ${Array.from(lastActualState.channels).join(', ')}, `;
-                errorMsg += `patterns: ${Array.from(lastActualState.patterns).join(', ')}, `;
-                errorMsg += `sharded: ${Array.from(lastActualState.sharded).join(', ')}\n`;
+                errorMsg += `Actual - channels: ${Array.from(lastActualState.channels).join(", ")}, `;
+                errorMsg += `patterns: ${Array.from(lastActualState.patterns).join(", ")}, `;
+                errorMsg += `sharded: ${Array.from(lastActualState.sharded).join(", ")}\n`;
             }
 
             throw new TimeoutError(errorMsg);
@@ -115,12 +123,15 @@ export async function waitForSubscriptionState(
 
         try {
             const result = await client.customCommand(["GET_SUBSCRIPTIONS"]);
-            const { exact, pattern, sharded } = parseActualSubscriptions(result);
+            const { exact, pattern, sharded } =
+                parseActualSubscriptions(result);
 
             // Convert Buffer arrays to string Sets
-            const channelsActual = new Set(exact.map(buf => buf.toString()));
-            const patternsActual = new Set(pattern.map(buf => buf.toString()));
-            const shardedActual = new Set(sharded.map(buf => buf.toString()));
+            const channelsActual = new Set(exact.map((buf) => buf.toString()));
+            const patternsActual = new Set(
+                pattern.map((buf) => buf.toString()),
+            );
+            const shardedActual = new Set(sharded.map((buf) => buf.toString()));
 
             lastActualState = {
                 channels: channelsActual,
@@ -129,17 +140,26 @@ export async function waitForSubscriptionState(
             };
 
             // Check if all expected states match
-            const channelsMatch = expectedChannels === undefined ||
+            const channelsMatch =
+                expectedChannels === undefined ||
                 (channelsActual.size === expectedChannels.size &&
-                 Array.from(expectedChannels).every(ch => channelsActual.has(ch)));
+                    Array.from(expectedChannels).every((ch) =>
+                        channelsActual.has(ch),
+                    ));
 
-            const patternsMatch = expectedPatterns === undefined ||
+            const patternsMatch =
+                expectedPatterns === undefined ||
                 (patternsActual.size === expectedPatterns.size &&
-                 Array.from(expectedPatterns).every(p => patternsActual.has(p)));
+                    Array.from(expectedPatterns).every((p) =>
+                        patternsActual.has(p),
+                    ));
 
-            const shardedMatch = expectedSharded === undefined ||
+            const shardedMatch =
+                expectedSharded === undefined ||
                 (shardedActual.size === expectedSharded.size &&
-                 Array.from(expectedSharded).every(s => shardedActual.has(s)));
+                    Array.from(expectedSharded).every((s) =>
+                        shardedActual.has(s),
+                    ));
 
             if (channelsMatch && patternsMatch && shardedMatch) {
                 return lastActualState;
@@ -193,45 +213,48 @@ export async function waitForSubscriptionStateIfNeeded(
     const { exact, pattern, sharded } = parseActualSubscriptions(result);
 
     // Convert Buffer arrays to string Sets
-    const channelsActual = new Set(exact.map(buf => buf.toString()));
-    const patternsActual = new Set(pattern.map(buf => buf.toString()));
-    const shardedActual = new Set(sharded.map(buf => buf.toString()));
+    const channelsActual = new Set(exact.map((buf) => buf.toString()));
+    const patternsActual = new Set(pattern.map((buf) => buf.toString()));
+    const shardedActual = new Set(sharded.map((buf) => buf.toString()));
 
     // Verify expected channels
     if (expectedChannels !== undefined) {
-        const channelsMatch = channelsActual.size === expectedChannels.size &&
-            Array.from(expectedChannels).every(ch => channelsActual.has(ch));
+        const channelsMatch =
+            channelsActual.size === expectedChannels.size &&
+            Array.from(expectedChannels).every((ch) => channelsActual.has(ch));
 
         if (!channelsMatch) {
             throw new Error(
-                `Expected channels ${Array.from(expectedChannels).join(', ')}, ` +
-                `got ${Array.from(channelsActual).join(', ')}`
+                `Expected channels ${Array.from(expectedChannels).join(", ")}, ` +
+                    `got ${Array.from(channelsActual).join(", ")}`,
             );
         }
     }
 
     // Verify expected patterns
     if (expectedPatterns !== undefined) {
-        const patternsMatch = patternsActual.size === expectedPatterns.size &&
-            Array.from(expectedPatterns).every(p => patternsActual.has(p));
+        const patternsMatch =
+            patternsActual.size === expectedPatterns.size &&
+            Array.from(expectedPatterns).every((p) => patternsActual.has(p));
 
         if (!patternsMatch) {
             throw new Error(
-                `Expected patterns ${Array.from(expectedPatterns).join(', ')}, ` +
-                `got ${Array.from(patternsActual).join(', ')}`
+                `Expected patterns ${Array.from(expectedPatterns).join(", ")}, ` +
+                    `got ${Array.from(patternsActual).join(", ")}`,
             );
         }
     }
 
     // Verify expected sharded channels
     if (expectedSharded !== undefined) {
-        const shardedMatch = shardedActual.size === expectedSharded.size &&
-            Array.from(expectedSharded).every(s => shardedActual.has(s));
+        const shardedMatch =
+            shardedActual.size === expectedSharded.size &&
+            Array.from(expectedSharded).every((s) => shardedActual.has(s));
 
         if (!shardedMatch) {
             throw new Error(
-                `Expected sharded ${Array.from(expectedSharded).join(', ')}, ` +
-                `got ${Array.from(shardedActual).join(', ')}`
+                `Expected sharded ${Array.from(expectedSharded).join(", ")}, ` +
+                    `got ${Array.from(shardedActual).join(", ")}`,
             );
         }
     }
@@ -519,24 +542,34 @@ export async function createPubsubClient(
         if (clusterMode) {
             // Use cluster mode enums
             if (channels && channels.size > 0) {
-                channelsAndPatterns[GlideClusterClientConfiguration.PubSubChannelModes.Exact] = channels;
+                channelsAndPatterns[
+                    GlideClusterClientConfiguration.PubSubChannelModes.Exact
+                ] = channels;
             }
 
             if (patterns && patterns.size > 0) {
-                channelsAndPatterns[GlideClusterClientConfiguration.PubSubChannelModes.Pattern] = patterns;
+                channelsAndPatterns[
+                    GlideClusterClientConfiguration.PubSubChannelModes.Pattern
+                ] = patterns;
             }
 
             if (shardedChannels && shardedChannels.size > 0) {
-                channelsAndPatterns[GlideClusterClientConfiguration.PubSubChannelModes.Sharded] = shardedChannels;
+                channelsAndPatterns[
+                    GlideClusterClientConfiguration.PubSubChannelModes.Sharded
+                ] = shardedChannels;
             }
         } else {
             // Use standalone mode enums
             if (channels && channels.size > 0) {
-                channelsAndPatterns[GlideClientConfiguration.PubSubChannelModes.Exact] = channels;
+                channelsAndPatterns[
+                    GlideClientConfiguration.PubSubChannelModes.Exact
+                ] = channels;
             }
 
             if (patterns && patterns.size > 0) {
-                channelsAndPatterns[GlideClientConfiguration.PubSubChannelModes.Pattern] = patterns;
+                channelsAndPatterns[
+                    GlideClientConfiguration.PubSubChannelModes.Pattern
+                ] = patterns;
             }
         }
 
@@ -564,9 +597,7 @@ export async function createPubsubClient(
  * @returns PubSubChannelModes enum for the client type
  */
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
-export function getPubsubModes(
-    client: TGlideClient,
-): any {
+export function getPubsubModes(client: TGlideClient): any {
     // Import dynamically to avoid circular dependencies
     const {
         GlideClusterClient,
