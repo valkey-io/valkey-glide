@@ -13,15 +13,15 @@ type TGlideClient = GlideClient | GlideClusterClient;
 
 /**
  * Enumeration for specifying the subscription mode.
- * 
+ *
  * @property {number} Lazy - Non-blocking subscription that returns immediately without waiting for confirmation.
  *                           Subscriptions are made dynamically after client creation using subscribeLazy/psubscribeLazy/ssubscribeLazy.
  *                           Requires polling to verify subscriptions are established before publishing messages.
- * 
+ *
  * @property {number} Blocking - Blocking subscription that waits for confirmation with a timeout.
  *                               Subscriptions are made dynamically after client creation using subscribe/psubscribe/ssubscribe.
  *                               Subscriptions are immediately verified after the blocking call returns.
- * 
+ *
  * @property {number} Config - Subscriptions configured at client creation time via pubsubSubscriptions parameter.
  *                             Client is created with subscriptions already established.
  *                             Requires immediate verification that subscriptions are active before publishing messages.
@@ -40,7 +40,7 @@ interface SubscriptionEntry {
 
 /**
  * Parse the GET_SUBSCRIPTIONS command response into structured subscription data.
- * 
+ *
  * @param result - Raw response from GET_SUBSCRIPTIONS command
  * @returns Object containing exact, pattern, and sharded subscription arrays as Buffers
  */
@@ -72,7 +72,7 @@ export function parseActualSubscriptions(result: unknown): {
 
 /**
  * Wait for subscription state to match expected values by polling GET_SUBSCRIPTIONS.
- * 
+ *
  * @param client - The Glide client
  * @param expectedChannels - Expected exact channel subscriptions (undefined = don't check)
  * @param expectedPatterns - Expected pattern subscriptions (undefined = don't check)
@@ -127,16 +127,16 @@ export async function waitForSubscriptionState(
             };
 
             // Check if all expected states match
-            const channelsMatch = expectedChannels === undefined || 
-                (channelsActual.size === expectedChannels.size && 
+            const channelsMatch = expectedChannels === undefined ||
+                (channelsActual.size === expectedChannels.size &&
                  Array.from(expectedChannels).every(ch => channelsActual.has(ch)));
-            
-            const patternsMatch = expectedPatterns === undefined || 
-                (patternsActual.size === expectedPatterns.size && 
+
+            const patternsMatch = expectedPatterns === undefined ||
+                (patternsActual.size === expectedPatterns.size &&
                  Array.from(expectedPatterns).every(p => patternsActual.has(p)));
-            
-            const shardedMatch = expectedSharded === undefined || 
-                (shardedActual.size === expectedSharded.size && 
+
+            const shardedMatch = expectedSharded === undefined ||
+                (shardedActual.size === expectedSharded.size &&
                  Array.from(expectedSharded).every(s => shardedActual.has(s)));
 
             if (channelsMatch && patternsMatch && shardedMatch) {
@@ -157,7 +157,7 @@ export async function waitForSubscriptionState(
  * Verify subscriptions are established based on the subscription method.
  * - Lazy: wait/poll until state matches (with timeout)
  * - Blocking and Config: verify immediately using GET_SUBSCRIPTIONS
- * 
+ *
  * @param client - The Glide client
  * @param subscriptionMethod - The subscription method (Mode.Lazy, Mode.Blocking, or Mode.Config)
  * @param expectedChannels - Expected exact channel subscriptions (undefined = don't check)
@@ -197,9 +197,9 @@ export async function waitForSubscriptionStateIfNeeded(
 
     // Verify expected channels
     if (expectedChannels !== undefined) {
-        const channelsMatch = channelsActual.size === expectedChannels.size && 
+        const channelsMatch = channelsActual.size === expectedChannels.size &&
             Array.from(expectedChannels).every(ch => channelsActual.has(ch));
-        
+
         if (!channelsMatch) {
             throw new Error(
                 `Expected channels ${Array.from(expectedChannels).join(', ')}, ` +
@@ -210,9 +210,9 @@ export async function waitForSubscriptionStateIfNeeded(
 
     // Verify expected patterns
     if (expectedPatterns !== undefined) {
-        const patternsMatch = patternsActual.size === expectedPatterns.size && 
+        const patternsMatch = patternsActual.size === expectedPatterns.size &&
             Array.from(expectedPatterns).every(p => patternsActual.has(p));
-        
+
         if (!patternsMatch) {
             throw new Error(
                 `Expected patterns ${Array.from(expectedPatterns).join(', ')}, ` +
@@ -223,9 +223,9 @@ export async function waitForSubscriptionStateIfNeeded(
 
     // Verify expected sharded channels
     if (expectedSharded !== undefined) {
-        const shardedMatch = shardedActual.size === expectedSharded.size && 
+        const shardedMatch = shardedActual.size === expectedSharded.size &&
             Array.from(expectedSharded).every(s => shardedActual.has(s));
-        
+
         if (!shardedMatch) {
             throw new Error(
                 `Expected sharded ${Array.from(expectedSharded).join(', ')}, ` +
@@ -238,7 +238,7 @@ export async function waitForSubscriptionStateIfNeeded(
 /**
  * Dynamically subscribe to exact channels based on subscription method.
  * Does NOT wait for subscription to be established - use waitForSubscriptionStateIfNeeded after calling.
- * 
+ *
  * @param client - The Glide client
  * @param channels - Set of exact channel names to subscribe to
  * @param subscriptionMethod - The subscription method (Mode.Lazy, Mode.Blocking, or Mode.Config)
@@ -275,7 +275,7 @@ export async function subscribeByMethod(
 /**
  * Dynamically subscribe to patterns based on subscription method.
  * Does NOT wait for subscription to be established - use waitForSubscriptionStateIfNeeded after calling.
- * 
+ *
  * @param client - The Glide client
  * @param patterns - Set of pattern names to subscribe to
  * @param subscriptionMethod - The subscription method (Mode.Lazy, Mode.Blocking, or Mode.Config)
@@ -312,7 +312,7 @@ export async function psubscribeByMethod(
 /**
  * Dynamically subscribe to sharded channels based on subscription method (cluster mode only).
  * Does NOT wait for subscription to be established - use waitForSubscriptionStateIfNeeded after calling.
- * 
+ *
  * @param client - The Glide cluster client
  * @param channels - Set of sharded channel names to subscribe to
  * @param subscriptionMethod - The subscription method (Mode.Lazy, Mode.Blocking, or Mode.Config)
@@ -349,7 +349,7 @@ export async function ssubscribeByMethod(
 /**
  * Dynamically unsubscribe from exact channels based on subscription method.
  * Does NOT wait for unsubscription to complete - use waitForSubscriptionStateIfNeeded after calling.
- * 
+ *
  * @param client - The Glide client
  * @param channels - Set of exact channel names to unsubscribe from (null = unsubscribe from all)
  * @param subscriptionMethod - The subscription method (Mode.Lazy, Mode.Blocking, or Mode.Config)
@@ -386,7 +386,7 @@ export async function unsubscribeByMethod(
 /**
  * Dynamically unsubscribe from patterns based on subscription method.
  * Does NOT wait for unsubscription to complete - use waitForSubscriptionStateIfNeeded after calling.
- * 
+ *
  * @param client - The Glide client
  * @param patterns - Set of pattern names to unsubscribe from (null = unsubscribe from all)
  * @param subscriptionMethod - The subscription method (Mode.Lazy, Mode.Blocking, or Mode.Config)
@@ -423,7 +423,7 @@ export async function punsubscribeByMethod(
 /**
  * Dynamically unsubscribe from sharded channels based on subscription method (cluster mode only).
  * Does NOT wait for unsubscription to complete - use waitForSubscriptionStateIfNeeded after calling.
- * 
+ *
  * @param client - The Glide cluster client
  * @param channels - Set of sharded channel names to unsubscribe from (null = unsubscribe from all)
  * @param subscriptionMethod - The subscription method (Mode.Lazy, Mode.Blocking, or Mode.Config)
@@ -461,7 +461,7 @@ export async function sunsubscribeByMethod(
  * Create a PubSub client with optional subscriptions.
  * If channels, patterns, or shardedChannels are provided, creates client with PubSub subscriptions.
  * Otherwise creates a regular client without subscriptions.
- * 
+ *
  * @param clusterMode - Whether to create a cluster client or standalone client
  * @param channels - Optional set of exact channel names to subscribe to
  * @param patterns - Optional set of pattern names to subscribe to
@@ -506,7 +506,7 @@ export async function createPubsubClient(
     // Check if we need to create PubSub subscriptions
     const hasSubscriptions = channels || patterns || shardedChannels;
 
-    if (hasSubscriptions) {
+    if (hasSubscriptions || callback) {
         // Build channelsAndPatterns object
         const channelsAndPatterns: any = {};
 
@@ -531,7 +531,8 @@ export async function createPubsubClient(
             }
         }
 
-        // Create PubSubSubscriptions object
+        // Create PubSubSubscriptions object - include callback even if no initial subscriptions
+        // This is needed for custom command tests where we subscribe dynamically
         baseConfig.pubsubSubscriptions = {
             channelsAndPatterns,
             callback,
@@ -549,7 +550,7 @@ export async function createPubsubClient(
 
 /**
  * Get the appropriate PubSubChannelModes enum for the client type.
- * 
+ *
  * @param client - The Glide client (cluster or standalone)
  * @returns PubSubChannelModes enum for the client type
  */
