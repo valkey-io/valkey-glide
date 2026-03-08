@@ -1,0 +1,51 @@
+# Dockerfile for running glide-core (Rust) integration tests locally.
+# Replicates the CI pipeline (rust.yml).
+# Base image (Rust + protoc + python3 + Valkey) provided via docker-bake.test.hcl.
+#
+# Usage (from repo root):
+#   docker buildx bake glide-core-test --load
+#   docker run --rm glide-core-test
+#   docker run --rm -e TEST_ARGS="--test test_client" glide-core-test
+
+FROM base
+
+# openssl needed for TLS certificate generation in tests
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# DNS entries required by DNS tests
+RUN echo "127.0.0.1 valkey.glide.test.tls.com" >> /etc/hosts.docker && \
+    echo "127.0.0.1 valkey.glide.test.no_tls.com" >> /etc/hosts.docker && \
+    echo "::1 valkey.glide.test.tls.com" >> /etc/hosts.docker && \
+    echo "::1 valkey.glide.test.no_tls.com" >> /etc/hosts.docker
+
+# L1: Rust dependency cache — copy manifests first, then fetch
+COPY glide-core/Cargo.toml glide-core/
+COPY glide-core/redis-rs/Cargo.toml glide-core/redis-rs/
+COPY glide-core/redis-rs/redis/Cargo.toml glide-core/redis-rs/redis/
+COPY glide-core/telemetry/Cargo.toml glide-core/telemetry/
+COPY logger_core/Cargo.toml logger_core/
+RUN mkdir -p glide-core/src && echo "" > glide-core/src/lib.rs && \
+    mkdir -p glide-core/benches && \
+    touch glide-core/benches/connections_benchmark.rs \
+          glide-core/benches/memory_benchmark.rs \
+          glide-core/benches/rotating_buffer_benchmark.rs && \
+    mkdir -p glide-core/redis-rs/redis/src && echo "" > glide-core/redis-rs/redis/src/lib.rs && \
+    mkdir -p glide-core/telemetry/src && echo "" > glide-core/telemetry/src/lib.rs && \
+    mkdir -p logger_core/src && echo "" > logger_core/src/lib.rs
+RUN cd glide-core && cargo fetch
+
+# L2: Full source → build test binaries
+COPY . .
+RUN cd glide-core && cargo test --features "proto,socket-layer,standalone_heartbeat" --no-run
+
+# Optional: TEST_ARGS for extra cargo test flags (e.g. "--test test_client").
+ENV CARGO_TERM_COLOR=always
+ENV VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+CMD ["bash", "-c", "\
+  cat /etc/hosts.docker >> /etc/hosts 2>/dev/null; \
+  cd glide-core && \
+  cargo test --features 'proto,socket-layer,standalone_heartbeat' $TEST_ARGS && \
+  cd telemetry && cargo test --all-features -- --test-threads=1 \
+"]

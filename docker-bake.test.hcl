@@ -11,6 +11,10 @@
 //   docker buildx bake python-test --load
 //   docker run --rm python-test
 //   docker run --rm -e TEST_ARGS="-k test_ping" python-test
+//
+//   docker buildx bake glide-core-test --load
+//   docker run --rm glide-core-test
+//   docker run --rm -e TEST_ARGS="--test test_client" glide-core-test
 
 target "base" {
   dockerfile = "Dockerfile.test"
@@ -33,4 +37,13 @@ target "python-test" {
     base = "target:base"
   }
   tags = ["python-test"]
+}
+
+target "glide-core-test" {
+  dockerfile = "glide-core/Dockerfile.test"
+  context    = "."
+  contexts = {
+    base = "target:base"
+  }
+  tags = ["glide-core-test"]
 }
