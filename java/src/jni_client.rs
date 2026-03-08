@@ -368,17 +368,34 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
             thread::Builder::new()
                 .name(format!("glide-jni-callback-{i}"))
                 .spawn(move || {
+                    // Pre-attach to JVM once at thread start. attach_current_thread_as_daemon
+                    // keeps the thread attached for its entire lifetime (no detach on drop).
+                    // This eliminates per-callback attach overhead and the attach failure window.
+                    let Some(jvm) = JVM.get() else {
+                        log::error!("Callback worker {i}: JVM not cached, cannot start");
+                        return;
+                    };
+                    let Ok(mut env) = jvm.attach_current_thread_as_daemon() else {
+                        log::error!("Callback worker {i}: failed to attach to JVM at startup");
+                        return;
+                    };
+
                     loop {
                         let job_opt = {
                             let guard = rx_clone.lock().unwrap();
                             guard.recv().ok()
                         };
-                        let Some((jvm, callback_id, result, binary_mode)) = job_opt else {
+                        let Some((_, callback_id, result, binary_mode)) = job_opt else {
                             break;
                         };
 
-                        // Process callback on this dedicated thread
-                        process_callback_job(jvm, callback_id, result, binary_mode);
+                        // Process callback with pre-attached env
+                        process_callback_job_with_env(
+                            &mut env,
+                            callback_id,
+                            result,
+                            binary_mode,
+                        );
                     }
                 })
                 .expect("Failed to spawn callback worker thread");
@@ -388,9 +405,10 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
     })
 }
 
-/// Drop callbacks that already timed out on the Java side.
-fn process_callback_job(
-    jvm: Arc<JavaVM>,
+/// Process a callback with an already-attached JNIEnv.
+/// Used by pre-attached callback worker threads.
+fn process_callback_job_with_env(
+    env: &mut JNIEnv,
     callback_id: jlong,
     result: CallbackResult,
     binary_mode: bool,
@@ -399,71 +417,56 @@ fn process_callback_job(
         return;
     }
 
-    match jvm.attach_current_thread_as_daemon() {
-        Ok(mut env) => match result {
-            Ok(server_value) => {
-                let _ = env.push_local_frame(16);
+    match result {
+        Ok(server_value) => {
+            let _ = env.push_local_frame(16);
 
-                let java_result = if should_use_direct_buffer(&server_value) {
-                    create_direct_byte_buffer(&mut env, server_value, !binary_mode)
-                } else {
-                    crate::resp_value_to_java(&mut env, server_value, !binary_mode)
-                };
+            let java_result = if should_use_direct_buffer(&server_value) {
+                create_direct_byte_buffer(env, server_value, !binary_mode)
+            } else {
+                crate::resp_value_to_java(env, server_value, !binary_mode)
+            };
 
-                if take_timed_out_callback(callback_id) {
-                    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
-                    return;
-                }
-
-                match java_result {
-                    Ok(java_result) => {
-                        if let Err(e) = complete_java_callback(&mut env, callback_id, &java_result)
-                        {
-                            log::error!(
-                                "JNI completion failed for callback {callback_id}: {e}"
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        let error_code = 0;
-                        let error_msg = format!("Response conversion failed: {e}");
-                        if let Err(e2) = complete_java_callback_with_error_code(
-                            &mut env,
-                            callback_id,
-                            error_code,
-                            &error_msg,
-                        ) {
-                            log::error!(
-                                "JNI error completion failed for callback {callback_id}: {e2}"
-                            );
-                        }
-                    }
-                }
+            if take_timed_out_callback(callback_id) {
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+                return;
             }
-            Err(server_err) => {
-                if take_timed_out_callback(callback_id) {
-                    return;
-                }
 
-                let error_code = error_type(&server_err) as i32;
-                let error_msg = error_message(&server_err);
-                if let Err(e) = complete_java_callback_with_error_code(
-                    &mut env,
-                    callback_id,
-                    error_code,
-                    &error_msg,
-                ) {
-                    log::error!(
-                        "JNI error completion failed for callback {callback_id}: {e}"
-                    );
+            match java_result {
+                Ok(java_result) => {
+                    if let Err(e) = complete_java_callback(env, callback_id, &java_result) {
+                        log::error!("JNI completion failed for callback {callback_id}: {e}");
+                    }
+                }
+                Err(e) => {
+                    let error_code = 0;
+                    let error_msg = format!("Response conversion failed: {e}");
+                    if let Err(e2) = complete_java_callback_with_error_code(
+                        env,
+                        callback_id,
+                        error_code,
+                        &error_msg,
+                    ) {
+                        log::error!(
+                            "JNI error completion failed for callback {callback_id}: {e2}"
+                        );
+                    }
                 }
             }
-        },
-        Err(e) => {
-            log::error!(
-                "JNI attach failed for callback {callback_id}, future will timeout: {e}"
-            );
+            let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+        }
+        Err(server_err) => {
+            if take_timed_out_callback(callback_id) {
+                return;
+            }
+
+            let error_code = error_type(&server_err) as i32;
+            let error_msg = error_message(&server_err);
+            if let Err(e) =
+                complete_java_callback_with_error_code(env, callback_id, error_code, &error_msg)
+            {
+                log::error!("JNI error completion failed for callback {callback_id}: {e}");
+            }
         }
     }
 }
