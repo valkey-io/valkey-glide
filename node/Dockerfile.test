@@ -1,0 +1,51 @@
+# Dockerfile for running Node.js integration tests locally.
+# Replicates the CI pipeline (node.yml).
+# Base image (Rust + protoc + python3 + Valkey) provided via docker-bake.hcl.
+#
+# Usage (from repo root):
+#   docker buildx bake node-test
+#   docker run --rm -e TEST_FILE=GlideClient.test.ts node-test
+
+FROM base
+
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# L1: Rust dependency cache — copy manifests first, then fetch
+COPY node/rust-client/Cargo.toml node/rust-client/Cargo.lock node/rust-client/
+COPY glide-core/Cargo.toml glide-core/
+COPY glide-core/redis-rs/Cargo.toml glide-core/redis-rs/
+COPY glide-core/redis-rs/redis/Cargo.toml glide-core/redis-rs/redis/
+COPY glide-core/telemetry/Cargo.toml glide-core/telemetry/
+COPY logger_core/Cargo.toml logger_core/
+RUN mkdir -p node/rust-client/src && echo "" > node/rust-client/src/lib.rs && \
+    mkdir -p glide-core/src && echo "" > glide-core/src/lib.rs && \
+    mkdir -p glide-core/redis-rs/redis/src && echo "" > glide-core/redis-rs/redis/src/lib.rs && \
+    mkdir -p glide-core/telemetry/src && echo "" > glide-core/telemetry/src/lib.rs && \
+    mkdir -p logger_core/src && echo "" > logger_core/src/lib.rs
+RUN cd node/rust-client && cargo fetch
+
+# L2: npm dependency cache
+COPY node/package.json node/package-lock.json node/
+COPY node/rust-client/package.json node/rust-client/
+COPY utils/package.json utils/
+RUN cd node && npm install --ignore-scripts && \
+    cd ../node/rust-client && npm install --ignore-scripts && \
+    cd ../../utils && npm install
+
+# L3: Full source → build (dev only, no release build needed for tests)
+COPY . .
+RUN cd utils && npm run build
+RUN cd node && npm run build
+
+# Optional: TEST_FILE to run a specific test file, TEST_PATTERN to filter by test name.
+ENV JEST_HTML_REPORTER_OUTPUT_PATH=test-report-node.html
+CMD ["bash", "-c", "\
+  cd node && \
+  ARGS='--verbose --forceExit --testPathIgnorePatterns=ServerModules'; \
+  [ -n \"$TEST_FILE\" ] && ARGS=\"$ARGS --testPathPattern=$TEST_FILE\"; \
+  [ -n \"$TEST_PATTERN\" ] && ARGS=\"$ARGS --testNamePattern=$TEST_PATTERN\"; \
+  npx jest $ARGS \
+"]
