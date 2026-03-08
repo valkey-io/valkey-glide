@@ -33,7 +33,6 @@ import {
 import {
     Mode,
     createPubsubClient,
-    getPubsubModes,
     parseActualSubscriptions,
     psubscribeByMethod,
     punsubscribeByMethod,
@@ -285,11 +284,6 @@ describe("PubSub", () => {
         return mySubscriptions;
     }
 
-    interface SubscriptionEntry {
-        key: string;
-        value: Buffer[];
-    }
-
     async function clientCleanup(
         client: TGlideClient,
         clusterModeSubs?: GlideClusterClientConfiguration.PubSubSubscriptions,
@@ -514,6 +508,7 @@ describe("PubSub", () => {
                     clientCleanup(publishingClient!),
                     clientCleanup(
                         listeningClient!,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         clusterMode ? {} as any : undefined,
                     ),
                 ]);
@@ -630,6 +625,7 @@ describe("PubSub", () => {
                     clientCleanup(publishingClient!),
                     clientCleanup(
                         listeningClient!,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         clusterMode ? {} as any : undefined,
                     ),
                 ]);
@@ -736,6 +732,7 @@ describe("PubSub", () => {
                     clientCleanup(publishingClient!),
                     clientCleanup(
                         listeningClient!,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         clusterMode ? {} as any : undefined,
                     ),
                 ]);
@@ -876,6 +873,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               clusterMode ? {} as any : undefined,
                           )
                         : Promise.resolve(),
@@ -1009,6 +1007,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               clusterMode ? {} as any : undefined,
                           )
                         : Promise.resolve(),
@@ -1572,7 +1571,7 @@ describe("PubSub", () => {
                         context,
                         options.protocol,
                         undefined,
-                        options.addresses as Array<{ host: string; port: number }>,
+                        options.addresses as { host: string; port: number }[],
                     );
                 } else {
                     // Lazy/Blocking mode: create client with callback but no initial subscriptions
@@ -1588,7 +1587,7 @@ describe("PubSub", () => {
                             context,
                             options.protocol,
                             undefined,
-                            options.addresses as Array<{ host: string; port: number }>,
+                            options.addresses as { host: string; port: number }[],
                         );
                     } else {
                         // For async/sync modes, create client without subscriptions or callback
@@ -1704,7 +1703,7 @@ describe("PubSub", () => {
                         undefined, // no context
                         options.protocol,
                         undefined,
-                        options.addresses as Array<{ host: string; port: number }>,
+                        options.addresses as { host: string; port: number }[],
                     );
                 } else {
                     // For Lazy/Blocking modes, create client without subscriptions
@@ -1835,7 +1834,7 @@ describe("PubSub", () => {
                         context,
                         options.protocol,
                         undefined,
-                        options.addresses as Array<{ host: string; port: number }>,
+                        options.addresses as { host: string; port: number }[],
                     );
                 } else {
                     // Lazy/Blocking mode: create client with callback but no initial subscriptions
@@ -1851,7 +1850,7 @@ describe("PubSub", () => {
                             context,
                             options.protocol,
                             undefined,
-                            options.addresses as Array<{ host: string; port: number }>,
+                            options.addresses as { host: string; port: number }[],
                         );
                     } else {
                         // For async/sync modes, create client without subscriptions or callback
@@ -2107,6 +2106,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               clusterMode ? ({} as any) : undefined,
                           )
                         : Promise.resolve(),
@@ -2584,6 +2584,7 @@ describe("PubSub", () => {
                     listeningClient
                         ? clientCleanup(
                               listeningClient,
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
                               clusterMode ? ({} as any) : undefined,
                           )
                         : Promise.resolve(),
@@ -2779,6 +2780,7 @@ describe("PubSub", () => {
                     if (listeningClientSharded) {
                         listeningClientSharded.close();
                     }
+
                     [listeningClientSharded] = await createClients(
                         clusterMode,
                         getOptions(clusterMode),
@@ -3721,6 +3723,7 @@ describe("PubSub", () => {
                         clientCleanup(publishingClient!),
                         clientCleanup(
                             listeningClient!,
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             clusterMode ? {} as any : undefined,
                         ),
                     ]);
@@ -3866,6 +3869,7 @@ describe("PubSub", () => {
                         clientCleanup(publishingClient!),
                         clientCleanup(
                             listeningClient!,
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             clusterMode ? {} as any : undefined,
                         ),
                     ]);
@@ -3990,6 +3994,7 @@ describe("PubSub", () => {
                         clientCleanup(publishingClient!),
                         clientCleanup(
                             listeningClient!,
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             clusterMode ? {} as any : undefined,
                         ),
                     ]);
@@ -4118,6 +4123,7 @@ describe("PubSub", () => {
                         clientCleanup(publishingClient!),
                         clientCleanup(
                             listeningClient!,
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             clusterMode ? {} as any : undefined,
                         ),
                     ]);
@@ -5812,7 +5818,7 @@ describe("PubSub", () => {
     async function killConnections(
         client: TGlideClient,
         killType: string | null = "normal",
-        skipMe: string = "yes",
+        skipMe = "yes",
     ): Promise<void> {
         const cmd: (string | Buffer)[] = ["CLIENT", "KILL"];
 
@@ -5836,6 +5842,7 @@ describe("PubSub", () => {
      * SUBSCRIBE (lazy) or SUBSCRIBE_BLOCKING (blocking) commands directly.
      * Config mode is not tested as it doesn't use custom commands.
      */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     it.each(testCasesWithSubscriptionMethod.filter(([_, __, subMethod]) => subMethod !== Mode.Config))(
         "test_pubsub_exact_happy_path_custom_command_%p_%p_%p",
         async (clusterMode, method, subscriptionMethod) => {
@@ -5968,6 +5975,7 @@ describe("PubSub", () => {
                 if (listeningClient) {
                     await clientCleanup(
                         listeningClient,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         clusterMode ? ({} as any) : undefined,
                     );
                 }
@@ -6115,6 +6123,7 @@ describe("PubSub", () => {
                 if (listeningClient) {
                     await clientCleanup(
                         listeningClient,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         clusterMode ? ({} as any) : undefined,
                     );
                 }
@@ -6266,6 +6275,7 @@ describe("PubSub", () => {
                 if (listeningClient) {
                     await clientCleanup(
                         listeningClient,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         clusterMode ? ({} as any) : undefined,
                     );
                 }
@@ -6407,6 +6417,7 @@ describe("PubSub", () => {
                 );
             } finally {
                 if (listeningClient) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     await clientCleanup(listeningClient, {} as any);
                 }
 
@@ -6557,6 +6568,7 @@ describe("PubSub", () => {
                 if (listeningClient) {
                     await clientCleanup(
                         listeningClient,
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         clusterMode ? ({} as any) : undefined,
                     );
                 }

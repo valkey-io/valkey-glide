@@ -6,6 +6,8 @@ import { expect } from "@jest/globals";
 import {
     GlideClusterClient,
     GlideClient,
+    ProtocolVersion,
+    PubSubMsg,
     TimeoutError,
 } from "../build-ts";
 
@@ -478,11 +480,11 @@ export async function createPubsubClient(
     channels?: Set<string>,
     patterns?: Set<string>,
     shardedChannels?: Set<string>,
-    callback?: (msg: any, context: any) => void,
-    context?: any[] | null,
-    protocol?: any,
+    callback?: (msg: PubSubMsg, context: PubSubMsg[]) => void,
+    context?: PubSubMsg[] | null,
+    protocol?: ProtocolVersion,
     timeout?: number,
-    addresses?: Array<{ host: string; port: number }>,
+    addresses?: { host: string; port: number }[],
 ): Promise<TGlideClient> {
     // Import dynamically to avoid circular dependencies
     const {
@@ -490,14 +492,16 @@ export async function createPubsubClient(
         GlideClusterClient,
         GlideClientConfiguration,
         GlideClusterClientConfiguration,
-        ProtocolVersion,
+        ProtocolVersion: PV,
     } = await import("../build-ts");
 
     // Build base configuration
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     const baseConfig: any = {
-        protocol: protocol || ProtocolVersion.RESP3,
+        protocol: protocol || PV.RESP3,
         addresses: addresses || [],
     };
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
     if (timeout !== undefined) {
         baseConfig.requestTimeout = timeout;
@@ -508,16 +512,20 @@ export async function createPubsubClient(
 
     if (hasSubscriptions || callback) {
         // Build channelsAndPatterns object
+        /* eslint-disable @typescript-eslint/no-explicit-any */
         const channelsAndPatterns: any = {};
+        /* eslint-enable @typescript-eslint/no-explicit-any */
 
         if (clusterMode) {
             // Use cluster mode enums
             if (channels && channels.size > 0) {
                 channelsAndPatterns[GlideClusterClientConfiguration.PubSubChannelModes.Exact] = channels;
             }
+
             if (patterns && patterns.size > 0) {
                 channelsAndPatterns[GlideClusterClientConfiguration.PubSubChannelModes.Pattern] = patterns;
             }
+
             if (shardedChannels && shardedChannels.size > 0) {
                 channelsAndPatterns[GlideClusterClientConfiguration.PubSubChannelModes.Sharded] = shardedChannels;
             }
@@ -526,6 +534,7 @@ export async function createPubsubClient(
             if (channels && channels.size > 0) {
                 channelsAndPatterns[GlideClientConfiguration.PubSubChannelModes.Exact] = channels;
             }
+
             if (patterns && patterns.size > 0) {
                 channelsAndPatterns[GlideClientConfiguration.PubSubChannelModes.Pattern] = patterns;
             }
@@ -554,6 +563,7 @@ export async function createPubsubClient(
  * @param client - The Glide client (cluster or standalone)
  * @returns PubSubChannelModes enum for the client type
  */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
 export function getPubsubModes(
     client: TGlideClient,
 ): any {
@@ -570,3 +580,4 @@ export function getPubsubModes(
         return GlideClientConfiguration.PubSubChannelModes;
     }
 }
+/* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports */
