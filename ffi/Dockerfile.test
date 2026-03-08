@@ -1,5 +1,5 @@
 # Dockerfile for running FFI (Rust) tests locally.
-# Base image (Rust + protoc + python3 + Valkey) provided via docker-bake.test.hcl.
+# Base image (Rust + protoc + python3 + Valkey + pre-compiled deps) via docker-bake.test.hcl.
 #
 # Usage (from repo root):
 #   docker buildx bake ffi-test --load
@@ -8,25 +8,9 @@
 
 FROM base
 
-# L1: Rust dependency cache — copy manifests first, then fetch
-COPY ffi/Cargo.toml ffi/
-COPY glide-core/Cargo.toml glide-core/
-COPY glide-core/redis-rs/Cargo.toml glide-core/redis-rs/
-COPY glide-core/redis-rs/redis/Cargo.toml glide-core/redis-rs/redis/
-COPY glide-core/telemetry/Cargo.toml glide-core/telemetry/
-COPY logger_core/Cargo.toml logger_core/
-RUN mkdir -p ffi/src && echo "" > ffi/src/lib.rs && \
-    mkdir -p glide-core/src && echo "" > glide-core/src/lib.rs && \
-    mkdir -p glide-core/benches && \
-    touch glide-core/benches/connections_benchmark.rs \
-          glide-core/benches/memory_benchmark.rs \
-          glide-core/benches/rotating_buffer_benchmark.rs && \
-    mkdir -p glide-core/redis-rs/redis/src && echo "" > glide-core/redis-rs/redis/src/lib.rs && \
-    mkdir -p glide-core/telemetry/src && echo "" > glide-core/telemetry/src/lib.rs && \
-    mkdir -p logger_core/src && echo "" > logger_core/src/lib.rs
-RUN cd ffi && cargo fetch
+ENV CARGO_TARGET_DIR=/app/target
 
-# L2: Full source → build test binaries
+# Full source → build test binaries (deps already compiled in rust-base)
 COPY . .
 RUN cd ffi && cargo test --no-run
 
