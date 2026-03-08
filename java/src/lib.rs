@@ -103,6 +103,70 @@ fn complete_callback_with_error_on_caller(env: &mut JNIEnv, callback_id: jlong, 
     }
 }
 
+/// Parse request bytes into a CommandRequest, completing the callback with an error on failure.
+/// Returns None if an error occurred (callback already completed).
+fn parse_request_bytes(
+    env: &mut JNIEnv,
+    request_bytes: &JByteArray,
+    callback_id: jlong,
+) -> Option<protobuf_bridge::CommandRequest> {
+    let raw_bytes = match env.convert_byte_array(request_bytes) {
+        Ok(b) => b,
+        Err(e) => {
+            log::error!("Failed to read request bytes: {e}");
+            complete_callback_with_error_on_caller(
+                env,
+                callback_id,
+                &format!("Failed to read request bytes: {e}"),
+            );
+            return None;
+        }
+    };
+
+    if raw_bytes.is_empty() {
+        log::error!("Empty request bytes");
+        complete_callback_with_error_on_caller(env, callback_id, "Empty request bytes");
+        return None;
+    }
+
+    match protobuf_bridge::parse_command_request(&raw_bytes) {
+        Ok(r) => Some(r),
+        Err(e) => {
+            log::error!("Failed to parse command request: {e}");
+            complete_callback_with_error_on_caller(
+                env,
+                callback_id,
+                &format!("Failed to parse command request: {e}"),
+            );
+            None
+        }
+    }
+}
+
+/// Get the JVM Arc, falling back to the cached static if env.get_java_vm() fails.
+/// Completes the callback with an error if both fail.
+fn get_jvm_or_complete_error(
+    env: &mut JNIEnv,
+    callback_id: jlong,
+    fn_name: &str,
+) -> Option<Arc<jni::JavaVM>> {
+    match env.get_java_vm() {
+        Ok(jvm) => Some(Arc::new(jvm)),
+        Err(e) => match JVM.get().cloned() {
+            Some(jvm) => Some(jvm),
+            None => {
+                log::error!("JVM unavailable in {fn_name}: {e}");
+                complete_callback_with_error_on_caller(
+                    env,
+                    callback_id,
+                    &format!("JVM unavailable: {e}"),
+                );
+                None
+            }
+        },
+    }
+}
+
 /// Recover from a panic in an async JNI function.
 /// Re-acquires a JNIEnv from the cached JVM (the calling thread is already JNI-attached),
 /// completes the failed callback with error, then sweeps all pending futures.
@@ -1418,70 +1482,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
 ) {
     let completed = handle_panics(
         move || {
-            let raw_bytes = match env.convert_byte_array(&request_bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("Failed to read command bytes: {e}");
-                    complete_callback_with_error_on_caller(
-                        &mut env,
-                        callback_id,
-                        &format!("Failed to read command bytes: {e}"),
-                    );
-                    return Some(());
-                }
-            };
-
-            if raw_bytes.is_empty() {
-                log::error!("Empty command request bytes");
-                complete_callback_with_error_on_caller(
-                    &mut env,
-                    callback_id,
-                    "Empty command request bytes",
-                );
-                return Some(());
-            }
-
-            // Parse actual protobuf CommandRequest using existing glide-core logic
-            let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("Failed to parse protobuf command request: {e}");
-                    complete_callback_with_error_on_caller(
-                        &mut env,
-                        callback_id,
-                        &format!("Failed to parse command request: {e}"),
-                    );
-                    return Some(());
-                }
-            };
+            let command_request =
+                parse_request_bytes(&mut env, &request_bytes, callback_id)?;
+            let jvm =
+                get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")?;
 
             let handle_id = client_ptr as u64;
-
-            // Get JVM for callback completion
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(e) => match JVM.get().cloned() {
-                    Some(jvm) => jvm,
-                    None => {
-                        log::error!("JVM unavailable in executeCommandAsync: {e}");
-                        complete_callback_with_error_on_caller(
-                            &mut env,
-                            callback_id,
-                            &format!("JVM unavailable: {e}"),
-                        );
-                        return Some(());
-                    }
-                },
-            };
-            // Spawn unified async executor
-            let runtime = get_runtime();
-            let expect_utf8 = true; // executeCommandAsync expects UTF-8 decoding
-            runtime.spawn(execute_command_request_and_complete(
+            get_runtime().spawn(execute_command_request_and_complete(
                 handle_id,
                 command_request,
                 callback_id,
                 jvm,
-                expect_utf8,
+                true, // executeCommandAsync expects UTF-8 decoding
             ));
 
             Some(())
@@ -1629,42 +1641,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 ) {
     let completed = handle_panics(
         move || {
-            let raw_bytes = match env.convert_byte_array(&batch_request_bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("Failed to read batch bytes: {e}");
-                    complete_callback_with_error_on_caller(
-                        &mut env,
-                        callback_id,
-                        &format!("Failed to read batch bytes: {e}"),
-                    );
-                    return Some(());
-                }
-            };
-
-            if raw_bytes.is_empty() {
-                log::error!("Empty batch request bytes");
-                complete_callback_with_error_on_caller(
-                    &mut env,
-                    callback_id,
-                    "Empty batch request bytes",
-                );
-                return Some(());
-            }
-
-            // Parse actual batch protobuf using existing protobuf logic
-            let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("Failed to parse batch protobuf request: {e}");
-                    complete_callback_with_error_on_caller(
-                        &mut env,
-                        callback_id,
-                        &format!("Failed to parse batch request: {e}"),
-                    );
-                    return Some(());
-                }
-            };
+            let command_request =
+                parse_request_bytes(&mut env, &batch_request_bytes, callback_id)?;
 
             // Extract optional root span pointer from the request (if provided by Java)
             let root_span_ptr_opt = command_request.root_span_ptr;
@@ -1685,23 +1663,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
             };
 
             let handle_id = client_ptr as u64;
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(e) => match JVM.get().cloned() {
-                    Some(jvm) => jvm,
-                    None => {
-                        log::error!("JVM unavailable in executeBatchAsync: {e}");
-                        complete_callback_with_error_on_caller(
-                            &mut env,
-                            callback_id,
-                            &format!("JVM unavailable: {e}"),
-                        );
-                        return Some(());
-                    }
-                },
-            };
-            let runtime = get_runtime();
-            runtime.spawn(async move {
+            let jvm =
+                get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")?;
+
+            get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
                 match client_result {
                     Ok(mut client) => {
@@ -1846,68 +1811,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
 ) {
     let completed = handle_panics(
         move || {
-            let raw_bytes = match env.convert_byte_array(&request_bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("Failed to read binary command bytes: {e}");
-                    complete_callback_with_error_on_caller(
-                        &mut env,
-                        callback_id,
-                        &format!("Failed to read binary command bytes: {e}"),
-                    );
-                    return Some(());
-                }
-            };
-
-            if raw_bytes.is_empty() {
-                log::error!("Empty binary command request bytes");
-                complete_callback_with_error_on_caller(
-                    &mut env,
-                    callback_id,
-                    "Empty binary command request bytes",
-                );
-                return Some(());
-            }
-
-            // Parse protobuf CommandRequest using existing bridge logic
-            let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("Failed to parse binary protobuf command request: {e}");
-                    complete_callback_with_error_on_caller(
-                        &mut env,
-                        callback_id,
-                        &format!("Failed to parse binary command request: {e}"),
-                    );
-                    return Some(());
-                }
-            };
+            let command_request =
+                parse_request_bytes(&mut env, &request_bytes, callback_id)?;
+            let jvm =
+                get_jvm_or_complete_error(&mut env, callback_id, "executeBinaryCommandAsync")?;
 
             let handle_id = client_ptr as u64;
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(e) => match JVM.get().cloned() {
-                    Some(jvm) => jvm,
-                    None => {
-                        log::error!("JVM unavailable in executeBinaryCommandAsync: {e}");
-                        complete_callback_with_error_on_caller(
-                            &mut env,
-                            callback_id,
-                            &format!("JVM unavailable: {e}"),
-                        );
-                        return Some(());
-                    }
-                },
-            };
-            // Spawn unified async executor
-            let runtime = get_runtime();
-            let expect_utf8 = false; // binary entrypoint expects binary decoding
-            runtime.spawn(execute_command_request_and_complete(
+            get_runtime().spawn(execute_command_request_and_complete(
                 handle_id,
                 command_request,
                 callback_id,
                 jvm,
-                expect_utf8,
+                false, // binary entrypoint expects binary decoding
             ));
 
             Some(())
@@ -1937,21 +1852,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
 ) {
     let completed = handle_panics(
         move || {
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(e) => match JVM.get().cloned() {
-                    Some(jvm) => jvm,
-                    None => {
-                        log::error!("JVM unavailable in executeScriptAsync: {e}");
-                        complete_callback_with_error_on_caller(
-                            &mut env,
-                            callback_id,
-                            &format!("JVM unavailable: {e}"),
-                        );
-                        return Some(());
-                    }
-                },
-            };
+            let jvm =
+                get_jvm_or_complete_error(&mut env, callback_id, "executeScriptAsync")?;
 
             // Extract script hash
             let hash_str = match env.get_string(&hash) {
@@ -2229,25 +2131,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
             let handle_id = _client_ptr as u64;
             let do_immediate = immediate_auth != 0;
 
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(e) => match JVM.get().cloned() {
-                    Some(jvm) => jvm,
-                    None => {
-                        log::error!("JVM unavailable in updateConnectionPassword: {e}");
-                        complete_callback_with_error_on_caller(
-                            &mut env,
-                            callback_id,
-                            &format!("JVM unavailable: {e}"),
-                        );
-                        return Some(());
-                    }
-                },
-            };
+            let jvm = get_jvm_or_complete_error(
+                &mut env,
+                callback_id,
+                "updateConnectionPassword",
+            )?;
 
-            // Spawn async task
-            let runtime = get_runtime();
-            runtime.spawn(async move {
+            get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
                 match client_result {
                     Ok(mut client) => {
@@ -2298,24 +2188,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_refreshIamToken(
         move || {
             let handle_id = client_ptr as u64;
 
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(e) => match JVM.get().cloned() {
-                    Some(jvm) => jvm,
-                    None => {
-                        log::error!("JVM unavailable in refreshIamToken: {e}");
-                        complete_callback_with_error_on_caller(
-                            &mut env,
-                            callback_id,
-                            &format!("JVM unavailable: {e}"),
-                        );
-                        return Some(());
-                    }
-                },
-            };
+            let jvm =
+                get_jvm_or_complete_error(&mut env, callback_id, "refreshIamToken")?;
 
-            let runtime = get_runtime();
-            runtime.spawn(async move {
+            get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
                 match client_result {
                     Ok(mut client) => {
@@ -2369,21 +2245,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
 ) {
     let completed = handle_panics(
         move || {
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(e) => match JVM.get().cloned() {
-                    Some(jvm) => jvm,
-                    None => {
-                        log::error!("JVM unavailable in executeClusterScanAsync: {e}");
-                        complete_callback_with_error_on_caller(
-                            &mut env,
-                            callback_id,
-                            &format!("JVM unavailable: {e}"),
-                        );
-                        return Some(());
-                    }
-                },
-            };
+            let jvm = get_jvm_or_complete_error(
+                &mut env,
+                callback_id,
+                "executeClusterScanAsync",
+            )?;
 
             // Extract cursor ID (null-safe: null means initial cursor)
             let cursor_str = if cursor_id.is_null() {
