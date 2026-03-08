@@ -94,8 +94,9 @@ fn get_registry_method_cache_safe(
 }
 
 /// Complete a callback with an error directly on the calling (JNI) thread.
-/// Used in pre-spawn error paths where the async task was never launched.
+/// Logs the error and propagates it to Java. Used in pre-spawn error paths.
 fn complete_callback_with_error_on_caller(env: &mut JNIEnv, callback_id: jlong, error_msg: &str) {
+    log::error!("{error_msg}");
     let error_code = 0; // RequestException (Unspecified)
     if let Err(e) = complete_java_callback_with_error_code(env, callback_id, error_code, error_msg)
     {
@@ -113,18 +114,13 @@ fn parse_request_bytes(
     let raw_bytes = match env.convert_byte_array(request_bytes) {
         Ok(b) => b,
         Err(e) => {
-            log::error!("Failed to read request bytes: {e}");
-            complete_callback_with_error_on_caller(
-                env,
-                callback_id,
-                &format!("Failed to read request bytes: {e}"),
-            );
+            let msg = format!("Failed to read request bytes: {e}");
+            complete_callback_with_error_on_caller(env, callback_id, &msg);
             return None;
         }
     };
 
     if raw_bytes.is_empty() {
-        log::error!("Empty request bytes");
         complete_callback_with_error_on_caller(env, callback_id, "Empty request bytes");
         return None;
     }
@@ -132,12 +128,8 @@ fn parse_request_bytes(
     match protobuf_bridge::parse_command_request(&raw_bytes) {
         Ok(r) => Some(r),
         Err(e) => {
-            log::error!("Failed to parse command request: {e}");
-            complete_callback_with_error_on_caller(
-                env,
-                callback_id,
-                &format!("Failed to parse command request: {e}"),
-            );
+            let msg = format!("Failed to parse command request: {e}");
+            complete_callback_with_error_on_caller(env, callback_id, &msg);
             None
         }
     }
@@ -155,12 +147,8 @@ fn get_jvm_or_complete_error(
         Err(e) => match JVM.get().cloned() {
             Some(jvm) => Some(jvm),
             None => {
-                log::error!("JVM unavailable in {fn_name}: {e}");
-                complete_callback_with_error_on_caller(
-                    env,
-                    callback_id,
-                    &format!("JVM unavailable: {e}"),
-                );
+                let msg = format!("JVM unavailable in {fn_name}: {e}");
+                complete_callback_with_error_on_caller(env, callback_id, &msg);
                 None
             }
         },
@@ -1652,7 +1640,6 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
             let batch = match command_request.command {
                 Some(command_request::Command::Batch(batch)) => batch,
                 _ => {
-                    log::error!("Expected batch command in request");
                     complete_callback_with_error_on_caller(
                         &mut env,
                         callback_id,
