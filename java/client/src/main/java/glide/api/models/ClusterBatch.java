@@ -15,6 +15,12 @@ import static command_request.CommandRequestOuterClass.RequestType.ClusterReset;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterSaveConfig;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterSetConfigEpoch;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterSetslot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
@@ -172,6 +178,17 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
+     * Gets information and statistics about the cluster state.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-info/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing cluster state information.
+     */
+    public ClusterBatch clusterInfo() {
+        protobufBatch.addCommands(buildCommand(ClusterInfo));
+        return getThis();
+    }
+
+    /**
      * Removes a node from the cluster.
      *
      * @see <a href="https://valkey.io/commands/cluster-forget/">valkey.io</a> for details.
@@ -180,6 +197,17 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      */
     public ClusterBatch clusterForget(@NonNull String nodeId) {
         protobufBatch.addCommands(buildCommand(ClusterForget, newArgsBuilder().add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Gets a list of all nodes in the cluster and their attributes.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-nodes/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing node information.
+     */
+    public ClusterBatch clusterNodes() {
+        protobufBatch.addCommands(buildCommand(ClusterNodes));
         return getThis();
     }
 
@@ -196,6 +224,18 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     }
 
     /**
+     * Returns details about the shards of the cluster.
+     *
+     * @apiNote Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/cluster-shards/">valkey.io</a> for details.
+     * @return Command response - An <code>array</code> of shard information maps.
+     */
+    public ClusterBatch clusterShards() {
+        protobufBatch.addCommands(buildCommand(ClusterShards));
+        return getThis();
+    }
+
+    /**
      * Returns a list of replicas for the specified primary node.
      *
      * @see <a href="https://valkey.io/commands/cluster-replicas/">valkey.io</a> for details.
@@ -204,6 +244,18 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      */
     public ClusterBatch clusterReplicas(@NonNull String nodeId) {
         protobufBatch.addCommands(buildCommand(ClusterReplicas, newArgsBuilder().add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the TCP links to and from each node in the cluster.
+     *
+     * @apiNote Valkey 7.0 and above.
+     * @see <a href="https://valkey.io/commands/cluster-links/">valkey.io</a> for details.
+     * @return Command response - An <code>array</code> of link information maps.
+     */
+    public ClusterBatch clusterLinks() {
+        protobufBatch.addCommands(buildCommand(ClusterLinks));
         return getThis();
     }
 
@@ -218,6 +270,17 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     public ClusterBatch clusterCountFailureReports(@NonNull String nodeId) {
         protobufBatch.addCommands(
                 buildCommand(ClusterCountFailureReports, newArgsBuilder().add(nodeId)));
+        return getThis();
+    }
+
+    /**
+     * Returns the unique identifier (ID) of the current node.
+     *
+     * @see <a href="https://valkey.io/commands/cluster-myid/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing the node ID.
+     */
+    public ClusterBatch clusterMyId() {
+        protobufBatch.addCommands(buildCommand(ClusterMyId));
         return getThis();
     }
 
@@ -372,6 +435,18 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
     public ClusterBatch clusterGetKeysInSlot(long slot, long count) {
         protobufBatch.addCommands(
                 buildCommand(ClusterGetKeysInSlot, newArgsBuilder().add(slot).add(count)));
+        return getThis();
+    }
+
+    /**
+     * Returns the shard ID of the current node.
+     *
+     * @apiNote Valkey 7.2 and above.
+     * @see <a href="https://valkey.io/commands/cluster-myshardid/">valkey.io</a> for details.
+     * @return Command response - A <code>String</code> containing the shard ID.
+     */
+    public ClusterBatch clusterMyShardId() {
+        protobufBatch.addCommands(buildCommand(ClusterMyShardId));
         return getThis();
     }
 }
