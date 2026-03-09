@@ -111,6 +111,7 @@ public class AsyncRegistryTest {
             assertInstanceOf(ClosingException.class, e.getCause());
             assertEquals(expectedMessage, e.getCause().getMessage());
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new AssertionError("Unexpected interruption", e);
         }
     }

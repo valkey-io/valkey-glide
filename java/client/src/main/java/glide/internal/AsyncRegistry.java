@@ -298,9 +298,7 @@ public final class AsyncRegistry {
                 (errorMessage == null || errorMessage.isEmpty())
                         ? "Native callback infrastructure failed"
                         : errorMessage;
-        ClosingException ex = new ClosingException(msg);
-
-        activeFutures.forEach((id, future) -> future.completeExceptionally(ex));
+        activeFutures.forEach((id, future) -> future.completeExceptionally(new ClosingException(msg)));
         activeFutures.clear();
 
         timeoutTasks.values().forEach(task -> task.cancel(false));

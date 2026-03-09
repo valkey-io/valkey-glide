@@ -105,7 +105,10 @@ fn complete_callback_with_error_on_caller(env: &mut JNIEnv, callback_id: jlong, 
 }
 
 /// Parse request bytes into a CommandRequest, completing the callback with an error on failure.
-/// Returns None if an error occurred (callback already completed).
+/// Returns `Some(request)` on success, `None` if an error occurred (callback already completed).
+/// NOTE: Callers inside `handle_panics` closures must use `let-else` with `return Some(())`
+/// on the None branch — do NOT use `?` which would return `None` from the closure and
+/// be misinterpreted as a panic by `handle_panics`.
 fn parse_request_bytes(
     env: &mut JNIEnv,
     request_bytes: &JByteArray,
@@ -137,6 +140,7 @@ fn parse_request_bytes(
 
 /// Get the JVM Arc, falling back to the cached static if env.get_java_vm() fails.
 /// Completes the callback with an error if both fail.
+/// NOTE: Same `?` caveat as `parse_request_bytes` — use `let-else` in handle_panics closures.
 fn get_jvm_or_complete_error(
     env: &mut JNIEnv,
     callback_id: jlong,
@@ -156,23 +160,19 @@ fn get_jvm_or_complete_error(
 }
 
 /// Recover from a panic in an async JNI function.
-/// Re-acquires a JNIEnv from the cached JVM (the calling thread is already JNI-attached),
-/// completes the failed callback with error, then sweeps all pending futures.
+/// Re-acquires the JNIEnv from the cached JVM (the calling thread is already JNI-attached,
+/// so `get_env()` returns the existing env without re-attaching).
+/// Sweeps all pending futures — the panicked callback is included in the sweep.
 fn recover_from_panic(callback_id: jlong) {
     if let Some(jvm) = JVM.get() {
-        if let Ok(mut env) = jvm.attach_current_thread_as_daemon() {
-            complete_callback_with_error_on_caller(
-                &mut env,
-                callback_id,
-                "Native function panicked",
-            );
+        if let Ok(mut env) = jvm.get_env() {
             jni_client::fail_all_pending_futures(
                 &mut env,
                 "Native panic detected, failing all pending requests",
             );
         } else {
             log::error!(
-                "FATAL: Cannot attach to JVM after panic — callback {callback_id} and all pending futures will hang"
+                "FATAL: Cannot re-acquire JNIEnv after panic — callback {callback_id} and all pending futures will hang"
             );
         }
     } else {
@@ -1470,8 +1470,14 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
 ) {
     let completed = handle_panics(
         move || {
-            let command_request = parse_request_bytes(&mut env, &request_bytes, callback_id)?;
-            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")?;
+            let Some(command_request) = parse_request_bytes(&mut env, &request_bytes, callback_id)
+            else {
+                return Some(());
+            };
+            let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")
+            else {
+                return Some(());
+            };
 
             let handle_id = client_ptr as u64;
             get_runtime().spawn(execute_command_request_and_complete(
@@ -1627,7 +1633,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 ) {
     let completed = handle_panics(
         move || {
-            let command_request = parse_request_bytes(&mut env, &batch_request_bytes, callback_id)?;
+            let Some(command_request) =
+                parse_request_bytes(&mut env, &batch_request_bytes, callback_id)
+            else {
+                return Some(());
+            };
 
             // Extract optional root span pointer from the request (if provided by Java)
             let root_span_ptr_opt = command_request.root_span_ptr;
@@ -1647,7 +1657,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
             };
 
             let handle_id = client_ptr as u64;
-            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")?;
+            let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")
+            else {
+                return Some(());
+            };
 
             get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -1794,9 +1807,15 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
 ) {
     let completed = handle_panics(
         move || {
-            let command_request = parse_request_bytes(&mut env, &request_bytes, callback_id)?;
-            let jvm =
-                get_jvm_or_complete_error(&mut env, callback_id, "executeBinaryCommandAsync")?;
+            let Some(command_request) = parse_request_bytes(&mut env, &request_bytes, callback_id)
+            else {
+                return Some(());
+            };
+            let Some(jvm) =
+                get_jvm_or_complete_error(&mut env, callback_id, "executeBinaryCommandAsync")
+            else {
+                return Some(());
+            };
 
             let handle_id = client_ptr as u64;
             get_runtime().spawn(execute_command_request_and_complete(
@@ -1834,7 +1853,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
 ) {
     let completed = handle_panics(
         move || {
-            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeScriptAsync")?;
+            let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeScriptAsync")
+            else {
+                return Some(());
+            };
 
             // Extract script hash
             let hash_str = match env.get_string(&hash) {
@@ -2112,7 +2134,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
             let handle_id = _client_ptr as u64;
             let do_immediate = immediate_auth != 0;
 
-            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "updateConnectionPassword")?;
+            let Some(jvm) =
+                get_jvm_or_complete_error(&mut env, callback_id, "updateConnectionPassword")
+            else {
+                return Some(());
+            };
 
             get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -2165,7 +2191,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_refreshIamToken(
         move || {
             let handle_id = client_ptr as u64;
 
-            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "refreshIamToken")?;
+            let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "refreshIamToken")
+            else {
+                return Some(());
+            };
 
             get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
@@ -2221,7 +2250,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
 ) {
     let completed = handle_panics(
         move || {
-            let jvm = get_jvm_or_complete_error(&mut env, callback_id, "executeClusterScanAsync")?;
+            let Some(jvm) =
+                get_jvm_or_complete_error(&mut env, callback_id, "executeClusterScanAsync")
+            else {
+                return Some(());
+            };
 
             // Extract cursor ID (null-safe: null means initial cursor)
             let cursor_str = if cursor_id.is_null() {

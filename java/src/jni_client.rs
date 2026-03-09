@@ -431,6 +431,7 @@ fn process_callback_job_with_env(
                 Ok(java_result) => {
                     if let Err(e) = complete_java_callback(env, callback_id, &java_result) {
                         log::error!("JNI completion failed for callback {callback_id}: {e}");
+                        let _ = env.exception_clear();
                     }
                 }
                 Err(e) => {
@@ -443,6 +444,7 @@ fn process_callback_job_with_env(
                         &error_msg,
                     ) {
                         log::error!("JNI error completion failed for callback {callback_id}: {e2}");
+                        let _ = env.exception_clear();
                     }
                 }
             }
@@ -459,6 +461,7 @@ fn process_callback_job_with_env(
                 complete_java_callback_with_error_code(env, callback_id, error_code, &error_msg)
             {
                 log::error!("JNI error completion failed for callback {callback_id}: {e}");
+                let _ = env.exception_clear();
             }
         }
     }
@@ -508,14 +511,17 @@ pub fn fail_all_pending_futures(env: &mut JNIEnv, error_msg: &str) {
             return;
         }
     };
-    let _ = unsafe {
+    if let Err(e) = unsafe {
         env.call_static_method_unchecked(
             &cache.async_handle_table_class,
             cache.fail_all_method,
             signature::ReturnType::Primitive(signature::Primitive::Void),
             &[JValue::Object(&msg).as_jni()],
         )
-    };
+    } {
+        log::error!("Failed to sweep pending futures via failAllWithError: {e}");
+        let _ = env.exception_clear();
+    }
     let _ = unsafe { env.pop_local_frame(&JObject::null()) };
 }
 
