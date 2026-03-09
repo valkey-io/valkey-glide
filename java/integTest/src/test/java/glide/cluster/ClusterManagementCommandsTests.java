@@ -29,6 +29,42 @@ public class ClusterManagementCommandsTests {
 
     private static GlideClusterClient client;
 
+    /** Expected length of node IDs and shard IDs (40-character hex strings). */
+    private static final int NODE_ID_LENGTH = 40;
+
+    /** Total number of hash slots in a cluster. */
+    private static final int TOTAL_CLUSTER_SLOTS = 16384;
+
+    private static GlideClusterClient client;
+
+    /**
+     * Count total slots from a shard's slots field. Supports both formats: flat list of integers
+     * [start1, end1, start2, end2, ...] (Valkey 9.0+) and nested list of [start,end] arrays (older).
+     */
+    private static long countSlotsFromShard(Object[] slots) {
+        if (slots == null || slots.length == 0) {
+            return 0;
+        }
+        long total = 0;
+        // Flat format: each element is Long (start, end pairs)
+        if (slots[0] instanceof Number) {
+            for (int i = 0; i < slots.length; i += 2) {
+                long start = ((Number) slots[i]).longValue();
+                long end = ((Number) slots[i + 1]).longValue();
+                total += (end - start + 1);
+            }
+            return total;
+        }
+        // Nested format: each element is Object[] {start, end}
+        for (Object slotRangeObj : slots) {
+            Object[] slotRange = (Object[]) slotRangeObj;
+            long start = ((Number) slotRange[0]).longValue();
+            long end = ((Number) slotRange[1]).longValue();
+            total += (end - start + 1);
+        }
+        return total;
+    }
+
     @BeforeAll
     @SneakyThrows
     public static void setUp() {
@@ -56,7 +92,9 @@ public class ClusterManagementCommandsTests {
 
         // Verify cluster is healthy
         assertTrue(info.contains("cluster_state:ok"), "Cluster should be in OK state");
-        assertTrue(info.contains("cluster_slots_assigned:16384"), "All 16384 slots should be assigned");
+        assertTrue(
+                info.contains("cluster_slots_assigned:" + TOTAL_CLUSTER_SLOTS),
+                "All " + TOTAL_CLUSTER_SLOTS + " slots should be assigned");
     }
 
     @SneakyThrows
@@ -118,7 +156,7 @@ public class ClusterManagementCommandsTests {
 
         // Verify node ID is 40-character hex string
         String nodeId = parts[0];
-        assertEquals(40, nodeId.length(), "Node ID should be 40 characters");
+        assertEquals(NODE_ID_LENGTH, nodeId.length(), "Node ID should be 40 characters");
         assertTrue(nodeId.matches("[0-9a-f]+"), "Node ID should be hexadecimal");
 
         // Verify address format (ip:port@cport or ip:port)
@@ -323,7 +361,7 @@ public class ClusterManagementCommandsTests {
         String nodeId = client.clusterMyId().get();
 
         assertNotNull(nodeId);
-        assertEquals(40, nodeId.length(), "Node ID should be 40 characters");
+        assertEquals(NODE_ID_LENGTH, nodeId.length(), "Node ID should be 40 characters");
         assertTrue(nodeId.matches("[0-9a-f]+"), "Node ID should be hexadecimal");
     }
 
@@ -341,7 +379,7 @@ public class ClusterManagementCommandsTests {
         // Verify each node returns a valid ID
         for (Map.Entry<String, String> entry : idsMap.entrySet()) {
             String nodeId = entry.getValue();
-            assertEquals(40, nodeId.length(), "Each node ID should be 40 characters");
+            assertEquals(NODE_ID_LENGTH, nodeId.length(), "Each node ID should be 40 characters");
             assertTrue(nodeId.matches("[0-9a-f]+"), "Each node ID should be hexadecimal");
         }
 
@@ -361,7 +399,7 @@ public class ClusterManagementCommandsTests {
         String shardId = client.clusterMyShardId().get();
 
         assertNotNull(shardId);
-        assertEquals(40, shardId.length(), "Shard ID should be 40 characters");
+        assertEquals(NODE_ID_LENGTH, shardId.length(), "Shard ID should be 40 characters");
         assertTrue(shardId.matches("[0-9a-f]+"), "Shard ID should be hexadecimal");
     }
 
@@ -384,7 +422,7 @@ public class ClusterManagementCommandsTests {
         // Verify each shard ID is valid
         for (Map.Entry<String, String> entry : shardIdsMap.entrySet()) {
             String shardId = entry.getValue();
-            assertEquals(40, shardId.length(), "Each shard ID should be 40 characters");
+            assertEquals(NODE_ID_LENGTH, shardId.length(), "Each shard ID should be 40 characters");
             assertTrue(shardId.matches("[0-9a-f]+"), "Each shard ID should be hexadecimal");
         }
     }
@@ -409,7 +447,7 @@ public class ClusterManagementCommandsTests {
         // Verify clusterMyId result
         assertInstanceOf(String.class, results[1]);
         String nodeId = (String) results[1];
-        assertEquals(40, nodeId.length());
+        assertEquals(NODE_ID_LENGTH, nodeId.length());
 
         // Verify clusterNodes result
         assertInstanceOf(String.class, results[2]);
@@ -427,7 +465,7 @@ public class ClusterManagementCommandsTests {
 
         ClusterBatch batch = new ClusterBatch(false);
         batch.clusterShards();
-        batch.clusterSlots();
+        batch.clusterMyId();
 
         Object[] results = client.exec(batch, false).get();
 
@@ -435,17 +473,12 @@ public class ClusterManagementCommandsTests {
 
         // Verify clusterShards result (array of shard info)
         assertNotNull(results[0]);
+        assertInstanceOf(Object[].class, results[0]);
 
-        // Verify clusterSlots result (array, may be wrapped depending on response)
-        assertNotNull(results[1]);
-        // Batch responses may wrap array results differently
-        if (results[1] instanceof Object[][]) {
-            Object[][] slots = (Object[][]) results[1];
-            assertTrue(slots.length > 0);
-        } else if (results[1] instanceof Object[]) {
-            Object[] slots = (Object[]) results[1];
-            assertTrue(slots.length > 0);
-        }
+        // Verify clusterMyId result
+        assertInstanceOf(String.class, results[1]);
+        String nodeId = (String) results[1];
+        assertEquals(NODE_ID_LENGTH, nodeId.length());
     }
 
     @SneakyThrows
@@ -494,16 +527,21 @@ public class ClusterManagementCommandsTests {
         String shardId = (String) results[0];
         String nodeId = (String) results[1];
 
-        assertEquals(40, shardId.length());
-        assertEquals(40, nodeId.length());
+        assertEquals(NODE_ID_LENGTH, shardId.length());
+        assertEquals(NODE_ID_LENGTH, nodeId.length());
     }
 
     @SneakyThrows
     @Test
     public void verify_cluster_topology_consistency() {
+        String minVersion = "7.0.0";
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo(minVersion),
+                "Valkey version required >= " + minVersion);
+
         // Get cluster info from multiple sources and verify consistency
         String nodesOutput = client.clusterNodes().get();
-        Object[][] slotsOutput = client.clusterSlots().get();
+        Object[] shardsOutput = client.clusterShards().get();
         String infoOutput = client.clusterInfo().get();
 
         // Extract known nodes count from info
@@ -523,15 +561,18 @@ public class ClusterManagementCommandsTests {
         assertEquals(
                 knownNodes, nodesCount, "Node count should match between cluster info and cluster nodes");
 
-        // Verify all slots are covered
+        // Verify all slots are covered using clusterShards
+        // Slots format: Valkey 9.0+ uses flat list [start1, end1, start2, end2, ...]; older may use
+        // nested [[start,end], ...]. Both are supported.
         long totalSlots = 0;
-        for (Object[] slotRange : slotsOutput) {
-            long start = (Long) slotRange[0];
-            long end = (Long) slotRange[1];
-            totalSlots += (end - start + 1);
+        for (Object shardObj : shardsOutput) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> shard = (Map<String, Object>) shardObj;
+            Object[] slots = (Object[]) shard.get("slots");
+            totalSlots += countSlotsFromShard(slots);
         }
 
-        assertEquals(16384, totalSlots, "All 16384 slots should be assigned");
+        assertEquals(TOTAL_CLUSTER_SLOTS, totalSlots, "All 16384 slots should be assigned");
     }
 
     @SneakyThrows

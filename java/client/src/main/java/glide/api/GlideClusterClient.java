@@ -11,6 +11,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlo
 import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
@@ -1491,7 +1492,7 @@ public class GlideClusterClient extends BaseClient
     }
 
     /**
-     * Subscribes the client to the specified sharded channels.
+     * Subscribes the client to the specified sharded channels and doesn't wait for confirmation.
      *
      * <p>Sharded pubsub (available in Redis 7.0+) allows messages to be published to specific cluster
      * shards, reducing overhead compared to cluster-wide pubsub.
@@ -1505,7 +1506,7 @@ public class GlideClusterClient extends BaseClient
      *
      * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details
      */
-    public CompletableFuture<Void> ssubscribe(Set<String> channels) {
+    public CompletableFuture<Void> ssubscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 SSubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -1671,7 +1672,8 @@ public class GlideClusterClient extends BaseClient
                 GetSubscriptions,
                 EMPTY_STRING_ARRAY,
                 response -> {
-                    Object[] parsed = (Object[]) parseSubscriptionState(response);
+                    Object[] arr = handleArrayResponse(response);
+                    Object[] parsed = (Object[]) parseSubscriptionState(arr);
                     @SuppressWarnings("unchecked")
                     Map<String, Object[]> desiredMap = (Map<String, Object[]>) parsed[0];
                     @SuppressWarnings("unchecked")

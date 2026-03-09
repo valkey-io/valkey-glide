@@ -9,6 +9,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlo
 import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;

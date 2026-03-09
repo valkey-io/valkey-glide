@@ -23,7 +23,7 @@ mod cluster_client_tests {
         },
     };
     use redis::{
-        ConnectionAddr, InfoDict, RedisConnectionInfo, Value,
+        InfoDict, RedisConnectionInfo, Value,
         cluster_routing::{
             MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
         },
@@ -750,23 +750,7 @@ mod cluster_client_tests {
         });
     }
 
-    /// Helper function to cleanup ACL user
-    async fn cleanup_acl_user(addr: &ConnectionAddr, username: &str) {
-        if let Ok(client) = redis::Client::open(redis::ConnectionInfo {
-            addr: addr.clone(),
-            redis: RedisConnectionInfo::default(),
-        }) && let Ok(mut connection) = client
-            .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
-            .await
-        {
-            let mut cmd = redis::cmd("ACL");
-            cmd.arg("DELUSER").arg(username);
-            let _ = connection.send_packed_command(&cmd).await;
-        }
-    }
-
     #[rstest]
-    #[ignore]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     #[serial_test::serial]
     fn test_cluster_connection_fails_with_permission_denied() {
@@ -780,56 +764,47 @@ mod cluster_client_tests {
             .await;
 
             let cluster = test_basics.cluster.as_ref().unwrap();
-            let addresses = cluster.get_server_addresses();
+            let mut client = test_basics.client;
 
-            // Create user WITHOUT permission for cluster slots command
-            let username = "no_cluster_slots_user";
+            let username = "restricted_user";
             let password = "test_password_456";
 
-            for addr in &addresses {
-                let client = redis::Client::open(redis::ConnectionInfo {
-                    addr: addr.clone(),
-                    redis: RedisConnectionInfo::default(),
-                })
-                .unwrap();
+            let mut cmd = redis::cmd("ACL");
+            cmd.arg("SETUSER")
+                .arg(username)
+                .arg("on")
+                .arg("allkeys")
+                .arg("+@all")
+                .arg("-cluster")
+                .arg(format!(">{password}"));
+            let routing = RoutingInfo::MultiNode((MultipleNodeRoutingInfo::AllNodes, None));
+            let set_user = client.send_command(&mut cmd, Some(routing)).await;
 
-                let mut connection = client
-                    .get_multiplexed_async_connection(redis::GlideConnectionOptions::default())
-                    .await
-                    .unwrap();
+            assert!(
+                set_user.is_ok(),
+                "Failed to set up ACL users for testing {:?}",
+                set_user.err()
+            );
 
-                // Create user with all permissions EXCEPT cluster commands
-                let mut cmd = redis::cmd("ACL");
-                cmd.arg("SETUSER")
-                    .arg(username)
-                    .arg("on")
-                    .arg("allkeys")
-                    .arg("+@all")
-                    .arg("-cluster") // Redis 6.2 does not support -cluster|slots type syntax.
-                    .arg(format!(">{password}"));
-
-                connection.send_packed_command(&cmd).await.unwrap();
-            }
-
-            // Try to create a client with the user that lacks cluster slots permission
-            let connection_info = RedisConnectionInfo {
-                username: Some(username.to_string()),
-                password: Some(password.to_string()),
-                ..Default::default()
-            };
-
-            let configuration = TestConfiguration {
+            // Create a new connection request with the restricted user's credentials
+            let restricted_configuration = TestConfiguration {
                 cluster_mode: ClusterMode::Enabled,
-                shared_server: false,
-                connection_info: Some(connection_info),
-                request_timeout: Some(10000),
+                connection_info: Some(RedisConnectionInfo {
+                    username: Some(username.to_string()),
+                    password: Some(password.to_string()),
+                    ..Default::default()
+                }),
                 ..Default::default()
             };
 
-            // Manually create connection request to get the actual error
-            let connection_request = create_connection_request(&addresses, &configuration);
+            let addresses = cluster.get_server_addresses();
+            let mut connection_request =
+                create_connection_request(&addresses, &restricted_configuration);
 
-            // This should fail during topology discovery
+            // Increase connection timeout to 10 seconds to allow retries to complete
+            connection_request.connection_timeout = 10_000;
+
+            // Reconnect with the restricted user.
             let result = Client::new(connection_request.into(), None).await;
 
             // Assert that connection failed
@@ -846,11 +821,6 @@ mod cluster_client_tests {
                     "Error should be a perrmission error, got: {}",
                     error_msg
                 );
-            }
-
-            // Cleanup
-            for addr in &addresses {
-                cleanup_acl_user(addr, username).await;
             }
         });
     }
