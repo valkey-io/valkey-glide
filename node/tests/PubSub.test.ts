@@ -5017,10 +5017,13 @@ describe("PubSub", () => {
                     unsubscribeMode,
                 );
 
-                // Wait for unsubscribe to propagate (for Lazy mode)
-                if (unsubscribeMode === Mode.Lazy) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                }
+                // Wait for unsubscribe to complete
+                await waitForSubscriptionState(
+                    listener,
+                    new Set<string>(),
+                    undefined,
+                    undefined,
+                );
 
                 // Verify no message in queue before publishing
                 const msgBefore = listener.tryGetPubSubMessage();
@@ -5100,12 +5103,18 @@ describe("PubSub", () => {
                 // Dynamically subscribe to pattern
                 if (subscribeMode === Mode.Lazy) {
                     await listener.psubscribeLazy(patterns);
-
-                    // Allow time for subscription to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
                     await listener.psubscribe(patterns, 500);
                 }
+
+                // Wait for subscription to be established
+                await waitForSubscriptionStateIfNeeded(
+                    listener,
+                    subscribeMode,
+                    undefined,
+                    new Set(patterns),
+                    undefined,
+                );
 
                 // Publish first message to matching channel and verify reception
                 await sender.publish(message1, channel1);
@@ -5124,10 +5133,13 @@ describe("PubSub", () => {
                     500,
                 );
 
-                // Wait for unsubscribe to propagate (for Lazy mode)
-                if (unsubscribeMode === Mode.Lazy) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                }
+                // Wait for unsubscribe to complete
+                await waitForSubscriptionState(
+                    listener,
+                    undefined,
+                    new Set<string>(),
+                    undefined,
+                );
 
                 // Verify no message in queue before publishing
                 const msgBefore = listener.tryGetPubSubMessage();
@@ -5201,15 +5213,21 @@ describe("PubSub", () => {
                     await (listener as GlideClusterClient).ssubscribeLazy(
                         channels,
                     );
-
-                    // Allow time for subscription to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
                     await (listener as GlideClusterClient).ssubscribe(
                         channels,
                         500,
                     );
                 }
+
+                // Wait for subscription to be established
+                await waitForSubscriptionStateIfNeeded(
+                    listener,
+                    subscribeMode,
+                    undefined,
+                    undefined,
+                    new Set(channels),
+                );
 
                 // Publish first message and verify reception
                 expect(
@@ -5234,10 +5252,13 @@ describe("PubSub", () => {
                     500,
                 );
 
-                // Wait for unsubscribe to propagate (needed for Lazy mode)
-                if (unsubscribeMode === Mode.Lazy) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                }
+                // Wait for unsubscribe to complete
+                await waitForSubscriptionState(
+                    listener,
+                    undefined,
+                    undefined,
+                    new Set<string>(),
+                );
 
                 // Verify no message in queue before publishing
                 const msgBefore = listener.tryGetPubSubMessage();
@@ -5354,10 +5375,13 @@ describe("PubSub", () => {
                     unsubscribeMode,
                 );
 
-                // Wait for unsubscribe to propagate
-                if (unsubscribeMode === Mode.Lazy) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                }
+                // Wait for unsubscribe to complete
+                await waitForSubscriptionState(
+                    listener,
+                    new Set<string>(),
+                    undefined,
+                    undefined,
+                );
 
                 // Drain any pending messages that were published before unsubscribe
                 while (listener.tryGetPubSubMessage() !== null) {
@@ -5445,7 +5469,12 @@ describe("PubSub", () => {
                 }
 
                 // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                await waitForSubscriptionState(
+                    listener,
+                    undefined,
+                    new Set([pattern as string]),
+                    undefined,
+                );
 
                 // Publish first message to matching channel
                 await sender.publish(message1, channel);
@@ -5467,8 +5496,13 @@ describe("PubSub", () => {
                     500,
                 );
 
-                // Wait for unsubscribe to propagate
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                // Wait for unsubscribe to complete
+                await waitForSubscriptionState(
+                    listener,
+                    undefined,
+                    new Set<string>(),
+                    undefined,
+                );
 
                 // Drain any pending messages that were published before unsubscribe
                 while (listener.tryGetPubSubMessage() !== null) {
@@ -5546,8 +5580,13 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                 );
 
-                // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                // Wait for subscription to be established
+                await waitForSubscriptionState(
+                    listener,
+                    undefined,
+                    undefined,
+                    new Set([channel as string]),
+                );
 
                 // Publish first message to sharded channel
                 expect(
@@ -5575,8 +5614,13 @@ describe("PubSub", () => {
                     500,
                 );
 
-                // Wait for unsubscribe to propagate
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                // Wait for unsubscribe to complete
+                await waitForSubscriptionState(
+                    listener,
+                    undefined,
+                    undefined,
+                    new Set<string>(),
+                );
 
                 // Drain any pending messages that were published before unsubscribe
                 while (listener.tryGetPubSubMessage() !== null) {
@@ -5671,11 +5715,18 @@ describe("PubSub", () => {
                 // Dynamically subscribe to channel
                 if (subscribeMode === Mode.Lazy) {
                     await listener.subscribeLazy([channel]);
-                    // Allow time for subscription to propagate
-                    await new Promise((resolve) => setTimeout(resolve, 500));
                 } else {
                     await listener.subscribe([channel], 500);
                 }
+
+                // Wait for subscription to be established
+                await waitForSubscriptionStateIfNeeded(
+                    listener,
+                    subscribeMode,
+                    new Set([channel as string]),
+                    undefined,
+                    undefined,
+                );
 
                 // Publish message
                 expect(await sender.publish(message, channel)).toBeGreaterThan(
@@ -5734,8 +5785,13 @@ describe("PubSub", () => {
                 // Dynamically subscribe to channel (non-blocking)
                 await client.subscribeLazy([channel]);
 
-                // Allow time for subscription to propagate
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                // Wait for subscription to be established
+                await waitForSubscriptionState(
+                    client,
+                    new Set([channel as string]),
+                    undefined,
+                    undefined,
+                );
 
                 // Get statistics
                 const stats = (await client.getStatistics()) as Record<
