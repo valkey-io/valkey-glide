@@ -23,7 +23,7 @@
 * Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
 * JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 * CORE: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
-* JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER SLOTS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) and cluster slot commands (CLUSTER KEYSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER GETKEYSINSLOT, CLUSTER ADDSLOTS, CLUSTER ADDSLOTSRANGE, CLUSTER DELSLOTS, CLUSTER DELSLOTSRANGE) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
+* JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) and cluster slot commands (CLUSTER KEYSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER GETKEYSINSLOT, CLUSTER ADDSLOTS, CLUSTER ADDSLOTSRANGE, CLUSTER DELSLOTS, CLUSTER DELSLOTSRANGE) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 
 #### Fixes
 * CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.

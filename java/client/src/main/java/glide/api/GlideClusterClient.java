@@ -17,7 +17,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -1768,26 +1767,6 @@ public class GlideClusterClient extends BaseClient
                 response ->
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleArrayResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
-    }
-
-    @Override
-    public CompletableFuture<Object[][]> clusterSlots() {
-        return commandManager.submitNewCommand(
-                ClusterSlots,
-                new String[0],
-                response -> castArray(handleArrayResponse(response), Object[].class));
-    }
-
-    @Override
-    public CompletableFuture<ClusterValue<Object[][]>> clusterSlots(@NonNull Route route) {
-        return commandManager.submitNewCommand(
-                ClusterSlots,
-                new String[0],
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(castArray(handleArrayResponse(response), Object[].class))
                                 : ClusterValue.of(handleMapResponse(response)));
     }
 

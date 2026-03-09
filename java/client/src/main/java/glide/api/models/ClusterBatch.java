@@ -15,7 +15,6 @@ import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterNodes;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterShards;
-import static command_request.CommandRequestOuterClass.RequestType.ClusterSlots;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
@@ -185,17 +184,6 @@ public class ClusterBatch extends BaseBatch<ClusterBatch> {
      */
     public ClusterBatch clusterShards() {
         protobufBatch.addCommands(buildCommand(ClusterShards));
-        return getThis();
-    }
-
-    /**
-     * Returns the mapping of hash slots to nodes.
-     *
-     * @see <a href="https://valkey.io/commands/cluster-slots/">valkey.io</a> for details.
-     * @return Command response - A <code>two-dimensional array</code> of slot mappings.
-     */
-    public ClusterBatch clusterSlots() {
-        protobufBatch.addCommands(buildCommand(ClusterSlots));
         return getThis();
     }
 

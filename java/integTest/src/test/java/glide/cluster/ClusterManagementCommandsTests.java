@@ -259,58 +259,6 @@ public class ClusterManagementCommandsTests {
 
     @SneakyThrows
     @Test
-    public void clusterSlots_returns_slot_mapping() {
-        Object[][] slots = client.clusterSlots().get();
-
-        assertNotNull(slots);
-        assertTrue(slots.length > 0, "Should have at least one slot range");
-
-        // Verify first slot range structure
-        Object[] slotRange = slots[0];
-        assertTrue(slotRange.length >= 3, "Should have start, end, and at least one node");
-
-        // Verify start and end slots are longs
-        assertInstanceOf(Long.class, slotRange[0]);
-        assertInstanceOf(Long.class, slotRange[1]);
-
-        long startSlot = (Long) slotRange[0];
-        long endSlot = (Long) slotRange[1];
-
-        assertTrue(startSlot >= 0 && startSlot <= 16383, "Start slot should be in valid range");
-        assertTrue(endSlot >= 0 && endSlot <= 16383, "End slot should be in valid range");
-        assertTrue(startSlot <= endSlot, "Start slot should be <= end slot");
-
-        // Verify node info structure [ip, port, node-id]
-        assertInstanceOf(Object[].class, slotRange[2]);
-        Object[] masterNode = (Object[]) slotRange[2];
-
-        assertTrue(masterNode.length >= 3, "Node info should have at least ip, port, node-id");
-        assertInstanceOf(String.class, masterNode[0]); // IP
-        assertInstanceOf(Long.class, masterNode[1]); // Port
-        assertInstanceOf(String.class, masterNode[2]); // Node ID
-
-        String nodeId = (String) masterNode[2];
-        assertEquals(40, nodeId.length(), "Node ID should be 40 characters");
-    }
-
-    @SneakyThrows
-    @Test
-    public void clusterSlots_with_route() {
-        ClusterValue<Object[][]> result = client.clusterSlots(RANDOM).get();
-
-        assertTrue(result.hasSingleData());
-        Object[][] slots = result.getSingleValue();
-
-        assertNotNull(slots);
-        assertTrue(slots.length > 0);
-
-        // Verify structure
-        Object[] firstRange = slots[0];
-        assertTrue(firstRange.length >= 3);
-    }
-
-    @SneakyThrows
-    @Test
     public void clusterLinks_returns_link_info() {
         String minVersion = "7.0.0";
         assumeTrue(

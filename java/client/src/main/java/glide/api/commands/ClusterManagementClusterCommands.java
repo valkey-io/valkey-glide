@@ -200,67 +200,6 @@ public interface ClusterManagementClusterCommands {
     CompletableFuture<ClusterValue<Object[]>> clusterShards(Route route);
 
     /**
-     * Returns the mapping of hash slots to nodes.<br>
-     * The command will be routed to a random node.
-     *
-     * @see <a href="https://valkey.io/commands/cluster-slots/">valkey.io</a> for details.
-     * @return A <code>two-dimensional array</code> where each inner array represents a slot range and
-     *     contains the following elements:
-     *     <ul>
-     *       <li><code>[0]</code> (Long) - Start slot number
-     *       <li><code>[1]</code> (Long) - End slot number
-     *       <li><code>[2..]</code> (Object[]) - Node information arrays, each containing:
-     *           <ul>
-     *             <li><code>[0]</code> (String) - Node IP address (IPv4, IPv6, or hostname)
-     *             <li><code>[1]</code> (Long) - Node port
-     *             <li><code>[2]</code> (String) - Node ID (40-character hex string)
-     *             <li><code>[3..]</code> (Optional) - Additional hostname/IP entries for this node
-     *           </ul>
-     *     </ul>
-     *     The first node in each slot range is the master, followed by its replicas.
-     * @example
-     *     <pre>{@code
-     * Object[][] slots = clusterClient.clusterSlots().get();
-     * for (Object[] slotRange : slots) {
-     *     long startSlot = (long) slotRange[0];
-     *     long endSlot = (long) slotRange[1];
-     *     System.out.println("Slots " + startSlot + "-" + endSlot + ":");
-     *
-     *     // First node is the master
-     *     Object[] masterInfo = (Object[]) slotRange[2];
-     *     System.out.println("  Master: " + masterInfo[0] + ":" + masterInfo[1] + " (" + masterInfo[2] + ")");
-     *
-     *     // Remaining nodes are replicas
-     *     for (int i = 3; i < slotRange.length; i++) {
-     *         Object[] replicaInfo = (Object[]) slotRange[i];
-     *         System.out.println("  Replica: " + replicaInfo[0] + ":" + replicaInfo[1] + " (" + replicaInfo[2] + ")");
-     *     }
-     * }
-     * }</pre>
-     */
-    CompletableFuture<Object[][]> clusterSlots();
-
-    /**
-     * Returns the mapping of hash slots to nodes.
-     *
-     * @see <a href="https://valkey.io/commands/cluster-slots/">valkey.io</a> for details.
-     * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
-     * @return When specifying a single-node route, returns a <code>two-dimensional array</code> of
-     *     slot mappings. When specifying a multi-node route, returns a <code>Map{@literal <String,
-     *     Object[][]>}</code> with each node address as the key and its slot mapping array as the
-     *     value.
-     * @example
-     *     <pre>{@code
-     * ClusterValue<Object[][]> slotsResult = clusterClient.clusterSlots(RANDOM).get();
-     * // Command sent to a random node, expecting SingleValue result
-     * Object[][] slots = slotsResult.getSingleValue();
-     * System.out.println("Total slot ranges: " + slots.length);
-     * }</pre>
-     */
-    CompletableFuture<ClusterValue<Object[][]>> clusterSlots(Route route);
-
-    /**
      * Returns information about the TCP links to and from each node in the cluster.<br>
      * The command will be routed to a random node.
      *
