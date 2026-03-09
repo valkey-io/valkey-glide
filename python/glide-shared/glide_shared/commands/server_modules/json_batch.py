@@ -102,7 +102,7 @@ def get(
     if options:
         args.extend(options.get_options())
     if paths:
-        if isinstance(paths, (str, bytes)):
+        if isinstance(paths, (str, bytes, bytearray, memoryview)):
             paths = [paths]
         args.extend(paths)
 

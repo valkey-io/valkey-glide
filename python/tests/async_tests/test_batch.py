@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+import os
 import platform
 import re
 import time
@@ -76,6 +77,35 @@ async def exec_batch(
 
 @pytest.mark.anyio
 class TestBatch:
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_batch_set_with_bytearray_and_memoryview(
+        self, glide_client: TGlideClient
+    ):
+        """Test that batch set() accepts bytearray and memoryview keys and values."""
+        key_ba = get_random_string(10)
+        key_mv = get_random_string(10)
+        key_ba_key = bytearray(b"ba_batch_" + os.urandom(8))
+        key_mv_key = memoryview(bytearray(b"mv_batch_" + os.urandom(8)))
+        data = os.urandom(256)
+
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+        batch.set(key_ba, bytearray(data))
+        batch.set(key_mv, memoryview(bytearray(data)))
+        batch.set(key_ba_key, b"value1")
+        batch.set(key_mv_key, b"value2")
+        result = await exec_batch(glide_client, batch)
+        assert result == [OK, OK, OK, OK]
+
+        assert await glide_client.get(key_ba) == data
+        assert await glide_client.get(key_mv) == data
+        assert await glide_client.get(key_ba_key) == b"value1"
+        assert await glide_client.get(key_mv_key) == b"value2"
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_with_different_slots(
