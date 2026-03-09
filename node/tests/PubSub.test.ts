@@ -7877,7 +7877,7 @@ describe("PubSub", () => {
                 }
 
                 for (const pattern of patterns) {
-                    const matchingChannel = pattern.replace("*", "test");
+                    const matchingChannel = pattern.replace(/\*/g, "test");
                     await publishingClient.publish(message, matchingChannel);
                 }
 
