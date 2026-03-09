@@ -4089,7 +4089,9 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void cluster_management_commands_readonly_readwrite(GlideClusterClient client) {
-        assumeTrue(getReplicaCount(client) > 0, "Requires at least one replica");
+        assumeTrue(
+                getReplicaCount(client, new SlotKeyRoute("replica-check", PRIMARY)) > 0,
+                "Requires at least one replica");
 
         // Test READONLY command
         // Note: This command only makes sense when sent to a replica
@@ -4139,7 +4141,7 @@ public class CommandTests {
         batch.readwrite();
         batch.asking();
 
-        Object[] results = client.exec(batch, ClusterBatchOptions.builder().build()).get();
+        Object[] results = client.exec(batch, false).get();
 
         assertEquals(5, results.length);
         assertEquals(OK, results[0]); // CLUSTER SAVECONFIG
@@ -4153,7 +4155,9 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void cluster_management_commands_replicas(GlideClusterClient client) {
-        assumeTrue(getReplicaCount(client) > 0, "Requires at least one replica");
+        assumeTrue(
+                getReplicaCount(client, new SlotKeyRoute("replica-check", PRIMARY)) > 0,
+                "Requires at least one replica");
 
         // Get cluster nodes to find a primary node ID
         String nodesOutput = client.customCommand(new String[] {"CLUSTER", "NODES"}).get().toString();
