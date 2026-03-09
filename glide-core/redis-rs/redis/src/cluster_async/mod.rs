@@ -2128,7 +2128,12 @@ where
                 Self::refresh_slots(inner.clone(), curr_retry, trigger)
                     .await
                     .map_err(|err| {
-                        if err.kind() == ErrorKind::AllConnectionsUnavailable {
+                        if matches!(
+                            err.kind(),
+                            ErrorKind::AllConnectionsUnavailable
+                                | ErrorKind::PermissionDenied
+                                | ErrorKind::AuthenticationFailed
+                        ) {
                             RetryError::permanent(err)
                         } else {
                             RetryError::transient(err)
@@ -3772,6 +3777,20 @@ where
                 _ => None,
             }),
     );
+
+    // Check for PermissionDenied errors (NOPERM) and return early if found
+    // Note: NOPERM is an ACL error. ACL permissions are expected to be applied cluster wide.
+    // If NOPERM is found it should be surfaced first, otherwise we continue.
+    if let Some(noperm_err) = topology_join_results.iter().find_map(|(_, res)| {
+        res.as_ref()
+            .err()
+            .filter(|err| err.kind() == ErrorKind::PermissionDenied)
+    }) {
+        return TopologyQueryResult {
+            topology_result: Err(noperm_err.clone_mostly("")),
+            failed_connections: Some(failed_addresses),
+        };
+    }
 
     let topology_values = topology_join_results.iter().filter_map(|(addr, res)| {
         res.as_ref()
