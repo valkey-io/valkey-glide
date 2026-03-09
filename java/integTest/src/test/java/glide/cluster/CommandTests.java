@@ -4147,12 +4147,11 @@ public class CommandTests {
         Object[] results = client.exec(batch, false).get();
 
         assertEquals(5, results.length);
-        // Non-atomic batch with no route: commands may be routed to different nodes, so order is not guaranteed
+        // Non-atomic batch with no route: commands may be routed to different nodes, so order is not
+        // guaranteed
         long okCount = Arrays.stream(results).filter(OK::equals).count();
         long bumpOrStillCount =
-                Arrays.stream(results)
-                        .filter(r -> "BUMPED".equals(r) || "STILL".equals(r))
-                        .count();
+                Arrays.stream(results).filter(r -> "BUMPED".equals(r) || "STILL".equals(r)).count();
         assertEquals(4, okCount, "Expected 4 OK responses (SAVECONFIG, READONLY, READWRITE, ASKING)");
         assertEquals(1, bumpOrStillCount, "Expected 1 BUMPED or STILL (CLUSTER BUMPEPOCH)");
     }
@@ -4193,7 +4192,9 @@ public class CommandTests {
         ClusterValue<String[]> replicasWithRoute = client.clusterReplicas(primaryNodeId, RANDOM).get();
         assertNotNull(replicasWithRoute);
         assertTrue(
-                replicasWithRoute.hasSingleData() ? replicasWithRoute.getSingleValue() != null : !replicasWithRoute.getMultiValue().isEmpty());
+                replicasWithRoute.hasSingleData()
+                        ? replicasWithRoute.getSingleValue() != null
+                        : !replicasWithRoute.getMultiValue().isEmpty());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
