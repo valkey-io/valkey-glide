@@ -149,9 +149,7 @@ export namespace GlideClusterClientConfiguration {
         /**
          * Channels and patterns by modes.
          */
-        channelsAndPatterns: Partial<
-            Record<PubSubChannelModes, Iterable<string>>
-        >;
+        channelsAndPatterns: Partial<Record<PubSubChannelModes, Set<string>>>;
 
         /**
          * Optional callback to accept the incoming messages.
