@@ -8329,4 +8329,150 @@ describe("PubSub", () => {
         },
         TIMEOUT,
     );
+
+    /**
+     * Test that getSubscriptions() method correctly parses the GlideRecord response format.
+     *
+     * This test verifies that the parseGetSubscriptionsResponse function correctly handles
+     * the GlideRecord format returned by the Rust core (array of {key, value} objects with
+     * string keys like "Exact", "Pattern", "Sharded").
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     */
+    it.each([true, false])(
+        "test_getSubscriptions_parses_response_correctly_%p",
+        async (clusterMode) => {
+            let client: TGlideClient | undefined;
+
+            try {
+                const addresses = clusterMode
+                    ? cmeCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }))
+                    : cmdCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }));
+
+                const channel = getRandomKey();
+                const pattern = `${getRandomKey()}*`;
+
+                // Create pubsub subscription config with exact and pattern subscriptions
+                const pubsubSubscriptions = createPubSubSubscription(
+                    clusterMode,
+                    {
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([channel]),
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern]: new Set([pattern]),
+                    },
+                    {
+                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                            new Set([channel]),
+                        [GlideClientConfiguration.PubSubChannelModes.Pattern]:
+                            new Set([pattern]),
+                    },
+                );
+
+                // Create client with subscriptions
+                if (clusterMode) {
+                    client = await GlideClusterClient.createClient({
+                        addresses,
+                        protocol: ProtocolVersion.RESP3,
+                        pubsubSubscriptions,
+                    });
+                } else {
+                    client = await GlideClient.createClient({
+                        addresses,
+                        protocol: ProtocolVersion.RESP3,
+                        pubsubSubscriptions,
+                    });
+                }
+
+                // Wait for subscriptions to be established
+                await waitForSubscriptionState(
+                    client,
+                    new Set([channel]),
+                    new Set([pattern]),
+                    undefined,
+                );
+
+                // Call getSubscriptions() method - this tests the parseGetSubscriptionsResponse fix
+                const state = await client.getSubscriptions();
+
+                // Verify the response structure is correct
+                expect(state).toHaveProperty("desiredSubscriptions");
+                expect(state).toHaveProperty("actualSubscriptions");
+
+                // Verify exact channel subscriptions
+                if (clusterMode) {
+                    const exactMode =
+                        GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact;
+                    const patternMode =
+                        GlideClusterClientConfiguration.PubSubChannelModes
+                            .Pattern;
+
+                    // Check desired subscriptions
+                    expect(state.desiredSubscriptions[exactMode]).toBeDefined();
+                    expect(
+                        state.desiredSubscriptions[exactMode]?.has(channel),
+                    ).toBe(true);
+                    expect(
+                        state.desiredSubscriptions[patternMode],
+                    ).toBeDefined();
+                    expect(
+                        state.desiredSubscriptions[patternMode]?.has(pattern),
+                    ).toBe(true);
+
+                    // Check actual subscriptions
+                    expect(state.actualSubscriptions[exactMode]).toBeDefined();
+                    expect(
+                        state.actualSubscriptions[exactMode]?.has(channel),
+                    ).toBe(true);
+                    expect(
+                        state.actualSubscriptions[patternMode],
+                    ).toBeDefined();
+                    expect(
+                        state.actualSubscriptions[patternMode]?.has(pattern),
+                    ).toBe(true);
+                } else {
+                    const exactMode =
+                        GlideClientConfiguration.PubSubChannelModes.Exact;
+                    const patternMode =
+                        GlideClientConfiguration.PubSubChannelModes.Pattern;
+
+                    // Check desired subscriptions
+                    expect(state.desiredSubscriptions[exactMode]).toBeDefined();
+                    expect(
+                        state.desiredSubscriptions[exactMode]?.has(channel),
+                    ).toBe(true);
+                    expect(
+                        state.desiredSubscriptions[patternMode],
+                    ).toBeDefined();
+                    expect(
+                        state.desiredSubscriptions[patternMode]?.has(pattern),
+                    ).toBe(true);
+
+                    // Check actual subscriptions
+                    expect(state.actualSubscriptions[exactMode]).toBeDefined();
+                    expect(
+                        state.actualSubscriptions[exactMode]?.has(channel),
+                    ).toBe(true);
+                    expect(
+                        state.actualSubscriptions[patternMode],
+                    ).toBeDefined();
+                    expect(
+                        state.actualSubscriptions[patternMode]?.has(pattern),
+                    ).toBe(true);
+                }
+            } finally {
+                if (client) {
+                    client.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
 });

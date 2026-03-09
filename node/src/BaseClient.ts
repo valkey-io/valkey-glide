@@ -9771,8 +9771,11 @@ export class BaseClient {
      * Helper method to parse GetSubscriptions response from Rust core.
      * Converts array response to structured object with desired and actual subscriptions.
      *
+     * The Rust core returns subscription data as a Value::Map with string keys ("Exact", "Pattern", "Sharded").
+     * The NAPI layer converts this to GlideRecord format: [{key: "Exact", value: [...]}, ...]
+     *
      * @param response - The response array from Rust core with format:
-     *   ["desired", { mode: [channels...] }, "actual", { mode: [channels...] }]
+     *   ["desired", GlideRecord, "actual", GlideRecord]
      * @returns Parsed subscription state with desired and actual subscriptions
      */
     protected parseGetSubscriptionsResponse<T extends number>(
@@ -9781,30 +9784,58 @@ export class BaseClient {
         desiredSubscriptions: Partial<Record<T, Set<GlideString>>>;
         actualSubscriptions: Partial<Record<T, Set<GlideString>>>;
     } {
-        // Response format: ["desired", {...}, "actual", {...}]
+        // Response format: ["desired", GlideRecord, "actual", GlideRecord]
         if (!Array.isArray(response) || response.length !== 4) {
             throw new Error(
-                `Invalid GetSubscriptions response format: expected array of length 4, got ${response}`,
+                `Invalid GetSubscriptions response format: expected array of length 4, got ${JSON.stringify(response)}`,
             );
         }
 
-        const desiredData = response[1] as Record<string, GlideString[]>;
-        const actualData = response[3] as Record<string, GlideString[]>;
+        // Map string mode names to numeric enum values
+        const modeNameToNumber: Record<string, number> = {
+            Exact: 0,
+            Pattern: 1,
+            Sharded: 2,
+        };
 
         const desiredSubscriptions: Partial<Record<T, Set<GlideString>>> = {};
         const actualSubscriptions: Partial<Record<T, Set<GlideString>>> = {};
 
-        // Parse desired subscriptions
-        for (const [mode, channels] of Object.entries(desiredData)) {
-            const modeKey = parseInt(mode) as T;
-            desiredSubscriptions[modeKey] = new Set(channels);
-        }
+        // Helper function to parse subscription data from GlideRecord format
+        const parseSubscriptionData = (
+            data: unknown,
+            target: Partial<Record<T, Set<GlideString>>>,
+        ): void => {
+            if (!Array.isArray(data)) {
+                return;
+            }
 
-        // Parse actual subscriptions
-        for (const [mode, channels] of Object.entries(actualData)) {
-            const modeKey = parseInt(mode) as T;
-            actualSubscriptions[modeKey] = new Set(channels);
-        }
+            for (const entry of data) {
+                if (
+                    !entry ||
+                    typeof entry !== "object" ||
+                    !("key" in entry) ||
+                    !("value" in entry)
+                ) {
+                    continue;
+                }
+
+                // Key might be a Buffer, convert to string
+                const modeName =
+                    entry.key instanceof Buffer
+                        ? entry.key.toString()
+                        : String(entry.key);
+                const modeKey = modeNameToNumber[modeName] as T;
+
+                if (modeKey !== undefined && Array.isArray(entry.value)) {
+                    target[modeKey] = new Set(entry.value as GlideString[]);
+                }
+            }
+        };
+
+        // Parse desired and actual subscriptions
+        parseSubscriptionData(response[1], desiredSubscriptions);
+        parseSubscriptionData(response[3], actualSubscriptions);
 
         return { desiredSubscriptions, actualSubscriptions };
     }
