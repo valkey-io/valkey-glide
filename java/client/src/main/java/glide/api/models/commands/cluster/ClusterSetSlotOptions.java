@@ -18,7 +18,9 @@ public class ClusterSetSlotOptions {
     /** The subcommand to execute for the slot. */
     private final SlotAction action;
 
-    /** The node ID (required for IMPORTING, MIGRATING, and NODE actions). */
+    /**
+     * The node ID (required for IMPORTING, MIGRATING, and NODE actions; null when action is STABLE).
+     */
     private final String nodeId;
 
     /**

@@ -3881,11 +3881,11 @@ public class GlideClusterClientTest {
                         eq(ClusterMeet), eq(new String[] {"192.168.1.100", "6379"}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterMeet(host, port) and block for result
         CompletableFuture<String> response = service.clusterMeet("192.168.1.100", 6379);
         String payload = response.get();
 
-        // verify
+        // verify: returned future is the mocked one and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -3903,11 +3903,11 @@ public class GlideClusterClientTest {
                         eq(ClusterMeet), eq(new String[] {"192.168.1.100", "6379"}), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterMeet(host, port, route) with RANDOM route
         CompletableFuture<ClusterValue<String>> response =
                 service.clusterMeet("192.168.1.100", 6379, RANDOM);
 
-        // verify
+        // verify: returned future matches mock and single value is OK
         assertEquals(testResponse, response);
         assertEquals(OK, response.get().getSingleValue());
     }
@@ -3925,11 +3925,11 @@ public class GlideClusterClientTest {
                         eq(ClusterForget), eq(new String[] {nodeId}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterForget(nodeId) and block for result
         CompletableFuture<String> response = service.clusterForget(nodeId);
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -3947,11 +3947,11 @@ public class GlideClusterClientTest {
                         eq(ClusterReplicate), eq(new String[] {nodeId}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterReplicate(nodeId) and block for result
         CompletableFuture<String> response = service.clusterReplicate(nodeId);
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -3970,10 +3970,10 @@ public class GlideClusterClientTest {
                         eq(ClusterReplicas), eq(new String[] {nodeId}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterReplicas(nodeId) and block for result
         CompletableFuture<String[]> response = service.clusterReplicas(nodeId);
 
-        // verify
+        // verify: returned replica list matches mock
         assertArrayEquals(replicas, response.get());
     }
 
@@ -3990,10 +3990,10 @@ public class GlideClusterClientTest {
                         eq(ClusterCountFailureReports), eq(new String[] {nodeId}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterCountFailureReports(nodeId) and block for result
         CompletableFuture<Long> response = service.clusterCountFailureReports(nodeId);
 
-        // verify
+        // verify: returned failure report count is 5
         assertEquals(5L, response.get());
     }
 
@@ -4008,11 +4008,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(ClusterFailover), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterFailover() with no options and block for result
         CompletableFuture<String> response = service.clusterFailover();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4029,11 +4029,11 @@ public class GlideClusterClientTest {
                         eq(ClusterFailover), eq(new String[] {"FORCE"}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterFailover(FORCE) and block for result
         CompletableFuture<String> response = service.clusterFailover(ClusterFailoverOptions.FORCE);
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4051,12 +4051,12 @@ public class GlideClusterClientTest {
                         eq(ClusterSetslot), eq(new String[] {"1234", "MIGRATING", nodeId}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterSetSlot(slot, migrating(nodeId)) and block for result
         CompletableFuture<String> response =
                 service.clusterSetSlot(1234, ClusterSetSlotOptions.migrating(nodeId));
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4072,11 +4072,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(ClusterBumpEpoch), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterBumpEpoch() and block for result
         CompletableFuture<String> response = service.clusterBumpEpoch();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is BUMPED
         assertEquals(testResponse, response);
         assertEquals("BUMPED", payload);
     }
@@ -4093,11 +4093,11 @@ public class GlideClusterClientTest {
                         eq(ClusterSetConfigEpoch), eq(new String[] {"123"}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterSetConfigEpoch(123) and block for result
         CompletableFuture<String> response = service.clusterSetConfigEpoch(123);
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4113,11 +4113,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(ClusterFlushSlots), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterFlushSlots() and block for result
         CompletableFuture<String> response = service.clusterFlushSlots();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4133,11 +4133,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(ClusterReset), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterReset() with no options and block for result
         CompletableFuture<String> response = service.clusterReset();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4154,11 +4154,11 @@ public class GlideClusterClientTest {
                         eq(ClusterReset), eq(new String[] {"SOFT"}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterReset(SOFT) and block for result
         CompletableFuture<String> response = service.clusterReset(ClusterResetOptions.SOFT);
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4174,11 +4174,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(ReadOnly), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call readonly() and block for result
         CompletableFuture<String> response = service.readonly();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4194,11 +4194,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(ReadWrite), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call readwrite() and block for result
         CompletableFuture<String> response = service.readwrite();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4214,11 +4214,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(Asking), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call asking() and block for result
         CompletableFuture<String> response = service.asking();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4234,11 +4234,11 @@ public class GlideClusterClientTest {
         when(commandManager.<String>submitNewCommand(eq(ClusterSaveConfig), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterSaveConfig() and block for result
         CompletableFuture<String> response = service.clusterSaveConfig();
         String payload = response.get();
 
-        // verify
+        // verify: returned future matches mock and payload is OK
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
@@ -4256,10 +4256,10 @@ public class GlideClusterClientTest {
                         eq(ClusterSaveConfig), eq(new String[0]), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterSaveConfig(RANDOM) and block for result
         CompletableFuture<ClusterValue<String>> response = service.clusterSaveConfig(RANDOM);
 
-        // verify
+        // verify: returned future matches mock and single value is OK
         assertEquals(testResponse, response);
         assertEquals(OK, response.get().getSingleValue());
     }
@@ -4277,10 +4277,10 @@ public class GlideClusterClientTest {
                         eq(ClusterGetKeysInSlot), eq(new String[] {"1234", "10"}), any()))
                 .thenReturn(testResponse);
 
-        // exercise
+        // exercise: call clusterGetKeysInSlot(slot, count) and block for result
         CompletableFuture<String[]> response = service.clusterGetKeysInSlot(1234, 10);
 
-        // verify
+        // verify: returned key array matches mock
         assertArrayEquals(keys, response.get());
     }
 }
