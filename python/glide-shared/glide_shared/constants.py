@@ -77,7 +77,12 @@ TJsonResponse = Union[T, List[Optional[T]]]
 #
 # For more information, see: https://redis.io/docs/data-types/json/path/ .
 TJsonUniversalResponse = Union[T, List[T]]
-TEncodable = Union[str, bytes]
+# Accepted types for command arguments.
+# All four types work with both sync and async clients. However, bytearray
+# and memoryview provide zero-copy performance benefits only in the sync
+# client. The async client converts them to bytes internally (protobuf
+# and PyO3 require bytes objects).
+TEncodable = Union[str, bytes, bytearray, memoryview]
 TFunctionListResponse = List[
     Mapping[
         bytes,
