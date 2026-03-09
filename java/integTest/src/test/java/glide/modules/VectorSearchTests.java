@@ -35,6 +35,7 @@ import glide.api.models.commands.FT.FTCreateOptions.TagField;
 import glide.api.models.commands.FT.FTCreateOptions.TextField;
 import glide.api.models.commands.FT.FTCreateOptions.VectorFieldFlat;
 import glide.api.models.commands.FT.FTCreateOptions.VectorFieldHnsw;
+import glide.api.models.commands.FT.FTInfoOptions;
 import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FlushMode;
@@ -946,6 +947,547 @@ public class VectorSearchTests {
                         () -> FT.explaincli(client, UUID.randomUUID().toString(), "*").get());
         assertInstanceOf(RequestException.class, exception.getCause());
         assertTrue(exception.getMessage().contains("Index not found"));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_1_2_sortby() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("price", new NumericField(true)),
+                                    new FieldInfo("name", new TextField()),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        client.hset(prefix + "1", createMap("price", "10", "name", "Aardvark")).get();
+        client.hset(prefix + "2", createMap("price", "20", "name", "Mango")).get();
+        client.hset(prefix + "3", createMap("price", "30", "name", "Zebra")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // SORTBY price ASC
+        FTSearchOptions options =
+                FTSearchOptions.builder().sortBy("price", FTSearchOptions.SortOrder.ASC).build();
+        Object[] result = FT.search(client, index, "@price:[1 +inf]", options).get();
+        assertEquals(3L, result[0]);
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Map<GlideString, GlideString>> docs =
+                (Map<GlideString, Map<GlideString, GlideString>>) result[1];
+        GlideString firstKey = docs.keySet().iterator().next();
+        assertEquals(gs("10"), docs.get(firstKey).get(gs("price")));
+
+        // SORTBY price DESC
+        options = FTSearchOptions.builder().sortBy("price", FTSearchOptions.SortOrder.DESC).build();
+        result = FT.search(client, index, "@price:[1 +inf]", options).get();
+        assertEquals(3L, result[0]);
+        docs = (Map<GlideString, Map<GlideString, GlideString>>) result[1];
+        // First result should have highest price (30)
+        firstKey = docs.keySet().iterator().next();
+        assertEquals(gs("30"), docs.get(firstKey).get(gs("price")));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_1_2_withsortkeys() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("price", new NumericField(true)),
+                                    new FieldInfo("name", new TextField()),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        client.hset(prefix + "1", createMap("price", "10", "name", "Aardvark")).get();
+        client.hset(prefix + "2", createMap("price", "20", "name", "Mango")).get();
+        client.hset(prefix + "3", createMap("price", "30", "name", "Zebra")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // WITHSORTKEYS — each doc value becomes [sortKey, fieldMap]
+        FTSearchOptions options =
+                FTSearchOptions.builder()
+                        .sortBy("price", FTSearchOptions.SortOrder.ASC)
+                        .withSortKeys()
+                        .build();
+        Object[] result = FT.search(client, index, "@price:[1 +inf]", options).get();
+        assertEquals(3L, result[0]);
+
+        // With WITHSORTKEYS the doc map values are Object[] { sortKey, fieldMap }
+        @SuppressWarnings("unchecked")
+        Map<GlideString, Object[]> docs = (Map<GlideString, Object[]>) result[1];
+        assertEquals(3, docs.size());
+
+        // Verify sort keys are in ascending order and field maps are accessible
+        int i = 0;
+        String[] expectedPrices = {"10", "20", "30"};
+        for (Map.Entry<GlideString, Object[]> entry : docs.entrySet()) {
+            Object[] pair = entry.getValue();
+            // pair[0] is the sort key (numeric sort keys are prefixed with #)
+            GlideString sortKey = (GlideString) pair[0];
+            assertTrue(sortKey.toString().contains(expectedPrices[i]));
+            // pair[1] is the field map
+            @SuppressWarnings("unchecked")
+            Map<GlideString, GlideString> fields = (Map<GlideString, GlideString>) pair[1];
+            assertEquals(gs(expectedPrices[i]), fields.get(gs("price")));
+            i++;
+        }
+
+        assertEquals(OK, FT.dropindex(client, index).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_1_2_text_query_flags() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("title", new TextField()),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        client.hset(prefix + "1", createMap("title", "hello world")).get();
+        client.hset(prefix + "2", createMap("title", "hello there")).get();
+        client.hset(prefix + "3", createMap("title", "goodbye world")).get();
+        client.hset(prefix + "4", createMap("title", "world hello")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // VERBATIM - no stemming
+        FTSearchOptions verbatimOptions = FTSearchOptions.builder().verbatim().build();
+        Object[] verbatimResult = FT.search(client, index, "hello", verbatimOptions).get();
+        assertEquals(3L, (Long) verbatimResult[0]); // hello world, hello there, world hello
+
+        // SLOP without INORDER
+        FTSearchOptions noInorderOptions = FTSearchOptions.builder().slop(1).build();
+        Object[] noInorderResult = FT.search(client, index, "hello world", noInorderOptions).get();
+        assertEquals(2L, (Long) noInorderResult[0]); // world hello, hello world
+
+        // SLOP with INORDER
+        FTSearchOptions inorderOptions = FTSearchOptions.builder().inorder().slop(1).build();
+        Object[] inorderResult = FT.search(client, index, "hello world", inorderOptions).get();
+        assertEquals(1L, (Long) inorderResult[0]); // hello world
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_1_2_shard_consistency() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("tag", new TagField()), new FieldInfo("score", new NumericField()),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        client.hset(prefix + "1", createMap("tag", "test", "score", "1")).get();
+        client.hset(prefix + "2", createMap("tag", "test", "score", "2")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // SOMESHARDS + INCONSISTENT
+        FTSearchOptions options =
+                FTSearchOptions.builder()
+                        .shardScope(FTSearchOptions.ShardScope.SOMESHARDS)
+                        .consistency(FTSearchOptions.ConsistencyMode.INCONSISTENT)
+                        .build();
+        Object[] result = FT.search(client, index, "@tag:{test}", options).get();
+
+        // In a healthy cluster, SOMESHARDS still returns all results.
+        // This test verifies the option is accepted; partial results only occur with unavailable
+        // shards.
+        // If it ends up being flakey, relax the equality to a GEQ check
+        assertEquals(2L, (Long) result[0]);
+
+        // ALLSHARDS + CONSISTENT (defaults)
+        options =
+                FTSearchOptions.builder()
+                        .shardScope(FTSearchOptions.ShardScope.ALLSHARDS)
+                        .consistency(FTSearchOptions.ConsistencyMode.CONSISTENT)
+                        .build();
+        result = FT.search(client, index, "@tag:{test}", options).get();
+        assertEquals(2L, (Long) result[0]);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_aggregate_1_2_query_flags() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo("score", new NumericField()),
+                                    new FieldInfo("title", new TextField()),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        client.hset(prefix + "1", createMap("score", "10", "title", "hello world")).get();
+        client.hset(prefix + "2", createMap("score", "20", "title", "hello there")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // VERBATIM - disables stemming on the query
+        FTAggregateOptions verbatimOptions = FTAggregateOptions.builder().verbatim().build();
+        Map<GlideString, Object>[] result =
+                FT.aggregate(client, index, "@score:[1 +inf]", verbatimOptions).get();
+        // Both docs match; no LOAD so each record is an empty map
+        assertEquals(2, result.length);
+        assertTrue(result[0].isEmpty());
+        assertTrue(result[1].isEmpty());
+
+        // INORDER + SLOP - proximity matching flags
+        FTAggregateOptions inorderOptions = FTAggregateOptions.builder().inorder().slop(1).build();
+        result = FT.aggregate(client, index, "@score:[1 +inf]", inorderOptions).get();
+        assertEquals(2, result.length);
+        assertTrue(result[0].isEmpty());
+        assertTrue(result[1].isEmpty());
+
+        // DIALECT
+        FTAggregateOptions dialectOptions = FTAggregateOptions.builder().dialect(2).build();
+        result = FT.aggregate(client, index, "@score:[1 +inf]", dialectOptions).get();
+        assertEquals(2, result.length);
+        assertTrue(result[0].isEmpty());
+        assertTrue(result[1].isEmpty());
+
+        // LOAD
+        FTAggregateOptions loadOptions = FTAggregateOptions.builder().loadAll().build();
+        result = FT.aggregate(client, index, "@score:[20 +inf]", loadOptions).get();
+        assertEquals(1, result.length);
+        assertFalse(result[0].isEmpty());
+        assertEquals(gs("hello there"), result[0].get(gs("title")));
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_create_1_2_index_options() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        // Test SCORE, LANGUAGE, SKIPINITIALSCAN are accepted by the server
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .score(1.0)
+                                        .language("english")
+                                        .skipInitialScan(true)
+                                        .build())
+                        .get());
+        assertEquals(OK, FT.dropindex(client, index).get());
+
+        // Test MINSTEMSIZE
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .minStemSize(6)
+                                        .build())
+                        .get());
+        client.hset(prefix + "1", createMap("title", "running")).get();
+        client.hset(prefix + "2", createMap("title", "plays")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        Object[] result = FT.search(client, index, "run").get();
+        assertEquals(1L, (Long) result[0]);
+
+        result = FT.search(client, index, "play").get();
+        assertEquals(0L, (Long) result[0]);
+        assertEquals(OK, FT.dropindex(client, index).get());
+
+        // Test NOSTOPWORDS
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .noStopWords(true)
+                                        .build())
+                        .get());
+        client.hset(prefix + "1", createMap("title", "the quick fox")).get();
+        assertEquals(1L, (Long) FT.search(client, index, "the").get()[0]);
+        assertEquals(OK, FT.dropindex(client, index).get());
+
+        // Test STOPWORDS
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .stopWords(new String[] {"fox", "an"})
+                                        .build())
+                        .get());
+        client.hset(prefix + "1", createMap("title", "the quick fox")).get();
+        assertEquals(1L, (Long) FT.search(client, index, "the").get()[0]);
+        assertEquals(1L, (Long) FT.search(client, index, "quick").get()[0]);
+
+        // RequestException: Filter epression 'fox' invalid query.
+        assertThrows(ExecutionException.class, () -> FT.search(client, index, "fox").get());
+        assertEquals(OK, FT.dropindex(client, index).get());
+
+        // Test NOOFFSETS
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .noOffsets(true)
+                                        .build())
+                        .get());
+        client.hset(prefix + "1", createMap("title", "hello")).get();
+        assertEquals(
+                1L, (Long) FT.search(client, index, "hello", FTSearchOptions.builder().build()).get()[0]);
+        assertThrows(
+                ExecutionException.class,
+                () -> FT.search(client, index, "hello", FTSearchOptions.builder().slop(1).build()).get());
+        assertEquals(OK, FT.dropindex(client, index).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_create_1_2_field_options() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        // TextField with nostem, weight, sortable
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo(
+                                            "title",
+                                            new TextField(
+                                                    /* noStem= */ true,
+                                                    /* weight= */ 1.0,
+                                                    /* withSuffixTrie= */ false,
+                                                    /* noSuffixTrie= */ false,
+                                                    /* sortable= */ true)),
+                                    new FieldInfo("price", new NumericField(/* sortable= */ true)),
+                                    new FieldInfo("tag", new TagField(',', false, /* sortable= */ true)),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        client.hset(prefix + "1", createMap("title", "hello", "price", "10", "tag", "a,b")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // Verify index works with sortable fields
+        FTSearchOptions options =
+                FTSearchOptions.builder().sortBy("price", FTSearchOptions.SortOrder.ASC).build();
+        Object[] result = FT.search(client, index, "@price:[1 +inf]", options).get();
+        assertEquals(1L, (Long) result[0]);
+
+        // noStemming
+        result = FT.search(client, index, "hello").get();
+        assertEquals(1L, (Long) result[0]);
+        result = FT.search(client, index, "hellos").get();
+        assertEquals(0L, (Long) result[0]);
+
+        assertEquals(OK, FT.dropindex(client, index).get());
+
+        // TextField with withSuffixTrie
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo(
+                                            "title",
+                                            new TextField(
+                                                    /* noStem= */ false,
+                                                    /* weight= */ null,
+                                                    /* withSuffixTrie= */ true,
+                                                    /* noSuffixTrie= */ false,
+                                                    /* sortable= */ false)),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+        client.hset(prefix + "1", createMap("title", "hello world")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // Suffix query - should work with suffix trie
+        result = FT.search(client, index, "*orld").get();
+        assertEquals(1L, (Long) result[0]);
+        assertEquals(OK, FT.dropindex(client, index).get());
+
+        // TextField with NOSUFFIXTRIE
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {
+                                    new FieldInfo(
+                                            "title",
+                                            new TextField(
+                                                    /* noStem= */ false,
+                                                    /* weight= */ null,
+                                                    /* withSuffixTrie= */ false,
+                                                    /* noSuffixTrie= */ true,
+                                                    /* sortable= */ false)),
+                                },
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+        client.hset(prefix + "1", createMap("title", "hello world")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // Suffix query - should NOT work with NOSUFFIXTRIE
+        assertThrows(ExecutionException.class, () -> FT.search(client, index, "*orld").get());
+
+        assertEquals(OK, FT.dropindex(client, index).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_info_1_2_options() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        client.hset(prefix + "1", createMap("title", "hello world")).get();
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // LOCAL scope — returns detailed per-node info with fields, num_docs, etc.
+        Map<String, Object> localInfo =
+                FT.info(client, index, new FTInfoOptions(FTInfoOptions.InfoScope.LOCAL)).get();
+        assertEquals(gs(index), localInfo.get("index_name"));
+        assertTrue(localInfo.containsKey("num_docs"));
+
+        // LOCAL with ALLSHARDS + CONSISTENT — smoke test that these flags are accepted
+        Map<String, Object> localWithFlags =
+                FT.info(
+                                client,
+                                index,
+                                new FTInfoOptions(
+                                        FTInfoOptions.InfoScope.LOCAL,
+                                        FTInfoOptions.ShardScope.ALLSHARDS,
+                                        FTInfoOptions.ConsistencyMode.CONSISTENT))
+                        .get();
+        assertEquals(gs(index), localWithFlags.get("index_name"));
+
+        // LOCAL with SOMESHARDS + INCONSISTENT — smoke test
+        Map<String, Object> localWithAltFlags =
+                FT.info(
+                                client,
+                                index,
+                                new FTInfoOptions(
+                                        FTInfoOptions.InfoScope.LOCAL,
+                                        FTInfoOptions.ShardScope.SOMESHARDS,
+                                        FTInfoOptions.ConsistencyMode.INCONSISTENT))
+                        .get();
+        assertEquals(gs(index), localWithAltFlags.get("index_name"));
+
+        // PRIMARY and CLUSTER scopes require the coordinator to be enabled
+        // (use-coordinator module arg). If available, verify the response shape;
+        // otherwise, verify the server rejects with the expected error.
+        try {
+            Map<String, Object> primaryInfo =
+                    FT.info(client, index, new FTInfoOptions(FTInfoOptions.InfoScope.PRIMARY)).get();
+            assertEquals(gs(index), primaryInfo.get("index_name"));
+            assertEquals(gs("PRIMARY"), primaryInfo.get("mode"));
+        } catch (ExecutionException e) {
+            assertInstanceOf(RequestException.class, e.getCause());
+            assertTrue(e.getMessage().contains("PRIMARY option is not valid"));
+        }
+
+        try {
+            Map<String, Object> clusterInfo =
+                    FT.info(client, index, new FTInfoOptions(FTInfoOptions.InfoScope.CLUSTER)).get();
+            assertEquals(gs(index), clusterInfo.get("index_name"));
+            assertEquals(gs("CLUSTER"), clusterInfo.get("mode"));
+        } catch (ExecutionException e) {
+            assertInstanceOf(RequestException.class, e.getCause());
+            assertTrue(e.getMessage().contains("CLUSTER option is not valid"));
+        }
+
+        assertEquals(OK, FT.dropindex(client, index).get());
     }
 
     private void createIndexHelper(String indexName) throws ExecutionException, InterruptedException {

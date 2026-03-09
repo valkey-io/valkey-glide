@@ -20,7 +20,10 @@ from glide_shared.commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
 )
 from glide_shared.commands.server_modules.ft_options.ft_search_options import (
+    ConsistencyMode,
     FtSearchOptions,
+    InfoScope,
+    ShardScope,
 )
 from glide_shared.constants import (
     TOK,
@@ -113,7 +116,7 @@ def search(
     client: TGlideClient,
     index_name: TEncodable,
     query: TEncodable,
-    options: Optional[FtSearchOptions],
+    options: Optional[FtSearchOptions] = None,
 ) -> FtSearchResponse:
     """
     Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed
@@ -221,7 +224,13 @@ def aliasupdate(client: TGlideClient, alias: TEncodable, index_name: TEncodable)
     return cast(TOK, client.custom_command(args))
 
 
-def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
+def info(
+    client: TGlideClient,
+    index_name: TEncodable,
+    scope: Optional["InfoScope"] = None,
+    shard_scope: Optional["ShardScope"] = None,
+    consistency: Optional["ConsistencyMode"] = None,
+) -> FtInfoResponse:
     """
     Returns information about a given index.
 
@@ -290,6 +299,12 @@ def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
             ]
     """
     args: List[TEncodable] = [CommandNames.FT_INFO, index_name]
+    if scope is not None:
+        args.append(scope.value)
+    if shard_scope is not None:
+        args.append(shard_scope.value)
+    if consistency is not None:
+        args.append(consistency.value)
     return cast(FtInfoResponse, client.custom_command(args))
 
 
@@ -343,7 +358,7 @@ def aggregate(
     client: TGlideClient,
     index_name: TEncodable,
     query: TEncodable,
-    options: Optional[FtAggregateOptions],
+    options: Optional[FtAggregateOptions] = None,
 ) -> FtAggregateResponse:
     """
     A superset of the FT.SEARCH command, it allows substantial additional processing of the keys selected by the query

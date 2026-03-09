@@ -28,6 +28,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     ArrayOfDoubleOrNull,
     FTAggregateReturnType,
     FTSearchReturnType,
+    FTSearchWithSortKeysReturnType,
     FTProfileReturnType(&'a Option<ExpectedReturnType<'a>>),
     FTInfoReturnType,
     Lolwut,
@@ -1023,6 +1024,113 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into())
         },
+        ExpectedReturnType::FTSearchWithSortKeysReturnType => match value {
+            /*
+            WITHSORTKEYS response (with field content):
+                1) (integer) 2
+                2) "key1"
+                3) "sortval1"
+                4) 1) "field1"
+                   2) "value1"
+                5) "key2"
+                6) "sortval2"
+                7) 1) "field2"
+                   2) "value2"
+
+            Converting response to:
+                1) (integer) 2
+                2) 1# "key1" =>
+                      1) "sortval1"
+                      2) 1# "field1" => "value1"
+                   2# "key2" =>
+                      1) "sortval2"
+                      2) 1# "field2" => "value2"
+
+            WITHSORTKEYS + NOCONTENT response:
+                1) (integer) 2
+                2) "key1"
+                3) "sortval1"
+                4) "key2"
+                5) (nil)
+
+            Converting to:
+                1) (integer) 2
+                2) 1# "key1" =>
+                      1) "sortval1"
+                      2) (empty map)
+                   2# "key2" =>
+                      1) (nil)
+                      2) (empty map)
+
+            Response may contain only 1 element (COUNT option), no conversion in that case.
+            */
+            Value::Array(ref array) if array.len() == 1 => Ok(value),
+            Value::Array(mut array) => {
+                let count = array.remove(0);
+                if array.is_empty() {
+                    // Empty result set — return count with an empty map.
+                    return Ok(Value::Array(vec![count, Value::Map(vec![])]));
+                }
+
+                // Determine if this is a NOCONTENT response (no field arrays).
+                // With WITHSORTKEYS + NOCONTENT, the layout is:
+                //   key1, sortkey1, key2, sortkey2, ...
+                // All elements are strings/nil (no Array elements).
+                let has_field_arrays = array.iter().any(|v| matches!(v, Value::Array(_)));
+
+                let mut pairs: Vec<(Value, Value)> = Vec::new();
+                let mut iter = array.into_iter();
+
+                if has_field_arrays {
+                    // Normal WITHSORTKEYS: triplets of (key, sortkey, fields_array)
+                    while let Some(key) = iter.next() {
+                        let Some(sort_key) = iter.next() else {
+                            return Err((
+                                ErrorKind::TypeError,
+                                "WITHSORTKEYS response: missing sort key after document key",
+                            )
+                                .into());
+                        };
+                        let Some(fields) = iter.next() else {
+                            return Err((
+                                ErrorKind::TypeError,
+                                "WITHSORTKEYS response: missing fields array after sort key",
+                            )
+                                .into());
+                        };
+                        // Convert the flat field array into a map of field name → value.
+                        let field_map = convert_to_expected_type(
+                            fields,
+                            Some(ExpectedReturnType::Map {
+                                key_type: &Some(ExpectedReturnType::BulkString),
+                                value_type: &Some(ExpectedReturnType::BulkString),
+                            }),
+                        )?;
+                        pairs.push((key, Value::Array(vec![sort_key, field_map])));
+                    }
+                } else {
+                    // NOCONTENT + WITHSORTKEYS: pairs of (key, sortkey)
+                    while let Some(key) = iter.next() {
+                        let Some(sort_key) = iter.next() else {
+                            return Err((
+                                ErrorKind::TypeError,
+                                "WITHSORTKEYS NOCONTENT response: missing sort key after document key",
+                            )
+                                .into());
+                        };
+                        pairs.push((key, Value::Array(vec![sort_key, Value::Map(vec![])])));
+                    }
+                }
+
+                Ok(Value::Array(vec![count, Value::Map(pairs)]))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for FT.SEARCH WITHSORTKEYS",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into())
+        },
         ExpectedReturnType::FTInfoReturnType => match value {
             /*
             Example of the response
@@ -1560,11 +1668,21 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             value_type: &None,
         }),
         b"FT.AGGREGATE" => Some(ExpectedReturnType::FTAggregateReturnType),
-        b"FT.SEARCH" => Some(ExpectedReturnType::FTSearchReturnType),
+        b"FT.SEARCH" => {
+            if cmd.position(b"WITHSORTKEYS").is_some() {
+                Some(ExpectedReturnType::FTSearchWithSortKeysReturnType)
+            } else {
+                Some(ExpectedReturnType::FTSearchReturnType)
+            }
+        }
         // TODO replace with tuple
         b"FT.PROFILE" => Some(ExpectedReturnType::FTProfileReturnType(
             if cmd.arg_idx(2).is_some_and(|a| a == b"SEARCH") {
-                &Some(ExpectedReturnType::FTSearchReturnType)
+                if cmd.position(b"WITHSORTKEYS").is_some() {
+                    &Some(ExpectedReturnType::FTSearchWithSortKeysReturnType)
+                } else {
+                    &Some(ExpectedReturnType::FTSearchReturnType)
+                }
             } else {
                 &Some(ExpectedReturnType::FTAggregateReturnType)
             },
@@ -3463,5 +3581,173 @@ mod tests {
                 value_type: &None,
             })
         ));
+    }
+
+    #[test]
+    fn convert_ft_search_withsortkeys() {
+        // expected_type_for_cmd: FT.SEARCH without WITHSORTKEYS → FTSearchReturnType
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("FT.SEARCH")
+                    .arg("idx")
+                    .arg("*")
+                    .arg("SORTBY")
+                    .arg("price")
+                    .arg("ASC")
+            ),
+            Some(ExpectedReturnType::FTSearchReturnType)
+        ));
+
+        // expected_type_for_cmd: FT.SEARCH with WITHSORTKEYS → FTSearchWithSortKeysReturnType
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("FT.SEARCH")
+                    .arg("idx")
+                    .arg("*")
+                    .arg("SORTBY")
+                    .arg("price")
+                    .arg("ASC")
+                    .arg("WITHSORTKEYS")
+            ),
+            Some(ExpectedReturnType::FTSearchWithSortKeysReturnType)
+        ));
+
+        // expected_type_for_cmd: FT.PROFILE SEARCH with WITHSORTKEYS
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("FT.PROFILE")
+                    .arg("idx")
+                    .arg("SEARCH")
+                    .arg("QUERY")
+                    .arg("*")
+                    .arg("SORTBY")
+                    .arg("price")
+                    .arg("WITHSORTKEYS")
+            ),
+            Some(ExpectedReturnType::FTProfileReturnType(&Some(
+                ExpectedReturnType::FTSearchWithSortKeysReturnType
+            )))
+        ));
+
+        // Normal WITHSORTKEYS response: triplets of (key, sortkey, fields_array)
+        //   1) (integer) 2
+        //   2) "key1"
+        //   3) "sortval1"
+        //   4) ["field1", "value1"]
+        //   5) "key2"
+        //   6) "sortval2"
+        //   7) ["field2", "value2"]
+        let response = Value::Array(vec![
+            Value::Int(2),
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"sortval1".to_vec()),
+            Value::Array(vec![
+                Value::BulkString(b"field1".to_vec()),
+                Value::BulkString(b"value1".to_vec()),
+            ]),
+            Value::BulkString(b"key2".to_vec()),
+            Value::BulkString(b"sortval2".to_vec()),
+            Value::Array(vec![
+                Value::BulkString(b"field2".to_vec()),
+                Value::BulkString(b"value2".to_vec()),
+            ]),
+        ]);
+
+        let converted = convert_to_expected_type(
+            response,
+            Some(ExpectedReturnType::FTSearchWithSortKeysReturnType),
+        )
+        .unwrap();
+
+        assert_eq!(
+            converted,
+            Value::Array(vec![
+                Value::Int(2),
+                Value::Map(vec![
+                    (
+                        Value::BulkString(b"key1".to_vec()),
+                        Value::Array(vec![
+                            Value::BulkString(b"sortval1".to_vec()),
+                            Value::Map(vec![(
+                                Value::BulkString(b"field1".to_vec()),
+                                Value::BulkString(b"value1".to_vec()),
+                            )]),
+                        ]),
+                    ),
+                    (
+                        Value::BulkString(b"key2".to_vec()),
+                        Value::Array(vec![
+                            Value::BulkString(b"sortval2".to_vec()),
+                            Value::Map(vec![(
+                                Value::BulkString(b"field2".to_vec()),
+                                Value::BulkString(b"value2".to_vec()),
+                            )]),
+                        ]),
+                    ),
+                ]),
+            ])
+        );
+
+        // NOCONTENT + WITHSORTKEYS response: pairs of (key, sortkey)
+        //   1) (integer) 2
+        //   2) "key1"
+        //   3) "sortval1"
+        //   4) "key2"
+        //   5) (nil)
+        let nocontent_response = Value::Array(vec![
+            Value::Int(2),
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"sortval1".to_vec()),
+            Value::BulkString(b"key2".to_vec()),
+            Value::Nil,
+        ]);
+
+        let converted_nocontent = convert_to_expected_type(
+            nocontent_response,
+            Some(ExpectedReturnType::FTSearchWithSortKeysReturnType),
+        )
+        .unwrap();
+
+        assert_eq!(
+            converted_nocontent,
+            Value::Array(vec![
+                Value::Int(2),
+                Value::Map(vec![
+                    (
+                        Value::BulkString(b"key1".to_vec()),
+                        Value::Array(vec![
+                            Value::BulkString(b"sortval1".to_vec()),
+                            Value::Map(vec![]),
+                        ]),
+                    ),
+                    (
+                        Value::BulkString(b"key2".to_vec()),
+                        Value::Array(vec![Value::Nil, Value::Map(vec![])]),
+                    ),
+                ]),
+            ])
+        );
+
+        // Empty result set: just count
+        let empty_response = Value::Array(vec![Value::Int(0)]);
+
+        let converted_empty = convert_to_expected_type(
+            empty_response,
+            Some(ExpectedReturnType::FTSearchWithSortKeysReturnType),
+        )
+        .unwrap();
+
+        assert_eq!(converted_empty, Value::Array(vec![Value::Int(0)]));
+
+        // COUNT-only response: single element array
+        let count_response = Value::Array(vec![Value::Int(5)]);
+
+        let converted_count = convert_to_expected_type(
+            count_response,
+            Some(ExpectedReturnType::FTSearchWithSortKeysReturnType),
+        )
+        .unwrap();
+
+        assert_eq!(converted_count, Value::Array(vec![Value::Int(5)]));
     }
 }

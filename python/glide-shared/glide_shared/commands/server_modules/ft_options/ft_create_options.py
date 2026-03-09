@@ -91,6 +91,7 @@ class Field(ABC):
         name: TEncodable,
         type: FieldType,
         alias: Optional[TEncodable] = None,
+        sortable: bool = False,
     ):
         """
         Initialize a new field instance.
@@ -99,10 +100,12 @@ class Field(ABC):
             name (TEncodable): The name of the field.
             type (FieldType): The type of the field.
             alias (Optional[TEncodable]): An alias for the field.
+            sortable (bool): If set, the field value can be used for sorting. Applies to TEXT, TAG, and NUMERIC fields.
         """
         self.name = name
         self.type = type
         self.alias = alias
+        self.sortable = sortable
 
     @abstractmethod
     def to_args(self) -> List[TEncodable]:
@@ -124,18 +127,49 @@ class TextField(Field):
     Field contains any blob of data.
     """
 
-    def __init__(self, name: TEncodable, alias: Optional[TEncodable] = None):
+    def __init__(
+        self,
+        name: TEncodable,
+        alias: Optional[TEncodable] = None,
+        nostem: bool = False,
+        weight: Optional[float] = None,
+        withsuffixtrie: bool = False,
+        nosuffixtrie: bool = False,
+        sortable: bool = False,
+    ):
         """
         Initialize a new TextField instance.
 
         Args:
             name (TEncodable): The name of the text field.
             alias (Optional[TEncodable]): An alias for the field.
+            nostem (bool): If set, disables stemming when indexing the field.
+            weight (Optional[float]): Declares the importance of this field when calculating result accuracy.
+                Default is 1.
+            withsuffixtrie (bool): If set, keeps a suffix trie for the field to optimize contains and suffix queries.
+                Mutually exclusive with ``nosuffixtrie``.
+            nosuffixtrie (bool): If set, disables the suffix trie for the field.
+                Mutually exclusive with ``withsuffixtrie``.
+            sortable (bool): If set, the field value can be used for sorting.
         """
-        super().__init__(name, FieldType.TEXT, alias)
+        super().__init__(name, FieldType.TEXT, alias, sortable)
+        self.nostem = nostem
+        self.weight = weight
+        self.withsuffixtrie = withsuffixtrie
+        self.nosuffixtrie = nosuffixtrie
 
     def to_args(self) -> List[TEncodable]:
         args = super().to_args()
+        if self.nostem:
+            args.append(FtCreateKeywords.NOSTEM)
+        if self.weight is not None:
+            args.extend([FtCreateKeywords.WEIGHT, str(self.weight)])
+        if self.withsuffixtrie:
+            args.append(FtCreateKeywords.WITHSUFFIXTRIE)
+        elif self.nosuffixtrie:
+            args.append(FtCreateKeywords.NOSUFFIXTRIE)
+        if self.sortable:
+            args.append(FtCreateKeywords.SORTABLE)
         return args
 
 
@@ -154,6 +188,7 @@ class TagField(Field):
         alias: Optional[TEncodable] = None,
         separator: Optional[TEncodable] = None,
         case_sensitive: bool = False,
+        sortable: bool = False,
     ):
         """
         Initialize a new TagField instance.
@@ -165,8 +200,9 @@ class TagField(Field):
                 single character.
             case_sensitive (bool): Preserve the original letter cases of tags. If set to False, characters are converted to
                 lowercase by default.
+            sortable (bool): If set, the field value can be used for sorting.
         """
-        super().__init__(name, FieldType.TAG, alias)
+        super().__init__(name, FieldType.TAG, alias, sortable)
         self.separator = separator
         self.case_sensitive = case_sensitive
 
@@ -176,6 +212,8 @@ class TagField(Field):
             args.extend([FtCreateKeywords.SEPARATOR, self.separator])
         if self.case_sensitive:
             args.append(FtCreateKeywords.CASESENSITIVE)
+        if self.sortable:
+            args.append(FtCreateKeywords.SORTABLE)
         return args
 
 
@@ -184,18 +222,26 @@ class NumericField(Field):
     Field contains a number.
     """
 
-    def __init__(self, name: TEncodable, alias: Optional[TEncodable] = None):
+    def __init__(
+        self,
+        name: TEncodable,
+        alias: Optional[TEncodable] = None,
+        sortable: bool = False,
+    ):
         """
         Initialize a new NumericField instance.
 
         Args:
             name (TEncodable): The name of the numeric field.
             alias (Optional[TEncodable]): An alias for the field.
+            sortable (bool): If set, the field value can be used for sorting.
         """
-        super().__init__(name, FieldType.NUMERIC, alias)
+        super().__init__(name, FieldType.NUMERIC, alias, sortable)
 
     def to_args(self) -> List[TEncodable]:
         args = super().to_args()
+        if self.sortable:
+            args.append(FtCreateKeywords.SORTABLE)
         return args
 
 
@@ -342,6 +388,7 @@ class VectorField(Field):
         algorithm: VectorAlgorithm,
         attributes: VectorFieldAttributes,
         alias: Optional[TEncodable] = None,
+        sortable: bool = False,
     ):
         """
         Initialize a new VectorField instance.
@@ -352,8 +399,10 @@ class VectorField(Field):
             alias (Optional[TEncodable]): An alias for the field.
             attributes (VectorFieldAttributes): Additional attributes to be passed with the vector field after the
                 algorithm name.
+            sortable (bool): If set, the SORTABLE parameter is emitted. Accepted by the server for
+                compatibility but has no effect on vector fields.
         """
-        super().__init__(name, FieldType.VECTOR, alias)
+        super().__init__(name, FieldType.VECTOR, alias, sortable)
         self.algorithm = algorithm
         self.attributes = attributes
 
@@ -364,6 +413,8 @@ class VectorField(Field):
             attribute_list = self.attributes.to_args()
             args.append(str(len(attribute_list)))
             args.extend(attribute_list)
+        if self.sortable:
+            args.append(FtCreateKeywords.SORTABLE)
         return args
 
 
@@ -392,16 +443,66 @@ class FtCreateOptions:
         self,
         data_type: Optional[DataType] = None,
         prefixes: Optional[List[TEncodable]] = None,
+        score: Optional[float] = None,
+        language: Optional[TEncodable] = None,
+        skipinitialscan: bool = False,
+        minstemsize: Optional[int] = None,
+        withoffsets: bool = False,
+        nooffsets: bool = False,
+        nostopwords: bool = False,
+        stopwords: Optional[List[TEncodable]] = None,
+        punctuation: Optional[TEncodable] = None,
     ):
         """
         Initialize the FT.CREATE optional fields.
 
         Args:
-            data_type (Optional[DataType]): The index data type. If not defined a `HASH` index is created.
+            data_type (Optional[DataType]): The index data type. If not defined a ``HASH`` index is created.
             prefixes (Optional[List[TEncodable]]): A list of prefixes of index definitions.
+            score (Optional[float]): Default score for documents in the index. Default is 1.0.
+            language (Optional[TEncodable]): Default language for documents in the index.
+            skipinitialscan (bool): If set, does not scan and index existing documents on index creation.
+            minstemsize (Optional[int]): Minimum word length to stem. Words shorter than this are not stemmed.
+            withoffsets (bool): If set, stores term offsets for document fields. Mutually exclusive with ``nooffsets``.
+            nooffsets (bool): If set, does not store term offsets. Mutually exclusive with ``withoffsets``.
+            nostopwords (bool): If set, disables stop-word filtering. Mutually exclusive with ``stopwords``.
+            stopwords (Optional[List[TEncodable]]): Custom list of stop words. Mutually exclusive with ``nostopwords``.
+            punctuation (Optional[TEncodable]): Custom punctuation characters to use during tokenization.
         """
         self.data_type = data_type
         self.prefixes = prefixes
+        self.score = score
+        self.language = language
+        self.skipinitialscan = skipinitialscan
+        self.minstemsize = minstemsize
+        self.withoffsets = withoffsets
+        self.nooffsets = nooffsets
+        self.nostopwords = nostopwords
+        self.stopwords = stopwords
+        self.punctuation = punctuation
+
+    def _validate_options(self) -> None:
+        """Validate mutually exclusive options."""
+        if self.withoffsets and self.nooffsets:
+            raise ValueError("withoffsets and nooffsets are mutually exclusive.")
+        if self.nostopwords and self.stopwords is not None:
+            raise ValueError("nostopwords and stopwords are mutually exclusive.")
+
+    def _append_offset_args(self, args: List[TEncodable]) -> None:
+        """Append offset-related arguments."""
+        if self.withoffsets:
+            args.append(FtCreateKeywords.WITHOFFSETS)
+        elif self.nooffsets:
+            args.append(FtCreateKeywords.NOOFFSETS)
+
+    def _append_stopword_args(self, args: List[TEncodable]) -> None:
+        """Append stopword-related arguments."""
+        if self.nostopwords:
+            args.append(FtCreateKeywords.NOSTOPWORDS)
+        elif self.stopwords is not None:
+            args.append(FtCreateKeywords.STOPWORDS)
+            args.append(str(len(self.stopwords)))
+            args.extend(self.stopwords)
 
     def to_args(self) -> List[TEncodable]:
         """
@@ -409,15 +510,26 @@ class FtCreateOptions:
 
         Returns:
             List[TEncodable]:
-                List of FT.CREATE optional agruments.
+                List of FT.CREATE optional arguments.
         """
+        self._validate_options()
         args: List[TEncodable] = []
         if self.data_type:
-            args.append(FtCreateKeywords.ON)
-            args.append(self.data_type.value)
+            args.extend([FtCreateKeywords.ON, self.data_type.value])
         if self.prefixes:
             args.append(FtCreateKeywords.PREFIX)
             args.append(str(len(self.prefixes)))
-            for prefix in self.prefixes:
-                args.append(prefix)
+            args.extend(self.prefixes)
+        if self.score is not None:
+            args.extend([FtCreateKeywords.SCORE, str(self.score)])
+        if self.language is not None:
+            args.extend([FtCreateKeywords.LANGUAGE, self.language])
+        if self.skipinitialscan:
+            args.append(FtCreateKeywords.SKIPINITIALSCAN)
+        if self.minstemsize is not None:
+            args.extend([FtCreateKeywords.MINSTEMSIZE, str(self.minstemsize)])
+        self._append_offset_args(args)
+        self._append_stopword_args(args)
+        if self.punctuation is not None:
+            args.extend([FtCreateKeywords.PUNCTUATION, self.punctuation])
         return args
