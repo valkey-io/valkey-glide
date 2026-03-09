@@ -7057,13 +7057,25 @@ describe("PubSub", () => {
                     statsAfterFirst["subscription_last_sync_timestamp"] || "0",
                 );
 
-                // Timestamp should increase after subscription
-                expect(timestampAfterFirst).toBeGreaterThan(initialTimestamp);
+                // Timestamp should be non-zero after successful subscription
+                expect(timestampAfterFirst).toBeGreaterThan(0);
 
-                // Verify the timestamp is greater than or equal to when we started the subscription
+                // The timestamp should be at least as recent as when we started the subscription.
+                // This verifies that the sync timestamp was updated during our subscription process.
+                // Note: We use >= because the timestamp might have been set during the first subscribe
+                // call, which happened after timeBeforeFirstSub was recorded.
                 expect(timestampAfterFirst).toBeGreaterThanOrEqual(
                     timeBeforeFirstSub,
                 );
+
+                // If the initial timestamp was 0 (no previous sync), verify it increased
+                // If the initial timestamp was non-zero (from previous test), the >= check above
+                // is sufficient to verify the timestamp is current
+                if (initialTimestamp === 0) {
+                    expect(timestampAfterFirst).toBeGreaterThan(
+                        initialTimestamp,
+                    );
+                }
 
                 // Verify subscription works by publishing and receiving a message
                 await publishingClient.publish(message, channel1);
