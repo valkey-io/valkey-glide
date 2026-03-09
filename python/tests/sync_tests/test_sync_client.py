@@ -507,6 +507,68 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer(self, glide_sync_client: TGlideClient):
+        """Test get with buffer writes value directly into caller's buffer."""
+        key = get_random_string(10)
+        data = os.urandom(4096)
+        assert glide_sync_client.set(key, data) == OK
+
+        buf = bytearray(4096)
+        n = glide_sync_client.get(key, buffer=memoryview(buf))
+        assert n == b"4096"
+        assert buf == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_nonexistent_key(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test get with buffer returns None for missing key."""
+        key = get_random_string(10)
+        buf = bytearray(64)
+        n = glide_sync_client.get(key, buffer=memoryview(buf))
+        assert n is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_larger_buffer(self, glide_sync_client: TGlideClient):
+        """Test get with buffer when buffer is larger than value."""
+        key = get_random_string(10)
+        data = os.urandom(100)
+        assert glide_sync_client.set(key, data) == OK
+
+        buf = bytearray(4096)
+        n = glide_sync_client.get(key, buffer=memoryview(buf))
+        assert n == b"100"
+        assert buf[:100] == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_readonly_raises(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test get with buffer rejects read-only buffer."""
+        key = get_random_string(10)
+        readonly_buf = memoryview(b"\x00" * 64)
+        with pytest.raises(TypeError):
+            glide_sync_client.get(key, buffer=readonly_buf)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_too_small_raises(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test get with buffer raises when buffer is smaller than value."""
+        key = get_random_string(10)
+        data = os.urandom(256)
+        assert glide_sync_client.set(key, data) == OK
+
+        small_buf = bytearray(64)
+        with pytest.raises(RequestError, match="exceeds buffer capacity"):
+            glide_sync_client.get(key, buffer=memoryview(small_buf))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_set_get_with_bytearray_and_memoryview(
         self, glide_sync_client: TGlideClient
     ):

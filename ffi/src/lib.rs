@@ -212,6 +212,11 @@ pub enum ResponseType {
     Error = 9,
 }
 
+/// A Send-safe wrapper around a raw buffer pointer and length.
+/// The caller guarantees the buffer remains valid for the duration of the FFI call.
+struct ResponseBuffer(*mut u8, usize);
+unsafe impl Send for ResponseBuffer {}
+
 /// Success callback that is called when a command succeeds.
 ///
 /// The success callback needs to copy the given string synchronously, since it will be dropped by Rust once the callback returns. The callback should be offloaded to a separate thread in order not to exhaust the client's thread pool.
@@ -437,6 +442,18 @@ impl ClientAdapter {
     where
         Fut: Future<Output = RedisResult<Value>> + Send + 'static,
     {
+        self.execute_request_with_buffer(request_id, request_future, None)
+    }
+
+    fn execute_request_with_buffer<Fut>(
+        &self,
+        request_id: usize,
+        request_future: Fut,
+        response_buf: Option<ResponseBuffer>,
+    ) -> *mut CommandResult
+    where
+        Fut: Future<Output = RedisResult<Value>> + Send + 'static,
+    {
         match self.core.client_type {
             ClientType::AsyncClient {
                 success_callback,
@@ -450,6 +467,7 @@ impl ClientAdapter {
                         Some(success_callback),
                         Some(failure_callback),
                         request_id,
+                        response_buf,
                     );
                 });
                 std::ptr::null_mut()
@@ -457,7 +475,7 @@ impl ClientAdapter {
             ClientType::SyncClient => {
                 // Block on the request for sync client
                 let result = self.runtime.block_on(request_future);
-                Self::handle_result(result, None, None, request_id)
+                Self::handle_result(result, None, None, request_id, response_buf)
             }
         }
     }
@@ -473,33 +491,39 @@ impl ClientAdapter {
         success_callback: Option<SuccessCallback>,
         failure_callback: Option<FailureCallback>,
         request_id: usize,
+        response_buf: Option<ResponseBuffer>,
     ) -> *mut CommandResult {
         match result {
-            Ok(value) => match valkey_value_to_command_response(value) {
-                Ok(command_response) => {
-                    if let Some(success_callback) = success_callback {
-                        unsafe {
-                            (success_callback)(
-                                request_id,
-                                Box::into_raw(Box::new(command_response)),
-                            );
+            Ok(value) => {
+                let buf = response_buf.map(|rb| (rb.0, rb.1));
+                match valkey_value_to_command_response(value, buf) {
+                    Ok(command_response) => {
+                        if let Some(success_callback) = success_callback {
+                            unsafe {
+                                (success_callback)(
+                                    request_id,
+                                    Box::into_raw(Box::new(command_response)),
+                                );
+                            }
+                        } else {
+                            return Box::into_raw(Box::new(CommandResult {
+                                response: Box::into_raw(Box::new(command_response)),
+                                command_error: std::ptr::null_mut(),
+                            }));
                         }
-                    } else {
-                        return Box::into_raw(Box::new(CommandResult {
-                            response: Box::into_raw(Box::new(command_response)),
-                            command_error: std::ptr::null_mut(),
-                        }));
+                    }
+                    Err(err) => {
+                        if let Some(failure_callback) = failure_callback {
+                            unsafe {
+                                Self::send_async_redis_error(failure_callback, err, request_id)
+                            };
+                        } else {
+                            eprintln!("Error converting value to CommandResponse: {err:?}");
+                            return create_error_result_with_redis_error(err);
+                        }
                     }
                 }
-                Err(err) => {
-                    if let Some(failure_callback) = failure_callback {
-                        unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
-                    } else {
-                        eprintln!("Error converting value to CommandResponse: {err:?}");
-                        return create_error_result_with_redis_error(err);
-                    }
-                }
-            },
+            }
             Err(err) => {
                 if let Some(failure_callback) = failure_callback {
                     unsafe { Self::send_async_redis_error(failure_callback, err, request_id) };
@@ -1013,7 +1037,10 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*mut T, c_long) {
     (vec_ptr, len)
 }
 
-fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse> {
+fn valkey_value_to_command_response(
+    value: Value,
+    response_buf: Option<(*mut u8, usize)>,
+) -> RedisResult<CommandResponse> {
     let mut command_response = CommandResponse::default();
     let result: RedisResult<CommandResponse> = match value {
         Value::Nil => Ok(command_response),
@@ -1025,8 +1052,29 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             command_response.response_type = ResponseType::String;
             Ok(command_response)
         }
-        Value::BulkString(text) => {
-            let (vec_ptr, len) = convert_vec_to_pointer(text);
+        Value::BulkString(data) => {
+            let data = if let Some((buf, buf_len)) = response_buf {
+                if data.len() > buf_len {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Value size exceeds buffer capacity",
+                        format!(
+                            "value is {} bytes but buffer is {} bytes",
+                            data.len(),
+                            buf_len
+                        ),
+                    )));
+                }
+                // Copy data directly into the caller's buffer; the command response
+                // will carry the number of bytes written instead of the data itself.
+                unsafe {
+                    std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
+                }
+                data.len().to_string().into_bytes()
+            } else {
+                data
+            };
+            let (vec_ptr, len) = convert_vec_to_pointer(data);
             command_response.string_value = vec_ptr as *mut c_char;
             command_response.string_value_len = len;
             command_response.response_type = ResponseType::String;
@@ -1062,7 +1110,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
         Value::Array(array) => {
             let vec: Result<Vec<CommandResponse>, RedisError> = array
                 .into_iter()
-                .map(valkey_value_to_command_response)
+                .map(|v| valkey_value_to_command_response(v, None))
                 .collect();
             let (vec_ptr, len) = convert_vec_to_pointer(vec?);
             command_response.array_value = vec_ptr;
@@ -1076,13 +1124,13 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
                 .map(|(key, val)| {
                     let mut map_response = CommandResponse::default();
 
-                    let map_key = match valkey_value_to_command_response(key) {
+                    let map_key = match valkey_value_to_command_response(key, None) {
                         Ok(map_key) => map_key,
                         Err(err) => return Err(err),
                     };
                     map_response.map_key = Box::into_raw(Box::new(map_key));
 
-                    let map_val = match valkey_value_to_command_response(val) {
+                    let map_val = match valkey_value_to_command_response(val, None) {
                         Ok(map_val) => map_val,
                         Err(err) => return Err(err),
                     };
@@ -1101,7 +1149,7 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
         Value::Set(array) => {
             let vec: Result<Vec<CommandResponse>, RedisError> = array
                 .into_iter()
-                .map(valkey_value_to_command_response)
+                .map(|v| valkey_value_to_command_response(v, None))
                 .collect();
             let (vec_ptr, len) = convert_vec_to_pointer(vec?);
             command_response.sets_value = vec_ptr;
@@ -1126,18 +1174,18 @@ fn valkey_value_to_command_response(value: Value) -> RedisResult<CommandResponse
             // Create kind entry
             let mut kind_entry = CommandResponse::default();
             let map_key =
-                valkey_value_to_command_response(Value::SimpleString("kind".to_string()))?;
+                valkey_value_to_command_response(Value::SimpleString("kind".to_string()), None)?;
             kind_entry.map_key = Box::into_raw(Box::new(map_key));
             let map_val =
-                valkey_value_to_command_response(Value::SimpleString(format!("{:?}", kind)))?;
+                valkey_value_to_command_response(Value::SimpleString(format!("{:?}", kind)), None)?;
             kind_entry.map_value = Box::into_raw(Box::new(map_val));
 
             // Create values entry
             let mut values_entry = CommandResponse::default();
             let map_key =
-                valkey_value_to_command_response(Value::SimpleString("values".to_string()))?;
+                valkey_value_to_command_response(Value::SimpleString("values".to_string()), None)?;
             values_entry.map_key = Box::into_raw(Box::new(map_key));
-            let map_val = valkey_value_to_command_response(Value::Array(data))?;
+            let map_val = valkey_value_to_command_response(Value::Array(data), None)?;
             values_entry.map_value = Box::into_raw(Box::new(map_val));
 
             let (map_ptr, map_len) = convert_vec_to_pointer(vec![kind_entry, values_entry]);
@@ -1180,6 +1228,64 @@ pub unsafe extern "C-unwind" fn command(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
+    span_ptr: u64,
+) -> *mut CommandResult {
+    unsafe {
+        command_with_buffer(
+            client_adapter_ptr,
+            request_id,
+            command_type,
+            arg_count,
+            args,
+            args_len,
+            route_bytes,
+            route_bytes_len,
+            std::ptr::null_mut(),
+            0,
+            span_ptr,
+        )
+    }
+}
+
+/// Executes a command, optionally copying a BulkString response directly into a
+/// caller-provided buffer instead of returning it as a heap-allocated value.
+///
+/// When `response_buf` is null (and `response_buf_len` is 0), behaves identically
+/// to [`command`] — the response flows through the normal `execute_request` path.
+///
+/// When `response_buf` is non-null, the response is written directly into the buffer:
+/// - `response.string_value` = number of bytes written as a string, or Nil response for missing keys.
+/// - Errors if the value exceeds `response_buf_len`.
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`]. See the safety documentation of [`std::sync::Arc::from_raw`].
+/// * `request_id` must be a request ID from the foreign language and must be valid until either `success_callback` or `failure_callback` is finished.
+/// * `args` is an optional bytes pointers array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `args_len` is an optional bytes length array. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `arg_count` the number of elements in `args` and `args_len`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `arg_count` must be 0 if `args` and `args_len` are null.
+/// * `args` and `args_len` must either be both null or be both not null.
+/// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
+/// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
+/// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * When non-null, `response_buf` must point to a writable buffer of at least `response_buf_len` bytes.
+/// * `response_buf_len` must be 0 if `response_buf` is null.
+/// * `span_ptr` is a valid pointer to [`Arc<GlideSpan>`], a span created by [`create_otel_span`] or `0`. The span must be valid until the command is finished.
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn command_with_buffer(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    command_type: RequestType,
+    arg_count: c_ulong,
+    args: *const usize,
+    args_len: *const c_ulong,
+    route_bytes: *const u8,
+    route_bytes_len: usize,
+    response_buf: *mut u8,
+    response_buf_len: usize,
     span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
@@ -1239,6 +1345,7 @@ pub unsafe extern "C-unwind" fn command(
             cmd.arg(command_arg);
         }
     }
+
     if span_ptr != 0 {
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
@@ -1269,12 +1376,23 @@ pub unsafe extern "C-unwind" fn command(
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
     let client_for_release = client_adapter.core.client.clone();
-    let result = client_adapter.execute_request(request_id, async move {
-        let routing_info = get_route(route, Some(&cmd))?;
-        let result = client.send_command(&mut cmd, routing_info).await;
-        client_for_release.release_inflight_request();
-        result
-    });
+
+    let buf_option = if response_buf.is_null() {
+        None
+    } else {
+        Some(ResponseBuffer(response_buf, response_buf_len))
+    };
+
+    let result = client_adapter.execute_request_with_buffer(
+        request_id,
+        async move {
+            let routing_info = get_route(route, Some(&cmd))?;
+            let result = client.send_command(&mut cmd, routing_info).await;
+            client_for_release.release_inflight_request();
+            result
+        },
+        buf_option,
+    );
     if let Ok(span) = child_span {
         span.end();
     }
