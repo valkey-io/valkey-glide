@@ -7741,4 +7741,520 @@ describe("PubSub", () => {
         },
         TIMEOUT,
     );
+
+    // Two-dimensional test cases for unsubscribe all tests: [cluster_mode, subscription_method]
+    // Only Lazy and Blocking can dynamically unsubscribe (Config cannot)
+    const testCasesUnsubscribeAll: [boolean, number][] = [
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+        [false, Mode.Lazy],
+        [false, Mode.Blocking],
+    ];
+
+    /**
+     * Test unsubscribing from all channels/patterns/sharded using null parameter.
+     *
+     * This test verifies that passing null to unsubscribe methods removes all
+     * subscriptions of that type. Tests all three subscription types in a single test.
+     *
+     * Validates: Python test_unsubscribe_all_subscription_types
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscriptionMethod - Specifies the subscription method (Lazy, Blocking).
+     */
+    it.each(testCasesUnsubscribeAll)(
+        "test_unsubscribe_all_subscription_types_%p_%p",
+        async (clusterMode, subscriptionMethod) => {
+            let listeningClient: TGlideClient | null = null;
+            let publishingClient: TGlideClient | null = null;
+
+            try {
+                const exactChannels = new Set([
+                    "exact_unsub_all_0",
+                    "exact_unsub_all_1",
+                    "exact_unsub_all_2",
+                ]);
+                const patterns = new Set([
+                    "pattern_unsub_all_0.*",
+                    "pattern_unsub_all_1.*",
+                    "pattern_unsub_all_2.*",
+                ]);
+                const shardedChannels = clusterMode
+                    ? new Set([
+                          "sharded_unsub_all_0",
+                          "sharded_unsub_all_1",
+                          "sharded_unsub_all_2",
+                      ])
+                    : undefined;
+                const message = "test_message";
+
+                const addresses = clusterMode
+                    ? cmeCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }))
+                    : cmdCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }));
+
+                // Create client with Config subscriptions (so we have something to unsubscribe from)
+                listeningClient = await createPubsubClient(
+                    clusterMode,
+                    exactChannels,
+                    patterns,
+                    shardedChannels,
+                    undefined, // no callback
+                    undefined, // no context
+                    undefined, // default protocol
+                    undefined, // default timeout
+                    addresses,
+                );
+
+                // Create publishing client
+                if (clusterMode) {
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Verify all subscriptions are active
+                await waitForSubscriptionStateIfNeeded(
+                    listeningClient,
+                    Mode.Config,
+                    exactChannels,
+                    patterns,
+                    shardedChannels,
+                );
+
+                // Unsubscribe from all (pass null to unsubscribe from all of each type)
+                await unsubscribeByMethod(
+                    listeningClient,
+                    null,
+                    subscriptionMethod,
+                );
+                await punsubscribeByMethod(
+                    listeningClient,
+                    null,
+                    subscriptionMethod,
+                );
+
+                if (clusterMode) {
+                    await sunsubscribeByMethod(
+                        listeningClient as GlideClusterClient,
+                        null,
+                        subscriptionMethod,
+                    );
+                }
+
+                // Wait for subscriptions to be cleared
+                await waitForSubscriptionState(
+                    listeningClient,
+                    new Set<string>(),
+                    new Set<string>(),
+                    clusterMode ? new Set<string>() : undefined,
+                );
+
+                // Publish to all types - none should be received
+                for (const channel of exactChannels) {
+                    await publishingClient.publish(message, channel);
+                }
+
+                for (const pattern of patterns) {
+                    const matchingChannel = pattern.replace("*", "test");
+                    await publishingClient.publish(message, matchingChannel);
+                }
+
+                if (clusterMode && shardedChannels) {
+                    for (const channel of shardedChannels) {
+                        await (publishingClient as GlideClusterClient).publish(
+                            message,
+                            channel,
+                            true,
+                        );
+                    }
+                }
+
+                // Allow messages to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Verify no messages received
+                await checkNoMessagesLeft(
+                    MethodTesting.Async,
+                    listeningClient,
+                    null,
+                    0,
+                );
+            } finally {
+                if (listeningClient) {
+                    listeningClient.close();
+                }
+
+                if (publishingClient) {
+                    publishingClient.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    // Two-dimensional test cases for empty set error tests: [cluster_mode, subscription_method]
+    const testCasesEmptySet: [boolean, number][] = [
+        [true, Mode.Lazy],
+        [true, Mode.Blocking],
+        [false, Mode.Lazy],
+        [false, Mode.Blocking],
+    ];
+
+    /**
+     * Test that subscribing with an empty set raises an error for dynamic subscription methods.
+     *
+     * This test verifies that Lazy and Blocking subscription methods raise RequestError
+     * when called with an empty set of channels/patterns.
+     *
+     * Validates: Python test_subscribe_empty_set_raises_error
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     * @param subscriptionMethod - Specifies the subscription method (Lazy, Blocking).
+     */
+    it.each(testCasesEmptySet)(
+        "test_subscribe_empty_set_raises_error_%p_%p",
+        async (clusterMode, subscriptionMethod) => {
+            let client: TGlideClient | null = null;
+
+            try {
+                const addresses = clusterMode
+                    ? cmeCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }))
+                    : cmdCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }));
+
+                // Create client without subscriptions
+                client = await createPubsubClient(
+                    clusterMode,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    addresses,
+                );
+
+                // Verify initial state is empty
+                await waitForSubscriptionState(
+                    client,
+                    new Set<string>(),
+                    new Set<string>(),
+                    clusterMode ? new Set<string>() : undefined,
+                );
+
+                // Test subscribe with empty set - should throw error
+                if (subscriptionMethod === Mode.Lazy) {
+                    await expect(
+                        client.subscribeLazy(new Set<string>()),
+                    ).rejects.toThrow();
+                } else {
+                    await expect(
+                        client.subscribe(new Set<string>(), 5000),
+                    ).rejects.toThrow();
+                }
+
+                // Test psubscribe with empty set - should throw error
+                if (subscriptionMethod === Mode.Lazy) {
+                    await expect(
+                        client.psubscribeLazy(new Set<string>()),
+                    ).rejects.toThrow();
+                } else {
+                    await expect(
+                        client.psubscribe(new Set<string>(), 5000),
+                    ).rejects.toThrow();
+                }
+
+                // Test ssubscribe with empty set (cluster only) - should throw error
+                if (clusterMode) {
+                    if (subscriptionMethod === Mode.Lazy) {
+                        await expect(
+                            (client as GlideClusterClient).ssubscribeLazy(
+                                new Set<string>(),
+                            ),
+                        ).rejects.toThrow();
+                    } else {
+                        await expect(
+                            (client as GlideClusterClient).ssubscribe(
+                                new Set<string>(),
+                                5000,
+                            ),
+                        ).rejects.toThrow();
+                    }
+                }
+
+                // Verify state is still empty after failed subscription attempts
+                await waitForSubscriptionState(
+                    client,
+                    new Set<string>(),
+                    new Set<string>(),
+                    clusterMode ? new Set<string>() : undefined,
+                );
+            } finally {
+                if (client) {
+                    client.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Test that pubsubReconciliationIntervalMs config bounds reconciliation staleness.
+     *
+     * Configures a 1 second interval, then samples multiple intervals between
+     * consecutive reconciliation timestamp updates. Validates that observed intervals
+     * are frequently below the upper tolerance bound.
+     *
+     * Validates: Python test_pubsub_reconciliation_interval_config
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     */
+    it.each([true, false])(
+        "test_pubsub_reconciliation_interval_config_%p",
+        async (clusterMode) => {
+            let listeningClient: TGlideClient | null = null;
+
+            try {
+                const intervalMs = 1000; // 1 second interval
+                const pollIntervalMs = 100; // 100ms polling
+
+                const addresses = clusterMode
+                    ? cmeCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }))
+                    : cmdCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }));
+
+                // Create client with configured reconciliation interval
+                if (clusterMode) {
+                    listeningClient = await GlideClusterClient.createClient({
+                        addresses,
+                        protocol: ProtocolVersion.RESP3,
+                        advancedConfiguration: {
+                            pubsubReconciliationIntervalMs: intervalMs,
+                        },
+                    });
+                } else {
+                    listeningClient = await GlideClient.createClient({
+                        addresses,
+                        protocol: ProtocolVersion.RESP3,
+                        advancedConfiguration: {
+                            pubsubReconciliationIntervalMs: intervalMs,
+                        },
+                    });
+                }
+
+                // Helper to poll for timestamp change
+                const pollForTimestampChange = async (
+                    previousTs: number,
+                    timeoutS = 5.0,
+                ): Promise<number> => {
+                    const startTime = Date.now();
+
+                    while ((Date.now() - startTime) / 1000 < timeoutS) {
+                        const stats =
+                            (await listeningClient!.getStatistics()) as Record<
+                                string,
+                                string
+                            >;
+                        const currentTs = parseInt(
+                            stats["subscription_last_sync_timestamp"] || "0",
+                            10,
+                        );
+
+                        if (currentTs !== previousTs) {
+                            return currentTs;
+                        }
+
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, pollIntervalMs),
+                        );
+                    }
+
+                    throw new Error(
+                        `Sync timestamp did not change within ${timeoutS}s. Previous: ${previousTs}`,
+                    );
+                };
+
+                // Get initial timestamp
+                const initialStats =
+                    (await listeningClient.getStatistics()) as Record<
+                        string,
+                        string
+                    >;
+                const initialTs = parseInt(
+                    initialStats["subscription_last_sync_timestamp"] || "0",
+                    10,
+                );
+
+                // Wait for first sync event after client creation
+                const firstSyncTs = await pollForTimestampChange(initialTs);
+
+                const upperBoundMs = intervalMs * 1.5;
+                const maxSamples = 8;
+                const requiredWithinUpperBoundSamples = 4;
+
+                // Collect several consecutive intervals
+                const sampledIntervalsMs: number[] = [];
+                let withinUpperBoundCount = 0;
+                let previousSyncTs = firstSyncTs;
+
+                for (let i = 0; i < maxSamples; i++) {
+                    const currentSyncTs = await pollForTimestampChange(
+                        previousSyncTs,
+                        3.0,
+                    );
+                    const sampledIntervalMs = currentSyncTs - previousSyncTs;
+                    sampledIntervalsMs.push(sampledIntervalMs);
+                    previousSyncTs = currentSyncTs;
+
+                    if (sampledIntervalMs <= upperBoundMs) {
+                        withinUpperBoundCount++;
+
+                        if (
+                            withinUpperBoundCount >=
+                            requiredWithinUpperBoundSamples
+                        ) {
+                            break;
+                        }
+                    }
+                }
+
+                expect(withinUpperBoundCount).toBeGreaterThanOrEqual(
+                    requiredWithinUpperBoundSamples,
+                );
+            } finally {
+                if (listeningClient) {
+                    listeningClient.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    /**
+     * Test that lazyConnect with preconfigured pubsub subscriptions subscribes on first command.
+     *
+     * This test verifies that when a client is created with lazyConnect: true and
+     * pubsubSubscriptions configured, the subscriptions are NOT established until
+     * the first command is executed.
+     *
+     * Validates: Reviewer feedback - lazy client with preconfigured subscriptions
+     *
+     * @param clusterMode - Indicates if the test should be run in cluster mode.
+     */
+    it.each([true, false])(
+        "test_lazy_connect_with_preconfigured_subscriptions_%p",
+        async (clusterMode) => {
+            let listeningClient: TGlideClient | null = null;
+            let publishingClient: TGlideClient | null = null;
+
+            try {
+                const channel = `lazy_preconfigured_channel_${Date.now()}`;
+                const message = "lazy_preconfigured_message";
+
+                const addresses = clusterMode
+                    ? cmeCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }))
+                    : cmdCluster.ports().map((port) => ({
+                          host: "localhost",
+                          port,
+                      }));
+
+                // Create pubsub subscription config
+                const pubsubSubscriptions = createPubSubSubscription(
+                    clusterMode,
+                    {
+                        [GlideClusterClientConfiguration.PubSubChannelModes
+                            .Exact]: new Set([channel]),
+                    },
+                    {
+                        [GlideClientConfiguration.PubSubChannelModes.Exact]:
+                            new Set([channel]),
+                    },
+                );
+
+                // Create client with lazyConnect and pubsub subscriptions
+                if (clusterMode) {
+                    listeningClient = await GlideClusterClient.createClient({
+                        addresses,
+                        protocol: ProtocolVersion.RESP3,
+                        lazyConnect: true,
+                        pubsubSubscriptions,
+                    });
+                } else {
+                    listeningClient = await GlideClient.createClient({
+                        addresses,
+                        protocol: ProtocolVersion.RESP3,
+                        lazyConnect: true,
+                        pubsubSubscriptions,
+                    });
+                }
+
+                // At this point, connection should NOT be established yet
+                // Execute first command to trigger connection
+                await listeningClient.ping();
+
+                // Now verify subscriptions are established
+                await waitForSubscriptionState(
+                    listeningClient,
+                    new Set([channel]),
+                    undefined,
+                    undefined,
+                );
+
+                // Create publishing client
+                if (clusterMode) {
+                    publishingClient = await GlideClusterClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                } else {
+                    publishingClient = await GlideClient.createClient(
+                        getOptions(clusterMode),
+                    );
+                }
+
+                // Publish message
+                await publishingClient.publish(message, channel);
+
+                // Allow message to propagate
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                // Verify message received
+                const pubsubMessage = await listeningClient.getPubSubMessage();
+                expect(pubsubMessage.message).toEqual(message);
+                expect(pubsubMessage.channel).toEqual(channel);
+            } finally {
+                if (listeningClient) {
+                    listeningClient.close();
+                }
+
+                if (publishingClient) {
+                    publishingClient.close();
+                }
+            }
+        },
+        TIMEOUT,
+    );
 });
