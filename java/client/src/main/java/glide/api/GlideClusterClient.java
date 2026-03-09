@@ -147,7 +147,6 @@ public class GlideClusterClient extends BaseClient
                 ScriptingAndFunctionsClusterCommands,
                 ServerManagementClusterCommands,
                 TransactionsClusterCommands,
-                PubSubClusterCommands,
                 ClusterManagementClusterCommands {
 
     /** Constructor using ClientParams from BaseClient. */

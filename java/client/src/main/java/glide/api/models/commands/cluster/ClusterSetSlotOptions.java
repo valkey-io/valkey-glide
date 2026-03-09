@@ -3,7 +3,6 @@ package glide.api.models.commands.cluster;
 
 import glide.api.GlideClusterClient;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 /**
  * Defines slot assignment options for the <code>CLUSTER SETSLOT</code> command implemented by
@@ -12,7 +11,6 @@ import lombok.RequiredArgsConstructor;
  * @see <a href="https://valkey.io/commands/cluster-setslot/">cluster-setslot</a> at valkey.io
  */
 @Getter
-@RequiredArgsConstructor
 public class ClusterSetSlotOptions {
 
     /** The subcommand to execute for the slot. */
@@ -22,6 +20,11 @@ public class ClusterSetSlotOptions {
      * The node ID (required for IMPORTING, MIGRATING, and NODE actions; null when action is STABLE).
      */
     private final String nodeId;
+
+    public ClusterSetSlotOptions(SlotAction action, String nodeId) {
+        this.action = action;
+        this.nodeId = nodeId;
+    }
 
     /**
      * Creates options to mark a slot as importing from the specified node.
