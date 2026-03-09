@@ -70,11 +70,9 @@ pub fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option
 }
 
 /// Execute a JNI entry point body. Provides a closure scope so callers can use
-/// early `return Some(...)` for error paths. The `_ffi_func_name` parameter is
-/// retained for API compatibility but unused — with `panic = "abort"` in release,
-/// panics terminate the process immediately.
+/// early `return Some(...)` for error paths.
 #[inline(always)]
-pub fn handle_panics<T, F: FnOnce() -> Option<T>>(func: F, _ffi_func_name: &str) -> Option<T> {
+pub fn run_ffi<T>(func: impl FnOnce() -> Option<T>) -> Option<T> {
     func()
 }
 
