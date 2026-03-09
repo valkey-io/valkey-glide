@@ -5875,8 +5875,8 @@ describe("PubSub", () => {
                     statsAfter["subscription_last_sync_timestamp"],
                 );
 
-                // Verify timestamp was updated (increased or stayed the same)
-                expect(timestampAfter).toBeGreaterThanOrEqual(timestampBefore);
+                // Verify timestamp was updated
+                expect(timestampAfter).toBeGreaterThan(timestampBefore);
             } finally {
                 if (client) {
                     client.close();
