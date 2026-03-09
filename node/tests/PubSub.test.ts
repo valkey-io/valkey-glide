@@ -7229,6 +7229,10 @@ describe("PubSub", () => {
     it.each([true, false])(
         "test_mixed_subscription_methods_all_types_%p",
         async (clusterMode) => {
+            // Sharded channels require Valkey 7.0+
+            if (clusterMode && cmeCluster.checkIfServerVersionLessThan("7.0.0"))
+                return;
+
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
 
@@ -7552,6 +7556,10 @@ describe("PubSub", () => {
     it.each(testCasesWithSubscriptionMethod)(
         "test_lazy_client_multiple_subscription_types_%p_%p_%p",
         async (clusterMode, method, subscriptionMethod) => {
+            // Sharded channels require Valkey 7.0+
+            if (clusterMode && cmeCluster.checkIfServerVersionLessThan("7.0.0"))
+                return;
+
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
 
@@ -7765,6 +7773,10 @@ describe("PubSub", () => {
     it.each(testCasesUnsubscribeAll)(
         "test_unsubscribe_all_subscription_types_%p_%p",
         async (clusterMode, subscriptionMethod) => {
+            // Sharded channels require Valkey 7.0+
+            if (clusterMode && cmeCluster.checkIfServerVersionLessThan("7.0.0"))
+                return;
+
             let listeningClient: TGlideClient | null = null;
             let publishingClient: TGlideClient | null = null;
 
@@ -7924,6 +7936,10 @@ describe("PubSub", () => {
     it.each(testCasesEmptySet)(
         "test_subscribe_empty_set_raises_error_%p_%p",
         async (clusterMode, subscriptionMethod) => {
+            // Sharded channels require Valkey 7.0+
+            if (clusterMode && cmeCluster.checkIfServerVersionLessThan("7.0.0"))
+                return;
+
             let client: TGlideClient | null = null;
 
             try {
