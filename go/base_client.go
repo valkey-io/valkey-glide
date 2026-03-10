@@ -71,14 +71,9 @@ func (client *baseClient) getMessageHandler() *MessageHandler {
 }
 
 // GetQueue returns the pub/sub queue for the client.
-// This method is only available for clients that have a subscription,
-// and returns an error if the client does not have a subscription.
+// GetQueue returns the pub/sub queue for the client.
+// Returns an error if the client is configured with a callback.
 func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
-	// Create MessageHandler lazily if not already created (for dynamic subscriptions)
-	if client.getMessageHandler() == nil {
-		client.setMessageHandler(NewMessageHandler(nil, nil))
-	}
-	// If a callback is configured, the queue should not be used
 	if client.getMessageHandler().callback != nil {
 		return nil, errors.New("cannot get queue for callback-only client")
 	}
