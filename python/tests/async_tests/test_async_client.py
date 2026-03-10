@@ -596,6 +596,24 @@ class TestGlideClients:
         await assert_connected(glide_client)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_usable_after_cancelled_commands(
+        self, glide_client: TGlideClient
+    ):
+        """Verify the client remains usable after repeated command cancellations (issue #5442)."""
+
+        for _ in range(50):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(glide_client.exists, ["cancel_test_key"])
+                # Yield to let the command dispatch to the server
+                await anyio.sleep(0)
+                tg.cancel_scope.cancel()
+
+        # Wait for in-flight server responses to arrive and be processed
+        await anyio.sleep(1)
+        await assert_connected(glide_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
     async def test_connect_with_ip_address_succeeds(
         self, cluster_mode: bool, ip_address: str

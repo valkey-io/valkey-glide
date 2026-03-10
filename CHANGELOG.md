@@ -40,6 +40,7 @@
 * Java: Fix hanging issue in AWS Lambda when response exceeds 16KB ([#5081](https://github.com/valkey-io/valkey-glide/issues/5081))
 * Core: Fixed a bug where permission errors for CLUSTER SLOTS command is not surfaced during initial connection ([#5486](https://github.com/valkey-io/valkey-glide/pull/5486))
 * Core: Move credential fetching to token generation time ([#5508](https://github.com/valkey-io/valkey-glide/pull/5508))
+* Python: Fix async client becoming permanently unusable after cancelled commands due to callback index collisions ([#5442](https://github.com/valkey-io/valkey-glide/issues/5442))
 
 #### Operational Enhancements
 * Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))
