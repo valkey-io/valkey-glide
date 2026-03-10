@@ -104,7 +104,7 @@ pub struct GlideConnectionOptions {
     /// Optional PubSub synchronizer for managing subscription state
     pub pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
     /// Buffer size for the internal pipeline mpsc channel.
-    /// When None, defaults to 50.
+    /// When None, defaults to 1000.
     pub pipeline_buffer_size: Option<usize>,
 }
 
