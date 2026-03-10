@@ -299,32 +299,36 @@ func (suite *GlideTestSuite) TestDynamicSubscribeWithoutConfig() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		channel := "no_config_channel"
 
-		queue, err := client.(PubSubQueuer).GetQueue()
-		assert.NoError(suite.T(), err)
-
-		// Determine client type for helpers
 		clientType := StandaloneClient
 		if _, ok := client.(*glide.ClusterClient); ok {
 			clientType = ClusterClient
 		}
 
-		// Subscribe dynamically
+		var standaloneClient *glide.Client
+		var clusterClient *glide.ClusterClient
+		if c, ok := client.(*glide.Client); ok {
+			standaloneClient = c
+		} else if c, ok := client.(*glide.ClusterClient); ok {
+			clusterClient = c
+		}
 		suite.subscribeByMethod(
-			func() *glide.Client { c, _ := client.(*glide.Client); return c }(),
-			func() *glide.ClusterClient { c, _ := client.(*glide.ClusterClient); return c }(),
+			standaloneClient,
+			clusterClient,
 			[]ChannelDefn{{Channel: channel, Mode: ExactMode}},
 			BlockingMethod,
 			suite.T(),
 		)
 
-		// Publish
 		publisher := suite.createAnyClient(clientType, nil)
 		defer publisher.Close()
 
-		err = suite.PublishMessage(publisher, clientType, channel, "no_config_msg", false)
+		err := suite.PublishMessage(publisher, clientType, channel, "no_config_msg", false)
 		assert.NoError(suite.T(), err)
 
 		time.Sleep(200 * time.Millisecond)
+
+		queue, err := client.(PubSubQueuer).GetQueue()
+		assert.NoError(suite.T(), err)
 
 		select {
 		case msg := <-queue.WaitForMessage():
