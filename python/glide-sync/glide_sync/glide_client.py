@@ -105,16 +105,13 @@ class BaseClient(CoreCommands):
             },
         )
 
-        if self._config._is_pubsub_configured():
-            # If in subscribed mode, create a callback that will be called by the FFI layer
-            # for handling push notifications. This callback would either call the user callback (if provided),
-            # or append the messaged to the the `_pubsub_queue`
-            python_callback = self._create_push_handle_callback()
-            pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
-            # Store reference to prevent garbage collection
-            self._pubsub_callback_ref = pubsub_callback
-        else:
-            pubsub_callback = self._ffi.cast("PubSubCallback", 0)
+        # Always create pubsub callback to support dynamic subscriptions
+        # This ensures messages are always handled by the wrapper, whether they originate
+        # from configured subscriptions or from dynamic subscriptions added at runtime
+        python_callback = self._create_push_handle_callback()
+        pubsub_callback = self._ffi.callback("PubSubCallback", python_callback)
+        # Store reference to prevent garbage collection
+        self._pubsub_callback_ref = pubsub_callback
 
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
@@ -337,7 +334,7 @@ class BaseClient(CoreCommands):
         for arg in args:
             if isinstance(arg, str):
                 arg_bytes = arg.encode(ENCODING)
-            elif isinstance(arg, bytes):
+            elif isinstance(arg, (bytes, bytearray, memoryview)):
                 arg_bytes = arg
             else:
                 raise TypeError(f"Unsupported argument type: {type(arg)}")
@@ -395,6 +392,7 @@ class BaseClient(CoreCommands):
         request_type: RequestType.ValueType,
         args: List[TEncodable],
         route: Optional[Route] = None,
+        response_buffer: Optional[memoryview] = None,
     ) -> TResult:
         if self._is_closed:
             raise ClosingError(
@@ -403,6 +401,11 @@ class BaseClient(CoreCommands):
         client_adapter_ptr = self._core_client
         if client_adapter_ptr == self._ffi.NULL:
             raise ValueError("Invalid client pointer.")
+        if response_buffer:
+            if response_buffer.readonly:
+                raise TypeError("response_buffer must be writable")
+            if not response_buffer.c_contiguous:
+                raise TypeError("response_buffer must be C-contiguous")
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
         from .opentelemetry import OpenTelemetry
@@ -423,16 +426,24 @@ class BaseClient(CoreCommands):
             # Route bytes should be kept alive in the scope of the FFI call
             route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-            result = self._lib.command(
-                client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
-                0,  # Request ID - placeholder for sync clients (used for async callbacks)
-                request_type,  # Request type (e.g., GET or SET)
-                len(args),  # Number of arguments
-                c_args,  # Array of argument pointers
-                c_lengths,  # Array of argument lengths
-                route_ptr,  # Pointer to protobuf-encoded routing information (NULL if no routing)
-                route_len,  # Length of the routing data in bytes (0 if no routing)
-                span,  # Span pointer for tracing
+            buf_ptr = (
+                self._ffi.from_buffer(response_buffer)
+                if response_buffer
+                else self._ffi.NULL
+            )
+            buf_len = len(response_buffer) if response_buffer else 0
+            result = self._lib.command_with_buffer(
+                client_adapter_ptr,
+                0,
+                request_type,
+                len(args),
+                c_args,
+                c_lengths,
+                route_ptr,
+                route_len,
+                buf_ptr,
+                buf_len,
+                span,
             )
         finally:
             # Drop span if it was created
@@ -581,7 +592,7 @@ class BaseClient(CoreCommands):
             for arg in args:
                 if isinstance(arg, str):
                     arg_bytes = arg.encode(ENCODING)
-                elif isinstance(arg, bytes):
+                elif isinstance(arg, (bytes, bytearray, memoryview)):
                     arg_bytes = arg
                 else:
                     raise TypeError(f"Unsupported argument type: {type(arg)}")
@@ -769,11 +780,6 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        if not self._config._is_pubsub_configured():
-            raise ConfigurationError(
-                "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
-            )
-
         if self._config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(
                 "The operation will never succeed since messages will be passed to the configured callback."
@@ -791,9 +797,6 @@ class BaseClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-
-        if not self._config._is_pubsub_configured():
-            raise ConfigurationError("No pubsub subscriptions configured")
 
         if self._config._get_pubsub_callback_and_context()[0] is not None:
             raise ConfigurationError(
@@ -913,7 +916,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     """
     Client used for connection to cluster servers.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster
+    https://glide.valkey.io/how-to/client-initialization/#cluster
     """
 
     def _build_cluster_scan_args(self, match, count, type, allow_non_covered_slots):
@@ -1001,7 +1004,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     """
     Client used for connection to standalone servers.
     For full documentation, see
-    https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone
+    https://glide.valkey.io/how-to/client-initialization/#standalone
     """
 
 

@@ -4,6 +4,7 @@
 
 import { expect } from "@jest/globals";
 import { exec } from "child_process";
+import * as fs from "fs";
 import { Socket } from "net";
 import { promisify } from "util";
 import ValkeyCluster, { TestTLSConfig } from "../../utils/TestUtils";
@@ -45,6 +46,17 @@ import {
     convertRecordToGlideRecord,
 } from "../build-ts";
 const execAsync = promisify(exec);
+
+/**
+ * Reads and returns the CA certificate data for TLS connections.
+ *
+ * @returns The CA certificate data as a Buffer
+ */
+export function getCaCertificateData(): Buffer {
+    const glideHomeDir = process.env.GLIDE_HOME_DIR || process.cwd() + "/..";
+    const caCertPath = `${glideHomeDir}/utils/tls_crts/ca.crt`;
+    return fs.readFileSync(caCertPath);
+}
 
 export function getRandomKey() {
     // generate key without using getRandomKey
@@ -2489,4 +2501,14 @@ export async function startServer(
         });
 
     return { process: serverProcess, command: serverCmd };
+}
+
+/**
+ * Asserts that the given client is connected.
+ */
+export async function assertConnected(
+    client: GlideClient | GlideClusterClient,
+): Promise<void> {
+    const result = await client.ping();
+    expect(result).toBe("PONG");
 }

@@ -149,8 +149,6 @@ struct IamTokenState {
     service_type: ServiceType,
     /// Token refresh interval in seconds
     refresh_interval_seconds: u32,
-    /// Cached AWS credentials used to sign tokens (resolved once in `new()`).
-    credentials: aws_credential_types::Credentials,
 }
 
 /// IAM-based token manager for ElastiCache/MemoryDB.
@@ -210,7 +208,6 @@ impl IAMTokenManager {
         token_refresh_callback: Option<Arc<dyn Fn(String) + Send + Sync>>,
     ) -> Result<Self, GlideIAMError> {
         let validated_refresh_interval = validate_refresh_interval(refresh_interval_seconds)?;
-        let creds = get_signing_identity(&region, service_type).await?;
 
         let state = IamTokenState {
             region,
@@ -219,7 +216,6 @@ impl IAMTokenManager {
             service_type,
             refresh_interval_seconds: validated_refresh_interval
                 .unwrap_or(DEFAULT_REFRESH_INTERVAL_SECONDS),
-            credentials: creds,
         };
 
         // Generate initial token using the state
@@ -401,7 +397,11 @@ impl IAMTokenManager {
         let signing_time = SystemTime::now();
         let hostname = state.cluster_name.clone();
         let base_url = build_base_url(&hostname, &state.username);
-        let identity_value = state.credentials.clone().into();
+
+        // Fetch fresh credentials on every token generation to handle credential rotation
+        // (e.g., EC2 instance profile credentials rotate every ~6 hours)
+        let creds = get_signing_identity(&state.region, state.service_type).await?;
+        let identity_value = creds.into();
 
         let mut signing_settings = SigningSettings::default();
         signing_settings.signature_location = SignatureLocation::QueryParams;
@@ -551,22 +551,12 @@ mod tests {
         username: &str,
         service_type: ServiceType,
     ) -> IamTokenState {
-        // Create mock credentials for testing
-        let credentials = aws_credential_types::Credentials::new(
-            "test_access_key",
-            "test_secret_key",
-            Some("test_session_token".to_string()),
-            None,
-            "test_provider",
-        );
-
         IamTokenState {
             region: region.to_string(),
             cluster_name: cluster_name.to_string(),
             username: username.to_string(),
             service_type,
             refresh_interval_seconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
-            credentials,
         }
     }
 
