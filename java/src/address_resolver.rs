@@ -13,6 +13,8 @@ pub struct JavaAddressResolver {
     jvm: Arc<JavaVM>,
     resolver_global: GlobalRef,
     method_id: JMethodID,
+    get_host_method_id: JMethodID,
+    get_port_method_id: JMethodID,
 }
 
 impl JavaAddressResolver {
@@ -44,10 +46,34 @@ impl JavaAddressResolver {
                 return None;
             }
         };
+        let get_host_method_id = match env.get_method_id(
+            "glide/api/models/configuration/ResolvedAddress",
+            "getHost",
+            "()Ljava/lang/String;",
+        ) {
+            Ok(method_id) => method_id,
+            Err(e) => {
+                log::error!("Failed to find 'getHost' method on the ResolvedAddress object: {e}");
+                return None;
+            }
+        };
+        let get_port_method_id = match env.get_method_id(
+            "glide/api/models/configuration/ResolvedAddress",
+            "getPort",
+            "()I",
+        ) {
+            Ok(method_id) => method_id,
+            Err(e) => {
+                log::error!("Failed to find 'getPort' method on the ResolvedAddress object: {e}");
+                return None;
+            }
+        };
         Some(Self {
             jvm,
             resolver_global,
             method_id,
+            get_host_method_id,
+            get_port_method_id,
         })
     }
 }
@@ -126,27 +152,37 @@ impl JavaAddressResolver {
         }
 
         // Call succeeded with non-null value. Let's extract the values now.
-        let resolved_host_obj = env
-            .call_method(&resolved_address, "getHost", "()Ljava/lang/String;", &[])
-            .map_err(|err| map_call_method_err(err, &env))?;
-        let resolved_host_jobj = resolved_host_obj
+        let resolved_host_jstr: JString = unsafe {
+            env.call_method_unchecked(
+                &resolved_address,
+                self.get_host_method_id,
+                jni::signature::ReturnType::Object,
+                &[],
+            )
+            .map_err(|err| map_call_method_err(err, &env))?
             .l()
-            .map_err(AddressResolverError::InvalidResult)?;
-        let resolved_host_jstr: JString = resolved_host_jobj.into();
-        let resolved_host_str = env
+            .map_err(AddressResolverError::InvalidResult)?
+            .into()
+        };
+        let resolved_host = env
             .get_string(&resolved_host_jstr)
-            .map_err(AddressResolverError::InvalidResult)?;
-        let resolved_host_string = resolved_host_str
+            .map_err(AddressResolverError::InvalidResult)?
             .to_str()
             .map_err(AddressResolverError::InvalidString)?
             .to_string();
-        let resolved_port_val = env
-            .call_method(&resolved_address, "getPort", "()I", &[])
-            .map_err(|err| map_call_method_err(err, &env))?;
-        let resolved_port = resolved_port_val
+        let resolved_port = unsafe {
+            env.call_method_unchecked(
+                &resolved_address,
+                self.get_port_method_id,
+                jni::signature::ReturnType::Primitive(jni::signature::Primitive::Int),
+                &[],
+            )
+            .map_err(|err| map_call_method_err(err, &env))?
             .i()
-            .map_err(AddressResolverError::InvalidResult)?;
-        Ok((resolved_host_string, resolved_port as u16))
+            .map_err(AddressResolverError::InvalidResult)?
+        };
+
+        Ok((resolved_host, resolved_port as u16))
     }
 }
 

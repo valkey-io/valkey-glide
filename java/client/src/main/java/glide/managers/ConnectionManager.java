@@ -4,6 +4,7 @@ package glide.managers;
 import static connection_request.ConnectionRequestOuterClass.*;
 
 import glide.api.models.GlideString;
+import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
@@ -396,7 +397,7 @@ public class ConnectionManager {
                         // Get the address resolver (may be null if not configured)
                         // The resolver is passed directly to native code which stores it as a global reference
                         // to prevent garbage collection while the client is alive
-                        var addressResolver = configuration.getAddressResolver().orElse(null);
+                        AddressResolver addressResolver = configuration.getAddressResolver().orElse(null);
 
                         // Create native client with protobuf bytes
                         // Native code will store the resolver as a global reference if provided

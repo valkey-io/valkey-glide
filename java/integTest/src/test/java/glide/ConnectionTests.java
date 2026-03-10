@@ -864,7 +864,7 @@ public class ConnectionTests {
 
         // Configure client with fake address - connection should succeed because
         // resolver translates it to the real address
-        var client =
+        GlideClient client =
                 GlideClient.createClient(
                                 GlideClientConfiguration.builder()
                                         .address(NodeAddress.builder().host(fakeHost).port(fakePort).build())
@@ -905,7 +905,7 @@ public class ConnectionTests {
 
         // Configure client with fake address - connection should succeed because
         // resolver translates it to the real address
-        var client =
+        GlideClusterClient client =
                 GlideClusterClient.createClient(
                                 GlideClusterClientConfiguration.builder()
                                         .address(NodeAddress.builder().host(fakeHost).port(fakePort).build())
@@ -932,7 +932,7 @@ public class ConnectionTests {
 
         AddressResolver resolver = (host, port) -> { throw new RuntimeException("test-exception"); };
 
-        var client =
+        GlideClusterClient client =
                 GlideClusterClient.createClient(
                                 GlideClusterClientConfiguration.builder()
                                         .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
@@ -959,7 +959,7 @@ public class ConnectionTests {
 
         AddressResolver resolver = (host, port) -> null;
 
-        var client =
+        GlideClusterClient client =
                 GlideClusterClient.createClient(
                                 GlideClusterClientConfiguration.builder()
                                         .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
