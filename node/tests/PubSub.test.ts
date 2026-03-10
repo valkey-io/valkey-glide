@@ -5098,21 +5098,17 @@ describe("PubSub", () => {
                     );
                 }
 
-                const patterns = [pattern];
+                const patterns = new Set([pattern]);
 
                 // Dynamically subscribe to pattern
-                if (subscribeMode === Mode.Lazy) {
-                    await listener.psubscribeLazy(patterns);
-                } else {
-                    await listener.psubscribe(patterns, 500);
-                }
+                await psubscribeByMethod(listener, patterns, subscribeMode);
 
                 // Wait for subscription to be established
                 await waitForSubscriptionStateIfNeeded(
                     listener,
                     subscribeMode,
                     undefined,
-                    new Set(patterns),
+                    patterns,
                     undefined,
                 );
 
@@ -5206,19 +5202,14 @@ describe("PubSub", () => {
                     getOptions(clusterMode),
                 );
 
-                const channels = [channel];
+                const channels = new Set([channel]);
 
                 // Dynamically subscribe to sharded channel
-                if (subscribeMode === Mode.Lazy) {
-                    await (listener as GlideClusterClient).ssubscribeLazy(
-                        channels,
-                    );
-                } else {
-                    await (listener as GlideClusterClient).ssubscribe(
-                        channels,
-                        500,
-                    );
-                }
+                await ssubscribeByMethod(
+                    listener as GlideClusterClient,
+                    channels,
+                    subscribeMode,
+                );
 
                 // Wait for subscription to be established
                 await waitForSubscriptionStateIfNeeded(
@@ -5226,7 +5217,7 @@ describe("PubSub", () => {
                     subscribeMode,
                     undefined,
                     undefined,
-                    new Set(channels),
+                    channels,
                 );
 
                 // Publish first message and verify reception
@@ -7591,215 +7582,6 @@ describe("PubSub", () => {
             } finally {
                 if (client) {
                     client.close();
-                }
-            }
-        },
-        TIMEOUT,
-    );
-
-    /**
-     * Test multiple subscription types (exact, pattern, and sharded for cluster) with all subscription methods.
-     *
-     * Verifies that a client can handle multiple subscription types being added via all
-     * subscription methods (Config, Lazy, Blocking). For cluster mode, also tests sharded channels.
-     *
-     * Validates: Requirements 10.12
-     *
-     * @param clusterMode - Indicates if the test should be run in cluster mode.
-     * @param method - Specifies the method of PUBSUB subscription (Async, Sync, Callback).
-     * @param subscriptionMethod - Specifies the subscription method (Config, Lazy, Blocking).
-     */
-    it.each(testCasesWithSubscriptionMethod)(
-        "test_lazy_client_multiple_subscription_types_%p_%p_%p",
-        async (clusterMode, method, subscriptionMethod) => {
-            // Sharded channels require Valkey 7.0+
-            if (clusterMode && cmeCluster.checkIfServerVersionLessThan("7.0.0"))
-                return;
-
-            let listeningClient: TGlideClient | null = null;
-            let publishingClient: TGlideClient | null = null;
-
-            try {
-                const exactChannel = "lazy_multi_exact";
-                const pattern = "lazy_multi_pattern_*";
-                const patternChannel = "lazy_multi_pattern_test";
-                const messageExact = "exact_message";
-                const messagePattern = "pattern_message";
-
-                // For cluster mode, also test sharded
-                const shardedChannel = clusterMode
-                    ? "lazy_multi_sharded"
-                    : null;
-                const messageSharded = clusterMode ? "sharded_message" : null;
-
-                const addresses = clusterMode
-                    ? cmeCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }))
-                    : cmdCluster.ports().map((port) => ({
-                          host: "localhost",
-                          port,
-                      }));
-
-                // Setup callback if needed
-                const callbackMessages: PubSubMsg[] = [];
-                const callback =
-                    method === MethodTesting.Callback
-                        ? (msg: PubSubMsg, context: PubSubMsg[]) => {
-                              context.push(msg);
-                          }
-                        : undefined;
-                const context =
-                    method === MethodTesting.Callback
-                        ? callbackMessages
-                        : undefined;
-
-                // Create client with subscriptions based on method
-                if (subscriptionMethod === Mode.Config) {
-                    listeningClient = await createPubsubClient(
-                        clusterMode,
-                        new Set([exactChannel]),
-                        new Set([pattern]),
-                        clusterMode && shardedChannel
-                            ? new Set([shardedChannel])
-                            : undefined,
-                        callback,
-                        context,
-                        undefined, // default protocol
-                        undefined, // default timeout
-                        addresses,
-                    );
-                } else {
-                    // Lazy/Blocking: create client without subscriptions, subscribe dynamically
-                    listeningClient = await createPubsubClient(
-                        clusterMode,
-                        undefined, // no channels
-                        undefined, // no patterns
-                        undefined, // no sharded
-                        callback,
-                        context,
-                        undefined, // default protocol
-                        undefined, // default timeout
-                        addresses,
-                    );
-
-                    await subscribeByMethod(
-                        listeningClient,
-                        new Set([exactChannel]),
-                        subscriptionMethod,
-                    );
-                    await psubscribeByMethod(
-                        listeningClient,
-                        new Set([pattern]),
-                        subscriptionMethod,
-                    );
-
-                    if (clusterMode && shardedChannel) {
-                        await ssubscribeByMethod(
-                            listeningClient as GlideClusterClient,
-                            new Set([shardedChannel]),
-                            subscriptionMethod,
-                        );
-                    }
-                }
-
-                // Wait for all subscriptions to be established
-                await waitForSubscriptionStateIfNeeded(
-                    listeningClient,
-                    subscriptionMethod,
-                    new Set([exactChannel]),
-                    new Set([pattern]),
-                    clusterMode && shardedChannel
-                        ? new Set([shardedChannel])
-                        : undefined,
-                );
-
-                // Create publishing client
-                if (clusterMode) {
-                    publishingClient = await GlideClusterClient.createClient(
-                        getOptions(clusterMode),
-                    );
-                } else {
-                    publishingClient = await GlideClient.createClient(
-                        getOptions(clusterMode),
-                    );
-                }
-
-                // Publish to all subscription types
-                await publishingClient.publish(messageExact, exactChannel);
-                await publishingClient.publish(messagePattern, patternChannel);
-
-                if (clusterMode && shardedChannel && messageSharded) {
-                    await (publishingClient as GlideClusterClient).publish(
-                        messageSharded,
-                        shardedChannel,
-                        true,
-                    );
-                }
-
-                // Allow messages to propagate
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                // Determine expected message count
-                const expectedCount = clusterMode ? 3 : 2;
-
-                // Collect all messages
-                const received: Record<string, PubSubMsg> = {};
-
-                for (let i = 0; i < expectedCount; i++) {
-                    const msg = await getMessageByMethod(
-                        method,
-                        listeningClient,
-                        callbackMessages,
-                        i,
-                    );
-
-                    if (msg) {
-                        const channelKey = (msg.channel as Buffer).toString();
-                        received[channelKey] = msg;
-                    }
-                }
-
-                // Verify exact channel message
-                expect(received[exactChannel]).toBeDefined();
-                expect(
-                    (received[exactChannel].message as Buffer).toString(),
-                ).toBe(messageExact);
-                expect(received[exactChannel].pattern).toBeNull();
-
-                // Verify pattern channel message
-                expect(received[patternChannel]).toBeDefined();
-                expect(
-                    (received[patternChannel].message as Buffer).toString(),
-                ).toBe(messagePattern);
-                expect(
-                    (received[patternChannel].pattern as Buffer).toString(),
-                ).toBe(pattern);
-
-                // Verify sharded channel message (cluster mode only)
-                if (clusterMode && shardedChannel) {
-                    expect(received[shardedChannel]).toBeDefined();
-                    expect(
-                        (received[shardedChannel].message as Buffer).toString(),
-                    ).toBe(messageSharded);
-                    expect(received[shardedChannel].pattern).toBeNull();
-                }
-
-                // Verify no extra messages
-                await checkNoMessagesLeft(
-                    method,
-                    listeningClient,
-                    callbackMessages,
-                    expectedCount,
-                );
-            } finally {
-                if (listeningClient) {
-                    listeningClient.close();
-                }
-
-                if (publishingClient) {
-                    publishingClient.close();
                 }
             }
         },

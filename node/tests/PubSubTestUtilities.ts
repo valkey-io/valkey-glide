@@ -165,10 +165,11 @@ export async function waitForSubscriptionState(
                 return lastActualState;
             }
         } catch (error) {
-            // Ignore connection errors during polling
-            if (!(error instanceof TimeoutError)) {
-                // Continue polling on other errors
+            // Rethrow TimeoutError (indicates polling timeout), continue on other errors
+            if (error instanceof TimeoutError) {
+                throw error;
             }
+            // Continue polling on connection/other transient errors
         }
 
         await new Promise((resolve) => setTimeout(resolve, pollInterval));
