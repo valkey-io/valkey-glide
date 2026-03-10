@@ -40,7 +40,7 @@ pub(crate) mod shared_client_tests {
     use utilities::cluster::*;
     use utilities::*;
 
-    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    #[cfg(feature = "iam_tests")]
     use glide_core::connection_request::{
         AuthenticationInfo, IamCredentials, ServiceType, TlsMode,
     };
@@ -52,13 +52,13 @@ pub(crate) mod shared_client_tests {
     #[cfg(feature = "iam_tests")]
     const MEMORYDB_CLUSTER_IAM_ENDPOINT: &str = "memorydb-cluster-iam.endpoint"; // Replace with your cluster endpoint
 
-    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    #[cfg(feature = "iam_tests")]
     const TEST_CLUSTER_NAME: &str = "test-cluster";
-    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    #[cfg(feature = "iam_tests")]
     const TEST_STANDALONE_NAME: &str = "test-standalone";
-    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    #[cfg(feature = "iam_tests")]
     const TEST_USERNAME: &str = "default";
-    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    #[cfg(feature = "iam_tests")]
     const TEST_REGION: &str = "us-east-1";
 
     struct TestBasics {
@@ -111,7 +111,7 @@ pub(crate) mod shared_client_tests {
         }
     }
 
-    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    #[cfg(feature = "iam_tests")]
     fn setup_mock_aws_credentials() {
         unsafe {
             std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
@@ -120,7 +120,7 @@ pub(crate) mod shared_client_tests {
         }
     }
 
-    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    #[cfg(feature = "iam_tests")]
     fn cleanup_mock_aws_credentials() {
         unsafe {
             std::env::remove_var("AWS_ACCESS_KEY_ID");
@@ -949,7 +949,7 @@ pub(crate) mod shared_client_tests {
         });
     }
 
-    #[cfg(feature = "iam_mock_tests")]
+    #[cfg(feature = "iam_tests")]
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
