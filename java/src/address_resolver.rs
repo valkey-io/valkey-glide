@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::str;
 use std::sync::Arc;
 
-use jni::objects::{GlobalRef, JObject, JString};
+use jni::objects::{GlobalRef, JMethodID, JObject, JString};
 use jni::{JNIEnv, JavaVM};
 use log::error;
 
@@ -12,22 +12,43 @@ use log::error;
 pub struct JavaAddressResolver {
     jvm: Arc<JavaVM>,
     resolver_global: GlobalRef,
+    method_id: JMethodID,
 }
 
 impl JavaAddressResolver {
     /// Creates a new JavaAddressResolver by creating a global reference to the Java object.
     /// Returns None if the global reference cannot be created.
     pub fn new(env: &mut JNIEnv, jvm: Arc<JavaVM>, resolver: &JObject) -> Option<Self> {
-        match env.new_global_ref(resolver) {
-            Ok(resolver_global) => Some(Self {
-                jvm,
-                resolver_global,
-            }),
+        let resolver_global = match env.new_global_ref(resolver) {
+            Ok(resolver_global) => resolver_global,
             Err(e) => {
                 log::error!("Failed to create global reference for address resolver: {e}");
-                None
+                return None;
             }
-        }
+        };
+        let class = match env.get_object_class(resolver_global.as_obj()) {
+            Ok(class) => class,
+            Err(e) => {
+                log::error!("Failed to get class of the address resolver object: {e}");
+                return None;
+            }
+        };
+        let method_id = match env.get_method_id(
+            class,
+            "resolve",
+            "(Ljava/lang/String;I)Lglide/api/models/configuration/ResolvedAddress;",
+        ) {
+            Ok(method_id) => method_id,
+            Err(e) => {
+                log::error!("Failed to find 'resolve' method on the address resolver object: {e}");
+                return None;
+            }
+        };
+        Some(Self {
+            jvm,
+            resolver_global,
+            method_id,
+        })
     }
 }
 
@@ -85,19 +106,20 @@ impl JavaAddressResolver {
         let host_jstring = env
             .new_string(host)
             .map_err(AddressResolverError::FailedToCreateHostString)?;
-
         // Call the resolver
-        let result = env
-            .call_method(
+        // SAFETY: method id is pre-calculated from resolver_global so is guaranteed to be valid.
+        let result = unsafe {
+            env.call_method_unchecked(
                 self.resolver_global.as_obj(),
-                "resolve",
-                "(Ljava/lang/String;I)Lglide/api/models/configuration/ResolvedAddress;",
+                self.method_id,
+                jni::signature::ReturnType::Object,
                 &[
-                    jni::objects::JValue::Object(&host_jstring),
-                    jni::objects::JValue::Int(port as i32),
+                    jni::objects::JValue::Object(&host_jstring).as_jni(),
+                    jni::objects::JValue::Int(port as i32).as_jni(),
                 ],
             )
-            .map_err(|err| map_call_method_err(err, &env))?;
+            .map_err(|err| map_call_method_err(err, &env))?
+        };
         let resolved_address = result.l().map_err(AddressResolverError::InvalidResult)?;
         if resolved_address.is_null() {
             return Ok((host.to_string(), port));
