@@ -60,7 +60,12 @@ def setup_mock_aws_credentials():
             os.environ.pop("AWS_SESSION_TOKEN", None)
 
 
-async def create_iam_client(request, cluster_mode: bool, protocol: ProtocolVersion, refresh_interval_seconds: int):
+async def create_iam_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    refresh_interval_seconds: int,
+):
     """Helper to create a client with IAM authentication."""
     iam_config = IamAuthConfig(
         cluster_name="test-cluster",
@@ -405,7 +410,9 @@ class TestAuthCommands:
         3. Operations continue to work after token refresh
         """
         with setup_mock_aws_credentials():
-            client = await create_iam_client(request, cluster_mode, protocol, refresh_interval_seconds=5)
+            client = await create_iam_client(
+                request, cluster_mode, protocol, refresh_interval_seconds=5
+            )
 
             # Verify connection works
             result = await client.custom_command(["PING"])
@@ -436,7 +443,9 @@ class TestAuthCommands:
         at the configured interval and continues to work correctly.
         """
         with setup_mock_aws_credentials():
-            client = await create_iam_client(request, cluster_mode, protocol, refresh_interval_seconds=2)
+            client = await create_iam_client(
+                request, cluster_mode, protocol, refresh_interval_seconds=2
+            )
 
             # Verify initial connection
             result = await client.custom_command(["PING"])

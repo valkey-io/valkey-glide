@@ -59,7 +59,12 @@ def setup_mock_aws_credentials():
             os.environ.pop("AWS_SESSION_TOKEN", None)
 
 
-def create_iam_client(request, cluster_mode: bool, protocol: ProtocolVersion, refresh_interval_seconds: int):
+def create_iam_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    refresh_interval_seconds: int,
+):
     """Helper to create a sync client with IAM authentication."""
     iam_config = IamAuthConfig(
         cluster_name="test-cluster",
@@ -403,7 +408,9 @@ class TestSyncAuthCommands:
         3. Operations continue to work after token refresh
         """
         with setup_mock_aws_credentials():
-            client = create_iam_client(request, cluster_mode, protocol, refresh_interval_seconds=5)
+            client = create_iam_client(
+                request, cluster_mode, protocol, refresh_interval_seconds=5
+            )
 
             # Verify connection works
             result = client.custom_command(["PING"])
@@ -421,6 +428,7 @@ class TestSyncAuthCommands:
             client.set("iam_test_key2", "iam_test_value2")
             value2 = client.get("iam_test_key2")
             assert value2 == b"iam_test_value2"
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_iam_authentication_automatic_token_refresh(
@@ -433,7 +441,9 @@ class TestSyncAuthCommands:
         at the configured interval and continues to work correctly.
         """
         with setup_mock_aws_credentials():
-            client = create_iam_client(request, cluster_mode, protocol, refresh_interval_seconds=2)
+            client = create_iam_client(
+                request, cluster_mode, protocol, refresh_interval_seconds=2
+            )
 
             # Verify initial connection
             result = client.custom_command(["PING"])
