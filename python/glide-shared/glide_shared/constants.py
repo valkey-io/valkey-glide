@@ -8,6 +8,26 @@ from glide_shared.routes import ByAddressRoute, RandomNode, SlotIdRoute, SlotKey
 
 OK: str = "OK"
 DEFAULT_READ_BYTES_SIZE: int = pow(2, 16)
+
+# PubSub constants for unsubscribing from all channels/patterns
+ALL_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all channels'.
+Pass this to unsubscribe() to unsubscribe from all channels.
+"""
+
+ALL_PATTERNS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all patterns'.
+Pass this to punsubscribe() to unsubscribe from all patterns.
+"""
+
+ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
+"""
+Constant representing 'unsubscribe from all sharded channels'.
+Pass this to sunsubscribe() to unsubscribe from all sharded channels.
+"""
+
 # Typing
 T = TypeVar("T")
 TOK = Literal["OK"]
@@ -57,7 +77,12 @@ TJsonResponse = Union[T, List[Optional[T]]]
 #
 # For more information, see: https://redis.io/docs/data-types/json/path/ .
 TJsonUniversalResponse = Union[T, List[T]]
-TEncodable = Union[str, bytes]
+# Accepted types for command arguments.
+# All four types work with both sync and async clients. However, bytearray
+# and memoryview provide zero-copy performance benefits only in the sync
+# client. The async client converts them to bytes internally (protobuf
+# and PyO3 require bytes objects).
+TEncodable = Union[str, bytes, bytearray, memoryview]
 TFunctionListResponse = List[
     Mapping[
         bytes,

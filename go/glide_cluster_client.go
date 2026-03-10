@@ -27,9 +27,9 @@ var _ interfaces.GlideClusterClientCommands = (*ClusterClient)(nil)
 // Client used for connection to cluster servers.
 // Use [NewClusterClient] to request a client.
 //
-// For full documentation refer to [Valkey Glide Wiki].
+// For full documentation refer to [Valkey GLIDE Documentation].
 //
-// [Valkey Glide Wiki]: https://github.com/valkey-io/valkey-glide/wiki/Golang-wrapper#cluster
+// [Valkey GLIDE Documentation]: https://glide.valkey.io/how-to/client-initialization/#cluster
 type ClusterClient struct {
 	baseClient
 }
@@ -69,6 +69,8 @@ func NewClusterClient(config *config.ClusterClientConfiguration) (*ClusterClient
 	if config.HasSubscription() {
 		subConfig := config.GetSubscription()
 		client.setMessageHandler(NewMessageHandler(subConfig.GetCallback(), subConfig.GetContext()))
+	} else {
+		client.setMessageHandler(NewMessageHandler(nil, nil))
 	}
 
 	return &ClusterClient{*client}, nil
@@ -192,7 +194,7 @@ func (client *ClusterClient) ExecWithOptions(
 //
 // The command will be routed automatically based on the passed command's default request policy.
 //
-// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
+// See [Valkey GLIDE Documentation] for details on the restrictions and limitations of the custom command API.
 //
 // This function should only be used for single-response commands. Commands that don't return complete response and awaits
 // (such as SUBSCRIBE), or that return potentially more than a single response (such as XREAD), or that change the client's
@@ -207,7 +209,7 @@ func (client *ClusterClient) ExecWithOptions(
 //
 //	The returned value for the custom command.
 //
-// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
+// [Valkey GLIDE Documentation]: https://glide.valkey.io/concepts/client-features/custom-commands/
 func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (models.ClusterValue[any], error) {
 	res, err := client.executeCommand(ctx, C.CustomCommand, args)
 	if err != nil {
@@ -328,7 +330,7 @@ func (client *ClusterClient) InfoWithOptions(
 // including the command name and subcommands, should be added as a separate value in args. The returning value depends on
 // the executed command.
 //
-// See [Valkey GLIDE Wiki] for details on the restrictions and limitations of the custom command API.
+// See [Valkey GLIDE Documentation] for details on the restrictions and limitations of the custom command API.
 //
 // Parameters:
 //
@@ -341,7 +343,7 @@ func (client *ClusterClient) InfoWithOptions(
 //
 //	The returning value depends on the executed command and route.
 //
-// [Valkey GLIDE Wiki]: https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command
+// [Valkey GLIDE Documentation]: https://glide.valkey.io/concepts/client-features/custom-commands/
 func (client *ClusterClient) CustomCommandWithRoute(ctx context.Context,
 	args []string,
 	route config.Route,
@@ -736,7 +738,7 @@ func (client *ClusterClient) clusterScan(
 // For each iteration, a new cursor object should be used to continue the scan.
 // Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
 // For more information about the Cluster Scan implementation, see
-// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+// https://glide.valkey.io/concepts/client-features/cluster-scan/.
 //
 // Like the SCAN command, the method can be used to iterate over the keys in the database,
 // returning all keys the database has from when the scan started until the scan ends.
@@ -777,7 +779,7 @@ func (client *ClusterClient) Scan(
 // For each iteration, a new cursor object should be used to continue the scan.
 // Using the same cursor object for multiple iterations will result in the same keys or unexpected behavior.
 // For more information about the Cluster Scan implementation, see
-// https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#cluster-scan.
+// https://glide.valkey.io/concepts/client-features/cluster-scan/.
 //
 // Like the SCAN command, the method can be used to iterate over the keys in the database,
 // returning all keys the database has from when the scan started until the scan ends.
@@ -2588,7 +2590,7 @@ func (client *ClusterClient) ScriptKillWithRoute(ctx context.Context, route opti
 // automatically flush all previously watched keys.
 // The command will be routed to all primary nodes.
 //
-// See [valkey.io] and [Valkey Glide Wiki] for details.
+// See [valkey.io] and [Valkey GLIDE Documentation] for details.
 //
 // Parameters:
 //
@@ -2599,7 +2601,7 @@ func (client *ClusterClient) ScriptKillWithRoute(ctx context.Context, route opti
 //	A simple "OK" response.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
-// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+// [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
 func (client *ClusterClient) Unwatch(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
 	if err != nil {
@@ -2611,7 +2613,7 @@ func (client *ClusterClient) Unwatch(ctx context.Context) (string, error) {
 // Flushes all the previously watched keys for a transaction. Executing a transaction will
 // automatically flush all previously watched keys.
 //
-// See [valkey.io] and [Valkey Glide Wiki] for details.
+// See [valkey.io] and [Valkey GLIDE Documentation] for details.
 //
 // Parameters:
 //
@@ -2624,7 +2626,7 @@ func (client *ClusterClient) Unwatch(ctx context.Context) (string, error) {
 //	A simple "OK" response.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
-// [Valkey Glide Wiki]: https://valkey.io/topics/transactions/#cas
+// [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
 func (client *ClusterClient) UnwatchWithOptions(ctx context.Context, route options.RouteOption) (string, error) {
 	result, err := client.executeCommandWithRoute(ctx, C.UnWatch, []string{}, route.Route)
 	if err != nil {
@@ -2633,44 +2635,18 @@ func (client *ClusterClient) UnwatchWithOptions(ctx context.Context, route optio
 	return handleOkResponse(result)
 }
 
-// AllShardedChannels represents "unsubscribe from all sharded channels".
-// Pass this to SUnsubscribe or SUnsubscribeBlocking to unsubscribe from all sharded channels.
-var AllShardedChannels []string = nil
-
-// SSubscribe subscribes the client to the specified sharded channels (lazy, non-blocking).
-// This command updates the client's internal desired subscription state without waiting
-// for server confirmation. It returns immediately after updating the local state.
-//
-// Sharded pubsub is only available in cluster mode and requires Redis 7.0+.
-//
-// Parameters:
-//
-//	ctx - The context for the operation.
-//	channels - A slice of sharded channel names to subscribe to.
-//
-// Return value:
-//
-//	An error if the operation fails.
-//
-// Example:
-//
-//	err := client.SSubscribe(ctx, []string{"shard_channel1"})
-func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string) error {
-	_, err := client.executeCommand(ctx, C.SSubscribe, channels)
-	return err
-}
-
-// SSubscribeBlocking subscribes the client to the specified sharded channels (blocking).
+// SSubscribe subscribes the client to the specified sharded channels (blocking).
 // This command updates the client's internal desired subscription state and waits
 // for server confirmation.
 //
-// Sharded pubsub is only available in cluster mode and requires Redis 7.0+.
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
 //	channels - A slice of sharded channel names to subscribe to.
 //	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
 //
 // Return value:
 //
@@ -2678,8 +2654,29 @@ func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string) 
 //
 // Example:
 //
-//	err := client.SSubscribeBlocking(ctx, []string{"shard_channel1"}, 5000)
-func (client *ClusterClient) SSubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+//	err := client.SSubscribe(ctx, []string{"shard_channel1"}, 5000)
+//
+// SSubscribe subscribes the client to the specified sharded channels (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
+//
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to subscribe to.
+//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
+//	            A value of 0 blocks indefinitely until confirmation.
+//
+// Return value:
+//
+//	An error if the operation fails or times out.
+//
+// Example:
+//
+//	err := client.SSubscribe(ctx, []string{"shard_channel1"}, 0)
+func (client *ClusterClient) SSubscribe(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
 		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
@@ -2688,13 +2685,16 @@ func (client *ClusterClient) SSubscribeBlocking(ctx context.Context, channels []
 	return err
 }
 
-// SUnsubscribe unsubscribes the client from the specified sharded channels (lazy, non-blocking).
-// If no channels are specified, unsubscribes from all sharded channels.
+// SSubscribeLazy subscribes the client to the specified sharded channels (non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+//
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
-//	channels - A slice of sharded channel names to unsubscribe from. Empty slice unsubscribes from all.
+//	channels - A slice of sharded channel names to subscribe to.
 //
 // Return value:
 //
@@ -2702,19 +2702,43 @@ func (client *ClusterClient) SSubscribeBlocking(ctx context.Context, channels []
 //
 // Example:
 //
-//	err := client.SUnsubscribe(ctx, []string{"shard_channel1"})
-func (client *ClusterClient) SUnsubscribe(ctx context.Context, channels []string) error {
-	_, err := client.executeCommand(ctx, C.SUnsubscribe, channels)
+//	err := client.SSubscribeLazy(ctx, []string{"shard_channel1"})
+//
+// SSubscribeLazy subscribes the client to the specified sharded channels (non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+// The client will attempt to subscribe asynchronously in the background.
+//
+// Sharded pubsub is only available in cluster mode and requires Valkey 7.0+.
+//
+// Note: Use GetSubscriptions() to verify the actual server-side subscription state.
+//
+// Parameters:
+//
+//	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to subscribe to.
+//
+// Return value:
+//
+//	An error if the operation fails.
+//
+// Example:
+//
+//	err := client.SSubscribeLazy(ctx, []string{"shard_channel1"})
+func (client *ClusterClient) SSubscribeLazy(ctx context.Context, channels []string) error {
+	_, err := client.executeCommand(ctx, C.SSubscribe, channels)
 	return err
 }
 
-// SUnsubscribeBlocking unsubscribes the client from the specified sharded channels (blocking).
+// SUnsubscribe unsubscribes the client from the specified sharded channels (blocking).
+// This command updates the client's internal desired subscription state and waits
+// for server confirmation.
 // If no channels are specified (nil or empty slice), unsubscribes from all sharded channels.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
-//	channels - A slice of sharded channel names to unsubscribe from. Pass nil or AllShardedChannels to unsubscribe from all.
+//	channels - A slice of sharded channel names to unsubscribe from. Pass nil to unsubscribe from all.
 //	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
 //	            A value of 0 blocks indefinitely until confirmation.
 //
@@ -2724,9 +2748,9 @@ func (client *ClusterClient) SUnsubscribe(ctx context.Context, channels []string
 //
 // Example:
 //
-//	err := client.SUnsubscribeBlocking(ctx, []string{"shard_channel1"}, 5000)
-//	err := client.SUnsubscribeBlocking(ctx, AllShardedChannels, 5000) // Unsubscribe from all
-func (client *ClusterClient) SUnsubscribeBlocking(ctx context.Context, channels []string, timeoutMs int) error {
+//	err := client.SUnsubscribe(ctx, []string{"shard_channel1"}, 5000)
+//	err := client.SUnsubscribe(ctx, nil, 5000) // Unsubscribe from all
+func (client *ClusterClient) SUnsubscribe(ctx context.Context, channels []string, timeoutMs int) error {
 	if timeoutMs < 0 {
 		return fmt.Errorf("timeout must be non-negative: %d", timeoutMs)
 	}
@@ -2735,11 +2759,15 @@ func (client *ClusterClient) SUnsubscribeBlocking(ctx context.Context, channels 
 	return err
 }
 
-// SUnsubscribeAll unsubscribes the client from all sharded channels (lazy, non-blocking).
+// SUnsubscribeLazy unsubscribes the client from the specified sharded channels (non-blocking).
+// This command updates the client's internal desired subscription state without waiting
+// for server confirmation. It returns immediately after updating the local state.
+// If no channels are specified (nil), unsubscribes from all sharded channels.
 //
 // Parameters:
 //
 //	ctx - The context for the operation.
+//	channels - A slice of sharded channel names to unsubscribe from. Pass nil to unsubscribe from all.
 //
 // Return value:
 //
@@ -2747,28 +2775,11 @@ func (client *ClusterClient) SUnsubscribeBlocking(ctx context.Context, channels 
 //
 // Example:
 //
-//	err := client.SUnsubscribeAll(ctx)
-func (client *ClusterClient) SUnsubscribeAll(ctx context.Context) error {
-	return client.SUnsubscribe(ctx, nil)
-}
-
-// SUnsubscribeAllBlocking unsubscribes the client from all sharded channels (blocking).
-//
-// Parameters:
-//
-//	ctx - The context for the operation.
-//	timeoutMs - Maximum time in milliseconds to wait for server confirmation.
-//	            A value of 0 blocks indefinitely until confirmation.
-//
-// Return value:
-//
-//	An error if the operation fails or times out.
-//
-// Example:
-//
-//	err := client.SUnsubscribeAllBlocking(ctx, 5000)
-func (client *ClusterClient) SUnsubscribeAllBlocking(ctx context.Context, timeoutMs int) error {
-	return client.SUnsubscribeBlocking(ctx, nil, timeoutMs)
+//	err := client.SUnsubscribeLazy(ctx, []string{"shard_channel1"})
+//	err := client.SUnsubscribeLazy(ctx, nil) // Unsubscribe from all
+func (client *ClusterClient) SUnsubscribeLazy(ctx context.Context, channels []string) error {
+	_, err := client.executeCommand(ctx, C.SUnsubscribe, channels)
+	return err
 }
 
 // ClusterInfo returns information about the state of the cluster.

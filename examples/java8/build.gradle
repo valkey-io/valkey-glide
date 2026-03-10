@@ -1,0 +1,22 @@
+plugins {
+    id 'application'
+    id 'com.google.osdetector' version '1.7.3'
+}
+
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+dependencies {
+    implementation "io.valkey:valkey-glide:1.+:${osdetector.classifier}"
+}
+
+application {
+    mainClass = 'glide.examples.StandaloneExample'
+}

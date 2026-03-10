@@ -2,6 +2,8 @@
 package glide.api.models.configuration;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -78,7 +80,11 @@ public abstract class BaseClientConfiguration {
      */
     private final ProtocolVersion protocol;
 
+    /** Returns the subscription configuration for the client. */
     public abstract BaseSubscriptionConfiguration getSubscriptionConfiguration();
+
+    /** Returns the advanced configuration settings for the client. */
+    public abstract AdvancedBaseClientConfiguration getAdvancedConfiguration();
 
     /**
      * The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
@@ -129,6 +135,6 @@ public abstract class BaseClientConfiguration {
     @Builder.Default private final boolean lazyConnect = false;
 
     public List<NodeAddress> getAddresses() {
-        return List.copyOf(addresses);
+        return Collections.unmodifiableList(new ArrayList<>(addresses));
     }
 }

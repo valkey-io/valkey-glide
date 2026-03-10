@@ -63,25 +63,6 @@ from glide_shared.routes import Route
 
 from .cluster_scan_cursor import ClusterScanCursor
 
-# PubSub constants for unsubscribing from all channels/patterns
-ALL_CHANNELS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all channels'.
-Pass this to unsubscribe() to unsubscribe from all channels.
-"""
-
-ALL_PATTERNS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all patterns'.
-Pass this to punsubscribe() to unsubscribe from all patterns.
-"""
-
-ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all sharded channels'.
-Pass this to sunsubscribe() to unsubscribe from all sharded channels.
-"""
-
 
 class CoreCommands(Protocol):
     def _execute_command(
@@ -89,6 +70,7 @@ class CoreCommands(Protocol):
         request_type: RequestType.ValueType,
         args: List[TEncodable],
         route: Optional[Route] = ...,
+        response_buffer: Optional[memoryview] = ...,
     ) -> TResult: ...
 
     def _execute_batch(
@@ -255,7 +237,9 @@ class CoreCommands(Protocol):
             args.extend(expiry.get_cmd_args())
         return cast(Optional[bytes], self._execute_command(RequestType.Set, args))
 
-    def get(self, key: TEncodable) -> Optional[bytes]:
+    def get(
+        self, key: TEncodable, buffer: Optional[memoryview] = None
+    ) -> Optional[bytes]:
         """
         Get the value associated with the given key, or null if no such value exists.
 
@@ -263,18 +247,32 @@ class CoreCommands(Protocol):
 
         Args:
             key (TEncodable): The key to retrieve from the database.
+            buffer (Optional[memoryview]): If provided, the value is copied directly into
+                this writable, C-contiguous buffer instead of allocating a new Python bytes
+                object. See Returns section for buffer response handling.
+                Note: The buffer length must be at least the size of the expected output;
+                otherwise, an error will be raised.
 
         Returns:
-            Optional[bytes]: If the key exists, returns the value of the key as a byte string.
+            Optional[bytes]:
+                Without buffer: Returns the value as a byte string if the key exists,
+                or None if the key does not exist.
 
-            Otherwise, return None.
+                With buffer: Returns the number of bytes written as a byte string
+                (e.g. b'4096') if the key exists, or None if the key does not exist.
 
         Example:
             >>> client.get("key")
                 b'value'
+            >>> buf = bytearray(1024)
+            >>> client.get("key", buffer=memoryview(buf))
+                b'5'
         """
         args: List[TEncodable] = [key]
-        return cast(Optional[bytes], self._execute_command(RequestType.Get, args))
+        return cast(
+            Optional[bytes],
+            self._execute_command(RequestType.Get, args, response_buffer=buffer),
+        )
 
     def getdel(self, key: TEncodable) -> Optional[bytes]:
         """
@@ -1765,7 +1763,7 @@ class CoreCommands(Protocol):
         Note:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BLPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -1844,7 +1842,7 @@ class CoreCommands(Protocol):
         Note:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BLMPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/blmpop/) for details.
@@ -2083,7 +2081,7 @@ class CoreCommands(Protocol):
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BRPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -2209,7 +2207,7 @@ class CoreCommands(Protocol):
         Notes:
             1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
             2. `BLMOVE` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/blmove/) for details.
@@ -4947,7 +4945,7 @@ class CoreCommands(Protocol):
             1. When in cluster mode, all keys must map to the same hash slot.
             2. `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
             3. `BZPOPMAX` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/bzpopmax) for more details.
@@ -5020,7 +5018,7 @@ class CoreCommands(Protocol):
             1. When in cluster mode, all keys must map to the same hash slot.
             2. `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
             3. `BZPOPMIN` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/bzpopmin) for more details.
@@ -6100,7 +6098,7 @@ class CoreCommands(Protocol):
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BZMPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -7728,8 +7726,114 @@ class CoreCommands(Protocol):
         result = self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
+    def subscribe_lazy(self, channels: Set[str]) -> None:
+        """
+        Subscribe to exact channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
+
+        Note:
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
+
+        Args:
+            channels: A set of channel names to subscribe to.
+
+        Returns: None
+
+        Examples:
+            >>> client.subscribe_lazy({"channel1"})
+            >>> # Subscription request sent, not waiting for confirmation
+            >>>
+            >>> # Multiple channels
+            >>> client.subscribe_lazy({"channel1", "channel2"})
+        """
+        self._execute_command(RequestType.Subscribe, list(channels))
+
+    def psubscribe_lazy(self, patterns: Set[str]) -> None:
+        """
+        Subscribe to channel patterns (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+        The client will attempt to subscribe asynchronously in the background.
+
+        Note:
+            Use `get_subscriptions()` to verify the actual server-side subscription state.
+
+        Args:
+            patterns: A set of patterns to subscribe to (e.g., {"news.*"}).
+
+        Returns: None
+
+        Examples:
+            >>> client.psubscribe_lazy({"news.*"})
+            >>> # Pattern subscription request sent, not waiting for confirmation
+            >>>
+            >>> # Multiple patterns
+            >>> client.psubscribe_lazy({"news.*", "updates.*"})
+        """
+        self._execute_command(RequestType.PSubscribe, list(patterns))
+
+    def unsubscribe_lazy(self, channels: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from exact channels (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+
+        Args:
+            channels: A set of channel names to unsubscribe from.
+                    If None or ALL_CHANNELS, unsubscribes from all exact channels.
+
+        Returns: None
+
+        Examples:
+            >>> client.unsubscribe_lazy({"channel1"})
+            >>> # Unsubscribe request sent, not waiting for confirmation
+            >>>
+            >>> # Unsubscribe from all channels
+            >>> client.unsubscribe_lazy()
+        """
+        args: List[Union[str, bytes]] = list(channels) if channels else []
+        self._execute_command(RequestType.Unsubscribe, args)
+
+    def punsubscribe_lazy(self, patterns: Optional[Set[str]] = None) -> None:
+        """
+        Unsubscribe from channel patterns (non-blocking).
+
+        This command updates the client's internal desired subscription state without waiting
+        for server confirmation. It returns immediately after updating the local state.
+
+        Args:
+            patterns: A set of patterns to unsubscribe from.
+                    If None or ALL_PATTERNS, unsubscribes from all patterns.
+
+        Returns: None
+
+        Examples:
+            >>> client.punsubscribe_lazy({"news.*"})
+            >>> # Unsubscribe request sent, not waiting for confirmation
+            >>>
+            >>> # Unsubscribe from all patterns
+            >>> client.punsubscribe_lazy()
+        """
+        args: List[Union[str, bytes]] = list(patterns) if patterns else []
+        self._execute_command(RequestType.PUnsubscribe, args)
+
     def subscribe(self, channels: Set[str], timeout_ms: int = 0) -> None:
-        """Subscribe to exact channels (blocking)."""
+        """
+        Subscribe to exact channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            channels: A set of channel names to subscribe to.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely.
+        """
         if timeout_ms < 0:
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
@@ -7738,7 +7842,17 @@ class CoreCommands(Protocol):
         self._execute_command(RequestType.SubscribeBlocking, args)
 
     def psubscribe(self, patterns: Set[str], timeout_ms: int = 0) -> None:
-        """Subscribe to channel patterns (blocking)."""
+        """
+        Subscribe to channel patterns (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
+
+        Args:
+            patterns: A set of patterns to subscribe to.
+            timeout_ms: Maximum time in milliseconds to wait for server confirmation.
+                    A value of 0 blocks indefinitely.
+        """
         if timeout_ms < 0:
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args: List[Union[str, bytes]] = cast(
@@ -7751,6 +7865,9 @@ class CoreCommands(Protocol):
     ) -> None:
         """
         Unsubscribe from exact channels (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
 
         Args:
             channels: A set of channel names to unsubscribe from.
@@ -7772,6 +7889,9 @@ class CoreCommands(Protocol):
     ) -> None:
         """
         Unsubscribe from channel patterns (blocking).
+
+        This command updates the client's internal desired subscription state and waits
+        for server confirmation.
 
         Args:
             patterns: A set of patterns to unsubscribe from.

@@ -32,7 +32,7 @@ mod jni_client;
 mod linked_hashmap;
 mod protobuf_bridge;
 
-use errors::{FFIError, handle_errors, handle_panics};
+use errors::{FFIError, handle_errors, run_ffi};
 use jni_client::*;
 use protobuf_bridge::*;
 
@@ -91,6 +91,68 @@ fn get_registry_method_cache_safe(
     }
     // Otherwise fallback to provided env
     get_registry_method_cache(fallback_env)
+}
+
+/// Complete a callback with an error directly on the calling (JNI) thread.
+/// Logs the error and propagates it to Java. Used in pre-spawn error paths.
+fn complete_callback_with_error_on_caller(env: &mut JNIEnv, callback_id: jlong, error_msg: &str) {
+    log::error!("{error_msg}");
+    let error_code = 0; // RequestException (Unspecified)
+    if let Err(e) = complete_java_callback_with_error_code(env, callback_id, error_code, error_msg)
+    {
+        log::error!("Failed to complete callback {callback_id} with error: {e}");
+    }
+}
+
+/// Parse request bytes into a CommandRequest, completing the callback with an error on failure.
+/// Returns `Some(request)` on success, `None` if an error occurred (callback already completed).
+fn parse_request_bytes(
+    env: &mut JNIEnv,
+    request_bytes: &JByteArray,
+    callback_id: jlong,
+) -> Option<protobuf_bridge::CommandRequest> {
+    let raw_bytes = match env.convert_byte_array(request_bytes) {
+        Ok(b) => b,
+        Err(e) => {
+            let msg = format!("Failed to read request bytes: {e}");
+            complete_callback_with_error_on_caller(env, callback_id, &msg);
+            return None;
+        }
+    };
+
+    if raw_bytes.is_empty() {
+        complete_callback_with_error_on_caller(env, callback_id, "Empty request bytes");
+        return None;
+    }
+
+    match protobuf_bridge::parse_command_request(&raw_bytes) {
+        Ok(r) => Some(r),
+        Err(e) => {
+            let msg = format!("Failed to parse command request: {e}");
+            complete_callback_with_error_on_caller(env, callback_id, &msg);
+            None
+        }
+    }
+}
+
+/// Get the JVM Arc, falling back to the cached static if env.get_java_vm() fails.
+/// Completes the callback with an error if both fail.
+fn get_jvm_or_complete_error(
+    env: &mut JNIEnv,
+    callback_id: jlong,
+    fn_name: &str,
+) -> Option<Arc<jni::JavaVM>> {
+    match env.get_java_vm() {
+        Ok(jvm) => Some(Arc::new(jvm)),
+        Err(e) => match JVM.get().cloned() {
+            Some(jvm) => Some(jvm),
+            None => {
+                let msg = format!("JVM unavailable in {fn_name}: {e}");
+                complete_callback_with_error_on_caller(env, callback_id, &msg);
+                None
+            }
+        },
+    }
 }
 
 // Internal helper: execute a parsed CommandRequest and complete Java callback
@@ -629,37 +691,34 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
     _class: JClass<'local>,
     pointer: jlong,
 ) -> JObject<'local> {
-    handle_panics(
-        move || {
-            fn value_from_pointer<'a>(
-                env: &mut JNIEnv<'a>,
-                pointer: jlong,
-            ) -> Result<JObject<'a>, FFIError> {
-                if pointer == 0 {
-                    return Ok(JObject::null());
-                }
-
-                let cache = get_registry_method_cache_safe(env)?;
-                let class_j = to_local_jclass(env, &cache.class)?;
-                let result = unsafe {
-                    env.call_static_method_unchecked(
-                        class_j,
-                        cache.retrieve_method,
-                        jni::signature::ReturnType::Object,
-                        &[jni::sys::jvalue { j: pointer }],
-                    )
-                }?;
-
-                match result {
-                    jni::objects::JValueGen::Object(obj) => Ok(obj),
-                    _ => Ok(JObject::null()),
-                }
+    run_ffi(|| {
+        fn value_from_pointer<'a>(
+            env: &mut JNIEnv<'a>,
+            pointer: jlong,
+        ) -> Result<JObject<'a>, FFIError> {
+            if pointer == 0 {
+                return Ok(JObject::null());
             }
-            let result = value_from_pointer(&mut env, pointer);
-            handle_errors(&mut env, result)
-        },
-        "valueFromPointer",
-    )
+
+            let cache = get_registry_method_cache_safe(env)?;
+            let class_j = to_local_jclass(env, &cache.class)?;
+            let result = unsafe {
+                env.call_static_method_unchecked(
+                    class_j,
+                    cache.retrieve_method,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { j: pointer }],
+                )
+            }?;
+
+            match result {
+                jni::objects::JValueGen::Object(obj) => Ok(obj),
+                _ => Ok(JObject::null()),
+            }
+        }
+        let result = value_from_pointer(&mut env, pointer);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(JObject::null())
 }
 
@@ -678,37 +737,34 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlideValueResolver_valueFromPoin
     _class: JClass<'local>,
     pointer: jlong,
 ) -> JObject<'local> {
-    handle_panics(
-        move || {
-            fn value_from_pointer_binary<'a>(
-                env: &mut JNIEnv<'a>,
-                pointer: jlong,
-            ) -> Result<JObject<'a>, FFIError> {
-                if pointer == 0 {
-                    return Ok(JObject::null());
-                }
-
-                let cache = get_registry_method_cache_safe(env)?;
-                let class_j = to_local_jclass(env, &cache.class)?;
-                let result = unsafe {
-                    env.call_static_method_unchecked(
-                        class_j,
-                        cache.retrieve_method,
-                        jni::signature::ReturnType::Object,
-                        &[jni::sys::jvalue { j: pointer }],
-                    )
-                }?;
-
-                match result {
-                    jni::objects::JValueGen::Object(obj) => Ok(obj),
-                    _ => Ok(JObject::null()),
-                }
+    run_ffi(|| {
+        fn value_from_pointer_binary<'a>(
+            env: &mut JNIEnv<'a>,
+            pointer: jlong,
+        ) -> Result<JObject<'a>, FFIError> {
+            if pointer == 0 {
+                return Ok(JObject::null());
             }
-            let result = value_from_pointer_binary(&mut env, pointer);
-            handle_errors(&mut env, result)
-        },
-        "valueFromPointerBinary",
-    )
+
+            let cache = get_registry_method_cache_safe(env)?;
+            let class_j = to_local_jclass(env, &cache.class)?;
+            let result = unsafe {
+                env.call_static_method_unchecked(
+                    class_j,
+                    cache.retrieve_method,
+                    jni::signature::ReturnType::Object,
+                    &[jni::sys::jvalue { j: pointer }],
+                )
+            }?;
+
+            match result {
+                jni::objects::JValueGen::Object(obj) => Ok(obj),
+                _ => Ok(JObject::null()),
+            }
+        }
+        let result = value_from_pointer_binary(&mut env, pointer);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(JObject::null())
 }
 
@@ -718,21 +774,18 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'loca
     _class: JClass<'local>,
     code: JByteArray<'local>,
 ) -> JString<'local> {
-    handle_panics(
-        move || {
-            fn store_script<'a>(
-                env: &mut JNIEnv<'a>,
-                code: JByteArray<'a>,
-            ) -> Result<JString<'a>, FFIError> {
-                let bytes = env.convert_byte_array(&code)?;
-                let hash = glide_core::scripts_container::add_script(&bytes);
-                Ok(env.new_string(hash)?)
-            }
-            let result = store_script(&mut env, code);
-            handle_errors(&mut env, result)
-        },
-        "storeScript",
-    )
+    run_ffi(|| {
+        fn store_script<'a>(
+            env: &mut JNIEnv<'a>,
+            code: JByteArray<'a>,
+        ) -> Result<JString<'a>, FFIError> {
+            let bytes = env.convert_byte_array(&code)?;
+            let hash = glide_core::scripts_container::add_script(&bytes);
+            Ok(env.new_string(hash)?)
+        }
+        let result = store_script(&mut env, code);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(JString::<'_>::default())
 }
 
@@ -742,18 +795,15 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local
     _class: JClass<'local>,
     sha1: JString<'local>,
 ) {
-    handle_panics(
-        move || {
-            fn drop_script(env: &mut JNIEnv<'_>, sha1: JString<'_>) -> Result<(), FFIError> {
-                let sha: String = env.get_string(&sha1)?.into();
-                glide_core::scripts_container::remove_script(&sha);
-                Ok(())
-            }
-            let result = drop_script(&mut env, sha1);
-            handle_errors(&mut env, result)
-        },
-        "dropScript",
-    )
+    run_ffi(|| {
+        fn drop_script(env: &mut JNIEnv<'_>, sha1: JString<'_>) -> Result<(), FFIError> {
+            let sha: String = env.get_string(&sha1)?.into();
+            glide_core::scripts_container::remove_script(&sha);
+            Ok(())
+        }
+        let result = drop_script(&mut env, sha1);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(())
 }
 
@@ -796,28 +846,25 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_logInternal<'loca
     log_identifier: JString<'local>,
     message: JString<'local>,
 ) {
-    handle_panics(
-        move || {
-            fn log_internal(
-                env: &mut JNIEnv<'_>,
-                level: jint,
-                log_identifier: JString<'_>,
-                message: JString<'_>,
-            ) -> Result<(), FFIError> {
-                let level = Level(level);
+    run_ffi(|| {
+        fn log_internal(
+            env: &mut JNIEnv<'_>,
+            level: jint,
+            log_identifier: JString<'_>,
+            message: JString<'_>,
+        ) -> Result<(), FFIError> {
+            let level = Level(level);
 
-                let log_identifier: String = env.get_string(&log_identifier)?.into();
+            let log_identifier: String = env.get_string(&log_identifier)?.into();
 
-                let message: String = env.get_string(&message)?.into();
+            let message: String = env.get_string(&message)?.into();
 
-                logger_core::log(level.try_into()?, log_identifier, message);
-                Ok(())
-            }
-            let result = log_internal(&mut env, level, log_identifier, message);
-            handle_errors(&mut env, result)
-        },
-        "logInternal",
-    )
+            logger_core::log(level.try_into()?, log_identifier, message);
+            Ok(())
+        }
+        let result = log_internal(&mut env, level, log_identifier, message);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(())
 }
 
@@ -828,31 +875,28 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
     level: jint,
     file_name: JString<'local>,
 ) -> jint {
-    handle_panics(
-        move || {
-            fn init_internal(
-                env: &mut JNIEnv<'_>,
-                level: jint,
-                file_name: JString<'_>,
-            ) -> Result<jint, FFIError> {
-                let level = if level >= 0 { Some(level) } else { None };
-                let file_name: Option<String> = match env.get_string(&file_name) {
-                    Ok(file_name) => Some(file_name.into()),
-                    Err(JniError::NullPtr(_)) => None,
-                    Err(err) => return Err(err.into()),
-                };
-                let level = match level {
-                    Some(lvl) => Some(Level(lvl).try_into()?),
-                    None => None,
-                };
-                let logger_level = logger_core::init(level, file_name.as_deref());
-                Ok(Level::from(logger_level).0)
-            }
-            let result = init_internal(&mut env, level, file_name);
-            handle_errors(&mut env, result)
-        },
-        "initInternal",
-    )
+    run_ffi(|| {
+        fn init_internal(
+            env: &mut JNIEnv<'_>,
+            level: jint,
+            file_name: JString<'_>,
+        ) -> Result<jint, FFIError> {
+            let level = if level >= 0 { Some(level) } else { None };
+            let file_name: Option<String> = match env.get_string(&file_name) {
+                Ok(file_name) => Some(file_name.into()),
+                Err(JniError::NullPtr(_)) => None,
+                Err(err) => return Err(err.into()),
+            };
+            let level = match level {
+                Some(lvl) => Some(Level(lvl).try_into()?),
+                None => None,
+            };
+            let logger_level = logger_core::init(level, file_name.as_deref());
+            Ok(Level::from(logger_level).0)
+        }
+        let result = init_internal(&mut env, level, file_name);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(0)
 }
 
@@ -871,21 +915,18 @@ pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releas
     _class: JClass<'local>,
     cursor: JString<'local>,
 ) {
-    handle_panics(
-        move || {
-            fn release_native_cursor(
-                env: &mut JNIEnv<'_>,
-                cursor: JString<'_>,
-            ) -> Result<(), FFIError> {
-                let cursor_str: String = env.get_string(&cursor)?.into();
-                glide_core::cluster_scan_container::remove_scan_state_cursor(cursor_str);
-                Ok(())
-            }
-            let result = release_native_cursor(&mut env, cursor);
-            handle_errors(&mut env, result)
-        },
-        "releaseNativeCursor",
-    )
+    run_ffi(|| {
+        fn release_native_cursor(
+            env: &mut JNIEnv<'_>,
+            cursor: JString<'_>,
+        ) -> Result<(), FFIError> {
+            let cursor_str: String = env.get_string(&cursor)?.into();
+            glide_core::cluster_scan_container::remove_scan_state_cursor(cursor_str);
+            Ok(())
+        }
+        let result = release_native_cursor(&mut env, cursor);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(())
 }
 
@@ -903,7 +944,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_getFin
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
-    safe_create_jstring(env, FINISHED_SCAN_CURSOR, "getFinishedCursorHandleConstant")
+    safe_create_jstring(env, FINISHED_SCAN_CURSOR)
 }
 
 /// Returns the String representing the name of the ObjectType String.
@@ -918,7 +959,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeString
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
-    safe_create_jstring(env, TYPE_STRING, "getTypeStringConstant")
+    safe_create_jstring(env, TYPE_STRING)
 }
 
 /// Returns the String representing the name of the ObjectType List.
@@ -933,7 +974,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeListCo
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
-    safe_create_jstring(env, TYPE_LIST, "getTypeListConstant")
+    safe_create_jstring(env, TYPE_LIST)
 }
 
 /// Returns the String representing the name of the ObjectType Set.
@@ -948,7 +989,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeSetCon
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
-    safe_create_jstring(env, TYPE_SET, "getTypeSetConstant")
+    safe_create_jstring(env, TYPE_SET)
 }
 
 /// Returns the String representing the name of the ObjectType ZSet.
@@ -963,7 +1004,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeZSetCo
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
-    safe_create_jstring(env, TYPE_ZSET, "getTypeZSetConstant")
+    safe_create_jstring(env, TYPE_ZSET)
 }
 
 /// Returns the String representing the name of the ObjectType Hash.
@@ -978,7 +1019,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeHashCo
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
-    safe_create_jstring(env, TYPE_HASH, "getTypeHashConstant")
+    safe_create_jstring(env, TYPE_HASH)
 }
 
 /// Returns the String representing the name of the ObjectType Set.
@@ -993,7 +1034,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStream
     env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> JString<'local> {
-    safe_create_jstring(env, TYPE_STREAM, "getTypeStreamConstant")
+    safe_create_jstring(env, TYPE_STREAM)
 }
 
 /// Returns a Java's `HashMap` representing the statistics collected for this process.
@@ -1093,8 +1134,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
     metrics_endpoint: JString<'local>,
     flush_interval_ms: jlong,
 ) -> jint {
-    handle_panics(
-        move || {
+    run_ffi(|| {
             fn init_open_telemetry<'a>(
                 env: &mut JNIEnv<'a>,
                 traces_endpoint: JString<'a>,
@@ -1186,7 +1226,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_initOpenTe
             let result = init_open_telemetry(&mut env, traces_endpoint, traces_sample_percentage, metrics_endpoint, flush_interval_ms);
             handle_errors(&mut env, result)
         },
-        "initOpenTelemetry",
     )
     .unwrap_or(0 as jint)
 }
@@ -1200,22 +1239,19 @@ pub extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_createLeak
     _class: JClass<'local>,
     name: JString<'local>,
 ) -> jlong {
-    handle_panics(
-        move || {
-            fn create_leaked_otel_span<'a>(
-                env: &mut JNIEnv<'a>,
-                name: JString<'a>,
-            ) -> Result<jlong, FFIError> {
-                let name_str: String = env.get_string(&name)?.into();
-                let span = glide_core::GlideOpenTelemetry::new_span(&name_str);
-                let s = Arc::into_raw(Arc::new(span)) as *mut glide_core::GlideSpan;
-                Ok(s as jlong)
-            }
-            let result = create_leaked_otel_span(&mut env, name);
-            handle_errors(&mut env, result)
-        },
-        "createLeakedOtelSpan",
-    )
+    run_ffi(|| {
+        fn create_leaked_otel_span<'a>(
+            env: &mut JNIEnv<'a>,
+            name: JString<'a>,
+        ) -> Result<jlong, FFIError> {
+            let name_str: String = env.get_string(&name)?.into();
+            let span = glide_core::GlideOpenTelemetry::new_span(&name_str);
+            let s = Arc::into_raw(Arc::new(span)) as *mut glide_core::GlideSpan;
+            Ok(s as jlong)
+        }
+        let result = create_leaked_otel_span(&mut env, name);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(0)
 }
 
@@ -1231,32 +1267,29 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dro
     _class: JClass<'local>,
     span_ptr: jlong,
 ) {
-    handle_panics(
-        move || {
-            fn drop_otel_span(span_ptr: jlong) -> Result<(), FFIError> {
-                if span_ptr <= 0 {
-                    return Err(FFIError::OpenTelemetry(
-                        "Received an invalid pointer value.".to_string(),
-                    ));
-                }
-
-                let span_ptr_u64 = span_ptr as u64;
-                if unsafe { !glide_core::GlideOpenTelemetry::is_span_pointer_valid(span_ptr_u64) } {
-                    return Err(FFIError::OpenTelemetry(format!(
-                        "Received an invalid pointer value: {span_ptr}"
-                    )));
-                }
-
-                unsafe {
-                    Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
-                }
-                Ok(())
+    run_ffi(|| {
+        fn drop_otel_span(span_ptr: jlong) -> Result<(), FFIError> {
+            if span_ptr <= 0 {
+                return Err(FFIError::OpenTelemetry(
+                    "Received an invalid pointer value.".to_string(),
+                ));
             }
-            let result = drop_otel_span(span_ptr);
-            handle_errors(&mut env, result)
-        },
-        "dropOtelSpan",
-    )
+
+            let span_ptr_u64 = span_ptr as u64;
+            if unsafe { !glide_core::GlideOpenTelemetry::is_span_pointer_valid(span_ptr_u64) } {
+                return Err(FFIError::OpenTelemetry(format!(
+                    "Received an invalid pointer value: {span_ptr}"
+                )));
+            }
+
+            unsafe {
+                Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
+            }
+            Ok(())
+        }
+        let result = drop_otel_span(span_ptr);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(())
 }
 
@@ -1266,24 +1299,14 @@ pub unsafe extern "system" fn Java_glide_ffi_resolvers_OpenTelemetryResolver_dro
 /// * `_class`          - The class object. Not used.
 /// * `input`           - The String to convert.
 /// * `functionName`    - The name of the calling function.
-fn safe_create_jstring<'local>(
-    mut env: JNIEnv<'local>,
-    input: &str,
-    function_name: &str,
-) -> JString<'local> {
-    handle_panics(
-        move || {
-            fn create_jstring<'a>(
-                env: &mut JNIEnv<'a>,
-                input: &str,
-            ) -> Result<JString<'a>, FFIError> {
-                Ok(env.new_string(input)?)
-            }
-            let result = create_jstring(&mut env, input);
-            handle_errors(&mut env, result)
-        },
-        function_name,
-    )
+fn safe_create_jstring<'local>(mut env: JNIEnv<'local>, input: &str) -> JString<'local> {
+    run_ffi(|| {
+        fn create_jstring<'a>(env: &mut JNIEnv<'a>, input: &str) -> Result<JString<'a>, FFIError> {
+            Ok(env.new_string(input)?)
+        }
+        let result = create_jstring(&mut env, input);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(JString::<'_>::default())
 }
 
@@ -1296,138 +1319,105 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
     _class: JClass,
     connection_request_bytes: JByteArray,
 ) -> jlong {
-    handle_panics(
-        move || {
-            // Convert Java byte array to Rust bytes
-            let request_bytes = match env.convert_byte_array(&connection_request_bytes) {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    log::error!("Failed to convert byte array: {e}");
-                    return Some(0);
-                }
-            };
-
-            // Parse ConnectionRequest protobuf
-            let request = match glide_core::connection_request::ConnectionRequest::parse_from_bytes(
-                &request_bytes,
-            ) {
-                Ok(req) => req,
-                Err(e) => {
-                    log::error!("Failed to parse ConnectionRequest protobuf: {e}");
-                    return Some(0);
-                }
-            };
-
-            // Convert protobuf to glide_core ConnectionRequest
-            let connection_request = glide_core::client::ConnectionRequest::from(request);
-
-            // Cache JVM for push callbacks
-            if let Ok(jvm) = env.get_java_vm() {
-                let _ = jni_client::JVM.set(Arc::new(jvm));
+    run_ffi(|| {
+        // Convert Java byte array to Rust bytes
+        let request_bytes = match env.convert_byte_array(&connection_request_bytes) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                log::error!("Failed to convert byte array: {e}");
+                return Some(0);
             }
+        };
 
-            // Direct client creation (no lazy loading for simplified implementation)
-            let runtime = get_runtime();
+        // Parse ConnectionRequest protobuf
+        let request = match glide_core::connection_request::ConnectionRequest::parse_from_bytes(
+            &request_bytes,
+        ) {
+            Ok(req) => req,
+            Err(e) => {
+                log::error!("Failed to parse ConnectionRequest protobuf: {e}");
+                return Some(0);
+            }
+        };
 
-            // Always create push channel to support dynamic subscriptions via customCommand
-            // This matches the behavior of socket_listener.rs which always creates push channels
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
+        // Convert protobuf to glide_core ConnectionRequest
+        let connection_request = glide_core::client::ConnectionRequest::from(request);
 
-            match runtime
-                .block_on(async { create_glide_client(connection_request, Some(tx)).await })
-            {
-                Ok(client) => {
-                    let safe_handle = jni_client::generate_safe_handle();
-                    let handle_table = get_handle_table();
+        // Cache JVM for push callbacks
+        if let Ok(jvm) = env.get_java_vm() {
+            let _ = jni_client::JVM.set(Arc::new(jvm));
+        }
 
-                    // Store in handle table
-                    handle_table.insert(safe_handle, client);
+        // Direct client creation (no lazy loading for simplified implementation)
+        let runtime = get_runtime();
 
-                    // Always spawn push forwarder to deliver pushes to Java
-                    let jvm_arc = jni_client::JVM.get().cloned();
-                    let handle_for_java = safe_handle as jlong;
-                    get_runtime().spawn(async move {
-                        let mut rx = rx;
-                        while let Some(push) = rx.recv().await {
-                            if let Some(jvm) = jvm_arc.as_ref()
-                                && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
-                            {
-                                handle_push_notification(&mut env, handle_for_java, push);
-                            }
+        // Always create push channel to support dynamic subscriptions via customCommand
+        // This matches the behavior of socket_listener.rs which always creates push channels
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<redis::PushInfo>();
+
+        match runtime.block_on(async { create_glide_client(connection_request, Some(tx)).await }) {
+            Ok(client) => {
+                let safe_handle = jni_client::generate_safe_handle();
+                let handle_table = get_handle_table();
+
+                // Store in handle table
+                handle_table.insert(safe_handle, client);
+
+                // Always spawn push forwarder to deliver pushes to Java
+                let jvm_arc = jni_client::JVM.get().cloned();
+                let handle_for_java = safe_handle as jlong;
+                get_runtime().spawn(async move {
+                    let mut rx = rx;
+                    while let Some(push) = rx.recv().await {
+                        if let Some(jvm) = jvm_arc.as_ref()
+                            && let Ok(mut env) = jvm.attach_current_thread_as_daemon()
+                        {
+                            handle_push_notification(&mut env, handle_for_java, push);
                         }
-                    });
+                    }
+                });
 
-                    Some(safe_handle as jlong)
-                }
-                Err(e) => {
-                    log::error!("Failed to create client: {e}");
-                    Some(0)
-                }
+                Some(safe_handle as jlong)
             }
-        },
-        "createClient",
-    )
+            Err(e) => {
+                log::error!("Failed to create client: {e}");
+                Some(0)
+            }
+        }
+    })
     .unwrap_or(0)
 }
 
 /// Execute Valkey command asynchronously using protobuf with FFI-imported routing.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     request_bytes: JByteArray,
     callback_id: jlong,
 ) {
-    handle_panics(
-        move || {
-            let raw_bytes = match env.convert_byte_array(&request_bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("Failed to read command bytes: {e}");
-                    return Some(());
-                }
-            };
+    run_ffi(|| {
+        let Some(command_request) = parse_request_bytes(&mut env, &request_bytes, callback_id)
+        else {
+            return Some(());
+        };
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeCommandAsync")
+        else {
+            return Some(());
+        };
 
-            if raw_bytes.is_empty() {
-                log::error!("Empty command request bytes");
-                return Some(());
-            }
+        let handle_id = client_ptr as u64;
+        get_runtime().spawn(execute_command_request_and_complete(
+            handle_id,
+            command_request,
+            callback_id,
+            jvm,
+            true, // executeCommandAsync expects UTF-8 decoding
+        ));
 
-            // Parse actual protobuf CommandRequest using existing glide-core logic
-            let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("Failed to parse protobuf command request: {e}");
-                    return Some(());
-                }
-            };
-
-            let handle_id = client_ptr as u64;
-
-            // Get JVM for callback completion
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in executeCommandAsync");
-                    return Some(());
-                }
-            };
-            // Spawn unified async executor
-            let runtime = get_runtime();
-            let expect_utf8 = true; // executeCommandAsync expects UTF-8 decoding
-            runtime.spawn(execute_command_request_and_complete(
-                handle_id,
-                command_request,
-                callback_id,
-                jvm,
-                expect_utf8,
-            ));
-
-            Some(())
-        },
-        "executeCommandAsync",
-    )
+        Some(())
+    })
     .unwrap_or(())
 }
 
@@ -1438,24 +1428,21 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeClient(
     _class: JClass,
     client_ptr: jlong,
 ) {
-    handle_panics(
-        move || {
-            let handle_table = get_handle_table();
-            let handle_id = client_ptr as u64;
+    run_ffi(|| {
+        let handle_table = get_handle_table();
+        let handle_id = client_ptr as u64;
 
-            // DashMap operations are sync and lock-free
-            if let Some((_, client)) = handle_table.remove(&handle_id) {
-                // Schedule async cleanup
-                let runtime = get_runtime();
-                runtime.spawn(async move {
-                    // Drop the client; core will close connections via Drop implementations
-                    drop(client);
-                });
-            }
-            Some(())
-        },
-        "closeClient",
-    )
+        // DashMap operations are sync and lock-free
+        if let Some((_, client)) = handle_table.remove(&handle_id) {
+            // Schedule async cleanup
+            let runtime = get_runtime();
+            runtime.spawn(async move {
+                // Drop the client; core will close connections via Drop implementations
+                drop(client);
+            });
+        }
+        Some(())
+    })
     .unwrap_or(())
 }
 
@@ -1466,18 +1453,15 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_isConnected(
     _class: JClass,
     client_ptr: jlong,
 ) -> jni::sys::jboolean {
-    handle_panics(
-        move || {
-            let handle_table = get_handle_table();
-            let handle_id = client_ptr as u64;
-            if handle_table.contains_key(&handle_id) {
-                Some(1)
-            } else {
-                Some(0)
-            }
-        },
-        "isConnected",
-    )
+    run_ffi(|| {
+        let handle_table = get_handle_table();
+        let handle_id = client_ptr as u64;
+        if handle_table.contains_key(&handle_id) {
+            Some(1)
+        } else {
+            Some(0)
+        }
+    })
     .unwrap_or(0)
 }
 
@@ -1488,29 +1472,26 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getClientInfo<'loca
     _class: JClass<'local>,
     client_ptr: jlong,
 ) -> JString<'local> {
-    handle_panics(
-        move || {
-            fn get_client_info<'a>(
-                env: &mut JNIEnv<'a>,
-                client_ptr: jlong,
-            ) -> Result<JString<'a>, FFIError> {
-                let handle_id = client_ptr as u64;
-                let handle_table = get_handle_table();
+    run_ffi(|| {
+        fn get_client_info<'a>(
+            env: &mut JNIEnv<'a>,
+            client_ptr: jlong,
+        ) -> Result<JString<'a>, FFIError> {
+            let handle_id = client_ptr as u64;
+            let handle_table = get_handle_table();
 
-                if handle_table.contains_key(&handle_id) {
-                    // Return basic client information
-                    let info = format!("Client handle: {}, Status: Connected", handle_id);
-                    Ok(env.new_string(info)?)
-                } else {
-                    let info = format!("Client handle: {}, Status: Not found", handle_id);
-                    Ok(env.new_string(info)?)
-                }
+            if handle_table.contains_key(&handle_id) {
+                // Return basic client information
+                let info = format!("Client handle: {}, Status: Connected", handle_id);
+                Ok(env.new_string(info)?)
+            } else {
+                let info = format!("Client handle: {}, Status: Not found", handle_id);
+                Ok(env.new_string(info)?)
             }
-            let result = get_client_info(&mut env, client_ptr);
-            handle_errors(&mut env, result)
-        },
-        "getClientInfo",
-    )
+        }
+        let result = get_client_info(&mut env, client_ptr);
+        handle_errors(&mut env, result)
+    })
     .unwrap_or(JString::default())
 }
 
@@ -1557,35 +1538,18 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_markTimedOut(
 /// Execute a batch (pipeline/transaction) asynchronously using FFI-imported logic
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     batch_request_bytes: JByteArray,
     expect_utf8: jni::sys::jboolean,
     callback_id: jlong,
 ) {
-    handle_panics(
-        move || {
-            let raw_bytes = match env.convert_byte_array(&batch_request_bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("Failed to read batch bytes: {e}");
-                    return Some(());
-                }
-            };
-
-            if raw_bytes.is_empty() {
-                log::error!("Empty batch request bytes");
+    run_ffi(|| {
+            let Some(command_request) =
+                parse_request_bytes(&mut env, &batch_request_bytes, callback_id)
+            else {
                 return Some(());
-            }
-
-            // Parse actual batch protobuf using existing protobuf logic
-            let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("Failed to parse batch protobuf request: {e}");
-                    return Some(());
-                }
             };
 
             // Extract optional root span pointer from the request (if provided by Java)
@@ -1596,21 +1560,22 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
             let batch = match command_request.command {
                 Some(command_request::Command::Batch(batch)) => batch,
                 _ => {
-                    log::error!("Expected batch command in request");
+                    complete_callback_with_error_on_caller(
+                        &mut env,
+                        callback_id,
+                        "Expected batch command in request",
+                    );
                     return Some(());
                 }
             };
 
             let handle_id = client_ptr as u64;
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in executeBatchAsync");
-                    return Some(());
-                }
+            let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeBatchAsync")
+            else {
+                return Some(());
             };
-            let runtime = get_runtime();
-            runtime.spawn(async move {
+
+            get_runtime().spawn(async move {
                 let client_result = ensure_client_for_handle(handle_id).await;
                 match client_result {
                     Ok(mut client) => {
@@ -1736,67 +1701,40 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
             Some(())
         },
-        "executeBatchAsync",
-    )
-    .unwrap_or(())
+    ).unwrap_or(())
 }
 
 /// Execute a binary command asynchronously
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryCommandAsync(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     request_bytes: JByteArray,
     callback_id: jlong,
 ) {
-    handle_panics(
-        move || {
-            let raw_bytes = match env.convert_byte_array(&request_bytes) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("Failed to read binary command bytes: {e}");
-                    return Some(());
-                }
-            };
+    run_ffi(|| {
+        let Some(command_request) = parse_request_bytes(&mut env, &request_bytes, callback_id)
+        else {
+            return Some(());
+        };
+        let Some(jvm) =
+            get_jvm_or_complete_error(&mut env, callback_id, "executeBinaryCommandAsync")
+        else {
+            return Some(());
+        };
 
-            if raw_bytes.is_empty() {
-                log::error!("Empty binary command request bytes");
-                return Some(());
-            }
+        let handle_id = client_ptr as u64;
+        get_runtime().spawn(execute_command_request_and_complete(
+            handle_id,
+            command_request,
+            callback_id,
+            jvm,
+            false, // binary entrypoint expects binary decoding
+        ));
 
-            // Parse protobuf CommandRequest using existing bridge logic
-            let command_request = match protobuf_bridge::parse_command_request(&raw_bytes) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("Failed to parse binary protobuf command request: {e}");
-                    return Some(());
-                }
-            };
-
-            let handle_id = client_ptr as u64;
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in executeBinaryCommandAsync");
-                    return Some(());
-                }
-            };
-            // Spawn unified async executor
-            let runtime = get_runtime();
-            let expect_utf8 = false; // binary entrypoint expects binary decoding
-            runtime.spawn(execute_command_request_and_complete(
-                handle_id,
-                command_request,
-                callback_id,
-                jvm,
-                expect_utf8,
-            ));
-
-            Some(())
-        },
-        "executeBinaryCommandAsync",
-    )
+        Some(())
+    })
     .unwrap_or(())
 }
 
@@ -1815,270 +1753,264 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
     route_param: JString,
     expect_utf8: jni::sys::jboolean,
 ) {
-    handle_panics(
-        move || {
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in executeScriptAsync");
-                    return Some(());
+    run_ffi(|| {
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeScriptAsync")
+        else {
+            return Some(());
+        };
+
+        // Extract script hash
+        let hash_str = match env.get_string(&hash) {
+            Ok(h) => h.to_string_lossy().to_string(),
+            Err(e) => {
+                log::error!("Failed to read script hash: {e}");
+                complete_callback(
+                    jvm,
+                    callback_id,
+                    Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Failed to read hash",
+                        e.to_string(),
+                    ))),
+                    false,
+                );
+                return Some(());
+            }
+        };
+
+        // Extract keys array (supports String[] or byte[][])
+        let keys_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
+            if keys.is_null() {
+                return Ok(Vec::new());
+            }
+            let length = env.get_array_length(&keys)? as usize;
+            let mut keys_data = Vec::with_capacity(length);
+
+            for i in 0..length {
+                let key_obj = env.get_object_array_element(&keys, i as i32)?;
+                if env.is_instance_of(&key_obj, "[B")? {
+                    let key_bytes = env.convert_byte_array(JByteArray::from(key_obj))?;
+                    keys_data.push(key_bytes);
+                } else {
+                    let jstr = JString::from(key_obj);
+                    let s: String = env.get_string(&jstr)?.into();
+                    keys_data.push(s.into_bytes());
                 }
-            };
+            }
+            Ok(keys_data)
+        })();
 
-            // Extract script hash
-            let hash_str = match env.get_string(&hash) {
-                Ok(h) => h.to_string_lossy().to_string(),
-                Err(e) => {
-                    log::error!("Failed to read script hash: {e}");
-                    complete_callback(
-                        jvm,
-                        callback_id,
-                        Err(redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Failed to read hash",
-                            e.to_string(),
-                        ))),
-                        false,
-                    );
-                    return Some(());
+        let keys_data = match keys_vec {
+            Ok(k) => k,
+            Err(e) => {
+                log::error!("Failed to extract script keys: {e}");
+                complete_callback(
+                    jvm,
+                    callback_id,
+                    Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Failed to extract keys",
+                        e.to_string(),
+                    ))),
+                    false,
+                );
+                return Some(());
+            }
+        };
+
+        // Extract args array (supports String[] or byte[][])
+        let args_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
+            if args.is_null() {
+                return Ok(Vec::new());
+            }
+            let length = env.get_array_length(&args)? as usize;
+            let mut args_data = Vec::with_capacity(length);
+
+            for i in 0..length {
+                let arg_obj = env.get_object_array_element(&args, i as i32)?;
+                if env.is_instance_of(&arg_obj, "[B")? {
+                    let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
+                    args_data.push(arg_bytes);
+                } else {
+                    let jstr = JString::from(arg_obj);
+                    let s: String = env.get_string(&jstr)?.into();
+                    args_data.push(s.into_bytes());
                 }
-            };
+            }
+            Ok(args_data)
+        })();
 
-            // Extract keys array (supports String[] or byte[][])
-            let keys_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
-                if keys.is_null() {
-                    return Ok(Vec::new());
-                }
-                let length = env.get_array_length(&keys)? as usize;
-                let mut keys_data = Vec::with_capacity(length);
+        let args_data = match args_vec {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!("Failed to extract script args: {e}");
+                complete_callback(
+                    jvm,
+                    callback_id,
+                    Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Failed to extract args",
+                        e.to_string(),
+                    ))),
+                    false,
+                );
+                return Some(());
+            }
+        };
 
-                for i in 0..length {
-                    let key_obj = env.get_object_array_element(&keys, i as i32)?;
-                    if env.is_instance_of(&key_obj, "[B")? {
-                        let key_bytes = env.convert_byte_array(JByteArray::from(key_obj))?;
-                        keys_data.push(key_bytes);
-                    } else {
-                        let jstr = JString::from(key_obj);
-                        let s: String = env.get_string(&jstr)?.into();
-                        keys_data.push(s.into_bytes());
-                    }
-                }
-                Ok(keys_data)
-            })();
+        let client_handle_id = handle_id as u64;
 
-            let keys_data = match keys_vec {
-                Ok(k) => k,
-                Err(e) => {
-                    log::error!("Failed to extract script keys: {e}");
-                    complete_callback(
-                        jvm,
-                        callback_id,
-                        Err(redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Failed to extract keys",
-                            e.to_string(),
-                        ))),
-                        false,
-                    );
-                    return Some(());
-                }
-            };
+        // Extract route parameters on the current thread (avoid JNI env escaping into async)
+        let has_route_bool = has_route != 0;
+        let route_type_val: i32 = route_type;
+        let route_param_str: Option<String> = if !route_param.is_null() {
+            match env.get_string(&route_param) {
+                Ok(s) => Some(s.into()),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
 
-            // Extract args array (supports String[] or byte[][])
-            let args_vec: Result<Vec<Vec<u8>>, FFIError> = (|| {
-                if args.is_null() {
-                    return Ok(Vec::new());
-                }
-                let length = env.get_array_length(&args)? as usize;
-                let mut args_data = Vec::with_capacity(length);
-
-                for i in 0..length {
-                    let arg_obj = env.get_object_array_element(&args, i as i32)?;
-                    if env.is_instance_of(&arg_obj, "[B")? {
-                        let arg_bytes = env.convert_byte_array(JByteArray::from(arg_obj))?;
-                        args_data.push(arg_bytes);
-                    } else {
-                        let jstr = JString::from(arg_obj);
-                        let s: String = env.get_string(&jstr)?.into();
-                        args_data.push(s.into_bytes());
-                    }
-                }
-                Ok(args_data)
-            })();
-
-            let args_data = match args_vec {
-                Ok(a) => a,
-                Err(e) => {
-                    log::error!("Failed to extract script args: {e}");
-                    complete_callback(
-                        jvm,
-                        callback_id,
-                        Err(redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Failed to extract args",
-                            e.to_string(),
-                        ))),
-                        false,
-                    );
-                    return Some(());
-                }
-            };
-
-            let client_handle_id = handle_id as u64;
-
-            // Extract route parameters on the current thread (avoid JNI env escaping into async)
-            let has_route_bool = has_route != 0;
-            let route_type_val: i32 = route_type;
-            let route_param_str: Option<String> = if !route_param.is_null() {
-                match env.get_string(&route_param) {
-                    Ok(s) => Some(s.into()),
-                    Err(_) => None,
-                }
-            } else {
-                None
-            };
-
-            // Spawn async task for script execution using FFI-imported patterns
-            let runtime = get_runtime();
-            runtime.spawn(async move {
-                let client_result = ensure_client_for_handle(client_handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        // Determine routing: explicit route if provided, otherwise infer from keys via EVALSHA-shaped command
-                        let routing_info = if has_route_bool {
-                            use glide_core::command_request::{
-                                ByAddressRoute, Routes, SimpleRoutes, SlotIdRoute, SlotKeyRoute,
-                                SlotTypes,
-                            };
-                            use protobuf::EnumOrUnknown;
-                            let mut routes = Routes::default();
-                            // Build route based on route_type/route_param
-                            // SimpleRoutes
-                            if route_type_val >= 0 && route_param_str.is_none() {
-                                let simple = match route_type_val {
-                                    0 => SimpleRoutes::AllNodes,
-                                    1 => SimpleRoutes::AllPrimaries,
-                                    _ => SimpleRoutes::Random,
-                                };
-                                routes.set_simple_routes(simple);
-                            } else if route_type_val >= 0 && route_param_str.is_some() {
-                                // Slot routes with slot type
-                                let slot_type = match route_type_val {
-                                    1 => SlotTypes::Replica,
-                                    _ => SlotTypes::Primary,
-                                };
-                                // Try to parse param as integer slot id; if fails, treat as slot key
-                                let param_str = route_param_str.unwrap_or_default();
-                                if let Ok(slot_id) = param_str.parse::<i32>() {
-                                    let s = SlotIdRoute {
-                                        slot_type: EnumOrUnknown::new(slot_type),
-                                        slot_id,
-                                        ..Default::default()
-                                    };
-                                    routes.set_slot_id_route(s);
-                                } else if !param_str.is_empty() {
-                                    let s = SlotKeyRoute {
-                                        slot_type: EnumOrUnknown::new(slot_type),
-                                        slot_key: param_str.into(),
-                                        ..Default::default()
-                                    };
-                                    routes.set_slot_key_route(s);
-                                }
-                            } else if route_type_val < 0 && route_param_str.is_some() {
-                                // ByAddressRoute encoded with route_type = -1 and host:port in route_param
-                                let param_str = route_param_str.unwrap_or_default();
-                                if let Some((host, port_str)) = param_str.split_once(':')
-                                    && let Ok(port) = port_str.parse::<i32>()
-                                {
-                                    let s = ByAddressRoute {
-                                        host: host.to_string().into(),
-                                        port,
-                                        ..Default::default()
-                                    };
-                                    routes.set_by_address_route(s);
-                                }
-                            }
-
-                            match protobuf_bridge::get_route(routes, None) {
-                                Ok(r) => r,
-                                Err(e) => {
-                                    complete_callback(
-                                        jvm,
-                                        callback_id,
-                                        Err(redis::RedisError::from((
-                                            redis::ErrorKind::ClientError,
-                                            "Routing error",
-                                            e.to_string(),
-                                        ))),
-                                        false,
-                                    );
-                                    return;
-                                }
-                            }
-                        } else {
-                            // Auto route by constructing EVALSHA-shaped command
-                            let mut route_cmd = redis::cmd("EVALSHA");
-                            route_cmd.arg(hash_str.as_bytes());
-                            route_cmd.arg(keys_data.len());
-                            for k in &keys_data {
-                                route_cmd.arg(k.as_slice());
-                            }
-                            for a in &args_data {
-                                route_cmd.arg(a.as_slice());
-                            }
-                            match protobuf_bridge::get_route(Default::default(), Some(&route_cmd)) {
-                                Ok(r) => r,
-                                Err(e) => {
-                                    complete_callback(
-                                        jvm,
-                                        callback_id,
-                                        Err(redis::RedisError::from((
-                                            redis::ErrorKind::ClientError,
-                                            "Routing error",
-                                            e.to_string(),
-                                        ))),
-                                        false,
-                                    );
-                                    return;
-                                }
-                            }
+        // Spawn async task for script execution using FFI-imported patterns
+        let runtime = get_runtime();
+        runtime.spawn(async move {
+            let client_result = ensure_client_for_handle(client_handle_id).await;
+            match client_result {
+                Ok(mut client) => {
+                    // Determine routing: explicit route if provided, otherwise infer from keys via EVALSHA-shaped command
+                    let routing_info = if has_route_bool {
+                        use glide_core::command_request::{
+                            ByAddressRoute, Routes, SimpleRoutes, SlotIdRoute, SlotKeyRoute,
+                            SlotTypes,
                         };
+                        use protobuf::EnumOrUnknown;
+                        let mut routes = Routes::default();
+                        // Build route based on route_type/route_param
+                        // SimpleRoutes
+                        if route_type_val >= 0 && route_param_str.is_none() {
+                            let simple = match route_type_val {
+                                0 => SimpleRoutes::AllNodes,
+                                1 => SimpleRoutes::AllPrimaries,
+                                _ => SimpleRoutes::Random,
+                            };
+                            routes.set_simple_routes(simple);
+                        } else if route_type_val >= 0 && route_param_str.is_some() {
+                            // Slot routes with slot type
+                            let slot_type = match route_type_val {
+                                1 => SlotTypes::Replica,
+                                _ => SlotTypes::Primary,
+                            };
+                            // Try to parse param as integer slot id; if fails, treat as slot key
+                            let param_str = route_param_str.unwrap_or_default();
+                            if let Ok(slot_id) = param_str.parse::<i32>() {
+                                let s = SlotIdRoute {
+                                    slot_type: EnumOrUnknown::new(slot_type),
+                                    slot_id,
+                                    ..Default::default()
+                                };
+                                routes.set_slot_id_route(s);
+                            } else if !param_str.is_empty() {
+                                let s = SlotKeyRoute {
+                                    slot_type: EnumOrUnknown::new(slot_type),
+                                    slot_key: param_str.into(),
+                                    ..Default::default()
+                                };
+                                routes.set_slot_key_route(s);
+                            }
+                        } else if route_type_val < 0 && route_param_str.is_some() {
+                            // ByAddressRoute encoded with route_type = -1 and host:port in route_param
+                            let param_str = route_param_str.unwrap_or_default();
+                            if let Some((host, port_str)) = param_str.split_once(':')
+                                && let Ok(port) = port_str.parse::<i32>()
+                            {
+                                let s = ByAddressRoute {
+                                    host: host.to_string().into(),
+                                    port,
+                                    ..Default::default()
+                                };
+                                routes.set_by_address_route(s);
+                            }
+                        }
 
-                        let result = client
-                            .invoke_script(
-                                &hash_str,
-                                &keys_data.iter().map(|k| k.as_slice()).collect::<Vec<_>>(),
-                                &args_data.iter().map(|a| a.as_slice()).collect::<Vec<_>>(),
-                                routing_info,
-                            )
-                            .await
-                            .map_err(|e| {
-                                redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "Script execution failed",
-                                    e.to_string(),
-                                ))
-                            });
+                        match protobuf_bridge::get_route(routes, None) {
+                            Ok(r) => r,
+                            Err(e) => {
+                                complete_callback(
+                                    jvm,
+                                    callback_id,
+                                    Err(redis::RedisError::from((
+                                        redis::ErrorKind::ClientError,
+                                        "Routing error",
+                                        e.to_string(),
+                                    ))),
+                                    false,
+                                );
+                                return;
+                            }
+                        }
+                    } else {
+                        // Auto route by constructing EVALSHA-shaped command
+                        let mut route_cmd = redis::cmd("EVALSHA");
+                        route_cmd.arg(hash_str.as_bytes());
+                        route_cmd.arg(keys_data.len());
+                        for k in &keys_data {
+                            route_cmd.arg(k.as_slice());
+                        }
+                        for a in &args_data {
+                            route_cmd.arg(a.as_slice());
+                        }
+                        match protobuf_bridge::get_route(Default::default(), Some(&route_cmd)) {
+                            Ok(r) => r,
+                            Err(e) => {
+                                complete_callback(
+                                    jvm,
+                                    callback_id,
+                                    Err(redis::RedisError::from((
+                                        redis::ErrorKind::ClientError,
+                                        "Routing error",
+                                        e.to_string(),
+                                    ))),
+                                    false,
+                                );
+                                return;
+                            }
+                        }
+                    };
 
-                        let binary_mode = expect_utf8 == 0;
-                        complete_callback(jvm, callback_id, result, binary_mode);
-                    }
-                    Err(err) => {
-                        let error = Err(redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Client not found",
-                            err.to_string(),
-                        )));
-                        let binary_mode = expect_utf8 == 0;
-                        complete_callback(jvm, callback_id, error, binary_mode);
-                    }
+                    let result = client
+                        .invoke_script(
+                            &hash_str,
+                            &keys_data.iter().map(|k| k.as_slice()).collect::<Vec<_>>(),
+                            &args_data.iter().map(|a| a.as_slice()).collect::<Vec<_>>(),
+                            routing_info,
+                        )
+                        .await
+                        .map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Script execution failed",
+                                e.to_string(),
+                            ))
+                        });
+
+                    let binary_mode = expect_utf8 == 0;
+                    complete_callback(jvm, callback_id, result, binary_mode);
                 }
-            });
+                Err(err) => {
+                    let error = Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Client not found",
+                        err.to_string(),
+                    )));
+                    let binary_mode = expect_utf8 == 0;
+                    complete_callback(jvm, callback_id, error, binary_mode);
+                }
+            }
+        });
 
-            Some(())
-        },
-        "executeScriptAsync",
-    )
+        Some(())
+    })
     .unwrap_or(())
 }
 
@@ -2092,111 +2024,96 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_updateConnectionPas
     immediate_auth: jni::sys::jboolean,
     callback_id: jlong,
 ) {
-    handle_panics(
-        move || {
-            let password_opt = get_optional_string_param_raw(&mut env, password);
-            let handle_id = _client_ptr as u64;
-            let do_immediate = immediate_auth != 0;
+    run_ffi(|| {
+        let password_opt = get_optional_string_param_raw(&mut env, password);
+        let handle_id = _client_ptr as u64;
+        let do_immediate = immediate_auth != 0;
 
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in updateConnectionPassword");
-                    return Some(());
+        let Some(jvm) =
+            get_jvm_or_complete_error(&mut env, callback_id, "updateConnectionPassword")
+        else {
+            return Some(());
+        };
+
+        get_runtime().spawn(async move {
+            let client_result = ensure_client_for_handle(handle_id).await;
+            match client_result {
+                Ok(mut client) => {
+                    let result = client
+                        .update_connection_password(password_opt, do_immediate)
+                        .await
+                        .map(|_| redis::Value::Okay)
+                        .map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Password update failed",
+                                e.to_string(),
+                            ))
+                        });
+
+                    complete_callback(jvm, callback_id, result, false);
                 }
-            };
-
-            // Spawn async task
-            let runtime = get_runtime();
-            runtime.spawn(async move {
-                let client_result = ensure_client_for_handle(handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        let result = client
-                            .update_connection_password(password_opt, do_immediate)
-                            .await
-                            .map(|_| redis::Value::Okay)
-                            .map_err(|e| {
-                                redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "Password update failed",
-                                    e.to_string(),
-                                ))
-                            });
-
-                        complete_callback(jvm, callback_id, result, false);
-                    }
-                    Err(err) => {
-                        let error = Err(redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Client not found",
-                            err.to_string(),
-                        )));
-                        complete_callback(jvm, callback_id, error, false);
-                    }
+                Err(err) => {
+                    let error = Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Client not found",
+                        err.to_string(),
+                    )));
+                    complete_callback(jvm, callback_id, error, false);
                 }
-            });
+            }
+        });
 
-            Some(())
-        },
-        "updateConnectionPassword",
-    )
+        Some(())
+    })
     .unwrap_or(())
 }
 
 /// Manually refresh IAM authentication token
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_refreshIamToken(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     callback_id: jlong,
 ) {
-    handle_panics(
-        move || {
-            let handle_id = client_ptr as u64;
+    run_ffi(|| {
+        let handle_id = client_ptr as u64;
 
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in refreshIamToken");
-                    return Some(());
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "refreshIamToken") else {
+            return Some(());
+        };
+
+        get_runtime().spawn(async move {
+            let client_result = ensure_client_for_handle(handle_id).await;
+            match client_result {
+                Ok(mut client) => {
+                    let result = client
+                        .refresh_iam_token()
+                        .await
+                        .map(|_| redis::Value::Okay)
+                        .map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "IAM token refresh failed",
+                                e.to_string(),
+                            ))
+                        });
+                    complete_callback(jvm, callback_id, result, false);
                 }
-            };
-
-            let runtime = get_runtime();
-            runtime.spawn(async move {
-                let client_result = ensure_client_for_handle(handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        let result = client
-                            .refresh_iam_token()
-                            .await
-                            .map(|_| redis::Value::Okay)
-                            .map_err(|e| {
-                                redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "IAM token refresh failed",
-                                    e.to_string(),
-                                ))
-                            });
-                        complete_callback(jvm, callback_id, result, false);
-                    }
-                    Err(err) => {
-                        let error = Err(redis::RedisError::from((
-                            redis::ErrorKind::ClientError,
-                            "Client not found",
-                            err.to_string(),
-                        )));
-                        complete_callback(jvm, callback_id, error, false);
-                    }
+                Err(err) => {
+                    let error = Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Client not found",
+                        err.to_string(),
+                    )));
+                    complete_callback(jvm, callback_id, error, false);
                 }
-            });
+            }
+        });
 
-            Some(())
-        },
-        "refreshIamToken",
-    )
+        Some(())
+    })
     .unwrap_or(())
 }
 
@@ -2214,166 +2131,160 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeClusterScanA
     expect_utf8: jni::sys::jboolean,
     callback_id: jlong,
 ) {
-    handle_panics(
-        move || {
-            let jvm = match env.get_java_vm() {
-                Ok(jvm) => Arc::new(jvm),
-                Err(_) => {
-                    log::error!("JVM error in executeClusterScanAsync");
+    run_ffi(|| {
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeClusterScanAsync")
+        else {
+            return Some(());
+        };
+
+        // Extract cursor ID (null-safe: null means initial cursor)
+        let cursor_str = if cursor_id.is_null() {
+            String::new()
+        } else {
+            match env.get_string(&cursor_id) {
+                Ok(s) => s.to_string_lossy().to_string(),
+                Err(e) => {
+                    log::error!("Failed to read cursor ID: {e}");
+                    complete_callback(
+                        jvm,
+                        callback_id,
+                        Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Failed to read cursor ID",
+                            e.to_string(),
+                        ))),
+                        false,
+                    );
                     return Some(());
                 }
-            };
+            }
+        };
 
-            // Extract cursor ID (null-safe: null means initial cursor)
-            let cursor_str = if cursor_id.is_null() {
-                String::new()
-            } else {
-                match env.get_string(&cursor_id) {
-                    Ok(s) => s.to_string_lossy().to_string(),
-                    Err(e) => {
-                        log::error!("Failed to read cursor ID: {e}");
-                        complete_callback(
-                            jvm,
-                            callback_id,
-                            Err(redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Failed to read cursor ID",
-                                e.to_string(),
-                            ))),
-                            false,
-                        );
-                        return Some(());
-                    }
-                }
-            };
-
-            // Extract optional match pattern
-            let pattern = if match_pattern.is_null() {
-                None
-            } else {
-                match env.get_string(&match_pattern) {
-                    Ok(s) => Some(s.to_string_lossy().to_string()),
-                    Err(e) => {
-                        log::error!("Failed to read match pattern: {e}");
-                        complete_callback(
-                            jvm,
-                            callback_id,
-                            Err(redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Failed to read match pattern",
-                                e.to_string(),
-                            ))),
-                            false,
-                        );
-                        return Some(());
-                    }
-                }
-            };
-
-            // Extract optional object type
-            let obj_type = if object_type.is_null() {
-                None
-            } else {
-                match env.get_string(&object_type) {
-                    Ok(s) => Some(s.to_string_lossy().to_string()),
-                    Err(e) => {
-                        log::error!("Failed to read object type: {e}");
-                        complete_callback(
-                            jvm,
-                            callback_id,
-                            Err(redis::RedisError::from((
-                                redis::ErrorKind::ClientError,
-                                "Failed to read object type",
-                                e.to_string(),
-                            ))),
-                            false,
-                        );
-                        return Some(());
-                    }
-                }
-            };
-
-            let client_handle_id = client_ptr as u64;
-            let count_value = if count > 0 { Some(count as u32) } else { None };
-
-            // Spawn async task for cluster scan execution
-            let runtime = get_runtime();
-            runtime.spawn(async move {
-                let client_result = ensure_client_for_handle(client_handle_id).await;
-                match client_result {
-                    Ok(mut client) => {
-                        // Get or create scan state cursor - using redis compatible types for now
-                        let scan_state_cursor = if cursor_str.is_empty() || cursor_str == "0" {
-                            // Create new initial cursor
-                            redis::ScanStateRC::new()
-                        } else {
-                            // Get existing cursor from container
-                            match glide_core::cluster_scan_container::get_cluster_scan_cursor(
-                                cursor_str,
-                            ) {
-                                Ok(cursor) => cursor,
-                                Err(e) => {
-                                    complete_callback(
-                                        jvm,
-                                        callback_id,
-                                        Err(redis::RedisError::from((
-                                            redis::ErrorKind::ClientError,
-                                            "Invalid cursor",
-                                            e.to_string(),
-                                        ))),
-                                        false,
-                                    );
-                                    return;
-                                }
-                            }
-                        };
-
-                        // Build cluster scan args
-                        let mut scan_args_builder = redis::ClusterScanArgs::builder();
-                        if let Some(pattern) = pattern {
-                            scan_args_builder = scan_args_builder
-                                .with_match_pattern::<bytes::Bytes>(pattern.into());
-                        }
-                        if let Some(count) = count_value {
-                            scan_args_builder = scan_args_builder.with_count(count);
-                        }
-                        if let Some(obj_type) = obj_type {
-                            scan_args_builder = scan_args_builder.with_object_type(obj_type.into());
-                        }
-                        let scan_args = scan_args_builder.build();
-
-                        // Execute cluster scan
-                        let result = client
-                            .cluster_scan(&scan_state_cursor, scan_args)
-                            .await
-                            .map_err(|e| {
-                                redis::RedisError::from((
-                                    redis::ErrorKind::ClientError,
-                                    "Cluster scan execution failed",
-                                    e.to_string(),
-                                ))
-                            });
-
-                        // binary_mode = !expect_utf8
-                        let binary_mode = expect_utf8 == 0;
-                        complete_callback(jvm, callback_id, result, binary_mode);
-                    }
-                    Err(err) => {
-                        let error = Err(redis::RedisError::from((
+        // Extract optional match pattern
+        let pattern = if match_pattern.is_null() {
+            None
+        } else {
+            match env.get_string(&match_pattern) {
+                Ok(s) => Some(s.to_string_lossy().to_string()),
+                Err(e) => {
+                    log::error!("Failed to read match pattern: {e}");
+                    complete_callback(
+                        jvm,
+                        callback_id,
+                        Err(redis::RedisError::from((
                             redis::ErrorKind::ClientError,
-                            "Client not found",
-                            err.to_string(),
-                        )));
-                        let binary_mode = expect_utf8 == 0;
-                        complete_callback(jvm, callback_id, error, binary_mode);
-                    }
+                            "Failed to read match pattern",
+                            e.to_string(),
+                        ))),
+                        false,
+                    );
+                    return Some(());
                 }
-            });
+            }
+        };
 
-            Some(())
-        },
-        "executeClusterScanAsync",
-    )
+        // Extract optional object type
+        let obj_type = if object_type.is_null() {
+            None
+        } else {
+            match env.get_string(&object_type) {
+                Ok(s) => Some(s.to_string_lossy().to_string()),
+                Err(e) => {
+                    log::error!("Failed to read object type: {e}");
+                    complete_callback(
+                        jvm,
+                        callback_id,
+                        Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Failed to read object type",
+                            e.to_string(),
+                        ))),
+                        false,
+                    );
+                    return Some(());
+                }
+            }
+        };
+
+        let client_handle_id = client_ptr as u64;
+        let count_value = if count > 0 { Some(count as u32) } else { None };
+
+        // Spawn async task for cluster scan execution
+        let runtime = get_runtime();
+        runtime.spawn(async move {
+            let client_result = ensure_client_for_handle(client_handle_id).await;
+            match client_result {
+                Ok(mut client) => {
+                    // Get or create scan state cursor - using redis compatible types for now
+                    let scan_state_cursor = if cursor_str.is_empty() || cursor_str == "0" {
+                        // Create new initial cursor
+                        redis::ScanStateRC::new()
+                    } else {
+                        // Get existing cursor from container
+                        match glide_core::cluster_scan_container::get_cluster_scan_cursor(
+                            cursor_str,
+                        ) {
+                            Ok(cursor) => cursor,
+                            Err(e) => {
+                                complete_callback(
+                                    jvm,
+                                    callback_id,
+                                    Err(redis::RedisError::from((
+                                        redis::ErrorKind::ClientError,
+                                        "Invalid cursor",
+                                        e.to_string(),
+                                    ))),
+                                    false,
+                                );
+                                return;
+                            }
+                        }
+                    };
+
+                    // Build cluster scan args
+                    let mut scan_args_builder = redis::ClusterScanArgs::builder();
+                    if let Some(pattern) = pattern {
+                        scan_args_builder =
+                            scan_args_builder.with_match_pattern::<bytes::Bytes>(pattern.into());
+                    }
+                    if let Some(count) = count_value {
+                        scan_args_builder = scan_args_builder.with_count(count);
+                    }
+                    if let Some(obj_type) = obj_type {
+                        scan_args_builder = scan_args_builder.with_object_type(obj_type.into());
+                    }
+                    let scan_args = scan_args_builder.build();
+
+                    // Execute cluster scan
+                    let result = client
+                        .cluster_scan(&scan_state_cursor, scan_args)
+                        .await
+                        .map_err(|e| {
+                            redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Cluster scan execution failed",
+                                e.to_string(),
+                            ))
+                        });
+
+                    // binary_mode = !expect_utf8
+                    let binary_mode = expect_utf8 == 0;
+                    complete_callback(jvm, callback_id, result, binary_mode);
+                }
+                Err(err) => {
+                    let error = Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Client not found",
+                        err.to_string(),
+                    )));
+                    let binary_mode = expect_utf8 == 0;
+                    complete_callback(jvm, callback_id, error, binary_mode);
+                }
+            }
+        });
+
+        Some(())
+    })
     .unwrap_or(())
 }
 

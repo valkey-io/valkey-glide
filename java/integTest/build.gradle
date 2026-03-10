@@ -24,7 +24,7 @@ tasks.withType(JavaCompile) {
 }
 
 dependencies {
-    def classifier 
+    def classifier
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         classifier = "linux_musl-${osdetector.arch}"
     }
@@ -33,7 +33,7 @@ dependencies {
     }
     // Use published GLIDE artifact
     implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: classifier
-    
+
     // Use published jedis-compatibility artifact
     testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
 
@@ -300,10 +300,10 @@ tasks.withType(Test) {
 
     minHeapSize = "2048m" // Initial heap size. Needed for max size tests.
     maxHeapSize = "2048m" // Maximum heap size. Needed for max size tests.
-    
+
     // Native library path for GLIDE FFI - needed for Jedis compatibility tests
     jvmArgs "-Djava.library.path=${project.rootDir}/../target/release"
-    
+
     // Disable modularity for jedis compatibility tests
     if (name.contains('jedis') || filter.includePatterns.any { it.contains('jedis') }) {
         jvmArgs += "--add-opens=java.base/java.lang=ALL-UNNAMED"
@@ -340,6 +340,12 @@ jacocoTestCoverageVerification {
 }
 // End of JaCoCo section
 
+tasks.register('printClasspath') {
+    doLast {
+        println configurations.testRuntimeClasspath.asPath
+    }
+}
+
 test {
     filter {
         excludeTestsMatching 'glide.PubSubTests'
@@ -363,3 +369,25 @@ tasks.register('modulesTest', Test) {
         includeTestsMatching 'glide.modules.*'
     }
 }
+
+// Configure Java 8 testing if enabled
+if (project.hasProperty('testJava8') && project.testJava8 == 'true') {
+    tasks.named('test', Test).configure {
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(8)
+            if (project.hasProperty('java8Vendor')) {
+                vendor = JvmVendorSpec.matching(project.java8Vendor)
+            }
+        }
+    }
+    
+    tasks.named('pubsubTest', Test).configure {
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(8)
+            if (project.hasProperty('java8Vendor')) {
+                vendor = JvmVendorSpec.matching(project.java8Vendor)
+            }
+        }
+    }
+}
+
