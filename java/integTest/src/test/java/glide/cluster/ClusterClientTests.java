@@ -13,12 +13,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
-import glide.api.models.configuration.ServiceType;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import java.util.Collections;
@@ -28,6 +26,7 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @Timeout(10) // seconds
 public class ClusterClientTests {
@@ -486,10 +485,7 @@ public class ClusterClientTests {
         ServerCredentials credentials =
                 ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig()
-                                .credentials(credentials)
-                                .useTLS(false)
-                                .build())
+                        commonClusterClientConfig().credentials(credentials).useTLS(false).build())
                 .get();
     }
 

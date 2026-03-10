@@ -52,6 +52,15 @@ pub(crate) mod shared_client_tests {
     #[cfg(feature = "iam_tests")]
     const MEMORYDB_CLUSTER_IAM_ENDPOINT: &str = "memorydb-cluster-iam.endpoint"; // Replace with your cluster endpoint
 
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    const TEST_CLUSTER_NAME: &str = "test-cluster";
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    const TEST_STANDALONE_NAME: &str = "test-standalone";
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    const TEST_USERNAME: &str = "default";
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    const TEST_REGION: &str = "us-east-1";
+
     struct TestBasics {
         server: BackingServer,
         client: Client,
@@ -99,6 +108,24 @@ pub(crate) mod shared_client_tests {
             let server = BackingServer::Standalone(test_basics.server);
             let client = create_client(&server, configuration).await;
             TestBasics { server, client }
+        }
+    }
+
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    fn setup_mock_aws_credentials() {
+        unsafe {
+            std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
+            std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
+            std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
+        }
+    }
+
+    #[cfg(any(feature = "iam_tests", feature = "iam_mock_tests"))]
+    fn cleanup_mock_aws_credentials() {
+        unsafe {
+            std::env::remove_var("AWS_ACCESS_KEY_ID");
+            std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+            std::env::remove_var("AWS_SESSION_TOKEN");
         }
     }
 
@@ -445,7 +472,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint: &'static str = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -505,7 +532,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-standalone"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint = ELASTICACHE_STANDALONE_IAM_ENDPOINT; // Replace with your standalone endpoint
 
             // Use the provided endpoint and port
@@ -566,7 +593,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth-test"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint = MEMORYDB_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -626,7 +653,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -722,7 +749,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-standalone"; // Replace with your standalone cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint = ELASTICACHE_STANDALONE_IAM_ENDPOINT; // Replace with your standalone endpoint
 
             // Use the provided endpoint and port
@@ -827,7 +854,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -849,12 +876,8 @@ pub(crate) mod shared_client_tests {
 
             match client_result {
                 Ok(mut client) => {
-                    // Test initial connection with PING
-                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        initial_ping.is_ok(),
-                        "Initial PING should succeed: {initial_ping:?}"
-                    );
+                    // Test initial connection
+                    assert_connected(&mut client).await;
 
                     // Set a test key-value pair to verify functionality
                     let test_key = generate_random_string(10);
@@ -933,26 +956,18 @@ pub(crate) mod shared_client_tests {
     fn test_iam_refresh_token(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
             // Set mock AWS credentials
-            unsafe {
-                std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
-                std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
-                std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
-            }
+            setup_mock_aws_credentials();
 
             // Cleanup function to restore original credentials
-            let cleanup = || unsafe {
-                std::env::remove_var("AWS_ACCESS_KEY_ID");
-                std::env::remove_var("AWS_SECRET_ACCESS_KEY");
-                std::env::remove_var("AWS_SESSION_TOKEN");
-            };
+            let cleanup = cleanup_mock_aws_credentials;
 
             let cluster_name = if use_cluster {
-                "test-cluster"
+                TEST_CLUSTER_NAME
             } else {
-                "test-standalone"
+                TEST_STANDALONE_NAME
             };
-            let username = "default";
-            let region = "us-east-1";
+            let username = TEST_USERNAME;
+            let region = TEST_REGION;
 
             // Create test basics with regular authentication first
             let test_basics = setup_test_basics(
@@ -1014,12 +1029,8 @@ pub(crate) mod shared_client_tests {
 
             match client_result {
                 Ok(mut client) => {
-                    // Test initial connection with PING
-                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        initial_ping.is_ok(),
-                        "Initial PING should succeed: {initial_ping:?}"
-                    );
+                    // Test initial connection
+                    assert_connected(&mut client).await;
 
                     // Test manual IAM token refresh
                     let refresh_result = client.refresh_iam_token().await;
@@ -1072,7 +1083,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -1095,12 +1106,8 @@ pub(crate) mod shared_client_tests {
 
             match client_result {
                 Ok(mut client) => {
-                    // Test initial connection with PING
-                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        initial_ping.is_ok(),
-                        "Initial PING should succeed: {initial_ping:?}"
-                    );
+                    // Test initial connection
+                    assert_connected(&mut client).await;
 
                     // Set a test key-value pair to verify functionality
                     let test_key = generate_random_string(10);
@@ -1190,7 +1197,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = "us-east-1";
+            let region = TEST_REGION;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -1212,14 +1219,10 @@ pub(crate) mod shared_client_tests {
 
             match client_result {
                 Ok(mut client) => {
-                    // Test initial connection with PING
+                    // Test initial connection
 
                     use logger_core::log_info;
-                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        initial_ping.is_ok(),
-                        "Initial PING should succeed: {initial_ping:?}"
-                    );
+                    assert_connected(&mut client).await;
 
                     // Change to 900
                     // wait enough for the token to be expired
@@ -1319,26 +1322,18 @@ pub(crate) mod shared_client_tests {
     ) {
         block_on_all(async move {
             // Set mock AWS credentials
-            unsafe {
-                std::env::set_var("AWS_ACCESS_KEY_ID", "test_access_key");
-                std::env::set_var("AWS_SECRET_ACCESS_KEY", "test_secret_key");
-                std::env::set_var("AWS_SESSION_TOKEN", "test_session_token");
-            }
+            setup_mock_aws_credentials();
 
             // Cleanup function to restore original credentials
-            let cleanup = || unsafe {
-                std::env::remove_var("AWS_ACCESS_KEY_ID");
-                std::env::remove_var("AWS_SECRET_ACCESS_KEY");
-                std::env::remove_var("AWS_SESSION_TOKEN");
-            };
+            let cleanup = cleanup_mock_aws_credentials;
 
             let cluster_name = if use_cluster {
-                "test-cluster"
+                TEST_CLUSTER_NAME
             } else {
-                "test-standalone"
+                TEST_STANDALONE_NAME
             };
-            let username = "default";
-            let region = "us-east-1";
+            let username = TEST_USERNAME;
+            let region = TEST_REGION;
 
             // Create test basics with regular authentication first
             let test_basics = setup_test_basics(
@@ -1401,11 +1396,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // Verify initial connection works
-                    let initial_ping = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        initial_ping.is_ok(),
-                        "Initial PING should succeed: {initial_ping:?}"
-                    );
+                    assert_connected(&mut client).await;
 
                     // Get initial client info
                     let mut client_info_cmd = redis::Cmd::new();
