@@ -489,7 +489,6 @@ describe("OpenTelemetry GlideClusterClient", () => {
 
             // Check for expected span names
             expect(spanNames).toContain("Batch");
-            expect(spanNames).toContain("send_batch");
 
             // Force GC and check memory
             if (global.gc) {

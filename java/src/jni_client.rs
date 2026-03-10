@@ -283,6 +283,7 @@ pub(crate) struct MethodCache {
     async_handle_table_class: GlobalRef,
     complete_callback_method: JStaticMethodID,
     complete_error_with_code_method: JStaticMethodID,
+    fail_all_method: JStaticMethodID,
 }
 
 static METHOD_CACHE: std::sync::OnceLock<Mutex<Option<MethodCache>>> = std::sync::OnceLock::new();
@@ -320,10 +321,15 @@ pub(crate) fn get_method_cache(env: &mut JNIEnv) -> Result<MethodCache> {
             anyhow::anyhow!("Failed to get completeCallbackWithErrorCode method ID: {e}")
         })?;
 
+    let fail_all_method = env
+        .get_static_method_id(&class, "failAllWithError", "(Ljava/lang/String;)V")
+        .map_err(|e| anyhow::anyhow!("Failed to get failAllWithError method ID: {e}"))?;
+
     let method_cache = MethodCache {
         async_handle_table_class: global_class,
         complete_callback_method,
         complete_error_with_code_method,
+        fail_all_method,
     };
 
     // Store in cache
@@ -362,17 +368,29 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
             thread::Builder::new()
                 .name(format!("glide-jni-callback-{i}"))
                 .spawn(move || {
+                    // Pre-attach to JVM once at thread start. attach_current_thread_as_daemon
+                    // keeps the thread attached for its entire lifetime (no detach on drop).
+                    // This eliminates per-callback attach overhead and the attach failure window.
+                    let Some(jvm) = JVM.get() else {
+                        log::error!("Callback worker {i}: JVM not cached, cannot start");
+                        return;
+                    };
+                    let Ok(mut env) = jvm.attach_current_thread_as_daemon() else {
+                        log::error!("Callback worker {i}: failed to attach to JVM at startup");
+                        return;
+                    };
+
                     loop {
                         let job_opt = {
                             let guard = rx_clone.lock().unwrap();
                             guard.recv().ok()
                         };
-                        let Some((jvm, callback_id, result, binary_mode)) = job_opt else {
+                        let Some((_, callback_id, result, binary_mode)) = job_opt else {
                             break;
                         };
 
-                        // Process callback on this dedicated thread
-                        process_callback_job(jvm, callback_id, result, binary_mode);
+                        // Process callback with pre-attached env
+                        process_callback_job_with_env(&mut env, callback_id, result, binary_mode);
                     }
                 })
                 .expect("Failed to spawn callback worker thread");
@@ -382,9 +400,10 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
     })
 }
 
-/// Drop callbacks that already timed out on the Java side.
-fn process_callback_job(
-    jvm: Arc<JavaVM>,
+/// Process a callback with an already-attached JNIEnv.
+/// Used by pre-attached callback worker threads.
+fn process_callback_job_with_env(
+    env: &mut JNIEnv,
     callback_id: jlong,
     result: CallbackResult,
     binary_mode: bool,
@@ -393,61 +412,63 @@ fn process_callback_job(
         return;
     }
 
-    match jvm.attach_current_thread_as_daemon() {
-        Ok(mut env) => match result {
-            Ok(server_value) => {
-                let _ = env.push_local_frame(16);
+    match result {
+        Ok(server_value) => {
+            let _ = env.push_local_frame(16);
 
-                let java_result = if should_use_direct_buffer(&server_value) {
-                    create_direct_byte_buffer(&mut env, server_value, !binary_mode)
-                } else {
-                    crate::resp_value_to_java(&mut env, server_value, !binary_mode)
-                };
+            let java_result = if should_use_direct_buffer(&server_value) {
+                create_direct_byte_buffer(env, server_value, !binary_mode)
+            } else {
+                crate::resp_value_to_java(env, server_value, !binary_mode)
+            };
 
-                if take_timed_out_callback(callback_id) {
-                    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
-                    return;
-                }
-
-                match java_result {
-                    Ok(java_result) => {
-                        let _ = complete_java_callback(&mut env, callback_id, &java_result);
-                    }
-                    Err(e) => {
-                        let error_code = 0;
-                        let error_msg = format!("Response conversion failed: {e}");
-                        let _ = complete_java_callback_with_error_code(
-                            &mut env,
-                            callback_id,
-                            error_code,
-                            &error_msg,
-                        );
-                    }
-                }
+            if take_timed_out_callback(callback_id) {
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+                return;
             }
-            Err(server_err) => {
-                if take_timed_out_callback(callback_id) {
-                    return;
-                }
 
-                let error_code = error_type(&server_err) as i32;
-                let error_msg = error_message(&server_err);
-                let _ = complete_java_callback_with_error_code(
-                    &mut env,
-                    callback_id,
-                    error_code,
-                    &error_msg,
-                );
+            match java_result {
+                Ok(java_result) => {
+                    if let Err(e) = complete_java_callback(env, callback_id, &java_result) {
+                        log::error!("JNI completion failed for callback {callback_id}: {e}");
+                        let _ = env.exception_clear();
+                    }
+                }
+                Err(e) => {
+                    let error_code = 0;
+                    let error_msg = format!("Response conversion failed: {e}");
+                    if let Err(e2) = complete_java_callback_with_error_code(
+                        env,
+                        callback_id,
+                        error_code,
+                        &error_msg,
+                    ) {
+                        log::error!("JNI error completion failed for callback {callback_id}: {e2}");
+                        let _ = env.exception_clear();
+                    }
+                }
             }
-        },
-        Err(e) => {
-            log::error!("JNI environment attachment failed: {e}");
+            let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+        }
+        Err(server_err) => {
+            if take_timed_out_callback(callback_id) {
+                return;
+            }
+
+            let error_code = error_type(&server_err) as i32;
+            let error_msg = error_message(&server_err);
+            if let Err(e) =
+                complete_java_callback_with_error_code(env, callback_id, error_code, &error_msg)
+            {
+                log::error!("JNI error completion failed for callback {callback_id}: {e}");
+                let _ = env.exception_clear();
+            }
         }
     }
 }
 
 /// Enqueue callback job to dedicated workers.
+/// If the channel is dead (all workers terminated), sweeps all pending futures with error.
 pub fn complete_callback(
     jvm: Arc<JavaVM>,
     callback_id: jlong,
@@ -455,9 +476,53 @@ pub fn complete_callback(
     binary_mode: bool,
 ) {
     let sender = init_callback_workers();
-    if let Err(e) = sender.send((jvm, callback_id, result, binary_mode)) {
-        log::error!("Callback queue send failed: {e}");
+    if let Err(e) = sender.send((jvm.clone(), callback_id, result, binary_mode)) {
+        log::error!("Callback channel dead, sweeping all pending futures: {e}");
+        // Workers are dead — sweep the entire AsyncRegistry table
+        if let Ok(mut env) = jvm.attach_current_thread_as_daemon() {
+            fail_all_pending_futures(
+                &mut env,
+                "Native callback workers terminated — all pending requests failed",
+            );
+        } else {
+            log::error!(
+                "FATAL: Cannot attach to JVM to sweep futures — all pending requests will hang"
+            );
+        }
     }
+}
+
+/// Fail all pending futures in AsyncRegistry by calling failAllWithError from Java.
+/// Used when fatal infrastructure failures are detected (channel dead, native panic).
+pub fn fail_all_pending_futures(env: &mut JNIEnv, error_msg: &str) {
+    let cache = match get_method_cache(env) {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("Cannot sweep futures — failed to get method cache: {e}");
+            return;
+        }
+    };
+    let _ = env.push_local_frame(4);
+    let msg = match env.new_string(error_msg) {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("Cannot sweep futures — failed to create error string: {e}");
+            let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+            return;
+        }
+    };
+    if let Err(e) = unsafe {
+        env.call_static_method_unchecked(
+            &cache.async_handle_table_class,
+            cache.fail_all_method,
+            signature::ReturnType::Primitive(signature::Primitive::Void),
+            &[JValue::Object(&msg).as_jni()],
+        )
+    } {
+        log::error!("Failed to sweep pending futures via failAllWithError: {e}");
+        let _ = env.exception_clear();
+    }
+    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
 }
 
 /// Complete Java CompletableFuture with success result using cached method IDs.
