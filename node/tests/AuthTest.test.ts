@@ -685,4 +685,76 @@ describe("IAM Auth: Mock Credentials", () => {
         },
         TIMEOUT,
     );
+
+    it(
+        "test_iam_authentication_automatic_token_refresh",
+        async () => {
+            // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
+
+            const clusterName = "test-cluster";
+            const username = "default";
+            const region = "us-east-1";
+            const iamConfig: IamAuthConfig = {
+                clusterName: clusterName,
+                service: ServiceType.Elasticache,
+                region: region,
+                refreshIntervalSeconds: 2, // Short interval for automatic refresh
+            };
+
+            // Use existing cluster from global setup
+            const clusterAddresses = global.CLUSTER_ENDPOINTS;
+            const cluster = clusterAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      true,
+                      parseEndpoints(clusterAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      true,
+                      3,
+                      1,
+                      getServerVersion,
+                  );
+
+            const addresses = cluster
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            try {
+                const client = await GlideClusterClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: false,
+                });
+
+                // Verify initial connection
+                const result = await client.ping();
+                expect(result).toBe("PONG");
+
+                // Wait for automatic token refresh to occur
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+
+                // Verify client still works after automatic refresh
+                await client.set("iam_auto_refresh_key", "iam_auto_refresh_value");
+                const value = await client.get("iam_auto_refresh_key");
+                expect(value).toBe("iam_auto_refresh_value");
+
+                client.close();
+            } finally {
+                await cluster.close();
+            }
+        },
+        TIMEOUT,
+    );
 });
