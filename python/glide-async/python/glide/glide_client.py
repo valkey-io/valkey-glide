@@ -132,6 +132,7 @@ class BaseClient(CoreCommands):
         self.config: BaseClientConfiguration = config
         self._available_futures: Dict[int, "TFuture"] = {}
         self._available_callback_indexes: List[int] = list()
+        self._next_callback_index: int = 1  # 0 is reserved for connection setup
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
@@ -644,14 +645,17 @@ class BaseClient(CoreCommands):
         try:
             return self._available_callback_indexes.pop()
         except IndexError:
-            # The list is empty
-            return len(self._available_futures)
+            # Use monotonic counter to avoid index collisions with cancelled futures
+            idx = self._next_callback_index
+            self._next_callback_index += 1
+            return idx
 
     async def _process_response(self, response: Response) -> None:
         res_future = self._available_futures.pop(response.callback_idx, None)
         if res_future is not None and res_future.done():
             # Future is already completed (e.g. request was cancelled while awaiting).
-            # Do not error to keep client in a valid state.
+            # Recycle the callback index to prevent index leaks.
+            self._available_callback_indexes.append(response.callback_idx)
             ClientLogger.log(
                 LogLevel.DEBUG,
                 "completed response",
