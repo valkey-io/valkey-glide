@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import os
 import platform
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -638,6 +639,34 @@ class TestCommands:
         value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
         assert await glide_client.set(key, value) == OK
         assert await glide_client.get(key) == value.encode()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_get_with_bytearray_and_memoryview(
+        self, glide_client: TGlideClient
+    ):
+        """Test that set() accepts bytearray and memoryview keys and values."""
+        data = os.urandom(256)
+
+        # bytearray value
+        key_ba = get_random_string(10)
+        assert await glide_client.set(key_ba, bytearray(data)) == OK
+        assert await glide_client.get(key_ba) == data
+
+        # memoryview value
+        key_mv = get_random_string(10)
+        assert await glide_client.set(key_mv, memoryview(bytearray(data))) == OK
+        assert await glide_client.get(key_mv) == data
+
+        # bytearray key
+        key_ba_key = bytearray(b"ba_key_" + os.urandom(8))
+        assert await glide_client.set(key_ba_key, b"value1") == OK
+        assert await glide_client.get(key_ba_key) == b"value1"
+
+        # memoryview key
+        key_mv_key = memoryview(bytearray(b"mv_key_" + os.urandom(8)))
+        assert await glide_client.set(key_mv_key, b"value2") == OK
+        assert await glide_client.get(key_mv_key) == b"value2"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])

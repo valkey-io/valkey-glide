@@ -381,6 +381,8 @@ class BaseClient(CoreCommands):
         if isinstance(arg, str):
             # TODO: Allow passing different encoding options
             return bytes(arg, encoding="utf8")
+        if isinstance(arg, (bytearray, memoryview)):
+            return bytes(arg)
         return arg
 
     def _encode_and_sum_size(
@@ -402,7 +404,7 @@ class BaseClient(CoreCommands):
         if not args_list:
             return (encoded_args_list, args_size)
         for arg in args_list:
-            encoded_arg = self._encode_arg(arg) if isinstance(arg, str) else arg
+            encoded_arg = self._encode_arg(arg)
             encoded_args_list.append(encoded_arg)
             args_size += len(encoded_arg)
         return (encoded_args_list, args_size)
@@ -428,8 +430,7 @@ class BaseClient(CoreCommands):
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = [
-            bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
-            for elem in args
+            self._encode_arg(elem) for elem in args
         ]
         encoded_args, args_size = self._encode_and_sum_size(args)
         if args_size < MAX_REQUEST_ARGS_LEN:
