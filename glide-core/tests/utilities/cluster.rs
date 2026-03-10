@@ -480,7 +480,7 @@ impl PubSubTestSetup {
             .expect("Failed to build cluster client for topology test");
 
         let connection = client
-            .get_async_connection(None, Some(synchronizer.clone()), None)
+            .get_async_connection(None, Some(synchronizer.clone()))
             .await
             .expect("Failed to get async connection for topology test");
 

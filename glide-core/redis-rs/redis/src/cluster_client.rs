@@ -48,6 +48,7 @@ struct BuilderParams {
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
     tcp_nodelay: bool,
+    pipeline_buffer_size: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -151,6 +152,7 @@ pub struct ClusterParams {
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
     pub(crate) tcp_nodelay: bool,
+    pub(crate) pipeline_buffer_size: Option<usize>,
 }
 
 impl ClusterParams {
@@ -183,6 +185,7 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
             tcp_nodelay: value.tcp_nodelay,
+            pipeline_buffer_size: value.pipeline_buffer_size,
         })
     }
 }
@@ -506,6 +509,14 @@ impl ClusterClientBuilder {
         self
     }
 
+    /// Sets the pipeline buffer size for the internal mpsc channel.
+    ///
+    /// When not set, defaults to 1000 (matching the default max inflight requests).
+    pub fn pipeline_buffer_size(mut self, size: usize) -> ClusterClientBuilder {
+        self.builder_params.pipeline_buffer_size = Some(size);
+        self
+    }
+
     /// Enables timing out on slow connection time.
     ///
     /// If enabled, the cluster will only wait the given time on each connection attempt to each node.
@@ -613,14 +624,12 @@ impl ClusterClient {
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
-        pipeline_buffer_size: Option<usize>,
     ) -> RedisResult<cluster_async::ClusterConnection> {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
             push_sender,
             pubsub_synchronizer,
-            pipeline_buffer_size,
         )
         .await
     }
@@ -657,7 +666,6 @@ impl ClusterClient {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
-            None,
             None,
             None,
         )

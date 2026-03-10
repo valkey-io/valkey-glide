@@ -1637,17 +1637,15 @@ async fn create_cluster_client(
 
     builder = builder.tcp_nodelay(request.tcp_nodelay);
 
+    let pipeline_buffer_size = resolve_pipeline_buffer_size(request.inflight_requests_limit);
+    builder = builder.pipeline_buffer_size(pipeline_buffer_size);
+
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    let pipeline_buffer_size = resolve_pipeline_buffer_size(request.inflight_requests_limit);
     let mut con = client
-        .get_async_connection(
-            push_sender,
-            Some(pubsub_synchronizer),
-            Some(pipeline_buffer_size),
-        )
+        .get_async_connection(push_sender, Some(pubsub_synchronizer))
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
