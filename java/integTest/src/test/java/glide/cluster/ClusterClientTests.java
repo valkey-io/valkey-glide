@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.IamAuthConfig;
@@ -479,8 +480,22 @@ public class ClusterClientTests {
         }
     }
 
+    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds)
+            throws ExecutionException, InterruptedException {
+        IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig()
+                                .credentials(credentials)
+                                .useTLS(false)
+                                .build())
+                .get();
+    }
+
     @SneakyThrows
     @Test
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_with_mock_credentials() {
         // NOTE: This test requires AWS credentials to be set as OS environment variables
         //
@@ -489,40 +504,11 @@ public class ClusterClientTests {
         // AWS_SESSION_TOKEN=test_session_token ./gradlew :integTest:test \
         // --tests "*.test_iam_authentication_with_mock_credentials"
 
-        // Skip test if AWS credentials are not set in OS environment
-        if (System.getenv("AWS_ACCESS_KEY_ID") == null) {
-            System.out.println("Skipping IAM test - AWS credentials not set in OS environment");
-            System.out.println(
-                    "Run with: AWS_ACCESS_KEY_ID=test_access_key AWS_SECRET_ACCESS_KEY=test_secret_key"
-                            + " AWS_SESSION_TOKEN=test_session_token ./gradlew :integTest:test");
-            return;
-        }
-
-        // Create IAM config
-        IamAuthConfig iamConfig =
-                IamAuthConfig.builder()
-                        .clusterName("test-cluster")
-                        .service(ServiceType.ELASTICACHE)
-                        .region("us-east-1")
-                        .refreshIntervalSeconds(5) // Fast refresh for testing
-                        .build();
-
-        // Create credentials with IAM config
-        ServerCredentials credentials =
-                ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
-
         // Create client with IAM authentication
-        try (GlideClusterClient client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig()
-                                        .credentials(credentials)
-                                        .useTLS(false) // Local cluster doesn't use TLS
-                                        .build())
-                        .get()) {
+        try (GlideClusterClient client = createClusterClientWithIam(5)) {
 
             // Verify connection works
-            String pingResult = client.ping().get();
-            assertEquals("PONG", pingResult);
+            assertConnected(client);
 
             // Test basic operations
             assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
@@ -539,36 +525,15 @@ public class ClusterClientTests {
 
     @SneakyThrows
     @Test
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_automatic_token_refresh()
             throws InterruptedException, ExecutionException {
         // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
 
-        // Skip test if AWS credentials are not set in OS environment
-        if (System.getenv("AWS_ACCESS_KEY_ID") == null) {
-            System.out.println("Skipping IAM test - AWS credentials not set in OS environment");
-            return;
-        }
-
-        // Create IAM config with very short refresh interval
-        IamAuthConfig iamConfig =
-                IamAuthConfig.builder()
-                        .clusterName("test-cluster")
-                        .service(ServiceType.ELASTICACHE)
-                        .region("us-east-1")
-                        .refreshIntervalSeconds(2) // Very fast refresh for testing
-                        .build();
-
-        ServerCredentials credentials =
-                ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
-
-        try (GlideClusterClient client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().credentials(credentials).useTLS(false).build())
-                        .get()) {
+        try (GlideClusterClient client = createClusterClientWithIam(2)) {
 
             // Verify initial connection
-            String pingResult = client.ping().get();
-            assertEquals("PONG", pingResult);
+            assertConnected(client);
 
             // Wait for automatic token refresh to occur
             Thread.sleep(3000);

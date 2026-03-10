@@ -13,25 +13,17 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
-// TestIamAuthenticationWithMockCredentials tests IAM authentication using mock AWS credentials.
-//
-// This test verifies:
-// 1. Client can connect using IAM authentication with mock credentials
-// 2. Basic operations work after IAM authentication
-// 3. Operations continue to work after token refresh
-func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
-	// Save original AWS credentials
+// setupMockAWSCredentials sets mock AWS credentials and returns a cleanup function
+func setupMockAWSCredentials() func() {
 	originalAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
 	originalSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
 	originalSessionToken := os.Getenv("AWS_SESSION_TOKEN")
 
-	// Set mock AWS credentials
 	os.Setenv("AWS_ACCESS_KEY_ID", "test_access_key")
 	os.Setenv("AWS_SECRET_ACCESS_KEY", "test_secret_key")
 	os.Setenv("AWS_SESSION_TOKEN", "test_session_token")
 
-	// Cleanup function to restore original credentials
-	defer func() {
+	return func() {
 		if originalAccessKey != "" {
 			os.Setenv("AWS_ACCESS_KEY_ID", originalAccessKey)
 		} else {
@@ -47,7 +39,17 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 		} else {
 			os.Unsetenv("AWS_SESSION_TOKEN")
 		}
-	}()
+	}
+}
+
+// TestIamAuthenticationWithMockCredentials tests IAM authentication using mock AWS credentials.
+//
+// This test verifies:
+// 1. Client can connect using IAM authentication with mock credentials
+// 2. Basic operations work after IAM authentication
+// 3. Operations continue to work after token refresh
+func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
+	defer setupMockAWSCredentials()()
 
 	// Create IAM config
 	iamConfig := config.NewIamAuthConfig(
@@ -111,34 +113,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 // This test verifies that the client automatically refreshes the IAM token
 // at the configured interval and continues to work correctly.
 func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
-	// Save original AWS credentials
-	originalAccessKey := os.Getenv("AWS_ACCESS_KEY_ID")
-	originalSecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY")
-	originalSessionToken := os.Getenv("AWS_SESSION_TOKEN")
-
-	// Set mock AWS credentials
-	os.Setenv("AWS_ACCESS_KEY_ID", "test_access_key")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "test_secret_key")
-	os.Setenv("AWS_SESSION_TOKEN", "test_session_token")
-
-	// Cleanup function to restore original credentials
-	defer func() {
-		if originalAccessKey != "" {
-			os.Setenv("AWS_ACCESS_KEY_ID", originalAccessKey)
-		} else {
-			os.Unsetenv("AWS_ACCESS_KEY_ID")
-		}
-		if originalSecretKey != "" {
-			os.Setenv("AWS_SECRET_ACCESS_KEY", originalSecretKey)
-		} else {
-			os.Unsetenv("AWS_SECRET_ACCESS_KEY")
-		}
-		if originalSessionToken != "" {
-			os.Setenv("AWS_SESSION_TOKEN", originalSessionToken)
-		} else {
-			os.Unsetenv("AWS_SESSION_TOKEN")
-		}
-	}()
+	defer setupMockAWSCredentials()()
 
 	// Create IAM config with very short refresh interval
 	iamConfig := config.NewIamAuthConfig(

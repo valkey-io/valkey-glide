@@ -25,6 +25,8 @@ import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.IamAuthConfig.ServiceType;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
@@ -723,5 +725,20 @@ public class TestUtilities {
                         .findFirst()
                         .orElseThrow(
                                 () -> new RuntimeException("connected_slaves not found in INFO REPLICATION")));
+    }
+
+    /**
+     * Creates a test IAM authentication configuration.
+     *
+     * @param refreshIntervalSeconds The refresh interval in seconds for IAM token refresh
+     * @return IamAuthConfig configured for testing
+     */
+    public static IamAuthConfig createTestIamConfig(int refreshIntervalSeconds) {
+        return IamAuthConfig.builder()
+                .clusterName("test-cluster")
+                .service(ServiceType.ELASTICACHE)
+                .region("us-east-1")
+                .refreshIntervalSeconds(refreshIntervalSeconds)
+                .build();
     }
 }
