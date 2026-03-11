@@ -21,6 +21,7 @@ import {
     IamAuthConfig,
 } from "../build-ts";
 import {
+    assertConnected,
     flushAndCloseClient,
     getServerVersion,
     parseEndpoints,
@@ -34,7 +35,25 @@ const NEW_PASSWORD = "new_password";
 const WRONG_PASSWORD = "wrong_password";
 const TIMEOUT = 50000;
 
+// IAM test constants
+const TEST_CLUSTER_NAME = "test-cluster";
+const TEST_REGION = "us-east-1";
+
 type AddressEntry = [string, number];
+
+/**
+ * Creates a test IAM authentication configuration.
+ * @param refreshIntervalSeconds - Token refresh interval in seconds
+ * @returns IamAuthConfig for testing
+ */
+function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
+    return {
+        clusterName: TEST_CLUSTER_NAME,
+        service: ServiceType.Elasticache,
+        region: TEST_REGION,
+        refreshIntervalSeconds: refreshIntervalSeconds,
+    };
+}
 
 describe("Auth tests", () => {
     let cmeCluster: ValkeyCluster;
@@ -622,15 +641,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const clusterName = "test-cluster";
             const username = "default"; // Use default user
-            const region = "us-east-1";
-            const iamConfig: IamAuthConfig = {
-                clusterName: clusterName,
-                service: ServiceType.Elasticache,
-                region: region,
-                refreshIntervalSeconds: 5, // Fast refresh for testing
-            };
+            const iamConfig = createTestIamConfig(5); // Fast refresh for testing
 
             // Use existing cluster from global setup
             const clusterAddresses = global.CLUSTER_ENDPOINTS;
@@ -662,8 +674,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 });
 
                 // Basic ping test to verify connection
-                const result = await client.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(client);
 
                 // Test basic operations
                 await client.set("iam_test_key", "iam_test_value");
@@ -699,15 +710,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const clusterName = "test-cluster";
             const username = "default";
-            const region = "us-east-1";
-            const iamConfig: IamAuthConfig = {
-                clusterName: clusterName,
-                service: ServiceType.Elasticache,
-                region: region,
-                refreshIntervalSeconds: 2, // Short interval for automatic refresh
-            };
+            const iamConfig = createTestIamConfig(2); // Short interval for automatic refresh
 
             // Use existing cluster from global setup
             const clusterAddresses = global.CLUSTER_ENDPOINTS;
@@ -739,8 +743,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 });
 
                 // Verify initial connection
-                const result = await client.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(client);
 
                 // Wait for automatic token refresh to occur
                 await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -774,15 +777,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const clusterName = "test-standalone";
             const username = "default";
-            const region = "us-east-1";
-            const iamConfig: IamAuthConfig = {
-                clusterName: clusterName,
-                service: ServiceType.Elasticache,
-                region: region,
-                refreshIntervalSeconds: 5,
-            };
+            const iamConfig = createTestIamConfig(5);
 
             // Use existing standalone server from global setup
             const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
@@ -814,8 +810,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 });
 
                 // Basic ping test to verify connection
-                const result = await client.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(client);
 
                 // Test basic operations
                 await client.set("iam_test_key", "iam_test_value");
@@ -851,15 +846,8 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const clusterName = "test-standalone";
             const username = "default";
-            const region = "us-east-1";
-            const iamConfig: IamAuthConfig = {
-                clusterName: clusterName,
-                service: ServiceType.Elasticache,
-                region: region,
-                refreshIntervalSeconds: 2,
-            };
+            const iamConfig = createTestIamConfig(2);
 
             // Use existing standalone server from global setup
             const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
@@ -891,8 +879,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 });
 
                 // Verify initial connection
-                const result = await client.ping();
-                expect(result).toBe("PONG");
+                await assertConnected(client);
 
                 // Wait for automatic token refresh to occur
                 await new Promise((resolve) => setTimeout(resolve, 3000));
