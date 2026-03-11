@@ -2,6 +2,7 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.assertConnected;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.TestUtilities;
 import glide.api.GlideClient;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;

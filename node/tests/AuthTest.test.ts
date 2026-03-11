@@ -757,4 +757,153 @@ describe("IAM Auth: Mock Credentials", () => {
         },
         TIMEOUT,
     );
+
+    it(
+        "test_iam_authentication_with_mock_credentials_standalone",
+        async () => {
+            // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
+
+            const clusterName = "test-standalone";
+            const username = "default";
+            const region = "us-east-1";
+            const iamConfig: IamAuthConfig = {
+                clusterName: clusterName,
+                service: ServiceType.Elasticache,
+                region: region,
+                refreshIntervalSeconds: 5,
+            };
+
+            // Use existing standalone server from global setup
+            const standaloneAddresses = global.STANDALONE_ENDPOINTS;
+            const server = standaloneAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      false,
+                      parseEndpoints(standaloneAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      false,
+                      1,
+                      0,
+                      getServerVersion,
+                  );
+
+            const addresses = server
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            try {
+                const client = await GlideClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: false,
+                });
+
+                // Basic ping test to verify connection
+                const result = await client.ping();
+                expect(result).toBe("PONG");
+
+                // Test basic operations
+                await client.set("iam_test_key", "iam_test_value");
+                const value = await client.get("iam_test_key");
+                expect(value).toBe("iam_test_value");
+
+                // Test manual token refresh
+                await client.refreshIamToken();
+
+                // Verify client still works after token refresh
+                await client.set("iam_test_key2", "iam_test_value2");
+                const value2 = await client.get("iam_test_key2");
+                expect(value2).toBe("iam_test_value2");
+
+                client.close();
+            } finally {
+                await server.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "test_iam_authentication_automatic_token_refresh_standalone",
+        async () => {
+            // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
+
+            const clusterName = "test-standalone";
+            const username = "default";
+            const region = "us-east-1";
+            const iamConfig: IamAuthConfig = {
+                clusterName: clusterName,
+                service: ServiceType.Elasticache,
+                region: region,
+                refreshIntervalSeconds: 2,
+            };
+
+            // Use existing standalone server from global setup
+            const standaloneAddresses = global.STANDALONE_ENDPOINTS;
+            const server = standaloneAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      false,
+                      parseEndpoints(standaloneAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      false,
+                      1,
+                      0,
+                      getServerVersion,
+                  );
+
+            const addresses = server
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            try {
+                const client = await GlideClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: false,
+                });
+
+                // Verify initial connection
+                const result = await client.ping();
+                expect(result).toBe("PONG");
+
+                // Wait for automatic token refresh to occur
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+
+                // Verify client still works after automatic refresh
+                await client.set("iam_auto_refresh_key", "iam_auto_refresh_value");
+                const value = await client.get("iam_auto_refresh_key");
+                expect(value).toBe("iam_auto_refresh_value");
+
+                client.close();
+            } finally {
+                await server.close();
+            }
+        },
+        TIMEOUT,
+    );
 });

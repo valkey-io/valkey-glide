@@ -122,3 +122,106 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), value, getResult.Value())
 }
+
+// TestIamAuthenticationWithMockCredentialsStandalone tests IAM authentication using mock AWS credentials in standalone mode.
+func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone() {
+	// Create IAM config
+	iamConfig := config.NewIamAuthConfig(
+		"test-standalone",
+		config.ElastiCache,
+		"us-east-1",
+	).WithRefreshIntervalSeconds(5)
+
+	// Create credentials with IAM config
+	credentials, err := config.NewServerCredentialsWithIam("default", iamConfig)
+	assert.NoError(suite.T(), err)
+
+	// Create standalone client configuration
+	standaloneConfig := config.NewClientConfiguration().
+		WithAddress(&config.NodeAddress{
+			Host: suite.standaloneHosts[0].Host,
+			Port: suite.standaloneHosts[0].Port,
+		}).
+		WithCredentials(credentials).
+		WithUseTLS(false)
+
+	// Create client with IAM authentication
+	client, err := glide.NewClient(standaloneConfig)
+	assert.NoError(suite.T(), err)
+	defer client.Close()
+
+	// Verify connection works
+	pingResult, err := client.Ping(context.Background())
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "PONG", pingResult)
+
+	// Test basic operations
+	key1 := uuid.NewString()
+	value1 := "iam_test_value"
+	setResult, err := client.Set(context.Background(), key1, value1)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", setResult)
+
+	getResult, err := client.Get(context.Background(), key1)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), value1, getResult.Value())
+
+	// Test manual token refresh
+	_, err = client.RefreshIamToken(context.Background())
+	assert.NoError(suite.T(), err)
+
+	// Verify operations still work after token refresh
+	key2 := uuid.NewString()
+	value2 := "iam_test_value2"
+	setResult2, err := client.Set(context.Background(), key2, value2)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", setResult2)
+
+	getResult2, err := client.Get(context.Background(), key2)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), value2, getResult2.Value())
+}
+
+// TestIamAuthenticationAutomaticTokenRefreshStandalone tests automatic IAM token refresh in standalone mode.
+func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalone() {
+	// Create IAM config with very short refresh interval
+	iamConfig := config.NewIamAuthConfig(
+		"test-standalone",
+		config.ElastiCache,
+		"us-east-1",
+	).WithRefreshIntervalSeconds(2)
+
+	credentials, err := config.NewServerCredentialsWithIam("default", iamConfig)
+	assert.NoError(suite.T(), err)
+
+	standaloneConfig := config.NewClientConfiguration().
+		WithAddress(&config.NodeAddress{
+			Host: suite.standaloneHosts[0].Host,
+			Port: suite.standaloneHosts[0].Port,
+		}).
+		WithCredentials(credentials).
+		WithUseTLS(false)
+
+	client, err := glide.NewClient(standaloneConfig)
+	assert.NoError(suite.T(), err)
+	defer client.Close()
+
+	// Verify initial connection
+	pingResult, err := client.Ping(context.Background())
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "PONG", pingResult)
+
+	// Wait for automatic token refresh to occur
+	time.Sleep(3 * time.Second)
+
+	// Verify client still works after automatic refresh
+	key := uuid.NewString()
+	value := "iam_auto_refresh_value"
+	setResult, err := client.Set(context.Background(), key, value)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "OK", setResult)
+
+	getResult, err := client.Get(context.Background(), key)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), value, getResult.Value())
+}
