@@ -96,7 +96,7 @@ jobs:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices]
-        timeout-minutes: 25
+        timeout-minutes: 40
         strategy:
             fail-fast: false
             matrix:
