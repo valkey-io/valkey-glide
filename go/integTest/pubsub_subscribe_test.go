@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
@@ -290,6 +291,53 @@ func (suite *GlideTestSuite) TestBlockingSubscribeUnsubscribe() {
 	case <-time.After(2 * time.Second):
 		suite.T().Fatal("Initial subscription failed")
 	}
+}
+
+// Verifies that a client created without any subscription config can subscribe
+// dynamically and receive messages via polling.
+func (suite *GlideTestSuite) TestDynamicSubscribeWithoutConfig() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		channel := "no_config_channel"
+
+		clientType := StandaloneClient
+		if _, ok := client.(*glide.ClusterClient); ok {
+			clientType = ClusterClient
+		}
+
+		var standaloneClient *glide.Client
+		var clusterClient *glide.ClusterClient
+		if c, ok := client.(*glide.Client); ok {
+			standaloneClient = c
+		} else if c, ok := client.(*glide.ClusterClient); ok {
+			clusterClient = c
+		}
+		suite.subscribeByMethod(
+			standaloneClient,
+			clusterClient,
+			[]ChannelDefn{{Channel: channel, Mode: ExactMode}},
+			BlockingMethod,
+			suite.T(),
+		)
+
+		publisher := suite.createAnyClient(clientType, nil)
+		defer publisher.Close()
+
+		err := suite.PublishMessage(publisher, clientType, channel, "no_config_msg", false)
+		assert.NoError(suite.T(), err)
+
+		time.Sleep(200 * time.Millisecond)
+
+		queue, err := client.(PubSubQueuer).GetQueue()
+		assert.NoError(suite.T(), err)
+
+		select {
+		case msg := <-queue.WaitForMessage():
+			assert.Equal(suite.T(), "no_config_msg", msg.Message)
+			assert.Equal(suite.T(), channel, msg.Channel)
+		case <-time.After(5 * time.Second):
+			suite.T().Fatal("Message not received on client created without subscription config")
+		}
+	})
 }
 
 func (suite *GlideTestSuite) TestGetSubscriptions() {

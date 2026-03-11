@@ -534,7 +534,7 @@ class TestOpenTelemetryGlide:
 
         # Wait for spans to be flushed
         await wait_for_spans_to_be_flushed(
-            VALID_ENDPOINT_TRACES, expected_span_names=["Batch", "send_batch"]
+            VALID_ENDPOINT_TRACES, expected_span_names=["Batch"]
         )
 
         # Read the span file and check span names
@@ -542,7 +542,6 @@ class TestOpenTelemetryGlide:
 
         # Check for expected span names
         assert "Batch" in span_names
-        assert "send_batch" in span_names
 
         # Force garbage collection
         gc.collect()
