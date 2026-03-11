@@ -37,21 +37,13 @@ public class JedisClient implements SyncClient {
         if (isClusterMode) {
             jedisCluster =
                     new JedisCluster(
-                            Set.of(new HostAndPort(connectionSettings.host, connectionSettings.port)),
-                            DefaultJedisClientConfig.builder()
-                                    .ssl(connectionSettings.useSsl)
-                                    .socketTimeoutMillis(60000) // 60 second timeout for bulk operations
-                                    .connectionTimeoutMillis(10000) // 10 second connection timeout
-                                    .build());
+                            Collections.singleton(
+                                    new HostAndPort(connectionSettings.host, connectionSettings.port)),
+                            DefaultJedisClientConfig.builder().ssl(connectionSettings.useSsl).build());
         } else {
-            DefaultJedisClientConfig config =
-                    DefaultJedisClientConfig.builder()
-                            .ssl(connectionSettings.useSsl)
-                            .socketTimeoutMillis(60000) // 60 second timeout
-                            .connectionTimeoutMillis(10000) // 10 second connection timeout
-                            .build();
             jedisStandalonePool =
-                    new JedisPool(new HostAndPort(connectionSettings.host, connectionSettings.port), config);
+                    new JedisPool(
+                            connectionSettings.host, connectionSettings.port, connectionSettings.useSsl);
         }
     }
 

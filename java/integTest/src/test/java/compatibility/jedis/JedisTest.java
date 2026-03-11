@@ -3,6 +3,7 @@ package compatibility.jedis;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.TestConfiguration.TLS;
 import static glide.utils.Java8Utils.createList;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.*;
@@ -15,6 +16,7 @@ import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -1846,6 +1848,39 @@ public class JedisTest {
                 0L,
                 receivedBinary,
                 "PUBLISH binary should return 0 (GLIDE API limitation - see issue #5354)");
+    }
+
+    /**
+     * Verifies PubSub introspection commands (PUBSUB CHANNELS, PUBSUB NUMSUB) when there is an active
+     * subscriber. Uses a GlideClient to create a subscription, then asserts via Jedis that the
+     * channel appears and subscriber count is correct.
+     */
+    @Test
+    void pubsub_introspection_with_active_subscription() throws Exception {
+        String channel = "ch:introspection:" + UUID.randomUUID();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.subscribe(Collections.singleton(channel), 5000).get();
+            List<String> channels = jedis.pubsubChannels();
+            assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
+            assertTrue(
+                    channels.contains(channel),
+                    "PUBSUB CHANNELS should contain channel with active subscription: " + channels);
+            Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+            assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
+            assertEquals(
+                    1L,
+                    numSub.getOrDefault(channel, 0L),
+                    "PUBSUB NUMSUB should return 1 for the subscribed channel");
+            List<String> withPattern = jedis.pubsubChannels(channel);
+            assertNotNull(withPattern, "PUBSUB CHANNELS with pattern should return a non-null list");
+            assertTrue(
+                    withPattern.contains(channel), "PUBSUB CHANNELS with pattern should contain the channel");
+        }
     }
 
     @Test

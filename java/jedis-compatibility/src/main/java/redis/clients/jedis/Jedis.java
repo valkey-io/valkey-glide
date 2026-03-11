@@ -4,7 +4,6 @@ package redis.clients.jedis;
 import static glide.utils.Java8Utils.createMap;
 
 import glide.api.GlideClient;
-import glide.api.GlideClusterClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
@@ -1263,11 +1262,6 @@ public final class Jedis implements Closeable {
         T execute() throws InterruptedException, ExecutionException;
     }
 
-    @FunctionalInterface
-    private interface GlideClusterOperation<T> {
-        T execute(GlideClusterClient clusterClient) throws InterruptedException, ExecutionException;
-    }
-
     /**
      * Helper method that encapsulates the common try/catch pattern with connection checks. This
      * method handles the standard flow: checkNotClosed() -> ensureInitialized() -> execute operation
@@ -1287,22 +1281,6 @@ public final class Jedis implements Closeable {
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException(operationName + " operation failed", e);
         }
-    }
-
-    /**
-     * Helper method to execute GLIDE cluster operations. Since Jedis class is for standalone
-     * connections only, this method always throws an exception directing users to use JedisCluster.
-     *
-     * @param operationName the name of the operation for error messages
-     * @param operation the lambda containing the GLIDE cluster client operation
-     * @param <T> the return type of the operation
-     * @return never returns (always throws exception)
-     * @throws JedisException always, as cluster operations are not supported in standalone mode
-     */
-    private <T> T executeCommandWithGlideCluster(
-            String operationName, GlideClusterOperation<T> operation) {
-        throw new JedisException(
-                operationName + " is only available in cluster mode. Use JedisCluster instead.");
     }
 
     /**
@@ -9565,9 +9543,6 @@ public final class Jedis implements Closeable {
                 });
     }
 
-    // ========================================
-    // Sorted Set Commands
-    // ========================================
     /**
      * Adds one or more members to a sorted set, or updates the score if it already exists.
      *
