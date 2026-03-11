@@ -20,6 +20,7 @@ from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
+    assert_connected,
     auth_client,
     config_set_new_password,
     delete_acl_username_and_password,
@@ -382,8 +383,7 @@ class TestAuthCommands:
         )
 
         # Verify connection works
-        result = await client.custom_command(["PING"])
-        assert result == b"PONG"
+        await assert_connected(client)
 
         # Test basic operations
         await client.set("iam_test_key", "iam_test_value")
@@ -414,8 +414,7 @@ class TestAuthCommands:
         )
 
         # Verify initial connection
-        result = await client.custom_command(["PING"])
-        assert result == b"PONG"
+        await assert_connected(client)
 
         # Wait for automatic token refresh to occur
         await asyncio.sleep(3)

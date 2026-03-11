@@ -19,6 +19,7 @@ from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
+    assert_connected_sync,
     auth_client,
     config_set_new_password,
     delete_acl_username_and_password,
@@ -380,8 +381,7 @@ class TestSyncAuthCommands:
         )
 
         # Verify connection works
-        result = client.custom_command(["PING"])
-        assert result == b"PONG"
+        assert_connected_sync(client)
 
         # Test manual token refresh
         client.refresh_iam_token()
@@ -412,8 +412,7 @@ class TestSyncAuthCommands:
         )
 
         # Verify initial connection
-        result = client.custom_command(["PING"])
-        assert result == b"PONG"
+        assert_connected_sync(client)
 
         # Wait for automatic token refresh to occur
         time.sleep(3)

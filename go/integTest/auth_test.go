@@ -45,9 +45,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	defer client.Close()
 
 	// Verify connection works
-	pingResult, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", pingResult)
+	assertConnected(suite.T(), client)
 
 	// Test basic operations
 	key1 := uuid.NewString()
@@ -104,9 +102,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 	defer client.Close()
 
 	// Verify initial connection
-	pingResult, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", pingResult)
+	assertConnected(suite.T(), client)
 
 	// Wait for automatic token refresh to occur
 	time.Sleep(3 * time.Second)
@@ -151,9 +147,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 	defer client.Close()
 
 	// Verify connection works
-	pingResult, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", pingResult)
+	assertConnected(suite.T(), client)
 
 	// Test basic operations
 	key1 := uuid.NewString()
@@ -207,9 +201,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 	defer client.Close()
 
 	// Verify initial connection
-	pingResult, err := client.Ping(context.Background())
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", pingResult)
+	assertConnected(suite.T(), client)
 
 	// Wait for automatic token refresh to occur
 	time.Sleep(3 * time.Second)
