@@ -3,7 +3,7 @@ package glide.benchmarks.clients.jedis;
 
 import glide.benchmarks.clients.SyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
-import java.util.Set;
+import java.util.Collections;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;

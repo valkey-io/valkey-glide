@@ -243,7 +243,7 @@ public final class AsyncRegistry {
         }
 
         String msg =
-                (errorMessage == null || errorMessage.isBlank())
+                (errorMessage == null || errorMessage.trim().isEmpty())
                         ? "Unknown error from native code"
                         : errorMessage;
 
@@ -284,6 +284,26 @@ public final class AsyncRegistry {
 
         // Shutdown the timeout scheduler
         timeoutScheduler.shutdownNow();
+    }
+
+    /**
+     * Fail all pending futures with a {@link ClosingException}. Called from the native layer when a
+     * fatal infrastructure failure is detected (e.g., callback worker threads terminated or native
+     * panic). This ensures no future is left dangling.
+     *
+     * @param errorMessage description of the failure cause
+     */
+    public static void failAllWithError(String errorMessage) {
+        String msg =
+                (errorMessage == null || errorMessage.isEmpty())
+                        ? "Native callback infrastructure failed"
+                        : errorMessage;
+        activeFutures.forEach((id, future) -> future.completeExceptionally(new ClosingException(msg)));
+        activeFutures.clear();
+
+        timeoutTasks.values().forEach(task -> task.cancel(false));
+        timeoutTasks.clear();
+        clientInflightCounts.clear();
     }
 
     /** Clean up per-client tracking when a client is closed. */

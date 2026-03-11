@@ -7,8 +7,8 @@ import glide.api.BaseClient;
 import glide.api.commands.servermodules.FT;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -40,7 +40,7 @@ public class FTCreateOptions {
     }
 
     public GlideString[] toArgs() {
-        var args = new ArrayList<GlideString>();
+        ArrayList<GlideString> args = new ArrayList<GlideString>();
         if (dataType != null) {
             args.add(gs("ON"));
             args.add(gs(dataType.toString()));
@@ -48,14 +48,15 @@ public class FTCreateOptions {
         if (prefixes != null && prefixes.length > 0) {
             args.add(gs("PREFIX"));
             args.add(gs(Integer.toString(prefixes.length)));
-            args.addAll(List.of(prefixes));
+            args.addAll(Arrays.asList(prefixes));
         }
-        return args.toArray(GlideString[]::new);
+        return args.toArray(new GlideString[0]);
     }
 
     public static class FTCreateOptionsBuilder {
         public FTCreateOptionsBuilder prefixes(@NonNull String[] prefixes) {
-            this.prefixes = Stream.of(prefixes).map(GlideString::gs).toArray(GlideString[]::new);
+            this.prefixes =
+                    Stream.of(prefixes).map(GlideString::gs).toArray(size -> new GlideString[size]);
             return this;
         }
     }
@@ -160,7 +161,7 @@ public class FTCreateOptions {
 
         @Override
         public String[] toArgs() {
-            var args = new ArrayList<String>();
+            ArrayList<String> args = new ArrayList<String>();
             args.add(FieldType.TAG.toString());
             if (separator.isPresent()) {
                 args.add("SEPARATOR");
@@ -169,7 +170,7 @@ public class FTCreateOptions {
             if (caseSensitive) {
                 args.add("CASESENSITIVE");
             }
-            return args.toArray(String[]::new);
+            return args.toArray(new String[0]);
         }
     }
 
@@ -195,7 +196,7 @@ public class FTCreateOptions {
 
         @Override
         public String[] toArgs() {
-            var args = new ArrayList<String>();
+            ArrayList<String> args = new ArrayList<String>();
             args.add(FieldType.VECTOR.toString());
             args.add(algorithm.toString());
             args.add(Integer.toString(params.size() * 2));
@@ -204,7 +205,7 @@ public class FTCreateOptions {
                         args.add(name.toString());
                         args.add(value);
                     });
-            return args.toArray(String[]::new);
+            return args.toArray(new String[0]);
         }
     }
 
@@ -409,14 +410,14 @@ public class FTCreateOptions {
 
         /** Convert to module API. */
         public GlideString[] toArgs() {
-            var args = new ArrayList<GlideString>();
+            ArrayList<GlideString> args = new ArrayList<GlideString>();
             args.add(name);
             if (alias != null) {
                 args.add(gs("AS"));
                 args.add(alias);
             }
             args.addAll(Stream.of(field.toArgs()).map(GlideString::gs).collect(Collectors.toList()));
-            return args.toArray(GlideString[]::new);
+            return args.toArray(new GlideString[0]);
         }
     }
 }
