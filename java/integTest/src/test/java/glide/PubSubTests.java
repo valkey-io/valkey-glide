@@ -2155,6 +2155,36 @@ public class PubSubTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
+    public void dynamic_punsubscribe_lazy(boolean standalone) {
+        executeWithClients(
+                standalone,
+                (listener, sender) -> {
+                    String pattern = "test-pattern-*";
+                    String channel = "test-pattern-" + UUID.randomUUID();
+                    String message = "test-message";
+
+                    // Subscribe
+                    Set<String> patterns = createSet(pattern);
+                    listener.psubscribeLazy(patterns).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Unsubscribe
+                    listener.punsubscribeLazy(patterns).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Publish message
+                    sender.publish(message, channel).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Should not receive message
+                    PubSubMessage msg = listener.tryGetPubSubMessage();
+                    assertNull(msg);
+                });
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
     public void dynamic_unsubscribe_lazy(boolean standalone) {
         executeWithClients(
                 standalone,
