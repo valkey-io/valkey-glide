@@ -211,6 +211,20 @@ make integ-test test-filter=TestSet
 make integ-test test-filter="Test\(Set\|Get\)"
 ```
 
+#### Running IAM Authentication Tests
+
+IAM authentication tests require AWS credentials to be set as OS environment variables **before** the Go process starts.
+
+To run IAM tests locally with mock credentials:
+
+```bash
+# Run from the `go/` directory
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+make integ-test test-filter=TestIamAuthentication
+```
+
 #### Additional Parameters
 
 Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.

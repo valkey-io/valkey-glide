@@ -255,6 +255,21 @@ source .env/bin/activate
 pytest -v --async-backend=trio --async-backend=asyncio
 ```
 
+### Running IAM Authentication Tests
+
+IAM authentication tests require AWS credentials to be set as OS environment variables **before** the Python process starts.
+
+To run IAM tests locally with mock credentials:
+
+```bash
+# Run from the `python/` directory
+source .env/bin/activate
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+pytest -v -k test_iam_authentication
+```
+
 ### DNS Tests
 
 To run [async](tests/async_tests/test_dns.py) and [sync](tests/async_tests/test_sync_dns.py) DNS tests locally:

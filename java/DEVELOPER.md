@@ -266,6 +266,29 @@ For Java, we use Spotless and SpotBugs.
 
    _Note: The `spotbugs` task is currently configured to not fail the build on findings._
 
+### Running Tests
+
+To run all tests:
+
+```bash
+# Run from the `java` folder
+./gradlew :integTest:test
+```
+
+#### Running IAM Authentication Tests
+
+IAM authentication tests require AWS credentials to be set as OS environment variables **before** the JVM starts. `System.setProperty()` does NOT work because the Rust AWS SDK reads from the OS process environment, not JVM properties.
+
+To run IAM tests locally with mock credentials:
+
+```bash
+# Run from the `java` folder
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+./gradlew :integTest:test --tests "*.test_iam_authentication*"
+```
+
 ### Troubleshooting
 
 Some troubleshooting issues:

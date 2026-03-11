@@ -173,6 +173,22 @@ Simplified test suite skips few time consuming tests and runs faster:
 npm test-minimum
 ```
 
+#### Running IAM Authentication Tests
+
+IAM authentication tests require AWS credentials to be set as OS environment variables **before** the Node.js process starts.
+
+To run IAM tests locally with mock credentials:
+
+```bash
+# Run from the `node/` directory
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+npm test -- --testNamePattern="iam"
+```
+
+#### Running Specific Tests
+
 To execute a specific test, use the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option with `test-dbg` script. For example:
 
 ```bash

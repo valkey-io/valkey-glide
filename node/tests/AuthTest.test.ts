@@ -746,7 +746,10 @@ describe("IAM Auth: Mock Credentials", () => {
                 await new Promise((resolve) => setTimeout(resolve, 3000));
 
                 // Verify client still works after automatic refresh
-                await client.set("iam_auto_refresh_key", "iam_auto_refresh_value");
+                await client.set(
+                    "iam_auto_refresh_key",
+                    "iam_auto_refresh_value",
+                );
                 const value = await client.get("iam_auto_refresh_key");
                 expect(value).toBe("iam_auto_refresh_value");
 
@@ -895,7 +898,10 @@ describe("IAM Auth: Mock Credentials", () => {
                 await new Promise((resolve) => setTimeout(resolve, 3000));
 
                 // Verify client still works after automatic refresh
-                await client.set("iam_auto_refresh_key", "iam_auto_refresh_value");
+                await client.set(
+                    "iam_auto_refresh_key",
+                    "iam_auto_refresh_value",
+                );
                 const value = await client.get("iam_auto_refresh_key");
                 expect(value).toBe("iam_auto_refresh_value");
 

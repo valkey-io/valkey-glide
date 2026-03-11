@@ -2,7 +2,6 @@
 
 
 import asyncio
-import os
 
 import anyio
 import pytest
