@@ -73,9 +73,6 @@ const DEFAULT_CALLBACK_WORKER_THREADS: usize = 2;
 static NATIVE_BUFFER_REGISTRY: std::sync::OnceLock<dashmap::DashMap<u64, Vec<u8>>> =
     std::sync::OnceLock::new();
 static NEXT_NATIVE_BUFFER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-static TIMED_OUT_CALLBACKS: std::sync::OnceLock<dashmap::DashMap<jlong, ()>> =
-    std::sync::OnceLock::new();
-
 fn get_native_buffer_registry() -> &'static dashmap::DashMap<u64, Vec<u8>> {
     NATIVE_BUFFER_REGISTRY.get_or_init(dashmap::DashMap::new)
 }
@@ -96,19 +93,8 @@ pub fn free_native_buffer(id: u64) -> bool {
     registry.remove(&id).is_some()
 }
 
-fn get_timed_out_callbacks() -> &'static dashmap::DashMap<jlong, ()> {
-    TIMED_OUT_CALLBACKS.get_or_init(dashmap::DashMap::new)
-}
-
-pub fn mark_callback_timed_out(callback_id: jlong) {
-    let registry = get_timed_out_callbacks();
-    registry.insert(callback_id, ());
-}
-
-fn take_timed_out_callback(callback_id: jlong) -> bool {
-    let registry = get_timed_out_callbacks();
-    registry.remove(&callback_id).is_some()
-}
+/// No-op: timeout handled by AsyncRegistry sweep on the Java side.
+pub fn mark_callback_timed_out(_callback_id: jlong) {}
 
 /// Initialize or return the shared Tokio runtime.
 pub(crate) fn get_runtime() -> &'static Runtime {
@@ -408,10 +394,6 @@ fn process_callback_job_with_env(
     result: CallbackResult,
     binary_mode: bool,
 ) {
-    if take_timed_out_callback(callback_id) {
-        return;
-    }
-
     match result {
         Ok(server_value) => {
             let _ = env.push_local_frame(16);
@@ -421,11 +403,6 @@ fn process_callback_job_with_env(
             } else {
                 crate::resp_value_to_java(env, server_value, !binary_mode)
             };
-
-            if take_timed_out_callback(callback_id) {
-                let _ = unsafe { env.pop_local_frame(&JObject::null()) };
-                return;
-            }
 
             match java_result {
                 Ok(java_result) => {
@@ -451,10 +428,6 @@ fn process_callback_job_with_env(
             let _ = unsafe { env.pop_local_frame(&JObject::null()) };
         }
         Err(server_err) => {
-            if take_timed_out_callback(callback_id) {
-                return;
-            }
-
             let error_code = error_type(&server_err) as i32;
             let error_msg = error_message(&server_err);
             if let Err(e) =

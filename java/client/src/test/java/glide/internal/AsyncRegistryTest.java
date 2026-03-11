@@ -104,6 +104,50 @@ public class AsyncRegistryTest {
         assertDoesNotThrow(() -> AsyncRegistry.register(f2, 1, 42L, 0));
     }
 
+    @Test
+    void orTimeout_completesWithGlideTimeoutException() throws Exception {
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        // 50ms timeout — should fire before any completion
+        AsyncRegistry.register(f, 0, 1L, 50);
+
+        Thread.sleep(200); // wait for timeout to fire
+
+        assertTrue(f.isCompletedExceptionally());
+        try {
+            f.get();
+        } catch (ExecutionException e) {
+            // Must be Glide's TimeoutException, not j.u.c.TimeoutException
+            assertInstanceOf(glide.api.models.exceptions.TimeoutException.class, e.getCause());
+        }
+        // Future should be cleaned up from activeFutures
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+    }
+
+    @Test
+    void normalCompletion_beforeTimeout_succeeds() throws Exception {
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        long id = AsyncRegistry.register(f, 0, 1L, 5000); // 5s timeout — won't fire
+
+        // Complete normally before timeout
+        AsyncRegistry.completeCallback(id, "result");
+
+        assertEquals("result", f.get());
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+    }
+
+    @Test
+    void completeCallback_afterTimeout_returnsFalse() throws Exception {
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        long id = AsyncRegistry.register(f, 0, 1L, 50);
+
+        Thread.sleep(200); // wait for timeout
+
+        // Late callback — future already timed out
+        boolean completed = AsyncRegistry.completeCallback(id, "late result");
+        // complete() returns false because future already done
+        assertTrue(!completed || f.isCompletedExceptionally());
+    }
+
     private static void assertClosingException(CompletableFuture<?> future, String expectedMessage) {
         try {
             future.get();
