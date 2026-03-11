@@ -785,7 +785,7 @@ describe("IAM Auth: Mock Credentials", () => {
             };
 
             // Use existing standalone server from global setup
-            const standaloneAddresses = global.STANDALONE_ENDPOINTS;
+            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
             const server = standaloneAddresses
                 ? await ValkeyCluster.initFromExistingCluster(
                       false,
@@ -862,7 +862,7 @@ describe("IAM Auth: Mock Credentials", () => {
             };
 
             // Use existing standalone server from global setup
-            const standaloneAddresses = global.STANDALONE_ENDPOINTS;
+            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
             const server = standaloneAddresses
                 ? await ValkeyCluster.initFromExistingCluster(
                       false,
