@@ -3833,7 +3833,7 @@ public class GlideClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void sunsubscribe_returns_success() {
+    public void sunsubscribe_blocking_returns_success() {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
@@ -3845,6 +3845,27 @@ public class GlideClusterClientTest {
 
         // exercise
         CompletableFuture<Void> response = service.sunsubscribe(createSet("channel1"), 1000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void sunsubscribe_lazy_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(
+                        eq(command_request.CommandRequestOuterClass.RequestType.SUnsubscribe),
+                        any(String[].class),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.sunsubscribeLazy(createSet("channel1"));
 
         // verify
         assertNull(response.get());

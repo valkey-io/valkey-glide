@@ -2155,7 +2155,7 @@ public class PubSubTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
-    public void dynamic_unsubscribe(boolean standalone) {
+    public void dynamic_unsubscribe_lazy(boolean standalone) {
         executeWithClients(
                 standalone,
                 (listener, sender) -> {
@@ -2168,7 +2168,7 @@ public class PubSubTests {
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Unsubscribe
-                    listener.unsubscribe(channels).get();
+                    listener.unsubscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2209,7 +2209,7 @@ public class PubSubTests {
 
     @Test
     @SneakyThrows
-    public void dynamic_sunsubscribe() {
+    public void dynamic_sunsubscribe_lazy() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         executeWithClusterClients(
@@ -2223,7 +2223,7 @@ public class PubSubTests {
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Unsubscribe
-                    listener.sunsubscribe(channels).get();
+                    listener.sunsubscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2308,7 +2308,7 @@ public class PubSubTests {
 
         // Now unsubscribe dynamically from the pre-configured subscription
         Set<String> channels = createSet(channel);
-        listener.unsubscribe(channels).get();
+        listener.unsubscribeLazy(channels).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Publish another message
@@ -2358,7 +2358,7 @@ public class PubSubTests {
             assertTrue(updatedTimestamp >= initialTimestamp);
 
             // Cleanup subscription
-            client.unsubscribe().get();
+            client.unsubscribeLazy().get();
             Thread.sleep(100);
         }
     }
@@ -2395,7 +2395,7 @@ public class PubSubTests {
             Thread.sleep(500);
 
             // Unsubscribe from all
-            client.unsubscribe().get();
+            client.unsubscribeLazy().get();
             Thread.sleep(500);
             Thread.sleep(500);
 
@@ -2429,7 +2429,7 @@ public class PubSubTests {
             assertEquals(2, exact.size());
 
             // Unsubscribe from all
-            client.unsubscribe().get();
+            client.unsubscribeLazy().get();
             Thread.sleep(500);
 
             // Verify all unsubscribed
@@ -2462,7 +2462,7 @@ public class PubSubTests {
             assertEquals(2, patterns.size());
 
             // Unsubscribe from all patterns
-            client.punsubscribe().get();
+            client.punsubscribeLazy().get();
             Thread.sleep(1000); // Wait longer to ensure unsubscribe completes
 
             // Verify all unsubscribed
@@ -2500,7 +2500,7 @@ public class PubSubTests {
             assertEquals(2, sharded.size());
 
             // Unsubscribe from all sharded channels
-            client.sunsubscribe().get();
+            client.sunsubscribeLazy().get();
             Thread.sleep(500);
 
             // Verify all unsubscribed
@@ -2594,7 +2594,7 @@ public class PubSubTests {
             publisher.publish(channel2, "message2", true).get();
             Thread.sleep(500);
         } finally {
-            client.sunsubscribe().get();
+            client.sunsubscribeLazy().get();
             Thread.sleep(100);
             client.close();
             listeners.remove(client);
@@ -2617,7 +2617,7 @@ public class PubSubTests {
         Thread.sleep(500);
 
         // Unsubscribe from one channel
-        client.sunsubscribe(createSet(channel1)).get();
+        client.sunsubscribeLazy(createSet(channel1)).get();
         Thread.sleep(500);
 
         // Verify only channel2 remains
@@ -2627,7 +2627,7 @@ public class PubSubTests {
         assertTrue(sharded.contains(channel2));
 
         // Cleanup remaining subscription
-        client.sunsubscribe().get();
+        client.sunsubscribeLazy().get();
         Thread.sleep(100);
         client.close();
         listeners.remove(client);
@@ -2653,7 +2653,7 @@ public class PubSubTests {
         assertNotNull(state.getActualSubscriptions().get(PubSubChannelMode.PATTERN));
 
         // Unsubscribe from all exact channels
-        client.unsubscribe().get();
+        client.unsubscribeLazy().get();
         Thread.sleep(500);
 
         // Verify exact unsubscribed but pattern remains
@@ -2665,7 +2665,7 @@ public class PubSubTests {
         assertFalse(patterns.isEmpty());
 
         // Unsubscribe from all patterns
-        client.punsubscribe().get();
+        client.punsubscribeLazy().get();
         Thread.sleep(500);
 
         // Verify all unsubscribed
@@ -2701,15 +2701,15 @@ public class PubSubTests {
         assertNotNull(state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED));
 
         // Unsubscribe from all exact channels
-        client.unsubscribe().get();
+        client.unsubscribeLazy().get();
         Thread.sleep(500);
 
         // Unsubscribe from all patterns
-        client.punsubscribe().get();
+        client.punsubscribeLazy().get();
         Thread.sleep(500);
 
         // Unsubscribe from all sharded
-        client.sunsubscribe().get();
+        client.sunsubscribeLazy().get();
         Thread.sleep(500);
 
         // Verify all unsubscribed
