@@ -5,6 +5,7 @@ package integTest
 import (
 	"context"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -41,29 +42,40 @@ func (suite *GlideTestSuite) TestPubSubMaxSizeMessageStandalone() {
 
 // TestPubSubMaxSizeMessageCallback tests large message with callback
 func (suite *GlideTestSuite) TestPubSubMaxSizeMessageCallback() {
-	channel := "max_size_callback"
-	largeMsg := strings.Repeat("b", 1024*1024)
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, ConfigMethod, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			channel := "max_size_callback"
+			largeMsg := strings.Repeat("b", 1024*1024)
 
-	publisher := suite.defaultClient()
-	defer publisher.Close()
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, true, ConfigMethod, t)
+			defer receiver.Close()
 
-	ctx := context.Background()
-	time.Sleep(100 * time.Millisecond)
+			ctx := context.Background()
+			time.Sleep(100 * time.Millisecond)
 
-	publisher.Publish(ctx, channel, largeMsg)
-	time.Sleep(500 * time.Millisecond)
+			if clientType == StandaloneClient {
+				publisher := suite.defaultClient()
+				defer publisher.Close()
+				publisher.Publish(ctx, channel, largeMsg)
+			} else {
+				publisher := suite.defaultClusterClient()
+				defer publisher.Close()
+				publisher.Publish(ctx, channel, largeMsg, false)
+			}
+			time.Sleep(500 * time.Millisecond)
 
-	// Check callback received it
-	key := "1-" + channel
-	value, ok := callbackCtx.Load(key)
-	assert.True(suite.T(), ok)
-	if ok {
-		msg := value.(*models.PubSubMessage)
-		assert.Equal(suite.T(), largeMsg, msg.Message)
+			// Check callback received it
+			key := "1-" + channel
+			value, ok := callbackCtx.Load(key)
+			assert.True(t, ok)
+			if ok {
+				msg := value.(*models.PubSubMessage)
+				assert.Equal(t, largeMsg, msg.Message)
+			}
+		})
 	}
 }
 

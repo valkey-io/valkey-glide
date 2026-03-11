@@ -341,68 +341,91 @@ func (suite *GlideTestSuite) TestDynamicSubscribeWithoutConfig() {
 }
 
 func (suite *GlideTestSuite) TestGetSubscriptions() {
-	channel := "test_channel"
-	pattern := "test.*"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: channel, Mode: ExactMode},
-		{Channel: pattern, Mode: PatternMode},
-	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			channel := "test_channel"
+			pattern := "test.*"
 
-	time.Sleep(100 * time.Millisecond)
+			channels := []ChannelDefn{
+				{Channel: channel, Mode: ExactMode},
+				{Channel: pattern, Mode: PatternMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Call GetSubscriptions in a goroutine with timeout
-	type result struct {
-		state *models.PubSubState
-		err   error
-	}
-	resultChan := make(chan result, 1)
+			time.Sleep(100 * time.Millisecond)
 
-	go func() {
-		state, err := receiver.(*glide.Client).GetSubscriptions(context.Background())
-		resultChan <- result{state, err}
-	}()
+			// Call GetSubscriptions in a goroutine with timeout
+			type result struct {
+				state *models.PubSubState
+				err   error
+			}
+			resultChan := make(chan result, 1)
 
-	select {
-	case res := <-resultChan:
-		assert.NoError(suite.T(), res.err)
+			go func() {
+				var state *models.PubSubState
+				var err error
+				if clientType == StandaloneClient {
+					state, err = receiver.(*glide.Client).GetSubscriptions(context.Background())
+				} else {
+					state, err = receiver.(*glide.ClusterClient).GetSubscriptions(context.Background())
+				}
+				resultChan <- result{state, err}
+			}()
 
-		_, hasChannel := res.state.DesiredSubscriptions[models.Exact][channel]
-		assert.True(suite.T(), hasChannel)
-		_, hasPattern := res.state.DesiredSubscriptions[models.Pattern][pattern]
-		assert.True(suite.T(), hasPattern)
-		_, hasChannelActual := res.state.ActualSubscriptions[models.Exact][channel]
-		assert.True(suite.T(), hasChannelActual)
-		_, hasPatternActual := res.state.ActualSubscriptions[models.Pattern][pattern]
-		assert.True(suite.T(), hasPatternActual)
-	case <-time.After(5 * time.Second):
-		suite.T().Fatal("GetSubscriptions timed out")
+			select {
+			case res := <-resultChan:
+				assert.NoError(t, res.err)
+
+				_, hasChannel := res.state.DesiredSubscriptions[models.Exact][channel]
+				assert.True(t, hasChannel)
+				_, hasPattern := res.state.DesiredSubscriptions[models.Pattern][pattern]
+				assert.True(t, hasPattern)
+				_, hasChannelActual := res.state.ActualSubscriptions[models.Exact][channel]
+				assert.True(t, hasChannelActual)
+				_, hasPatternActual := res.state.ActualSubscriptions[models.Pattern][pattern]
+				assert.True(t, hasPatternActual)
+			case <-time.After(5 * time.Second):
+				t.Fatal("GetSubscriptions timed out")
+			}
+		})
 	}
 }
 
 func (suite *GlideTestSuite) TestPubSubReconciliationMetrics() {
-	initialChannel := "metrics_test_channel"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Create subscriber
-	channels := []ChannelDefn{
-		{Channel: initialChannel, Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			initialChannel := "metrics_test_channel"
+
+			// Create subscriber
+			channels := []ChannelDefn{
+				{Channel: initialChannel, Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			// Get statistics
+			var stats map[string]uint64
+			if clientType == StandaloneClient {
+				stats = receiver.(*glide.Client).GetStatistics()
+			} else {
+				stats = receiver.(*glide.ClusterClient).GetStatistics()
+			}
+
+			// Verify pubsub-specific metrics exist
+			timestamp := stats["subscription_last_sync_timestamp"]
+			outOfSyncCount := stats["subscription_out_of_sync_count"]
+
+			// Verify timestamp is set (non-zero means at least one sync occurred)
+			assert.Greater(t, timestamp, uint64(0),
+				"Subscription sync timestamp should be set after client creation with subscriptions")
+
+			// Verify out_of_sync_count exists (should be 0 for normal operation)
+			assert.GreaterOrEqual(t, outOfSyncCount, uint64(0))
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	// Get statistics
-	stats := receiver.(*glide.Client).GetStatistics()
-
-	// Verify pubsub-specific metrics exist
-	timestamp := stats["subscription_last_sync_timestamp"]
-	outOfSyncCount := stats["subscription_out_of_sync_count"]
-
-	// Verify timestamp is set (non-zero means at least one sync occurred)
-	assert.Greater(suite.T(), timestamp, uint64(0),
-		"Subscription sync timestamp should be set after client creation with subscriptions")
-
-	// Verify out_of_sync_count exists (should be 0 for normal operation)
-	assert.GreaterOrEqual(suite.T(), outOfSyncCount, uint64(0))
 }
