@@ -2155,25 +2155,31 @@ public class PubSubTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
-    public void dynamic_punsubscribe_lazy(boolean standalone) {
+    public void dynamic_punsubscribe(boolean standalone) {
         executeWithClients(
                 standalone,
                 (listener, sender) -> {
-                    String pattern = "test-pattern-*";
-                    String channel = "test-pattern-" + UUID.randomUUID();
+                    String pattern1 = "test-pattern-1-*";
+                    String pattern2 = "test-pattern-2-*";
+                    String channel1 = "test-pattern-1-" + UUID.randomUUID();
+                    String channel2 = "test-pattern-2-" + UUID.randomUUID();
                     String message = "test-message";
 
                     // Subscribe
-                    Set<String> patterns = createSet(pattern);
-                    listener.psubscribeLazy(patterns).get();
+                    listener.psubscribeLazy(createSet(pattern1, pattern2)).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-                    // Unsubscribe
-                    listener.punsubscribeLazy(patterns).get();
+                    // Unsubscribe (lazy)
+                    listener.punsubscribeLazy(createSet(pattern1)).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Unsubscribe (blocking)
+                    listener.punsubscribe(createSet(pattern2), 5000).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
-                    sender.publish(message, channel).get();
+                    sender.publish(message, channel1).get();
+                    sender.publish(message, channel2).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Should not receive message
@@ -2185,24 +2191,29 @@ public class PubSubTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @SneakyThrows
-    public void dynamic_unsubscribe_lazy(boolean standalone) {
+    public void dynamic_unsubscribe(boolean standalone) {
         executeWithClients(
                 standalone,
                 (listener, sender) -> {
-                    String channel = "test-channel-" + UUID.randomUUID();
+                    String channel1 = "test-channel-1-" + UUID.randomUUID();
+                    String channel2 = "test-channel-2-" + UUID.randomUUID();
                     String message = "test-message";
 
                     // Subscribe
-                    Set<String> channels = createSet(channel);
-                    listener.subscribeLazy(channels).get();
+                    listener.subscribeLazy(createSet(channel1, channel2)).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-                    // Unsubscribe
-                    listener.unsubscribeLazy(channels).get();
+                    // Unsubscribe (lazy)
+                    listener.unsubscribeLazy(createSet(channel1)).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Unsubscribe (blocking)
+                    listener.unsubscribe(createSet(channel2), 5000).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
-                    sender.publish(message, channel).get();
+                    sender.publish(message, channel1).get();
+                    sender.publish(message, channel2).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Should not receive message
@@ -2239,25 +2250,30 @@ public class PubSubTests {
 
     @Test
     @SneakyThrows
-    public void dynamic_sunsubscribe_lazy() {
+    public void dynamic_sunsubscribe() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in version 7");
 
         executeWithClusterClients(
                 (listener, sender) -> {
-                    String channel = "test-shard-channel-" + UUID.randomUUID();
+                    String channel1 = "test-shard-channel-1-" + UUID.randomUUID();
+                    String channel2 = "test-shard-channel-2-" + UUID.randomUUID();
                     String message = "test-message";
 
                     // Subscribe
-                    Set<String> channels = createSet(channel);
-                    listener.ssubscribeLazy(channels).get();
+                    listener.ssubscribeLazy(createSet(channel1, channel2)).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-                    // Unsubscribe
-                    listener.sunsubscribeLazy(channels).get();
+                    // Unsubscribe (lazy)
+                    listener.sunsubscribeLazy(createSet(channel1)).get();
+                    Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+                    // Unsubscribe (blocking)
+                    listener.sunsubscribe(createSet(channel2), 5000).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
-                    sender.publish(message, channel, true).get();
+                    sender.publish(message, channel1, true).get();
+                    sender.publish(message, channel2, true).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Should not receive message
@@ -2296,7 +2312,8 @@ public class PubSubTests {
     @ValueSource(booleans = {true, false})
     @SneakyThrows
     public void dynamic_unsubscribe_from_preconfigured(boolean standalone) {
-        String channel = "preconfigured-channel-" + UUID.randomUUID();
+        String channel1 = "preconfigured-channel-1-" + UUID.randomUUID();
+        String channel2 = "preconfigured-channel-2-" + UUID.randomUUID();
         String message = "test-message";
 
         // Create client with pre-configured subscription
@@ -2304,7 +2321,8 @@ public class PubSubTests {
         if (standalone) {
             StandaloneSubscriptionConfiguration subConfig =
                     StandaloneSubscriptionConfiguration.builder()
-                            .subscription(PubSubChannelMode.EXACT, gs(channel))
+                            .subscription(PubSubChannelMode.EXACT, gs(channel1))
+                            .subscription(PubSubChannelMode.EXACT, gs(channel2))
                             .build();
             listener =
                     GlideClient.createClient(
@@ -2316,7 +2334,8 @@ public class PubSubTests {
         } else {
             ClusterSubscriptionConfiguration subConfig =
                     ClusterSubscriptionConfiguration.builder()
-                            .subscription(PubSubClusterChannelMode.EXACT, gs(channel))
+                            .subscription(PubSubClusterChannelMode.EXACT, gs(channel1))
+                            .subscription(PubSubClusterChannelMode.EXACT, gs(channel2))
                             .build();
             listener =
                     GlideClusterClient.createClient(
@@ -2331,18 +2350,22 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Verify subscription is active by receiving a message
-        sender.publish(message, channel).get();
+        sender.publish(message, channel1).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
         PubSubMessage msg = listener.getPubSubMessage().get(5, TimeUnit.SECONDS);
         assertEquals(message, msg.getMessage().getString());
 
-        // Now unsubscribe dynamically from the pre-configured subscription
-        Set<String> channels = createSet(channel);
-        listener.unsubscribeLazy(channels).get();
+        // Now unsubscribe dynamically from the pre-configured subscription (lazy)
+        listener.unsubscribeLazy(createSet(channel1)).get();
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+        // Now unsubscribe dynamically from the pre-configured subscription (blocking)
+        listener.unsubscribe(createSet(channel2), 5000).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Publish another message
-        sender.publish(message + "-2", channel).get();
+        sender.publish(message + "-2", channel1).get();
+        sender.publish(message + "-2", channel2).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Should not receive message
@@ -2424,8 +2447,17 @@ public class PubSubTests {
             Thread.sleep(500);
             Thread.sleep(500);
 
-            // Unsubscribe from all
+            // Unsubscribe from all (lazy)
             client.unsubscribeLazy().get();
+            Thread.sleep(500);
+            Thread.sleep(500);
+
+            // Verify we can subscribe again (proves unsubscribe worked)
+            client.subscribeLazy(createSet(channel1, channel2)).get();
+            Thread.sleep(500);
+
+            // Unsubscribe from all (blocking)
+            client.unsubscribe(5000).get();
             Thread.sleep(500);
             Thread.sleep(500);
 
@@ -2458,13 +2490,27 @@ public class PubSubTests {
             assertNotNull(exact);
             assertEquals(2, exact.size());
 
-            // Unsubscribe from all
+            // Unsubscribe from all (lazy)
             client.unsubscribeLazy().get();
             Thread.sleep(500);
 
             // Verify all unsubscribed
             state = client.getSubscriptions().get();
             Set<String> exactAfter = state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
+            assertTrue(exactAfter == null || exactAfter.isEmpty());
+
+            // Subscribe again
+            client.subscribeLazy(createSet(channel1, channel2)).get();
+            Thread.sleep(500);
+            Thread.sleep(500);
+
+            // Unsubscribe from all (blocking)
+            client.unsubscribe(5000).get();
+            Thread.sleep(500);
+
+            // Verify all unsubscribed
+            state = client.getSubscriptions().get();
+            exactAfter = state.getActualSubscriptions().get(PubSubClusterChannelMode.EXACT);
             assertTrue(exactAfter == null || exactAfter.isEmpty());
         } finally {
             client.close();
@@ -2491,13 +2537,26 @@ public class PubSubTests {
             assertNotNull(patterns);
             assertEquals(2, patterns.size());
 
-            // Unsubscribe from all patterns
+            // Unsubscribe from all patterns (lazy)
             client.punsubscribeLazy().get();
             Thread.sleep(1000); // Wait longer to ensure unsubscribe completes
 
             // Verify all unsubscribed
             state = client.getSubscriptions().get();
             Set<String> patternsAfter = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
+            assertTrue(patternsAfter == null || patternsAfter.isEmpty());
+
+            // Subscribe to multiple patterns again
+            client.psubscribeLazy(createSet(pattern1, pattern2)).get();
+            Thread.sleep(500);
+
+            // Unsubscribe from all patterns (blocking)
+            client.punsubscribe(5000).get();
+            Thread.sleep(1000); // Wait longer to ensure unsubscribe completes
+
+            // Verify all unsubscribed
+            state = client.getSubscriptions().get();
+            patternsAfter = state.getActualSubscriptions().get(PubSubChannelMode.PATTERN);
             assertTrue(patternsAfter == null || patternsAfter.isEmpty());
         } finally {
             // Extra wait before closing to ensure server processes unsubscribe
@@ -2529,7 +2588,7 @@ public class PubSubTests {
             assertNotNull(sharded);
             assertEquals(2, sharded.size());
 
-            // Unsubscribe from all sharded channels
+            // Unsubscribe from all sharded channels (lazy)
             client.sunsubscribeLazy().get();
             Thread.sleep(500);
 
@@ -2537,6 +2596,19 @@ public class PubSubTests {
             state = client.getSubscriptions().get();
             Set<String> shardedAfter =
                     state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
+            assertTrue(shardedAfter == null || shardedAfter.isEmpty());
+
+            // Subscribe again
+            client.ssubscribeLazy(createSet(channel1, channel2)).get();
+            Thread.sleep(500);
+
+            // Unsubscribe from all sharded channels (blocking)
+            client.sunsubscribe(5000).get();
+            Thread.sleep(500);
+
+            // Verify all unsubscribed
+            state = client.getSubscriptions().get();
+            shardedAfter = state.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
             assertTrue(shardedAfter == null || shardedAfter.isEmpty());
         } finally {
             client.close();
