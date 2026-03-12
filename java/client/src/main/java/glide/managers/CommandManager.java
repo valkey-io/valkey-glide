@@ -73,8 +73,8 @@ public class CommandManager {
     private final GlideCoreClient coreClient;
 
     /**
-     * Apply a response handler with cleanup on exception. If the handler throws, the stored object
-     * in JniResponseRegistry is removed to prevent memory leaks.
+     * Apply a response handler with cleanup on exception. If the handler throws, the stored object in
+     * JniResponseRegistry is removed to prevent memory leaks.
      *
      * @param response the Response to process
      * @param responseHandler the handler to apply
@@ -839,12 +839,22 @@ public class CommandManager {
     private static void validateLength(int length, ByteBuffer buffer, String typeName, int index) {
         if (length < 0) {
             throw new IllegalArgumentException(
-                    "Invalid negative " + typeName.toLowerCase() + " length at element " + index + ": " + length);
+                    "Invalid negative "
+                            + typeName.toLowerCase()
+                            + " length at element "
+                            + index
+                            + ": "
+                            + length);
         }
         if (length > buffer.remaining()) {
             throw new IllegalArgumentException(
-                    typeName + " length " + length + " exceeds buffer remaining " + buffer.remaining()
-                            + " at element " + index);
+                    typeName
+                            + " length "
+                            + length
+                            + " exceeds buffer remaining "
+                            + buffer.remaining()
+                            + " at element "
+                            + index);
         }
     }
 
