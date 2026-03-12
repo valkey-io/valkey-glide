@@ -808,24 +808,64 @@ public class CommandManager {
     /**
      * Deserialize a ByteBuffer containing a serialized map back to Map<?,?>. Format: '%' + count(u32
      * BE) + repeated [keyLen(u32) + keyBytes + valLen(u32) + valBytes]
+     *
+     * <p>This method includes defense-in-depth validation to protect against malformed buffers from
+     * the native layer (due to bugs or memory corruption).
+     *
+     * @throws IllegalArgumentException if the buffer format is invalid or contains out-of-bounds
+     *     values
      */
     private java.util.LinkedHashMap<Object, Object> deserializeByteBufferMap(
             ByteBuffer buffer, boolean expectUtf8) {
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.rewind();
 
+        // Validate minimum buffer size for marker + count
+        if (buffer.remaining() < 5) {
+            throw new IllegalArgumentException(
+                    "Buffer too small for map header: " + buffer.remaining() + " bytes");
+        }
+
         byte marker = buffer.get();
         if (marker != '%') {
             throw new IllegalArgumentException("Expected map marker '%', got: " + (char) marker);
         }
+
         int count = buffer.getInt();
+
+        // Validate count is non-negative (primary protection is per-element bounds checking)
+        if (count < 0) {
+            throw new IllegalArgumentException("Invalid negative map count: " + count);
+        }
+
+        // Use reasonable initial capacity to avoid huge upfront allocation
+        // The actual elements will be validated one-by-one against buffer bounds
         java.util.LinkedHashMap<Object, Object> map =
-                new java.util.LinkedHashMap<>(Math.max(16, count));
+                new java.util.LinkedHashMap<>(Math.min(count, 1024));
+
         for (int i = 0; i < count; i++) {
+            // Validate buffer has enough bytes for key length field
+            if (buffer.remaining() < 4) {
+                throw new IllegalArgumentException(
+                        "Buffer underflow reading key length at entry " + i + ": " + buffer.remaining()
+                                + " bytes remaining");
+            }
+
             int klen = buffer.getInt();
+
+            // Validate key length
+            if (klen < 0) {
+                throw new IllegalArgumentException(
+                        "Invalid negative key length at entry " + i + ": " + klen);
+            }
+            if (klen > buffer.remaining()) {
+                throw new IllegalArgumentException(
+                        "Key length " + klen + " exceeds buffer remaining " + buffer.remaining()
+                                + " at entry " + i);
+            }
+
             Object key;
             if (expectUtf8) {
-                // Decode UTF-8 directly from buffer
                 key = BufferUtils.decodeUtf8(buffer, klen);
             } else {
                 byte[] kbytes = new byte[klen];
@@ -833,10 +873,28 @@ public class CommandManager {
                 key = glide.api.models.GlideString.gs(kbytes);
             }
 
+            // Validate buffer has enough bytes for value length field
+            if (buffer.remaining() < 4) {
+                throw new IllegalArgumentException(
+                        "Buffer underflow reading value length at entry " + i + ": " + buffer.remaining()
+                                + " bytes remaining");
+            }
+
             int vlen = buffer.getInt();
+
+            // Validate value length
+            if (vlen < 0) {
+                throw new IllegalArgumentException(
+                        "Invalid negative value length at entry " + i + ": " + vlen);
+            }
+            if (vlen > buffer.remaining()) {
+                throw new IllegalArgumentException(
+                        "Value length " + vlen + " exceeds buffer remaining " + buffer.remaining()
+                                + " at entry " + i);
+            }
+
             Object val;
             if (expectUtf8) {
-                // Decode UTF-8 directly from buffer
                 val = BufferUtils.decodeUtf8(buffer, vlen);
             } else {
                 byte[] vbytes = new byte[vlen];
@@ -1016,10 +1074,22 @@ public class CommandManager {
      * Deserialize a ByteBuffer containing a serialized array back to Object[]. This handles
      * DirectByteBuffer responses for large data (>16KB). Format uses Redis-like protocol: '*' +
      * array_len(4 bytes BE) + elements Each element: type_marker + data
+     *
+     * <p>This method includes defense-in-depth validation to protect against malformed buffers from
+     * the native layer (due to bugs or memory corruption).
+     *
+     * @throws IllegalArgumentException if the buffer format is invalid or contains out-of-bounds
+     *     values
      */
     private Object[] deserializeByteBufferArray(ByteBuffer buffer, boolean expectUtf8Response) {
         buffer.order(ByteOrder.BIG_ENDIAN); // Rust uses big-endian
         buffer.rewind();
+
+        // Validate minimum buffer size for marker + count
+        if (buffer.remaining() < 5) {
+            throw new IllegalArgumentException(
+                    "Buffer too small for array header: " + buffer.remaining() + " bytes");
+        }
 
         // Read array marker ('*')
         byte marker = buffer.get();
@@ -1029,20 +1099,44 @@ public class CommandManager {
 
         // Read array element count (4 bytes, big-endian)
         int count = buffer.getInt();
+
+        // Validate count is non-negative (primary protection is per-element bounds checking)
+        if (count < 0) {
+            throw new IllegalArgumentException("Invalid negative array count: " + count);
+        }
+
         Object[] result = new Object[count];
 
         for (int i = 0; i < count; i++) {
+            // Validate buffer has at least 1 byte for type marker
+            if (buffer.remaining() < 1) {
+                throw new IllegalArgumentException(
+                        "Buffer underflow reading type marker at element " + i);
+            }
+
             // Read element type marker
             byte typeMarker = buffer.get();
 
             switch (typeMarker) {
                 case '$': // Bulk string
+                    if (buffer.remaining() < 4) {
+                        throw new IllegalArgumentException(
+                                "Buffer underflow reading bulk string length at element " + i);
+                    }
                     int bulkLen = buffer.getInt();
                     if (bulkLen == -1) {
                         result[i] = null;
                     } else {
+                        if (bulkLen < 0) {
+                            throw new IllegalArgumentException(
+                                    "Invalid negative bulk string length at element " + i + ": " + bulkLen);
+                        }
+                        if (bulkLen > buffer.remaining()) {
+                            throw new IllegalArgumentException(
+                                    "Bulk string length " + bulkLen + " exceeds buffer remaining "
+                                            + buffer.remaining() + " at element " + i);
+                        }
                         if (expectUtf8Response) {
-                            // Decode UTF-8 directly from buffer
                             result[i] = BufferUtils.decodeUtf8(buffer, bulkLen);
                         } else {
                             byte[] data = new byte[bulkLen];
@@ -1053,35 +1147,84 @@ public class CommandManager {
                     break;
 
                 case '+': // Simple string (includes "OK")
+                    if (buffer.remaining() < 4) {
+                        throw new IllegalArgumentException(
+                                "Buffer underflow reading simple string length at element " + i);
+                    }
                     int simpleLen = buffer.getInt();
-                    // Simple strings are always UTF-8
+                    if (simpleLen < 0) {
+                        throw new IllegalArgumentException(
+                                "Invalid negative simple string length at element " + i + ": " + simpleLen);
+                    }
+                    if (simpleLen > buffer.remaining()) {
+                        throw new IllegalArgumentException(
+                                "Simple string length " + simpleLen + " exceeds buffer remaining "
+                                        + buffer.remaining() + " at element " + i);
+                    }
                     String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
                     result[i] = simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
                     break;
 
                 case ':': // Integer
+                    if (buffer.remaining() < 8) {
+                        throw new IllegalArgumentException(
+                                "Buffer underflow reading integer at element " + i);
+                    }
                     long intValue = buffer.getLong();
                     result[i] = intValue;
                     break;
 
                 case ',': // Double
+                    if (buffer.remaining() < 8) {
+                        throw new IllegalArgumentException(
+                                "Buffer underflow reading double at element " + i);
+                    }
                     result[i] = buffer.getDouble();
                     break;
 
                 case '?': // Boolean
+                    if (buffer.remaining() < 1) {
+                        throw new IllegalArgumentException(
+                                "Buffer underflow reading boolean at element " + i);
+                    }
                     result[i] = buffer.get() != 0;
                     break;
 
                 case '(': // BigNumber
+                    if (buffer.remaining() < 4) {
+                        throw new IllegalArgumentException(
+                                "Buffer underflow reading big number length at element " + i);
+                    }
                     int bigNumberLen = buffer.getInt();
+                    if (bigNumberLen < 0) {
+                        throw new IllegalArgumentException(
+                                "Invalid negative big number length at element " + i + ": " + bigNumberLen);
+                    }
+                    if (bigNumberLen > buffer.remaining()) {
+                        throw new IllegalArgumentException(
+                                "Big number length " + bigNumberLen + " exceeds buffer remaining "
+                                        + buffer.remaining() + " at element " + i);
+                    }
                     String bigNumberStr = BufferUtils.decodeUtf8(buffer, bigNumberLen);
                     result[i] = new BigInteger(bigNumberStr);
                     break;
 
                 case '#': // Complex type (serialized as string)
+                    if (buffer.remaining() < 4) {
+                        throw new IllegalArgumentException(
+                                "Buffer underflow reading complex type length at element " + i);
+                    }
                     int complexLen = buffer.getInt();
+                    if (complexLen < 0) {
+                        throw new IllegalArgumentException(
+                                "Invalid negative complex type length at element " + i + ": " + complexLen);
+                    }
+                    if (complexLen > buffer.remaining()) {
+                        throw new IllegalArgumentException(
+                                "Complex type length " + complexLen + " exceeds buffer remaining "
+                                        + buffer.remaining() + " at element " + i);
+                    }
                     if (expectUtf8Response) {
-                        // Decode UTF-8 directly from buffer
                         result[i] = BufferUtils.decodeUtf8(buffer, complexLen);
                     } else {
                         byte[] complexData = new byte[complexLen];
