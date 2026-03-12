@@ -87,46 +87,47 @@ public class NativeUtils {
     }
 
     /**
-     * Detects whether the Linux system uses musl or glibc. Executes "ldd --version" and checks for
-     * "musl" in the output.
+     * Detects whether the Linux system uses musl or glibc by checking for the musl dynamic linker.
+     * <p>The musl dynamic linker is typically located at /lib/ld-musl-{arch}.so.1
      *
      * @return true if musl is detected, false otherwise (defaults to glibc on any error)
      */
     private static boolean isMuslLibc() {
         try {
-            Process process = Runtime.getRuntime().exec(new String[] {"ldd", "--version"});
+            // Check for musl dynamic linker files
+            // musl systems have /lib/ld-musl-{arch}.so.1
+            File libDir = new File("/lib");
+            if (libDir.exists() && libDir.isDirectory()) {
+                String[] files = libDir.list();
+                if (files != null) {
+                    for (String file : files) {
+                        if (file.startsWith("ld-musl-") && file.endsWith(".so.1")) {
+                            return true;
+                        }
+                    }
+                }
+            }
 
-            // Read both stdout and stderr (musl outputs to stderr)
-            String output =
-                    readInputStream(process.getInputStream()) + readInputStream(process.getErrorStream());
+            // Also check /lib64 for some distributions
+            File lib64Dir = new File("/lib64");
+            if (lib64Dir.exists() && lib64Dir.isDirectory()) {
+                String[] files = lib64Dir.list();
+                if (files != null) {
+                    for (String file : files) {
+                        if (file.startsWith("ld-musl-") && file.endsWith(".so.1")) {
+                            return true;
+                        }
+                    }
+                }
+            }
 
-            process.waitFor();
+            // Default to glibc if no musl linker found
+            return false;
 
-            // Check if output contains "musl" (case-insensitive)
-            return output.toLowerCase().contains("musl");
-
-        } catch (Exception e) {
-            // Default to glibc on any exception
+        } catch (SecurityException e) {
+            // If we can't read the directory, default to glibc
             return false;
         }
-    }
-
-    /**
-     * Reads all lines from an InputStream and returns them as a single String.
-     *
-     * @param inputStream The input stream to read from
-     * @return The content as a String with newlines preserved
-     * @throws IOException If an I/O error occurs
-     */
-    private static String readInputStream(InputStream inputStream) throws IOException {
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-        }
-        return output.toString();
     }
 
     /**
