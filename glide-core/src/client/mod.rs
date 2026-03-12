@@ -1586,8 +1586,10 @@ async fn create_cluster_client(
         })
         .collect();
 
+    let request_timeout = to_duration(request.request_timeout, DEFAULT_RESPONSE_TIMEOUT);
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(connection_timeout)
+        .response_timeout(request_timeout)
         .retries(DEFAULT_RETRIES);
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
