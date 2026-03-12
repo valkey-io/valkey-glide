@@ -250,6 +250,10 @@ async fn run_with_timeout<T>(
         Some(duration) => match tokio::time::timeout(duration, future).await {
             Ok(result) => result,
             Err(_) => {
+                log_warn(
+                    "run_with_timeout",
+                    format!("request timed out after {}ms", duration.as_millis()),
+                );
                 // Record timeout error metric if telemetry is initialized
                 if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
                     log_error(

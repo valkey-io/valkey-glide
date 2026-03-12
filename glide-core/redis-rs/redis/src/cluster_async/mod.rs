@@ -110,6 +110,40 @@ use dispose::{Disposable, Dispose};
 use futures::{future::BoxFuture, prelude::*, ready};
 use pin_project_lite::pin_project;
 use std::sync::RwLock as StdRwLock;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+
+// Diagnostic counters for detecting poll_flush busy-spin during partition.
+static POLL_FLUSH_CALLS: AtomicU64 = AtomicU64::new(0);
+static POLL_RECOVER_READY: AtomicU64 = AtomicU64::new(0);
+static POLL_RECOVER_PENDING: AtomicU64 = AtomicU64::new(0);
+static POLL_COMPLETE_READY: AtomicU64 = AtomicU64::new(0);
+static POLL_COMPLETE_PENDING: AtomicU64 = AtomicU64::new(0);
+static LAST_DIAG_LOG: AtomicU64 = AtomicU64::new(0);
+
+fn log_diag_counters() {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let last = LAST_DIAG_LOG.load(AtomicOrdering::Relaxed);
+    if now.saturating_sub(last) < 5 {
+        return;
+    }
+    if LAST_DIAG_LOG.compare_exchange(last, now, AtomicOrdering::Relaxed, AtomicOrdering::Relaxed).is_err() {
+        return;
+    }
+    let flush = POLL_FLUSH_CALLS.swap(0, AtomicOrdering::Relaxed);
+    let rec_ready = POLL_RECOVER_READY.swap(0, AtomicOrdering::Relaxed);
+    let rec_pend = POLL_RECOVER_PENDING.swap(0, AtomicOrdering::Relaxed);
+    let comp_ready = POLL_COMPLETE_READY.swap(0, AtomicOrdering::Relaxed);
+    let comp_pend = POLL_COMPLETE_PENDING.swap(0, AtomicOrdering::Relaxed);
+    if flush > 0 {
+        warn!(
+            "DIAG poll_flush={} recover(ready={},pending={}) complete(ready={},pending={})",
+            flush, rec_ready, rec_pend, comp_ready, comp_pend
+        );
+    }
+}
 use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
@@ -3409,25 +3443,54 @@ where
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
         trace!("poll_flush: {:?}", self.state);
+        POLL_FLUSH_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
+        log_diag_counters();
+        // No loop{} here — when recovery is needed, we enter recovery state and
+        // return Pending. The batch-drain loop will re-call flush() which re-polls
+        // us. This prevents busy-spinning the single-threaded Tokio runtime during
+        // network partition or long recovery.
         loop {
             self.send_refresh_error();
 
-            if let Err(err) = ready!(self.as_mut().poll_recover(cx)) {
-                // We failed to reconnect, while we will try again we will report the
-                // error if we can to avoid getting trapped in an infinite loop of
-                // trying to reconnect
-                self.refresh_error = Some(err);
+            match self.as_mut().poll_recover(cx) {
+                Poll::Pending => {
+                    POLL_RECOVER_PENDING.fetch_add(1, AtomicOrdering::Relaxed);
+                    // Fail any requests that Forward put into pending_requests
+                    // via start_send while we're in recovery. Without this,
+                    // those requests wait for recovery to complete (~seconds),
+                    // causing timeouts.
+                    return Poll::Pending;
+                }
+                Poll::Ready(Err(err)) => {
+                    POLL_RECOVER_READY.fetch_add(1, AtomicOrdering::Relaxed);
+                    // We failed to reconnect, while we will try again we will report the
+                    // error if we can to avoid getting trapped in an infinite loop of
+                    // trying to reconnect
+                    self.refresh_error = Some(err);
 
-                // Give other tasks a chance to progress before we try to recover
-                // again. Since the future may not have registered a wake up we do so
-                // now so the task is not forgotten
-                cx.waker().wake_by_ref();
-                return Poll::Pending;
+                    // Give other tasks a chance to progress before we try to recover
+                    // again. Since the future may not have registered a wake up we do so
+                    // now so the task is not forgotten
+                    cx.waker().wake_by_ref();
+                    return Poll::Pending;
+                }
+                Poll::Ready(Ok(())) => {
+                    POLL_RECOVER_READY.fetch_add(1, AtomicOrdering::Relaxed);
+                }
             }
 
-            match ready!(self.poll_complete(cx)) {
-                PollFlushAction::None => return Poll::Ready(Ok(())),
-                PollFlushAction::RebuildSlots => {
+            let poll_complete_result = self.as_mut().poll_complete(cx);
+            match poll_complete_result {
+                Poll::Pending => {
+                    POLL_COMPLETE_PENDING.fetch_add(1, AtomicOrdering::Relaxed);
+                    return Poll::Pending;
+                }
+                Poll::Ready(PollFlushAction::None) => {
+                    POLL_COMPLETE_READY.fetch_add(1, AtomicOrdering::Relaxed);
+                    return Poll::Ready(Ok(()));
+                }
+                Poll::Ready(PollFlushAction::RebuildSlots) => {
+                    POLL_COMPLETE_READY.fetch_add(1, AtomicOrdering::Relaxed);
                     // Spawn refresh task
                     let task_handle = ClusterConnInner::spawn_refresh_slots_task(
                         self.inner.clone(),
@@ -3438,13 +3501,15 @@ where
                     self.state =
                         ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
                 }
-                PollFlushAction::ReconnectFromInitialConnections => {
+                Poll::Ready(PollFlushAction::ReconnectFromInitialConnections) => {
+                    POLL_COMPLETE_READY.fetch_add(1, AtomicOrdering::Relaxed);
                     self.state =
                         ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(Box::pin(
                             ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
                         )));
                 }
-                PollFlushAction::Reconnect(addresses) => {
+                Poll::Ready(PollFlushAction::Reconnect(addresses)) => {
+                    POLL_COMPLETE_READY.fetch_add(1, AtomicOrdering::Relaxed);
                     self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
                         ClusterConnInner::trigger_refresh_connection_tasks(
                             self.inner.clone(),
