@@ -199,7 +199,8 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
             .with(file_layer)
             .with(targets_filter)
             .with(console_layer)
-            .init();
+            .try_init()
+            .ok();
 
         let reloads: Reloads = Reloads {
             console_reload: RwLock::new(stdout_reload),
