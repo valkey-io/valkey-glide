@@ -253,7 +253,7 @@ jobs:
               shell: bash
               run: |
                   # Create staging directory for native libraries
-                  mkdir -p java/client/build/native-libs-staging
+                  mkdir -p java/client/build/native-libs-staging/natives
 
                   # Copy all native libraries from downloaded artifacts
                   # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
@@ -261,8 +261,16 @@ jobs:
                   for artifact_dir in native-libs-downloaded/native-lib-*; do
                       if [ -d "$artifact_dir" ]; then
                           echo "Processing $artifact_dir"
-                          # Copy preserving the platform/arch structure under a 'natives' directory
-                          cp -r "$artifact_dir"/* java/client/build/native-libs-staging/natives/ 2>/dev/null || true
+                          # Find all native library files and copy them preserving the platform/arch structure
+                          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
+                              # Extract the relative path from the artifact directory
+                              rel_path="${lib_file#$artifact_dir/}"
+                              target_path="java/client/build/native-libs-staging/natives/$rel_path"
+                              # Create target directory if it doesn't exist
+                              mkdir -p "$(dirname "$target_path")"
+                              # Copy the file
+                              cp "$lib_file" "$target_path"
+                          done
                       fi
                   done
 
