@@ -1332,48 +1332,67 @@ where
     ) -> RedisResult<ConnectionMap<C>> {
         let initial_nodes: Vec<(String, Option<SocketAddr>)> =
             Self::try_to_expand_initial_nodes(initial_nodes).await;
-        let connections = stream::iter(initial_nodes.iter().cloned())
-            .map(|(node_addr, socket_addr)| {
-                let params: ClusterParams = params.clone();
-                let glide_connection_options = glide_connection_options.clone();
-                // set subscriptions to none, they will be applied upon the topology discovery
+        let connections =
+            stream::iter(initial_nodes.iter().cloned())
+                .map(|(node_addr, socket_addr)| {
+                    let params: ClusterParams = params.clone();
+                    let glide_connection_options = glide_connection_options.clone();
+                    // set subscriptions to none, they will be applied upon the topology discovery
 
-                async move {
-                    let result = connect_and_check(
-                        &node_addr,
-                        params,
-                        socket_addr,
-                        RefreshConnectionType::AllConnections,
-                        None,
-                        glide_connection_options,
-                    )
-                    .await
-                    .get_node();
-                    let node_address = if let Some(socket_addr) = socket_addr {
-                        socket_addr.to_string()
-                    } else {
-                        node_addr
-                    };
-                    result.map(|node| (node_address, node))
-                }
-            })
-            .buffer_unordered(initial_nodes.len())
-            .fold(
-                (
-                    ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
-                    None,
-                ),
-                |connections: (ConnectionMap<C>, Option<String>), addr_conn_res| async move {
-                    match addr_conn_res {
-                        Ok((addr, node)) => {
-                            connections.0 .0.insert(addr, node);
-                            (connections.0, None)
+                    async move {
+                        let result = connect_and_check::<C>(
+                            &node_addr,
+                            params,
+                            socket_addr,
+                            RefreshConnectionType::AllConnections,
+                            None,
+                            glide_connection_options,
+                        )
+                        .await
+                        .get_node();
+                        // The PushManager is initialized with connection_info.addr
+                        // (the original hostname, e.g. "localhost:6379"), but the
+                        // ConnectionsMap key uses the resolved IP from socket_addr
+                        // (e.g. "127.0.0.1:6379"). When these differ, align them so
+                        // PubSub synchronization can match subscriptions to nodes.
+                        let (node_address, push_manager_needs_update) =
+                            if let Some(socket_addr) = socket_addr {
+                                let resolved = socket_addr.to_string();
+                                let differs = resolved != node_addr;
+                                (resolved, differs)
+                            } else {
+                                (node_addr, false)
+                            };
+                        if push_manager_needs_update {
+                            if let Ok(ref node) = result {
+                                node.user_connection
+                                    .conn
+                                    .clone()
+                                    .await
+                                    .update_push_manager_node_address(node_address.clone());
+                            }
                         }
-                        Err(e) => (connections.0, Some(e.to_string())),
+                        result.map(|node| (node_address, node))
                     }
-                },
-            )
-            .await;
+                })
+                .buffer_unordered(initial_nodes.len())
+                .fold(
+                    (
+                        ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
+                        None,
+                    ),
+                    |connections: (ConnectionMap<C>, Option<String>),
+                     addr_conn_res: RedisResult<_>| async move {
+                        match addr_conn_res {
+                            Ok((addr, node)) => {
+                                connections.0 .0.insert(addr, node);
+                                (connections.0, None)
+                            }
+                            Err(e) => (connections.0, Some(e.to_string())),
+                        }
+                    },
+                )
+                .await;
         if connections.0 .0.is_empty() {
             return Err(RedisError::from((
                 ErrorKind::IoError,
