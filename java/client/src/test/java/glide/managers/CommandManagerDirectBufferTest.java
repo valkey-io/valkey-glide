@@ -281,6 +281,7 @@ public class CommandManagerDirectBufferTest {
                 CommandManager.class.getDeclaredMethod(
                         "deserializeByteBufferMap", ByteBuffer.class, boolean.class);
         method.setAccessible(true);
-        return (LinkedHashMap<Object, Object>) method.invoke(commandManager, buffer, expectUtf8Response);
+        return (LinkedHashMap<Object, Object>)
+                method.invoke(commandManager, buffer, expectUtf8Response);
     }
 }

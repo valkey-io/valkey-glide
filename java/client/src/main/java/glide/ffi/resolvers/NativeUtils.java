@@ -88,6 +88,7 @@ public class NativeUtils {
 
     /**
      * Detects whether the Linux system uses musl or glibc by checking for the musl dynamic linker.
+     *
      * <p>The musl dynamic linker is typically located at /lib/ld-musl-{arch}.so.1
      *
      * @return true if musl is detected, false otherwise (defaults to glibc on any error)
@@ -244,8 +245,7 @@ public class NativeUtils {
         Object fileKeyBeforeLoad = null;
         if (isPosixCompliant()) {
             try {
-                BasicFileAttributes attrs =
-                        Files.readAttributes(temp.toPath(), BasicFileAttributes.class);
+                BasicFileAttributes attrs = Files.readAttributes(temp.toPath(), BasicFileAttributes.class);
                 fileKeyBeforeLoad = attrs.fileKey();
             } catch (IOException e) {
                 cleanupTempFile(temp);
@@ -262,8 +262,8 @@ public class NativeUtils {
                 if (!fileKeyBeforeLoad.equals(fileKeyAtLoad)) {
                     cleanupTempFile(temp);
                     throw new SecurityException(
-                            "Security violation: Native library file was modified between extraction and loading. "
-                                    + "This may indicate a TOCTOU attack.");
+                            "Security violation: Native library file was modified between extraction and loading."
+                                    + " This may indicate a TOCTOU attack.");
                 }
             }
             System.load(temp.getAbsolutePath());
@@ -302,10 +302,11 @@ public class NativeUtils {
      * Creates a secure temporary directory with cryptographically random name.
      *
      * <p>Uses {@link Files#createTempDirectory} which provides:
+     *
      * <ul>
-     *   <li>Cryptographically random directory names (prevents prediction attacks)</li>
-     *   <li>Atomic directory creation (prevents TOCTOU race conditions)</li>
-     *   <li>Restrictive permissions (700) on POSIX systems</li>
+     *   <li>Cryptographically random directory names (prevents prediction attacks)
+     *   <li>Atomic directory creation (prevents TOCTOU race conditions)
+     *   <li>Restrictive permissions (700) on POSIX systems
      * </ul>
      *
      * @param prefix The prefix string to be used in generating the directory's name

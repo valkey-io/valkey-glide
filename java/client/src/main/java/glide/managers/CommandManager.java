@@ -847,7 +847,10 @@ public class CommandManager {
             // Validate buffer has enough bytes for key length field
             if (buffer.remaining() < 4) {
                 throw new IllegalArgumentException(
-                        "Buffer underflow reading key length at entry " + i + ": " + buffer.remaining()
+                        "Buffer underflow reading key length at entry "
+                                + i
+                                + ": "
+                                + buffer.remaining()
                                 + " bytes remaining");
             }
 
@@ -860,8 +863,12 @@ public class CommandManager {
             }
             if (klen > buffer.remaining()) {
                 throw new IllegalArgumentException(
-                        "Key length " + klen + " exceeds buffer remaining " + buffer.remaining()
-                                + " at entry " + i);
+                        "Key length "
+                                + klen
+                                + " exceeds buffer remaining "
+                                + buffer.remaining()
+                                + " at entry "
+                                + i);
             }
 
             Object key;
@@ -876,7 +883,10 @@ public class CommandManager {
             // Validate buffer has enough bytes for value length field
             if (buffer.remaining() < 4) {
                 throw new IllegalArgumentException(
-                        "Buffer underflow reading value length at entry " + i + ": " + buffer.remaining()
+                        "Buffer underflow reading value length at entry "
+                                + i
+                                + ": "
+                                + buffer.remaining()
                                 + " bytes remaining");
             }
 
@@ -889,8 +899,12 @@ public class CommandManager {
             }
             if (vlen > buffer.remaining()) {
                 throw new IllegalArgumentException(
-                        "Value length " + vlen + " exceeds buffer remaining " + buffer.remaining()
-                                + " at entry " + i);
+                        "Value length "
+                                + vlen
+                                + " exceeds buffer remaining "
+                                + buffer.remaining()
+                                + " at entry "
+                                + i);
             }
 
             Object val;
@@ -1110,8 +1124,7 @@ public class CommandManager {
         for (int i = 0; i < count; i++) {
             // Validate buffer has at least 1 byte for type marker
             if (buffer.remaining() < 1) {
-                throw new IllegalArgumentException(
-                        "Buffer underflow reading type marker at element " + i);
+                throw new IllegalArgumentException("Buffer underflow reading type marker at element " + i);
             }
 
             // Read element type marker
@@ -1133,8 +1146,12 @@ public class CommandManager {
                         }
                         if (bulkLen > buffer.remaining()) {
                             throw new IllegalArgumentException(
-                                    "Bulk string length " + bulkLen + " exceeds buffer remaining "
-                                            + buffer.remaining() + " at element " + i);
+                                    "Bulk string length "
+                                            + bulkLen
+                                            + " exceeds buffer remaining "
+                                            + buffer.remaining()
+                                            + " at element "
+                                            + i);
                         }
                         if (expectUtf8Response) {
                             result[i] = BufferUtils.decodeUtf8(buffer, bulkLen);
@@ -1158,8 +1175,12 @@ public class CommandManager {
                     }
                     if (simpleLen > buffer.remaining()) {
                         throw new IllegalArgumentException(
-                                "Simple string length " + simpleLen + " exceeds buffer remaining "
-                                        + buffer.remaining() + " at element " + i);
+                                "Simple string length "
+                                        + simpleLen
+                                        + " exceeds buffer remaining "
+                                        + buffer.remaining()
+                                        + " at element "
+                                        + i);
                     }
                     String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
                     result[i] = simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
@@ -1167,8 +1188,7 @@ public class CommandManager {
 
                 case ':': // Integer
                     if (buffer.remaining() < 8) {
-                        throw new IllegalArgumentException(
-                                "Buffer underflow reading integer at element " + i);
+                        throw new IllegalArgumentException("Buffer underflow reading integer at element " + i);
                     }
                     long intValue = buffer.getLong();
                     result[i] = intValue;
@@ -1176,16 +1196,14 @@ public class CommandManager {
 
                 case ',': // Double
                     if (buffer.remaining() < 8) {
-                        throw new IllegalArgumentException(
-                                "Buffer underflow reading double at element " + i);
+                        throw new IllegalArgumentException("Buffer underflow reading double at element " + i);
                     }
                     result[i] = buffer.getDouble();
                     break;
 
                 case '?': // Boolean
                     if (buffer.remaining() < 1) {
-                        throw new IllegalArgumentException(
-                                "Buffer underflow reading boolean at element " + i);
+                        throw new IllegalArgumentException("Buffer underflow reading boolean at element " + i);
                     }
                     result[i] = buffer.get() != 0;
                     break;
@@ -1202,8 +1220,12 @@ public class CommandManager {
                     }
                     if (bigNumberLen > buffer.remaining()) {
                         throw new IllegalArgumentException(
-                                "Big number length " + bigNumberLen + " exceeds buffer remaining "
-                                        + buffer.remaining() + " at element " + i);
+                                "Big number length "
+                                        + bigNumberLen
+                                        + " exceeds buffer remaining "
+                                        + buffer.remaining()
+                                        + " at element "
+                                        + i);
                     }
                     String bigNumberStr = BufferUtils.decodeUtf8(buffer, bigNumberLen);
                     result[i] = new BigInteger(bigNumberStr);
@@ -1221,8 +1243,12 @@ public class CommandManager {
                     }
                     if (complexLen > buffer.remaining()) {
                         throw new IllegalArgumentException(
-                                "Complex type length " + complexLen + " exceeds buffer remaining "
-                                        + buffer.remaining() + " at element " + i);
+                                "Complex type length "
+                                        + complexLen
+                                        + " exceeds buffer remaining "
+                                        + buffer.remaining()
+                                        + " at element "
+                                        + i);
                     }
                     if (expectUtf8Response) {
                         result[i] = BufferUtils.decodeUtf8(buffer, complexLen);
