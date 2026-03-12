@@ -521,6 +521,7 @@ jobs:
                       python/glide-sync/dist/*.tar.gz
 
     test-release:
+        if: ${{ github.event_name == 'push' || inputs.publish_async== true || inputs.publish_sync == true }}
         name: Test the release
         runs-on: ${{ matrix.build.RUNNER }}
         needs:
@@ -598,44 +599,83 @@ jobs:
                   engine-version: "8.0"
                   target: ${{ matrix.build.target }}
 
+            - name: Check if RC and set a distribution tag for the package
+              shell: bash
+              env:
+                  RELEASE_VERSION: ${{ needs.publish-binaries.outputs.release_version }}
+              run: |
+                  if [[ "$RELEASE_VERSION" == *"rc"* ]]
+                  then
+                    echo "This is a release candidate"
+                    echo "PIP_PRE=true" >> $GITHUB_ENV
+                  else
+                    echo "This is a stable release"
+                    echo "PIP_PRE=false" >> $GITHUB_ENV
+                  fi
+
+                  # Format the version for PyPI (remove leading 'v' and convert '-rc' to 'rc')
+                  PYPI_VERSION="${RELEASE_VERSION#v}"
+                  PYPI_VERSION="${PYPI_VERSION//-rc/rc}"
+                  echo "PYPI_VERSION=${PYPI_VERSION}" >> $GITHUB_ENV
+
             - name: Run the Async Client tests
+              if: ${{ inputs.publish_async == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
                   python -m venv venv
                   source venv/bin/activate
                   pip install -U pip
-                  pip install valkey-glide
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
+                  else
+                    pip install valkey-glide
+                  fi
                   python async_rc_test.py
 
             - name: Run the Async Clients tests with PyPy
+              if: ${{ inputs.publish_async == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
                   pypy3 -m venv pypy_venv
                   source pypy_venv/bin/activate
                   pip install -U pip
-                  pip install valkey-glide
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install "valkey-glide==${{ env.PYPI_VERSION }}"
+                  else
+                    pip install valkey-glide
+                  fi
                   pypy3 async_rc_test.py
 
             - name: Run the Sync Client tests
+              if: ${{ inputs.publish_sync == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
-                  python -m venv venv_sync
-                  source venv_sync/bin/activate
+                  python -m venv venv
+                  source venv/bin/activate
                   pip install -U pip
-                  pip install valkey-glide-sync
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
+                  else
+                    pip install valkey-glide-sync
+                  fi
                   python sync_rc_test.py
 
             - name: Run the Sync Client tests with PyPy
+              if: ${{ inputs.publish_sync == true }}
               shell: bash
               working-directory: ./utils/release-candidate-testing/python
               run: |
-                  pypy3 -m venv pypy_venv_sync
-                  source pypy_venv_sync/bin/activate
+                  pypy3 -m venv pypy_venv
+                  source pypy_venv/bin/activate
                   pip install -U pip
-                  pip install valkey-glide-sync
+                  if [[ "${{ env.PIP_PRE }}" == "true" ]]; then
+                    pip install "valkey-glide-sync==${{ env.PYPI_VERSION }}"
+                  else
+                    pip install valkey-glide-sync
+                  fi
                   pypy3 sync_rc_test.py
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
