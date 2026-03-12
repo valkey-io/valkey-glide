@@ -21,13 +21,13 @@ import (
 func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	// Create IAM config
 	iamConfig := config.NewIamAuthConfig(
-		"test-cluster",
+		TestClusterName,
 		config.ElastiCache,
-		"us-east-1",
+		TestRegionUsEast1,
 	).WithRefreshIntervalSeconds(5) // Fast refresh for testing
 
 	// Create credentials with IAM config
-	credentials, err := config.NewServerCredentialsWithIam("default", iamConfig)
+		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	// Create cluster client configuration
@@ -82,12 +82,12 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 	// Create IAM config with very short refresh interval
 	iamConfig := config.NewIamAuthConfig(
-		"test-cluster",
+		TestClusterName,
 		config.ElastiCache,
-		"us-east-1",
+		TestRegionUsEast1,
 	).WithRefreshIntervalSeconds(2) // Very fast refresh for testing
 
-	credentials, err := config.NewServerCredentialsWithIam("default", iamConfig)
+		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	clusterConfig := config.NewClusterClientConfiguration().
@@ -124,13 +124,13 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone() {
 	// Create IAM config
 	iamConfig := config.NewIamAuthConfig(
-		"test-standalone",
+		TestClusterName,
 		config.ElastiCache,
-		"us-east-1",
+		TestRegionUsEast1,
 	).WithRefreshIntervalSeconds(5)
 
 	// Create credentials with IAM config
-	credentials, err := config.NewServerCredentialsWithIam("default", iamConfig)
+		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	// Create standalone client configuration
@@ -181,12 +181,12 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalone() {
 	// Create IAM config with very short refresh interval
 	iamConfig := config.NewIamAuthConfig(
-		"test-standalone",
+		TestClusterName,
 		config.ElastiCache,
-		"us-east-1",
+		TestRegionUsEast1,
 	).WithRefreshIntervalSeconds(2)
 
-	credentials, err := config.NewServerCredentialsWithIam("default", iamConfig)
+		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	standaloneConfig := config.NewClientConfiguration().

@@ -15,6 +15,11 @@ from glide_shared.exceptions import RequestError
 from glide_sync.glide_client import TGlideClient
 
 from tests.sync_tests.conftest import create_sync_client
+from tests.test_constants import (
+    IAM_TEST_CLUSTER_NAME,
+    IAM_TEST_REGION_US_EAST_1,
+    IAM_USERNAME,
+)
 from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
@@ -36,13 +41,13 @@ def create_iam_client(
 ):
     """Helper to create a sync client with IAM authentication."""
     iam_config = IamAuthConfig(
-        cluster_name="test-cluster",
+        cluster_name=IAM_TEST_CLUSTER_NAME,
         service=ServiceType.ELASTICACHE,
-        region="us-east-1",
+        region=IAM_TEST_REGION_US_EAST_1,
         refresh_interval_seconds=refresh_interval_seconds,
     )
 
-    credentials = ServerCredentials(username="default", iam_config=iam_config)
+    credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
 
     # Note: use_tls is set from request which respects the --tls flag
     return create_sync_client(

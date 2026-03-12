@@ -53,13 +53,11 @@ pub(crate) mod shared_client_tests {
     const MEMORYDB_CLUSTER_IAM_ENDPOINT: &str = "memorydb-cluster-iam.endpoint"; // Replace with your cluster endpoint
 
     #[cfg(feature = "iam_tests")]
-    const TEST_CLUSTER_NAME: &str = "test-cluster";
-    #[cfg(feature = "iam_tests")]
     const TEST_STANDALONE_NAME: &str = "test-standalone";
+
+    // Import IAM test constants from test_constants module
     #[cfg(feature = "iam_tests")]
-    const TEST_USERNAME: &str = "default";
-    #[cfg(feature = "iam_tests")]
-    const TEST_REGION: &str = "us-east-1";
+    use test_constants::{IAM_TEST_CLUSTER_NAME, IAM_TEST_REGION_US_EAST_1, IAM_USERNAME};
 
     struct TestBasics {
         server: BackingServer,
@@ -472,7 +470,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint: &'static str = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -532,7 +530,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-standalone"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint = ELASTICACHE_STANDALONE_IAM_ENDPOINT; // Replace with your standalone endpoint
 
             // Use the provided endpoint and port
@@ -593,7 +591,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth-test"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint = MEMORYDB_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -653,7 +651,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -749,7 +747,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-standalone"; // Replace with your standalone cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint = ELASTICACHE_STANDALONE_IAM_ENDPOINT; // Replace with your standalone endpoint
 
             // Use the provided endpoint and port
@@ -854,7 +852,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -961,13 +959,13 @@ pub(crate) mod shared_client_tests {
             // Cleanup function to restore original credentials
             let cleanup = cleanup_mock_aws_credentials;
 
-            let cluster_name = if use_cluster {
-                TEST_CLUSTER_NAME
-            } else {
-                TEST_STANDALONE_NAME
-            };
-            let username = TEST_USERNAME;
-            let region = TEST_REGION;
+                        let cluster_name = if use_cluster {
+                            IAM_TEST_CLUSTER_NAME
+                        } else {
+                            TEST_STANDALONE_NAME
+                        };
+            let username = IAM_USERNAME;
+            let region = IAM_TEST_REGION_US_EAST_1;
 
             // Create test basics with regular authentication first
             let test_basics = setup_test_basics(
@@ -1083,7 +1081,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -1197,7 +1195,7 @@ pub(crate) mod shared_client_tests {
 
             let cluster_name = "iam-auth-test"; // Replace with your ElastiCache cluster name
             let username = "iam-auth"; // Replace with your IAM username
-            let region = TEST_REGION;
+            let region = IAM_TEST_REGION_US_EAST_1;
             let endpoint = ELASTICACHE_CLUSTER_IAM_ENDPOINT; // Replace with your cluster endpoint
 
             // Use the provided endpoint and port
@@ -1327,13 +1325,13 @@ pub(crate) mod shared_client_tests {
             // Cleanup function to restore original credentials
             let cleanup = cleanup_mock_aws_credentials;
 
-            let cluster_name = if use_cluster {
-                TEST_CLUSTER_NAME
-            } else {
-                TEST_STANDALONE_NAME
-            };
-            let username = TEST_USERNAME;
-            let region = TEST_REGION;
+                        let cluster_name = if use_cluster {
+                            IAM_TEST_CLUSTER_NAME
+                        } else {
+                            TEST_STANDALONE_NAME
+                        };
+            let username = IAM_USERNAME;
+            let region = IAM_TEST_REGION_US_EAST_1;
 
             // Create test basics with regular authentication first
             let test_basics = setup_test_basics(

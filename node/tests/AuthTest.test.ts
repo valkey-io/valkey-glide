@@ -26,6 +26,11 @@ import {
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
+import {
+    IAM_TEST_CLUSTER_NAME,
+    IAM_TEST_REGION_US_EAST_1,
+    IAM_USERNAME,
+} from "./Constants";
 
 type BaseClient = GlideClient | GlideClusterClient;
 
@@ -34,10 +39,6 @@ const INITIAL_PASSWORD = "initial_password";
 const NEW_PASSWORD = "new_password";
 const WRONG_PASSWORD = "wrong_password";
 const TIMEOUT = 50000;
-
-// IAM test constants
-const TEST_CLUSTER_NAME = "test-cluster";
-const TEST_REGION = "us-east-1";
 
 type AddressEntry = [string, number];
 
@@ -48,9 +49,9 @@ type AddressEntry = [string, number];
  */
 function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
     return {
-        clusterName: TEST_CLUSTER_NAME,
+        clusterName: IAM_TEST_CLUSTER_NAME,
         service: ServiceType.Elasticache,
-        region: TEST_REGION,
+        region: IAM_TEST_REGION_US_EAST_1,
         refreshIntervalSeconds: refreshIntervalSeconds,
     };
 }
@@ -641,7 +642,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const username = "default"; // Use default user
+                        const username = IAM_USERNAME; // Use default user
             const iamConfig = createTestIamConfig(5); // Fast refresh for testing
 
             // Use existing cluster from global setup
@@ -710,7 +711,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const username = "default";
+                        const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2); // Short interval for automatic refresh
 
             // Use existing cluster from global setup
@@ -777,7 +778,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const username = "default";
+                        const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(5);
 
             // Use existing standalone server from global setup
@@ -846,7 +847,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-            const username = "default";
+                        const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2);
 
             // Use existing standalone server from global setup
