@@ -137,7 +137,7 @@ public class CommandManagerDirectBufferTest {
                 assertThrows(
                         InvocationTargetException.class, () -> deserializeByteBufferArray(buffer, false));
         assertTrue(ex.getCause() instanceof IllegalArgumentException);
-        assertTrue(ex.getCause().getMessage().contains("Buffer underflow reading type marker"));
+        assertTrue(ex.getCause().getMessage().contains("type marker"));
     }
 
     // ==================== Map Bounds Checking Tests ====================

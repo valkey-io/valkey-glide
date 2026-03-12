@@ -72,6 +72,54 @@ public class CommandManager {
     /** Core client connection. */
     private final GlideCoreClient coreClient;
 
+    /**
+     * Apply a response handler with cleanup on exception. If the handler throws, the stored object
+     * in JniResponseRegistry is removed to prevent memory leaks.
+     *
+     * @param response the Response to process
+     * @param responseHandler the handler to apply
+     * @return the result from the handler
+     * @throws RuntimeException if the handler throws (after cleanup)
+     */
+    private static <T> T applyHandlerWithCleanup(
+            Response response, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        long objectId = response.getRespPointer();
+        try {
+            return responseHandler.apply(response);
+        } catch (RuntimeException e) {
+            // Clean up stored object on handler exception to prevent memory leak
+            if (objectId != 0L) {
+                JniResponseRegistry.remove(objectId);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Apply a response handler with cleanup on exception, using a pre-computed objectId. If the
+     * handler throws, the stored object in JniResponseRegistry is removed to prevent memory leaks.
+     *
+     * @param response the Response to process
+     * @param objectId the registry ID to clean up on exception (may be 0 if nothing stored)
+     * @param responseHandler the handler to apply
+     * @return the result from the handler
+     * @throws RuntimeException if the handler throws (after cleanup)
+     */
+    private static <T> T applyHandlerWithCleanup(
+            Response response,
+            long objectId,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        try {
+            return responseHandler.apply(response);
+        } catch (RuntimeException e) {
+            // Clean up stored object on handler exception to prevent memory leak
+            if (objectId != 0L) {
+                JniResponseRegistry.remove(objectId);
+            }
+            throw e;
+        }
+    }
+
     /** Internal interface for exposing implementation details about a ClusterScanCursor. */
     public interface ClusterScanCursorDetail extends ClusterScanCursor {
         /**
@@ -335,16 +383,7 @@ public class CommandManager {
                     .thenApply(
                             result -> {
                                 Response response = createDirectResponse(result, expectUtf8Response);
-                                long objectId = response.getRespPointer();
-                                try {
-                                    return responseHandler.apply(response);
-                                } catch (RuntimeException e) {
-                                    // Clean up stored object on handler exception to prevent memory leak
-                                    if (objectId != 0L) {
-                                        JniResponseRegistry.remove(objectId);
-                                    }
-                                    throw e;
-                                }
+                                return applyHandlerWithCleanup(response, responseHandler);
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -390,16 +429,7 @@ public class CommandManager {
                     .thenApply(
                             result -> {
                                 Response response = createDirectResponse(result, expectUtf8Response);
-                                long objectId = response.getRespPointer();
-                                try {
-                                    return responseHandler.apply(response);
-                                } catch (RuntimeException e) {
-                                    // Clean up stored object on handler exception to prevent memory leak
-                                    if (objectId != 0L) {
-                                        JniResponseRegistry.remove(objectId);
-                                    }
-                                    throw e;
-                                }
+                                return applyHandlerWithCleanup(response, responseHandler);
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -683,32 +713,8 @@ public class CommandManager {
                             : coreClient.executeBinaryCommandAsync(requestBytes); // Allow binary conversion
 
             return jniFuture
-                    .thenApply(
-                            result -> {
-                                Response.Builder builder = Response.newBuilder();
-                                Object toStore = result;
-                                long objectId = 0L;
-                                if (result == null) {
-                                    builder.setRespPointer(0L);
-                                } else if ("OK".equals(result)) {
-                                    builder.setConstantResponse(ConstantResponse.OK);
-                                } else {
-                                    if (result instanceof ByteBuffer) {
-                                        toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
-                                    }
-                                    objectId = JniResponseRegistry.storeObject(toStore);
-                                    builder.setRespPointer(objectId);
-                                }
-                                try {
-                                    return responseHandler.apply(builder.build());
-                                } catch (RuntimeException e) {
-                                    // Clean up stored object on handler exception to prevent memory leak
-                                    if (objectId != 0L) {
-                                        JniResponseRegistry.remove(objectId);
-                                    }
-                                    throw e;
-                                }
-                            })
+                    .thenApply(result -> buildResponseFromJniResult(result, expectUtf8Response))
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
@@ -745,38 +751,38 @@ public class CommandManager {
                             : coreClient.executeBinaryCommandAsyncNoTimeout(requestBytes);
 
             return jniFuture
-                    .thenApply(
-                            result -> {
-                                Response.Builder builder = Response.newBuilder();
-                                Object toStore = result;
-                                long objectId = 0L;
-                                if (result == null) {
-                                    builder.setRespPointer(0L);
-                                } else if ("OK".equals(result)) {
-                                    builder.setConstantResponse(ConstantResponse.OK);
-                                } else {
-                                    if (result instanceof ByteBuffer) {
-                                        toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
-                                    }
-                                    objectId = JniResponseRegistry.storeObject(toStore);
-                                    builder.setRespPointer(objectId);
-                                }
-                                try {
-                                    return responseHandler.apply(builder.build());
-                                } catch (RuntimeException e) {
-                                    // Clean up stored object on handler exception to prevent memory leak
-                                    if (objectId != 0L) {
-                                        JniResponseRegistry.remove(objectId);
-                                    }
-                                    throw e;
-                                }
-                            })
+                    .thenApply(result -> buildResponseFromJniResult(result, expectUtf8Response))
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
+    }
+
+    /**
+     * Build a Response from JNI result, storing the result in JniResponseRegistry if needed.
+     *
+     * @param result the raw result from JNI
+     * @param expectUtf8Response whether to expect UTF-8 encoded response
+     * @return the built Response
+     */
+    private Response buildResponseFromJniResult(Object result, boolean expectUtf8Response) {
+        Response.Builder builder = Response.newBuilder();
+        Object toStore = result;
+        if (result == null) {
+            builder.setRespPointer(0L);
+        } else if ("OK".equals(result)) {
+            builder.setConstantResponse(ConstantResponse.OK);
+        } else {
+            if (result instanceof ByteBuffer) {
+                toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
+            }
+            long objectId = JniResponseRegistry.storeObject(toStore);
+            builder.setRespPointer(objectId);
+        }
+        return builder.build();
     }
 
     private Object normalizeDirectBuffer(ByteBuffer buffer, boolean expectUtf8Response) {
@@ -806,6 +812,43 @@ public class CommandManager {
     }
 
     /**
+     * Validate that the buffer has at least the required number of bytes remaining.
+     *
+     * @param buffer the buffer to check
+     * @param required the minimum number of bytes required
+     * @param context description of what is being read (for error message)
+     * @throws IllegalArgumentException if buffer has insufficient bytes
+     */
+    private static void requireBufferBytes(ByteBuffer buffer, int required, String context) {
+        if (buffer.remaining() < required) {
+            throw new IllegalArgumentException(
+                    "Buffer too small for " + context + ": " + buffer.remaining() + " bytes");
+        }
+    }
+
+    /**
+     * Validate a length field read from the buffer.
+     *
+     * @param length the length value to validate
+     * @param buffer the buffer to check remaining bytes against
+     * @param typeName description of the data type (for error message), capitalized (e.g., "Key",
+     *     "Value")
+     * @param index the element/entry index (for error message)
+     * @throws IllegalArgumentException if length is negative or exceeds buffer remaining
+     */
+    private static void validateLength(int length, ByteBuffer buffer, String typeName, int index) {
+        if (length < 0) {
+            throw new IllegalArgumentException(
+                    "Invalid negative " + typeName.toLowerCase() + " length at element " + index + ": " + length);
+        }
+        if (length > buffer.remaining()) {
+            throw new IllegalArgumentException(
+                    typeName + " length " + length + " exceeds buffer remaining " + buffer.remaining()
+                            + " at element " + index);
+        }
+    }
+
+    /**
      * Deserialize a ByteBuffer containing a serialized map back to Map<?,?>. Format: '%' + count(u32
      * BE) + repeated [keyLen(u32) + keyBytes + valLen(u32) + valBytes]
      *
@@ -821,10 +864,7 @@ public class CommandManager {
         buffer.rewind();
 
         // Validate minimum buffer size for marker + count
-        if (buffer.remaining() < 5) {
-            throw new IllegalArgumentException(
-                    "Buffer too small for map header: " + buffer.remaining() + " bytes");
-        }
+        requireBufferBytes(buffer, 5, "map header");
 
         byte marker = buffer.get();
         if (marker != '%') {
@@ -844,32 +884,9 @@ public class CommandManager {
                 new java.util.LinkedHashMap<>(Math.min(count, 1024));
 
         for (int i = 0; i < count; i++) {
-            // Validate buffer has enough bytes for key length field
-            if (buffer.remaining() < 4) {
-                throw new IllegalArgumentException(
-                        "Buffer underflow reading key length at entry "
-                                + i
-                                + ": "
-                                + buffer.remaining()
-                                + " bytes remaining");
-            }
-
+            requireBufferBytes(buffer, 4, "key length at entry " + i);
             int klen = buffer.getInt();
-
-            // Validate key length
-            if (klen < 0) {
-                throw new IllegalArgumentException(
-                        "Invalid negative key length at entry " + i + ": " + klen);
-            }
-            if (klen > buffer.remaining()) {
-                throw new IllegalArgumentException(
-                        "Key length "
-                                + klen
-                                + " exceeds buffer remaining "
-                                + buffer.remaining()
-                                + " at entry "
-                                + i);
-            }
+            validateLength(klen, buffer, "Key", i);
 
             Object key;
             if (expectUtf8) {
@@ -880,32 +897,9 @@ public class CommandManager {
                 key = glide.api.models.GlideString.gs(kbytes);
             }
 
-            // Validate buffer has enough bytes for value length field
-            if (buffer.remaining() < 4) {
-                throw new IllegalArgumentException(
-                        "Buffer underflow reading value length at entry "
-                                + i
-                                + ": "
-                                + buffer.remaining()
-                                + " bytes remaining");
-            }
-
+            requireBufferBytes(buffer, 4, "value length at entry " + i);
             int vlen = buffer.getInt();
-
-            // Validate value length
-            if (vlen < 0) {
-                throw new IllegalArgumentException(
-                        "Invalid negative value length at entry " + i + ": " + vlen);
-            }
-            if (vlen > buffer.remaining()) {
-                throw new IllegalArgumentException(
-                        "Value length "
-                                + vlen
-                                + " exceeds buffer remaining "
-                                + buffer.remaining()
-                                + " at entry "
-                                + i);
-            }
+            validateLength(vlen, buffer, "Value", i);
 
             Object val;
             if (expectUtf8) {
@@ -941,22 +935,12 @@ public class CommandManager {
             byte[] requestBytes = command.build().toByteArray();
 
             // Execute via JNI and convert response
+            // Stage 1: Convert JNI result to Response
+            // Stage 2: Apply response handler with cleanup on exception
             return coreClient
                     .executeBatchAsync(requestBytes, expectUtf8Response, timeoutOverrideMs)
-                    .thenApply(
-                            result -> {
-                                Response response = convertJniToProtobufResponse(result, expectUtf8Response);
-                                long objectId = response.getRespPointer();
-                                try {
-                                    return responseHandler.apply(response);
-                                } catch (RuntimeException e) {
-                                    // Clean up stored object on handler exception to prevent memory leak
-                                    if (objectId != 0L) {
-                                        JniResponseRegistry.remove(objectId);
-                                    }
-                                    throw e;
-                                }
-                            })
+                    .thenApply(result -> convertJniToProtobufResponse(result, expectUtf8Response))
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
@@ -1100,10 +1084,7 @@ public class CommandManager {
         buffer.rewind();
 
         // Validate minimum buffer size for marker + count
-        if (buffer.remaining() < 5) {
-            throw new IllegalArgumentException(
-                    "Buffer too small for array header: " + buffer.remaining() + " bytes");
-        }
+        requireBufferBytes(buffer, 5, "array header");
 
         // Read array marker ('*')
         byte marker = buffer.get();
@@ -1122,37 +1103,19 @@ public class CommandManager {
         Object[] result = new Object[count];
 
         for (int i = 0; i < count; i++) {
-            // Validate buffer has at least 1 byte for type marker
-            if (buffer.remaining() < 1) {
-                throw new IllegalArgumentException("Buffer underflow reading type marker at element " + i);
-            }
+            requireBufferBytes(buffer, 1, "type marker at element " + i);
 
             // Read element type marker
             byte typeMarker = buffer.get();
 
             switch (typeMarker) {
                 case '$': // Bulk string
-                    if (buffer.remaining() < 4) {
-                        throw new IllegalArgumentException(
-                                "Buffer underflow reading bulk string length at element " + i);
-                    }
+                    requireBufferBytes(buffer, 4, "bulk string length at element " + i);
                     int bulkLen = buffer.getInt();
                     if (bulkLen == -1) {
                         result[i] = null;
                     } else {
-                        if (bulkLen < 0) {
-                            throw new IllegalArgumentException(
-                                    "Invalid negative bulk string length at element " + i + ": " + bulkLen);
-                        }
-                        if (bulkLen > buffer.remaining()) {
-                            throw new IllegalArgumentException(
-                                    "Bulk string length "
-                                            + bulkLen
-                                            + " exceeds buffer remaining "
-                                            + buffer.remaining()
-                                            + " at element "
-                                            + i);
-                        }
+                        validateLength(bulkLen, buffer, "bulk string", i);
                         if (expectUtf8Response) {
                             result[i] = BufferUtils.decodeUtf8(buffer, bulkLen);
                         } else {
@@ -1164,92 +1127,40 @@ public class CommandManager {
                     break;
 
                 case '+': // Simple string (includes "OK")
-                    if (buffer.remaining() < 4) {
-                        throw new IllegalArgumentException(
-                                "Buffer underflow reading simple string length at element " + i);
-                    }
+                    requireBufferBytes(buffer, 4, "simple string length at element " + i);
                     int simpleLen = buffer.getInt();
-                    if (simpleLen < 0) {
-                        throw new IllegalArgumentException(
-                                "Invalid negative simple string length at element " + i + ": " + simpleLen);
-                    }
-                    if (simpleLen > buffer.remaining()) {
-                        throw new IllegalArgumentException(
-                                "Simple string length "
-                                        + simpleLen
-                                        + " exceeds buffer remaining "
-                                        + buffer.remaining()
-                                        + " at element "
-                                        + i);
-                    }
+                    validateLength(simpleLen, buffer, "simple string", i);
                     String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
                     result[i] = simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
                     break;
 
                 case ':': // Integer
-                    if (buffer.remaining() < 8) {
-                        throw new IllegalArgumentException("Buffer underflow reading integer at element " + i);
-                    }
-                    long intValue = buffer.getLong();
-                    result[i] = intValue;
+                    requireBufferBytes(buffer, 8, "integer at element " + i);
+                    result[i] = buffer.getLong();
                     break;
 
                 case ',': // Double
-                    if (buffer.remaining() < 8) {
-                        throw new IllegalArgumentException("Buffer underflow reading double at element " + i);
-                    }
+                    requireBufferBytes(buffer, 8, "double at element " + i);
                     result[i] = buffer.getDouble();
                     break;
 
                 case '?': // Boolean
-                    if (buffer.remaining() < 1) {
-                        throw new IllegalArgumentException("Buffer underflow reading boolean at element " + i);
-                    }
+                    requireBufferBytes(buffer, 1, "boolean at element " + i);
                     result[i] = buffer.get() != 0;
                     break;
 
                 case '(': // BigNumber
-                    if (buffer.remaining() < 4) {
-                        throw new IllegalArgumentException(
-                                "Buffer underflow reading big number length at element " + i);
-                    }
+                    requireBufferBytes(buffer, 4, "big number length at element " + i);
                     int bigNumberLen = buffer.getInt();
-                    if (bigNumberLen < 0) {
-                        throw new IllegalArgumentException(
-                                "Invalid negative big number length at element " + i + ": " + bigNumberLen);
-                    }
-                    if (bigNumberLen > buffer.remaining()) {
-                        throw new IllegalArgumentException(
-                                "Big number length "
-                                        + bigNumberLen
-                                        + " exceeds buffer remaining "
-                                        + buffer.remaining()
-                                        + " at element "
-                                        + i);
-                    }
+                    validateLength(bigNumberLen, buffer, "big number", i);
                     String bigNumberStr = BufferUtils.decodeUtf8(buffer, bigNumberLen);
                     result[i] = new BigInteger(bigNumberStr);
                     break;
 
                 case '#': // Complex type (serialized as string)
-                    if (buffer.remaining() < 4) {
-                        throw new IllegalArgumentException(
-                                "Buffer underflow reading complex type length at element " + i);
-                    }
+                    requireBufferBytes(buffer, 4, "complex type length at element " + i);
                     int complexLen = buffer.getInt();
-                    if (complexLen < 0) {
-                        throw new IllegalArgumentException(
-                                "Invalid negative complex type length at element " + i + ": " + complexLen);
-                    }
-                    if (complexLen > buffer.remaining()) {
-                        throw new IllegalArgumentException(
-                                "Complex type length "
-                                        + complexLen
-                                        + " exceeds buffer remaining "
-                                        + buffer.remaining()
-                                        + " at element "
-                                        + i);
-                    }
+                    validateLength(complexLen, buffer, "complex type", i);
                     if (expectUtf8Response) {
                         result[i] = BufferUtils.decodeUtf8(buffer, complexLen);
                     } else {

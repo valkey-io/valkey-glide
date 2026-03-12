@@ -1,11 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import glide.api.logging.Logger;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Registry for storing Java objects returned from JNI calls. This allows us to pass object IDs
@@ -17,7 +16,8 @@ import java.util.logging.Logger;
  */
 public class JniResponseRegistry {
 
-    private static final Logger logger = Logger.getLogger(JniResponseRegistry.class.getName());
+    /** Log identifier for this class. */
+    private static final String LOG_IDENTIFIER = "JniResponseRegistry";
 
     /** Minimum interval between warning checks in nanoseconds. */
     private static final long CHECK_INTERVAL_NANOS = TimeUnit.SECONDS.toNanos(60); // 1 minute
@@ -56,7 +56,6 @@ public class JniResponseRegistry {
         long id = nextId.getAndIncrement();
         responseObjects.put(id, object);
 
-        // Periodic check for potential memory leaks (minimal overhead)
         checkForPotentialLeak();
 
         return id;
@@ -123,11 +122,14 @@ public class JniResponseRegistry {
 
         int currentSize = responseObjects.size();
         if (currentSize >= SIZE_WARNING_THRESHOLD) {
-            logger.log(
-                    Level.WARNING,
-                    "JniResponseRegistry size ({0}) exceeds threshold ({1}). "
-                            + "This may indicate a memory leak in response handling.",
-                    new Object[] {currentSize, SIZE_WARNING_THRESHOLD});
+            Logger.log(
+                    Logger.Level.WARN,
+                    LOG_IDENTIFIER,
+                    "JniResponseRegistry size ("
+                            + currentSize
+                            + ") exceeds threshold ("
+                            + SIZE_WARNING_THRESHOLD
+                            + "). This may indicate a memory leak in response handling.");
         }
     }
 }
