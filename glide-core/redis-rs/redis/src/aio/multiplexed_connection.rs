@@ -35,6 +35,7 @@ use tokio_util::codec::Decoder;
 
 // Default connection timeout in ms
 const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);
+const DEFAULT_PIPELINE_BUFFER_SIZE: usize = 1000;
 
 // Senders which the result of a single request are sent through
 type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
@@ -476,9 +477,8 @@ where
         T::Error: Send,
         T::Error: ::std::fmt::Debug,
     {
-        // Matches DEFAULT_MAX_INFLIGHT_REQUESTS in glide-core/src/client/mod.rs
-        const DEFAULT_BUFFER_SIZE: usize = 1000;
-        let (sender, mut receiver) = mpsc::channel(buffer_size.unwrap_or(DEFAULT_BUFFER_SIZE));
+        let (sender, mut receiver) =
+            mpsc::channel(buffer_size.unwrap_or(DEFAULT_PIPELINE_BUFFER_SIZE));
         let push_manager: Arc<ArcSwap<PushManager>> =
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));

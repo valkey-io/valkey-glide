@@ -20,6 +20,7 @@ pub(crate) type ConnectionFuture<C> = futures::future::Shared<BoxFuture<'static,
 /// Cluster node for async connections
 #[doc(hidden)]
 pub type AsyncClusterNode<C> = ClusterNode<ConnectionFuture<C>>;
+const MANAGEMENT_CONNECTION_PIPELINE_BUFFER_SIZE: usize = 50;
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -401,6 +402,10 @@ where
     if is_management {
         glide_connection_options.disconnect_notifier = None;
         glide_connection_options.pubsub_synchronizer = None;
+        // Management connections only carry internal topology commands, so keep the
+        // queue on the historical small buffer instead of inheriting the user path size.
+        glide_connection_options.pipeline_buffer_size =
+            Some(MANAGEMENT_CONNECTION_PIPELINE_BUFFER_SIZE);
     }
     C::connect(
         info,
