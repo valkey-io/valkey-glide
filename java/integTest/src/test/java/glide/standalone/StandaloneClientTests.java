@@ -31,10 +31,10 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @Timeout(20) // seconds
+@SneakyThrows
 public class StandaloneClientTests {
 
-    @SneakyThrows
-    @Test
+        @Test
     public void register_client_name_and_version() {
         String minVersion = "7.2.0";
         assumeTrue(
@@ -50,8 +50,7 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     public void can_connect_with_auth_require_pass() {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -86,8 +85,7 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     public void can_connect_with_auth_acl() {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -137,8 +135,7 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     public void select_standalone_database_id() {
         GlideClient client = GlideClient.createClient(commonClientConfig().databaseId(4).build()).get();
 
@@ -148,8 +145,7 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     public void client_name() {
         GlideClient client =
                 GlideClient.createClient(commonClientConfig().clientName("TEST_CLIENT_NAME").build()).get();
@@ -160,8 +156,7 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @Test
-    @SneakyThrows
+        @Test
     public void closed_client_throws_ExecutionException_with_ClosingException_as_cause() {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -171,8 +166,7 @@ public class StandaloneClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     public void update_connection_password_auth_non_valid_pass() {
         // Test Client fails on call to updateConnectionPassword with invalid parameters
         try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
@@ -188,8 +182,7 @@ public class StandaloneClientTests {
         }
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     public void update_connection_password_no_server_auth() {
         String pwd = UUID.randomUUID().toString();
 
@@ -205,8 +198,7 @@ public class StandaloneClientTests {
         }
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     public void update_connection_password_long() {
         String pwd = RandomStringUtils.randomAlphabetic(1000);
 
@@ -219,9 +211,8 @@ public class StandaloneClientTests {
         }
     }
 
-    @Timeout(50)
-    @SneakyThrows
-    @Test
+        @Timeout(50)
+        @Test
     public void replace_password_immediateAuth_wrong_password() {
         String pwd = UUID.randomUUID().toString();
         String notThePwd = UUID.randomUUID().toString();
@@ -248,9 +239,8 @@ public class StandaloneClientTests {
         }
     }
 
-    @Timeout(50)
-    @SneakyThrows
-    @Test
+        @Timeout(50)
+        @Test
     public void test_update_connection_password_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -299,9 +289,8 @@ public class StandaloneClientTests {
         }
     }
 
-    @Timeout(50)
-    @SneakyThrows
-    @Test
+        @Timeout(50)
+        @Test
     public void test_update_connection_password_connection_lost_before_password_update_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -349,9 +338,8 @@ public class StandaloneClientTests {
         }
     }
 
-    @Timeout(50)
-    @SneakyThrows
-    @Test
+        @Timeout(50)
+        @Test
     public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -386,9 +374,8 @@ public class StandaloneClientTests {
         }
     }
 
-    @Timeout(50)
-    @SneakyThrows
-    @Test
+        @Timeout(50)
+        @Test
     public void test_update_connection_password_non_valid_auth_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -433,8 +420,7 @@ public class StandaloneClientTests {
                 .get();
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_with_mock_credentials() {
         // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -458,8 +444,7 @@ public class StandaloneClientTests {
         }
     }
 
-    @SneakyThrows
-    @Test
+        @Test
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_automatic_token_refresh()
             throws InterruptedException, ExecutionException {
