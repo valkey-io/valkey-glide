@@ -467,8 +467,7 @@ public class ClusterClientTests {
         }
     }
 
-    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds)
-            throws ExecutionException, InterruptedException {
+    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =
                 ServerCredentials.builder().username("default").iamConfig(iamConfig).build();

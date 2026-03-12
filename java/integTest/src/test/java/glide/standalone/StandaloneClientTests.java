@@ -410,8 +410,7 @@ public class StandaloneClientTests {
         }
     }
 
-    private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds)
-            throws ExecutionException, InterruptedException {
+    private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =
                 ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
