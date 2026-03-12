@@ -72,7 +72,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::{GlideOpenTelemetry, Telemetry};
+use telemetrylib::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -120,6 +120,23 @@ use self::{
     connections_logic::connect_and_check,
 };
 use crate::types::RetryMethod;
+
+/// Parses a `"host:port"` address string into its components.
+/// Returns `None` if the address has no `:` separator or the port is not a valid integer.
+fn parse_node_address(address: &str) -> Option<(&str, i64)> {
+    let (host, port_str) = address.rsplit_once(':')?;
+    let port = port_str.parse::<i64>().ok()?;
+    Some((host, port))
+}
+
+/// Sets the routed node's address on the command span for OTel reporting.
+/// Called after cluster routing resolves the actual target node.
+fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
+    if let Some((host, port)) = parse_node_address(address) {
+        span.set_attribute("server.address", host.to_string());
+        span.set_attribute_i64("server.port", port);
+    }
+}
 
 pub(crate) const MUTEX_READ_ERR: &str = "Failed to obtain read lock. Poisoned mutex?";
 const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock. Poisoned mutex?";
@@ -1315,48 +1332,67 @@ where
     ) -> RedisResult<ConnectionMap<C>> {
         let initial_nodes: Vec<(String, Option<SocketAddr>)> =
             Self::try_to_expand_initial_nodes(initial_nodes).await;
-        let connections = stream::iter(initial_nodes.iter().cloned())
-            .map(|(node_addr, socket_addr)| {
-                let params: ClusterParams = params.clone();
-                let glide_connection_options = glide_connection_options.clone();
-                // set subscriptions to none, they will be applied upon the topology discovery
+        let connections =
+            stream::iter(initial_nodes.iter().cloned())
+                .map(|(node_addr, socket_addr)| {
+                    let params: ClusterParams = params.clone();
+                    let glide_connection_options = glide_connection_options.clone();
+                    // set subscriptions to none, they will be applied upon the topology discovery
 
-                async move {
-                    let result = connect_and_check(
-                        &node_addr,
-                        params,
-                        socket_addr,
-                        RefreshConnectionType::AllConnections,
-                        None,
-                        glide_connection_options,
-                    )
-                    .await
-                    .get_node();
-                    let node_address = if let Some(socket_addr) = socket_addr {
-                        socket_addr.to_string()
-                    } else {
-                        node_addr
-                    };
-                    result.map(|node| (node_address, node))
-                }
-            })
-            .buffer_unordered(initial_nodes.len())
-            .fold(
-                (
-                    ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
-                    None,
-                ),
-                |connections: (ConnectionMap<C>, Option<String>), addr_conn_res| async move {
-                    match addr_conn_res {
-                        Ok((addr, node)) => {
-                            connections.0 .0.insert(addr, node);
-                            (connections.0, None)
+                    async move {
+                        let result = connect_and_check::<C>(
+                            &node_addr,
+                            params,
+                            socket_addr,
+                            RefreshConnectionType::AllConnections,
+                            None,
+                            glide_connection_options,
+                        )
+                        .await
+                        .get_node();
+                        // The PushManager is initialized with connection_info.addr
+                        // (the original hostname, e.g. "localhost:6379"), but the
+                        // ConnectionsMap key uses the resolved IP from socket_addr
+                        // (e.g. "127.0.0.1:6379"). When these differ, align them so
+                        // PubSub synchronization can match subscriptions to nodes.
+                        let (node_address, push_manager_needs_update) =
+                            if let Some(socket_addr) = socket_addr {
+                                let resolved = socket_addr.to_string();
+                                let differs = resolved != node_addr;
+                                (resolved, differs)
+                            } else {
+                                (node_addr, false)
+                            };
+                        if push_manager_needs_update {
+                            if let Ok(ref node) = result {
+                                node.user_connection
+                                    .conn
+                                    .clone()
+                                    .await
+                                    .update_push_manager_node_address(node_address.clone());
+                            }
                         }
-                        Err(e) => (connections.0, Some(e.to_string())),
+                        result.map(|node| (node_address, node))
                     }
-                },
-            )
-            .await;
+                })
+                .buffer_unordered(initial_nodes.len())
+                .fold(
+                    (
+                        ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
+                        None,
+                    ),
+                    |connections: (ConnectionMap<C>, Option<String>),
+                     addr_conn_res: RedisResult<_>| async move {
+                        match addr_conn_res {
+                            Ok((addr, node)) => {
+                                connections.0 .0.insert(addr, node);
+                                (connections.0, None)
+                            }
+                            Err(e) => (connections.0, Some(e.to_string())),
+                        }
+                    },
+                )
+                .await;
         if connections.0 .0.is_empty() {
             return Err(RedisError::from((
                 ErrorKind::IoError,
@@ -2592,6 +2628,10 @@ where
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
+        // Update OTel span with actual routed node address
+        if let Some(span) = cmd.span() {
+            set_routed_node_on_span(&span, &address);
+        }
         conn.req_packed_command(&cmd)
             .await
             .map(Response::Single)
@@ -2606,6 +2646,10 @@ where
     ) -> OperationResult {
         trace!("try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
+        // Update OTel span with actual routed node address
+        if let Some(span) = pipeline.span() {
+            set_routed_node_on_span(&span, &address);
+        }
         conn.req_packed_commands(&pipeline, offset, count, None)
             .await
             .map(Response::Multiple)
@@ -4202,5 +4246,53 @@ mod pipeline_routing_tests {
             route_for_pipeline(&pipeline),
             Ok(Some(Route::new(12182, SlotAddr::Master)))
         );
+    }
+}
+
+#[cfg(test)]
+mod parse_node_address_tests {
+    use super::parse_node_address;
+
+    #[test]
+    fn host_and_port() {
+        assert_eq!(
+            parse_node_address("127.0.0.1:6379"),
+            Some(("127.0.0.1", 6379))
+        );
+    }
+
+    #[test]
+    fn hostname_and_port() {
+        assert_eq!(
+            parse_node_address("redis.example.com:6380"),
+            Some(("redis.example.com", 6380))
+        );
+    }
+
+    #[test]
+    fn ipv6_and_port() {
+        // rsplit_once splits on the last colon, giving the IPv6 prefix as host
+        assert_eq!(parse_node_address("::1:6379"), Some(("::1", 6379)));
+    }
+
+    #[test]
+    fn no_colon_returns_none() {
+        assert_eq!(parse_node_address("localhost"), None);
+    }
+
+    #[test]
+    fn invalid_port_returns_none() {
+        assert_eq!(parse_node_address("host:notaport"), None);
+    }
+
+    #[test]
+    fn empty_string_returns_none() {
+        assert_eq!(parse_node_address(""), None);
+    }
+
+    #[test]
+    fn port_only() {
+        // ":6379" → host="", port=6379
+        assert_eq!(parse_node_address(":6379"), Some(("", 6379)));
     }
 }

@@ -26,6 +26,8 @@ runs:
               ::1 valkey.glide.test.no_tls.com"
               if [[ "$OS" == "windows" ]]; then
                   echo "$ENTRIES" >> /c/Windows/System32/drivers/etc/hosts
-              else
+              elif command -v sudo &> /dev/null; then
                   echo "$ENTRIES" | sudo tee -a /etc/hosts
+              else
+                  echo "$ENTRIES" | tee -a /etc/hosts
               fi
