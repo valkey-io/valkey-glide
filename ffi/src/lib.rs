@@ -1919,16 +1919,16 @@ pub unsafe extern "C-unwind" fn invoke_script(
         Vec::new()
     };
 
-    if span_ptr != 0 {
-        if let Some(span) = unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) } {
-            set_db_script_attributes(
-                &span,
-                hash_str,
-                &keys_vec,
-                &args_vec,
-                &client_adapter.core.client,
-            );
-        }
+    if span_ptr != 0
+        && let Some(span) = unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) }
+    {
+        set_db_script_attributes(
+            &span,
+            hash_str,
+            &keys_vec,
+            &args_vec,
+            &client_adapter.core.client,
+        );
     }
 
     // Parse routing information if provided
