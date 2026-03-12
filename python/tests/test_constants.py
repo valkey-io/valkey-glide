@@ -15,3 +15,4 @@ HOST_ADDRESS_IPV6: str = "::1"
 IAM_USERNAME: str = "default"
 IAM_TEST_CLUSTER_NAME: str = "test-cluster"
 IAM_TEST_REGION_US_EAST_1: str = "us-east-1"
+IAM_DEFAULT_REFRESH_INTERVAL_SECONDS: int = 5

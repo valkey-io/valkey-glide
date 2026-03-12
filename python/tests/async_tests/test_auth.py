@@ -17,6 +17,7 @@ from glide_shared.exceptions import RequestError
 
 from tests.async_tests.conftest import create_client
 from tests.test_constants import (
+    IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
     IAM_TEST_CLUSTER_NAME,
     IAM_TEST_REGION_US_EAST_1,
     IAM_USERNAME,
@@ -38,7 +39,7 @@ async def create_iam_client(
     request,
     cluster_mode: bool,
     protocol: ProtocolVersion,
-    refresh_interval_seconds: int,
+    refresh_interval_seconds: int = IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
 ):
     """Helper to create a client with IAM authentication."""
     iam_config = IamAuthConfig(
@@ -383,9 +384,7 @@ class TestAuthCommands:
         2. Basic operations work after IAM authentication
         3. Operations continue to work after token refresh
         """
-        client = await create_iam_client(
-            request, cluster_mode, protocol, refresh_interval_seconds=5
-        )
+        client = await create_iam_client(request, cluster_mode, protocol)
 
         # Verify connection works
         await assert_connected(client)

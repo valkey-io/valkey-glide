@@ -16,6 +16,7 @@ from glide_sync.glide_client import TGlideClient
 
 from tests.sync_tests.conftest import create_sync_client
 from tests.test_constants import (
+    IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
     IAM_TEST_CLUSTER_NAME,
     IAM_TEST_REGION_US_EAST_1,
     IAM_USERNAME,
@@ -37,7 +38,7 @@ def create_iam_client(
     request,
     cluster_mode: bool,
     protocol: ProtocolVersion,
-    refresh_interval_seconds: int,
+    refresh_interval_seconds: int = IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
 ):
     """Helper to create a sync client with IAM authentication."""
     iam_config = IamAuthConfig(
@@ -381,9 +382,7 @@ class TestSyncAuthCommands:
         2. Basic operations work after IAM authentication
         3. Operations continue to work after token refresh
         """
-        client = create_iam_client(
-            request, cluster_mode, protocol, refresh_interval_seconds=5
-        )
+        client = create_iam_client(request, cluster_mode, protocol)
 
         # Verify connection works
         assert_connected_sync(client)
