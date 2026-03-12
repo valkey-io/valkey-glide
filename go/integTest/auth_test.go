@@ -31,13 +31,14 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	assert.NoError(suite.T(), err)
 
 	// Create cluster client configuration
+	// Note: useTLS is set from suite.tls which respects the --tls flag
 	clusterConfig := config.NewClusterClientConfiguration().
 		WithAddress(&config.NodeAddress{
 			Host: suite.clusterHosts[0].Host,
 			Port: suite.clusterHosts[0].Port,
 		}).
 		WithCredentials(credentials).
-		WithUseTLS(false) // Local cluster doesn't use TLS
+		WithUseTLS(suite.tls)
 
 	// Create client with IAM authentication
 	client, err := glide.NewClusterClient(clusterConfig)
@@ -95,7 +96,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 			Port: suite.clusterHosts[0].Port,
 		}).
 		WithCredentials(credentials).
-		WithUseTLS(false)
+		WithUseTLS(suite.tls)
 
 	client, err := glide.NewClusterClient(clusterConfig)
 	assert.NoError(suite.T(), err)
@@ -139,7 +140,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 			Port: suite.standaloneHosts[0].Port,
 		}).
 		WithCredentials(credentials).
-		WithUseTLS(false)
+		WithUseTLS(suite.tls)
 
 	// Create client with IAM authentication
 	client, err := glide.NewClient(standaloneConfig)
@@ -194,7 +195,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 			Port: suite.standaloneHosts[0].Port,
 		}).
 		WithCredentials(credentials).
-		WithUseTLS(false)
+		WithUseTLS(suite.tls)
 
 	client, err := glide.NewClient(standaloneConfig)
 	assert.NoError(suite.T(), err)

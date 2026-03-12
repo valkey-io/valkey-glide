@@ -45,12 +45,12 @@ async def create_iam_client(
 
     credentials = ServerCredentials(username="default", iam_config=iam_config)
 
+    # Note: use_tls is set from request which respects the --tls flag
     return await create_client(
         request=request,
         cluster_mode=cluster_mode,
         protocol=protocol,
         credentials=credentials,
-        use_tls=False,
     )
 
 

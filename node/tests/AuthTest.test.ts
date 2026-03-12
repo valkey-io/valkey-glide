@@ -670,7 +670,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: false, // Local cluster doesn't use TLS
+                    useTLS: global.TLS, // Use TLS setting from test configuration
                 });
 
                 // Basic ping test to verify connection
@@ -739,7 +739,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: false,
+                    useTLS: global.TLS, // Use TLS setting from test configuration
                 });
 
                 // Verify initial connection
@@ -806,7 +806,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: false,
+                    useTLS: global.TLS, // Use TLS setting from test configuration
                 });
 
                 // Basic ping test to verify connection
@@ -875,7 +875,7 @@ describe("IAM Auth: Mock Credentials", () => {
                         username: username,
                         iamConfig: iamConfig,
                     },
-                    useTLS: false,
+                    useTLS: global.TLS, // Use TLS setting from test configuration
                 });
 
                 // Verify initial connection

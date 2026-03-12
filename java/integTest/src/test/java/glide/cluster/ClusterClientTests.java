@@ -472,8 +472,9 @@ public class ClusterClientTests {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =
                 ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
+        // Note: useTLS is inherited from commonClusterClientConfig() which respects the -Dtls system property
         return GlideClusterClient.createClient(
-                        commonClusterClientConfig().credentials(credentials).useTLS(false).build())
+                        commonClusterClientConfig().credentials(credentials).build())
                 .get();
     }
 

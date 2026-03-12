@@ -415,8 +415,8 @@ public class StandaloneClientTests {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =
                 ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
-        return GlideClient.createClient(
-                        commonClientConfig().credentials(credentials).useTLS(false).build())
+        // Note: useTLS is inherited from commonClientConfig() which respects the -Dtls system property
+        return GlideClient.createClient(commonClientConfig().credentials(credentials).build())
                 .get();
     }
 
