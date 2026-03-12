@@ -24,7 +24,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 		TestClusterName,
 		config.ElastiCache,
 		TestRegionUsEast1,
-	).WithRefreshIntervalSeconds(5) // Fast refresh for testing
+	).WithRefreshIntervalSeconds(5)
 
 	// Create credentials with IAM config
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
@@ -85,7 +85,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 		TestClusterName,
 		config.ElastiCache,
 		TestRegionUsEast1,
-	).WithRefreshIntervalSeconds(2) // Very fast refresh for testing
+	).WithRefreshIntervalSeconds(2)
 
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)

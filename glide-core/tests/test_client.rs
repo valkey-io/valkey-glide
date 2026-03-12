@@ -553,8 +553,7 @@ pub(crate) mod shared_client_tests {
             match client_result {
                 Ok(mut client) => {
                     // If the client is successfully created, try sending a command
-                    let result = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(result.is_ok(), "PING command should succeed: {result:?}");
+                    assert_connected(&mut client).await;
                 }
                 Err(err) => {
                     // In case of failure, print error and assert that it is not a non-connection/auth error
@@ -906,11 +905,7 @@ pub(crate) mod shared_client_tests {
                     kill_connection(&mut client).await;
 
                     // Test that the client can reconnect and function properly after connection kill
-                    let reconnect_ping = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        reconnect_ping.is_ok(),
-                        "PING after reconnection should succeed: {reconnect_ping:?}"
-                    );
+                    assert_connected(&mut client).await;
 
                     // Verify that we can still retrieve the previously set value after reconnection
                     let get_after_reconnect = client
@@ -1000,7 +995,7 @@ pub(crate) mod shared_client_tests {
                 cluster_name: cluster_name.into(),
                 region: region.into(),
                 service_type: ServiceType::ELASTICACHE.into(),
-                refresh_interval_seconds: Some(5), // Fast refresh for testing
+                refresh_interval_seconds: Some(5),
                 ..Default::default()
             };
 
@@ -1038,12 +1033,7 @@ pub(crate) mod shared_client_tests {
                     );
 
                     // Verify that the client still works after token refresh
-                    let post_refresh_ping =
-                        client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        post_refresh_ping.is_ok(),
-                        "PING after token refresh should succeed: {post_refresh_ping:?}"
-                    );
+                    assert_connected(&mut client).await;
 
                     // Test multiple consecutive refreshes
                     for i in 1..=3 {
@@ -1054,11 +1044,7 @@ pub(crate) mod shared_client_tests {
                         );
 
                         // Verify client still works after each refresh
-                        let ping_result = client.send_command(&mut redis::cmd("PING"), None).await;
-                        assert!(
-                            ping_result.is_ok(),
-                            "PING after refresh #{i} should succeed: {ping_result:?}"
-                        );
+                        assert_connected(&mut client).await;
                     }
 
                     cleanup();
@@ -1139,11 +1125,7 @@ pub(crate) mod shared_client_tests {
                     kill_connection(&mut client).await;
 
                     // Test that the client can reconnect and function properly after connection kill
-                    let reconnect_ping = client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        reconnect_ping.is_ok(),
-                        "PING after reconnection should succeed: {reconnect_ping:?}"
-                    );
+                    assert_connected(&mut client).await;
 
                     // Verify that we can still retrieve the previously set value after reconnection
                     let get_after_reconnect = client
@@ -1245,12 +1227,7 @@ pub(crate) mod shared_client_tests {
                     );
 
                     // Verify that the client still works after token refresh
-                    let post_refresh_ping =
-                        client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        post_refresh_ping.is_ok(),
-                        "PING after token refresh should succeed: {post_refresh_ping:?}"
-                    );
+                    assert_connected(&mut client).await;
 
                     // Change to 900
                     // wait enough again for the token to be expired
@@ -1270,12 +1247,7 @@ pub(crate) mod shared_client_tests {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
                     // Verify that the client still works after token refresh
-                    let post_refresh_ping =
-                        client.send_command(&mut redis::cmd("PING"), None).await;
-                    assert!(
-                        post_refresh_ping.is_ok(),
-                        "PING after token refresh should succeed: {post_refresh_ping:?}"
-                    );
+                    assert_connected(&mut client).await;
                 }
                 Err(err) => {
                     // In case of failure, print error and assert that it is not a non-connection/auth error
@@ -1366,7 +1338,7 @@ pub(crate) mod shared_client_tests {
                 cluster_name: cluster_name.into(),
                 region: region.into(),
                 service_type: ServiceType::ELASTICACHE.into(),
-                refresh_interval_seconds: Some(5), // Fast refresh for testing
+                refresh_interval_seconds: Some(5),
                 ..Default::default()
             };
 

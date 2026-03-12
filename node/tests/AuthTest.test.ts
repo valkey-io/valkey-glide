@@ -635,7 +635,7 @@ describe("IAM Auth: Mock Credentials", () => {
             }
 
             const username = IAM_USERNAME; // Use default user
-            const iamConfig = createTestIamConfig(5); // Fast refresh for testing
+            const iamConfig = createTestIamConfig(5);
 
             // Use existing cluster from global setup
             const clusterAddresses = global.CLUSTER_ENDPOINTS;
