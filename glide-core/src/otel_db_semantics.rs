@@ -113,7 +113,7 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
 }
 
 /// Serialize command arguments for `db.query.text`, hiding sensitive values
-/// according to the command's [`MaskingPattern`].
+/// according to the command's `MaskingPattern`.
 pub fn serialize_query_text(cmd: &Cmd) -> Option<String> {
     let mut args = cmd.args_iter().filter_map(|arg| match arg {
         Arg::Simple(b) => Some(String::from_utf8_lossy(b).into_owned()),
