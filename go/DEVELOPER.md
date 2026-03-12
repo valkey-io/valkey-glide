@@ -211,11 +211,18 @@ make integ-test test-filter=TestSet
 make integ-test test-filter="Test\(Set\|Get\)"
 ```
 
-#### Running IAM Authentication Tests
+#### Additional Parameters
 
-IAM authentication tests require AWS credentials to be set as OS environment variables **before** the Go process starts.
+Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.
+By default, those test suites start standalone and cluster servers without TLS and stop them at the end.
 
-To run IAM tests locally with mock credentials:
+```bash
+make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
+```
+
+#### IAM Authentication Tests
+
+To run [IAM authentication tests](integTest/auth_test.go) locally with mock credentials:
 
 ```bash
 # Run from the `go/` directory
@@ -225,14 +232,9 @@ AWS_SESSION_TOKEN=test_session_token \
 make integ-test test-filter=TestIamAuthentication
 ```
 
-#### Additional Parameters
+If any of these environment variables are not set, IAM authentication tests will be skipped.
 
-Integration and modules tests accept `standalone-endpoints`, `cluster-endpoints` and `tls` parameters to run tests on existing servers.
-By default, those test suites start standalone and cluster servers without TLS and stop them at the end.
-
-```bash
-make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
-```
+**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
 
 #### DNS Tests
 
