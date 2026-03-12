@@ -332,8 +332,20 @@ public class CommandManager {
                             expectUtf8Response);
 
             return jniFuture
-                    .thenApply(result -> createDirectResponse(result, expectUtf8Response))
-                    .thenApply(responseHandler::apply)
+                    .thenApply(
+                            result -> {
+                                Response response = createDirectResponse(result, expectUtf8Response);
+                                long objectId = response.getRespPointer();
+                                try {
+                                    return responseHandler.apply(response);
+                                } catch (RuntimeException e) {
+                                    // Clean up stored object on handler exception to prevent memory leak
+                                    if (objectId != 0L) {
+                                        JniResponseRegistry.remove(objectId);
+                                    }
+                                    throw e;
+                                }
+                            })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
@@ -375,8 +387,20 @@ public class CommandManager {
                             expectUtf8Response);
 
             return jniFuture
-                    .thenApply(result -> createDirectResponse(result, expectUtf8Response))
-                    .thenApply(responseHandler::apply)
+                    .thenApply(
+                            result -> {
+                                Response response = createDirectResponse(result, expectUtf8Response);
+                                long objectId = response.getRespPointer();
+                                try {
+                                    return responseHandler.apply(response);
+                                } catch (RuntimeException e) {
+                                    // Clean up stored object on handler exception to prevent memory leak
+                                    if (objectId != 0L) {
+                                        JniResponseRegistry.remove(objectId);
+                                    }
+                                    throw e;
+                                }
+                            })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
@@ -513,19 +537,25 @@ public class CommandManager {
                                 }
                                 long objectId = JniResponseRegistry.storeObject(normalized);
                                 builder.setRespPointer(objectId);
-                                T out = responseHandler.apply(builder.build());
-                                if (out == null) {
-                                    @SuppressWarnings("unchecked")
-                                    T fallback =
-                                            (T)
-                                                    new Object[] {
-                                                        glide.ffi.resolvers.ClusterScanCursorResolver
-                                                                .getFinishedCursorHandleConstant(),
-                                                        new Object[0]
-                                                    };
-                                    return fallback;
+                                try {
+                                    T out = responseHandler.apply(builder.build());
+                                    if (out == null) {
+                                        @SuppressWarnings("unchecked")
+                                        T fallback =
+                                                (T)
+                                                        new Object[] {
+                                                            glide.ffi.resolvers.ClusterScanCursorResolver
+                                                                    .getFinishedCursorHandleConstant(),
+                                                            new Object[0]
+                                                        };
+                                        return fallback;
+                                    }
+                                    return out;
+                                } catch (RuntimeException e) {
+                                    // Clean up stored object on handler exception to prevent memory leak
+                                    JniResponseRegistry.remove(objectId);
+                                    throw e;
                                 }
-                                return out;
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -657,6 +687,7 @@ public class CommandManager {
                             result -> {
                                 Response.Builder builder = Response.newBuilder();
                                 Object toStore = result;
+                                long objectId = 0L;
                                 if (result == null) {
                                     builder.setRespPointer(0L);
                                 } else if ("OK".equals(result)) {
@@ -665,10 +696,18 @@ public class CommandManager {
                                     if (result instanceof ByteBuffer) {
                                         toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
                                     }
-                                    long objectId = JniResponseRegistry.storeObject(toStore);
+                                    objectId = JniResponseRegistry.storeObject(toStore);
                                     builder.setRespPointer(objectId);
                                 }
-                                return responseHandler.apply(builder.build());
+                                try {
+                                    return responseHandler.apply(builder.build());
+                                } catch (RuntimeException e) {
+                                    // Clean up stored object on handler exception to prevent memory leak
+                                    if (objectId != 0L) {
+                                        JniResponseRegistry.remove(objectId);
+                                    }
+                                    throw e;
+                                }
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -710,6 +749,7 @@ public class CommandManager {
                             result -> {
                                 Response.Builder builder = Response.newBuilder();
                                 Object toStore = result;
+                                long objectId = 0L;
                                 if (result == null) {
                                     builder.setRespPointer(0L);
                                 } else if ("OK".equals(result)) {
@@ -718,10 +758,18 @@ public class CommandManager {
                                     if (result instanceof ByteBuffer) {
                                         toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
                                     }
-                                    long objectId = JniResponseRegistry.storeObject(toStore);
+                                    objectId = JniResponseRegistry.storeObject(toStore);
                                     builder.setRespPointer(objectId);
                                 }
-                                return responseHandler.apply(builder.build());
+                                try {
+                                    return responseHandler.apply(builder.build());
+                                } catch (RuntimeException e) {
+                                    // Clean up stored object on handler exception to prevent memory leak
+                                    if (objectId != 0L) {
+                                        JniResponseRegistry.remove(objectId);
+                                    }
+                                    throw e;
+                                }
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
@@ -823,8 +871,20 @@ public class CommandManager {
             // Execute via JNI and convert response
             return coreClient
                     .executeBatchAsync(requestBytes, expectUtf8Response, timeoutOverrideMs)
-                    .thenApply(result -> convertJniToProtobufResponse(result, expectUtf8Response))
-                    .thenApply(responseHandler::apply)
+                    .thenApply(
+                            result -> {
+                                Response response = convertJniToProtobufResponse(result, expectUtf8Response);
+                                long objectId = response.getRespPointer();
+                                try {
+                                    return responseHandler.apply(response);
+                                } catch (RuntimeException e) {
+                                    // Clean up stored object on handler exception to prevent memory leak
+                                    if (objectId != 0L) {
+                                        JniResponseRegistry.remove(objectId);
+                                    }
+                                    throw e;
+                                }
+                            })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
