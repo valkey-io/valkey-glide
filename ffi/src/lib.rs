@@ -1380,7 +1380,6 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         return unsafe { client_adapter.handle_redis_error(err, request_id) };
     }
 
-    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
     let client_for_release = client_adapter.core.client.clone();
 
@@ -1390,7 +1389,7 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         Some(ResponseBuffer(response_buf, response_buf_len))
     };
 
-    let result = client_adapter.execute_request_with_buffer(
+    client_adapter.execute_request_with_buffer(
         request_id,
         async move {
             let routing_info = get_route(route, Some(&cmd))?;
@@ -1399,11 +1398,7 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
             result
         },
         buf_option,
-    );
-    if let Ok(span) = child_span {
-        span.end();
-    }
-    result
+    )
 }
 
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.
@@ -2088,10 +2083,9 @@ pub unsafe extern "C" fn batch(
         set_db_batch_attributes(span, pipeline.commands(), &client_adapter.core.client);
     }
 
-    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
-    let result = client_adapter.execute_request(callback_index, async move {
+    client_adapter.execute_request(callback_index, async move {
         if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
@@ -2107,12 +2101,7 @@ pub unsafe extern "C" fn batch(
                 )
                 .await
         }
-    });
-
-    if let Ok(span) = child_span {
-        span.end();
-    }
-    result
+    })
 }
 
 /// Convert raw C string to a rust string.
@@ -2892,19 +2881,6 @@ unsafe fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpa
         Arc::increment_strong_count(command_span as *const GlideSpan);
         (*Arc::from_raw(command_span as *const GlideSpan)).clone()
     })
-}
-
-/// Creates a child span for telemetry if telemetry is enabled
-fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, String> {
-    // Early return if no parent span is provided
-    let parent_span = span.ok_or_else(|| "No parent span provided".to_string())?;
-
-    match parent_span.add_span(name) {
-        Ok(child_span) => Ok(child_span),
-        Err(error_msg) => Err(format!(
-            "Opentelemetry failed to create child span with name `{name}`. Error: {error_msg:?}"
-        )),
-    }
 }
 
 #[repr(C)]
