@@ -8,6 +8,9 @@ use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors::RequestErrorType;
 use glide_core::errors::{self, error_message};
+use glide_core::otel_db_semantics::{
+    set_db_attributes, set_db_batch_attributes, set_db_script_attributes,
+};
 use glide_core::request_type::RequestType;
 use glide_core::scripts_container;
 use glide_core::{
@@ -1350,6 +1353,10 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
 
+    if let Some(ref span) = cmd.span() {
+        set_db_attributes(span, &cmd, &client_adapter.core.client);
+    }
+
     let route = if !route_bytes.is_null() {
         let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
         match Routes::parse_from_bytes(r_bytes) {
@@ -1872,6 +1879,7 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
 /// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * `span_ptr` is a valid pointer to [`Arc<GlideSpan>`], a span created by [`create_otel_span`] or `0`. The span must be valid until the command is finished.
 /// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn invoke_script(
@@ -1886,6 +1894,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
+    span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
@@ -1914,6 +1923,18 @@ pub unsafe extern "C-unwind" fn invoke_script(
     } else {
         Vec::new()
     };
+
+    if span_ptr != 0 {
+        if let Some(span) = unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) } {
+            set_db_script_attributes(
+                &span,
+                hash_str,
+                &keys_vec,
+                &args_vec,
+                &client_adapter.core.client,
+            );
+        }
+    }
 
     // Parse routing information if provided
     let route = if !route_bytes.is_null() {
@@ -2062,6 +2083,11 @@ pub unsafe extern "C" fn batch(
     if span_ptr != 0 {
         pipeline.set_pipeline_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
+
+    if let Some(ref span) = pipeline.span() {
+        set_db_batch_attributes(span, pipeline.commands(), &client_adapter.core.client);
+    }
+
     let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
