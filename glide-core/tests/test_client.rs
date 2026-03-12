@@ -959,11 +959,11 @@ pub(crate) mod shared_client_tests {
             // Cleanup function to restore original credentials
             let cleanup = cleanup_mock_aws_credentials;
 
-                        let cluster_name = if use_cluster {
-                            IAM_TEST_CLUSTER_NAME
-                        } else {
-                            TEST_STANDALONE_NAME
-                        };
+            let cluster_name = if use_cluster {
+                IAM_TEST_CLUSTER_NAME
+            } else {
+                TEST_STANDALONE_NAME
+            };
             let username = IAM_USERNAME;
             let region = IAM_TEST_REGION_US_EAST_1;
 
@@ -1325,11 +1325,11 @@ pub(crate) mod shared_client_tests {
             // Cleanup function to restore original credentials
             let cleanup = cleanup_mock_aws_credentials;
 
-                        let cluster_name = if use_cluster {
-                            IAM_TEST_CLUSTER_NAME
-                        } else {
-                            TEST_STANDALONE_NAME
-                        };
+            let cluster_name = if use_cluster {
+                IAM_TEST_CLUSTER_NAME
+            } else {
+                TEST_STANDALONE_NAME
+            };
             let username = IAM_USERNAME;
             let region = IAM_TEST_REGION_US_EAST_1;
 

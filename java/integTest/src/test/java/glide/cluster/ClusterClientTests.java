@@ -52,7 +52,7 @@ public class ClusterClientTests {
         client.close();
     }
 
-        @Test
+    @Test
     public void can_connect_with_auth_requirepass() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -88,7 +88,7 @@ public class ClusterClientTests {
         client.close();
     }
 
-        @Test
+    @Test
     public void can_connect_with_auth_acl() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -141,7 +141,7 @@ public class ClusterClientTests {
         client.close();
     }
 
-        @Test
+    @Test
     public void client_name() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(
@@ -155,7 +155,7 @@ public class ClusterClientTests {
         client.close();
     }
 
-        @Test
+    @Test
     public void select_cluster_database_id() {
         String minVersion = "9.0.0";
         assumeTrue(
@@ -172,7 +172,7 @@ public class ClusterClientTests {
         client.close();
     }
 
-        @Test
+    @Test
     public void closed_client_throws_ExecutionException_with_ClosingException_as_cause() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -183,7 +183,7 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-        @Test
+    @Test
     public void test_update_connection_password() {
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -216,7 +216,7 @@ public class ClusterClientTests {
         }
     }
 
-        @Test
+    @Test
     public void test_update_connection_password_auth_non_valid_pass() {
         // Test Client fails on call to updateConnectionPassword with invalid parameters
         try (GlideClusterClient testClient =
@@ -233,7 +233,7 @@ public class ClusterClientTests {
         }
     }
 
-        @Test
+    @Test
     public void test_update_connection_password_no_server_auth() {
         String pwd = UUID.randomUUID().toString();
 
@@ -250,7 +250,7 @@ public class ClusterClientTests {
         }
     }
 
-        @Test
+    @Test
     public void test_update_connection_password_long() {
         String pwd = RandomStringUtils.randomAlphabetic(1000);
 
@@ -264,8 +264,8 @@ public class ClusterClientTests {
         }
     }
 
-        @Timeout(50)
-        @Test
+    @Timeout(50)
+    @Test
     public void test_replace_password_immediateAuth_wrong_password() {
         String pwd = UUID.randomUUID().toString();
         String notThePwd = UUID.randomUUID().toString();
@@ -294,8 +294,8 @@ public class ClusterClientTests {
         }
     }
 
-        @Timeout(50)
-        @Test
+    @Timeout(50)
+    @Test
     public void test_update_connection_password_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -348,8 +348,8 @@ public class ClusterClientTests {
         }
     }
 
-        @Timeout(50)
-        @Test
+    @Timeout(50)
+    @Test
     public void test_update_connection_password_reconnection_with_immediate_auth_with_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -391,8 +391,8 @@ public class ClusterClientTests {
         }
     }
 
-        @Timeout(50)
-        @Test
+    @Timeout(50)
+    @Test
     public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -430,8 +430,8 @@ public class ClusterClientTests {
         }
     }
 
-        @Timeout(50)
-        @Test
+    @Timeout(50)
+    @Test
     public void test_update_connection_password_non_valid_auth_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -471,13 +471,14 @@ public class ClusterClientTests {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =
                 ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
-        // Note: useTLS is inherited from commonClusterClientConfig() which respects the -Dtls system property
+        // Note: useTLS is inherited from commonClusterClientConfig() which respects the -Dtls system
+        // property
         return GlideClusterClient.createClient(
                         commonClusterClientConfig().credentials(credentials).build())
                 .get();
     }
 
-        @Test
+    @Test
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_with_mock_credentials() {
         // See DEVELOPER.md for instructions on running IAM authentication tests
@@ -501,7 +502,7 @@ public class ClusterClientTests {
         }
     }
 
-        @Test
+    @Test
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_automatic_token_refresh()
             throws InterruptedException, ExecutionException {

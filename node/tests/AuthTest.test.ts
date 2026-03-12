@@ -624,25 +624,17 @@ describe("IAM Auth: Mock Credentials", () => {
     it(
         "test_iam_authentication_with_mock_credentials",
         async () => {
-            // NOTE: This test requires AWS credentials to be set as OS environment variables
-            // BEFORE the Node.js process starts.
-            //
-            // To run this test locally:
-            // AWS_ACCESS_KEY_ID=test_access_key AWS_SECRET_ACCESS_KEY=test_secret_key \
-            // AWS_SESSION_TOKEN=test_session_token npm test -- --testNamePattern="iam"
+            // See DEVELOPER.md for instructions on running IAM authentication tests
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
                 console.log(
                     "Skipping IAM test - AWS credentials not set in OS environment",
                 );
-                console.log(
-                    "Run with: AWS_ACCESS_KEY_ID=test_access_key AWS_SECRET_ACCESS_KEY=test_secret_key AWS_SESSION_TOKEN=test_session_token npm test -- --testNamePattern='iam'",
-                );
                 return;
             }
 
-                        const username = IAM_USERNAME; // Use default user
+            const username = IAM_USERNAME; // Use default user
             const iamConfig = createTestIamConfig(5); // Fast refresh for testing
 
             // Use existing cluster from global setup
@@ -701,7 +693,7 @@ describe("IAM Auth: Mock Credentials", () => {
     it(
         "test_iam_authentication_automatic_token_refresh",
         async () => {
-            // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+            // See DEVELOPER.md for instructions on running IAM authentication tests
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
@@ -711,7 +703,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-                        const username = IAM_USERNAME;
+            const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2); // Short interval for automatic refresh
 
             // Use existing cluster from global setup
@@ -768,7 +760,7 @@ describe("IAM Auth: Mock Credentials", () => {
     it(
         "test_iam_authentication_with_mock_credentials_standalone",
         async () => {
-            // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+            // See DEVELOPER.md for instructions on running IAM authentication tests
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
@@ -778,7 +770,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-                        const username = IAM_USERNAME;
+            const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(5);
 
             // Use existing standalone server from global setup
@@ -837,7 +829,7 @@ describe("IAM Auth: Mock Credentials", () => {
     it(
         "test_iam_authentication_automatic_token_refresh_standalone",
         async () => {
-            // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+            // See DEVELOPER.md for instructions on running IAM authentication tests
 
             // Skip test if AWS credentials are not set in OS environment
             if (!process.env.AWS_ACCESS_KEY_ID) {
@@ -847,7 +839,7 @@ describe("IAM Auth: Mock Credentials", () => {
                 return;
             }
 
-                        const username = IAM_USERNAME;
+            const username = IAM_USERNAME;
             const iamConfig = createTestIamConfig(2);
 
             // Use existing standalone server from global setup
