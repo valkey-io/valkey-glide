@@ -380,11 +380,8 @@ public class CommandManager {
                             expectUtf8Response);
 
             return jniFuture
-                    .thenApply(
-                            result -> {
-                                Response response = createDirectResponse(result, expectUtf8Response);
-                                return applyHandlerWithCleanup(response, responseHandler);
-                            })
+                    .thenApply(result -> createDirectResponse(result, expectUtf8Response))
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
@@ -426,11 +423,8 @@ public class CommandManager {
                             expectUtf8Response);
 
             return jniFuture
-                    .thenApply(
-                            result -> {
-                                Response response = createDirectResponse(result, expectUtf8Response);
-                                return applyHandlerWithCleanup(response, responseHandler);
-                            })
+                    .thenApply(result -> createDirectResponse(result, expectUtf8Response))
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
             CompletableFuture<T> errorFuture = new CompletableFuture<T>();
