@@ -437,14 +437,7 @@ public class StandaloneClientTests {
     @Test
     @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
     public void test_iam_authentication_with_mock_credentials() {
-        // NOTE: This test requires AWS credentials to be set as OS environment variables
-        // BEFORE the JVM starts. System.setProperty() does NOT work because the Rust AWS SDK
-        // reads from the OS process environment, not JVM properties.
-        //
-        // To run this test locally:
-        // AWS_ACCESS_KEY_ID=test_access_key AWS_SECRET_ACCESS_KEY=test_secret_key \
-        // AWS_SESSION_TOKEN=test_session_token ./gradlew :integTest:test \
-        // --tests "*.test_iam_authentication_with_mock_credentials"
+        // See DEVELOPER.md for instructions on running IAM authentication tests
 
         // Create client with IAM authentication
         try (GlideClient client = createStandaloneClientWithIam(5)) {
