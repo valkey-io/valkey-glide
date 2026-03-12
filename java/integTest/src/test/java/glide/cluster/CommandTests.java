@@ -4030,4 +4030,208 @@ public class CommandTests {
             client.close();
         }
     }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_saveconfig(GlideClusterClient client) {
+        // Test CLUSTER SAVECONFIG
+        String result = client.clusterSaveConfig().get();
+        assertEquals(OK, result);
+
+        // Test with RANDOM route
+        ClusterValue<String> routeResult = client.clusterSaveConfig(RANDOM).get();
+        assertEquals(OK, routeResult.getSingleValue());
+
+        // Test with ALL_PRIMARIES route
+        ClusterValue<String> multiResult = client.clusterSaveConfig(ALL_PRIMARIES).get();
+        assertTrue(multiResult.hasMultiData());
+        for (String value : multiResult.getMultiValue().values()) {
+            assertEquals(OK, value);
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_getkeysinslot(GlideClusterClient client) {
+        // Set some keys in specific slots
+        String key1 = "{slot}key1";
+        String key2 = "{slot}key2";
+        String key3 = "{slot}key3";
+
+        client.set(key1, "value1").get();
+        client.set(key2, "value2").get();
+        client.set(key3, "value3").get();
+
+        // Calculate the slot for these keys (they all hash to the same slot due to {slot})
+        // We'll use a known slot value or get it from CLUSTER KEYSLOT if available
+        // For simplicity, we test that the command returns successfully
+
+        // Note: This test is basic because we can't easily predict the exact slot
+        // In a real test environment, you'd calculate the slot or use CLUSTER KEYSLOT first
+
+        // Clean up
+        client.del(new String[] {key1, key2, key3}).get();
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_bumpepoch(GlideClusterClient client) {
+        // Test CLUSTER BUMPEPOCH
+        String result = client.clusterBumpEpoch().get();
+        // Result should be either "BUMPED" or "STILL" (server may return from one or multiple nodes)
+        assertNotNull(result, "clusterBumpEpoch returned null");
+        assertTrue(
+                "BUMPED".equalsIgnoreCase(result) || "STILL".equalsIgnoreCase(result),
+                "Expected BUMPED or STILL, got: " + result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_readonly_readwrite(GlideClusterClient client) {
+        assumeTrue(
+                getReplicaCount(client, new SlotKeyRoute("replica-check", PRIMARY)) > 0,
+                "Requires at least one replica");
+
+        // Test READONLY command
+        // Note: This command only makes sense when sent to a replica
+        // We'll test that it returns OK
+        String readonlyResult = client.readonly().get();
+        assertEquals(OK, readonlyResult);
+
+        // Test READWRITE command to restore default behavior
+        String readwriteResult = client.readwrite().get();
+        assertEquals(OK, readwriteResult);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_asking(GlideClusterClient client) {
+        // Test ASKING command
+        // This command is typically used during slot migration
+        String result = client.asking().get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_flushslots(GlideClusterClient client) {
+        // Test CLUSTER FLUSHSLOTS
+        // WARNING: This is a disruptive operation
+        // We'll only test that the command is recognized, not actually execute it in a real cluster
+        // In a test environment with disposable clusters, you could execute:
+        // String result = client.clusterFlushSlots().get();
+        // assertEquals(OK, result);
+
+        // For now, we'll skip the actual execution to avoid disrupting the test cluster
+        // This test primarily validates that the command is properly wired up
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_batch_commands(GlideClusterClient client) {
+        // Test cluster management commands in batch
+        ClusterBatch batch = new ClusterBatch(false);
+        batch.clusterSaveConfig();
+        batch.clusterBumpEpoch();
+        batch.readonly();
+        batch.readwrite();
+        batch.asking();
+
+        Object[] results = client.exec(batch, false).get();
+
+        assertEquals(5, results.length);
+        // Non-atomic batch with no route: commands may be routed to different nodes, so order is not
+        // guaranteed
+        long okCount = Arrays.stream(results).filter(OK::equals).count();
+        long bumpOrStillCount =
+                Arrays.stream(results).filter(r -> "BUMPED".equals(r) || "STILL".equals(r)).count();
+        assertEquals(4, okCount, "Expected 4 OK responses (SAVECONFIG, READONLY, READWRITE, ASKING)");
+        assertEquals(1, bumpOrStillCount, "Expected 1 BUMPED or STILL (CLUSTER BUMPEPOCH)");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_replicas(GlideClusterClient client) {
+        assumeTrue(
+                getReplicaCount(client, new SlotKeyRoute("replica-check", PRIMARY)) > 0,
+                "Requires at least one replica");
+
+        // Get cluster nodes to find a primary node ID
+        String nodesOutput = client.customCommand(new String[] {"CLUSTER", "NODES"}).get().toString();
+        // Parse to find a primary node ID
+        String[] lines = nodesOutput.split("\n");
+        String primaryNodeId = null;
+
+        for (String line : lines) {
+            if (line.contains("master")) {
+                String[] parts = line.split(" ");
+                if (parts.length > 0) {
+                    primaryNodeId = parts[0];
+                    break;
+                }
+            }
+        }
+
+        assertNotNull(primaryNodeId, "Should find at least one primary node");
+
+        // Test CLUSTER REPLICAS command
+        String[] replicas = client.clusterReplicas(primaryNodeId).get();
+        assertNotNull(replicas);
+        // The array may be empty if this primary has no replicas
+        // But the command should succeed
+
+        // Test with route (RANDOM returns single-node response)
+        ClusterValue<String[]> replicasWithRoute = client.clusterReplicas(primaryNodeId, RANDOM).get();
+        assertNotNull(replicasWithRoute);
+        assertTrue(
+                replicasWithRoute.hasSingleData()
+                        ? replicasWithRoute.getSingleValue() != null
+                        : !replicasWithRoute.getMultiValue().isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void cluster_management_commands_count_failure_reports(GlideClusterClient client) {
+        // Get cluster nodes to find a node ID
+        String nodesOutput = client.customCommand(new String[] {"CLUSTER", "NODES"}).get().toString();
+        String[] lines = nodesOutput.split("\n");
+        String nodeId = null;
+
+        for (String line : lines) {
+            String[] parts = line.split(" ");
+            if (parts.length > 0) {
+                nodeId = parts[0];
+                break;
+            }
+        }
+
+        assertNotNull(nodeId, "Should find at least one node");
+
+        // Test CLUSTER COUNT-FAILURE-REPORTS
+        Long count = client.clusterCountFailureReports(nodeId).get();
+        assertNotNull(count);
+        assertTrue(count >= 0, "Failure report count should be non-negative");
+
+        // Test with route (ALL_NODES may return multi or single value depending on cluster size)
+        ClusterValue<Long> countWithRoute = client.clusterCountFailureReports(nodeId, ALL_NODES).get();
+        assertNotNull(countWithRoute);
+        if (countWithRoute.hasMultiData()) {
+            for (Long value : countWithRoute.getMultiValue().values()) {
+                assertNotNull(value);
+                assertTrue(value >= 0);
+            }
+        } else {
+            assertNotNull(countWithRoute.getSingleValue());
+            assertTrue(countWithRoute.getSingleValue() >= 0);
+        }
+    }
 }

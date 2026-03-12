@@ -19,6 +19,7 @@
 * Go: Add ALLOW_NON_COVERED_SLOTS flag support for cluster scan ([#4895](https://github.com/valkey-io/valkey-glide/issues/4895))
 * CORE: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
 * CORE: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
+* JAVA: Add cluster management commands (CLUSTER MEET, CLUSTER FORGET, CLUSTER REPLICATE, CLUSTER REPLICAS, CLUSTER COUNT-FAILURE-REPORTS, CLUSTER FAILOVER, CLUSTER SETSLOT, CLUSTER BUMPEPOCH, CLUSTER SET-CONFIG-EPOCH, CLUSTER FLUSHSLOTS, CLUSTER RESET, READONLY, READWRITE, ASKING, CLUSTER SAVECONFIG, CLUSTER GETKEYSINSLOT)
 * Go: Add CLUSTER management commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER MYSHARDID, CLUSTER GETKEYSINSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER LINKS) ([#5206](https://github.com/valkey-io/valkey-glide/issues/5206))
 * Java: Make client java 8 compatible
 * Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
