@@ -2,6 +2,7 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.IAM_USERNAME;
 import static glide.TestUtilities.assertConnected;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.deleteAclUser;
@@ -470,7 +471,7 @@ public class ClusterClientTests {
     private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =
-                ServerCredentials.builder().username("default").iamConfig(iamConfig).build();
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
         // Note: useTLS is inherited from commonClusterClientConfig() which respects the -Dtls system
         // property
         return GlideClusterClient.createClient(

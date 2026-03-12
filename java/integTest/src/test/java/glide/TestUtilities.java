@@ -57,6 +57,13 @@ public class TestUtilities {
 
     private static final String REDIS_VERSION_KEY = "redis_version";
 
+    /** IAM authentication test constants */
+    public static final String IAM_USERNAME = "default";
+
+    public static final String IAM_TEST_CLUSTER_NAME = "test-cluster";
+
+    public static final String IAM_TEST_REGION_US_EAST_1 = "us-east-1";
+
     /**
      * Checks if the current operating system is Windows.
      *
@@ -735,9 +742,9 @@ public class TestUtilities {
      */
     public static IamAuthConfig createTestIamConfig(int refreshIntervalSeconds) {
         return IamAuthConfig.builder()
-                .clusterName("test-cluster")
+                .clusterName(IAM_TEST_CLUSTER_NAME)
                 .service(ServiceType.ELASTICACHE)
-                .region("us-east-1")
+                .region(IAM_TEST_REGION_US_EAST_1)
                 .refreshIntervalSeconds(refreshIntervalSeconds)
                 .build();
     }
