@@ -266,15 +266,6 @@ For Java, we use Spotless and SpotBugs.
 
    _Note: The `spotbugs` task is currently configured to not fail the build on findings._
 
-### Running Tests
-
-To run all tests:
-
-```bash
-# Run from the `java` folder
-./gradlew :integTest:test
-```
-
 ### Troubleshooting
 
 Some troubleshooting issues:
@@ -398,14 +389,12 @@ To run server modules test (it doesn't start servers):
 
 #### IAM Authentication Tests
 
-To run [IAM authentication tests](integTest/src/test/java/glide/AuthTest.java) locally with mock credentials:
+To run [IAM authentication tests](integTest/src/test/java/glide/AuthTest.java) locally, set the following environment variables:
 
 ```bash
-# Run from the `java` folder
-AWS_ACCESS_KEY_ID=test_access_key \
-AWS_SECRET_ACCESS_KEY=test_secret_key \
-AWS_SESSION_TOKEN=test_session_token \
-./gradlew :integTest:test --tests "*.test_iam_authentication*"
+export AWS_ACCESS_KEY_ID=test_access_key
+export AWS_SECRET_ACCESS_KEY=test_secret_key
+export AWS_SESSION_TOKEN=test_session_token
 ```
 
 If any of these environment variables are not set, IAM authentication tests will be skipped.
