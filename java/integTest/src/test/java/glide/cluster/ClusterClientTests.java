@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @Timeout(10) // seconds
-@SneakyThrows
 public class ClusterClientTests {
 
     @Test
@@ -468,6 +467,7 @@ public class ClusterClientTests {
         }
     }
 
+    @SneakyThrows
     private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =

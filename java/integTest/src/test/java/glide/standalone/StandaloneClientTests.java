@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @Timeout(20) // seconds
-@SneakyThrows
 public class StandaloneClientTests {
 
     @Test
@@ -411,6 +410,7 @@ public class StandaloneClientTests {
         }
     }
 
+    @SneakyThrows
     private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
         IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
         ServerCredentials credentials =

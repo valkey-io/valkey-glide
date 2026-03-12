@@ -27,7 +27,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 	).WithRefreshIntervalSeconds(5) // Fast refresh for testing
 
 	// Create credentials with IAM config
-		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
+	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	// Create cluster client configuration
@@ -87,7 +87,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 		TestRegionUsEast1,
 	).WithRefreshIntervalSeconds(2) // Very fast refresh for testing
 
-		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
+	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	clusterConfig := config.NewClusterClientConfiguration().
@@ -130,7 +130,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 	).WithRefreshIntervalSeconds(5)
 
 	// Create credentials with IAM config
-		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
+	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	// Create standalone client configuration
@@ -186,7 +186,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 		TestRegionUsEast1,
 	).WithRefreshIntervalSeconds(2)
 
-		credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
+	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
 	assert.NoError(suite.T(), err)
 
 	standaloneConfig := config.NewClientConfiguration().

@@ -11,7 +11,7 @@ const (
 	HostAddressIPv6 = "::1"
 
 	// IAM authentication test constants
-	TestClusterName     = "test-cluster"
-	TestRegionUsEast1   = "us-east-1"
-	TestIamUsername     = "default"
+	TestClusterName   = "test-cluster"
+	TestRegionUsEast1 = "us-east-1"
+	TestIamUsername   = "default"
 )
