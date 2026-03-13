@@ -532,19 +532,13 @@ fn get_route(
 }
 
 fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer>) {
-    let callback_idx = request.callback_idx;
     task::spawn_local(async move {
-        let start = std::time::Instant::now();
         let mut updated_inflight_counter = true;
         let client_clone = client.clone();
 
         let result = match client.reserve_inflight_request() {
             false => {
                 updated_inflight_counter = false;
-                log_warn(
-                    "handle_request",
-                    format!("cb={} REJECTED: max inflight reached", callback_idx),
-                );
                 Err(ClientUsageError::User(
                     "Reached maximum inflight requests".to_string(),
                 ))
@@ -641,19 +635,6 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
 
         if updated_inflight_counter {
             client_clone.release_inflight_request();
-        }
-
-        let elapsed_ms = start.elapsed().as_millis();
-        if elapsed_ms > 500 || result.is_err() {
-            log_warn(
-                "handle_request",
-                format!(
-                    "cb={} elapsed={}ms ok={}",
-                    callback_idx,
-                    elapsed_ms,
-                    result.is_ok()
-                ),
-            );
         }
 
         let _res = write_result(result, request.callback_idx, &writer, request.root_span_ptr).await;
