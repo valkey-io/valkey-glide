@@ -6294,11 +6294,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(PSubscribeBlocking, args, response -> null);
     }
 
-    public CompletableFuture<Void> unsubscribe() {
+    public CompletableFuture<Void> unsubscribeLazy() {
         return commandManager.submitNewCommand(Unsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
-    public CompletableFuture<Void> unsubscribe(Set<String> channels) {
+    public CompletableFuture<Void> unsubscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 Unsubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6324,11 +6324,11 @@ public abstract class BaseClient
                 UnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
     }
 
-    public CompletableFuture<Void> punsubscribe() {
+    public CompletableFuture<Void> punsubscribeLazy() {
         return commandManager.submitNewCommand(PUnsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
-    public CompletableFuture<Void> punsubscribe(Set<String> patterns) {
+    public CompletableFuture<Void> punsubscribeLazy(Set<String> patterns) {
         return commandManager.submitNewCommand(
                 PUnsubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
