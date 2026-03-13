@@ -44,7 +44,7 @@ on:
                 type: boolean
                 default: false
             run-with-macos:
-                description: "Run with macos included (only when necessary)"
+                description: Include macOS runs (avoid GitHub runners unless specifically required)
                 type: choice
                 options:
                     - false
