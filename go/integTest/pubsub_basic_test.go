@@ -171,19 +171,30 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 }
 
 func (suite *GlideTestSuite) TestSubscribeEmptySetRaisesError() {
-	ctx := context.Background()
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: "initial", Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+
+			channels := []ChannelDefn{
+				{Channel: "initial", Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			// Empty slice should raise error
+			var err error
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+				err = client.Subscribe(ctx, []string{}, 5000)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+				err = client.Subscribe(ctx, []string{}, 5000)
+			}
+			assert.Error(t, err)
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	client := receiver.(*glide.Client)
-
-	// Empty slice should raise error
-	err := client.Subscribe(ctx, []string{}, 5000)
-	assert.Error(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestUnsubscribeSpecificChannels() {
@@ -681,47 +692,71 @@ func (suite *GlideTestSuite) TestGetSubscriptionsDesiredVsActual() {
 }
 
 func (suite *GlideTestSuite) TestTwoPublishingClientsSameName() {
-	ctx := context.Background()
-	channel := "same_name_channel"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Create subscriber
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channel := "same_name_channel"
 
-	time.Sleep(200 * time.Millisecond)
+			// Create subscriber
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Create two publishers
-	pub1 := suite.defaultClient()
-	defer pub1.Close()
-	pub2 := suite.defaultClient()
-	defer pub2.Close()
+			time.Sleep(200 * time.Millisecond)
 
-	// Both publish to same channel
-	_, err := pub1.Publish(ctx, channel, "message_from_pub1")
-	assert.NoError(suite.T(), err)
-	_, err = pub2.Publish(ctx, channel, "message_from_pub2")
-	assert.NoError(suite.T(), err)
+			// Create two publishers and publish based on client type
+			if clientType == StandaloneClient {
+				pub1 := suite.defaultClient()
+				defer pub1.Close()
+				pub2 := suite.defaultClient()
+				defer pub2.Close()
 
-	time.Sleep(200 * time.Millisecond)
+				// Both publish to same channel
+				_, err := pub1.Publish(ctx, channel, "message_from_pub1")
+				assert.NoError(t, err)
+				_, err = pub2.Publish(ctx, channel, "message_from_pub2")
+				assert.NoError(t, err)
+			} else {
+				pub1 := suite.defaultClusterClient()
+				defer pub1.Close()
+				pub2 := suite.defaultClusterClient()
+				defer pub2.Close()
 
-	// Verify both messages received
-	client := receiver.(*glide.Client)
-	queue, err := client.GetQueue()
-	assert.NoError(suite.T(), err)
+				// Both publish to same channel
+				_, err := pub1.Publish(ctx, channel, "message_from_pub1", false)
+				assert.NoError(t, err)
+				_, err = pub2.Publish(ctx, channel, "message_from_pub2", false)
+				assert.NoError(t, err)
+			}
 
-	messages := make(map[string]bool)
-	for i := 0; i < 2; i++ {
-		select {
-		case msg := <-queue.WaitForMessage():
-			messages[msg.Message] = true
-		case <-time.After(2 * time.Second):
-			suite.T().Fatalf("Failed to receive message %d/2", i+1)
-		}
+			time.Sleep(200 * time.Millisecond)
+
+			// Verify both messages received
+			var queue *glide.PubSubMessageQueue
+			var err error
+			if clientType == StandaloneClient {
+				queue, err = receiver.(*glide.Client).GetQueue()
+			} else {
+				queue, err = receiver.(*glide.ClusterClient).GetQueue()
+			}
+			assert.NoError(t, err)
+
+			messages := make(map[string]bool)
+			for i := 0; i < 2; i++ {
+				select {
+				case msg := <-queue.WaitForMessage():
+					messages[msg.Message] = true
+				case <-time.After(2 * time.Second):
+					t.Fatalf("Failed to receive message %d/2", i+1)
+				}
+			}
+
+			assert.True(t, messages["message_from_pub1"])
+			assert.True(t, messages["message_from_pub2"])
+		})
 	}
-
-	assert.True(suite.T(), messages["message_from_pub1"])
-	assert.True(suite.T(), messages["message_from_pub2"])
 }
 
 func (suite *GlideTestSuite) TestThreePublishingClientsSameNameWithSharded() {
@@ -772,47 +807,68 @@ func (suite *GlideTestSuite) TestThreePublishingClientsSameNameWithSharded() {
 }
 
 func (suite *GlideTestSuite) TestCombinedDifferentChannelsWithSameName() {
-	ctx := context.Background()
-	channelName := "same_name"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Subscribe to both exact channel and pattern that matches it
-	channels := []ChannelDefn{
-		{Channel: channelName, Mode: ExactMode},
-		{Channel: "same_*", Mode: PatternMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channelName := "same_name"
+
+			// Subscribe to both exact channel and pattern that matches it
+			channels := []ChannelDefn{
+				{Channel: channelName, Mode: ExactMode},
+				{Channel: "same_*", Mode: PatternMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			time.Sleep(200 * time.Millisecond)
+
+			// Create publisher and publish based on client type
+			if clientType == StandaloneClient {
+				publisher := suite.defaultClient()
+				defer publisher.Close()
+
+				// Publish once - should be received twice (exact + pattern match)
+				_, err := publisher.Publish(ctx, channelName, "test_message")
+				assert.NoError(t, err)
+			} else {
+				publisher := suite.defaultClusterClient()
+				defer publisher.Close()
+
+				// Publish once - should be received twice (exact + pattern match)
+				_, err := publisher.Publish(ctx, channelName, "test_message", false)
+				assert.NoError(t, err)
+			}
+
+			time.Sleep(200 * time.Millisecond)
+
+			var queue *glide.PubSubMessageQueue
+			var err error
+			if clientType == StandaloneClient {
+				queue, err = receiver.(*glide.Client).GetQueue()
+			} else {
+				queue, err = receiver.(*glide.ClusterClient).GetQueue()
+			}
+			assert.NoError(t, err)
+
+			// Should receive 2 messages (one for exact, one for pattern)
+			receivedCount := 0
+			timeout := time.After(2 * time.Second)
+			for i := 0; i < 2; i++ {
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, "test_message", msg.Message)
+					receivedCount++
+				case <-timeout:
+					goto done
+				}
+			}
+		done:
+
+			assert.Equal(t, 2, receivedCount, "Should receive message twice (exact + pattern)")
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	time.Sleep(200 * time.Millisecond)
-
-	publisher := suite.defaultClient()
-	defer publisher.Close()
-
-	// Publish once - should be received twice (exact + pattern match)
-	_, err := publisher.Publish(ctx, channelName, "test_message")
-	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
-
-	client := receiver.(*glide.Client)
-	queue, err := client.GetQueue()
-	assert.NoError(suite.T(), err)
-
-	// Should receive 2 messages (one for exact, one for pattern)
-	receivedCount := 0
-	timeout := time.After(2 * time.Second)
-	for i := 0; i < 2; i++ {
-		select {
-		case msg := <-queue.WaitForMessage():
-			assert.Equal(suite.T(), "test_message", msg.Message)
-			receivedCount++
-		case <-timeout:
-			goto done
-		}
-	}
-done:
-
-	assert.Equal(suite.T(), 2, receivedCount, "Should receive message twice (exact + pattern)")
 }
 
 func (suite *GlideTestSuite) TestChannelsAndShardChannelsSeparation() {
@@ -889,18 +945,29 @@ func (suite *GlideTestSuite) TestRESP2RaisesError() {
 }
 
 func (suite *GlideTestSuite) TestCallbackOnlyRaisesErrorOnGetMethods() {
-	// Create callback-only client
-	channel := "callback_only_channel"
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, ConfigMethod, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			// Create callback-only client
+			channel := "callback_only_channel"
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
 
-	client := receiver.(*glide.Client)
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, true, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Try to get queue - should fail for callback-only client
-	_, err := client.GetQueue()
-	assert.Error(suite.T(), err, "GetQueue should fail for callback-only client")
+			// Try to get queue - should fail for callback-only client
+			var err error
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+				_, err = client.GetQueue()
+			} else {
+				client := receiver.(*glide.ClusterClient)
+				_, err = client.GetQueue()
+			}
+			assert.Error(t, err, "GetQueue should fail for callback-only client")
+		})
+	}
 }
 
 func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {

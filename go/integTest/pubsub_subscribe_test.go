@@ -14,140 +14,211 @@ import (
 )
 
 func (suite *GlideTestSuite) TestDynamicSubscribeUnsubscribe() {
-	tests := []struct {
-		name   string
-		method SubscriptionMethod
-	}{
-		{"Blocking", BlockingMethod},
-		{"Lazy", LazyMethod},
-	}
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	for _, tt := range tests {
-		suite.T().Run(tt.name, func(t *testing.T) {
-			initialChannel := "initial_channel"
-			dynamicChannel := "dynamic_channel"
-
-			// Create publisher
-			publisher := suite.defaultClient()
-			defer publisher.Close()
-
-			// Create subscriber using EXACT same pattern as working test
-			channels := []ChannelDefn{
-				{Channel: initialChannel, Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			tests := []struct {
+				name   string
+				method SubscriptionMethod
+			}{
+				{"Blocking", BlockingMethod},
+				{"Lazy", LazyMethod},
 			}
-			receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, t)
-			defer receiver.Close()
 
-			queue, err := receiver.(*glide.Client).GetQueue()
-			assert.NoError(t, err)
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					initialChannel := "initial_channel"
+					dynamicChannel := "dynamic_channel"
 
-			// Allow subscription to establish
-			time.Sleep(100 * time.Millisecond)
+					// Create publisher based on client type
+					var standalonePublisher *glide.Client
+					var clusterPublisher *glide.ClusterClient
+					if clientType == StandaloneClient {
+						standalonePublisher = suite.defaultClient()
+						defer standalonePublisher.Close()
+					} else {
+						clusterPublisher = suite.defaultClusterClient()
+						defer clusterPublisher.Close()
+					}
 
-			// Publish test message
-			_, err = publisher.Publish(context.Background(), initialChannel, "test_message")
-			assert.NoError(t, err)
+					// Create subscriber
+					channels := []ChannelDefn{
+						{Channel: initialChannel, Mode: ExactMode},
+					}
+					receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+					defer receiver.Close()
 
-			// Allow time for message to be received
-			time.Sleep(100 * time.Millisecond)
-
-			// Verify message received
-			select {
-			case msg := <-queue.WaitForMessage():
-				t.Logf("SUCCESS! Initial subscription works. Message: '%s'", msg.Message)
-
-				// Now test dynamic subscribe using parameterized method
-				ctx := context.Background()
-				if tt.method == LazyMethod {
-					err = receiver.(*glide.Client).SubscribeLazy(ctx, []string{dynamicChannel})
+					var queue *glide.PubSubMessageQueue
+					var err error
+					if clientType == StandaloneClient {
+						queue, err = receiver.(*glide.Client).GetQueue()
+					} else {
+						queue, err = receiver.(*glide.ClusterClient).GetQueue()
+					}
 					assert.NoError(t, err)
-					time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
-				} else {
-					err = receiver.(*glide.Client).Subscribe(ctx, []string{dynamicChannel}, 5000)
+
+					// Allow subscription to establish
+					time.Sleep(100 * time.Millisecond)
+
+					// Publish test message
+					ctx := context.Background()
+					if clientType == StandaloneClient {
+						_, err = standalonePublisher.Publish(ctx, initialChannel, "test_message")
+					} else {
+						_, err = clusterPublisher.Publish(ctx, initialChannel, "test_message", false)
+					}
 					assert.NoError(t, err)
-					// No sleep needed for blocking
-				}
 
-				_, err = publisher.Publish(context.Background(), dynamicChannel, "dynamic_message")
-				assert.NoError(t, err)
+					// Allow time for message to be received
+					time.Sleep(100 * time.Millisecond)
 
-				time.Sleep(100 * time.Millisecond)
+					// Verify message received
+					select {
+					case msg := <-queue.WaitForMessage():
+						t.Logf("SUCCESS! Initial subscription works. Message: '%s'", msg.Message)
 
-				select {
-				case msg := <-queue.WaitForMessage():
-					t.Logf("Dynamic subscribe SUCCESS! Message: '%s'", msg.Message)
-					assert.Equal(t, "dynamic_message", msg.Message)
-				case <-time.After(2 * time.Second):
-					t.Fatal("Dynamic subscribe failed")
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("Initial subscription failed")
+						// Now test dynamic subscribe using parameterized method
+						if clientType == StandaloneClient {
+							client := receiver.(*glide.Client)
+							if tt.method == LazyMethod {
+								err = client.SubscribeLazy(ctx, []string{dynamicChannel})
+								assert.NoError(t, err)
+								time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
+							} else {
+								err = client.Subscribe(ctx, []string{dynamicChannel}, 5000)
+								assert.NoError(t, err)
+							}
+							_, err = standalonePublisher.Publish(ctx, dynamicChannel, "dynamic_message")
+						} else {
+							client := receiver.(*glide.ClusterClient)
+							if tt.method == LazyMethod {
+								err = client.SubscribeLazy(ctx, []string{dynamicChannel})
+								assert.NoError(t, err)
+								time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
+							} else {
+								err = client.Subscribe(ctx, []string{dynamicChannel}, 5000)
+								assert.NoError(t, err)
+							}
+							_, err = clusterPublisher.Publish(ctx, dynamicChannel, "dynamic_message", false)
+						}
+						assert.NoError(t, err)
+
+						time.Sleep(100 * time.Millisecond)
+
+						select {
+						case msg := <-queue.WaitForMessage():
+							t.Logf("Dynamic subscribe SUCCESS! Message: '%s'", msg.Message)
+							assert.Equal(t, "dynamic_message", msg.Message)
+						case <-time.After(2 * time.Second):
+							t.Fatal("Dynamic subscribe failed")
+						}
+					case <-time.After(2 * time.Second):
+						t.Fatal("Initial subscription failed")
+					}
+				})
 			}
 		})
 	}
 }
 
 func (suite *GlideTestSuite) TestDynamicPSubscribeUnsubscribe() {
-	tests := []struct {
-		name   string
-		method SubscriptionMethod
-	}{
-		{"Blocking", BlockingMethod},
-		{"Lazy", LazyMethod},
-	}
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	for _, tt := range tests {
-		suite.T().Run(tt.name, func(t *testing.T) {
-			initialPattern := "initial_*"
-			dynamicPattern := "dynamic_*"
-
-			publisher := suite.defaultClient()
-			defer publisher.Close()
-
-			channels := []ChannelDefn{
-				{Channel: initialPattern, Mode: PatternMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			tests := []struct {
+				name   string
+				method SubscriptionMethod
+			}{
+				{"Blocking", BlockingMethod},
+				{"Lazy", LazyMethod},
 			}
-			receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, t)
-			defer receiver.Close()
 
-			queue, err := receiver.(*glide.Client).GetQueue()
-			assert.NoError(t, err)
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					initialPattern := "initial_*"
+					dynamicPattern := "dynamic_*"
 
-			time.Sleep(200 * time.Millisecond)
+					// Create publisher based on client type
+					var standalonePublisher *glide.Client
+					var clusterPublisher *glide.ClusterClient
+					if clientType == StandaloneClient {
+						standalonePublisher = suite.defaultClient()
+						defer standalonePublisher.Close()
+					} else {
+						clusterPublisher = suite.defaultClusterClient()
+						defer clusterPublisher.Close()
+					}
 
-			_, err = publisher.Publish(context.Background(), "initial_test", "test_message")
-			assert.NoError(t, err)
+					channels := []ChannelDefn{
+						{Channel: initialPattern, Mode: PatternMode},
+					}
+					receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+					defer receiver.Close()
 
-			time.Sleep(200 * time.Millisecond)
-
-			select {
-			case msg := <-queue.WaitForMessage():
-				assert.Equal(t, "test_message", msg.Message)
-
-				ctx := context.Background()
-				if tt.method == LazyMethod {
-					err = receiver.(*glide.Client).PSubscribeLazy(ctx, []string{dynamicPattern})
+					var queue *glide.PubSubMessageQueue
+					var err error
+					if clientType == StandaloneClient {
+						queue, err = receiver.(*glide.Client).GetQueue()
+					} else {
+						queue, err = receiver.(*glide.ClusterClient).GetQueue()
+					}
 					assert.NoError(t, err)
-					time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
-				} else {
-					err = receiver.(*glide.Client).PSubscribe(ctx, []string{dynamicPattern}, 5000)
+
+					time.Sleep(200 * time.Millisecond)
+
+					ctx := context.Background()
+					if clientType == StandaloneClient {
+						_, err = standalonePublisher.Publish(ctx, "initial_test", "test_message")
+					} else {
+						_, err = clusterPublisher.Publish(ctx, "initial_test", "test_message", false)
+					}
 					assert.NoError(t, err)
-					// No sleep needed for blocking
-				}
 
-				_, err = publisher.Publish(context.Background(), "dynamic_test", "dynamic_message")
-				assert.NoError(t, err)
+					time.Sleep(200 * time.Millisecond)
 
-				time.Sleep(200 * time.Millisecond)
+					select {
+					case msg := <-queue.WaitForMessage():
+						assert.Equal(t, "test_message", msg.Message)
 
-				select {
-				case msg := <-queue.WaitForMessage():
-					assert.Equal(t, "dynamic_message", msg.Message)
-				case <-time.After(2 * time.Second):
-					t.Fatal("Dynamic psubscribe failed")
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("Initial pattern subscription failed")
+						if clientType == StandaloneClient {
+							client := receiver.(*glide.Client)
+							if tt.method == LazyMethod {
+								err = client.PSubscribeLazy(ctx, []string{dynamicPattern})
+								assert.NoError(t, err)
+								time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
+							} else {
+								err = client.PSubscribe(ctx, []string{dynamicPattern}, 5000)
+								assert.NoError(t, err)
+							}
+							_, err = standalonePublisher.Publish(ctx, "dynamic_test", "dynamic_message")
+						} else {
+							client := receiver.(*glide.ClusterClient)
+							if tt.method == LazyMethod {
+								err = client.PSubscribeLazy(ctx, []string{dynamicPattern})
+								assert.NoError(t, err)
+								time.Sleep(200 * time.Millisecond) // Wait for lazy subscription
+							} else {
+								err = client.PSubscribe(ctx, []string{dynamicPattern}, 5000)
+								assert.NoError(t, err)
+							}
+							_, err = clusterPublisher.Publish(ctx, "dynamic_test", "dynamic_message", false)
+						}
+						assert.NoError(t, err)
+
+						time.Sleep(200 * time.Millisecond)
+
+						select {
+						case msg := <-queue.WaitForMessage():
+							assert.Equal(t, "dynamic_message", msg.Message)
+						case <-time.After(2 * time.Second):
+							t.Fatal("Dynamic psubscribe failed")
+						}
+					case <-time.After(2 * time.Second):
+						t.Fatal("Initial pattern subscription failed")
+					}
+				})
 			}
 		})
 	}
@@ -222,74 +293,117 @@ func (suite *GlideTestSuite) TestDynamicSSubscribeUnsubscribe() {
 }
 
 func (suite *GlideTestSuite) TestBlockingSubscribeUnsubscribe() {
-	channel1 := "blocking_channel1"
-	channel2 := "blocking_channel2"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	publisher := suite.defaultClient()
-	defer publisher.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			channel1 := "blocking_channel1"
+			channel2 := "blocking_channel2"
 
-	channels := []ChannelDefn{
-		{Channel: channel1, Mode: ExactMode},
-	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
-	defer receiver.Close()
+			// Create publisher based on client type
+			var standalonePublisher *glide.Client
+			var clusterPublisher *glide.ClusterClient
+			if clientType == StandaloneClient {
+				standalonePublisher = suite.defaultClient()
+				defer standalonePublisher.Close()
+			} else {
+				clusterPublisher = suite.defaultClusterClient()
+				defer clusterPublisher.Close()
+			}
 
-	queue, err := receiver.(*glide.Client).GetQueue()
-	assert.NoError(suite.T(), err)
+			channels := []ChannelDefn{
+				{Channel: channel1, Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	time.Sleep(200 * time.Millisecond)
-
-	// Verify initial subscription works
-	_, err = publisher.Publish(context.Background(), channel1, "message1")
-	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
-
-	select {
-	case msg := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), "message1", msg.Message)
-
-		// Dynamically subscribe to second channel
-		err = receiver.(*glide.Client).Subscribe(context.Background(), []string{channel2}, 5000)
-		assert.NoError(suite.T(), err)
-
-		time.Sleep(200 * time.Millisecond)
-
-		_, err = publisher.Publish(context.Background(), channel2, "message2")
-		assert.NoError(suite.T(), err)
-
-		time.Sleep(200 * time.Millisecond)
-
-		select {
-		case msg := <-queue.WaitForMessage():
-			assert.Equal(suite.T(), "message2", msg.Message)
-
-			// Unsubscribe from first channel
-			err = receiver.(*glide.Client).Unsubscribe(context.Background(), []string{channel1}, 5000)
-			assert.NoError(suite.T(), err)
+			var queue *glide.PubSubMessageQueue
+			var err error
+			if clientType == StandaloneClient {
+				queue, err = receiver.(*glide.Client).GetQueue()
+			} else {
+				queue, err = receiver.(*glide.ClusterClient).GetQueue()
+			}
+			assert.NoError(t, err)
 
 			time.Sleep(200 * time.Millisecond)
 
-			// Verify channel1 doesn't receive, but channel2 still does
-			_, err = publisher.Publish(context.Background(), channel1, "should_not_receive")
-			assert.NoError(suite.T(), err)
-			_, err = publisher.Publish(context.Background(), channel2, "message3")
-			assert.NoError(suite.T(), err)
+			// Verify initial subscription works
+			ctx := context.Background()
+			if clientType == StandaloneClient {
+				_, err = standalonePublisher.Publish(ctx, channel1, "message1")
+			} else {
+				_, err = clusterPublisher.Publish(ctx, channel1, "message1", false)
+			}
+			assert.NoError(t, err)
 
 			time.Sleep(200 * time.Millisecond)
 
 			select {
 			case msg := <-queue.WaitForMessage():
-				assert.Equal(suite.T(), "message3", msg.Message)
-				assert.Equal(suite.T(), channel2, msg.Channel)
+				assert.Equal(t, "message1", msg.Message)
+
+				// Dynamically subscribe to second channel
+				if clientType == StandaloneClient {
+					err = receiver.(*glide.Client).Subscribe(ctx, []string{channel2}, 5000)
+				} else {
+					err = receiver.(*glide.ClusterClient).Subscribe(ctx, []string{channel2}, 5000)
+				}
+				assert.NoError(t, err)
+
+				time.Sleep(200 * time.Millisecond)
+
+				if clientType == StandaloneClient {
+					_, err = standalonePublisher.Publish(ctx, channel2, "message2")
+				} else {
+					_, err = clusterPublisher.Publish(ctx, channel2, "message2", false)
+				}
+				assert.NoError(t, err)
+
+				time.Sleep(200 * time.Millisecond)
+
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, "message2", msg.Message)
+
+					// Unsubscribe from first channel
+					if clientType == StandaloneClient {
+						err = receiver.(*glide.Client).Unsubscribe(ctx, []string{channel1}, 5000)
+					} else {
+						err = receiver.(*glide.ClusterClient).Unsubscribe(ctx, []string{channel1}, 5000)
+					}
+					assert.NoError(t, err)
+
+					time.Sleep(200 * time.Millisecond)
+
+					// Verify channel1 doesn't receive, but channel2 still does
+					if clientType == StandaloneClient {
+						_, err = standalonePublisher.Publish(ctx, channel1, "should_not_receive")
+						assert.NoError(t, err)
+						_, err = standalonePublisher.Publish(ctx, channel2, "message3")
+					} else {
+						_, err = clusterPublisher.Publish(ctx, channel1, "should_not_receive", false)
+						assert.NoError(t, err)
+						_, err = clusterPublisher.Publish(ctx, channel2, "message3", false)
+					}
+					assert.NoError(t, err)
+
+					time.Sleep(200 * time.Millisecond)
+
+					select {
+					case msg := <-queue.WaitForMessage():
+						assert.Equal(t, "message3", msg.Message)
+						assert.Equal(t, channel2, msg.Channel)
+					case <-time.After(2 * time.Second):
+						t.Fatal("Should receive message on channel2")
+					}
+				case <-time.After(2 * time.Second):
+					t.Fatal("Dynamic subscribe to channel2 failed")
+				}
 			case <-time.After(2 * time.Second):
-				suite.T().Fatal("Should receive message on channel2")
+				t.Fatal("Initial subscription failed")
 			}
-		case <-time.After(2 * time.Second):
-			suite.T().Fatal("Dynamic subscribe to channel2 failed")
-		}
-	case <-time.After(2 * time.Second):
-		suite.T().Fatal("Initial subscription failed")
+		})
 	}
 }
 

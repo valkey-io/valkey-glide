@@ -4,10 +4,12 @@ package integTest
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
@@ -73,43 +75,71 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 // TestResubscribeAfterConnectionKillManyChannels tests that multiple exact channel
 // subscriptions are restored after connection kill
 func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillManyChannels() {
-	ctx := context.Background()
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Create 10 channels
-	var channels []ChannelDefn
-	expectedChannels := make(map[string]bool)
-	for i := 0; i < 10; i++ {
-		channelName := suite.T().Name() + "_channel_" + string(rune('0'+i))
-		channels = append(channels, ChannelDefn{Channel: channelName, Mode: ExactMode})
-		expectedChannels[channelName] = true
-	}
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
 
-	// Test standalone
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
+			// Create 10 channels
+			var channels []ChannelDefn
+			expectedChannels := make(map[string]bool)
+			for i := 0; i < 10; i++ {
+				channelName := t.Name() + "_channel_" + string(rune('0'+i))
+				channels = append(channels, ChannelDefn{Channel: channelName, Mode: ExactMode})
+				expectedChannels[channelName] = true
+			}
 
-	time.Sleep(300 * time.Millisecond)
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Verify all initial subscriptions
-	client := receiver.(*glide.Client)
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	for channelName := range expectedChannels {
-		_, exists := state.ActualSubscriptions[models.Exact][channelName]
-		assert.True(suite.T(), exists, "Channel %s should be subscribed", channelName)
-	}
+			time.Sleep(300 * time.Millisecond)
 
-	// Kill connections
-	client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+			// Verify all initial subscriptions and kill connections based on client type
+			var state *models.PubSubState
+			var err error
 
-	time.Sleep(2 * time.Second)
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				for channelName := range expectedChannels {
+					_, exists := state.ActualSubscriptions[models.Exact][channelName]
+					assert.True(t, exists, "Channel %s should be subscribed", channelName)
+				}
 
-	// Verify all subscriptions restored
-	state, err = client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	for channelName := range expectedChannels {
-		_, exists := state.ActualSubscriptions[models.Exact][channelName]
-		assert.True(suite.T(), exists, "Channel %s should be restored", channelName)
+				// Kill connections
+				client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+
+				time.Sleep(2 * time.Second)
+
+				// Verify all subscriptions restored
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				for channelName := range expectedChannels {
+					_, exists := state.ActualSubscriptions[models.Exact][channelName]
+					assert.True(t, exists, "Channel %s should be subscribed", channelName)
+				}
+
+				// Kill connections using CustomCommandWithRoute
+				client.CustomCommandWithRoute(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"}, config.AllNodes)
+
+				time.Sleep(2 * time.Second)
+
+				// Verify all subscriptions restored
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			for channelName := range expectedChannels {
+				_, exists := state.ActualSubscriptions[models.Exact][channelName]
+				assert.True(t, exists, "Channel %s should be restored", channelName)
+			}
+		})
 	}
 }
 
