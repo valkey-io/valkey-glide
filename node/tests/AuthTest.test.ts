@@ -19,13 +19,18 @@ import {
     RequestError,
     ServiceType,
     IamAuthConfig,
-    Logger,
 } from "../build-ts";
 import {
+    assertConnected,
     flushAndCloseClient,
     getServerVersion,
     parseEndpoints,
 } from "./TestUtilities";
+import {
+    IAM_TEST_CLUSTER_NAME,
+    IAM_TEST_REGION_US_EAST_1,
+    IAM_USERNAME,
+} from "./Constants";
 
 type BaseClient = GlideClient | GlideClusterClient;
 
@@ -36,6 +41,20 @@ const WRONG_PASSWORD = "wrong_password";
 const TIMEOUT = 50000;
 
 type AddressEntry = [string, number];
+
+/**
+ * Creates a test IAM authentication configuration.
+ * @param refreshIntervalSeconds - Token refresh interval in seconds
+ * @returns IamAuthConfig for testing
+ */
+function createTestIamConfig(refreshIntervalSeconds: number): IamAuthConfig {
+    return {
+        clusterName: IAM_TEST_CLUSTER_NAME,
+        service: ServiceType.Elasticache,
+        region: IAM_TEST_REGION_US_EAST_1,
+        refreshIntervalSeconds: refreshIntervalSeconds,
+    };
+}
 
 describe("Auth tests", () => {
     let cmeCluster: ValkeyCluster;
@@ -600,45 +619,277 @@ describe("Auth tests", () => {
     );
 });
 
-// Skip IAM Auth tests in CI/CD environments
-const describeIamTests =
-    process.env.CI || process.env.GITHUB_ACTIONS || process.env.JENKINS_URL
-        ? describe.skip
-        : describe;
+// IAM Auth tests with mock credentials
+describe("IAM Auth: Mock Credentials", () => {
+    it(
+        "test_iam_authentication_with_mock_credentials",
+        async () => {
+            // See DEVELOPER.md for instructions on running IAM authentication tests
 
-describeIamTests("IAM Auth: Elasticache Cluster", () => {
-    it("test_iam_authentication_elasticache_cluster", async () => {
-        // Use debug level to see detailed logs about the iam auth process
-        Logger.setLoggerConfig("debug");
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
 
-        // Replace these values with your actual cluster info and region
-        const clusterName = "iam-auth-cluster";
-        const username = "iam-auth";
-        const region = "us-east-1";
-        const endpoint =
-            "clustercfg.iam-auth-cluster.nra7gl.use1.cache.amazonaws.com";
-        const iamConfig: IamAuthConfig = {
-            clusterName: clusterName,
-            service: ServiceType.Elasticache,
-            region: region,
-            // refreshIntervalSeconds: 10, // optional
-        };
+            const username = IAM_USERNAME; // Use default user
+            const iamConfig = createTestIamConfig(5);
 
-        const client = await GlideClusterClient.createClient({
-            addresses: [{ host: endpoint, port: 6379 }],
-            credentials: { username: username, iamConfig: iamConfig },
-            useTLS: true,
-        });
+            // Use existing cluster from global setup
+            const clusterAddresses = global.CLUSTER_ENDPOINTS;
+            const cluster = clusterAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      true,
+                      parseEndpoints(clusterAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      true,
+                      3,
+                      1,
+                      getServerVersion,
+                  );
 
-        // Basic ping test to verify connection
-        const result = await client.ping();
-        expect(result).toBe("PONG");
+            const addresses = cluster
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
 
-        Logger.log("info", "IAM test", "Refreshing the token manually");
+            try {
+                const client = await GlideClusterClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
 
-        // Should see in the logs ""send_immediate_auth - Using IAM token for authentication`
-        await client.refreshIamToken();
+                // Basic ping test to verify connection
+                await assertConnected(client);
 
-        await client.close();
-    });
+                // Test basic operations
+                await client.set("iam_test_key", "iam_test_value");
+                const value = await client.get("iam_test_key");
+                expect(value).toBe("iam_test_value");
+
+                // Test manual token refresh
+                await client.refreshIamToken();
+
+                // Verify client still works after token refresh
+                await client.set("iam_test_key2", "iam_test_value2");
+                const value2 = await client.get("iam_test_key2");
+                expect(value2).toBe("iam_test_value2");
+
+                client.close();
+            } finally {
+                await cluster.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "test_iam_authentication_automatic_token_refresh",
+        async () => {
+            // See DEVELOPER.md for instructions on running IAM authentication tests
+
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
+
+            const username = IAM_USERNAME;
+            const iamConfig = createTestIamConfig(2); // Short interval for automatic refresh
+
+            // Use existing cluster from global setup
+            const clusterAddresses = global.CLUSTER_ENDPOINTS;
+            const cluster = clusterAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      true,
+                      parseEndpoints(clusterAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      true,
+                      3,
+                      1,
+                      getServerVersion,
+                  );
+
+            const addresses = cluster
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            try {
+                const client = await GlideClusterClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
+
+                // Verify initial connection
+                await assertConnected(client);
+
+                // Wait for automatic token refresh to occur
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+
+                // Verify client still works after automatic refresh
+                await client.set(
+                    "iam_auto_refresh_key",
+                    "iam_auto_refresh_value",
+                );
+                const value = await client.get("iam_auto_refresh_key");
+                expect(value).toBe("iam_auto_refresh_value");
+
+                client.close();
+            } finally {
+                await cluster.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "test_iam_authentication_with_mock_credentials_standalone",
+        async () => {
+            // See DEVELOPER.md for instructions on running IAM authentication tests
+
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
+
+            const username = IAM_USERNAME;
+            const iamConfig = createTestIamConfig(5);
+
+            // Use existing standalone server from global setup
+            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+            const server = standaloneAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      false,
+                      parseEndpoints(standaloneAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      false,
+                      1,
+                      0,
+                      getServerVersion,
+                  );
+
+            const addresses = server
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            try {
+                const client = await GlideClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
+
+                // Basic ping test to verify connection
+                await assertConnected(client);
+
+                // Test basic operations
+                await client.set("iam_test_key", "iam_test_value");
+                const value = await client.get("iam_test_key");
+                expect(value).toBe("iam_test_value");
+
+                // Test manual token refresh
+                await client.refreshIamToken();
+
+                // Verify client still works after token refresh
+                await client.set("iam_test_key2", "iam_test_value2");
+                const value2 = await client.get("iam_test_key2");
+                expect(value2).toBe("iam_test_value2");
+
+                client.close();
+            } finally {
+                await server.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "test_iam_authentication_automatic_token_refresh_standalone",
+        async () => {
+            // See DEVELOPER.md for instructions on running IAM authentication tests
+
+            // Skip test if AWS credentials are not set in OS environment
+            if (!process.env.AWS_ACCESS_KEY_ID) {
+                console.log(
+                    "Skipping IAM test - AWS credentials not set in OS environment",
+                );
+                return;
+            }
+
+            const username = IAM_USERNAME;
+            const iamConfig = createTestIamConfig(2);
+
+            // Use existing standalone server from global setup
+            const standaloneAddresses = global.STAND_ALONE_ENDPOINT;
+            const server = standaloneAddresses
+                ? await ValkeyCluster.initFromExistingCluster(
+                      false,
+                      parseEndpoints(standaloneAddresses),
+                      getServerVersion,
+                  )
+                : await ValkeyCluster.createCluster(
+                      false,
+                      1,
+                      0,
+                      getServerVersion,
+                  );
+
+            const addresses = server
+                .getAddresses()
+                .map(([host, port]) => ({ host, port }));
+
+            try {
+                const client = await GlideClient.createClient({
+                    addresses: addresses,
+                    credentials: {
+                        username: username,
+                        iamConfig: iamConfig,
+                    },
+                    useTLS: global.TLS, // Use TLS setting from test configuration
+                });
+
+                // Verify initial connection
+                await assertConnected(client);
+
+                // Wait for automatic token refresh to occur
+                await new Promise((resolve) => setTimeout(resolve, 3000));
+
+                // Verify client still works after automatic refresh
+                await client.set(
+                    "iam_auto_refresh_key",
+                    "iam_auto_refresh_value",
+                );
+                const value = await client.get("iam_auto_refresh_key");
+                expect(value).toBe("iam_auto_refresh_value");
+
+                client.close();
+            } finally {
+                await server.close();
+            }
+        },
+        TIMEOUT,
+    );
 });
