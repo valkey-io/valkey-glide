@@ -18,6 +18,11 @@ import (
 var (
 	clusterNodes   = flag.String("clusternodes", "", "AddressNodes for running Valkey/Redis cluster nodes")
 	standaloneNode = flag.String("standalonenode", "", "AddressNode for running Valkey/Redis standalone node")
+	vssTest        = flag.Bool(
+		"vss-test",
+		false,
+		"Set to true to run Valkey Search module example tests (requires server with search module loaded)",
+	)
 )
 
 var (
