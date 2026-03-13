@@ -321,8 +321,6 @@ public final class AsyncRegistry {
         timeoutScheduler.shutdownNow();
     }
 
-<<<<<<< HEAD
-=======
     /**
      * Fail all pending futures with a {@link ClosingException}. Called from the native layer when a
      * fatal infrastructure failure is detected (e.g., callback worker threads terminated or native
@@ -347,7 +345,6 @@ public final class AsyncRegistry {
         clientInflightCounts.clear();
     }
 
->>>>>>> d44a0d854 (Fix Potential Security Issues for Release 2.3 (#5583))
     /** Clean up per-client tracking when a client is closed. */
     public static void cleanupClient(long clientHandle) {
         clientInflightCounts.remove(clientHandle);
