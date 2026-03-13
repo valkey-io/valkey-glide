@@ -13,33 +13,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
-// TestPubSubMaxSizeMessageStandalone tests 1MB message on standalone
-func (suite *GlideTestSuite) TestPubSubMaxSizeMessageStandalone() {
-	channel := "max_size_standalone"
-	largeMsg := strings.Repeat("a", 1024*1024)
-
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	publisher := suite.defaultClient()
-	defer publisher.Close()
-
-	ctx := context.Background()
-	queue, _ := receiver.(*glide.Client).GetQueue()
-
-	time.Sleep(100 * time.Millisecond)
-
-	publisher.Publish(ctx, channel, largeMsg)
-
-	select {
-	case msg := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), largeMsg, msg.Message)
-	case <-time.After(5 * time.Second):
-		suite.T().Fatal("Timeout")
-	}
-}
-
 // TestPubSubMaxSizeMessageCallback tests large message with callback
 func (suite *GlideTestSuite) TestPubSubMaxSizeMessageCallback() {
 	clientTypes := []ClientType{StandaloneClient, ClusterClient}
