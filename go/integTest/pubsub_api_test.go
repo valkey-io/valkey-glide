@@ -160,6 +160,28 @@ func (suite *GlideTestSuite) TestUnsubscribeAllChannels() {
 			case <-time.After(2 * time.Second):
 				t.Fatal("Pattern subscription should still work")
 			}
+
+			// Now test PUnsubscribe from all patterns using nil
+			if clientType == StandaloneClient {
+				err = receiver.(*glide.Client).PUnsubscribe(ctx, nil, 5000)
+			} else {
+				err = receiver.(*glide.ClusterClient).PUnsubscribe(ctx, nil, 5000)
+			}
+			assert.NoError(t, err)
+
+			// Verify pattern no longer receives
+			err = suite.PublishMessage(publisher, clientType, "unsub_pattern_test2", "should_not_receive", false)
+			assert.NoError(t, err)
+
+			time.Sleep(200 * time.Millisecond)
+
+			// Should not receive any message (use non-blocking check)
+			select {
+			case msg := <-queue.WaitForMessage():
+				t.Fatalf("Should not receive message after PUnsubscribe(nil), got: %s", msg.Message)
+			case <-time.After(500 * time.Millisecond):
+				// Expected - no message received
+			}
 		})
 	}
 }
