@@ -3,6 +3,7 @@ package glide.internal;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -102,6 +103,83 @@ public class AsyncRegistryTest {
         // Should be able to register again on the same client (counter was reset)
         CompletableFuture<Object> f2 = new CompletableFuture<>();
         assertDoesNotThrow(() -> AsyncRegistry.register(f2, 1, 42L, 0));
+    }
+
+    // ==================== Shutdown Race Condition Tests ====================
+
+    @Test
+    void register_afterShutdown_returnsZeroAndFailsFuture() {
+        // First, trigger shutdown
+        AsyncRegistry.failAllWithError("shutdown");
+        assertTrue(AsyncRegistry.isShutdown());
+
+        // Now try to register a new future
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        long id = AsyncRegistry.register(f, 0, 1L, 0);
+
+        // Should return 0 (special ID indicating registration failed)
+        assertEquals(0L, id);
+
+        // Future should be completed exceptionally
+        assertTrue(f.isCompletedExceptionally());
+        assertClosingException(f, "Client is shutting down, cannot register new requests");
+
+        // Should not be added to active futures
+        assertEquals(0, AsyncRegistry.getActiveFutureCount());
+    }
+
+    @Test
+    void failAllWithError_setsShutdownFlag() {
+        assertFalse(AsyncRegistry.isShutdown());
+
+        AsyncRegistry.failAllWithError("test");
+
+        assertTrue(AsyncRegistry.isShutdown());
+    }
+
+    @Test
+    void reset_clearsShutdownFlag() {
+        // Trigger shutdown
+        AsyncRegistry.failAllWithError("test");
+        assertTrue(AsyncRegistry.isShutdown());
+
+        // Reset should clear the flag
+        AsyncRegistry.reset();
+
+        assertFalse(AsyncRegistry.isShutdown());
+
+        // Should be able to register again
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        long id = AsyncRegistry.register(f, 0, 1L, 0);
+
+        assertTrue(id > 0);
+        assertEquals(1, AsyncRegistry.getActiveFutureCount());
+    }
+
+    @Test
+    void register_afterShutdown_doesNotIncrementInflightCounter() {
+        // Trigger shutdown
+        AsyncRegistry.failAllWithError("shutdown");
+
+        // Try to register with inflight limit
+        CompletableFuture<Object> f = new CompletableFuture<>();
+        long id = AsyncRegistry.register(f, 10, 42L, 0);
+
+        assertEquals(0L, id);
+
+        // Reset and verify we can register the full limit (counter wasn't incremented)
+        AsyncRegistry.reset();
+
+        for (int i = 0; i < 10; i++) {
+            CompletableFuture<Object> fi = new CompletableFuture<>();
+            long regId = AsyncRegistry.register(fi, 10, 42L, 0);
+            assertTrue(regId > 0, "Registration " + i + " should succeed");
+        }
+    }
+
+    @Test
+    void isShutdown_initiallyFalse() {
+        assertFalse(AsyncRegistry.isShutdown());
     }
 
     private static void assertClosingException(CompletableFuture<?> future, String expectedMessage) {

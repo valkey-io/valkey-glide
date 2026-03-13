@@ -5,8 +5,13 @@ import java.io.*;
 import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.ProviderNotFoundException;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
 
 /**
  * A simple library class which helps with loading dynamic libraries stored in the JAR archive.
@@ -82,46 +87,48 @@ public class NativeUtils {
     }
 
     /**
-     * Detects whether the Linux system uses musl or glibc. Executes "ldd --version" and checks for
-     * "musl" in the output.
+     * Detects whether the Linux system uses musl or glibc by checking for the musl dynamic linker.
+     *
+     * <p>The musl dynamic linker is typically located at /lib/ld-musl-{arch}.so.1
      *
      * @return true if musl is detected, false otherwise (defaults to glibc on any error)
      */
     private static boolean isMuslLibc() {
         try {
-            Process process = Runtime.getRuntime().exec(new String[] {"ldd", "--version"});
+            // Check for musl dynamic linker files
+            // musl systems have /lib/ld-musl-{arch}.so.1
+            File libDir = new File("/lib");
+            if (libDir.exists() && libDir.isDirectory()) {
+                String[] files = libDir.list();
+                if (files != null) {
+                    for (String file : files) {
+                        if (file.startsWith("ld-musl-") && file.endsWith(".so.1")) {
+                            return true;
+                        }
+                    }
+                }
+            }
 
-            // Read both stdout and stderr (musl outputs to stderr)
-            String output =
-                    readInputStream(process.getInputStream()) + readInputStream(process.getErrorStream());
+            // Also check /lib64 for some distributions
+            File lib64Dir = new File("/lib64");
+            if (lib64Dir.exists() && lib64Dir.isDirectory()) {
+                String[] files = lib64Dir.list();
+                if (files != null) {
+                    for (String file : files) {
+                        if (file.startsWith("ld-musl-") && file.endsWith(".so.1")) {
+                            return true;
+                        }
+                    }
+                }
+            }
 
-            process.waitFor();
+            // Default to glibc if no musl linker found
+            return false;
 
-            // Check if output contains "musl" (case-insensitive)
-            return output.toLowerCase().contains("musl");
-
-        } catch (Exception e) {
-            // Default to glibc on any exception
+        } catch (SecurityException e) {
+            // If we can't read the directory, default to glibc
             return false;
         }
-    }
-
-    /**
-     * Reads all lines from an InputStream and returns them as a single String.
-     *
-     * @param inputStream The input stream to read from
-     * @return The content as a String with newlines preserved
-     * @throws IOException If an I/O error occurs
-     */
-    private static String readInputStream(InputStream inputStream) throws IOException {
-        StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-        }
-        return output.toString();
     }
 
     /**
@@ -220,6 +227,12 @@ public class NativeUtils {
                                 path));
             }
             Files.copy(is, temp.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+            // On POSIX systems, set restrictive permissions on the extracted file
+            if (isPosixCompliant()) {
+                Set<PosixFilePermission> filePerms = PosixFilePermissions.fromString("rwx------");
+                Files.setPosixFilePermissions(temp.toPath(), filePerms);
+            }
         } catch (IOException e) {
             cleanupTempFile(temp);
             throw new IOException(
@@ -228,7 +241,31 @@ public class NativeUtils {
                     e);
         }
 
+        // Capture file identity before loading
+        Object fileKeyBeforeLoad = null;
+        if (isPosixCompliant()) {
+            try {
+                BasicFileAttributes attrs = Files.readAttributes(temp.toPath(), BasicFileAttributes.class);
+                fileKeyBeforeLoad = attrs.fileKey();
+            } catch (IOException e) {
+                cleanupTempFile(temp);
+                throw new IOException("Failed to read file attributes for security verification", e);
+            }
+        }
+
         try {
+            // Verify file identity immediately before loading
+            if (isPosixCompliant() && fileKeyBeforeLoad != null) {
+                BasicFileAttributes attrsAtLoad =
+                        Files.readAttributes(temp.toPath(), BasicFileAttributes.class);
+                Object fileKeyAtLoad = attrsAtLoad.fileKey();
+                if (!fileKeyBeforeLoad.equals(fileKeyAtLoad)) {
+                    cleanupTempFile(temp);
+                    throw new SecurityException(
+                            "Security violation: Native library file was modified between extraction and loading."
+                                    + " This may indicate a TOCTOU attack.");
+                }
+            }
             System.load(temp.getAbsolutePath());
         } catch (UnsatisfiedLinkError e) {
             throw new RuntimeException(
@@ -261,13 +298,32 @@ public class NativeUtils {
         }
     }
 
+    /**
+     * Creates a secure temporary directory with cryptographically random name.
+     *
+     * <p>Uses {@link Files#createTempDirectory} which provides:
+     *
+     * <ul>
+     *   <li>Cryptographically random directory names (prevents prediction attacks)
+     *   <li>Atomic directory creation (prevents TOCTOU race conditions)
+     *   <li>Restrictive permissions (700) on POSIX systems
+     * </ul>
+     *
+     * @param prefix The prefix string to be used in generating the directory's name
+     * @return A newly created temporary directory
+     * @throws IOException If the directory cannot be created
+     */
     private static File createTempDirectory(String prefix) throws IOException {
-        String tempDir = System.getProperty("java.io.tmpdir");
-        File generatedDir = new File(tempDir, prefix + System.nanoTime());
-
-        if (!generatedDir.mkdir())
-            throw new IOException("Failed to create temp directory " + generatedDir.getName());
-
-        return generatedDir;
+        Path tempDir;
+        if (isPosixCompliant()) {
+            // On POSIX systems, create with restrictive permissions (owner-only: rwx------)
+            Set<PosixFilePermission> permissions = PosixFilePermissions.fromString("rwx------");
+            tempDir =
+                    Files.createTempDirectory(prefix, PosixFilePermissions.asFileAttribute(permissions));
+        } else {
+            // On non-POSIX systems (Windows), use default secure creation
+            tempDir = Files.createTempDirectory(prefix);
+        }
+        return tempDir.toFile();
     }
 }

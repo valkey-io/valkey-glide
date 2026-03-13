@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -49,6 +50,12 @@ public final class AsyncRegistry {
 
     /** Thread-safe ID generator for correlation IDs. */
     private static final AtomicLong nextId = new AtomicLong(1);
+
+    /**
+     * Shutdown flag to prevent race conditions between register() and shutdown()/failAllWithError().
+     * Once set to true, register() will return pre-failed futures instead of adding to the registry.
+     */
+    private static final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
     /**
      * Single-threaded scheduler for timeout tasks. Uses a daemon thread so it won't prevent JVM
@@ -98,16 +105,28 @@ public final class AsyncRegistry {
      * Register future with client-specific inflight limit, client handle for per-client tracking, and
      * optional Java-side timeout.
      *
+     * <p>If the registry is shutting down, the future will be completed exceptionally with a
+     * ClosingException and a special correlation ID (0) will be returned to indicate the registration
+     * failed.
+     *
      * @param future the future to register
      * @param maxInflightRequests per-client limit (0 = no Java-side limit, defer to core)
      * @param clientHandle native client handle for tracking
      * @param timeoutMillis Java-side timeout in milliseconds (0 = use Rust default timeout)
-     * @return correlation ID for native callback
+     * @return correlation ID for native callback, or 0 if shutdown is in progress
      */
     public static <T> long register(
             CompletableFuture<T> future, int maxInflightRequests, long clientHandle, long timeoutMillis) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
+        }
+
+        // Check shutdown flag before registering to prevent race conditions
+        // This ensures no futures are added after shutdown() starts clearing
+        if (isShutdown.get()) {
+            future.completeExceptionally(
+                    new ClosingException("Client is shutting down, cannot register new requests"));
+            return 0L; // Special ID indicating registration failed
         }
 
         // Client-specific inflight limit check
@@ -124,6 +143,18 @@ public final class AsyncRegistry {
 
         // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
+
+        // Double-check shutdown flag after insertion to handle race with shutdown()
+        // If shutdown started between our first check and the put(), clean up and fail
+        if (isShutdown.get()) {
+            activeFutures.remove(correlationId);
+            if (maxInflightRequests > 0) {
+                decrementInflightCount(clientHandle);
+            }
+            future.completeExceptionally(
+                    new ClosingException("Client is shutting down, cannot register new requests"));
+            return 0L;
+        }
 
         // Schedule Java-side timeout if configured (0 = defer to Rust core timeout)
         if (timeoutMillis > 0) {
@@ -273,6 +304,10 @@ public final class AsyncRegistry {
 
     /** Shutdown cleanup - cancel all pending operations during client shutdown. */
     public static void shutdown() {
+        // Set shutdown flag first to prevent new registrations
+        // This must happen before any clearing to avoid race conditions
+        isShutdown.set(true);
+
         // Cancel timeout tasks without interrupting (they're just scheduled, not running)
         timeoutTasks.values().forEach(task -> task.cancel(false));
         timeoutTasks.clear();
@@ -294,6 +329,10 @@ public final class AsyncRegistry {
      * @param errorMessage description of the failure cause
      */
     public static void failAllWithError(String errorMessage) {
+        // Set shutdown flag first to prevent new registrations
+        // This must happen before any clearing to avoid race conditions
+        isShutdown.set(true);
+
         String msg =
                 (errorMessage == null || errorMessage.isEmpty())
                         ? "Native callback infrastructure failed"
@@ -313,6 +352,9 @@ public final class AsyncRegistry {
 
     /** Reset all internal state. Intended for test isolation and client shutdown cleanup. */
     public static void reset() {
+        // Reset shutdown flag first to allow new registrations
+        isShutdown.set(false);
+
         // Cancel timeout tasks without interrupting
         timeoutTasks.values().forEach(task -> task.cancel(false));
         timeoutTasks.clear();
@@ -339,6 +381,15 @@ public final class AsyncRegistry {
      */
     public static int getActiveFutureCount() {
         return activeFutures.size();
+    }
+
+    /**
+     * Returns whether the registry is in shutdown state. Intended for testing and diagnostics.
+     *
+     * @return true if shutdown() or failAllWithError() has been called
+     */
+    public static boolean isShutdown() {
+        return isShutdown.get();
     }
 
     /**
