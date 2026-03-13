@@ -387,6 +387,22 @@ To run server modules test (it doesn't start servers):
 ./gradlew :integTest:modulesTest -Dcluster-endpoints=localhost:7000 -Dtls=true
 ```
 
+#### IAM Authentication Tests
+
+To run [IAM authentication tests](integTest/src/test/java/glide/AuthTest.java) locally, set the following environment variables:
+
+```bash
+export AWS_ACCESS_KEY_ID=test_access_key
+export AWS_SECRET_ACCESS_KEY=test_secret_key
+export AWS_SESSION_TOKEN=test_session_token
+```
+
+If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+
+**Important:** `System.setProperty()` does NOT work for setting AWS credentials because the Rust AWS SDK reads from the OS process environment, not JVM properties. Credentials must be set as OS environment variables **before** the JVM starts.
+
 #### DNS Tests
 
 To run [DNS tests](integTest/src/test/java/glide/DnsTest.java) locally:

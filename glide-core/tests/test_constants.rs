@@ -9,3 +9,8 @@ pub const HOSTNAME_TLS: &str = "valkey.glide.test.tls.com";
 pub const HOSTNAME_NO_TLS: &str = "valkey.glide.test.no_tls.com";
 pub const HOST_IPV4: &str = "127.0.0.1";
 pub const HOST_IPV6: &str = "::1";
+
+// IAM authentication test constants
+pub const IAM_USERNAME: &str = "default";
+pub const IAM_TEST_CLUSTER_NAME: &str = "test-cluster";
+pub const IAM_TEST_REGION_US_EAST_1: &str = "us-east-1";
