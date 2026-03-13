@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2"
-	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
 // TestPubSubExactCoexistence tests WaitForMessage and Pop working together
@@ -156,53 +155,6 @@ func (suite *GlideTestSuite) TestPubSubMaxSizeMessage() {
 				assert.Equal(t, string(largeMsg), msg.Message)
 			case <-time.After(5 * time.Second):
 				t.Fatal("Timeout waiting for large message")
-			}
-		})
-	}
-}
-
-// TestPubSubCustomCommand tests using CustomCommand with pubsub
-func (suite *GlideTestSuite) TestPubSubCustomCommand() {
-	clientTypes := []ClientType{StandaloneClient, ClusterClient}
-
-	for _, clientType := range clientTypes {
-		suite.T().Run(clientType.String(), func(t *testing.T) {
-			channel := "custom_cmd_test"
-
-			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
-			defer receiver.Close()
-
-			ctx := context.Background()
-			var queue *glide.PubSubMessageQueue
-
-			if clientType == StandaloneClient {
-				publisher := suite.defaultClient()
-				defer publisher.Close()
-				queue, _ = receiver.(*glide.Client).GetQueue()
-
-				time.Sleep(100 * time.Millisecond)
-
-				// Use CustomCommand to publish
-				publisher.CustomCommand(ctx, []string{"PUBLISH", channel, "test_msg"})
-			} else {
-				publisher := suite.defaultClusterClient()
-				defer publisher.Close()
-				queue, _ = receiver.(*glide.ClusterClient).GetQueue()
-
-				time.Sleep(100 * time.Millisecond)
-
-				// Use CustomCommandWithRoute to publish
-				publisher.CustomCommandWithRoute(ctx, []string{"PUBLISH", channel, "test_msg"}, config.RandomRoute)
-			}
-
-			time.Sleep(100 * time.Millisecond)
-
-			select {
-			case msg := <-queue.WaitForMessage():
-				assert.Equal(t, "test_msg", msg.Message)
-			case <-time.After(3 * time.Second):
-				t.Fatal("Timeout waiting for custom command message")
 			}
 		})
 	}

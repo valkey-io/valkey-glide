@@ -511,42 +511,107 @@ func (suite *GlideTestSuite) TestCustomCommandWithPubSub() {
 		suite.T().Run(clientType.String(), func(t *testing.T) {
 			ctx := context.Background()
 			channel := "custom_cmd_channel"
+			message := "custom_cmd_message"
 
-			channels := []ChannelDefn{
-				{Channel: channel, Mode: ExactMode},
-			}
-			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			// Create client without config-based subscriptions - we'll subscribe using custom_command
+			receiver := suite.CreatePubSubReceiver(clientType, nil, 10, false, ConfigMethod, t)
 			defer receiver.Close()
 
-			var state *models.PubSubState
+			// Create sender using createAnyClient
+			sender := suite.createAnyClient(clientType, nil)
+			defer sender.Close()
+
+			// Get the queue for reading messages
+			queue, err := receiver.(PubSubQueuer).GetQueue()
+			assert.NoError(t, err)
 
 			if clientType == StandaloneClient {
 				client := receiver.(*glide.Client)
 
-				// Execute custom command (PING)
-				result, err := client.CustomCommand(ctx, []string{"PING"})
+				// Subscribe using custom_command (lazy subscribe)
+				result, err := client.CustomCommand(ctx, []string{"SUBSCRIBE", channel})
 				assert.NoError(t, err)
-				assert.Equal(t, "PONG", result)
+				assert.Nil(t, result) // SUBSCRIBE returns nil
 
-				// Verify subscription still works after custom command
+				// Wait for subscription to be established
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify subscription is established
+				state, err := client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, exists := state.ActualSubscriptions[models.Exact][channel]
+				assert.True(t, exists, "Channel should be subscribed")
+
+				// Publish a message
+				err = suite.PublishMessage(sender, clientType, channel, message, false)
+				assert.NoError(t, err)
+
+				// Read the message from the queue
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, message, msg.Message)
+					assert.Equal(t, channel, msg.Channel)
+				case <-time.After(3 * time.Second):
+					t.Fatal("Timeout waiting for message")
+				}
+
+				// Unsubscribe using custom_command
+				result, err = client.CustomCommand(ctx, []string{"UNSUBSCRIBE", channel})
+				assert.NoError(t, err)
+				assert.Nil(t, result) // UNSUBSCRIBE returns nil
+
+				// Wait for unsubscription
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify unsubscription
 				state, err = client.GetSubscriptions(ctx)
 				assert.NoError(t, err)
+				_, exists = state.ActualSubscriptions[models.Exact][channel]
+				assert.False(t, exists, "Channel should be unsubscribed")
 			} else {
 				client := receiver.(*glide.ClusterClient)
 
-				// Execute custom command with route (PING)
-				result, err := client.CustomCommandWithRoute(ctx, []string{"PING"}, config.RandomRoute)
+				// Subscribe using custom_command (lazy subscribe)
+				result, err := client.CustomCommand(ctx, []string{"SUBSCRIBE", channel})
 				assert.NoError(t, err)
-				// ClusterClient returns ClusterValue, extract single value
-				assert.Equal(t, "PONG", result.SingleValue())
+				assert.Nil(t, result.SingleValue()) // SUBSCRIBE returns nil
 
-				// Verify subscription still works after custom command
+				// Wait for subscription to be established
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify subscription is established
+				state, err := client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, exists := state.ActualSubscriptions[models.Exact][channel]
+				assert.True(t, exists, "Channel should be subscribed")
+
+				// Publish a message
+				err = suite.PublishMessage(sender, clientType, channel, message, false)
+				assert.NoError(t, err)
+
+				// Read the message from the queue
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, message, msg.Message)
+					assert.Equal(t, channel, msg.Channel)
+				case <-time.After(3 * time.Second):
+					t.Fatal("Timeout waiting for message")
+				}
+
+				// Unsubscribe using custom_command
+				result, err = client.CustomCommand(ctx, []string{"UNSUBSCRIBE", channel})
+				assert.NoError(t, err)
+				assert.Nil(t, result.SingleValue()) // UNSUBSCRIBE returns nil
+
+				// Wait for unsubscription
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify unsubscription
 				state, err = client.GetSubscriptions(ctx)
 				assert.NoError(t, err)
+				_, exists = state.ActualSubscriptions[models.Exact][channel]
+				assert.False(t, exists, "Channel should be unsubscribed")
 			}
-
-			_, exists := state.ActualSubscriptions[models.Exact][channel]
-			assert.True(t, exists)
 		})
 	}
 }

@@ -37,7 +37,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 	assert.True(suite.T(), exists, "Initial subscription should exist")
 
 	// Kill all connections
-	_, _ = client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	_, _ = client.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 	// Error expected since we killed our own connection
 
 	// Wait for reconnection and resubscription
@@ -61,8 +61,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 	_, exists = state.ActualSubscriptions[models.Exact][channel]
 	assert.True(suite.T(), exists)
 
-	// Kill connections on cluster
-	_, _ = clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections on cluster
+	_, _ = clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 
@@ -108,8 +108,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillManyChannels() {
 					assert.True(t, exists, "Channel %s should be subscribed", channelName)
 				}
 
-				// Kill connections
-				client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+				// Kill all connections
+				client.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 				time.Sleep(2 * time.Second)
 
@@ -125,8 +125,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillManyChannels() {
 					assert.True(t, exists, "Channel %s should be subscribed", channelName)
 				}
 
-				// Kill connections using CustomCommandWithRoute
-				client.CustomCommandWithRoute(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"}, config.AllNodes)
+				// Kill all connections using CustomCommandWithRoute
+				client.CustomCommandWithRoute(ctx, []string{"CLIENT", "KILL"}, config.AllNodes)
 
 				time.Sleep(2 * time.Second)
 
@@ -165,8 +165,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillPatterns() {
 	_, exists := state.ActualSubscriptions[models.Pattern][pattern]
 	assert.True(suite.T(), exists, "Initial pattern subscription should exist")
 
-	// Kill connections
-	client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections
+	client.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 
@@ -188,7 +188,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillPatterns() {
 	_, exists = state.ActualSubscriptions[models.Pattern][pattern]
 	assert.True(suite.T(), exists)
 
-	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections
+	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 
@@ -221,8 +222,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillSharded() {
 	_, exists := state.ActualSubscriptions[models.Sharded][channel]
 	assert.True(suite.T(), exists, "Initial sharded subscription should exist")
 
-	// Kill connections
-	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections
+	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 

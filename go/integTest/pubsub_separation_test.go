@@ -3,12 +3,10 @@
 package integTest
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/valkey-io/valkey-glide/go/v2"
 )
 
 // TestChannelSeparation tests that different channels don't interfere
@@ -28,31 +26,16 @@ func (suite *GlideTestSuite) TestChannelSeparation() {
 			receiver2 := suite.CreatePubSubReceiver(clientType, channels2, 2, false, ConfigMethod, t)
 			defer receiver2.Close()
 
-			ctx := context.Background()
-			var queue1, queue2 *glide.PubSubMessageQueue
-			var standalonePublisher *glide.Client
-			var clusterPublisher *glide.ClusterClient
+			publisher := suite.createAnyClient(clientType, nil)
+			defer publisher.Close()
 
-			if clientType == StandaloneClient {
-				standalonePublisher = suite.defaultClient()
-				defer standalonePublisher.Close()
-				queue1, _ = receiver1.(*glide.Client).GetQueue()
-				queue2, _ = receiver2.(*glide.Client).GetQueue()
-			} else {
-				clusterPublisher = suite.defaultClusterClient()
-				defer clusterPublisher.Close()
-				queue1, _ = receiver1.(*glide.ClusterClient).GetQueue()
-				queue2, _ = receiver2.(*glide.ClusterClient).GetQueue()
-			}
+			queue1, _ := receiver1.(PubSubQueuer).GetQueue()
+			queue2, _ := receiver2.(PubSubQueuer).GetQueue()
 
 			time.Sleep(200 * time.Millisecond)
 
 			// Publish to channel1
-			if clientType == StandaloneClient {
-				standalonePublisher.Publish(ctx, channel1, "msg1")
-			} else {
-				clusterPublisher.Publish(ctx, channel1, "msg1", false)
-			}
+			suite.PublishMessage(publisher, clientType, channel1, "msg1", false)
 			time.Sleep(300 * time.Millisecond)
 
 			// Only receiver1 should get it
@@ -68,11 +51,7 @@ func (suite *GlideTestSuite) TestChannelSeparation() {
 			assert.Nil(t, msg, "receiver2 should not get channel1 message")
 
 			// Publish to channel2
-			if clientType == StandaloneClient {
-				standalonePublisher.Publish(ctx, channel2, "msg2")
-			} else {
-				clusterPublisher.Publish(ctx, channel2, "msg2", false)
-			}
+			suite.PublishMessage(publisher, clientType, channel2, "msg2", false)
 			time.Sleep(300 * time.Millisecond)
 
 			// Only receiver2 should get it
@@ -105,30 +84,15 @@ func (suite *GlideTestSuite) TestMultipleClientsOneChannel() {
 			receiver2 := suite.CreatePubSubReceiver(clientType, channels, 2, false, ConfigMethod, t)
 			defer receiver2.Close()
 
-			ctx := context.Background()
-			var queue1, queue2 *glide.PubSubMessageQueue
-			var standalonePublisher *glide.Client
-			var clusterPublisher *glide.ClusterClient
+			publisher := suite.createAnyClient(clientType, nil)
+			defer publisher.Close()
 
-			if clientType == StandaloneClient {
-				standalonePublisher = suite.defaultClient()
-				defer standalonePublisher.Close()
-				queue1, _ = receiver1.(*glide.Client).GetQueue()
-				queue2, _ = receiver2.(*glide.Client).GetQueue()
-			} else {
-				clusterPublisher = suite.defaultClusterClient()
-				defer clusterPublisher.Close()
-				queue1, _ = receiver1.(*glide.ClusterClient).GetQueue()
-				queue2, _ = receiver2.(*glide.ClusterClient).GetQueue()
-			}
+			queue1, _ := receiver1.(PubSubQueuer).GetQueue()
+			queue2, _ := receiver2.(PubSubQueuer).GetQueue()
 
 			time.Sleep(100 * time.Millisecond)
 
-			if clientType == StandaloneClient {
-				standalonePublisher.Publish(ctx, channel, "broadcast")
-			} else {
-				clusterPublisher.Publish(ctx, channel, "broadcast", false)
-			}
+			suite.PublishMessage(publisher, clientType, channel, "broadcast", false)
 			time.Sleep(200 * time.Millisecond)
 
 			// Both should receive
