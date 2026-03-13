@@ -805,6 +805,33 @@ impl Client {
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // Check for IAM token changes and update the password without authentication if needed (pull model)
+            if let Some(iam_manager) = &self.iam_token_manager
+                && iam_manager.token_changed()
+            {
+                // Token has changed, retrieve it and update the password without authentication
+                let current_token = iam_manager.get_token().await;
+
+                // Check if token is empty (edge case during initialization)
+                if current_token.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "IAM token not available",
+                    )));
+                }
+
+                // Clear the flag BEFORE calling update_connection_password
+                iam_manager.clear_token_changed();
+
+                // Authenticate with new token using immediate_auth=false
+                log_debug(
+                    "update_connection_password",
+                    "Updating connection password with IAM token",
+                );
+                self.update_connection_password(Some(current_token), false)
+                    .await?;
+            }
+
             let client = self.get_or_initialize_client().await?;
 
             if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
@@ -1275,10 +1302,7 @@ impl Client {
     /// Send AUTH command using IAM token (preferred) or the provided password
     async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
         // Determine the password to use for authentication
-        let pass = if let Some(iam_manager) = &self.iam_token_manager {
-            log_debug("send_immediate_auth", "Using IAM token for authentication");
-            iam_manager.get_token().await
-        } else if let Some(ref password) = password {
+        let pass = if let Some(ref password) = password {
             if password.is_empty() {
                 return Err(RedisError::from((
                     ErrorKind::UserOperationError,
@@ -1333,53 +1357,20 @@ impl Client {
         }
     }
 
-    /// IAM token refresh callback function
-    ///
-    /// On new token, spawns a task that write-locks the `Client` and calls
-    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
-    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
-    fn iam_callback(
-        client_arc: Arc<tokio::sync::RwLock<Client>>,
-    ) -> impl Fn(String) + Send + 'static {
-        move |new_token: String| {
-            let client_arc = Arc::clone(&client_arc);
-            tokio::spawn(async move {
-                let mut client = client_arc.write().await;
-                let result = client
-                    .update_connection_password(Some(new_token.clone()), true)
-                    .await;
-
-                if let Err(e) = result {
-                    log_error(
-                        "IAM token refresh",
-                        format!("Failed to update connection password with immediate auth: {e}"),
-                    );
-                }
-            });
-        }
-    }
-
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
-    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
-    /// can always reach the client. (Note: this can create a retain cycle unless you
-    /// stop the refresh task and drop the manager explicitly.)
+    /// Client retrieves tokens on-demand during command execution.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-        client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
     ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
-                // Set up callback to update connection password when token refreshes
-                let iam_callback = Self::iam_callback(std::sync::Arc::clone(&client_arc));
-
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
-                    Some(std::sync::Arc::new(iam_callback)),
                 )
                 .await
                 {
@@ -1913,9 +1904,9 @@ impl Client {
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            // Create IAM token manager if needed, passing a strong Arc to the callback
+            // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, Arc::clone(&client_arc)).await
+                Self::create_iam_token_manager(auth_info).await
             } else {
                 None
             };
