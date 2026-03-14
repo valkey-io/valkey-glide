@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -1277,5 +1278,37 @@ func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_ErrorHandli
 
 		// End parent span after operations complete
 		otelInstance.EndSpan(parentSpan)
+	})
+}
+
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientScriptInvocationSpan() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
+		// Wait for any existing spans to be flushed
+		time.Sleep(500 * time.Millisecond)
+
+		// Remove any existing span file
+		if _, err := os.Stat(validEndpointTraces); err == nil {
+			err = os.Remove(validEndpointTraces)
+			require.NoError(suite.T(), err)
+		}
+
+		script := options.NewScript("return 'Hello'")
+		defer script.Close()
+		result, err := client.InvokeScript(context.Background(), *script)
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "Hello", result)
+
+		// Wait for spans to be flushed
+		time.Sleep(5 * time.Second)
+
+		// Read and verify spans
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+
+		// Check for expected EVALSHA span
+		assert.Contains(suite.T(), spans.SpanNames, "EVALSHA", "Should find EVALSHA span in exported spans")
 	})
 }
