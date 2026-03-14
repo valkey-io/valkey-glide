@@ -171,86 +171,143 @@ func (suite *GlideTestSuite) TestPubSub_Basic_CombinedExactPatternMultipleSubscr
 }
 
 func (suite *GlideTestSuite) TestSubscribeEmptySetRaisesError() {
-	ctx := context.Background()
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: "initial", Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+
+			channels := []ChannelDefn{
+				{Channel: "initial", Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			// Empty slice should raise error
+			var err error
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+				err = client.Subscribe(ctx, []string{}, 5000)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+				err = client.Subscribe(ctx, []string{}, 5000)
+			}
+			assert.Error(t, err)
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	client := receiver.(*glide.Client)
-
-	// Empty slice should raise error
-	err := client.Subscribe(ctx, []string{}, 5000)
-	assert.Error(suite.T(), err)
 }
 
 func (suite *GlideTestSuite) TestUnsubscribeSpecificChannels() {
-	ctx := context.Background()
-	channel1 := "unsub_channel_1"
-	channel2 := "unsub_channel_2"
-	channel3 := "unsub_channel_3"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: channel1, Mode: ExactMode},
-		{Channel: channel2, Mode: ExactMode},
-		{Channel: channel3, Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channel1 := "unsub_channel_1"
+			channel2 := "unsub_channel_2"
+			channel3 := "unsub_channel_3"
+
+			channels := []ChannelDefn{
+				{Channel: channel1, Mode: ExactMode},
+				{Channel: channel2, Mode: ExactMode},
+				{Channel: channel3, Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			time.Sleep(200 * time.Millisecond)
+
+			// Get subscriptions and unsubscribe based on client type
+			var state *models.PubSubState
+			var err error
+
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				assert.Equal(t, 3, len(state.ActualSubscriptions[models.Exact]))
+
+				// Unsubscribe from one (blocking - no sleep needed)
+				err = client.Unsubscribe(ctx, []string{channel1}, 5000)
+				assert.NoError(t, err)
+
+				// Verify only 2 remain
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				assert.Equal(t, 3, len(state.ActualSubscriptions[models.Exact]))
+
+				// Unsubscribe from one (blocking - no sleep needed)
+				err = client.Unsubscribe(ctx, []string{channel1}, 5000)
+				assert.NoError(t, err)
+
+				// Verify only 2 remain
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			_, exists := state.ActualSubscriptions[models.Exact][channel1]
+			assert.False(t, exists)
+			_, exists = state.ActualSubscriptions[models.Exact][channel2]
+			assert.True(t, exists)
+			_, exists = state.ActualSubscriptions[models.Exact][channel3]
+			assert.True(t, exists)
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	time.Sleep(200 * time.Millisecond)
-
-	client := receiver.(*glide.Client)
-
-	// Verify all subscribed
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), 3, len(state.ActualSubscriptions[models.Exact]))
-
-	// Unsubscribe from one (blocking - no sleep needed)
-	err = client.Unsubscribe(ctx, []string{channel1}, 5000)
-	assert.NoError(suite.T(), err)
-
-	// Verify only 2 remain
-	state, err = client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	_, exists := state.ActualSubscriptions[models.Exact][channel1]
-	assert.False(suite.T(), exists)
-	_, exists = state.ActualSubscriptions[models.Exact][channel2]
-	assert.True(suite.T(), exists)
-	_, exists = state.ActualSubscriptions[models.Exact][channel3]
-	assert.True(suite.T(), exists)
 }
 
 func (suite *GlideTestSuite) TestPUnsubscribeSpecificPatterns() {
-	ctx := context.Background()
-	pattern1 := "pattern1_*"
-	pattern2 := "pattern2_*"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: pattern1, Mode: PatternMode},
-		{Channel: pattern2, Mode: PatternMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			pattern1 := "pattern1_*"
+			pattern2 := "pattern2_*"
+
+			channels := []ChannelDefn{
+				{Channel: pattern1, Mode: PatternMode},
+				{Channel: pattern2, Mode: PatternMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			time.Sleep(200 * time.Millisecond)
+
+			var state *models.PubSubState
+			var err error
+
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+
+				// Unsubscribe from one pattern (blocking - no sleep needed)
+				err = client.PUnsubscribe(ctx, []string{pattern1}, 5000)
+				assert.NoError(t, err)
+
+				// Verify only pattern2 remains
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+
+				// Unsubscribe from one pattern (blocking - no sleep needed)
+				err = client.PUnsubscribe(ctx, []string{pattern1}, 5000)
+				assert.NoError(t, err)
+
+				// Verify only pattern2 remains
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			_, exists := state.ActualSubscriptions[models.Pattern][pattern1]
+			assert.False(t, exists)
+			_, exists = state.ActualSubscriptions[models.Pattern][pattern2]
+			assert.True(t, exists)
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	time.Sleep(200 * time.Millisecond)
-
-	client := receiver.(*glide.Client)
-
-	// Unsubscribe from one pattern (blocking - no sleep needed)
-	err := client.PUnsubscribe(ctx, []string{pattern1}, 5000)
-	assert.NoError(suite.T(), err)
-
-	// Verify only pattern2 remains
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	_, exists := state.ActualSubscriptions[models.Pattern][pattern1]
-	assert.False(suite.T(), exists)
-	_, exists = state.ActualSubscriptions[models.Pattern][pattern2]
-	assert.True(suite.T(), exists)
 }
 
 func (suite *GlideTestSuite) TestSUnsubscribeSpecificShardedChannels() {
@@ -285,229 +342,486 @@ func (suite *GlideTestSuite) TestSUnsubscribeSpecificShardedChannels() {
 }
 
 func (suite *GlideTestSuite) TestUnsubscribeAllTypes() {
-	ctx := context.Background()
-	channel := "test_channel"
-	pattern := "test_pattern_*"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: channel, Mode: ExactMode},
-		{Channel: pattern, Mode: PatternMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channel := "test_channel"
+			pattern := "test_pattern_*"
+
+			channels := []ChannelDefn{
+				{Channel: channel, Mode: ExactMode},
+				{Channel: pattern, Mode: PatternMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			time.Sleep(200 * time.Millisecond)
+
+			var state *models.PubSubState
+			var err error
+
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+
+				// Verify both types subscribed
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				assert.Greater(t, len(state.ActualSubscriptions[models.Exact]), 0)
+				assert.Greater(t, len(state.ActualSubscriptions[models.Pattern]), 0)
+
+				// Unsubscribe from all exact channels
+				err = client.Unsubscribe(ctx, nil, 5000)
+				assert.NoError(t, err)
+
+				time.Sleep(200 * time.Millisecond)
+
+				// Verify exact channels gone, patterns remain
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				assert.Equal(t, 0, len(state.ActualSubscriptions[models.Exact]))
+				assert.Greater(t, len(state.ActualSubscriptions[models.Pattern]), 0)
+
+				// Unsubscribe from all patterns
+				err = client.PUnsubscribe(ctx, nil, 5000)
+				assert.NoError(t, err)
+
+				time.Sleep(200 * time.Millisecond)
+
+				// Verify all gone
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+
+				// Verify both types subscribed
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				assert.Greater(t, len(state.ActualSubscriptions[models.Exact]), 0)
+				assert.Greater(t, len(state.ActualSubscriptions[models.Pattern]), 0)
+
+				// Unsubscribe from all exact channels
+				err = client.Unsubscribe(ctx, nil, 5000)
+				assert.NoError(t, err)
+
+				time.Sleep(200 * time.Millisecond)
+
+				// Verify exact channels gone, patterns remain
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				assert.Equal(t, 0, len(state.ActualSubscriptions[models.Exact]))
+				assert.Greater(t, len(state.ActualSubscriptions[models.Pattern]), 0)
+
+				// Unsubscribe from all patterns
+				err = client.PUnsubscribe(ctx, nil, 5000)
+				assert.NoError(t, err)
+
+				time.Sleep(200 * time.Millisecond)
+
+				// Verify all gone
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, 0, len(state.ActualSubscriptions[models.Exact]))
+			assert.Equal(t, 0, len(state.ActualSubscriptions[models.Pattern]))
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	time.Sleep(200 * time.Millisecond)
-
-	client := receiver.(*glide.Client)
-
-	// Verify both types subscribed
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	assert.Greater(suite.T(), len(state.ActualSubscriptions[models.Exact]), 0)
-	assert.Greater(suite.T(), len(state.ActualSubscriptions[models.Pattern]), 0)
-
-	// Unsubscribe from all exact channels
-	err = client.Unsubscribe(ctx, nil, 5000)
-	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
-
-	// Verify exact channels gone, patterns remain
-	state, err = client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), 0, len(state.ActualSubscriptions[models.Exact]))
-	assert.Greater(suite.T(), len(state.ActualSubscriptions[models.Pattern]), 0)
-
-	// Unsubscribe from all patterns
-	err = client.PUnsubscribe(ctx, nil, 5000)
-	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
-
-	// Verify all gone
-	state, err = client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), 0, len(state.ActualSubscriptions[models.Exact]))
-	assert.Equal(suite.T(), 0, len(state.ActualSubscriptions[models.Pattern]))
 }
 
 func (suite *GlideTestSuite) TestMixedSubscriptionMethodsAllTypes() {
-	ctx := context.Background()
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: "initial", Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+
+			channels := []ChannelDefn{
+				{Channel: "initial", Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			var state *models.PubSubState
+			var err error
+
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+
+				// Mix lazy and blocking for exact channels
+				err = client.SubscribeLazy(ctx, []string{"lazy_exact"})
+				assert.NoError(t, err)
+
+				err = client.Subscribe(ctx, []string{"blocking_exact"}, 5000)
+				assert.NoError(t, err)
+
+				// Mix lazy and blocking for patterns
+				err = client.PSubscribeLazy(ctx, []string{"lazy_pattern_*"})
+				assert.NoError(t, err)
+
+				err = client.PSubscribe(ctx, []string{"blocking_pattern_*"}, 5000)
+				assert.NoError(t, err)
+
+				time.Sleep(300 * time.Millisecond)
+
+				// Verify all subscriptions exist
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+
+				// Mix lazy and blocking for exact channels
+				err = client.SubscribeLazy(ctx, []string{"lazy_exact"})
+				assert.NoError(t, err)
+
+				err = client.Subscribe(ctx, []string{"blocking_exact"}, 5000)
+				assert.NoError(t, err)
+
+				// Mix lazy and blocking for patterns
+				err = client.PSubscribeLazy(ctx, []string{"lazy_pattern_*"})
+				assert.NoError(t, err)
+
+				err = client.PSubscribe(ctx, []string{"blocking_pattern_*"}, 5000)
+				assert.NoError(t, err)
+
+				time.Sleep(300 * time.Millisecond)
+
+				// Verify all subscriptions exist
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			_, exists := state.ActualSubscriptions[models.Exact]["lazy_exact"]
+			assert.True(t, exists)
+			_, exists = state.ActualSubscriptions[models.Exact]["blocking_exact"]
+			assert.True(t, exists)
+			_, exists = state.ActualSubscriptions[models.Pattern]["lazy_pattern_*"]
+			assert.True(t, exists)
+			_, exists = state.ActualSubscriptions[models.Pattern]["blocking_pattern_*"]
+			assert.True(t, exists)
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	client := receiver.(*glide.Client)
-
-	// Mix lazy and blocking for exact channels
-	err := client.SubscribeLazy(ctx, []string{"lazy_exact"})
-	assert.NoError(suite.T(), err)
-
-	err = client.Subscribe(ctx, []string{"blocking_exact"}, 5000)
-	assert.NoError(suite.T(), err)
-
-	// Mix lazy and blocking for patterns
-	err = client.PSubscribeLazy(ctx, []string{"lazy_pattern_*"})
-	assert.NoError(suite.T(), err)
-
-	err = client.PSubscribe(ctx, []string{"blocking_pattern_*"}, 5000)
-	assert.NoError(suite.T(), err)
-
-	time.Sleep(300 * time.Millisecond)
-
-	// Verify all subscriptions exist
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-
-	_, exists := state.ActualSubscriptions[models.Exact]["lazy_exact"]
-	assert.True(suite.T(), exists)
-	_, exists = state.ActualSubscriptions[models.Exact]["blocking_exact"]
-	assert.True(suite.T(), exists)
-	_, exists = state.ActualSubscriptions[models.Pattern]["lazy_pattern_*"]
-	assert.True(suite.T(), exists)
-	_, exists = state.ActualSubscriptions[models.Pattern]["blocking_pattern_*"]
-	assert.True(suite.T(), exists)
 }
 
 func (suite *GlideTestSuite) TestCustomCommandWithPubSub() {
-	ctx := context.Background()
-	channel := "custom_cmd_channel"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: channel, Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channel := "custom_cmd_channel"
+			message := "custom_cmd_message"
+
+			// Create client without config-based subscriptions - we'll subscribe using custom_command
+			receiver := suite.CreatePubSubReceiver(clientType, nil, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			// Create sender using createAnyClient
+			sender := suite.createAnyClient(clientType, nil)
+			defer sender.Close()
+
+			// Get the queue for reading messages
+			queue, err := receiver.(PubSubQueuer).GetQueue()
+			assert.NoError(t, err)
+
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+
+				// Subscribe using custom_command (lazy subscribe)
+				result, err := client.CustomCommand(ctx, []string{"SUBSCRIBE", channel})
+				assert.NoError(t, err)
+				assert.Nil(t, result) // SUBSCRIBE returns nil
+
+				// Wait for subscription to be established
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify subscription is established
+				state, err := client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, exists := state.ActualSubscriptions[models.Exact][channel]
+				assert.True(t, exists, "Channel should be subscribed")
+
+				// Publish a message
+				err = suite.PublishMessage(sender, clientType, channel, message, false)
+				assert.NoError(t, err)
+
+				// Read the message from the queue
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, message, msg.Message)
+					assert.Equal(t, channel, msg.Channel)
+				case <-time.After(3 * time.Second):
+					t.Fatal("Timeout waiting for message")
+				}
+
+				// Unsubscribe using custom_command
+				result, err = client.CustomCommand(ctx, []string{"UNSUBSCRIBE", channel})
+				assert.NoError(t, err)
+				assert.Nil(t, result) // UNSUBSCRIBE returns nil
+
+				// Wait for unsubscription
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify unsubscription
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, exists = state.ActualSubscriptions[models.Exact][channel]
+				assert.False(t, exists, "Channel should be unsubscribed")
+			} else {
+				client := receiver.(*glide.ClusterClient)
+
+				// Subscribe using custom_command (lazy subscribe)
+				result, err := client.CustomCommand(ctx, []string{"SUBSCRIBE", channel})
+				assert.NoError(t, err)
+				assert.Nil(t, result.SingleValue()) // SUBSCRIBE returns nil
+
+				// Wait for subscription to be established
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify subscription is established
+				state, err := client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, exists := state.ActualSubscriptions[models.Exact][channel]
+				assert.True(t, exists, "Channel should be subscribed")
+
+				// Publish a message
+				err = suite.PublishMessage(sender, clientType, channel, message, false)
+				assert.NoError(t, err)
+
+				// Read the message from the queue
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, message, msg.Message)
+					assert.Equal(t, channel, msg.Channel)
+				case <-time.After(3 * time.Second):
+					t.Fatal("Timeout waiting for message")
+				}
+
+				// Unsubscribe using custom_command
+				result, err = client.CustomCommand(ctx, []string{"UNSUBSCRIBE", channel})
+				assert.NoError(t, err)
+				assert.Nil(t, result.SingleValue()) // UNSUBSCRIBE returns nil
+
+				// Wait for unsubscription
+				time.Sleep(500 * time.Millisecond)
+
+				// Verify unsubscription
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, exists = state.ActualSubscriptions[models.Exact][channel]
+				assert.False(t, exists, "Channel should be unsubscribed")
+			}
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	client := receiver.(*glide.Client)
-
-	// Execute custom command (PING)
-	result, err := client.CustomCommand(ctx, []string{"PING"})
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "PONG", result)
-
-	// Verify subscription still works after custom command
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	_, exists := state.ActualSubscriptions[models.Exact][channel]
-	assert.True(suite.T(), exists)
 }
 
 func (suite *GlideTestSuite) TestLazyVsBlockingBehavior() {
-	ctx := context.Background()
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: "initial", Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+
+			channels := []ChannelDefn{
+				{Channel: "initial", Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			var state *models.PubSubState
+			var err error
+			var lazyDuration, blockingDuration time.Duration
+
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+
+				// Lazy subscribe returns immediately, subscription may not be active yet
+				start := time.Now()
+				err = client.SubscribeLazy(ctx, []string{"lazy_channel"})
+				lazyDuration = time.Since(start)
+				assert.NoError(t, err)
+				assert.Less(t, lazyDuration, 50*time.Millisecond, "Lazy should return immediately")
+
+				// Check subscription state - may not be in actual yet
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, inDesired := state.DesiredSubscriptions[models.Exact]["lazy_channel"]
+				assert.True(t, inDesired, "Should be in desired immediately")
+
+				// Blocking subscribe waits for confirmation
+				start = time.Now()
+				err = client.Subscribe(ctx, []string{"blocking_channel"}, 5000)
+				blockingDuration = time.Since(start)
+				assert.NoError(t, err)
+				t.Logf("Blocking took %v", blockingDuration)
+
+				// Check subscription state - should be in actual
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+
+				// Lazy subscribe returns immediately, subscription may not be active yet
+				start := time.Now()
+				err = client.SubscribeLazy(ctx, []string{"lazy_channel"})
+				lazyDuration = time.Since(start)
+				assert.NoError(t, err)
+				assert.Less(t, lazyDuration, 50*time.Millisecond, "Lazy should return immediately")
+
+				// Check subscription state - may not be in actual yet
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, inDesired := state.DesiredSubscriptions[models.Exact]["lazy_channel"]
+				assert.True(t, inDesired, "Should be in desired immediately")
+
+				// Blocking subscribe waits for confirmation
+				start = time.Now()
+				err = client.Subscribe(ctx, []string{"blocking_channel"}, 5000)
+				blockingDuration = time.Since(start)
+				assert.NoError(t, err)
+				t.Logf("Blocking took %v", blockingDuration)
+
+				// Check subscription state - should be in actual
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			_, inActual := state.ActualSubscriptions[models.Exact]["blocking_channel"]
+			assert.True(t, inActual, "Should be in actual after blocking returns")
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	client := receiver.(*glide.Client)
-
-	// Lazy subscribe returns immediately, subscription may not be active yet
-	start := time.Now()
-	err := client.SubscribeLazy(ctx, []string{"lazy_channel"})
-	lazyDuration := time.Since(start)
-	assert.NoError(suite.T(), err)
-	assert.Less(suite.T(), lazyDuration, 50*time.Millisecond, "Lazy should return immediately")
-
-	// Check subscription state - may not be in actual yet
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	_, inDesired := state.DesiredSubscriptions[models.Exact]["lazy_channel"]
-	assert.True(suite.T(), inDesired, "Should be in desired immediately")
-
-	// Blocking subscribe waits for confirmation
-	start = time.Now()
-	err = client.Subscribe(ctx, []string{"blocking_channel"}, 5000)
-	blockingDuration := time.Since(start)
-	assert.NoError(suite.T(), err)
-	suite.T().Logf("Blocking took %v", blockingDuration)
-
-	// Check subscription state - should be in actual
-	state, err = client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	_, inActual := state.ActualSubscriptions[models.Exact]["blocking_channel"]
-	assert.True(suite.T(), inActual, "Should be in actual after blocking returns")
 }
 
 func (suite *GlideTestSuite) TestGetSubscriptionsDesiredVsActual() {
-	ctx := context.Background()
-	channel := "test_desired_actual"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{
-		{Channel: "initial", Mode: ExactMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channel := "test_desired_actual"
+
+			channels := []ChannelDefn{
+				{Channel: "initial", Mode: ExactMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			var state *models.PubSubState
+			var err error
+
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+
+				// Use lazy subscribe
+				err = client.SubscribeLazy(ctx, []string{channel})
+				assert.NoError(t, err)
+
+				// Immediately check - should be in desired, may not be in actual yet
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, inDesired := state.DesiredSubscriptions[models.Exact][channel]
+				assert.True(t, inDesired, "Should be in desired immediately")
+
+				// Wait for reconciliation
+				time.Sleep(500 * time.Millisecond)
+
+				// Now should be in actual too
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+
+				// Use lazy subscribe
+				err = client.SubscribeLazy(ctx, []string{channel})
+				assert.NoError(t, err)
+
+				// Immediately check - should be in desired, may not be in actual yet
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				_, inDesired := state.DesiredSubscriptions[models.Exact][channel]
+				assert.True(t, inDesired, "Should be in desired immediately")
+
+				// Wait for reconciliation
+				time.Sleep(500 * time.Millisecond)
+
+				// Now should be in actual too
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			_, inActual := state.ActualSubscriptions[models.Exact][channel]
+			assert.True(t, inActual, "Should be in actual after reconciliation")
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	client := receiver.(*glide.Client)
-
-	// Use lazy subscribe
-	err := client.SubscribeLazy(ctx, []string{channel})
-	assert.NoError(suite.T(), err)
-
-	// Immediately check - should be in desired, may not be in actual yet
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	_, inDesired := state.DesiredSubscriptions[models.Exact][channel]
-	assert.True(suite.T(), inDesired, "Should be in desired immediately")
-
-	// Wait for reconciliation
-	time.Sleep(500 * time.Millisecond)
-
-	// Now should be in actual too
-	state, err = client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	_, inActual := state.ActualSubscriptions[models.Exact][channel]
-	assert.True(suite.T(), inActual, "Should be in actual after reconciliation")
 }
 
 func (suite *GlideTestSuite) TestTwoPublishingClientsSameName() {
-	ctx := context.Background()
-	channel := "same_name_channel"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Create subscriber
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channel := "same_name_channel"
 
-	time.Sleep(200 * time.Millisecond)
+			// Create subscriber
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Create two publishers
-	pub1 := suite.defaultClient()
-	defer pub1.Close()
-	pub2 := suite.defaultClient()
-	defer pub2.Close()
+			time.Sleep(200 * time.Millisecond)
 
-	// Both publish to same channel
-	_, err := pub1.Publish(ctx, channel, "message_from_pub1")
-	assert.NoError(suite.T(), err)
-	_, err = pub2.Publish(ctx, channel, "message_from_pub2")
-	assert.NoError(suite.T(), err)
+			// Create two publishers and publish based on client type
+			if clientType == StandaloneClient {
+				pub1 := suite.defaultClient()
+				defer pub1.Close()
+				pub2 := suite.defaultClient()
+				defer pub2.Close()
 
-	time.Sleep(200 * time.Millisecond)
+				// Both publish to same channel
+				_, err := pub1.Publish(ctx, channel, "message_from_pub1")
+				assert.NoError(t, err)
+				_, err = pub2.Publish(ctx, channel, "message_from_pub2")
+				assert.NoError(t, err)
+			} else {
+				pub1 := suite.defaultClusterClient()
+				defer pub1.Close()
+				pub2 := suite.defaultClusterClient()
+				defer pub2.Close()
 
-	// Verify both messages received
-	client := receiver.(*glide.Client)
-	queue, err := client.GetQueue()
-	assert.NoError(suite.T(), err)
+				// Both publish to same channel
+				_, err := pub1.Publish(ctx, channel, "message_from_pub1", false)
+				assert.NoError(t, err)
+				_, err = pub2.Publish(ctx, channel, "message_from_pub2", false)
+				assert.NoError(t, err)
+			}
 
-	messages := make(map[string]bool)
-	for i := 0; i < 2; i++ {
-		select {
-		case msg := <-queue.WaitForMessage():
-			messages[msg.Message] = true
-		case <-time.After(2 * time.Second):
-			suite.T().Fatalf("Failed to receive message %d/2", i+1)
-		}
+			time.Sleep(200 * time.Millisecond)
+
+			// Verify both messages received
+			var queue *glide.PubSubMessageQueue
+			var err error
+			if clientType == StandaloneClient {
+				queue, err = receiver.(*glide.Client).GetQueue()
+			} else {
+				queue, err = receiver.(*glide.ClusterClient).GetQueue()
+			}
+			assert.NoError(t, err)
+
+			messages := make(map[string]bool)
+			for i := 0; i < 2; i++ {
+				select {
+				case msg := <-queue.WaitForMessage():
+					messages[msg.Message] = true
+				case <-time.After(2 * time.Second):
+					t.Fatalf("Failed to receive message %d/2", i+1)
+				}
+			}
+
+			assert.True(t, messages["message_from_pub1"])
+			assert.True(t, messages["message_from_pub2"])
+		})
 	}
-
-	assert.True(suite.T(), messages["message_from_pub1"])
-	assert.True(suite.T(), messages["message_from_pub2"])
 }
 
 func (suite *GlideTestSuite) TestThreePublishingClientsSameNameWithSharded() {
@@ -558,47 +872,68 @@ func (suite *GlideTestSuite) TestThreePublishingClientsSameNameWithSharded() {
 }
 
 func (suite *GlideTestSuite) TestCombinedDifferentChannelsWithSameName() {
-	ctx := context.Background()
-	channelName := "same_name"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Subscribe to both exact channel and pattern that matches it
-	channels := []ChannelDefn{
-		{Channel: channelName, Mode: ExactMode},
-		{Channel: "same_*", Mode: PatternMode},
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
+			channelName := "same_name"
+
+			// Subscribe to both exact channel and pattern that matches it
+			channels := []ChannelDefn{
+				{Channel: channelName, Mode: ExactMode},
+				{Channel: "same_*", Mode: PatternMode},
+			}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
+
+			time.Sleep(200 * time.Millisecond)
+
+			// Create publisher and publish based on client type
+			if clientType == StandaloneClient {
+				publisher := suite.defaultClient()
+				defer publisher.Close()
+
+				// Publish once - should be received twice (exact + pattern match)
+				_, err := publisher.Publish(ctx, channelName, "test_message")
+				assert.NoError(t, err)
+			} else {
+				publisher := suite.defaultClusterClient()
+				defer publisher.Close()
+
+				// Publish once - should be received twice (exact + pattern match)
+				_, err := publisher.Publish(ctx, channelName, "test_message", false)
+				assert.NoError(t, err)
+			}
+
+			time.Sleep(200 * time.Millisecond)
+
+			var queue *glide.PubSubMessageQueue
+			var err error
+			if clientType == StandaloneClient {
+				queue, err = receiver.(*glide.Client).GetQueue()
+			} else {
+				queue, err = receiver.(*glide.ClusterClient).GetQueue()
+			}
+			assert.NoError(t, err)
+
+			// Should receive 2 messages (one for exact, one for pattern)
+			receivedCount := 0
+			timeout := time.After(2 * time.Second)
+			for i := 0; i < 2; i++ {
+				select {
+				case msg := <-queue.WaitForMessage():
+					assert.Equal(t, "test_message", msg.Message)
+					receivedCount++
+				case <-timeout:
+					goto done
+				}
+			}
+		done:
+
+			assert.Equal(t, 2, receivedCount, "Should receive message twice (exact + pattern)")
+		})
 	}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
-
-	time.Sleep(200 * time.Millisecond)
-
-	publisher := suite.defaultClient()
-	defer publisher.Close()
-
-	// Publish once - should be received twice (exact + pattern match)
-	_, err := publisher.Publish(ctx, channelName, "test_message")
-	assert.NoError(suite.T(), err)
-
-	time.Sleep(200 * time.Millisecond)
-
-	client := receiver.(*glide.Client)
-	queue, err := client.GetQueue()
-	assert.NoError(suite.T(), err)
-
-	// Should receive 2 messages (one for exact, one for pattern)
-	receivedCount := 0
-	timeout := time.After(2 * time.Second)
-	for i := 0; i < 2; i++ {
-		select {
-		case msg := <-queue.WaitForMessage():
-			assert.Equal(suite.T(), "test_message", msg.Message)
-			receivedCount++
-		case <-timeout:
-			goto done
-		}
-	}
-done:
-
-	assert.Equal(suite.T(), 2, receivedCount, "Should receive message twice (exact + pattern)")
 }
 
 func (suite *GlideTestSuite) TestChannelsAndShardChannelsSeparation() {
@@ -675,76 +1010,112 @@ func (suite *GlideTestSuite) TestRESP2RaisesError() {
 }
 
 func (suite *GlideTestSuite) TestCallbackOnlyRaisesErrorOnGetMethods() {
-	// Create callback-only client
-	channel := "callback_only_channel"
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, true, ConfigMethod, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			// Create callback-only client
+			channel := "callback_only_channel"
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
 
-	client := receiver.(*glide.Client)
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, true, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Try to get queue - should fail for callback-only client
-	_, err := client.GetQueue()
-	assert.Error(suite.T(), err, "GetQueue should fail for callback-only client")
+			// Try to get queue - should fail for callback-only client
+			var err error
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+				_, err = client.GetQueue()
+			} else {
+				client := receiver.(*glide.ClusterClient)
+				_, err = client.GetQueue()
+			}
+			assert.Error(t, err, "GetQueue should fail for callback-only client")
+		})
+	}
 }
 
 func (suite *GlideTestSuite) TestReconciliationIntervalSupport() {
-	t := suite.T()
-	intervalMs := 1000
-	pollIntervalMs := 100
-	timeoutSec := 5.0
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Create client with configured reconciliation interval
-	sConfig := config.NewStandaloneSubscriptionConfig()
-	advancedConfig := config.NewAdvancedClientConfiguration().
-		WithPubSubReconciliationIntervalMs(intervalMs)
-	clientConfig := suite.defaultClientConfig().
-		WithSubscriptionConfig(sConfig).
-		WithAdvancedConfiguration(advancedConfig)
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			intervalMs := 1000
+			pollIntervalMs := 100
+			timeoutSec := 5.0
 
-	client, err := suite.client(clientConfig)
-	require.NoError(t, err)
-	defer client.Close()
+			var getStats func() map[string]uint64
+			var closeClient func()
 
-	pollForTimestampChange := func(previousTs int64) (int64, error) {
-		start := time.Now()
-		for time.Since(start).Seconds() < timeoutSec {
-			stats := client.GetStatistics()
-			currentTs, ok := stats["subscription_last_sync_timestamp"]
-			if !ok {
-				time.Sleep(time.Duration(pollIntervalMs) * time.Millisecond)
-				continue
+			if clientType == StandaloneClient {
+				// Create standalone client with configured reconciliation interval
+				sConfig := config.NewStandaloneSubscriptionConfig()
+				advancedConfig := config.NewAdvancedClientConfiguration().
+					WithPubSubReconciliationIntervalMs(intervalMs)
+				clientConfig := suite.defaultClientConfig().
+					WithSubscriptionConfig(sConfig).
+					WithAdvancedConfiguration(advancedConfig)
+
+				client, err := suite.client(clientConfig)
+				require.NoError(t, err)
+				closeClient = func() { client.Close() }
+				getStats = func() map[string]uint64 { return client.GetStatistics() }
+			} else {
+				// Create cluster client with configured reconciliation interval
+				cConfig := config.NewClusterSubscriptionConfig()
+				advancedConfig := config.NewAdvancedClusterClientConfiguration().
+					WithPubSubReconciliationIntervalMs(intervalMs)
+				clientConfig := suite.defaultClusterClientConfig().
+					WithSubscriptionConfig(cConfig).
+					WithAdvancedConfiguration(advancedConfig)
+
+				client, err := suite.clusterClient(clientConfig)
+				require.NoError(t, err)
+				closeClient = func() { client.Close() }
+				getStats = func() map[string]uint64 { return client.GetStatistics() }
 			}
-			if int64(currentTs) != previousTs {
-				return int64(currentTs), nil
+			defer closeClient()
+
+			pollForTimestampChange := func(previousTs int64) (int64, error) {
+				start := time.Now()
+				for time.Since(start).Seconds() < timeoutSec {
+					stats := getStats()
+					currentTs, ok := stats["subscription_last_sync_timestamp"]
+					if !ok {
+						time.Sleep(time.Duration(pollIntervalMs) * time.Millisecond)
+						continue
+					}
+					if int64(currentTs) != previousTs {
+						return int64(currentTs), nil
+					}
+					time.Sleep(time.Duration(pollIntervalMs) * time.Millisecond)
+				}
+				return 0, fmt.Errorf("sync timestamp did not change within %.1fs. Previous: %d", timeoutSec, previousTs)
 			}
-			time.Sleep(time.Duration(pollIntervalMs) * time.Millisecond)
-		}
-		return 0, fmt.Errorf("sync timestamp did not change within %.1fs. Previous: %d", timeoutSec, previousTs)
+
+			// Get initial timestamp (may be 0 if sync hasn't happened yet)
+			initialStats := getStats()
+			initialTs := int64(initialStats["subscription_last_sync_timestamp"])
+
+			// Wait for first sync event (if initialTs is 0, this waits for first sync)
+			firstSyncTs, err := pollForTimestampChange(initialTs)
+			require.NoError(t, err)
+
+			// Wait for second sync event
+			secondSyncTs, err := pollForTimestampChange(firstSyncTs)
+			require.NoError(t, err)
+
+			// Compute actual interval
+			actualIntervalMs := secondSyncTs - firstSyncTs
+
+			// Assert interval is positive and at most 2x the configured interval
+			// Note: Reconciliation can be triggered immediately by subscription changes,
+			// so we only enforce an upper bound based on the timer interval
+			maxInterval := int64(intervalMs) * 2 // Maximum 2x the configured interval
+			assert.Greater(t, actualIntervalMs, int64(0),
+				"Reconciliation interval (%dms) should be positive", actualIntervalMs)
+			assert.LessOrEqual(t, actualIntervalMs, maxInterval,
+				"Reconciliation interval (%dms) should be <= %dms", actualIntervalMs, maxInterval)
+		})
 	}
-
-	// Get initial timestamp (may be 0 if sync hasn't happened yet)
-	initialStats := client.GetStatistics()
-	initialTs := int64(initialStats["subscription_last_sync_timestamp"])
-
-	// Wait for first sync event (if initialTs is 0, this waits for first sync)
-	firstSyncTs, err := pollForTimestampChange(initialTs)
-	require.NoError(t, err)
-
-	// Wait for second sync event
-	secondSyncTs, err := pollForTimestampChange(firstSyncTs)
-	require.NoError(t, err)
-
-	// Compute actual interval
-	actualIntervalMs := secondSyncTs - firstSyncTs
-
-	// Assert interval is positive and at most 2x the configured interval
-	// Note: Reconciliation can be triggered immediately by subscription changes,
-	// so we only enforce an upper bound based on the timer interval
-	maxInterval := int64(intervalMs) * 2 // Maximum 2x the configured interval
-	assert.Greater(t, actualIntervalMs, int64(0),
-		"Reconciliation interval (%dms) should be positive", actualIntervalMs)
-	assert.LessOrEqual(t, actualIntervalMs, maxInterval,
-		"Reconciliation interval (%dms) should be <= %dms", actualIntervalMs, maxInterval)
 }
