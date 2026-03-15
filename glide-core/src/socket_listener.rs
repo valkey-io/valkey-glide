@@ -543,7 +543,7 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
 
         // Periodic inflight snapshot every 1000 requests
         let count = REQUEST_COUNTER.fetch_add(1, Ordering::Relaxed);
-        if count % 1000 == 0 {
+        if count.is_multiple_of(1000) {
             log_warn(
                 "handle_request",
                 format!(

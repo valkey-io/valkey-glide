@@ -86,3 +86,4 @@ copilot-instructions.md
 **/performance*
 repro-test/.gradle/
 repro-test/build/
+repro-test/
