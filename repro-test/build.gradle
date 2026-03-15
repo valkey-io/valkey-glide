@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.gradleup.shadow' version '9.0.0-beta12'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+repositories {
+    mavenCentral()
+    flatDir {
+        dirs System.getenv().getOrDefault('GLIDE_CLIENT_JAR_DIR', '../java/client/build/libs')
+    }
+}
+
+dependencies {
+    implementation name: System.getenv().getOrDefault('GLIDE_CLIENT_JAR_NAME', 'client-linux-aarch_64')
+    implementation 'com.google.code.gson:gson:2.11.0'
+}
+
+application {
+    mainClass = 'repro.Main'
+}
+
+shadowJar {
+    archiveBaseName = 'glide-repro'
+    archiveClassifier = ''
+    archiveVersion = ''
+    mergeServiceFiles()
+}

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer
+  namespace: glide-repro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      containers:
+        - name: producer
+          image: 301403446842.dkr.ecr.us-east-2.amazonaws.com/glide-repro:spin
+          envFrom:
+            - configMapRef:
+                name: glide-repro-config
+          env:
+            - name: ROLE
+              value: "producer"
+            - name: WORKER_ADDRESSES
+              value: "worker-0.workers.glide-repro.svc.cluster.local:9001,worker-1.workers.glide-repro.svc.cluster.local:9001,worker-2.workers.glide-repro.svc.cluster.local:9001"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
