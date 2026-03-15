@@ -24,6 +24,13 @@ RUN echo "127.0.0.1 valkey.glide.test.tls.com" >> /etc/hosts.docker && \
 
 # Full source → build test binaries (deps already compiled in rust-base)
 COPY . .
+
+# --- Lint (matches CI: .github/workflows/lint-rust/action.yml) ---
+RUN cd glide-core && cargo fmt --all -- --check
+RUN cd glide-core && cargo clippy --all-features --all-targets -- -D warnings
+RUN cd glide-core && cargo clippy --all-targets -- -D warnings
+RUN cd glide-core && RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+
 RUN cd glide-core && cargo test --features "proto,socket-layer,standalone_heartbeat" --no-run
 
 # Optional: TEST_ARGS for extra cargo test flags (e.g. "--test test_client").

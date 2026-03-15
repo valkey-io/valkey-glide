@@ -5,3 +5,7 @@ rust-client/*
 !rust-client/tsconfig.json
 # ignore docs dir
 docs/*
+# ignore generated test artifacts
+coverage/*
+test-report.html
+test-report-node.html

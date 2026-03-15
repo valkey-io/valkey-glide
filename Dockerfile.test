@@ -27,6 +27,9 @@ COPY --from=valkey /usr/local/bin/valkey-cli /usr/local/bin/
 
 WORKDIR /app
 
+# Install lint tools (matches CI: .github/workflows/lint-rust/action.yml)
+RUN rustup component add rustfmt clippy
+
 # --- Pre-compile shared Rust dependencies ---
 # All crates share one target directory for maximum cache reuse.
 ENV CARGO_TARGET_DIR=/app/target

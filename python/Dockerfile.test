@@ -21,9 +21,19 @@ COPY python/dev_requirements.txt python/
 RUN python3 -m venv python/.env && \
     python/.env/bin/pip install --no-cache-dir -r python/dev_requirements.txt
 
-# L2: Full source → build
+# L2: Full source → lint → build
 COPY . .
+
+# --- Rust lint (matches CI: .github/workflows/lint-rust/action.yml) ---
+RUN cd python/glide-async && cargo fmt --all -- --check
+RUN cd python/glide-async && cargo clippy --all-features --all-targets -- -D warnings
+RUN cd python/glide-async && cargo clippy --all-targets -- -D warnings
+RUN cd python/glide-async && RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+
 RUN cd python && python3 dev.py build --no-cache
+
+# --- Python lint (matches CI: python.yml lint job) ---
+RUN cd python && python3 dev.py lint --check
 
 # Optional: TEST_ARGS to pass extra args to pytest (e.g. "-k test_ping").
 CMD ["bash", "-c", "\

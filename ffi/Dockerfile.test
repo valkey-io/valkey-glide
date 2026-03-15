@@ -12,6 +12,13 @@ ENV CARGO_TARGET_DIR=/app/target
 
 # Full source → build test binaries (deps already compiled in rust-base)
 COPY . .
+
+# --- Lint (matches CI: .github/workflows/lint-rust/action.yml) ---
+RUN cd ffi && cargo fmt --all -- --check
+RUN cd ffi && cargo clippy --all-features --all-targets -- -D warnings
+RUN cd ffi && cargo clippy --all-targets -- -D warnings
+RUN cd ffi && RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+
 RUN cd ffi && cargo test --no-run
 
 # Optional: TEST_ARGS for extra cargo test flags.

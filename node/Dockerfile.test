@@ -24,8 +24,18 @@ RUN cd node && npm install --ignore-scripts && \
     cd ../node/rust-client && npm install --ignore-scripts && \
     cd ../../utils && npm install
 
-# L2: Full source → build (dev only, no release build needed for tests)
+# L2: Full source → lint → build
 COPY . .
+
+# --- Rust lint (matches CI: .github/workflows/lint-rust/action.yml) ---
+RUN cd node/rust-client && cargo fmt --all -- --check
+RUN cd node/rust-client && cargo clippy --all-features --all-targets -- -D warnings
+RUN cd node/rust-client && cargo clippy --all-targets -- -D warnings
+RUN cd node/rust-client && RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+
+# --- TS lint (matches CI: .github/workflows/lint-ts.yml) ---
+RUN cd node && npm run lint
+
 RUN cd utils && npm run build
 RUN cd node && npm run build
 
