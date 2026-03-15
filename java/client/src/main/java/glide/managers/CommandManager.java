@@ -516,25 +516,49 @@ public class CommandManager {
                             ? coreClient.executeCommandAsync(requestBytes) // Force UTF-8 conversion
                             : coreClient.executeBinaryCommandAsync(requestBytes); // Allow binary conversion
 
-            return jniFuture
-                    .thenApply(
-                            result -> {
-                                Response.Builder builder = Response.newBuilder();
-                                Object toStore = result;
-                                if (result == null) {
-                                    builder.setRespPointer(0L);
-                                } else if ("OK".equals(result)) {
-                                    builder.setConstantResponse(ConstantResponse.OK);
-                                } else {
-                                    if (result instanceof ByteBuffer) {
-                                        toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
-                                    }
-                                    long objectId = JniResponseRegistry.storeObject(toStore);
-                                    builder.setRespPointer(objectId);
-                                }
-                                return responseHandler.apply(builder.build());
-                            })
-                    .exceptionally(this::exceptionHandler);
+            // DIAG: The derived future returned to caller is NOT the same as jniFuture in AsyncRegistry.
+            // If .orTimeout() is called on the derived future, jniFuture stays pending → inflight slot
+            // leaks.
+            CompletableFuture<T> derivedFuture =
+                    jniFuture
+                            .thenApply(
+                                    result -> {
+                                        long parseStart = System.nanoTime();
+                                        try {
+                                            Response.Builder builder = Response.newBuilder();
+                                            Object toStore = result;
+                                            if (result == null) {
+                                                builder.setRespPointer(0L);
+                                            } else if ("OK".equals(result)) {
+                                                builder.setConstantResponse(ConstantResponse.OK);
+                                            } else {
+                                                if (result instanceof ByteBuffer) {
+                                                    toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
+                                                }
+                                                long objectId = JniResponseRegistry.storeObject(toStore);
+                                                builder.setRespPointer(objectId);
+                                            }
+                                            return responseHandler.apply(builder.build());
+                                        } catch (Exception e) {
+                                            long parseMs = (System.nanoTime() - parseStart) / 1_000_000;
+                                            glide.api.logging.Logger.log(
+                                                    glide.api.logging.Logger.Level.ERROR,
+                                                    "CommandManager",
+                                                    "DIAG PARSE_FAILED: elapsed=" + parseMs + "ms err=" + e.getMessage());
+                                            throw e;
+                                        } finally {
+                                            long parseMs = (System.nanoTime() - parseStart) / 1_000_000;
+                                            if (parseMs > 50) {
+                                                glide.api.logging.Logger.log(
+                                                        glide.api.logging.Logger.Level.WARN,
+                                                        "CommandManager",
+                                                        "DIAG SLOW_PARSE: elapsed=" + parseMs + "ms");
+                                            }
+                                        }
+                                    })
+                            .exceptionally(this::exceptionHandler);
+
+            return derivedFuture;
         } catch (Exception e) {
             var errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
