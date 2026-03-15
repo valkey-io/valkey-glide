@@ -105,6 +105,10 @@ pub(crate) fn get_runtime() -> &'static Runtime {
             DEFAULT_RUNTIME_WORKER_THREADS
         };
 
+        log::warn!(
+            "DIAG tokio runtime init: worker_threads={} max_blocking_threads={}",
+            worker_threads, worker_threads * 2
+        );
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
             .max_blocking_threads(worker_threads * 2)

@@ -119,6 +119,8 @@ static POLL_RECOVER_PENDING: AtomicU64 = AtomicU64::new(0);
 static POLL_COMPLETE_READY: AtomicU64 = AtomicU64::new(0);
 static POLL_COMPLETE_PENDING: AtomicU64 = AtomicU64::new(0);
 static DIAG_IN_FLIGHT: AtomicU64 = AtomicU64::new(0);
+static DIAG_CONNECTIONS: AtomicU64 = AtomicU64::new(0);
+static DIAG_PENDING_QUEUE: AtomicU64 = AtomicU64::new(0);
 static LAST_DIAG_LOG: AtomicU64 = AtomicU64::new(0);
 
 fn log_diag_counters() {
@@ -139,10 +141,12 @@ fn log_diag_counters() {
     let comp_ready = POLL_COMPLETE_READY.swap(0, AtomicOrdering::Relaxed);
     let comp_pend = POLL_COMPLETE_PENDING.swap(0, AtomicOrdering::Relaxed);
     let in_flight = DIAG_IN_FLIGHT.load(AtomicOrdering::Relaxed);
+    let conns = DIAG_CONNECTIONS.load(AtomicOrdering::Relaxed);
+    let pending_q = DIAG_PENDING_QUEUE.load(AtomicOrdering::Relaxed);
     if flush > 0 {
         warn!(
-            "DIAG event_loop: poll_flush={} recover(ready={},pending={}) complete(ready={},pending={}) in_flight={}",
-            flush, rec_ready, rec_pend, comp_ready, comp_pend, in_flight
+            "DIAG event_loop: poll_flush={} recover(ready={},pending={}) complete(ready={},pending={}) in_flight={} connections={} pending_queue={}",
+            flush, rec_ready, rec_pend, comp_ready, comp_pend, in_flight, conns, pending_q
         );
     }
 }
@@ -2119,6 +2123,7 @@ where
         }
 
         let mut res = Ok(());
+        let refresh_start = std::time::Instant::now();
         if should_refresh_slots {
             let retry_strategy = ExponentialFactorBackoff::from_millis(
                 DEFAULT_REFRESH_SLOTS_RETRY_BASE_DURATION_MILLIS,
@@ -2142,6 +2147,13 @@ where
             .await;
         }
         in_progress.store(false, Ordering::Relaxed);
+        let refresh_elapsed = refresh_start.elapsed();
+        if should_refresh_slots {
+            warn!(
+                "DIAG slot_refresh: elapsed={}ms ok={} trigger={:?}",
+                refresh_elapsed.as_millis(), res.is_ok(), trigger
+            );
+        }
 
         Self::refresh_pubsub_subscriptions(inner).await;
 
@@ -3305,7 +3317,15 @@ where
         let mut poll_flush_action = PollFlushAction::None;
         let mut shed_count: u32 = 0;
         let mut new_inflight: u32 = 0;
+        let lock_start = std::time::Instant::now();
         let mut pending_requests_guard = self.inner.pending_requests.lock().unwrap();
+        let lock_elapsed = lock_start.elapsed();
+        if lock_elapsed.as_micros() > 500 {
+            warn!(
+                "DIAG poll_complete: pending_requests lock took {}us (contention!)",
+                lock_elapsed.as_micros()
+            );
+        }
         let pending_queue_depth = pending_requests_guard.len();
         if !pending_requests_guard.is_empty() {
             let mut pending_requests = mem::take(&mut *pending_requests_guard);
@@ -3513,6 +3533,7 @@ where
 
         let info = RequestInfo { cmd };
 
+        let lock_start = std::time::Instant::now();
         self.inner
             .pending_requests
             .lock()
@@ -3522,6 +3543,13 @@ where
                 sender,
                 info,
             });
+        let lock_elapsed = lock_start.elapsed();
+        if lock_elapsed.as_micros() > 500 {
+            warn!(
+                "DIAG start_send: pending_requests lock took {}us (contention!)",
+                lock_elapsed.as_micros()
+            );
+        }
         Ok(())
     }
 
@@ -3532,6 +3560,14 @@ where
         trace!("poll_flush: {:?}", self.state);
         POLL_FLUSH_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
         DIAG_IN_FLIGHT.store(self.in_flight_requests.len() as u64, AtomicOrdering::Relaxed);
+        DIAG_CONNECTIONS.store(
+            self.inner.conn_lock.read().map(|c| c.len()).unwrap_or(0) as u64,
+            AtomicOrdering::Relaxed,
+        );
+        DIAG_PENDING_QUEUE.store(
+            self.inner.pending_requests.lock().map(|p| p.len()).unwrap_or(0) as u64,
+            AtomicOrdering::Relaxed,
+        );
         log_diag_counters();
         loop {
             self.send_refresh_error();
