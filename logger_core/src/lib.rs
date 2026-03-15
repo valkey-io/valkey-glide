@@ -169,18 +169,38 @@ pub fn init(minimal_level: Option<Level>, file_name: Option<&str>) -> Level {
             LevelFilter::TRACE
         };
 
-        // Enable logging only from allowed crates
+        // Enable logging only from allowed crates.
+        // tokio and runtime targets are included at TRACE level for console-subscriber
+        // (tokio-console) to receive task instrumentation spans.
         let targets_filter = filter::Targets::new()
             .with_target("glide", log_level)
             .with_target("redis", log_level)
             .with_target("logger_core", log_level)
-            .with_target(std::env!("CARGO_PKG_NAME"), log_level);
+            .with_target(std::env!("CARGO_PKG_NAME"), log_level)
+            .with_target("tokio", LevelFilter::TRACE)
+            .with_target("runtime", LevelFilter::TRACE);
+
+        // Console-subscriber layer for tokio-console support.
+        // Port is configurable via TOKIO_CONSOLE_PORT env var (default: 6669).
+        let console_layer = {
+            let port: u16 = std::env::var("TOKIO_CONSOLE_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(6669);
+            let layer = console_subscriber::ConsoleLayer::builder()
+                .server_addr(([0, 0, 0, 0], port))
+                .spawn();
+            eprintln!("tokio-console: listening on port {}", port);
+            layer
+        };
 
         tracing_subscriber::registry()
             .with(stdout_layer)
             .with(file_layer)
             .with(targets_filter)
-            .init();
+            .with(console_layer)
+            .try_init()
+            .ok();
 
         let reloads: Reloads = Reloads {
             console_reload: RwLock::new(stdout_reload),

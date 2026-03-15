@@ -1,2 +1,6 @@
 [env]
 GLIDE_VERSION = "unknown"
+
+[build]
+# Required for console-subscriber (tokio-console) to instrument async tasks
+rustflags = ["--cfg", "tokio_unstable"]
