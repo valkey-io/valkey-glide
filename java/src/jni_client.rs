@@ -507,7 +507,7 @@ pub fn complete_callback(
     let queued = CB_QUEUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let processed = CB_PROCESSED.load(std::sync::atomic::Ordering::Relaxed);
     let queue_depth = queued.saturating_sub(processed);
-    if queue_depth > 100 || queued % 5000 == 0 {
+    if queue_depth > 100 || queued.is_multiple_of(5000) {
         log::warn!(
             "DIAG callback_queue: queued={} processed={} depth={}",
             queued + 1,

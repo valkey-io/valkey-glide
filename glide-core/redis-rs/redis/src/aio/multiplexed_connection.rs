@@ -1,5 +1,4 @@
 use super::{ConnectionLike, Runtime};
-use tracing::warn;
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
 use crate::client::GlideConnectionOptions;
@@ -32,6 +31,7 @@ use std::task::{self, Poll};
 use std::time::Duration;
 #[cfg(feature = "tokio-comp")]
 use tokio_util::codec::Decoder;
+use tracing::warn;
 
 // Default connection timeout in ms
 const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);

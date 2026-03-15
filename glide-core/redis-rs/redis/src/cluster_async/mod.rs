@@ -109,8 +109,8 @@ use tokio::{sync::Notify, time::timeout};
 use dispose::{Disposable, Dispose};
 use futures::{future::BoxFuture, prelude::*, ready};
 use pin_project_lite::pin_project;
-use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::RwLock as StdRwLock;
 
 // Diagnostic counters for detecting poll_flush busy-spin and zombie accumulation.
 static POLL_FLUSH_CALLS: AtomicU64 = AtomicU64::new(0);
@@ -132,7 +132,10 @@ fn log_diag_counters() {
     if now.saturating_sub(last) < 5 {
         return;
     }
-    if LAST_DIAG_LOG.compare_exchange(last, now, AtomicOrdering::Relaxed, AtomicOrdering::Relaxed).is_err() {
+    if LAST_DIAG_LOG
+        .compare_exchange(last, now, AtomicOrdering::Relaxed, AtomicOrdering::Relaxed)
+        .is_err()
+    {
         return;
     }
     let flush = POLL_FLUSH_CALLS.swap(0, AtomicOrdering::Relaxed);
@@ -733,13 +736,19 @@ fn boxed_sleep(duration: Duration) -> BoxFuture<'static, ()> {
 fn diag_cmd_summary<C>(cmd_arg: &CmdArg<C>) -> String {
     match cmd_arg {
         CmdArg::Cmd { cmd, .. } => {
-            let cmd_name = cmd.arg_idx(0)
+            let cmd_name = cmd
+                .arg_idx(0)
                 .map(|b| String::from_utf8_lossy(b).to_string())
                 .unwrap_or_else(|| "?".into());
-            let first_key = cmd.arg_idx(1)
+            let first_key = cmd
+                .arg_idx(1)
                 .map(|b| {
                     let s = String::from_utf8_lossy(b);
-                    if s.len() > 40 { format!("{}...", &s[..40]) } else { s.to_string() }
+                    if s.len() > 40 {
+                        format!("{}...", &s[..40])
+                    } else {
+                        s.to_string()
+                    }
                 })
                 .unwrap_or_else(|| "-".into());
             format!("{}({})", cmd_name, first_key)
@@ -2151,7 +2160,9 @@ where
         if should_refresh_slots {
             warn!(
                 "DIAG slot_refresh: elapsed={}ms ok={} trigger={:?}",
-                refresh_elapsed.as_millis(), res.is_ok(), trigger
+                refresh_elapsed.as_millis(),
+                res.is_ok(),
+                trigger
             );
         }
 
@@ -2662,7 +2673,8 @@ where
                 }
             };
         }
-        let node_addrs: Vec<String> = receivers.iter()
+        let node_addrs: Vec<String> = receivers
+            .iter()
             .filter_map(|(addr, _)| addr.clone())
             .collect();
         let sub_cmd_count = requests.iter().filter(|r| r.is_some()).count();
@@ -2673,8 +2685,7 @@ where
             .extend(requests.into_iter().flatten());
 
         let start = std::time::Instant::now();
-        let result = Self::aggregate_results(receivers, routing, response_policy)
-            .await;
+        let result = Self::aggregate_results(receivers, routing, response_policy).await;
         let elapsed = start.elapsed();
         if elapsed.as_millis() > 500 || result.is_err() {
             warn!(
@@ -2722,7 +2733,9 @@ where
         if elapsed.as_millis() > 500 || result.is_err() {
             warn!(
                 "DIAG try_cmd_request: node={} elapsed={}ms ok={}",
-                address, elapsed.as_millis(), result.is_ok()
+                address,
+                elapsed.as_millis(),
+                result.is_ok()
             );
         }
         result
@@ -3362,8 +3375,12 @@ where
                 Poll::Ready(None) | Poll::Pending => break,
             };
             match result {
-                Next::Done => { done_count += 1; }
-                Next::Cancelled => { cancelled_count += 1; }
+                Next::Done => {
+                    done_count += 1;
+                }
+                Next::Cancelled => {
+                    cancelled_count += 1;
+                }
                 Next::Retry { request } => {
                     retry_count += 1;
                     let future = Self::try_request(request.info.clone(), self.inner.clone());
@@ -3454,7 +3471,12 @@ where
         }
 
         // Log when anything interesting happened in this poll cycle
-        if shed_count > 0 || cancelled_count > 0 || retry_count > 0 || refresh_count > 0 || reconnect_count > 0 {
+        if shed_count > 0
+            || cancelled_count > 0
+            || retry_count > 0
+            || refresh_count > 0
+            || reconnect_count > 0
+        {
             warn!(
                 "DIAG poll_complete: pending_queue={} in_flight={} shed={} new={} done={} cancelled={} retry={} refresh={} reconnect={}",
                 pending_queue_depth, self.in_flight_requests.len(), shed_count, new_inflight,
@@ -3559,13 +3581,20 @@ where
     ) -> Poll<Result<(), Self::Error>> {
         trace!("poll_flush: {:?}", self.state);
         POLL_FLUSH_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
-        DIAG_IN_FLIGHT.store(self.in_flight_requests.len() as u64, AtomicOrdering::Relaxed);
+        DIAG_IN_FLIGHT.store(
+            self.in_flight_requests.len() as u64,
+            AtomicOrdering::Relaxed,
+        );
         DIAG_CONNECTIONS.store(
             self.inner.conn_lock.read().map(|c| c.len()).unwrap_or(0) as u64,
             AtomicOrdering::Relaxed,
         );
         DIAG_PENDING_QUEUE.store(
-            self.inner.pending_requests.lock().map(|p| p.len()).unwrap_or(0) as u64,
+            self.inner
+                .pending_requests
+                .lock()
+                .map(|p| p.len())
+                .unwrap_or(0) as u64,
             AtomicOrdering::Relaxed,
         );
         log_diag_counters();
