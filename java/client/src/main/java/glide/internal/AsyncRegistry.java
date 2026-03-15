@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
+import glide.api.logging.Logger;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,6 +22,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class AsyncRegistry {
 
+    private static final String LOG_TAG = "AsyncRegistry";
+
     /** Thread-safe storage for active futures Using ConcurrentHashMap for lock-free operations */
     private static final ConcurrentHashMap<Long, CompletableFuture<Object>> activeFutures =
             // Size based on max inflight requests with a small margin
@@ -35,6 +38,44 @@ public final class AsyncRegistry {
 
     /** Thread-safe ID generator */
     private static final AtomicLong nextId = new AtomicLong(1);
+
+    // ==================== DIAGNOSTIC COUNTERS ====================
+    private static final AtomicLong diagRegistered = new AtomicLong(0);
+    private static final AtomicLong diagCompleted = new AtomicLong(0);
+    private static final AtomicLong diagCompletedWithError = new AtomicLong(0);
+    private static final AtomicLong diagRejected = new AtomicLong(0);
+    private static final AtomicLong diagLastLogTime = new AtomicLong(0);
+
+    /** How many registered futures were already done when native callback arrived */
+    private static final AtomicLong diagAlreadyDone = new AtomicLong(0);
+
+    private static void diagPeriodicLog() {
+        long now = System.currentTimeMillis();
+        long last = diagLastLogTime.get();
+        if (now - last < 5000) return; // every 5 seconds
+        if (!diagLastLogTime.compareAndSet(last, now)) return;
+
+        long registered = diagRegistered.get();
+        long completed = diagCompleted.get();
+        long completedErr = diagCompletedWithError.get();
+        long rejected = diagRejected.get();
+        long alreadyDone = diagAlreadyDone.get();
+        int pending = activeFutures.size();
+
+        // Count how many pending futures are already done (externally timed out)
+        int doneButPending = 0;
+        for (CompletableFuture<Object> f : activeFutures.values()) {
+            if (f.isDone()) doneButPending++;
+        }
+
+        Logger.log(
+                Logger.Level.WARN,
+                LOG_TAG,
+                String.format(
+                        "DIAG AsyncRegistry: pending=%d done_but_pending=%d "
+                                + "total_registered=%d completed=%d errors=%d rejected=%d already_done=%d",
+                        pending, doneButPending, registered, completed, completedErr, rejected, alreadyDone));
+    }
 
     // ==================== CONFIGURABLE CONSTANTS ====================
 
@@ -71,6 +112,8 @@ public final class AsyncRegistry {
             throw new IllegalArgumentException("Future cannot be null");
         }
 
+        diagPeriodicLog();
+
         // Client-specific inflight limit check
         // 0 means "use native/core defaults" - no limit enforcement in Java layer
         if (maxInflightRequests > 0) {
@@ -83,6 +126,13 @@ public final class AsyncRegistry {
                         int updated = value.incrementAndGet();
                         if (updated > maxInflightRequests) {
                             value.decrementAndGet();
+                            diagRejected.incrementAndGet();
+                            Logger.log(
+                                    Logger.Level.WARN,
+                                    LOG_TAG,
+                                    String.format(
+                                            "DIAG REJECTED: client=%d inflight=%d max=%d pending=%d",
+                                            clientHandle, updated - 1, maxInflightRequests, activeFutures.size()));
                             throw new glide.api.models.exceptions.RequestException(
                                     "Client reached maximum inflight requests");
                         }
@@ -90,6 +140,8 @@ public final class AsyncRegistry {
                         return value;
                     });
         }
+
+        diagRegistered.incrementAndGet();
 
         long correlationId = nextId.getAndIncrement();
 
@@ -136,16 +188,28 @@ public final class AsyncRegistry {
         CompletableFuture<Object> future = activeFutures.get(correlationId);
 
         if (future == null) {
-            // Future already completed or timed out
+            // Future already cleaned up (completed + whenComplete ran)
+            diagAlreadyDone.incrementAndGet();
             return false;
         }
 
-        // complete() returns false if already completed
-        // This prevents IllegalStateException from completing twice
-        boolean completed = future.complete(result);
+        if (future.isDone()) {
+            // Future was externally completed (e.g. .orTimeout() on derived future propagated back,
+            // or Java-side cancel). The native callback arrived too late.
+            diagAlreadyDone.incrementAndGet();
+            Logger.log(
+                    Logger.Level.WARN,
+                    LOG_TAG,
+                    String.format(
+                            "DIAG LATE_CALLBACK: cb=%d future already done (external timeout?), pending=%d",
+                            correlationId, activeFutures.size()));
+        }
 
-        // Note: cleanup happens automatically in whenComplete()
-        // No manual removal needed, which eliminates race conditions
+        // complete() returns false if already completed
+        boolean completed = future.complete(result);
+        if (completed) {
+            diagCompleted.incrementAndGet();
+        }
 
         return completed;
     }
@@ -158,8 +222,11 @@ public final class AsyncRegistry {
             long correlationId, int errorTypeCode, String errorMessage) {
         CompletableFuture<Object> future = activeFutures.get(correlationId);
         if (future == null) {
+            diagAlreadyDone.incrementAndGet();
             return false;
         }
+
+        diagCompletedWithError.incrementAndGet();
 
         String msg =
                 (errorMessage == null || errorMessage.isBlank())

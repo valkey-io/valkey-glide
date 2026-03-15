@@ -105,6 +105,11 @@ pub(crate) fn get_runtime() -> &'static Runtime {
             DEFAULT_RUNTIME_WORKER_THREADS
         };
 
+        log::warn!(
+            "DIAG tokio runtime init: worker_threads={} max_blocking_threads={}",
+            worker_threads,
+            worker_threads * 2
+        );
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
             .max_blocking_threads(worker_threads * 2)
@@ -346,11 +351,16 @@ fn get_callback_worker_threads() -> usize {
     }
 }
 
+static CB_QUEUED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CB_PROCESSED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
     CALLBACK_SENDER.get_or_init(|| {
         let (tx, rx) = channel::<CallbackJob>();
         let rx = Arc::new(std::sync::Mutex::new(rx));
         let worker_threads = get_callback_worker_threads();
+
+        log::warn!("DIAG JNI callback workers: {} threads", worker_threads);
 
         for i in 0..worker_threads {
             let rx_clone = Arc::clone(&rx);
@@ -366,6 +376,7 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
                             break;
                         };
 
+                        CB_PROCESSED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         // Process callback on this dedicated thread
                         process_callback_job(jvm, callback_id, result, binary_mode);
                     }
@@ -383,11 +394,15 @@ fn process_callback_job(
     result: CallbackResult,
     binary_mode: bool,
 ) {
+    let cb_start = std::time::Instant::now();
+    let thread_name = std::thread::current().name().unwrap_or("?").to_string();
+
     match jvm.attach_current_thread_as_daemon() {
         Ok(mut env) => match result {
             Ok(server_value) => {
                 let _ = env.push_local_frame(16);
 
+                let convert_start = std::time::Instant::now();
                 // Direct conversion with size-based routing
                 let java_result = if should_use_direct_buffer(&server_value) {
                     // For large data (>16KB): Use DirectByteBuffer
@@ -396,39 +411,87 @@ fn process_callback_job(
                     // For small data (<16KB): Regular JNI objects
                     crate::resp_value_to_java(&mut env, server_value, !binary_mode)
                 };
+                let convert_elapsed = convert_start.elapsed();
 
                 match java_result {
                     Ok(java_result) => {
-                        let _ = complete_java_callback(&mut env, callback_id, &java_result);
+                        if let Err(e) = complete_java_callback(&mut env, callback_id, &java_result)
+                        {
+                            log::error!(
+                                "DIAG cb={} complete_java_callback FAILED (future left dangling): {}",
+                                callback_id,
+                                e
+                            );
+                        }
                     }
                     Err(e) => {
+                        log::error!(
+                            "DIAG cb={} response CONVERSION FAILED: {} (convert_time={}ms)",
+                            callback_id,
+                            e,
+                            convert_elapsed.as_millis()
+                        );
                         // Use ClientError for conversion failures
                         let error_code = 0; // UNSPECIFIED error type
                         let error_msg = format!("Response conversion failed: {e}");
-                        let _ = complete_java_callback_with_error_code(
+                        if let Err(e2) = complete_java_callback_with_error_code(
                             &mut env,
                             callback_id,
                             error_code,
                             &error_msg,
-                        );
+                        ) {
+                            log::error!(
+                                "DIAG cb={} complete_java_callback_with_error_code FAILED (future left dangling): {}",
+                                callback_id,
+                                e2
+                            );
+                        }
                     }
                 }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
+
+                let cb_elapsed = cb_start.elapsed();
+                if cb_elapsed.as_millis() > 100 || convert_elapsed.as_millis() > 50 {
+                    log::warn!(
+                        "DIAG cb={} SLOW_CALLBACK: thread={} total={}ms convert={}ms",
+                        callback_id,
+                        thread_name,
+                        cb_elapsed.as_millis(),
+                        convert_elapsed.as_millis()
+                    );
+                }
             }
             Err(redis_err) => {
                 // Always use error codes for consistent error handling
                 let error_code = error_type(&redis_err) as i32;
                 let error_msg = error_message(&redis_err);
-                let _ = complete_java_callback_with_error_code(
+                log::warn!(
+                    "DIAG cb={} ERROR_CALLBACK: thread={} error_code={} msg={}",
+                    callback_id,
+                    thread_name,
+                    error_code,
+                    error_msg
+                );
+                if let Err(e) = complete_java_callback_with_error_code(
                     &mut env,
                     callback_id,
                     error_code,
                     &error_msg,
-                );
+                ) {
+                    log::error!(
+                        "DIAG cb={} complete_java_callback_with_error_code FAILED on redis error (future left dangling): {}",
+                        callback_id,
+                        e
+                    );
+                }
             }
         },
         Err(e) => {
-            log::error!("JNI environment attachment failed: {e}");
+            log::error!(
+                "DIAG cb={} JNI environment attachment FAILED (future left dangling): {}",
+                callback_id,
+                e
+            );
         }
     }
 }
@@ -441,8 +504,23 @@ pub fn complete_callback(
     binary_mode: bool,
 ) {
     let sender = init_callback_workers();
+    let queued = CB_QUEUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let processed = CB_PROCESSED.load(std::sync::atomic::Ordering::Relaxed);
+    let queue_depth = queued.saturating_sub(processed);
+    if queue_depth > 100 {
+        log::warn!(
+            "DIAG callback_queue: queued={} processed={} depth={}",
+            queued + 1,
+            processed,
+            queue_depth
+        );
+    }
     if let Err(e) = sender.send((jvm, callback_id, result, binary_mode)) {
-        log::error!("Callback queue send failed: {e}");
+        log::error!(
+            "DIAG cb={} callback queue send FAILED (future left dangling): {}",
+            callback_id,
+            e
+        );
     }
 }
 

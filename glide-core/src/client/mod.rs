@@ -238,6 +238,7 @@ pub struct Client {
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
+    inflight_requests_limit: isize,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
 }
@@ -250,6 +251,10 @@ async fn run_with_timeout<T>(
         Some(duration) => match tokio::time::timeout(duration, future).await {
             Ok(result) => result,
             Err(_) => {
+                log_warn(
+                    "run_with_timeout",
+                    format!("request timed out after {}ms", duration.as_millis()),
+                );
                 // Record timeout error metric if telemetry is initialized
                 if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
                     log_error(
@@ -562,6 +567,20 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
+            let cmd_name_for_diag = cmd.command().unwrap_or_default();
+            let cmd_name_for_diag = String::from_utf8_lossy(&cmd_name_for_diag).to_string();
+            let first_key_for_diag = cmd
+                .arg_idx(1)
+                .map(|b| {
+                    let s = String::from_utf8_lossy(b);
+                    if s.len() > 40 {
+                        format!("{}...", &s[..40])
+                    } else {
+                        s.to_string()
+                    }
+                })
+                .unwrap_or_default();
+
             let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
@@ -597,7 +616,32 @@ impl Client {
                 }
                 .and_then(|value| convert_to_expected_type(value, expected_type))
             })
-            .await?;
+            .await;
+
+            match &result {
+                Err(e) if e.is_timeout() => {
+                    log_warn(
+                        "send_command",
+                        format!(
+                            "DIAG TIMEOUT: cmd={}({}) timeout={}ms",
+                            cmd_name_for_diag,
+                            first_key_for_diag,
+                            request_timeout.map(|d| d.as_millis()).unwrap_or(0)
+                        ),
+                    );
+                }
+                Err(e) => {
+                    log_warn(
+                        "send_command",
+                        format!(
+                            "DIAG ERROR: cmd={}({}) err={}",
+                            cmd_name_for_diag, first_key_for_diag, e
+                        ),
+                    );
+                }
+                _ => {}
+            }
+            let result = result?;
 
             // Intercept CLIENT SETNAME commands after regular processing
             // Only handle CLIENT SETNAME commands if they executed successfully (no error)
@@ -932,6 +976,11 @@ impl Client {
     pub fn release_inflight_request(&self) -> isize {
         self.inflight_requests_allowed
             .fetch_add(1, Ordering::SeqCst)
+    }
+
+    /// Returns the current number of inflight requests (limit - allowed).
+    pub fn get_inflight_count(&self) -> isize {
+        self.inflight_requests_limit - self.inflight_requests_allowed.load(Ordering::SeqCst)
     }
 
     /// Update the password used to authenticate with the servers.
@@ -1488,6 +1537,7 @@ impl Client {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
+                inflight_requests_limit: inflight_requests_limit as isize,
                 iam_token_manager: None,
             };
 
@@ -1831,6 +1881,7 @@ mod tests {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
             iam_token_manager: None,
         }
     }
