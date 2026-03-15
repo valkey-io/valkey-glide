@@ -112,12 +112,13 @@ use pin_project_lite::pin_project;
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
-// Diagnostic counters for detecting poll_flush busy-spin during partition.
+// Diagnostic counters for detecting poll_flush busy-spin and zombie accumulation.
 static POLL_FLUSH_CALLS: AtomicU64 = AtomicU64::new(0);
 static POLL_RECOVER_READY: AtomicU64 = AtomicU64::new(0);
 static POLL_RECOVER_PENDING: AtomicU64 = AtomicU64::new(0);
 static POLL_COMPLETE_READY: AtomicU64 = AtomicU64::new(0);
 static POLL_COMPLETE_PENDING: AtomicU64 = AtomicU64::new(0);
+static DIAG_IN_FLIGHT: AtomicU64 = AtomicU64::new(0);
 static LAST_DIAG_LOG: AtomicU64 = AtomicU64::new(0);
 
 fn log_diag_counters() {
@@ -137,10 +138,11 @@ fn log_diag_counters() {
     let rec_pend = POLL_RECOVER_PENDING.swap(0, AtomicOrdering::Relaxed);
     let comp_ready = POLL_COMPLETE_READY.swap(0, AtomicOrdering::Relaxed);
     let comp_pend = POLL_COMPLETE_PENDING.swap(0, AtomicOrdering::Relaxed);
+    let in_flight = DIAG_IN_FLIGHT.load(AtomicOrdering::Relaxed);
     if flush > 0 {
         warn!(
-            "DIAG poll_flush={} recover(ready={},pending={}) complete(ready={},pending={})",
-            flush, rec_ready, rec_pend, comp_ready, comp_pend
+            "DIAG event_loop: poll_flush={} recover(ready={},pending={}) complete(ready={},pending={}) in_flight={}",
+            flush, rec_ready, rec_pend, comp_ready, comp_pend, in_flight
         );
     }
 }
@@ -1553,8 +1555,8 @@ where
             }
 
             let handle = tokio::spawn(async move {
-                info!(
-                    "refreshing connection task to {:?} started",
+                warn!(
+                    "DIAG connection refresh STARTED for node {:?}",
                     address_clone_for_task
                 );
 
@@ -1609,8 +1611,8 @@ where
 
                                 first_attempt = false;
                             }
-                            debug!(
-                                "Failed to refresh connection for node {}. Error: `{:?}`. Retrying in {:?}",
+                            warn!(
+                                "DIAG connection refresh FAILED for node {}. Error: `{:?}`. Retrying in {:?}",
                                 address_clone_for_task, err, backoff_duration
                             );
                             tokio::time::sleep(backoff_duration).await;
@@ -1620,8 +1622,8 @@ where
 
                 match node_result {
                     Ok(node) => {
-                        info!(
-                            "Succeeded to refresh connection for node {}.",
+                        warn!(
+                            "DIAG connection refresh SUCCEEDED for node {}",
                             address_clone_for_task
                         );
                         inner_clone
@@ -2613,13 +2615,30 @@ where
                 }
             };
         }
+        let node_addrs: Vec<String> = receivers.iter()
+            .filter_map(|(addr, _)| addr.clone())
+            .collect();
+        let sub_cmd_count = requests.iter().filter(|r| r.is_some()).count();
+
         core.pending_requests
             .lock()
             .unwrap()
             .extend(requests.into_iter().flatten());
 
-        Self::aggregate_results(receivers, routing, response_policy)
-            .await
+        let start = std::time::Instant::now();
+        let result = Self::aggregate_results(receivers, routing, response_policy)
+            .await;
+        let elapsed = start.elapsed();
+        if elapsed.as_millis() > 500 || result.is_err() {
+            warn!(
+                "DIAG multi_node: sub_cmds={} nodes=[{}] elapsed={}ms ok={}",
+                sub_cmd_count,
+                node_addrs.join(","),
+                elapsed.as_millis(),
+                result.is_ok()
+            );
+        }
+        result
             .map(Response::Single)
             .map_err(|err| (OperationTarget::FanOut, err))
     }
@@ -2650,8 +2669,16 @@ where
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
-        conn.req_packed_command(&cmd)
-            .await
+        let start = std::time::Instant::now();
+        let result = conn.req_packed_command(&cmd).await;
+        let elapsed = start.elapsed();
+        if elapsed.as_millis() > 500 || result.is_err() {
+            warn!(
+                "DIAG try_cmd_request: node={} elapsed={}ms ok={}",
+                address, elapsed.as_millis(), result.is_ok()
+            );
+        }
+        result
             .map(Response::Single)
             .map_err(|err| (address.into(), err))
     }
@@ -3241,7 +3268,10 @@ where
             .get_cluster_param(|params| params.retry_params.clone())
             .expect(MUTEX_READ_ERR);
         let mut poll_flush_action = PollFlushAction::None;
+        let mut shed_count: u32 = 0;
+        let mut new_inflight: u32 = 0;
         let mut pending_requests_guard = self.inner.pending_requests.lock().unwrap();
+        let pending_queue_depth = pending_requests_guard.len();
         if !pending_requests_guard.is_empty() {
             let mut pending_requests = mem::take(&mut *pending_requests_guard);
             for request in pending_requests.drain(..) {
@@ -3249,9 +3279,11 @@ where
                 // requests callers care about (load shedding). It will be ambiguous whether the
                 // request actually goes through regardless.
                 if request.sender.is_closed() {
+                    shed_count += 1;
                     continue;
                 }
 
+                new_inflight += 1;
                 let future = Self::try_request(request.info.clone(), self.inner.clone()).boxed();
                 self.in_flight_requests.push(Box::pin(Request {
                     retry_params: retry_params.clone(),
@@ -3263,6 +3295,10 @@ where
         }
         drop(pending_requests_guard);
 
+        let mut done_count: u32 = 0;
+        let mut retry_count: u32 = 0;
+        let mut refresh_count: u32 = 0;
+        let mut reconnect_count: u32 = 0;
         loop {
             let retry_params = retry_params.clone();
             let result = match Pin::new(&mut self.in_flight_requests).poll_next(cx) {
@@ -3270,8 +3306,9 @@ where
                 Poll::Ready(None) | Poll::Pending => break,
             };
             match result {
-                Next::Done => {}
+                Next::Done => { done_count += 1; }
                 Next::Retry { request } => {
+                    retry_count += 1;
                     let future = Self::try_request(request.info.clone(), self.inner.clone());
                     self.in_flight_requests.push(Box::pin(Request {
                         retry_params: retry_params.clone(),
@@ -3282,6 +3319,7 @@ where
                     }));
                 }
                 Next::RetryBusyLoadingError { request, address } => {
+                    retry_count += 1;
                     // TODO - do we also want to try and reconnect to replica if it is loading?
                     let future = Self::handle_loading_error_and_retry(
                         self.inner.clone(),
@@ -3303,6 +3341,7 @@ where
                     sleep_duration,
                     moved_redirect,
                 } => {
+                    refresh_count += 1;
                     poll_flush_action =
                         poll_flush_action.change_state(PollFlushAction::RebuildSlots);
                     let future: Option<
@@ -3339,6 +3378,7 @@ where
                     }
                 }
                 Next::Reconnect { request, target } => {
+                    reconnect_count += 1;
                     poll_flush_action = poll_flush_action
                         .change_state(PollFlushAction::Reconnect(HashSet::from_iter([target])));
                     if let Some(request) = request {
@@ -3346,6 +3386,7 @@ where
                     }
                 }
                 Next::ReconnectToInitialNodes { request } => {
+                    reconnect_count += 1;
                     poll_flush_action = poll_flush_action
                         .change_state(PollFlushAction::ReconnectFromInitialConnections);
                     if let Some(request) = request {
@@ -3353,6 +3394,15 @@ where
                     }
                 }
             }
+        }
+
+        // Log when anything interesting happened in this poll cycle
+        if shed_count > 0 || retry_count > 0 || refresh_count > 0 || reconnect_count > 0 {
+            warn!(
+                "DIAG poll_complete: pending_queue={} in_flight={} shed={} new={} done={} retry={} refresh={} reconnect={}",
+                pending_queue_depth, self.in_flight_requests.len(), shed_count, new_inflight,
+                done_count, retry_count, refresh_count, reconnect_count
+            );
         }
 
         if matches!(poll_flush_action, PollFlushAction::None) {
@@ -3444,11 +3494,8 @@ where
     ) -> Poll<Result<(), Self::Error>> {
         trace!("poll_flush: {:?}", self.state);
         POLL_FLUSH_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
+        DIAG_IN_FLIGHT.store(self.in_flight_requests.len() as u64, AtomicOrdering::Relaxed);
         log_diag_counters();
-        // No loop{} here — when recovery is needed, we enter recovery state and
-        // return Pending. The batch-drain loop will re-call flush() which re-polls
-        // us. This prevents busy-spinning the single-threaded Tokio runtime during
-        // network partition or long recovery.
         loop {
             self.send_refresh_error();
 

@@ -938,6 +938,12 @@ impl Client {
             .fetch_add(1, Ordering::SeqCst)
     }
 
+    /// Returns the current number of inflight requests (limit - allowed).
+    pub fn get_inflight_count(&self) -> isize {
+        DEFAULT_MAX_INFLIGHT_REQUESTS as isize
+            - self.inflight_requests_allowed.load(Ordering::SeqCst)
+    }
+
     /// Update the password used to authenticate with the servers.
     /// If None is passed, the password will be removed.
     /// If `immediate_auth` is true, the password will be used to authenticate with the servers immediately using the `AUTH` command.

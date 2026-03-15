@@ -399,18 +399,28 @@ fn process_callback_job(
 
                 match java_result {
                     Ok(java_result) => {
-                        let _ = complete_java_callback(&mut env, callback_id, &java_result);
+                        if let Err(e) = complete_java_callback(&mut env, callback_id, &java_result) {
+                            log::error!(
+                                "DIAG cb={} complete_java_callback FAILED (future left dangling): {}",
+                                callback_id, e
+                            );
+                        }
                     }
                     Err(e) => {
                         // Use ClientError for conversion failures
                         let error_code = 0; // UNSPECIFIED error type
                         let error_msg = format!("Response conversion failed: {e}");
-                        let _ = complete_java_callback_with_error_code(
+                        if let Err(e2) = complete_java_callback_with_error_code(
                             &mut env,
                             callback_id,
                             error_code,
                             &error_msg,
-                        );
+                        ) {
+                            log::error!(
+                                "DIAG cb={} complete_java_callback_with_error_code FAILED (future left dangling): {}",
+                                callback_id, e2
+                            );
+                        }
                     }
                 }
                 let _ = unsafe { env.pop_local_frame(&JObject::null()) };
@@ -419,16 +429,24 @@ fn process_callback_job(
                 // Always use error codes for consistent error handling
                 let error_code = error_type(&redis_err) as i32;
                 let error_msg = error_message(&redis_err);
-                let _ = complete_java_callback_with_error_code(
+                if let Err(e) = complete_java_callback_with_error_code(
                     &mut env,
                     callback_id,
                     error_code,
                     &error_msg,
-                );
+                ) {
+                    log::error!(
+                        "DIAG cb={} complete_java_callback_with_error_code FAILED on redis error (future left dangling): {}",
+                        callback_id, e
+                    );
+                }
             }
         },
         Err(e) => {
-            log::error!("JNI environment attachment failed: {e}");
+            log::error!(
+                "DIAG cb={} JNI environment attachment FAILED (future left dangling): {}",
+                callback_id, e
+            );
         }
     }
 }
@@ -442,7 +460,10 @@ pub fn complete_callback(
 ) {
     let sender = init_callback_workers();
     if let Err(e) = sender.send((jvm, callback_id, result, binary_mode)) {
-        log::error!("Callback queue send failed: {e}");
+        log::error!(
+            "DIAG cb={} callback queue send FAILED (future left dangling): {}",
+            callback_id, e
+        );
     }
 }
 

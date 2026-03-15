@@ -532,18 +532,38 @@ fn get_route(
 }
 
 fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer>) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static REQUEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     let callback_idx = request.callback_idx;
     task::spawn_local(async move {
         let start = std::time::Instant::now();
         let mut updated_inflight_counter = true;
         let client_clone = client.clone();
 
+        // Periodic inflight snapshot every 1000 requests
+        let count = REQUEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        if count % 1000 == 0 {
+            log_warn(
+                "handle_request",
+                format!(
+                    "DIAG periodic: request_count={} inflight={}",
+                    count,
+                    client.get_inflight_count()
+                ),
+            );
+        }
+
         let result = match client.reserve_inflight_request() {
             false => {
                 updated_inflight_counter = false;
                 log_warn(
                     "handle_request",
-                    format!("cb={} REJECTED: max inflight reached", callback_idx),
+                    format!(
+                        "cb={} REJECTED: max inflight reached (inflight={})",
+                        callback_idx,
+                        client.get_inflight_count()
+                    ),
                 );
                 Err(ClientUsageError::User(
                     "Reached maximum inflight requests".to_string(),
@@ -648,10 +668,11 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
             log_warn(
                 "handle_request",
                 format!(
-                    "cb={} elapsed={}ms ok={}",
+                    "cb={} elapsed={}ms ok={} inflight={}",
                     callback_idx,
                     elapsed_ms,
-                    result.is_ok()
+                    result.is_ok(),
+                    client_clone.get_inflight_count()
                 ),
             );
         }
