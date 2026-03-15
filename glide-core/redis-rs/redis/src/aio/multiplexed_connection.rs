@@ -381,6 +381,7 @@ where
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
+        let send_start = std::time::Instant::now();
         self.sender
             .send(PipelineMessage {
                 input,
@@ -399,12 +400,23 @@ where
                     err.to_string(),
                 ))
             })?;
+        let send_elapsed = send_start.elapsed();
+        if send_elapsed.as_millis() > 100 {
+            warn!(
+                "DIAG send_recv: pipeline channel send took {}ms (backpressure from slow TCP)",
+                send_elapsed.as_millis()
+            );
+        }
         match Runtime::locate().timeout(timeout, receiver).await {
             Ok(Ok(result)) => result,
             Ok(Err(err)) => {
                 // The `sender` was dropped, likely indicating a failure in the stream.
                 // This error suggests that it's unclear whether the server received the request before the connection failed,
                 // making it unsafe to retry. For example, retrying an INCR request could result in double increments.
+                warn!(
+                    "DIAG send_recv: connection stream died (sender dropped): {}",
+                    err
+                );
                 Err(RedisError::from((
                     crate::ErrorKind::FatalReceiveError,
                     "Failed to receive a response due to a fatal error",
@@ -412,7 +424,7 @@ where
                 )))
             }
             Err(elapsed) => {
-                warn!("send_recv: response_timeout fired after {}ms", timeout.as_millis());
+                warn!("DIAG send_recv: response_timeout fired after {}ms (sub-command zombie left in pipeline)", timeout.as_millis());
                 Err(elapsed.into())
             }
         }

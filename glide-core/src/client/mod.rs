@@ -566,6 +566,15 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
+            let cmd_name_for_diag = cmd.command().unwrap_or_default();
+            let cmd_name_for_diag = String::from_utf8_lossy(&cmd_name_for_diag).to_string();
+            let first_key_for_diag = cmd.arg_idx(1)
+                .map(|b| {
+                    let s = String::from_utf8_lossy(b);
+                    if s.len() > 40 { format!("{}...", &s[..40]) } else { s.to_string() }
+                })
+                .unwrap_or_default();
+
             let result = run_with_timeout(request_timeout, async move {
                 match client {
                     ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
@@ -601,7 +610,32 @@ impl Client {
                 }
                 .and_then(|value| convert_to_expected_type(value, expected_type))
             })
-            .await?;
+            .await;
+
+            match &result {
+                Err(e) if e.is_timeout() => {
+                    log_warn(
+                        "send_command",
+                        format!(
+                            "DIAG TIMEOUT: cmd={}({}) timeout={}ms",
+                            cmd_name_for_diag,
+                            first_key_for_diag,
+                            request_timeout.map(|d| d.as_millis()).unwrap_or(0)
+                        ),
+                    );
+                }
+                Err(e) => {
+                    log_warn(
+                        "send_command",
+                        format!(
+                            "DIAG ERROR: cmd={}({}) err={}",
+                            cmd_name_for_diag, first_key_for_diag, e
+                        ),
+                    );
+                }
+                _ => {}
+            }
+            let result = result?;
 
             // Intercept CLIENT SETNAME commands after regular processing
             // Only handle CLIENT SETNAME commands if they executed successfully (no error)

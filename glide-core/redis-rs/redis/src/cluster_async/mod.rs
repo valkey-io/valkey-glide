@@ -725,6 +725,27 @@ fn boxed_sleep(duration: Duration) -> BoxFuture<'static, ()> {
     Box::pin(tokio::time::sleep(duration))
 }
 
+/// Extract command name and first key for diagnostic logging.
+fn diag_cmd_summary<C>(cmd_arg: &CmdArg<C>) -> String {
+    match cmd_arg {
+        CmdArg::Cmd { cmd, .. } => {
+            let cmd_name = cmd.arg_idx(0)
+                .map(|b| String::from_utf8_lossy(b).to_string())
+                .unwrap_or_else(|| "?".into());
+            let first_key = cmd.arg_idx(1)
+                .map(|b| {
+                    let s = String::from_utf8_lossy(b);
+                    if s.len() > 40 { format!("{}...", &s[..40]) } else { s.to_string() }
+                })
+                .unwrap_or_else(|| "-".into());
+            format!("{}({})", cmd_name, first_key)
+        }
+        CmdArg::Pipeline { .. } => "PIPELINE".into(),
+        CmdArg::ClusterScan { .. } => "CLUSTER_SCAN".into(),
+        CmdArg::OperationRequest(_) => "OPERATION".into(),
+    }
+}
+
 #[derive(Debug, Display)]
 pub(crate) enum Response {
     Single(Value),
@@ -938,6 +959,9 @@ enum Next<C> {
         request: Option<PendingRequest<C>>,
     },
     Done,
+    /// The caller dropped the receiver (e.g. parent timeout cancelled aggregate_results).
+    /// The sub-command was still in-flight — this is a zombie being cleaned up.
+    Cancelled,
 }
 
 impl<C> Future for Request<C> {
@@ -947,8 +971,11 @@ impl<C> Future for Request<C> {
         let mut this = self.as_mut().project();
         // If the sender is closed, the caller is no longer waiting for the reply, and it is ambiguous
         // whether they expect the side-effect of the request to happen or not.
-        if this.request.is_none() || this.request.as_ref().unwrap().sender.is_closed() {
+        if this.request.is_none() {
             return Poll::Ready(Next::Done);
+        }
+        if this.request.as_ref().unwrap().sender.is_closed() {
+            return Poll::Ready(Next::Cancelled);
         }
         let future = match this.future.as_mut().project() {
             RequestStateProj::Future { future } => future,
@@ -1063,7 +1090,15 @@ impl<C> Future for Request<C> {
                     }
                 };
 
-                warn!("Received request error {} on node {:?}.", err, address);
+                warn!(
+                    "DIAG request error: cmd={} node={} retry={}/{} err={} method={:?}",
+                    diag_cmd_summary(&request.info.cmd),
+                    address,
+                    request.retry,
+                    this.retry_params.number_of_retries,
+                    err,
+                    err.retry_method()
+                );
 
                 match err.retry_method() {
                     RetryMethod::AskRedirect => {
@@ -3296,6 +3331,7 @@ where
         drop(pending_requests_guard);
 
         let mut done_count: u32 = 0;
+        let mut cancelled_count: u32 = 0;
         let mut retry_count: u32 = 0;
         let mut refresh_count: u32 = 0;
         let mut reconnect_count: u32 = 0;
@@ -3307,6 +3343,7 @@ where
             };
             match result {
                 Next::Done => { done_count += 1; }
+                Next::Cancelled => { cancelled_count += 1; }
                 Next::Retry { request } => {
                     retry_count += 1;
                     let future = Self::try_request(request.info.clone(), self.inner.clone());
@@ -3397,11 +3434,11 @@ where
         }
 
         // Log when anything interesting happened in this poll cycle
-        if shed_count > 0 || retry_count > 0 || refresh_count > 0 || reconnect_count > 0 {
+        if shed_count > 0 || cancelled_count > 0 || retry_count > 0 || refresh_count > 0 || reconnect_count > 0 {
             warn!(
-                "DIAG poll_complete: pending_queue={} in_flight={} shed={} new={} done={} retry={} refresh={} reconnect={}",
+                "DIAG poll_complete: pending_queue={} in_flight={} shed={} new={} done={} cancelled={} retry={} refresh={} reconnect={}",
                 pending_queue_depth, self.in_flight_requests.len(), shed_count, new_inflight,
-                done_count, retry_count, refresh_count, reconnect_count
+                done_count, cancelled_count, retry_count, refresh_count, reconnect_count
             );
         }
 
