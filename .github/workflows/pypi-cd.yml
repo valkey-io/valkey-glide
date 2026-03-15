@@ -587,6 +587,12 @@ jobs:
 
                   echo "/opt/${PYPY_VERSION_3_10}/bin" >> ${GITHUB_PATH}
 
+            - name: Install engine build dependencies (ephemeral runners)
+              if: ${{ contains(matrix.build.RUNNER, 'ephemeral') }}
+              run: |
+                  sudo apt update -y
+                  sudo apt install -y pkg-config libssl-dev
+
             - name: Install engine
               uses: ./.github/workflows/install-engine
               with:
