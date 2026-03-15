@@ -360,7 +360,7 @@ pub fn init_callback_workers() -> &'static Sender<CallbackJob> {
         let rx = Arc::new(std::sync::Mutex::new(rx));
         let worker_threads = get_callback_worker_threads();
 
-        log::info!("DIAG JNI callback workers: {} threads", worker_threads);
+        log::warn!("DIAG JNI callback workers: {} threads", worker_threads);
 
         for i in 0..worker_threads {
             let rx_clone = Arc::clone(&rx);
@@ -507,7 +507,7 @@ pub fn complete_callback(
     let queued = CB_QUEUED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let processed = CB_PROCESSED.load(std::sync::atomic::Ordering::Relaxed);
     let queue_depth = queued.saturating_sub(processed);
-    if queue_depth > 100 || queued.is_multiple_of(5000) {
+    if queue_depth > 100 {
         log::warn!(
             "DIAG callback_queue: queued={} processed={} depth={}",
             queued + 1,

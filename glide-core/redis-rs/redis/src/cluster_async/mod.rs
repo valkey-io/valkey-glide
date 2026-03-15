@@ -3581,22 +3581,30 @@ where
     ) -> Poll<Result<(), Self::Error>> {
         trace!("poll_flush: {:?}", self.state);
         POLL_FLUSH_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
-        DIAG_IN_FLIGHT.store(
-            self.in_flight_requests.len() as u64,
-            AtomicOrdering::Relaxed,
-        );
-        DIAG_CONNECTIONS.store(
-            self.inner.conn_lock.read().map(|c| c.len()).unwrap_or(0) as u64,
-            AtomicOrdering::Relaxed,
-        );
-        DIAG_PENDING_QUEUE.store(
-            self.inner
-                .pending_requests
-                .lock()
-                .map(|p| p.len())
-                .unwrap_or(0) as u64,
-            AtomicOrdering::Relaxed,
-        );
+        DIAG_IN_FLIGHT.store(self.in_flight_requests.len() as u64, AtomicOrdering::Relaxed);
+        // Snapshot connection count and pending queue only when the periodic log
+        // is about to fire (every 5s) to avoid lock contention on every poll cycle.
+        {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let last = LAST_DIAG_LOG.load(AtomicOrdering::Relaxed);
+            if now.saturating_sub(last) >= 5 {
+                DIAG_CONNECTIONS.store(
+                    self.inner.conn_lock.read().map(|c| c.len()).unwrap_or(0) as u64,
+                    AtomicOrdering::Relaxed,
+                );
+                DIAG_PENDING_QUEUE.store(
+                    self.inner
+                        .pending_requests
+                        .lock()
+                        .map(|p| p.len())
+                        .unwrap_or(0) as u64,
+                    AtomicOrdering::Relaxed,
+                );
+            }
+        }
         log_diag_counters();
         loop {
             self.send_refresh_error();

@@ -238,6 +238,7 @@ pub struct Client {
     request_timeout: Duration,
     // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
+    inflight_requests_limit: isize,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
 }
@@ -979,8 +980,7 @@ impl Client {
 
     /// Returns the current number of inflight requests (limit - allowed).
     pub fn get_inflight_count(&self) -> isize {
-        DEFAULT_MAX_INFLIGHT_REQUESTS as isize
-            - self.inflight_requests_allowed.load(Ordering::SeqCst)
+        self.inflight_requests_limit - self.inflight_requests_allowed.load(Ordering::SeqCst)
     }
 
     /// Update the password used to authenticate with the servers.
@@ -1537,6 +1537,7 @@ impl Client {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
+                inflight_requests_limit: inflight_requests_limit as isize,
                 iam_token_manager: None,
             };
 
@@ -1880,6 +1881,7 @@ mod tests {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
             iam_token_manager: None,
         }
     }
