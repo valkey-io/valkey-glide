@@ -568,10 +568,15 @@ impl Client {
 
             let cmd_name_for_diag = cmd.command().unwrap_or_default();
             let cmd_name_for_diag = String::from_utf8_lossy(&cmd_name_for_diag).to_string();
-            let first_key_for_diag = cmd.arg_idx(1)
+            let first_key_for_diag = cmd
+                .arg_idx(1)
                 .map(|b| {
                     let s = String::from_utf8_lossy(b);
-                    if s.len() > 40 { format!("{}...", &s[..40]) } else { s.to_string() }
+                    if s.len() > 40 {
+                        format!("{}...", &s[..40])
+                    } else {
+                        s.to_string()
+                    }
                 })
                 .unwrap_or_default();
 

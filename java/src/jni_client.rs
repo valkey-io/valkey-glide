@@ -107,7 +107,8 @@ pub(crate) fn get_runtime() -> &'static Runtime {
 
         log::warn!(
             "DIAG tokio runtime init: worker_threads={} max_blocking_threads={}",
-            worker_threads, worker_threads * 2
+            worker_threads,
+            worker_threads * 2
         );
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(worker_threads)
@@ -414,17 +415,21 @@ fn process_callback_job(
 
                 match java_result {
                     Ok(java_result) => {
-                        if let Err(e) = complete_java_callback(&mut env, callback_id, &java_result) {
+                        if let Err(e) = complete_java_callback(&mut env, callback_id, &java_result)
+                        {
                             log::error!(
                                 "DIAG cb={} complete_java_callback FAILED (future left dangling): {}",
-                                callback_id, e
+                                callback_id,
+                                e
                             );
                         }
                     }
                     Err(e) => {
                         log::error!(
                             "DIAG cb={} response CONVERSION FAILED: {} (convert_time={}ms)",
-                            callback_id, e, convert_elapsed.as_millis()
+                            callback_id,
+                            e,
+                            convert_elapsed.as_millis()
                         );
                         // Use ClientError for conversion failures
                         let error_code = 0; // UNSPECIFIED error type
@@ -437,7 +442,8 @@ fn process_callback_job(
                         ) {
                             log::error!(
                                 "DIAG cb={} complete_java_callback_with_error_code FAILED (future left dangling): {}",
-                                callback_id, e2
+                                callback_id,
+                                e2
                             );
                         }
                     }
@@ -448,7 +454,10 @@ fn process_callback_job(
                 if cb_elapsed.as_millis() > 100 || convert_elapsed.as_millis() > 50 {
                     log::warn!(
                         "DIAG cb={} SLOW_CALLBACK: thread={} total={}ms convert={}ms",
-                        callback_id, thread_name, cb_elapsed.as_millis(), convert_elapsed.as_millis()
+                        callback_id,
+                        thread_name,
+                        cb_elapsed.as_millis(),
+                        convert_elapsed.as_millis()
                     );
                 }
             }
@@ -458,7 +467,10 @@ fn process_callback_job(
                 let error_msg = error_message(&redis_err);
                 log::warn!(
                     "DIAG cb={} ERROR_CALLBACK: thread={} error_code={} msg={}",
-                    callback_id, thread_name, error_code, error_msg
+                    callback_id,
+                    thread_name,
+                    error_code,
+                    error_msg
                 );
                 if let Err(e) = complete_java_callback_with_error_code(
                     &mut env,
@@ -468,7 +480,8 @@ fn process_callback_job(
                 ) {
                     log::error!(
                         "DIAG cb={} complete_java_callback_with_error_code FAILED on redis error (future left dangling): {}",
-                        callback_id, e
+                        callback_id,
+                        e
                     );
                 }
             }
@@ -476,7 +489,8 @@ fn process_callback_job(
         Err(e) => {
             log::error!(
                 "DIAG cb={} JNI environment attachment FAILED (future left dangling): {}",
-                callback_id, e
+                callback_id,
+                e
             );
         }
     }
@@ -496,13 +510,16 @@ pub fn complete_callback(
     if queue_depth > 100 || queued % 5000 == 0 {
         log::warn!(
             "DIAG callback_queue: queued={} processed={} depth={}",
-            queued + 1, processed, queue_depth
+            queued + 1,
+            processed,
+            queue_depth
         );
     }
     if let Err(e) = sender.send((jvm, callback_id, result, binary_mode)) {
         log::error!(
             "DIAG cb={} callback queue send FAILED (future left dangling): {}",
-            callback_id, e
+            callback_id,
+            e
         );
     }
 }
