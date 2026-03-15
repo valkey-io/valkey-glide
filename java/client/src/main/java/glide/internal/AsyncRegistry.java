@@ -15,8 +15,8 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Async registry for correlating native callbacks with Java {@link CompletableFuture}s.
  *
- * <p>Timeouts use a periodic sweep over {@code activeFutures}. Each entry stores the future and
- * its deadline, avoiding a separate tracking map and minimizing per-request overhead.
+ * <p>Timeouts use a periodic sweep over {@code activeFutures}. Each entry stores the future and its
+ * deadline, avoiding a separate tracking map and minimizing per-request overhead.
  */
 public final class AsyncRegistry {
 
@@ -86,10 +86,7 @@ public final class AsyncRegistry {
 
     /** Register a future with optional timeout, inflight limit, and client tracking. */
     public static <T> long register(
-            CompletableFuture<T> future,
-            int maxInflightRequests,
-            long clientHandle,
-            long timeoutMillis) {
+            CompletableFuture<T> future, int maxInflightRequests, long clientHandle, long timeoutMillis) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
         }
@@ -103,10 +100,7 @@ public final class AsyncRegistry {
         @SuppressWarnings("unchecked")
         CompletableFuture<Object> originalFuture = (CompletableFuture<Object>) future;
 
-        long deadline =
-                timeoutMillis > 0
-                        ? System.currentTimeMillis() + timeoutMillis
-                        : Long.MAX_VALUE;
+        long deadline = timeoutMillis > 0 ? System.currentTimeMillis() + timeoutMillis : Long.MAX_VALUE;
 
         activeFutures.put(correlationId, new Entry(originalFuture, deadline));
 
@@ -141,8 +135,7 @@ public final class AsyncRegistry {
         activeFutures.forEach(
                 (id, entry) -> {
                     if (entry.deadlineMs <= now) {
-                        if (entry.future.completeExceptionally(
-                                new TimeoutException("Request timed out"))) {
+                        if (entry.future.completeExceptionally(new TimeoutException("Request timed out"))) {
                             GlideNativeBridge.markTimedOut(id);
                         }
                     }
@@ -176,9 +169,7 @@ public final class AsyncRegistry {
         return entry != null && entry.future.complete(result);
     }
 
-    /**
-     * Complete with error. Codes: 0=Unspecified, 1=ExecAbort, 2=Timeout, 3=Disconnect.
-     */
+    /** Complete with error. Codes: 0=Unspecified, 1=ExecAbort, 2=Timeout, 3=Disconnect. */
     public static boolean completeCallbackWithErrorCode(
             long correlationId, int errorTypeCode, String errorMessage) {
         Entry entry = activeFutures.get(correlationId);
