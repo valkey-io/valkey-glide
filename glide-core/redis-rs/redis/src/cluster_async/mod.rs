@@ -3581,7 +3581,10 @@ where
     ) -> Poll<Result<(), Self::Error>> {
         trace!("poll_flush: {:?}", self.state);
         POLL_FLUSH_CALLS.fetch_add(1, AtomicOrdering::Relaxed);
-        DIAG_IN_FLIGHT.store(self.in_flight_requests.len() as u64, AtomicOrdering::Relaxed);
+        DIAG_IN_FLIGHT.store(
+            self.in_flight_requests.len() as u64,
+            AtomicOrdering::Relaxed,
+        );
         // Snapshot connection count and pending queue only when the periodic log
         // is about to fire (every 5s) to avoid lock contention on every poll cycle.
         {
