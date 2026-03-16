@@ -265,9 +265,6 @@ publishing {
             artifactId = 'valkey-glide'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
             pom {
-                // Shadow plugin sets packaging to 'pom' by default; override to 'jar'
-                // so Maven and Gradle (without .module metadata) resolve the artifact correctly.
-                packaging = 'jar'
                 name = 'valkey-glide'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
                 url = 'https://github.com/valkey-io/valkey-glide.git'
@@ -304,13 +301,7 @@ java {
 
 tasks.withType(GenerateModuleMetadata) {
     dependsOn shadowJar
-    // Only suppress .module for release builds. During local dev / CI builds,
-    // the single-platform .module is correct and needed for classifier resolution.
-    // For release publishes, each platform CI job generates its own .module and
-    // the last one wins the race during bundling, pointing to the wrong jar.
-    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion
-    def isReleaseBuild = releaseVersion != defaultReleaseVersion
-    enabled = !isReleaseBuild
+    enabled = false
 }
 
 tasks.withType(Sign) {
