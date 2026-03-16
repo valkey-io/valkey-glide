@@ -306,6 +306,10 @@ impl RedisCluster {
             .map(|server| ClusterType::build_addr(self.use_tls, &server.host, server.port as u16))
             .collect()
     }
+
+    pub fn all_server_pids(&self) -> Vec<u32> {
+        self.servers.iter().map(|s| s.pid).collect()
+    }
 }
 
 pub struct ClusterTestBasics {
