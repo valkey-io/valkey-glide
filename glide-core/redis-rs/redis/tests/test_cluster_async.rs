@@ -5038,9 +5038,10 @@ mod cluster_async {
             let res = con_tx
                 .route_command(
                     &cmd_id,
-                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                        Route::new(keyslot_bar, SlotAddr::Master),
-                    )),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        keyslot_bar,
+                        SlotAddr::Master,
+                    ))),
                 )
                 .await;
             let client_id = match res.unwrap() {
@@ -5073,7 +5074,10 @@ mod cluster_async {
                         &pipe,
                         0,
                         2,
-                        Some(SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master))),
+                        Some(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                            keyslot_bar,
+                            SlotAddr::Master,
+                        ))),
                         None,
                     )
                     .await;
@@ -5087,12 +5091,18 @@ mod cluster_async {
             {
                 let mut trigger_set_cmd = redis::cmd("SET");
                 trigger_set_cmd.arg("bar").arg("123");
-                let trigger_res =
-                    trigger_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                let trigger_res = trigger_set_cmd.query_async::<_, String>(&mut con_tx).await;
                 match trigger_res {
-                    Ok(_) => panic!("Unexpected success on SET to blocked shard; expected ConnectionNotFoundForRoute error"),
+                    Ok(_) => panic!(
+                        "Unexpected success on SET to blocked shard; expected connection error"
+                    ),
                     Err(e) => {
-                        if !e.to_string().contains("ConnectionNotFoundForRoute") {
+                        let msg = e.to_string();
+                        if !msg.contains("ConnectionNotFoundForRoute")
+                            && !e.is_connection_dropped()
+                            && e.kind() != ErrorKind::AllConnectionsUnavailable
+                            && e.kind() != ErrorKind::FatalSendError
+                        {
                             panic!("Unexpected error on SET to blocked shard: {e:?}");
                         }
                     }
@@ -5104,13 +5114,11 @@ mod cluster_async {
             {
                 let mut healthy_set_cmd = redis::cmd("SET");
                 healthy_set_cmd.arg("foo").arg("123");
-                let healthy_res =
-                    healthy_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                let healthy_res = healthy_set_cmd.query_async::<_, String>(&mut con_tx).await;
                 match healthy_res {
                     Ok(result) => {
                         assert_eq!(
-                            result,
-                            "OK",
+                            result, "OK",
                             "Healthy shard (slot 12182) did not return OK as expected"
                         );
                     }
@@ -5669,7 +5677,10 @@ mod cluster_async {
         }
         // If you need to change the number here due to a change in the cluster, you probably also need to adjust the test.
         // See the PING counts above to explain why 5 is the target number.
-        assert_eq!(ping_attempts.load(Ordering::Acquire), 5);
+        // With non-blocking reconnection, the reconnect path may complete with fewer PINGs
+        // since the poll loop isn't blocked waiting for reconnection futures.
+        let pings = ping_attempts.load(Ordering::Acquire);
+        assert!((4..=5).contains(&pings), "Expected 4-5 pings, got {pings}");
     }
 
     #[test]

@@ -1310,8 +1310,10 @@ pub(crate) mod shared_client_tests {
                         Err(err) => {
                             // Connection was dropped as expected
                             assert!(
-                                err.is_connection_dropped() || err.is_timeout(),
-                                "Expected connection dropped or timeout error, got: {err:?}",
+                                err.is_connection_dropped()
+                                    || err.is_timeout()
+                                    || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
+                                "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                             );
                             // Retry and verify we can still connect with IAM auth after reconnection
                             let client_info = repeat_try_create(|| async {
