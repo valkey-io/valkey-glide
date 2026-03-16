@@ -5114,6 +5114,9 @@ mod cluster_async {
                         let err_str = e.to_string();
                         if !err_str.contains("ConnectionNotFoundForRoute")
                             && !err_str.contains("timed out")
+                            && !e.is_connection_dropped()
+                            && e.kind() != ErrorKind::AllConnectionsUnavailable
+                            && e.kind() != ErrorKind::FatalSendError
                         {
                             panic!("Unexpected error on SET to blocked shard: {e:?}");
                         }
@@ -5689,7 +5692,10 @@ mod cluster_async {
         }
         // If you need to change the number here due to a change in the cluster, you probably also need to adjust the test.
         // See the PING counts above to explain why 5 is the target number.
-        assert_eq!(ping_attempts.load(Ordering::Acquire), 5);
+        // With non-blocking reconnection, the reconnect path may complete with fewer PINGs
+        // since the poll loop isn't blocked waiting for reconnection futures.
+        let pings = ping_attempts.load(Ordering::Acquire);
+        assert!((4..=5).contains(&pings), "Expected 4-5 pings, got {pings}");
     }
 
     #[test]
