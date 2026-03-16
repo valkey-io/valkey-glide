@@ -38,6 +38,7 @@ from tests.utils.pubsub_test_utils import (
     sync_subscribe_by_method,
     sync_wait_for_subscription_state,
     sync_wait_for_subscription_state_if_needed,
+    wait_for_messages,
 )
 from tests.utils.utils import (
     get_random_string,
@@ -1909,8 +1910,8 @@ class TestSyncPubSub:
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
-            # allow the message to propagate
-            time.sleep(15)
+            # Wait for message to propagate
+            wait_for_messages(1, callback_messages, timeout=30.0)
 
             assert len(callback_messages) == 1
 
@@ -1967,8 +1968,8 @@ class TestSyncPubSub:
                 == 1
             )
 
-            # allow the message to propagate
-            time.sleep(15)
+            # Wait for message with polling
+            wait_for_messages(1, callback_messages, timeout=45.0)
 
             assert len(callback_messages) == 1
 

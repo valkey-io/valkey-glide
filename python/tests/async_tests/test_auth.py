@@ -1,8 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
-import asyncio
-
 import anyio
 import pytest
 from glide.glide_client import TGlideClient
@@ -421,7 +419,7 @@ class TestAuthCommands:
         await assert_connected(client)
 
         # Wait for automatic token refresh to occur
-        await asyncio.sleep(3)
+        await anyio.sleep(3)
 
         # Verify client still works after automatic refresh
         await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
