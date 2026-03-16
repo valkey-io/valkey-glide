@@ -265,6 +265,9 @@ publishing {
             artifactId = 'valkey-glide'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
             pom {
+                // Shadow plugin sets packaging to 'pom' by default; override to 'jar'
+                // so Maven and Gradle (without .module metadata) resolve the artifact correctly.
+                packaging = 'jar'
                 name = 'valkey-glide'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
                 url = 'https://github.com/valkey-io/valkey-glide.git'
@@ -300,7 +303,11 @@ java {
 }
 
 tasks.withType(GenerateModuleMetadata) {
-    dependsOn shadowJar
+    // Suppress .module generation — the metadata currently doesn't declare
+    // proper per-platform variants, so Gradle consumers may resolve the wrong
+    // classifier jar.  Falling back to the POM works correctly for both the
+    // uber jar (no classifier) and explicit platform classifier requests.
+    enabled = false
 }
 
 tasks.withType(Sign) {
