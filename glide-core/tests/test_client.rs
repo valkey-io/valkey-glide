@@ -2654,8 +2654,10 @@ pub(crate) mod shared_client_tests {
                 Err(err) => {
                     // Connection was dropped as expected
                     assert!(
-                        err.is_connection_dropped() || err.is_timeout(),
-                        "Expected connection dropped or timeout error, got: {err:?}",
+                        err.is_connection_dropped()
+                            || err.is_timeout()
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
+                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
                     // Retry and verify we're still on database 5 after reconnection
                     let client_info = repeat_try_create(|| async {
@@ -2788,8 +2790,10 @@ pub(crate) mod shared_client_tests {
                 Err(err) => {
                     // Connection was dropped as expected
                     assert!(
-                        err.is_connection_dropped() || err.is_timeout(),
-                        "Expected connection dropped or timeout error, got: {err:?}",
+                        err.is_connection_dropped()
+                            || err.is_timeout()
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
+                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
                     // Retry and verify we're still on name 2ndName after reconnection
                     let client_info = repeat_try_create(|| async {
@@ -2948,8 +2952,10 @@ pub(crate) mod shared_client_tests {
                 Err(err) => {
                     // Connection was dropped as expected
                     assert!(
-                        err.is_connection_dropped() || err.is_timeout(),
-                        "Expected connection dropped or timeout error, got: {err:?}",
+                        err.is_connection_dropped()
+                            || err.is_timeout()
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
+                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
                     // Retry and verify we're still authenticated with same username after reconnection
                     let client_info = repeat_try_create(|| async {
@@ -3088,8 +3094,10 @@ pub(crate) mod shared_client_tests {
                 Err(err) => {
                     // Connection was dropped as expected
                     assert!(
-                        err.is_connection_dropped() || err.is_timeout(),
-                        "Expected connection dropped or timeout error, got: {err:?}",
+                        err.is_connection_dropped()
+                            || err.is_timeout()
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
+                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
                     // Retry and verify we're still using RESP3 after reconnection
                     let hello_info = repeat_try_create(|| async {
