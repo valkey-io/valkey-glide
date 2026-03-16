@@ -303,11 +303,14 @@ java {
 }
 
 tasks.withType(GenerateModuleMetadata) {
-    // Suppress .module generation — the metadata currently doesn't declare
-    // proper per-platform variants, so Gradle consumers may resolve the wrong
-    // classifier jar.  Falling back to the POM works correctly for both the
-    // uber jar (no classifier) and explicit platform classifier requests.
-    enabled = false
+    dependsOn shadowJar
+    // Only suppress .module for release builds. During local dev / CI builds,
+    // the single-platform .module is correct and needed for classifier resolution.
+    // For release publishes, each platform CI job generates its own .module and
+    // the last one wins the race during bundling, pointing to the wrong jar.
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: defaultReleaseVersion
+    def isReleaseBuild = releaseVersion != defaultReleaseVersion
+    enabled = !isReleaseBuild
 }
 
 tasks.withType(Sign) {
