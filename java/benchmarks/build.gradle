@@ -29,10 +29,10 @@ dependencies {
 
     // This dependency is used internally, and not exposed to consumers on their own compile classpath.
     implementation 'com.google.guava:guava:33.5.0-jre'
-    implementation 'redis.clients:jedis:7.0.0'
-    implementation 'io.lettuce:lettuce-core:7.0.0.RELEASE'
-    implementation 'io.lettuce:lettuce-core:7.0.0.RELEASE'
-    implementation 'commons-cli:commons-cli:1.5.0'
+    implementation 'redis.clients:jedis:7.4.0'
+    implementation 'io.lettuce:lettuce-core:7.5.0.RELEASE'
+    implementation 'io.lettuce:lettuce-core:7.5.0.RELEASE'
+    implementation 'commons-cli:commons-cli:1.11.0'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.13.2'
