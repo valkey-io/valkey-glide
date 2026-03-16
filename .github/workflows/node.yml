@@ -96,7 +96,7 @@ jobs:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: [get-matrices]
-        timeout-minutes: 25
+        timeout-minutes: 40
         strategy:
             fail-fast: false
             matrix:
@@ -152,6 +152,9 @@ jobs:
               shell: bash
               run: |
                   npm run build
+                  export AWS_ACCESS_KEY_ID=test_access_key 
+                  export AWS_SECRET_ACCESS_KEY=test_secret_key 
+                  export AWS_SESSION_TOKEN=test_session_token 
                   npm run test
               working-directory: ./node
               env:

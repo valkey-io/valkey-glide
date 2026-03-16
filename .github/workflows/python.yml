@@ -44,7 +44,7 @@ on:
                 type: boolean
                 default: false
             run-with-macos:
-                description: "Run with macos included (only when necessary)"
+                description: Include macOS runs (avoid GitHub runners unless specifically required)
                 type: choice
                 options:
                     - false
@@ -176,24 +176,39 @@ jobs:
               working-directory: ./python
               env:
                   TEST_NAME_ARG: ${{ inputs.name && format('-k {0}', inputs.name) || '' }}
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
             - name: Test with pytest (full matrix, all async backends)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (async only)
               if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (sync only)
               if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
