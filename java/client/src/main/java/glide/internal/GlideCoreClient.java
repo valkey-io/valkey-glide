@@ -10,6 +10,9 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -118,6 +121,39 @@ public class GlideCoreClient implements AutoCloseable {
                 });
     }
 
+    /**
+     * Shared timeout scheduler for Java-side timeout on futures. This only completes the user-facing
+     * future with TimeoutException — it does NOT touch AsyncRegistry or inflight counters. The
+     * registry entry and inflight slot are released only when the native callback arrives.
+     *
+     * <p>Uses ScheduledExecutorService for Java 8 compatibility. On Java 9+ this could be replaced
+     * with CompletableFuture.orTimeout(), which uses the same internal mechanism
+     * (Delayer.delay/ScheduledThreadPoolExecutor) but avoids the explicit scheduler field.
+     */
+    private static final ScheduledExecutorService TIMEOUT_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(
+                    r -> {
+                        Thread t = new Thread(r, "GlideClientTimeout");
+                        t.setDaemon(true);
+                        return t;
+                    });
+
+    /**
+     * Apply Java-side timeout to a future. If timeoutMs > 0 and the future is not completed within
+     * the deadline, it is completed exceptionally with TimeoutException. This does not affect the
+     * AsyncRegistry entry or inflight counter.
+     */
+    private static void applyTimeout(CompletableFuture<?> future, long timeoutMs) {
+        if (timeoutMs > 0) {
+            TIMEOUT_SCHEDULER.schedule(
+                    () ->
+                            future.completeExceptionally(
+                                    new glide.api.models.exceptions.TimeoutException("Request timed out")),
+                    timeoutMs,
+                    TimeUnit.MILLISECONDS);
+        }
+    }
+
     /** Handle for the native client resource. */
     private final AtomicLong nativeClientHandle = new AtomicLong(0);
 
@@ -222,6 +258,7 @@ public class GlideCoreClient implements AutoCloseable {
             // Execute binary command directly using protobuf bytes
             GlideNativeBridge.executeBinaryCommandAsync(handle, requestBytes, correlationId);
 
+            applyTimeout(future, timeoutMs);
             return future;
 
         } catch (Exception e) {
@@ -270,6 +307,7 @@ public class GlideCoreClient implements AutoCloseable {
             // Execute command directly using protobuf bytes
             GlideNativeBridge.executeCommandAsync(handle, requestBytes, correlationId);
 
+            applyTimeout(future, timeoutMs);
             return future;
 
         } catch (Exception e) {
@@ -309,6 +347,7 @@ public class GlideCoreClient implements AutoCloseable {
             GlideNativeBridge.executeBatchAsync(
                     handle, batchRequestBytes, expectUtf8Response, correlationId);
 
+            applyTimeout(future, timeoutMs);
             return future;
 
         } catch (Exception e) {
@@ -350,6 +389,7 @@ public class GlideCoreClient implements AutoCloseable {
             GlideNativeBridge.executeClusterScanAsync(
                     handle, cursorId, matchPattern, count, objectType, expectUtf8Response, correlationId);
 
+            applyTimeout(future, this.requestTimeoutMillis);
             return future;
 
         } catch (Exception e) {
@@ -381,6 +421,7 @@ public class GlideCoreClient implements AutoCloseable {
         }
 
         GlideNativeBridge.updateConnectionPassword(handle, password, immediateAuth, correlationId);
+        applyTimeout(future, this.requestTimeoutMillis);
         return future;
     }
 
@@ -406,6 +447,7 @@ public class GlideCoreClient implements AutoCloseable {
         }
 
         GlideNativeBridge.refreshIamToken(handle, correlationId);
+        applyTimeout(future, this.requestTimeoutMillis);
         return future;
     }
 
@@ -449,6 +491,7 @@ public class GlideCoreClient implements AutoCloseable {
                     routeParam,
                     expectUtf8Response);
 
+            applyTimeout(future, this.requestTimeoutMillis);
             return future;
 
         } catch (Exception e) {
