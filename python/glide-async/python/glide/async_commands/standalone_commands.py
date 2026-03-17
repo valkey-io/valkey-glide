@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast
+from typing import Dict, List, Mapping, Optional, Tuple, cast
 
 from glide.glide import Script
 from glide_shared.commands.batch import Batch
@@ -846,7 +846,7 @@ class StandaloneCommands(CoreCommands):
         match: Optional[TEncodable] = None,
         count: Optional[int] = None,
         type: Optional[ObjectType] = None,
-    ) -> List[Union[bytes, List[bytes]]]:
+    ) -> Tuple[bytes, List[bytes]]:
         """
         Incrementally iterate over a collection of keys.
         SCAN is a cursor based iterator. This means that at every call of the command,
@@ -878,8 +878,8 @@ class StandaloneCommands(CoreCommands):
             type (ObjectType): The type of object to scan for.
 
         Returns:
-            List[Union[bytes, List[bytes]]]: A List containing the next cursor value and a list of keys,
-            formatted as [cursor, [key1, key2, ...]]
+            Tuple[bytes, List[bytes]]: A List containing the next cursor value and a list of keys,
+            formatted as (cursor, [key1, key2, ...])
 
         Examples:
             >>> result = await client.scan(b'0')
@@ -903,8 +903,8 @@ class StandaloneCommands(CoreCommands):
         if type:
             args.extend(["TYPE", type.value])
         return cast(
-            List[Union[bytes, List[bytes]]],
-            await self._execute_command(RequestType.Scan, args),
+            Tuple[bytes, List[bytes]],
+            tuple(await self._execute_command(RequestType.Scan, args)),
         )
 
     async def script_exists(self, sha1s: List[TEncodable]) -> List[bool]:
