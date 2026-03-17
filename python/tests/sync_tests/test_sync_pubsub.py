@@ -1907,6 +1907,13 @@ class TestSyncPubSub:
             context=context,
             timeout=10000,
         ) as (listening_client, publishing_client):
+            # Wait for subscription to be established before publishing
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={channel},
+            )
+
             result = publishing_client.publish(message, channel)
             if cluster_mode:
                 assert result == 1
@@ -1961,6 +1968,13 @@ class TestSyncPubSub:
             context=context,
             timeout=10000,
         ) as (listening_client, publishing_client):
+            # Wait for subscription to be established before publishing
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_sharded={channel},
+            )
+
             assert (
                 cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
