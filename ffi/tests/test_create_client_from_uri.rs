@@ -678,7 +678,12 @@ fn test_create_client_from_uri_with_compression_config() {
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
 
     assert!(!response.is_null());
@@ -716,7 +721,12 @@ fn test_create_client_from_uri_with_periodic_checks_manual() {
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
 
     assert!(!response.is_null());
@@ -755,7 +765,12 @@ fn test_create_client_from_uri_with_periodic_checks_disabled() {
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
 
     assert!(!response.is_null());
@@ -797,7 +812,12 @@ fn test_create_client_from_uri_with_iam_credentials() {
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
 
     assert!(!response.is_null());
@@ -832,7 +852,12 @@ fn test_create_client_from_uri_with_pubsub_subscriptions() {
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
 
     assert!(!response.is_null());
@@ -872,7 +897,12 @@ fn test_create_client_from_uri_invalid_compression_backend() {
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
 
     assert!(!response.is_null());
@@ -883,9 +913,7 @@ fn test_create_client_from_uri_invalid_compression_backend() {
     assert!(conn_response.conn_ptr.is_null());
 
     let error = parse_error_msg(conn_response.connection_error_message);
-    assert!(
-        error.contains("Unknown compression backend") || error.contains("INVALID")
-    );
+    assert!(error.contains("Unknown compression backend") || error.contains("INVALID"));
 
     unsafe {
         free_connection_response(response as *mut ConnectionResponse);
@@ -911,7 +939,12 @@ fn test_create_client_from_uri_invalid_service_type() {
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
 
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
 
     assert!(!response.is_null());
