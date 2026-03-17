@@ -301,6 +301,7 @@ java {
 
 tasks.withType(GenerateModuleMetadata) {
     dependsOn shadowJar
+    enabled = false
 }
 
 tasks.withType(Sign) {
