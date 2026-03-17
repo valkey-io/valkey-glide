@@ -4,6 +4,7 @@ use std::ffi::{CStr, CString, c_char};
 use std::net::TcpListener;
 use std::process::{Child, Command};
 use std::ptr;
+use std::time::Duration;
 
 // TODO: Move RedisServer implementation from glide-core tests to a reusable library and replace this Server implementation.
 struct Server {
@@ -27,15 +28,29 @@ impl Server {
     }
 
     fn start_server(port: u16) -> Child {
-        Command::new("valkey-server")
-            .arg("--port")
-            .arg(port.to_string())
-            .arg("--save")
-            .arg("")
-            .arg("--appendonly")
-            .arg("no")
-            .spawn()
-            .expect("Failed to start valkey-server")
+        let run_server = |engine_type: &str| {
+            Command::new(engine_type)
+                .arg("--port")
+                .arg(port.to_string())
+                .arg("--save")
+                .arg("")
+                .arg("--appendonly")
+                .arg("no")
+                .spawn()
+        };
+
+        let child = match run_server("valkey-server") {
+            Ok(child) => child,
+            Err(e) => {
+                eprintln!("Failed to start valkey-server: {e}. Trying redis-server...");
+                run_server("redis-server")
+                    .expect("Failed to start both valkey-server and redis-server")
+            }
+        };
+
+        // Give the server some time to start
+        std::thread::sleep(Duration::from_millis(500));
+        child
     }
 }
 
