@@ -446,12 +446,20 @@ jobs:
             - name: Test with pytest (asyncio only)
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
