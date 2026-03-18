@@ -117,6 +117,7 @@ impl TokioDisconnectNotifier {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_connection(
     connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
@@ -125,6 +126,7 @@ async fn create_connection(
     connection_timeout: Duration,
     tcp_nodelay: bool,
     pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+    pipeline_buffer_size: Option<usize>,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = {
         let guard = connection_backend
@@ -144,6 +146,7 @@ async fn create_connection(
         connection_retry_strategy: Some(retry_strategy),
         tcp_nodelay,
         pubsub_synchronizer,
+        pipeline_buffer_size,
     };
 
     // Wrap retry loop in timeout so total time respects connection_timeout
@@ -252,6 +255,7 @@ impl ReconnectingConnection {
         tls_params: Option<redis::TlsConnParams>,
         tcp_nodelay: bool,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+        pipeline_buffer_size: Option<usize>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -272,6 +276,7 @@ impl ReconnectingConnection {
             connection_timeout,
             tcp_nodelay,
             pubsub_synchronizer,
+            pipeline_buffer_size,
         )
         .await
     }

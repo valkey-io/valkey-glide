@@ -35,6 +35,7 @@ use tokio_util::codec::Decoder;
 
 // Default connection timeout in ms
 const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(2000);
+const DEFAULT_PIPELINE_BUFFER_SIZE: usize = 1000;
 
 // Senders which the result of a single request are sent through
 type PipelineOutput = oneshot::Sender<RedisResult<Value>>;
@@ -467,6 +468,7 @@ where
     fn new<T>(
         sink_stream: T,
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
+        buffer_size: Option<usize>,
     ) -> (Self, impl Future<Output = ()>)
     where
         T: Sink<SinkItem, Error = RedisError> + Stream<Item = RedisResult<Value>> + 'static,
@@ -475,8 +477,8 @@ where
         T::Error: Send,
         T::Error: ::std::fmt::Debug,
     {
-        const BUFFER_SIZE: usize = 50;
-        let (sender, mut receiver) = mpsc::channel(BUFFER_SIZE);
+        let (sender, mut receiver) =
+            mpsc::channel(buffer_size.unwrap_or(DEFAULT_PIPELINE_BUFFER_SIZE));
         let push_manager: Arc<ArcSwap<PushManager>> =
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));
@@ -623,8 +625,11 @@ impl MultiplexedConnection {
         let codec = ValueCodec::default()
             .framed(stream)
             .and_then(|msg| async move { msg });
-        let (mut pipeline, driver) =
-            Pipeline::new(codec, glide_connection_options.disconnect_notifier);
+        let (mut pipeline, driver) = Pipeline::new(
+            codec,
+            glide_connection_options.disconnect_notifier,
+            glide_connection_options.pipeline_buffer_size,
+        );
         let driver = Box::pin(driver);
         let pm = PushManager::new(
             glide_connection_options.push_sender,

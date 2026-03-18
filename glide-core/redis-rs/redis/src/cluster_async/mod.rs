@@ -1218,6 +1218,7 @@ where
             connection_retry_strategy: Some(connection_retry_strategy),
             tcp_nodelay: cluster_params.tcp_nodelay,
             pubsub_synchronizer,
+            pipeline_buffer_size: cluster_params.pipeline_buffer_size,
         };
 
         let connections = Self::create_initial_connections(

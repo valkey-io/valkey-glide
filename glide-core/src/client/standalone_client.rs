@@ -223,6 +223,8 @@ impl StandaloneClient {
         let read_only = connection_request.read_only;
         let addresses = connection_request.addresses.clone();
         let read_from_option = connection_request.read_from.clone();
+        let pipeline_buffer_size =
+            super::resolve_pipeline_buffer_size(connection_request.inflight_requests_limit);
 
         let mut stream = stream::iter(addresses.into_iter())
             .map(move |address| {
@@ -236,6 +238,7 @@ impl StandaloneClient {
                 let nodelay = tcp_nodelay;
                 let sync = pubsub_synchronizer.clone();
                 let skip_replication = read_only;
+                let buf_size = Some(pipeline_buffer_size);
                 async move {
                     get_connection_and_replication_info(
                         &address,
@@ -249,6 +252,7 @@ impl StandaloneClient {
                         nodelay,
                         &sync,
                         skip_replication,
+                        buf_size,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -831,6 +835,7 @@ async fn get_connection_and_replication_info(
     tcp_nodelay: bool,
     pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     skip_replication_check: bool,
+    pipeline_buffer_size: Option<usize>,
 ) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -843,6 +848,7 @@ async fn get_connection_and_replication_info(
         tls_params,
         tcp_nodelay,
         pubsub_synchronizer.clone(),
+        pipeline_buffer_size,
     )
     .await?;
 

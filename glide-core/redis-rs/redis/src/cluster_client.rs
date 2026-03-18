@@ -48,6 +48,7 @@ struct BuilderParams {
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
     tcp_nodelay: bool,
+    pipeline_buffer_size: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -151,6 +152,7 @@ pub struct ClusterParams {
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
     pub(crate) tcp_nodelay: bool,
+    pub(crate) pipeline_buffer_size: Option<usize>,
 }
 
 impl ClusterParams {
@@ -183,6 +185,7 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
             tcp_nodelay: value.tcp_nodelay,
+            pipeline_buffer_size: value.pipeline_buffer_size,
         })
     }
 }
@@ -503,6 +506,14 @@ impl ClusterClientBuilder {
     /// Defaults to true if not set.
     pub fn tcp_nodelay(mut self, tcp_nodelay: bool) -> ClusterClientBuilder {
         self.builder_params.tcp_nodelay = tcp_nodelay;
+        self
+    }
+
+    /// Sets the pipeline buffer size for the internal mpsc channel.
+    ///
+    /// When not set, defaults to 1000 (matching the default max inflight requests).
+    pub fn pipeline_buffer_size(mut self, size: usize) -> ClusterClientBuilder {
+        self.builder_params.pipeline_buffer_size = Some(size);
         self
     }
 
