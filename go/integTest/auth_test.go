@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
@@ -28,7 +29,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 
 	// Create credentials with IAM config
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err)
 
 	// Create cluster client configuration
 	// Note: useTLS is set from suite.tls which respects the --tls flag
@@ -42,7 +43,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentials() {
 
 	// Create client with IAM authentication
 	client, err := glide.NewClusterClient(clusterConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
 	defer client.Close()
 
 	// Verify connection works
@@ -88,7 +89,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 	).WithRefreshIntervalSeconds(2)
 
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err)
 
 	clusterConfig := config.NewClusterClientConfiguration().
 		WithAddress(&config.NodeAddress{
@@ -99,7 +100,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefresh() {
 		WithUseTLS(suite.tls)
 
 	client, err := glide.NewClusterClient(clusterConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
 	defer client.Close()
 
 	// Verify initial connection
@@ -131,7 +132,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 
 	// Create credentials with IAM config
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err)
 
 	// Create standalone client configuration
 	standaloneConfig := config.NewClientConfiguration().
@@ -144,7 +145,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationWithMockCredentialsStandalone(
 
 	// Create client with IAM authentication
 	client, err := glide.NewClient(standaloneConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
 	defer client.Close()
 
 	// Verify connection works
@@ -187,7 +188,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 	).WithRefreshIntervalSeconds(2)
 
 	credentials, err := config.NewServerCredentialsWithIam(TestIamUsername, iamConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err)
 
 	standaloneConfig := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{
@@ -198,7 +199,7 @@ func (suite *GlideTestSuite) TestIamAuthenticationAutomaticTokenRefreshStandalon
 		WithUseTLS(suite.tls)
 
 	client, err := glide.NewClient(standaloneConfig)
-	assert.NoError(suite.T(), err)
+	require.NoError(suite.T(), err, "Failed to create client - ensure AWS mock credentials are set")
 	defer client.Close()
 
 	// Verify initial connection
