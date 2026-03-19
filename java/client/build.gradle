@@ -5,7 +5,7 @@ plugins {
     id 'maven-publish'
     id 'signing'
     id 'io.freefair.lombok' version '8.6'
-    id 'com.github.spotbugs' version '6.4.2'
+    id 'com.github.spotbugs' version '6.4.8'
     id 'com.google.osdetector' version '1.7.3'
     id 'com.gradleup.shadow' version '9.1.0'
 }
@@ -42,10 +42,10 @@ dependencies {
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
 
     //lombok
-    compileOnly 'org.projectlombok:lombok:1.18.42'
-    annotationProcessor 'org.projectlombok:lombok:1.18.42'
-    testCompileOnly 'org.projectlombok:lombok:1.18.42'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
+    compileOnly 'org.projectlombok:lombok:1.18.44'
+    annotationProcessor 'org.projectlombok:lombok:1.18.44'
+    testCompileOnly 'org.projectlombok:lombok:1.18.44'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.44'
 }
 
 ext {
