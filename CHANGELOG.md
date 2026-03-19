@@ -5,7 +5,7 @@
 #### Fixes
 
 #### Operational Enhancements
-
+* Python Sync: Use `current_thread` tokio runtime for sync FFI clients, eliminating cross-thread condvar wake overhead on every command ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083), [#5624](https://github.com/valkey-io/valkey-glide/issues/5624))
 
 ## 2.3
 
