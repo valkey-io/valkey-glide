@@ -73,6 +73,10 @@ on:
                 description: "Build with mock pubsub and run dynamic pubsub tests"
                 type: boolean
                 default: false
+            containers-only:
+                description: "Run only container tests (skip regular test-python job)"
+                type: boolean
+                default: false
 
     workflow_call:
         inputs:
@@ -121,6 +125,7 @@ jobs:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -233,6 +238,7 @@ jobs:
         name: Python PubSubTests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -334,6 +340,7 @@ jobs:
 
     lint:
         runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v4
@@ -358,6 +365,7 @@ jobs:
 
     docs-test:
         runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v4
@@ -379,7 +387,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event.inputs.containers-only == 'true' || github.event_name == 'schedule' }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -446,12 +454,20 @@ jobs:
             - name: Test with pytest (asyncio only)
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
