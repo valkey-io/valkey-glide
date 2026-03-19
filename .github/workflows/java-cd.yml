@@ -252,18 +252,30 @@ jobs:
             - name: Organize native libraries for uber JAR
               shell: bash
               run: |
-                  # Create the target directory
-                  mkdir -p java/client/build/resources/main
+                  # Create staging directory for native libraries
+                  mkdir -p java/client/build/native-libs-staging/natives
 
                   # Copy all native libraries from downloaded artifacts
-                  # Structure: native-libs-downloaded/native-lib-{TARGET}/natives/{platform}/{arch}/*.{so,dylib,dll}
-                  cp -r native-libs-downloaded/native-lib-*/natives java/client/build/resources/main/ || true
+                  # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
+                  # Target structure: java/client/build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
+                  for artifact_dir in native-libs-downloaded/native-lib-*; do
+                      if [ -d "$artifact_dir" ]; then
+                          echo "Processing $artifact_dir"
+                          # Find all native library files and copy them preserving the platform/arch structure
+                          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
+                              # Extract the relative path from the artifact directory
+                              rel_path="${lib_file#$artifact_dir/}"
+                              target_path="java/client/build/native-libs-staging/natives/$rel_path"
+                              # Create target directory if it doesn't exist
+                              mkdir -p "$(dirname "$target_path")"
+                              # Copy the file
+                              cp "$lib_file" "$target_path"
+                          done
+                      fi
+                  done
 
-                  # Merge all natives directories into one
-                  find native-libs-downloaded -type d -name "natives" -exec cp -r {}/* java/client/build/resources/main/natives/ \;
-
-                  echo "Native libraries organized:"
-                  find java/client/build/resources/main/natives -type f
+                  echo "Native libraries staged:"
+                  find java/client/build/native-libs-staging -type f
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -300,17 +312,10 @@ jobs:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
                   UBER_JAR_BUILD: "true"
               run: |
-                  # Build uber JAR without platform classifier
-                  # We set UBER_JAR_BUILD env var to signal build.gradle to skip classifier
-                  ./gradlew --build-cache :client:shadowJar :client:javadocJar :client:sourcesJar \
-                  -x buildRust -x copyNativeLib \
-                  -Psigning.secretKeyRingFile=secring.gpg \
-                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
-                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-
-                  # Manually publish to Maven local with correct structure
+                  # Build uber JAR and publish to Maven local in one step
+                  # UBER_JAR_BUILD env var signals build.gradle to use copyAllNativeLibs
                   ./gradlew --build-cache :client:publishToMavenLocal \
-                  -x buildRust -x copyNativeLib -x shadowJar -x javadocJar -x sourcesJar \
+                  -x buildRust -x copyNativeLib \
                   -Psigning.secretKeyRingFile=secring.gpg \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
                   -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
