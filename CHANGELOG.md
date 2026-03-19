@@ -20,7 +20,7 @@
 * CORE: Refresh IAM token before slot refresh and initial node reconnection — ensure `cluster_params.password` has a valid IAM token in `refresh_slots_inner` and `reconnect_to_initial_nodes`, not just the per-node reconnection loop ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
 
 #### Operational Enhancements
-
+* Python Sync: Use `current_thread` tokio runtime for sync FFI clients, eliminating cross-thread condvar wake overhead on every command ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083), [#5624](https://github.com/valkey-io/valkey-glide/issues/5624))
 
 ## 2.3
 

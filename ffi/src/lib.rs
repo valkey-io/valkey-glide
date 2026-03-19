@@ -765,16 +765,33 @@ fn create_client_internal(
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
-    // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
-    let runtime = Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(1)
-        .thread_name("Valkey-GLIDE thread")
-        .build()
-        .map_err(|err| {
-            let redis_error = err.into();
-            errors::error_message(&redis_error)
-        })?;
+    let runtime = match &client_type {
+        ClientType::SyncClient => {
+            // current_thread runtime: block_on drives the reactor directly on the
+            // calling thread, eliminating the condvar park/wake overhead that occurs
+            // with multi_thread when the calling thread waits for a worker.
+            Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|err| {
+                    let redis_error: redis::RedisError = err.into();
+                    errors::error_message(&redis_error)
+                })?
+        }
+        ClientType::AsyncClient { .. } => {
+            // Async clients need a background worker thread to drive the reactor
+            // since the calling thread is owned by the foreign language's event loop.
+            Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(1)
+                .thread_name("Valkey-GLIDE thread")
+                .build()
+                .map_err(|err| {
+                    let redis_error: redis::RedisError = err.into();
+                    errors::error_message(&redis_error)
+                })?
+        }
+    };
 
     // Always create push channels to support dynamic pubsub
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
