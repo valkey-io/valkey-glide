@@ -27,6 +27,8 @@ import org.junit.jupiter.api.Timeout;
 @Timeout(30) // seconds
 public class ClusterManagementCommandsTests {
 
+    private static GlideClusterClient client;
+
     /** Expected length of node IDs and shard IDs (40-character hex strings). */
     private static final int NODE_ID_LENGTH = 40;
 
