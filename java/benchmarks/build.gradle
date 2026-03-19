@@ -2,6 +2,7 @@ plugins {
     // Apply the application plugin to add support for building a CLI application in Java.
     id 'application'
     id "com.google.osdetector" version "1.7.3"
+    id 'me.champeau.jmh' version '0.7.2'
 }
 
 repositories {
@@ -36,6 +37,21 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.13.2'
+
+    jmhImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    jmhAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+}
+
+jmh {
+    warmupIterations = 5
+    iterations = 10
+    fork = 2
+    benchmarkMode = ['avgt']
+    timeUnit = 'ns'
+    profilers = ['gc']
+    resultFormat = 'JSON'
+    resultsFile = project.file("${project.buildDir}/reports/jmh/results.json")
+    includes = ['ArrayTransformBenchmark']
 }
 
 if (!System.getenv("GLIDE_RELEASE_VERSION")) {
