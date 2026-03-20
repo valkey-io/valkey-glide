@@ -32,6 +32,9 @@ def to_c_route_ptr_and_len(ffi, route):
 
     The returned `route_bytes` must be kept alive for the duration of the FFI call.
     """
+    if route is None:
+        return ffi.NULL, 0, None
+
     from glide_shared.routes import build_protobuf_route
 
     proto_route = build_protobuf_route(route)

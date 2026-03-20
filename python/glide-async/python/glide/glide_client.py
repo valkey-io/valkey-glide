@@ -119,6 +119,7 @@ class BaseClient(CoreCommands):
                 "async_client": {
                     "success_callback": _success_cb,
                     "failure_callback": _failure_cb,
+                    "allow_stack_response": True,
                 },
             },
         )

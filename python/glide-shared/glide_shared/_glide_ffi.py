@@ -197,6 +197,7 @@ class _GlideFFI:
                     struct {
                         SuccessCallback success_callback;
                         FailureCallback failure_callback;
+                        bool allow_stack_response;
                     } async_client;
                 };
             } ClientType;

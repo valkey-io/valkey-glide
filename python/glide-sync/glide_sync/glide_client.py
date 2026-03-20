@@ -35,6 +35,7 @@ from glide_shared.routes import (
 
 from ._glide_ffi import _GlideFFI
 from .logger import Level, Logger
+from .opentelemetry import OpenTelemetry
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.core import CoreCommands
@@ -292,8 +293,6 @@ class BaseClient(CoreCommands):
                 raise TypeError("response_buffer must be C-contiguous")
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
-        from .opentelemetry import OpenTelemetry
-
         span = 0
         span_name_cstr = None
         if OpenTelemetry.should_sample():
@@ -412,8 +411,6 @@ class BaseClient(CoreCommands):
             raise ValueError("Invalid client pointer.")
 
         # Create span if OpenTelemetry is configured and sampling indicates we should trace
-        from .opentelemetry import OpenTelemetry
-
         span = 0
         if OpenTelemetry.should_sample():
             span = self._lib.create_batch_otel_span()
