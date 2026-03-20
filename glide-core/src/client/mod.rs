@@ -850,8 +850,12 @@ impl Client {
                 Err(err) => return Err(err),
             };
 
-            // Clone compression_manager reference before moving into async block
-            let compression_manager = self.compression_manager.clone();
+            // Clone compression_manager reference only if compression is enabled
+            let compression_manager = if self.is_compression_enabled() {
+                self.compression_manager.clone()
+            } else {
+                None
+            };
 
             let result = run_with_timeout(request_timeout, async move {
                 let expected_type = expected_type_for_cmd(cmd);
