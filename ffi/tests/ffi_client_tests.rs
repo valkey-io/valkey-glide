@@ -246,6 +246,7 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
         ClientType::AsyncClient {
             success_callback: string_success_callback,
             failure_callback,
+            allow_stack_response: false,
         }
     } else {
         ClientType::SyncClient
