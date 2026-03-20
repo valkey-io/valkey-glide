@@ -13,7 +13,7 @@ from glide_shared.config import (
     GlideClientConfiguration,
     GlideClusterClientConfiguration,
 )
-from glide_shared.constants import OK, TEncodable, TResult
+from glide_shared.constants import TEncodable, TResult
 from glide_shared.exceptions import (
     ClosingError,
     ConfigurationError,
