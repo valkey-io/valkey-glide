@@ -23,8 +23,8 @@ import org.openjdk.jmh.annotations.Warmup;
 /**
  * JMH microbenchmarks for ArrayTransformUtils methods.
  *
- * <p>Establishes baseline for stream-based implementations before replacing with for-loop variants.
- * GC profiler is enabled to capture allocations/op alongside latency.
+ * <p>Measures the for-loop + pre-sized array implementations. GC profiler captures
+ * allocations/op alongside latency.
  *
  * <p>Run: ./gradlew :benchmarks:jmh
  *
@@ -63,7 +63,7 @@ public class ArrayTransformBenchmark {
         }
     }
 
-    // --- Methods that use flatMap + Stream.of(key, value) per entry ---
+    // --- Map-to-interleaved-array methods (key, value, key, value, ...) ---
 
     /** Used by: mset, msetnx (binary variants). */
     @Benchmark
