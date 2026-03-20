@@ -337,7 +337,9 @@ async fn send_command(
     }
 
     // Process command arguments for compression if compression is enabled
-    if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
+    if client.is_compression_enabled()
+        && let Err(compression_error) = process_command_for_compression(&mut cmd, &client)
+    {
         log_warn(
             "send_command",
             format!(
