@@ -5,7 +5,7 @@ import sys
 import threading
 from typing import Any, List, Optional, Tuple, Union
 
-from _fast_response import parse_response as _fast_parse_response
+from glide_shared._fast_response import parse_response as _fast_parse_response
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (

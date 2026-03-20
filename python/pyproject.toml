@@ -10,5 +10,5 @@ target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 exclude = "^(.*\\/)?(\\.env|glide-shared/glide_shared/protobuf|utils/release-candidate-testing|target|ort|build)(\\/|$)"
 
 [[tool.mypy.overrides]]
-module = "_fast_response"
+module = "glide_shared._fast_response"
 ignore_missing_imports = true
