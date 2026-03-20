@@ -97,31 +97,10 @@ class CompressionBackend(Enum):
 
 
 def _get_min_compressed_size() -> int:
-    """
-    Get the minimum compressed size from the Rust core.
-    This ensures Python validation stays in sync with Rust implementation.
-    """
-    try:
-        # Try async module first
-        from glide import get_min_compressed_size
+    """Get the minimum compressed size from the Rust core via FFI."""
+    from glide_shared._glide_ffi import GlideFFI
 
-        return get_min_compressed_size()
-    except ImportError:
-        pass
-
-    try:
-        # Try sync module
-        from glide_sync import get_min_compressed_size
-
-        return get_min_compressed_size()
-    except ImportError:
-        pass
-
-    # If neither module is available, fail fast
-    raise ImportError(
-        "Cannot import get_min_compressed_size from either 'glide' or 'glide_sync'. "
-        "Ensure the native module is built and available."
-    )
+    return GlideFFI.lib.get_min_compressed_size()
 
 
 # Lazy cache for minimum compression size to avoid circular import issues

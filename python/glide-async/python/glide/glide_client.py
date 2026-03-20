@@ -15,15 +15,9 @@ from typing import (
     cast,
 )
 
-<<<<<<< Updated upstream
-from glide_sync._glide_ffi import _GlideFFI
-from glide_sync.sync_commands.cluster_scan_cursor import ClusterScanCursor
-=======
 from glide_shared._fast_response import parse_response as _c_parse_response
-from glide.async_commands.core import RequestType
 from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.cluster_scan_cursor import ClusterScanCursor
->>>>>>> Stashed changes
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -44,7 +38,7 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide.async_commands.core import RequestType
-from glide_shared.routes import Route, build_protobuf_route
+from glide_shared.routes import Route
 
 from .async_commands.cluster_commands import ClusterCommands
 from .async_commands.core import CoreCommands
@@ -53,6 +47,7 @@ from .logger import Level as LogLevel
 from .logger import Logger as ClientLogger
 from .opentelemetry import OpenTelemetry
 
+from glide_shared.ffi_helpers import ENCODING, to_c_strings, encode_arg, to_c_route_ptr_and_len
 from _fast_response import parse_response as _c_parse_response
 
 if sys.version_info >= (3, 11):
@@ -60,7 +55,7 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
-ENCODING = "utf-8"
+
 
 
 class FFIClientTypeEnum:
@@ -78,7 +73,7 @@ class BaseClient(CoreCommands):
         self._config: BaseClientConfiguration = config
         self._is_closed: bool = False
         self._core_client = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop  # set in _create_client
         self._pending_futures: Dict[int, asyncio.Future] = {}
         self._callback_counter = 0
         self._lock = threading.Lock()
@@ -198,7 +193,7 @@ class BaseClient(CoreCommands):
         except Exception:
             msg = "Unknown error"
 
-        exc = get_request_error_class(error_type)(msg)
+        exc = get_request_error_class(error_type)(msg)  # type: ignore[arg-type]
 
         fut = self._pending_futures.pop(index_ptr, None)
         if fut is not None and not fut.done():
@@ -301,90 +296,20 @@ class BaseClient(CoreCommands):
             self._lib.free_response_arena(self._ffi.cast("void*", arena_ptr))
         return result
 
-    def _parse_response_cffi(self, addr):
-        """Fallback CFFI-based response parser when C extension is unavailable."""
-        msg = self._ffi.cast("struct CommandResponse*", addr)[0]
-        return self._handle_command_response(msg)
-
-    def _handle_command_response(self, msg):
-        rt = msg.response_type
-        if rt == 0:  # Null
-            return None
-        elif rt == 1:  # Int
-            return msg.int_value
-        elif rt == 2:  # Float
-            return msg.float_value
-        elif rt == 3:  # Bool
-            return bool(msg.bool_value)
-        elif rt == 4:  # String
-            return self._ffi.buffer(msg.string_value, msg.string_value_len)[:]
-        elif rt == 5:  # Array
-            return [
-                self._handle_response(
-                    self._ffi.cast("struct CommandResponse*", msg.array_value + i)
-                )
-                for i in range(msg.array_value_len)
-            ]
-        elif rt == 6:  # Map
-            result = {}
-            for i in range(msg.array_value_len):
-                elem = self._ffi.cast("struct CommandResponse*", msg.array_value + i)
-                key = self._handle_response(
-                    self._ffi.cast("struct CommandResponse*", elem.map_key)
-                )
-                val = self._handle_response(
-                    self._ffi.cast("struct CommandResponse*", elem.map_value)
-                )
-                result[key] = val
-            return result
-        elif rt == 7:  # Sets
-            result = set()
-            sets_array = self._ffi.cast(
-                f"struct CommandResponse[{msg.sets_value_len}]", msg.sets_value
-            )
-            for i in range(msg.sets_value_len):
-                result.add(self._handle_response(sets_array[i]))
-            return result
-        elif rt == 8:  # Ok
-            return OK
-        elif rt == 9:  # Error
-            error_msg = self._ffi.buffer(msg.string_value, msg.string_value_len)[:]
-            raise RequestError(str(error_msg))
-        else:
-            raise RequestError(f"Unknown response type: {rt}")
-
     # ==================== FFI Helpers ====================
 
-    @staticmethod
-    def _encode_arg(arg):
-        return arg.encode(ENCODING) if isinstance(arg, str) else bytes(arg) if isinstance(arg, (bytearray, memoryview)) else arg
-
     def _to_c_strings(self, args):
-        ffi = self._ffi
-        encode = self._encode_arg
-        buffers = [encode(a) for a in args]
-        c_strings = ffi.new("size_t[]", [ffi.cast("size_t", ffi.from_buffer(b)) for b in buffers])
-        c_lengths = ffi.new("unsigned long[]", [len(b) for b in buffers])
-        return c_strings, c_lengths, buffers
+        return to_c_strings(self._ffi, args)
 
-    def _to_c_route_ptr_and_len(self, route: Optional[Route]):
-        proto_route = build_protobuf_route(route)
-        if proto_route:
-            route_bytes = proto_route.SerializeToString()
-            route_ptr = self._ffi.from_buffer(route_bytes)
-            route_len = len(route_bytes)
-        else:
-            route_bytes = None
-            route_ptr = self._ffi.NULL
-            route_len = 0
-        return route_ptr, route_len, route_bytes
+    def _to_c_route_ptr_and_len(self, route):
+        return to_c_route_ptr_and_len(self._ffi, route)
 
 
     # ==================== Command Execution ====================
 
     async def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = None,
     ) -> TResult:
@@ -426,7 +351,7 @@ class BaseClient(CoreCommands):
 
     async def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool = False,
         retry_server_error: bool = False,
@@ -646,8 +571,8 @@ class BaseClient(CoreCommands):
                 "Sharded": PubSubChannelModes.Sharded,
             }
         else:
-            PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
-            StateClass = GlideClientConfiguration.PubSubState
+            PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes  # type: ignore[assignment]
+            StateClass = GlideClientConfiguration.PubSubState  # type: ignore[assignment]
             mode_map = {
                 "Exact": PubSubChannelModes.Exact,
                 "Pattern": PubSubChannelModes.Pattern,
@@ -656,13 +581,13 @@ class BaseClient(CoreCommands):
         desired_subscriptions = {}
         actual_subscriptions = {}
 
-        for key_bytes, value_list in desired_dict.items():
+        for key_bytes, value_list in desired_dict.items():  # type: ignore[union-attr]
             key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
             if key in mode_map:
                 values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
                 desired_subscriptions[mode_map[key]] = values
 
-        for key_bytes, value_list in actual_dict.items():
+        for key_bytes, value_list in actual_dict.items():  # type: ignore[union-attr]
             key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
             if key in mode_map:
                 values = {v.decode() if isinstance(v, bytes) else v for v in value_list}

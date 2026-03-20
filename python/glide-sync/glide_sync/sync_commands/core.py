@@ -67,7 +67,7 @@ from .cluster_scan_cursor import ClusterScanCursor
 class CoreCommands(Protocol):
     def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = ...,
         response_buffer: Optional[memoryview] = ...,
@@ -75,7 +75,7 @@ class CoreCommands(Protocol):
 
     def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool,
         retry_server_error: bool = False,

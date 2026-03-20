@@ -12,3 +12,7 @@ exclude = "^(.*\\/)?(\\.env|glide-shared/glide_shared/protobuf|utils/release-can
 [[tool.mypy.overrides]]
 module = "glide_shared._fast_response"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true

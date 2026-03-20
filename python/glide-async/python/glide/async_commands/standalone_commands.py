@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide_sync.sync_commands.script import Script
+from glide_shared.script import Script
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
 from glide_shared.commands.command_args import ObjectType

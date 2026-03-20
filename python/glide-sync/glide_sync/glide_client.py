@@ -20,7 +20,8 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
-from glide_shared.protobuf.command_request_pb2 import RequestType
+from glide_shared.request_type import RequestType
+from glide_shared.ffi_helpers import ENCODING, to_c_strings, to_c_route_ptr_and_len
 from glide_shared.routes import (
     AllNodes,
     AllPrimaries,
@@ -30,7 +31,6 @@ from glide_shared.routes import (
     SlotIdRoute,
     SlotKeyRoute,
     SlotType,
-    build_protobuf_route,
 )
 
 from ._glide_ffi import _GlideFFI
@@ -45,7 +45,7 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
-ENCODING = "utf-8"
+
 
 
 # Enum values must match the Rust definition
@@ -239,81 +239,6 @@ class BaseClient(CoreCommands):
         # Arena is freed by free_command_result in _handle_cmd_result's finally block
         return result
 
-    def _handle_command_response(self, msg):
-        """Handle a CommandResponse message based on its response type."""
-        handlers = {
-            0: self._handle_null_response,
-            1: self._handle_int_response,
-            2: self._handle_float_response,
-            3: self._handle_bool_response,
-            4: self._handle_string_response,
-            5: self._handle_array_response,
-            6: self._handle_map_response,
-            7: self._handle_set_response,
-            8: self._handle_ok_response,
-            9: self._handle_error_response,
-        }
-
-        handler = handlers.get(msg.response_type)
-        if handler is None:
-            raise RequestError(f"Unhandled response type = {msg.response_type}")
-
-        return handler(msg)
-
-    def _handle_null_response(self, msg):
-        return None
-
-    def _handle_int_response(self, msg):
-        return msg.int_value
-
-    def _handle_float_response(self, msg):
-        return msg.float_value
-
-    def _handle_bool_response(self, msg):
-        return bool(msg.bool_value)
-
-    def _handle_string_response(self, msg):
-        try:
-            return self._ffi.buffer(msg.string_value, msg.string_value_len)[:]
-        except Exception as e:
-            raise RequestError(f"Error decoding string value: {e}")
-
-    def _handle_array_response(self, msg):
-        array = []
-        for i in range(msg.array_value_len):
-            element = self._try_ffi_cast("struct CommandResponse*", msg.array_value + i)
-            array.append(self._handle_response(element))
-        return array
-
-    def _handle_map_response(self, msg):
-        map_dict = {}
-        for i in range(msg.array_value_len):
-            element = self._try_ffi_cast("struct CommandResponse*", msg.array_value + i)
-            key = self._try_ffi_cast("struct CommandResponse*", element.map_key)
-            value = self._try_ffi_cast("struct CommandResponse*", element.map_value)
-            map_dict[self._handle_response(key)] = self._handle_response(value)
-        return map_dict
-
-    def _handle_set_response(self, msg):
-        result_set = set()
-        sets_array = self._try_ffi_cast(
-            f"struct CommandResponse[{msg.sets_value_len}]", msg.sets_value
-        )
-        for i in range(msg.sets_value_len):
-            element = sets_array[i]
-            result_set.add(self._handle_response(element))
-        return result_set
-
-    def _handle_ok_response(self, msg):
-        return OK
-
-    def _handle_error_response(self, msg):
-        try:
-            error_msg = self._ffi.buffer(msg.string_value, msg.string_value_len)[:]
-            return RequestError(f"{error_msg}")
-        except Exception as e:
-            raise RequestError(f"Error decoding error message: {e}")
-
     def _try_ffi_cast(self, type, source):
         try:
             return self._ffi.cast(type, source)
@@ -321,45 +246,11 @@ class BaseClient(CoreCommands):
             raise ClosingError(f"FFI casting failed: {e}")
 
     def _to_c_strings(self, args):
-        """Convert Python arguments to C-compatible pointers and lengths."""
-        c_strings = []
-        string_lengths = []
-        buffers = []  # Keep a reference to prevent premature garbage collection
-
-        for arg in args:
-            if isinstance(arg, str):
-                arg_bytes = arg.encode(ENCODING)
-            elif isinstance(arg, (bytes, bytearray, memoryview)):
-                arg_bytes = arg
-            else:
-                raise TypeError(f"Unsupported argument type: {type(arg)}")
-
-            # Use ffi.from_buffer for zero-copy conversion
-            buffers.append(arg_bytes)  # Keep the byte buffer alive
-            c_strings.append(
-                self._try_ffi_cast("size_t", self._ffi.from_buffer(arg_bytes))
-            )
-            string_lengths.append(len(arg_bytes))
-        # Return C-compatible arrays and keep buffers alive
-        return (
-            self._ffi.new("size_t[]", c_strings),
-            self._ffi.new("unsigned long[]", string_lengths),
-            buffers,  # Ensure buffers stay alive
-        )
+        return to_c_strings(self._ffi, args)
 
     # `route_bytes` must remain alive for the duration of the FFI call that consumes `route_ptr`
-    def _to_c_route_ptr_and_len(self, route: Optional[Route]):
-        proto_route = build_protobuf_route(route)
-        if proto_route:
-            route_bytes = proto_route.SerializeToString()
-            route_ptr = self._ffi.from_buffer(route_bytes)
-            route_len = len(route_bytes)
-        else:
-            route_bytes = None
-            route_ptr = self._ffi.NULL
-            route_len = 0
-
-        return route_ptr, route_len, route_bytes
+    def _to_c_route_ptr_and_len(self, route):
+        return to_c_route_ptr_and_len(self._ffi, route)
 
     def _handle_cmd_result(self, command_result):
         try:
@@ -384,7 +275,7 @@ class BaseClient(CoreCommands):
 
     def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = None,
         response_buffer: Optional[memoryview] = None,
@@ -408,8 +299,6 @@ class BaseClient(CoreCommands):
         span = 0
         span_name_cstr = None
         if OpenTelemetry.should_sample():
-            from glide_shared.protobuf.command_request_pb2 import RequestType
-
             command_name = RequestType.Name(request_type)
             span_name_cstr = self._ffi.new("char[]", command_name.encode())
             span = self._lib.create_named_otel_span(span_name_cstr)
@@ -502,7 +391,7 @@ class BaseClient(CoreCommands):
 
     def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool,
         retry_server_error: bool = False,
@@ -562,7 +451,7 @@ class BaseClient(CoreCommands):
 
     def _convert_commands_to_c_batch_info(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
     ) -> Tuple[Any, List[Any]]:
         """
@@ -917,7 +806,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     def _build_cluster_scan_args(self, match, count, type, allow_non_covered_slots):
         args = []
         if match is not None:
-            # Inline _encode_arg logic
+            # Encode match pattern
             if isinstance(match, str):
                 encoded_match = match.encode(ENCODING)
             else:

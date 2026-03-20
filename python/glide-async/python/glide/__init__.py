@@ -4,13 +4,16 @@ import sys
 import types
 import warnings
 
-from glide_sync._glide_ffi import _GlideFFI as _FFI
-from glide_sync.sync_commands.cluster_scan_cursor import ClusterScanCursor
-from glide_sync.sync_commands.script import Script
+from glide_shared._glide_ffi import _GlideFFI as _FFI
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
+from glide_shared.script import Script
+<<<<<<< Updated upstream
 
 
 def get_min_compressed_size() -> int:
     return _FFI().lib.get_min_compressed_size()
+=======
+>>>>>>> Stashed changes
 from glide_shared import (
     ALL_CHANNELS,
     ALL_PATTERNS,
@@ -176,6 +179,11 @@ from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
 from .opentelemetry import OpenTelemetry
+
+
+def get_min_compressed_size() -> int:
+    return _FFI().lib.get_min_compressed_size()
+
 
 _glide_module = sys.modules[__name__]
 

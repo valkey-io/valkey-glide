@@ -94,13 +94,13 @@ class BaseBatch:
                 If `True`, the batch will be executed as an atomic transaction.
                 If `False`, the batch will be executed as a non-atomic pipeline.
         """
-        self.commands: List[Tuple[RequestType.ValueType, List[TEncodable]]] = []
+        self.commands: List[Tuple[int, List[TEncodable]]] = []
         self.lock = threading.Lock()
         self.is_atomic = is_atomic
 
     def append_command(
         self: TBatch,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
     ) -> TBatch:
         self.lock.acquire()

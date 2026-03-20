@@ -1,7 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
 
-from glide_sync.sync_commands.cluster_scan_cursor import ClusterScanCursor
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
@@ -60,35 +60,21 @@ from glide_shared.constants import (
     TXInfoStreamResponse,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import RequestType as _RequestType
+from glide_shared.request_type import RequestType
 from glide_shared.routes import Route
-
-
-class _CachedRequestType:
-    """Cache protobuf enum int values to avoid repeated __getattr__ through enum_type_wrapper.
-    Each uncached access costs ~0.5μs due to protobuf descriptor lookup."""
-    def __init__(self):
-        src = _RequestType
-        for v in src.DESCRIPTOR.values:
-            setattr(self, v.name, v.number)
-        self.ValueType = src.ValueType
-        self.Name = src.Name
-
-
-RequestType = _CachedRequestType()
 
 
 class CoreCommands(Protocol):
     async def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = ...,
     ) -> TResult: ...
 
     async def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool,
         retry_server_error: bool = False,

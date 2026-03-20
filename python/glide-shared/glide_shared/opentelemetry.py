@@ -47,6 +47,10 @@ Validation Rules
 
 from typing import Optional
 
+import random
+
+from glide_shared.exceptions import ConfigurationError
+
 
 class OpenTelemetryTracesConfig:
     """Configuration for exporting OpenTelemetry traces."""
@@ -98,3 +102,99 @@ class OpenTelemetryConfig:
 
     def get_flush_interval_ms(self) -> Optional[int]:
         return self.flush_interval_ms
+
+
+class OpenTelemetry:
+    """Singleton class for managing OpenTelemetry configuration and operations."""
+
+    _instance: Optional["OpenTelemetry"] = None
+    _config: Optional[OpenTelemetryConfig] = None
+
+    @classmethod
+    def init(cls, config: OpenTelemetryConfig) -> None:
+        if not cls._instance:
+            cls._config = config
+            from glide_shared._glide_ffi import GlideFFI
+            from glide_shared.logger import Level, Logger
+
+            ffi = GlideFFI.ffi
+            lib = GlideFFI.lib
+
+            traces_ptr = ffi.NULL
+            traces_endpoint_cstr = None
+            if config.traces:
+                traces_endpoint_cstr = ffi.new(
+                    "char[]", config.traces.endpoint.encode()
+                )
+                traces_config = ffi.new("OpenTelemetryTracesConfig*")
+                traces_config.endpoint = traces_endpoint_cstr
+                traces_config.has_sample_percentage = True
+                traces_config.sample_percentage = config.traces.sample_percentage
+                traces_ptr = traces_config
+
+            metrics_ptr = ffi.NULL
+            metrics_endpoint_cstr = None
+            if config.metrics:
+                metrics_endpoint_cstr = ffi.new(
+                    "char[]", config.metrics.endpoint.encode()
+                )
+                metrics_config = ffi.new("OpenTelemetryMetricsConfig*")
+                metrics_config.endpoint = metrics_endpoint_cstr
+                metrics_ptr = metrics_config
+
+            otel_config = ffi.new("OpenTelemetryConfig*")
+            otel_config.traces = traces_ptr
+            otel_config.metrics = metrics_ptr
+            otel_config.has_flush_interval_ms = config.flush_interval_ms is not None
+            otel_config.flush_interval_ms = (
+                config.flush_interval_ms if config.flush_interval_ms else 0
+            )
+
+            error = lib.init_open_telemetry(otel_config)
+            if error != ffi.NULL:
+                error_msg = ffi.string(error).decode()
+                lib.free_c_string(error)
+                raise ConfigurationError(
+                    f"Failed to initialize OpenTelemetry: {error_msg}"
+                )
+
+            cls._instance = OpenTelemetry()
+            Logger.log(
+                Level.INFO,
+                "GlideOpenTelemetry",
+                "OpenTelemetry initialized successfully",
+            )
+            return
+
+        from glide_shared.logger import Level, Logger
+
+        Logger.log(
+            Level.WARN,
+            "GlideOpenTelemetry",
+            "OpenTelemetry already initialized - ignoring new configuration",
+        )
+
+    @classmethod
+    def is_initialized(cls) -> bool:
+        return cls._instance is not None
+
+    @classmethod
+    def get_sample_percentage(cls) -> Optional[int]:
+        if cls._config and cls._config.traces:
+            return cls._config.traces.sample_percentage
+        return None
+
+    @classmethod
+    def should_sample(cls) -> bool:
+        if not cls._instance:
+            return False
+        percentage = cls.get_sample_percentage()
+        return percentage is not None and random.random() * 100 < percentage
+
+    @classmethod
+    def set_sample_percentage(cls, percentage: int) -> None:
+        if not cls._config or not cls._config.traces:
+            raise ConfigurationError("OpenTelemetry traces not initialized")
+        if percentage < 0 or percentage > 100:
+            raise ConfigurationError("Sample percentage must be between 0 and 100")
+        cls._config.traces.sample_percentage = percentage

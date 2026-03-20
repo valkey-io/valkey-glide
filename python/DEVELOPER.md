@@ -13,8 +13,8 @@ The `python/` directory contains three separate components:
 #### 🔹 glide-async/
 
 - Purpose: Async client for Valkey, implemented as a hybrid Python/Rust project.
-- Rust bindings: via PyO3, defined in `valkey-glide/python/glide-async/src/lib.rs`.
-- Communication Layer: Communicates with Glide's Rust core using a Unix Domain Socket (UDS).
+- Rust bindings: via CFFI (command path) and PyO3 (connection setup), defined in `valkey-glide/ffi/src/lib.rs` and `valkey-glide/python/glide-async/src/lib.rs`.
+- Communication Layer: Communicates with Glide's Rust core via direct FFI calls with async callbacks.
 - Import path: `import glide`
 - PyPI package name: `valkey-glide`
 - Build backend: Maturin (Rust-based)
