@@ -758,20 +758,34 @@ class BaseClient(CoreCommands):
         # Route bytes should be kept alive in the scope of the FFI call
         route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-        result = self._lib.invoke_script(
-            client_adapter_ptr,  # Pointer to the ClientAdapter from create_client()
-            0,  # Request ID - placeholder for sync clients (used for async callbacks)
-            hash_buffer,  # Pointer to the script's SHA1 hash string
-            len(keys),  # num of keys
-            keys_c_args,  # keys (array of pointers)
-            keys_c_lengths,  # keys_len (array of lengths)
-            len(args),  # args_count
-            args_c_args,  # args (array of pointers)
-            args_c_lengths,  # args_len (array of lengths)
-            route_ptr,  # Pointer to protobuf-encoded routing information (NULL if no routing)
-            route_len,  # Length of the routing data in bytes (0 if no routing)
-        )
-        return self._handle_cmd_result(result)
+        # Create span if OpenTelemetry is configured and sampling
+        from .opentelemetry import OpenTelemetry
+
+        span = 0
+        span_name_cstr = None
+        if OpenTelemetry.should_sample():
+            span_name_cstr = self._ffi.new("char[]", b"EVALSHA")
+            span = self._lib.create_named_otel_span(span_name_cstr)
+
+        try:
+            result = self._lib.invoke_script(
+                client_adapter_ptr,
+                0,  # Request ID - placeholder for sync clients
+                hash_buffer,
+                len(keys),
+                keys_c_args,
+                keys_c_lengths,
+                len(args),
+                args_c_args,
+                args_c_lengths,
+                route_ptr,
+                route_len,
+                span,
+            )
+            return self._handle_cmd_result(result)
+        finally:
+            if span != 0:
+                self._lib.drop_otel_span(span)
 
     def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
         """Try to get a pubsub message without blocking"""
