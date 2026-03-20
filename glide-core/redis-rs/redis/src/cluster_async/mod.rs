@@ -60,7 +60,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicUsize, Ordering},
+        atomic::{self, AtomicBool, AtomicIsize, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     task::{self, Poll},
@@ -94,6 +94,12 @@ use futures::{
     stream::{FuturesUnordered, StreamExt},
 };
 use std::time::Duration;
+
+/// Global counter exposing the current number of requests in the cluster
+/// event loop's `in_flight_requests` (FuturesUnordered). Used for
+/// observability and chaos testing — this is the counter that reached
+/// 298K in the customer incident.
+pub static IN_FLIGHT_REQUEST_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(feature = "tokio-comp")]
 use async_trait::async_trait;
@@ -245,6 +251,7 @@ where
             .send(Message {
                 cmd: CmdArg::ClusterScan { cluster_scan_args },
                 sender,
+                inflight_tracker: None,
             })
             .await
             .map_err(|e| {
@@ -273,15 +280,83 @@ where
         cmd: &Cmd,
         routing: cluster_routing::RoutingInfo,
     ) -> RedisResult<Value> {
+        self.route_command_arc(Arc::new(cmd.clone()), routing).await
+    }
+
+    /// Like [`route_command`], but accepts a pre-wrapped `Arc<Cmd>` to avoid
+    /// cloning the command payload a second time on the hot path.
+    pub async fn route_command_arc(
+        &mut self,
+        cmd: Arc<Cmd>,
+        routing: cluster_routing::RoutingInfo,
+    ) -> RedisResult<Value> {
         trace!("route_command");
         let (sender, receiver) = oneshot::channel();
         self.0
             .send(Message {
                 cmd: CmdArg::Cmd {
-                    cmd: Arc::new(cmd.clone()),
+                    cmd,
                     routing: routing.into(),
                 },
                 sender,
+                inflight_tracker: None,
+            })
+            .await
+            .map_err(|e| {
+                RedisError::from(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    format!("Cluster: Error occurred while trying to send command to internal sender. {e:?}"),
+                ))
+            })?;
+        receiver
+            .await
+            .unwrap_or_else(|e| {
+                Err(RedisError::from(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    format!(
+                        "Cluster: Failed to receive command response from internal sender. {e:?}"
+                    ),
+                )))
+            })
+            .map(|response| match response {
+                Response::Single(value) => value,
+                Response::ClusterScanResult(..) | Response::Multiple(_) => unreachable!(),
+            })
+    }
+
+    /// Like [`route_command`], but attaches an [`InflightTracker`] to the request.
+    ///
+    /// When the tracker is cancelled (user timeout), unsent sub-commands are
+    /// dropped immediately while sent sub-commands keep running until the
+    /// server responds. The inflight counter is released when all sub-commands
+    /// are done, via the tracker's `Drop`.
+    pub async fn route_command_with_inflight_tracker(
+        &mut self,
+        cmd: &Cmd,
+        routing: cluster_routing::RoutingInfo,
+        tracker: InflightTracker,
+    ) -> RedisResult<Value> {
+        self.route_command_with_inflight_tracker_arc(Arc::new(cmd.clone()), routing, tracker)
+            .await
+    }
+
+    /// Like [`route_command_with_inflight_tracker`], but accepts `Arc<Cmd>`.
+    pub async fn route_command_with_inflight_tracker_arc(
+        &mut self,
+        cmd: Arc<Cmd>,
+        routing: cluster_routing::RoutingInfo,
+        tracker: InflightTracker,
+    ) -> RedisResult<Value> {
+        trace!("route_command_with_inflight_tracker");
+        let (sender, receiver) = oneshot::channel();
+        self.0
+            .send(Message {
+                cmd: CmdArg::Cmd {
+                    cmd,
+                    routing: routing.into(),
+                },
+                sender,
+                inflight_tracker: Some(tracker),
             })
             .await
             .map_err(|e| {
@@ -331,6 +406,7 @@ where
                     pipeline_retry_strategy: pipeline_retry_strategy.unwrap_or_default(),
                 },
                 sender,
+                inflight_tracker: None,
             })
             .await
             .map_err(|err| {
@@ -423,6 +499,7 @@ where
             .send(Message {
                 cmd: CmdArg::OperationRequest(operation_request),
                 sender,
+                inflight_tracker: None,
             })
             .await
             .map_err(|_| RedisError::from(io::Error::from(io::ErrorKind::BrokenPipe)))?;
@@ -793,6 +870,7 @@ impl RedirectNode {
 struct Message<C: Sized> {
     cmd: CmdArg<C>,
     sender: oneshot::Sender<RedisResult<Response>>,
+    inflight_tracker: Option<InflightTracker>,
 }
 
 enum RecoverFuture {
@@ -822,6 +900,9 @@ impl fmt::Debug for ConnectionState {
 #[derive(Clone)]
 struct RequestInfo<C> {
     cmd: CmdArg<C>,
+    /// Inflight tracker from the parent command. Cloned into fan-out
+    /// sub-commands so the inflight slot is released only when ALL complete.
+    inflight_tracker: Option<InflightTracker>,
 }
 
 impl<C> RequestInfo<C> {
@@ -922,10 +1003,122 @@ pin_project! {
     }
 }
 
+/// Tracks a cancelled request's inflight slot. When the user times out, the
+/// request is marked as cancelled via [`InflightTracker::cancel`]. Sent
+/// sub-commands keep running until the server responds. When the last
+/// `InflightTracker` clone is dropped (all sub-commands done), the inflight
+/// counter is released.
+///
+/// If no tracker is attached (`None`), the request follows the default
+/// cancellation behaviour (`sender.is_closed()` → immediate cancel).
+#[derive(Clone)]
+pub struct InflightTracker {
+    inner: Arc<InflightTrackerInner>,
+}
+
+struct InflightTrackerInner {
+    cancelled: AtomicBool,
+    inflight_counter: Arc<AtomicIsize>,
+}
+
+impl Drop for InflightTrackerInner {
+    fn drop(&mut self) {
+        if self.cancelled.load(Ordering::Acquire) {
+            // Request was cancelled by user timeout. Release the inflight slot
+            // now that all sub-commands have completed (or were skipped).
+            self.inflight_counter.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+}
+
+impl InflightTracker {
+    /// Create a new tracker backed by the given inflight counter.
+    pub fn new(inflight_counter: Arc<AtomicIsize>) -> Self {
+        Self {
+            inner: Arc::new(InflightTrackerInner {
+                cancelled: AtomicBool::new(false),
+                inflight_counter,
+            }),
+        }
+    }
+
+    /// Mark the request as cancelled. When all clones of this tracker are
+    /// dropped the inflight counter will be released.
+    pub fn cancel(&self) {
+        self.inner.cancelled.store(true, Ordering::Release);
+    }
+
+    /// Returns `true` if the request has been cancelled by user timeout.
+    pub fn is_cancelled(&self) -> bool {
+        self.inner.cancelled.load(Ordering::Acquire)
+    }
+}
+
+#[cfg(test)]
+mod inflight_tracker_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn normal_completion_does_not_release_slot() {
+        let counter = Arc::new(AtomicIsize::new(0));
+        let tracker = InflightTracker::new(counter.clone());
+        assert!(!tracker.is_cancelled());
+        drop(tracker);
+        // Not cancelled → Drop is a no-op, counter stays at 0
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn cancelled_tracker_releases_slot_on_drop() {
+        let counter = Arc::new(AtomicIsize::new(0));
+        let tracker = InflightTracker::new(counter.clone());
+        tracker.cancel();
+        assert!(tracker.is_cancelled());
+        drop(tracker);
+        // Cancelled → Drop releases the slot (increments by 1)
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn cloned_tracker_releases_only_when_last_clone_drops() {
+        let counter = Arc::new(AtomicIsize::new(0));
+        let tracker = InflightTracker::new(counter.clone());
+        let clone1 = tracker.clone();
+        let clone2 = tracker.clone();
+        tracker.cancel();
+
+        drop(clone1);
+        // Still 2 references alive (tracker + clone2), no release yet
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+
+        drop(tracker);
+        // Still 1 reference alive (clone2), no release yet
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
+
+        drop(clone2);
+        // Last reference dropped → slot released
+        assert_eq!(counter.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn cancel_is_visible_to_all_clones() {
+        let counter = Arc::new(AtomicIsize::new(0));
+        let tracker = InflightTracker::new(counter.clone());
+        let clone = tracker.clone();
+        assert!(!clone.is_cancelled());
+
+        tracker.cancel();
+        assert!(clone.is_cancelled());
+    }
+}
+
 struct PendingRequest<C> {
     retry: u32,
     sender: oneshot::Sender<RedisResult<Response>>,
     info: RequestInfo<C>,
+    inflight_tracker: Option<InflightTracker>,
 }
 
 pin_project! {
@@ -969,9 +1162,28 @@ impl<C> Future for Request<C> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
         let mut this = self.as_mut().project();
-        // If the sender is closed, the caller is no longer waiting for the reply, and it is ambiguous
-        // whether they expect the side-effect of the request to happen or not.
-        if this.request.is_none() || this.request.as_ref().unwrap().sender.is_closed() {
+        if this.request.is_none() {
+            return Poll::Ready(Next::Done);
+        }
+        let request = this.request.as_ref().unwrap();
+        if request.sender.is_closed() {
+            // Receiver dropped — nobody is waiting for the reply.
+            // If the request has a cancelled inflight tracker, keep polling the
+            // inner future so that commands already sent to the server complete
+            // cleanly. The InflightTracker's Drop releases the inflight slot
+            // when this Request is removed from in_flight_requests.
+            if request
+                .inflight_tracker
+                .as_ref()
+                .is_some_and(|t| t.is_cancelled())
+            {
+                if let RequestStateProj::Future { future } = this.future.as_mut().project() {
+                    match future.poll(cx) {
+                        Poll::Ready(_) => return Poll::Ready(Next::Done),
+                        Poll::Pending => return Poll::Pending,
+                    }
+                }
+            }
             return Poll::Ready(Next::Done);
         }
         let future = match this.future.as_mut().project() {
@@ -2501,17 +2713,16 @@ where
         routing: &'a MultipleNodeRoutingInfo,
         core: Core<C>,
         response_policy: Option<ResponsePolicy>,
+        inflight_tracker: Option<InflightTracker>,
     ) -> OperationResult {
         trace!("execute_on_multiple_nodes");
 
-        // This function maps the connections to senders & receivers of one-shot channels, and the receivers are mapped to `PendingRequest`s.
-        // This allows us to pass the new `PendingRequest`s to `try_request`, while letting `execute_on_multiple_nodes` wait on the receivers
-        // for all of the individual requests to complete.
-        #[allow(clippy::type_complexity)] // The return value is complex, but indentation and linebreaks make it human readable.
+        #[allow(clippy::type_complexity)]
         fn into_channels<C>(
             iterator: impl Iterator<
                 Item = Option<(Arc<Cmd>, ConnectionAndAddress<ConnectionFuture<C>>)>,
             >,
+            inflight_tracker: &Option<InflightTracker>,
         ) -> (
             Vec<(Option<String>, Receiver<Result<Response, RedisError>>)>,
             Vec<Option<PendingRequest<C>>>,
@@ -2527,7 +2738,9 @@ where
                             Some(PendingRequest {
                                 retry: 0,
                                 sender,
+                                inflight_tracker: inflight_tracker.clone(),
                                 info: RequestInfo {
+                                    inflight_tracker: inflight_tracker.clone(),
                                     cmd: CmdArg::Cmd {
                                         cmd,
                                         routing: InternalSingleNodeRouting::Connection {
@@ -2569,14 +2782,16 @@ where
                     connections_container
                         .all_node_connections()
                         .map(|tuple| Some((cmd.clone(), tuple))),
+                    &inflight_tracker,
                 ),
                 MultipleNodeRoutingInfo::AllMasters => into_channels(
                     connections_container
                         .all_primary_connections()
                         .map(|tuple| Some((cmd.clone(), tuple))),
+                    &inflight_tracker,
                 ),
-                MultipleNodeRoutingInfo::MultiSlot((slots, _)) => {
-                    into_channels(slots.iter().map(|(route, indices)| {
+                MultipleNodeRoutingInfo::MultiSlot((slots, _)) => into_channels(
+                    slots.iter().map(|(route, indices)| {
                         connections_container
                             .connection_for_route(route)
                             .map(|tuple| {
@@ -2587,8 +2802,9 @@ where
                                     );
                                 (Arc::new(new_cmd), tuple)
                             })
-                    }))
-                }
+                    }),
+                    &inflight_tracker,
+                ),
             };
         }
         core.pending_requests
@@ -2606,15 +2822,16 @@ where
         cmd: Arc<Cmd>,
         routing: InternalRoutingInfo<C>,
         core: Core<C>,
+        inflight_tracker: Option<InflightTracker>,
     ) -> OperationResult {
         let routing = match routing {
-            // commands that are sent to multiple nodes are handled here.
             InternalRoutingInfo::MultiNode((multi_node_routing, response_policy)) => {
                 return Self::execute_on_multiple_nodes(
                     &cmd,
                     &multi_node_routing,
                     core,
                     response_policy,
+                    inflight_tracker,
                 )
                 .await;
             }
@@ -2623,15 +2840,13 @@ where
         };
         trace!("route request to single node");
 
-        // if we reached this point, we're sending the command only to single node, and we need to find the
-        // right connection to the node.
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
-        // Update OTel span with actual routed node address
         if let Some(span) = cmd.span() {
             set_routed_node_on_span(&span, &address);
         }
+
         conn.req_packed_command(&cmd)
             .await
             .map(Response::Single)
@@ -2646,10 +2861,10 @@ where
     ) -> OperationResult {
         trace!("try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
-        // Update OTel span with actual routed node address
         if let Some(span) = pipeline.span() {
             set_routed_node_on_span(&span, &address);
         }
+
         conn.req_packed_commands(&pipeline, offset, count, None)
             .await
             .map(Response::Multiple)
@@ -2657,8 +2872,11 @@ where
     }
 
     async fn try_request(info: RequestInfo<C>, core: Core<C>) -> OperationResult {
+        let inflight_tracker = info.inflight_tracker;
         match info.cmd {
-            CmdArg::Cmd { cmd, routing } => Self::try_cmd_request(cmd, routing, core).await,
+            CmdArg::Cmd { cmd, routing } => {
+                Self::try_cmd_request(cmd, routing, core, inflight_tracker).await
+            }
             CmdArg::Pipeline {
                 pipeline,
                 offset,
@@ -2668,7 +2886,6 @@ where
                 pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
-                    // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines (i.e., the pipeline is already routed to a specific node), we can send it as is, with no need to split it into sub-pipelines.
                     Self::try_pipeline_request(
                         pipeline,
                         offset,
@@ -3232,6 +3449,9 @@ where
     }
 
     fn poll_complete(&mut self, cx: &mut task::Context<'_>) -> Poll<PollFlushAction> {
+        // Update global in-flight counter for observability
+        IN_FLIGHT_REQUEST_COUNT.store(self.in_flight_requests.len(), atomic::Ordering::Relaxed);
+
         let retry_params = self
             .inner
             .get_cluster_param(|params| params.retry_params.clone())
@@ -3425,9 +3645,16 @@ where
     }
 
     fn start_send(self: Pin<&mut Self>, msg: Message<C>) -> Result<(), Self::Error> {
-        let Message { cmd, sender } = msg;
+        let Message {
+            cmd,
+            sender,
+            inflight_tracker,
+        } = msg;
 
-        let info = RequestInfo { cmd };
+        let info = RequestInfo {
+            cmd,
+            inflight_tracker: inflight_tracker.clone(),
+        };
 
         self.inner
             .pending_requests
@@ -3437,6 +3664,7 @@ where
                 retry: 0,
                 sender,
                 info,
+                inflight_tracker,
             });
         Ok(())
     }
