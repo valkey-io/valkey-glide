@@ -20,7 +20,9 @@ def to_c_strings(ffi, args):
     The returned `buffers` list must be kept alive for the duration of the FFI call.
     """
     buffers = [encode_arg(a) for a in args]
-    c_strings = ffi.new("size_t[]", [ffi.cast("size_t", ffi.from_buffer(b)) for b in buffers])
+    c_strings = ffi.new(
+        "size_t[]", [ffi.cast("size_t", ffi.from_buffer(b)) for b in buffers]
+    )
     c_lengths = ffi.new("unsigned long[]", [len(b) for b in buffers])
     return c_strings, c_lengths, buffers
 

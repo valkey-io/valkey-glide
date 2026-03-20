@@ -1,21 +1,19 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
-import os
 import sys
 import threading
 from typing import (
-    Any,
     Dict,
     List,
     Optional,
-    Set,
     Tuple,
     Union,
     cast,
 )
 
 from glide_shared._fast_response import parse_response as _c_parse_response
+from glide.async_commands.core import RequestType
 from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.command_args import ObjectType
@@ -37,7 +35,11 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
-from glide.async_commands.core import RequestType
+from glide_shared.ffi_helpers import (
+    ENCODING,
+    to_c_route_ptr_and_len,
+    to_c_strings,
+)
 from glide_shared.routes import Route
 
 from .async_commands.cluster_commands import ClusterCommands
@@ -47,21 +49,15 @@ from .logger import Level as LogLevel
 from .logger import Logger as ClientLogger
 from .opentelemetry import OpenTelemetry
 
-from glide_shared.ffi_helpers import ENCODING, to_c_strings, encode_arg, to_c_route_ptr_and_len
-from _fast_response import parse_response as _c_parse_response
-
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
 
 
-
-
 class FFIClientTypeEnum:
     Async = 0
     Sync = 1
-
 
 
 class BaseClient(CoreCommands):
@@ -149,7 +145,9 @@ class BaseClient(CoreCommands):
             self._core_client = client_response.conn_ptr
         else:
             error_msg = (
-                self._ffi.string(client_response.connection_error_message).decode(ENCODING)
+                self._ffi.string(client_response.connection_error_message).decode(
+                    ENCODING
+                )
                 if client_response.connection_error_message != self._ffi.NULL
                 else "Unknown error"
             )
@@ -158,7 +156,6 @@ class BaseClient(CoreCommands):
 
         self._lib.free_connection_response(client_response_ptr)
         return self
-
 
     # ==================== Callback Handling ====================
 
@@ -204,15 +201,29 @@ class BaseClient(CoreCommands):
     def _create_push_handle_callback(self):
         """Create the FFI pubsub callback function."""
         push_kind_map = {
-            0: "Disconnection", 1: "Other", 2: "Invalidate",
-            3: "Message", 4: "PMessage", 5: "SMessage",
-            6: "Unsubscribe", 7: "PUnsubscribe", 8: "SUnsubscribe",
-            9: "Subscribe", 10: "PSubscribe", 11: "SSubscribe",
+            0: "Disconnection",
+            1: "Other",
+            2: "Invalidate",
+            3: "Message",
+            4: "PMessage",
+            5: "SMessage",
+            6: "Unsubscribe",
+            7: "PUnsubscribe",
+            8: "SUnsubscribe",
+            9: "Subscribe",
+            10: "PSubscribe",
+            11: "SSubscribe",
         }
 
         def _pubsub_callback(
-            client_ptr, kind, message_ptr, message_len,
-            channel_ptr, channel_len, pattern_ptr, pattern_len,
+            client_ptr,
+            kind,
+            message_ptr,
+            message_len,
+            channel_ptr,
+            channel_len,
+            pattern_ptr,
+            pattern_len,
         ):
             try:
                 message = self._ffi.buffer(message_ptr, message_len)[:]
@@ -226,7 +237,8 @@ class BaseClient(CoreCommands):
 
                 if message_kind == "Disconnection":
                     ClientLogger.log(
-                        LogLevel.WARN, "disconnect notification",
+                        LogLevel.WARN,
+                        "disconnect notification",
                         "Transport disconnected, messages might be lost",
                     )
                 elif message_kind in ("Message", "PMessage", "SMessage"):
@@ -244,7 +256,8 @@ class BaseClient(CoreCommands):
                             self._complete_pubsub_futures_safe()
             except Exception as e:
                 ClientLogger.log(
-                    LogLevel.ERROR, "pubsub_callback",
+                    LogLevel.ERROR,
+                    "pubsub_callback",
                     f"Error in pubsub callback: {e}",
                 )
 
@@ -284,7 +297,6 @@ class BaseClient(CoreCommands):
                 return self._pending_push_notifications.pop(0)
             return None
 
-
     # ==================== Response Parsing ====================
 
     def _handle_response(self, message):
@@ -303,7 +315,6 @@ class BaseClient(CoreCommands):
 
     def _to_c_route_ptr_and_len(self, route):
         return to_c_route_ptr_and_len(self._ffi, route)
-
 
     # ==================== Command Execution ====================
 
@@ -328,19 +339,35 @@ class BaseClient(CoreCommands):
         # OTel span creation only when initialized (rare)
         span = 0
         if OpenTelemetry._instance is not None and OpenTelemetry.should_sample():
-            span_name_cstr = self._ffi.new("char[]", RequestType.Name(request_type).encode())
+            span_name_cstr = self._ffi.new(
+                "char[]", RequestType.Name(request_type).encode()
+            )
             span = self._lib.create_named_otel_span(span_name_cstr)
 
         if route is None:
             self._lib.command(
-                self._core_client, callback_id, request_type,
-                len(args), c_args, c_lengths, self._ffi.NULL, 0, span,
+                self._core_client,
+                callback_id,
+                request_type,
+                len(args),
+                c_args,
+                c_lengths,
+                self._ffi.NULL,
+                0,
+                span,
             )
         else:
             route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
             self._lib.command(
-                self._core_client, callback_id, request_type,
-                len(args), c_args, c_lengths, route_ptr, route_len, span,
+                self._core_client,
+                callback_id,
+                request_type,
+                len(args),
+                c_args,
+                c_lengths,
+                route_ptr,
+                route_len,
+                span,
             )
 
         try:
@@ -443,7 +470,6 @@ class BaseClient(CoreCommands):
         finally:
             if span != 0:
                 self._lib.drop_otel_span(span)
-
 
     async def _execute_script(
         self,
@@ -618,7 +644,6 @@ class BaseClient(CoreCommands):
             if self._core_client is not None:
                 self._lib.close_client(self._core_client)
                 self._core_client = None
-
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):

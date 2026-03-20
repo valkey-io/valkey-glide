@@ -6,9 +6,8 @@ import traceback
 from enum import Enum
 from typing import Optional, cast
 
-from glide_shared.exceptions import LoggerError
-
 from glide_shared._glide_ffi import _GlideFFI
+from glide_shared.exceptions import LoggerError
 
 ENCODING = "utf-8"
 

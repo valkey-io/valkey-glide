@@ -45,9 +45,8 @@ Validation Rules
 * Invalid configuration will throw an error when calling OpenTelemetry.init()
 """
 
-from typing import Optional
-
 import random
+from typing import Optional
 
 from glide_shared.exceptions import ConfigurationError
 

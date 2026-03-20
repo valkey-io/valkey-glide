@@ -854,9 +854,16 @@ fn create_client_internal(
         ClientType::AsyncClient { .. } => {
             // Async clients need a background worker thread to drive the reactor
             // since the calling thread is owned by the foreign language's event loop.
+            // GLIDE_TOKIO_WORKER_THREADS controls the number of tokio worker threads
+            // (default 1). More workers can help concurrent large-response workloads.
+            let worker_threads = std::env::var("GLIDE_TOKIO_WORKER_THREADS")
+                .ok()
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(1)
+                .max(1);
             Builder::new_multi_thread()
                 .enable_all()
-                .worker_threads(1)
+                .worker_threads(worker_threads)
                 .thread_name("Valkey-GLIDE thread")
                 .build()
                 .map_err(|err| {

@@ -20,8 +20,8 @@ from glide_shared.exceptions import (
     RequestError,
     get_request_error_class,
 )
+from glide_shared.ffi_helpers import ENCODING, to_c_route_ptr_and_len, to_c_strings
 from glide_shared.request_type import RequestType
-from glide_shared.ffi_helpers import ENCODING, to_c_strings, to_c_route_ptr_and_len
 from glide_shared.routes import (
     AllNodes,
     AllPrimaries,
@@ -44,8 +44,6 @@ if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
-
-
 
 
 # Enum values must match the Rust definition

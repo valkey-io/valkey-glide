@@ -1,10 +1,9 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
+from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.constants import TEncodable
 from glide_shared.exceptions import RequestError
-
-from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.logger import Level, Logger
 
 ENCODING = "utf-8"
