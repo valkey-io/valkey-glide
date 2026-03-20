@@ -75,6 +75,7 @@ blockingSocketTimeoutMillis
 - ✅ Wait operations (WAIT, WAITAOF)
 - ✅ Object introspection (OBJECT ENCODING, OBJECT FREQ, OBJECT IDLETIME, OBJECT REFCOUNT)
 - ✅ Geospatial operations (GEOADD, GEOPOS, GEODIST, GEOHASH, GEOSEARCH, GEOSEARCHSTORE)
+- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT). `publish()` returns `0` instead of the actual subscriber count due to GLIDE API limitations (see [issue #5354](https://github.com/valkey-io/valkey-glide/issues/5354)). For subscription management and message handling, use GLIDE's native dynamic pubsub APIs for subscribing to channels and handling messages at runtime.
 - ✅ Connection commands (PING, ECHO, SELECT, CLIENT ID, CLIENT GETNAME)
 - ✅ Server management commands (INFO, CONFIG GET/SET/REWRITE/RESETSTAT, DBSIZE, FLUSHDB, FLUSHALL, TIME, LASTSAVE, LOLWUT)
 - ✅ ACL commands (ACL LIST, ACL GETUSER, ACL SETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL LOG, ACL LOG RESET, ACL WHOAMI, ACL USERS, ACL SAVE, ACL LOAD, ACL DRYRUN)
@@ -106,6 +107,7 @@ blockingSocketTimeoutMillis
 - **Failover configurations**: Jedis-specific failover logic not supported
 
 ### Advanced Features
+- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported (see [issue #5469](https://github.com/valkey-io/valkey-glide/issues/5469) for planned support). For PubSub functionality with message handling, use GLIDE's native dynamic pubsub APIs to subscribe to channels and handle messages at runtime. The compatibility layer only provides `publish()` and `pubsub*()` inspection commands.
 - ⚠️ **Transactions**: Basic MULTI/EXEC/DISCARD/WATCH/UNWATCH supported, but with limitations:
   - After `multi()`, you must use the returned **Transaction** object to queue commands (e.g. `t.set()`, `t.get()`). Calling `jedis.set()` or other Jedis methods directly does **not** queue to the transaction.
   - For commands not yet exposed on `Transaction`, or for pipeline (non-atomic) batching, use the native GLIDE Batch API with the same connection.
