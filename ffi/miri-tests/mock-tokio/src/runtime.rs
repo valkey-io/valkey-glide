@@ -38,6 +38,10 @@ impl Builder {
         Builder
     }
 
+    pub fn new_current_thread() -> Builder {
+        Builder
+    }
+
     pub fn enable_all(&mut self) -> &mut Self {
         self
     }
