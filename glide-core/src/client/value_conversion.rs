@@ -953,7 +953,7 @@ pub(crate) fn convert_to_expected_type(
         },
         ExpectedReturnType::FTSearchReturnType => match value {
             /*
-            Example of the response
+            Normal response (with field content):
                 1) (integer) 2
                 2) "json:2"
                 3) 1) "__VEC_score"
@@ -975,20 +975,46 @@ pub(crate) fn convert_to_expected_type(
                       1# "__VEC_score" => "91"
                       2# "$" => "{\"vec\":[1,2,3,4,5,6]}"
 
-            Response may contain only 1 element, no conversion in that case.
+            NOCONTENT response (key names only):
+                1) (integer) 2
+                2) "json:2"
+                3) "json:0"
+
+            Converting to:
+                1) (integer) 2
+                2) 1# "json:2" => (empty map)
+                   2# "json:0" => (empty map)
+
+            Response may contain only 1 element (COUNT option), no conversion in that case.
             */
             Value::Array(ref array) if array.len() == 1 => Ok(value),
             Value::Array(mut array) => {
-                Ok(Value::Array(vec![
-                    array.remove(0),
-                    convert_to_expected_type(Value::Array(array), Some(ExpectedReturnType::Map {
-                        key_type: &Some(ExpectedReturnType::BulkString),
-                        value_type: &Some(ExpectedReturnType::Map {
+                let count = array.remove(0);
+                if array.is_empty() {
+                    // Empty result set — return count with an empty map.
+                    Ok(Value::Array(vec![count, Value::Map(vec![])]))
+                } else if array.iter().all(|v| matches!(v, Value::BulkString(_) | Value::SimpleString(_))) {
+                    // NOCONTENT response: every element after count is a key name (BulkString or SimpleString).
+                    // Normal responses alternate key (BulkString) and fields (Array), so at
+                    // least one Array element would be present. If all elements are strings,
+                    // this is a NOCONTENT response — build key -> empty map pairs.
+                    let pairs: Vec<(Value, Value)> = array
+                        .into_iter()
+                        .map(|key| (key, Value::Map(vec![])))
+                        .collect();
+                    Ok(Value::Array(vec![count, Value::Map(pairs)]))
+                } else {
+                    Ok(Value::Array(vec![
+                        count,
+                        convert_to_expected_type(Value::Array(array), Some(ExpectedReturnType::Map {
                             key_type: &Some(ExpectedReturnType::BulkString),
-                            value_type: &Some(ExpectedReturnType::BulkString),
-                        }),
-                    }))?
-                ]))
+                            value_type: &Some(ExpectedReturnType::Map {
+                                key_type: &Some(ExpectedReturnType::BulkString),
+                                value_type: &Some(ExpectedReturnType::BulkString),
+                            }),
+                        }))?
+                    ]))
+                }
             },
             _ => Err((
                 ErrorKind::TypeError,

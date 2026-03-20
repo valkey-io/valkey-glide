@@ -85,6 +85,8 @@ class FtSearchOptions:
         params: Optional[Mapping[TEncodable, TEncodable]] = None,
         limit: Optional[FtSearchLimit] = None,
         count: Optional[bool] = False,
+        nocontent: Optional[bool] = False,
+        dialect: Optional[int] = None,
     ):
         """
         Initialize the FT.SEARCH optional fields.
@@ -100,12 +102,17 @@ class FtSearchOptions:
                 and count values are returned. See `FtSearchLimit`.
             count (Optional[bool]): This flag option suppresses returning the contents of keys.
                 Only the number of keys is returned.
+            nocontent (Optional[bool]): If set, the query returns only the document IDs and not the content.
+                The document entries in the result will have empty attribute maps.
+            dialect (Optional[int]): The query dialect version to use. The only supported dialect is ``2``.
         """
         self.return_fields = return_fields
         self.timeout = timeout
         self.params = params
         self.limit = limit
         self.count = count
+        self.nocontent = nocontent
+        self.dialect = dialect
 
     def to_args(self) -> List[TEncodable]:
         """
@@ -116,6 +123,8 @@ class FtSearchOptions:
                 List of FT.SEARCH optional agruments.
         """
         args: List[TEncodable] = []
+        if self.nocontent:
+            args.append(FtSearchKeywords.NOCONTENT)
         if self.return_fields:
             args.append(FtSearchKeywords.RETURN)
             return_field_args: List[TEncodable] = []
@@ -136,4 +145,6 @@ class FtSearchOptions:
             args.extend(self.limit.to_args())
         if self.count:
             args.append(FtSearchKeywords.COUNT)
+        if self.dialect is not None:
+            args.extend([FtSearchKeywords.DIALECT, str(self.dialect)])
         return args
