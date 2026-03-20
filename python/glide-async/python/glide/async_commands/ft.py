@@ -20,7 +20,10 @@ from glide_shared.commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
 )
 from glide_shared.commands.server_modules.ft_options.ft_search_options import (
+    ConsistencyMode,
     FtSearchOptions,
+    InfoScope,
+    ShardScope,
 )
 from glide_shared.constants import (
     TOK,
@@ -58,6 +61,24 @@ async def create(
         >>> prefixes: List[str] = ["blog:post:"]
         >>> await ft.create(glide_client, "my_idx1", schema, FtCreateOptions(DataType.HASH, prefixes))
             'OK'  # Indicates successful creation of index named 'idx'
+
+        # Create with all options in one call:
+        # Note: nostopwords/stopwords are mutually exclusive;
+        # withoffsets/nooffsets are mutually exclusive;
+        # withsuffixtrie/nosuffixtrie are mutually exclusive.
+        >>> await ft.create(glide_client, "product_idx",
+        ...     schema=[
+        ...         TextField("title", sortable=True, nostem=True, weight=2.0,
+        ...                   withsuffixtrie=True),
+        ...         NumericField("price", sortable=True),
+        ...         TagField("category", sortable=True),
+        ...     ],
+        ...     options=FtCreateOptions(
+        ...         data_type=DataType.HASH, prefixes=["product:"],
+        ...         score=1.0, language="english", skipinitialscan=True,
+        ...         minstemsize=4, withoffsets=True,
+        ...         stopwords=["the", "a", "is"], punctuation=".,;!?"))
+            'OK'
     """
     args: List[TEncodable] = [CommandNames.FT_CREATE, index_name]
     if options:
@@ -113,7 +134,7 @@ async def search(
     client: TGlideClient,
     index_name: TEncodable,
     query: TEncodable,
-    options: Optional[FtSearchOptions],
+    options: Optional[FtSearchOptions] = None,
 ) -> FtSearchResponse:
     """
     Uses the provided query expression to locate keys within an index. Once located, the count and/or the content of indexed
@@ -128,7 +149,7 @@ async def search(
     Returns:
         FtSearchResponse: A two element array, where first element is count of documents in result set, and the second
             element, which has the format Mapping[TEncodable, Mapping[TEncodable, TEncodable]] is a mapping between document
-            names and map of their attributes.
+            names and map of their attributes. When ``nocontent`` is set, the attribute maps will be empty.
         If count(option in `FtSearchOptions`) is set to true or limit(option in `FtSearchOptions`) is set to
             FtSearchLimit(0, 0), the command returns array with only one element - the count of the documents.
 
@@ -152,6 +173,17 @@ async def search(
         [1, { b'json:1': { b'first': b'42', b'second': b'33' } }]
         # The first element, 1 is the number of keys returned in the search result. The second element is a map of
         # data queried per key.
+
+        # Text search with all options in one call:
+        # Note: withsortkeys requires sortby; shard_scope/consistency are cluster-mode options.
+        >>> await ft.search(glide_client, "idx", "hello world",
+        ...     options=FtSearchOptions(
+        ...         verbatim=True, inorder=True, slop=1,
+        ...         sortby="price", sortby_order=FtSearchOrderBy.ASC,
+        ...         withsortkeys=True,
+        ...         shard_scope=ShardScope.ALLSHARDS,
+        ...         consistency=ConsistencyMode.CONSISTENT,
+        ...         dialect=2))
     """
     args: List[TEncodable] = [CommandNames.FT_SEARCH, index_name, query]
     if options:
@@ -225,13 +257,22 @@ async def aliasupdate(
     return cast(TOK, await client.custom_command(args))
 
 
-async def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
+async def info(
+    client: TGlideClient,
+    index_name: TEncodable,
+    scope: Optional["InfoScope"] = None,
+    shard_scope: Optional["ShardScope"] = None,
+    consistency: Optional["ConsistencyMode"] = None,
+) -> FtInfoResponse:
     """
     Returns information about a given index.
 
     Args:
         client (TGlideClient): The client to execute the command.
         index_name (TEncodable): The index name for which the information has to be returned.
+        scope (Optional[InfoScope]): Controls which nodes provide index information (LOCAL, PRIMARY, CLUSTER).
+        shard_scope (Optional[ShardScope]): Controls shard participation (ALLSHARDS, SOMESHARDS).
+        consistency (Optional[ConsistencyMode]): Controls consistency requirements (CONSISTENT, INCONSISTENT).
 
     Returns:
         FtInfoResponse: Nested maps with info about the index. See example for more details.
@@ -292,8 +333,22 @@ async def info(client: TGlideClient, index_name: TEncodable) -> FtInfoResponse:
                 b'index_status', b'AVAILABLE',
                 b'index_degradation_percentage', 0
             ]
+
+        # Get info with 1.2 scope options:
+        >>> await ft.info(glide_client, "myIndex", scope=InfoScope.LOCAL)
+        # Returns detailed local node info
+
+        # Get cluster-wide info (requires coordinator):
+        >>> await ft.info(glide_client, "myIndex", scope=InfoScope.PRIMARY,
+        ...     shard_scope=ShardScope.ALLSHARDS, consistency=ConsistencyMode.CONSISTENT)
     """
     args: List[TEncodable] = [CommandNames.FT_INFO, index_name]
+    if scope is not None:
+        args.append(scope.value)
+    if shard_scope is not None:
+        args.append(shard_scope.value)
+    if consistency is not None:
+        args.append(consistency.value)
     return cast(FtInfoResponse, await client.custom_command(args))
 
 
@@ -347,7 +402,7 @@ async def aggregate(
     client: TGlideClient,
     index_name: TEncodable,
     query: TEncodable,
-    options: Optional[FtAggregateOptions],
+    options: Optional[FtAggregateOptions] = None,
 ) -> FtAggregateResponse:
     """
     A superset of the FT.SEARCH command, it allows substantial additional processing of the keys selected by the query
@@ -388,6 +443,10 @@ async def aggregate(
                     b'bicycles': b'4'
                 }
             ]
+
+        # Aggregate with all query flags in one call:
+        >>> await ft.aggregate(glide_client, "myIndex", "@score:[20 +inf]",
+        ...     FtAggregateOptions(loadAll=True, verbatim=True, inorder=True, slop=1, dialect=2))
     """
     args: List[TEncodable] = [CommandNames.FT_AGGREGATE, index_name, query]
     if options:

@@ -14,6 +14,7 @@ import {
     Field,
     FtAggregateOptions,
     FtCreateOptions,
+    FtInfoOptions,
     FtSearchOptions,
 } from "..";
 
@@ -68,6 +69,26 @@ export class GlideFt {
      *      dataType: "JSON",
      *      prefixes: ["json:"]
      *  });
+     *
+     * // Create a text search index with all options:
+     * // Note: noStopWords/stopWords are mutually exclusive;
+     * // withOffsets/noOffsets are mutually exclusive.
+     * await GlideFt.create(client, "text_idx", [
+     *     { type: "TEXT", name: "title", sortable: true, nostem: true, weight: 2.0,
+     *       withsuffixtrie: true },
+     *     { type: "NUMERIC", name: "price", sortable: true },
+     *     { type: "TAG", name: "category", sortable: true },
+     * ], {
+     *     dataType: "HASH",
+     *     prefixes: ["product:"],
+     *     score: 1.0,
+     *     language: "english",
+     *     skipInitialScan: true,
+     *     minStemSize: 4,
+     *     withOffsets: true,
+     *     stopWords: ["the", "a", "is"],
+     *     punctuation: ".,;!?",
+     * });
      * ```
      */
     static async create(
@@ -90,6 +111,54 @@ export class GlideFt {
                     ...options.prefixes,
                 );
             }
+
+            if (options.score !== undefined) {
+                args.push("SCORE", options.score.toString());
+            }
+
+            if (options.language) {
+                args.push("LANGUAGE", options.language);
+            }
+
+            if (options.skipInitialScan) {
+                args.push("SKIPINITIALSCAN");
+            }
+
+            if (options.minStemSize !== undefined) {
+                args.push("MINSTEMSIZE", options.minStemSize.toString());
+            }
+
+            if (options.withOffsets && options.noOffsets) {
+                throw new Error(
+                    "withOffsets and noOffsets are mutually exclusive.",
+                );
+            }
+
+            if (options.noStopWords && options.stopWords) {
+                throw new Error(
+                    "noStopWords and stopWords are mutually exclusive.",
+                );
+            }
+
+            if (options.withOffsets) {
+                args.push("WITHOFFSETS");
+            } else if (options.noOffsets) {
+                args.push("NOOFFSETS");
+            }
+
+            if (options.noStopWords) {
+                args.push("NOSTOPWORDS");
+            } else if (options.stopWords) {
+                args.push(
+                    "STOPWORDS",
+                    options.stopWords.length.toString(),
+                    ...options.stopWords,
+                );
+            }
+
+            if (options.punctuation) {
+                args.push("PUNCTUATION", options.punctuation);
+            }
         }
 
         args.push("SCHEMA");
@@ -104,6 +173,28 @@ export class GlideFt {
             args.push(f.type);
 
             switch (f.type) {
+                case "TEXT": {
+                    if (f.nostem) {
+                        args.push("NOSTEM");
+                    }
+
+                    if (f.weight !== undefined) {
+                        args.push("WEIGHT", f.weight.toString());
+                    }
+
+                    if (f.withsuffixtrie) {
+                        args.push("WITHSUFFIXTRIE");
+                    } else if (f.nosuffixtrie) {
+                        args.push("NOSUFFIXTRIE");
+                    }
+
+                    if (f.sortable) {
+                        args.push("SORTABLE");
+                    }
+
+                    break;
+                }
+
                 case "TAG": {
                     if (f.separator) {
                         args.push("SEPARATOR", f.separator);
@@ -111,6 +202,18 @@ export class GlideFt {
 
                     if (f.caseSensitive) {
                         args.push("CASESENSITIVE");
+                    }
+
+                    if (f.sortable) {
+                        args.push("SORTABLE");
+                    }
+
+                    break;
+                }
+
+                case "NUMERIC": {
+                    if (f.sortable) {
+                        args.push("SORTABLE");
                     }
 
                     break;
@@ -154,27 +257,33 @@ export class GlideFt {
                         }
 
                         // VectorFieldAttributesHnsw attributes
-                        if ("m" in f.attributes && f.attributes.m) {
-                            attributes.push("M", f.attributes.m.toString());
-                        }
-
                         if (
-                            "efContruction" in f.attributes &&
-                            f.attributes.efContruction
+                            "numberOfEdges" in f.attributes &&
+                            f.attributes.numberOfEdges
                         ) {
                             attributes.push(
-                                "EF_CONSTRUCTION",
-                                f.attributes.efContruction.toString(),
+                                "M",
+                                f.attributes.numberOfEdges.toString(),
                             );
                         }
 
                         if (
-                            "efRuntime" in f.attributes &&
-                            f.attributes.efRuntime
+                            "vectorsExaminedOnConstruction" in f.attributes &&
+                            f.attributes.vectorsExaminedOnConstruction
+                        ) {
+                            attributes.push(
+                                "EF_CONSTRUCTION",
+                                f.attributes.vectorsExaminedOnConstruction.toString(),
+                            );
+                        }
+
+                        if (
+                            "vectorsExaminedOnRuntime" in f.attributes &&
+                            f.attributes.vectorsExaminedOnRuntime
                         ) {
                             attributes.push(
                                 "EF_RUNTIME",
-                                f.attributes.efRuntime.toString(),
+                                f.attributes.vectorsExaminedOnRuntime.toString(),
                             );
                         }
 
@@ -300,6 +409,10 @@ export class GlideFt {
      * //         }
      * //     ]
      * // ]
+     *
+     * // Aggregate with all query flags:
+     * const result12 = await GlideFt.aggregate(client, "myIndex", "@score:[20 +inf]",
+     *     { loadAll: true, verbatim: true, inorder: true, slop: 1, dialect: 2 });
      * ```
      */
     static async aggregate(
@@ -371,14 +484,36 @@ export class GlideFt {
      * //         },
      * //     ]
      * // }
+     *
+     * // Get info with scope options:
+     * const localInfo = await GlideFt.info(client, "myIndex", { scope: "LOCAL" });
+     *
+     * // Get cluster-wide info (requires coordinator):
+     * const clusterInfo = await GlideFt.info(client, "myIndex", {
+     *     scope: "PRIMARY",
+     *     shardScope: "ALLSHARDS",
+     *     consistency: "CONSISTENT",
+     * });
      * ```
      */
     static async info(
         client: GlideClient | GlideClusterClient,
         indexName: GlideString,
-        options?: DecoderOption,
+        options?: DecoderOption & FtInfoOptions,
     ): Promise<FtInfoReturnType> {
         const args: GlideString[] = ["FT.INFO", indexName];
+
+        if (options?.scope) {
+            args.push(options.scope);
+        }
+
+        if (options?.shardScope) {
+            args.push(options.shardScope);
+        }
+
+        if (options?.consistency) {
+            args.push(options.consistency);
+        }
 
         return (
             _handleCustomCommand(client, args, options) as Promise<
@@ -454,6 +589,7 @@ export class GlideFt {
      * @returns A two-element array, where the first element is the number of documents in the result set, and the
      * second element has the format: `GlideRecord<GlideRecord<GlideString>>`:
      * a mapping between document names and a map of their attributes.
+     * When `nocontent` is set, the attribute maps will be empty.
      *
      * If `count` or `limit` with values `{offset: 0, count: 0}` is
      * set, the command returns array with only one element: the number of documents.
@@ -495,6 +631,20 @@ export class GlideFt {
      * //     },
      * //   ],
      * // ]
+     *
+     * // Text search with all options:
+     * // Note: withSortKeys requires sortby; shardScope/consistency are cluster-mode options.
+     * const textResult = await GlideFt.search(client, "myIndex", "hello world", {
+     *     verbatim: true,
+     *     inorder: true,
+     *     slop: 1,
+     *     sortby: "price",
+     *     sortbyOrder: SortOrder.ASC,
+     *     withsortkeys: true,
+     *     shardScope: "ALLSHARDS",
+     *     consistency: "CONSISTENT",
+     *     dialect: 2,
+     * });
      * ```
      */
     static async search(
@@ -739,6 +889,10 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
 
     const args: GlideString[] = [];
 
+    if (options.verbatim) args.push("VERBATIM");
+    if (options.inorder) args.push("INORDER");
+    if (options.slop !== undefined) args.push("SLOP", options.slop.toString());
+
     if (options.loadAll) args.push("LOAD", "*");
     else if (options.loadFields)
         args.push(
@@ -813,6 +967,9 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
         }
     }
 
+    if (options.dialect !== undefined)
+        args.push("DIALECT", options.dialect.toString());
+
     return args;
 }
 
@@ -822,7 +979,45 @@ function _addFtAggregateOptions(options?: FtAggregateOptions): GlideString[] {
 function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
     if (!options) return [];
 
+    if (!options.sortby && options.sortbyOrder) {
+        throw new Error("sortbyOrder requires sortby to be set.");
+    }
+
+    if (!options.sortby && options.withsortkeys) {
+        throw new Error("withsortkeys requires sortby to be set.");
+    }
+
     const args: GlideString[] = [];
+
+    // SHARD SCOPE
+    if (options.shardScope) {
+        args.push(options.shardScope);
+    }
+
+    // CONSISTENCY
+    if (options.consistency) {
+        args.push(options.consistency);
+    }
+
+    // NOCONTENT
+    if (options.nocontent) {
+        args.push("NOCONTENT");
+    }
+
+    // VERBATIM
+    if (options.verbatim) {
+        args.push("VERBATIM");
+    }
+
+    // INORDER
+    if (options.inorder) {
+        args.push("INORDER");
+    }
+
+    // SLOP
+    if (options.slop !== undefined) {
+        args.push("SLOP", options.slop.toString());
+    }
 
     // RETURN
     if (options.returnFields) {
@@ -837,6 +1032,20 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
                 : returnFields.push(returnField.fieldIdentifier),
         );
         args.push("RETURN", returnFields.length.toString(), ...returnFields);
+    }
+
+    // SORTBY
+    if (options.sortby) {
+        args.push("SORTBY", options.sortby);
+
+        if (options.sortbyOrder) {
+            args.push(options.sortbyOrder);
+        }
+    }
+
+    // WITHSORTKEYS
+    if (options.withsortkeys) {
+        args.push("WITHSORTKEYS");
     }
 
     // TIMEOUT
@@ -865,6 +1074,11 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
     // COUNT
     if (options.count) {
         args.push("COUNT");
+    }
+
+    // DIALECT
+    if (options.dialect !== undefined) {
+        args.push("DIALECT", options.dialect.toString());
     }
 
     return args;

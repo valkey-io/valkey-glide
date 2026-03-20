@@ -23,6 +23,7 @@ import lombok.NonNull;
  * command.
  */
 @Builder
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class FTCreateOptions {
     /** The index data type. If not defined a {@link DataType#HASH} index is created. */
     private final DataType dataType;
@@ -30,9 +31,52 @@ public class FTCreateOptions {
     /** A list of prefixes of index definitions. */
     private final GlideString[] prefixes;
 
-    FTCreateOptions(DataType dataType, GlideString[] prefixes) {
+    /** Default score for documents in the index. Default is 1.0. */
+    private final Double score;
+
+    /** Default language for documents in the index. */
+    private final String language;
+
+    /** If set, does not scan and index existing documents on index creation. */
+    @Builder.Default private final boolean skipInitialScan = false;
+
+    /** Minimum word length to stem. Words shorter than this are not stemmed. */
+    private final Integer minStemSize;
+
+    /** If set, stores term offsets for document fields. Mutually exclusive with {@code noOffsets}. */
+    @Builder.Default private final boolean withOffsets = false;
+
+    /** If set, does not store term offsets. Mutually exclusive with {@code withOffsets}. */
+    @Builder.Default private final boolean noOffsets = false;
+
+    /** If set, disables stop-word filtering. Mutually exclusive with {@code stopWords}. */
+    @Builder.Default private final boolean noStopWords = false;
+
+    /** Custom list of stop words. Mutually exclusive with {@code noStopWords}. */
+    private final String[] stopWords;
+
+    /** Custom punctuation characters to use during tokenization. */
+    private final String punctuation;
+
+    /**
+     * Backward-compatible convenience constructor for callers that only need {@code dataType} and
+     * {@code prefixes}. All other options use their defaults.
+     *
+     * @param dataType The index data type. If {@code null} a {@link DataType#HASH} index is created.
+     * @param prefixes A list of prefixes of index definitions.
+     */
+    public FTCreateOptions(DataType dataType, GlideString[] prefixes) {
         this.dataType = dataType;
         this.prefixes = prefixes;
+        this.score = null;
+        this.language = null;
+        this.skipInitialScan = false;
+        this.minStemSize = null;
+        this.withOffsets = false;
+        this.noOffsets = false;
+        this.noStopWords = false;
+        this.stopWords = null;
+        this.punctuation = null;
     }
 
     public static FTCreateOptionsBuilder builder() {
@@ -40,6 +84,12 @@ public class FTCreateOptions {
     }
 
     public GlideString[] toArgs() {
+        if (withOffsets && noOffsets) {
+            throw new IllegalArgumentException("withOffsets and noOffsets are mutually exclusive.");
+        }
+        if (noStopWords && stopWords != null) {
+            throw new IllegalArgumentException("noStopWords and stopWords are mutually exclusive.");
+        }
         ArrayList<GlideString> args = new ArrayList<GlideString>();
         if (dataType != null) {
             args.add(gs("ON"));
@@ -49,6 +99,39 @@ public class FTCreateOptions {
             args.add(gs("PREFIX"));
             args.add(gs(Integer.toString(prefixes.length)));
             args.addAll(Arrays.asList(prefixes));
+        }
+        if (score != null) {
+            args.add(gs("SCORE"));
+            args.add(gs(score.toString()));
+        }
+        if (language != null) {
+            args.add(gs("LANGUAGE"));
+            args.add(gs(language));
+        }
+        if (skipInitialScan) {
+            args.add(gs("SKIPINITIALSCAN"));
+        }
+        if (minStemSize != null) {
+            args.add(gs("MINSTEMSIZE"));
+            args.add(gs(minStemSize.toString()));
+        }
+        if (withOffsets) {
+            args.add(gs("WITHOFFSETS"));
+        } else if (noOffsets) {
+            args.add(gs("NOOFFSETS"));
+        }
+        if (noStopWords) {
+            args.add(gs("NOSTOPWORDS"));
+        } else if (stopWords != null) {
+            args.add(gs("STOPWORDS"));
+            args.add(gs(Integer.toString(stopWords.length)));
+            for (String sw : stopWords) {
+                args.add(gs(sw));
+            }
+        }
+        if (punctuation != null) {
+            args.add(gs("PUNCTUATION"));
+            args.add(gs(punctuation));
         }
         return args.toArray(new GlideString[0]);
     }
@@ -94,17 +177,93 @@ public class FTCreateOptions {
 
     /** Field contains a number. */
     public static class NumericField implements Field {
+        private final boolean sortable;
+
+        /** Create a {@code NUMERIC} field. */
+        public NumericField() {
+            this.sortable = false;
+        }
+
+        /**
+         * Create a {@code NUMERIC} field.
+         *
+         * @param sortable If set, the field value can be used for sorting.
+         */
+        public NumericField(boolean sortable) {
+            this.sortable = sortable;
+        }
+
         @Override
         public String[] toArgs() {
-            return new String[] {FieldType.NUMERIC.toString()};
+            ArrayList<String> args = new ArrayList<String>();
+            args.add(FieldType.NUMERIC.toString());
+            if (sortable) args.add("SORTABLE");
+            return args.toArray(new String[0]);
         }
     }
 
     /** Field contains any blob of data. */
     public static class TextField implements Field {
+        private final boolean noStem;
+        private final Double weight;
+        private final boolean withSuffixTrie;
+        private final boolean noSuffixTrie;
+        private final boolean sortable;
+
+        /** Create a {@code TEXT} field. */
+        public TextField() {
+            this.noStem = false;
+            this.weight = null;
+            this.withSuffixTrie = false;
+            this.noSuffixTrie = false;
+            this.sortable = false;
+        }
+
+        /**
+         * Create a {@code TEXT} field.
+         *
+         * @param noStem If set, disables stemming when indexing the field.
+         * @param weight Declares the importance of this field when calculating result accuracy. Default
+         *     is 1.
+         * @param withSuffixTrie If set, keeps a suffix trie for the field to optimize contains and
+         *     suffix queries. Mutually exclusive with {@code noSuffixTrie}.
+         * @param noSuffixTrie If set, disables the suffix trie for the field. Mutually exclusive with
+         *     {@code withSuffixTrie}.
+         * @param sortable If set, the field value can be used for sorting.
+         */
+        public TextField(
+                boolean noStem,
+                Double weight,
+                boolean withSuffixTrie,
+                boolean noSuffixTrie,
+                boolean sortable) {
+            this.noStem = noStem;
+            this.weight = weight;
+            this.withSuffixTrie = withSuffixTrie;
+            this.noSuffixTrie = noSuffixTrie;
+            this.sortable = sortable;
+        }
+
         @Override
         public String[] toArgs() {
-            return new String[] {FieldType.TEXT.toString()};
+            if (withSuffixTrie && noSuffixTrie) {
+                throw new IllegalArgumentException(
+                        "withSuffixTrie and noSuffixTrie are mutually exclusive.");
+            }
+            ArrayList<String> args = new ArrayList<String>();
+            args.add(FieldType.TEXT.toString());
+            if (noStem) args.add("NOSTEM");
+            if (weight != null) {
+                args.add("WEIGHT");
+                args.add(weight.toString());
+            }
+            if (withSuffixTrie) {
+                args.add("WITHSUFFIXTRIE");
+            } else if (noSuffixTrie) {
+                args.add("NOSUFFIXTRIE");
+            }
+            if (sortable) args.add("SORTABLE");
+            return args.toArray(new String[0]);
         }
     }
 
@@ -118,11 +277,13 @@ public class FTCreateOptions {
     public static class TagField implements Field {
         private Optional<Character> separator;
         private final boolean caseSensitive;
+        private final boolean sortable;
 
         /** Create a <code>TAG</code> field. */
         public TagField() {
             this.separator = Optional.empty();
             this.caseSensitive = false;
+            this.sortable = false;
         }
 
         /**
@@ -134,6 +295,7 @@ public class FTCreateOptions {
         public TagField(char separator) {
             this.separator = Optional.of(separator);
             this.caseSensitive = false;
+            this.sortable = false;
         }
 
         /**
@@ -147,6 +309,7 @@ public class FTCreateOptions {
         public TagField(char separator, boolean caseSensitive) {
             this.separator = Optional.of(separator);
             this.caseSensitive = caseSensitive;
+            this.sortable = false;
         }
 
         /**
@@ -156,7 +319,35 @@ public class FTCreateOptions {
          *     are converted to lowercase by default.
          */
         public TagField(boolean caseSensitive) {
+            this.separator = Optional.empty();
             this.caseSensitive = caseSensitive;
+            this.sortable = false;
+        }
+
+        /**
+         * Create a <code>TAG</code> field.
+         *
+         * @param caseSensitive Preserve the original letter cases of tags.
+         * @param sortable If set, the field value can be used for sorting.
+         */
+        public TagField(boolean caseSensitive, boolean sortable) {
+            this.separator = Optional.empty();
+            this.caseSensitive = caseSensitive;
+            this.sortable = sortable;
+        }
+
+        /**
+         * Create a <code>TAG</code> field.
+         *
+         * @param separator Specify how text in the attribute is split into individual tags. Must be a
+         *     single character.
+         * @param caseSensitive Preserve the original letter cases of tags.
+         * @param sortable If set, the field value can be used for sorting.
+         */
+        public TagField(char separator, boolean caseSensitive, boolean sortable) {
+            this.separator = Optional.of(separator);
+            this.caseSensitive = caseSensitive;
+            this.sortable = sortable;
         }
 
         @Override
@@ -169,6 +360,9 @@ public class FTCreateOptions {
             }
             if (caseSensitive) {
                 args.add("CASESENSITIVE");
+            }
+            if (sortable) {
+                args.add("SORTABLE");
             }
             return args.toArray(new String[0]);
         }
