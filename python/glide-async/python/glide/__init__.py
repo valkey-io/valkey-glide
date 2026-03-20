@@ -4,11 +4,13 @@ import sys
 import types
 import warnings
 
-from glide.glide import (
-    ClusterScanCursor,
-    Script,
-    get_min_compressed_size,
-)
+from glide_sync._glide_ffi import _GlideFFI as _FFI
+from glide_sync.sync_commands.cluster_scan_cursor import ClusterScanCursor
+from glide_sync.sync_commands.script import Script
+
+
+def get_min_compressed_size() -> int:
+    return _FFI().lib.get_min_compressed_size()
 from glide_shared import (
     ALL_CHANNELS,
     ALL_PATTERNS,
