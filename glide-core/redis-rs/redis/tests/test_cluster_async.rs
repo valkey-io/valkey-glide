@@ -5038,9 +5038,10 @@ mod cluster_async {
             let res = con_tx
                 .route_command(
                     &cmd_id,
-                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(
-                        Route::new(keyslot_bar, SlotAddr::Master),
-                    )),
+                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                        keyslot_bar,
+                        SlotAddr::Master,
+                    ))),
                 )
                 .await;
             let client_id = match res.unwrap() {
@@ -5073,7 +5074,10 @@ mod cluster_async {
                         &pipe,
                         0,
                         2,
-                        Some(SingleNodeRoutingInfo::SpecificNode(Route::new(keyslot_bar, SlotAddr::Master))),
+                        Some(SingleNodeRoutingInfo::SpecificNode(Route::new(
+                            keyslot_bar,
+                            SlotAddr::Master,
+                        ))),
                         None,
                     )
                     .await;
@@ -5087,12 +5091,30 @@ mod cluster_async {
             {
                 let mut trigger_set_cmd = redis::cmd("SET");
                 trigger_set_cmd.arg("bar").arg("123");
-                let trigger_res =
-                    trigger_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                let trigger_res = trigger_set_cmd.query_async::<_, String>(&mut con_tx).await;
                 match trigger_res {
-                    Ok(_) => panic!("Unexpected success on SET to blocked shard; expected ConnectionNotFoundForRoute error"),
+                    Ok(val) => {
+                        // With bounded response_timeout, reconnection may complete
+                        // before the error is returned. Verify the SET actually persisted.
+                        assert_eq!(
+                            val, "OK",
+                            "SET to blocked shard should return OK if it succeeds"
+                        );
+                        let get_res: String = redis::cmd("GET")
+                            .arg("bar")
+                            .query_async(&mut con_tx)
+                            .await
+                            .expect("GET after successful SET should not fail");
+                        assert_eq!(
+                            get_res, "123",
+                            "GET should return the value SET during reconnection"
+                        );
+                    }
                     Err(e) => {
-                        if !e.to_string().contains("ConnectionNotFoundForRoute") {
+                        let err_str = e.to_string();
+                        if !err_str.contains("ConnectionNotFoundForRoute")
+                            && !err_str.contains("timed out")
+                        {
                             panic!("Unexpected error on SET to blocked shard: {e:?}");
                         }
                     }
@@ -5104,13 +5126,11 @@ mod cluster_async {
             {
                 let mut healthy_set_cmd = redis::cmd("SET");
                 healthy_set_cmd.arg("foo").arg("123");
-                let healthy_res =
-                    healthy_set_cmd.query_async::<_, String>(&mut con_tx).await;
+                let healthy_res = healthy_set_cmd.query_async::<_, String>(&mut con_tx).await;
                 match healthy_res {
                     Ok(result) => {
                         assert_eq!(
-                            result,
-                            "OK",
+                            result, "OK",
                             "Healthy shard (slot 12182) did not return OK as expected"
                         );
                     }

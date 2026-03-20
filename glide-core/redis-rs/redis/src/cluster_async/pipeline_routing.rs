@@ -441,7 +441,9 @@ where
         pending_requests.push(PendingRequest {
             retry,
             sender,
+            inflight_tracker: None,
             info: RequestInfo {
+                inflight_tracker: None,
                 cmd: CmdArg::Pipeline {
                     count: context.pipeline.len(),
                     pipeline: context.pipeline.into(),
