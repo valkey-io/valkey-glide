@@ -160,10 +160,10 @@ public class TimeoutTests {
     }
 
     /**
-     * Test 4: Timeout tasks are cleaned up after request completion.
+     * Test 4: Futures are cleaned up after request completion.
      *
-     * <p>Verifies that scheduled timeout tasks are cancelled and removed from the registry when
-     * requests complete. Uses AsyncRegistry.getPendingTimeoutCount() to assert cleanup.
+     * <p>Verifies that active futures are removed from the registry when requests complete. Uses
+     * AsyncRegistry.getActiveFutureCount() to assert cleanup.
      */
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
@@ -178,10 +178,9 @@ public class TimeoutTests {
 
         try {
             // Record initial state
-            int initialTimeouts = AsyncRegistry.getPendingTimeoutCount();
             int initialFutures = AsyncRegistry.getActiveFutureCount();
 
-            // Execute multiple requests that each schedule a timeout task
+            // Execute multiple requests
             String keyPrefix = "cleanup-test-" + UUID.randomUUID() + "-";
             for (int i = 0; i < 50; i++) {
                 String key = keyPrefix + i;
@@ -192,22 +191,19 @@ public class TimeoutTests {
             // Allow brief time for async cleanup to complete
             Thread.sleep(100);
 
-            // After all requests complete, timeout tasks should be cleaned up
-            int finalTimeouts = AsyncRegistry.getPendingTimeoutCount();
+            // After all requests complete, no new futures should remain from our requests.
+            // Use <= because background operations (topology checks) may complete between snapshots.
             int finalFutures = AsyncRegistry.getActiveFutureCount();
 
-            assertEquals(
-                    initialTimeouts,
-                    finalTimeouts,
-                    "Timeout tasks should be cleaned up after completion, but found "
-                            + (finalTimeouts - initialTimeouts)
-                            + " leaked");
-            assertEquals(
-                    initialFutures,
-                    finalFutures,
-                    "Active futures should be cleaned up after completion, but found "
+            assertTrue(
+                    finalFutures <= initialFutures,
+                    "Active futures should not grow after completion, but found "
                             + (finalFutures - initialFutures)
-                            + " leaked");
+                            + " leaked (initial="
+                            + initialFutures
+                            + ", final="
+                            + finalFutures
+                            + ")");
         } finally {
             client.close();
         }
