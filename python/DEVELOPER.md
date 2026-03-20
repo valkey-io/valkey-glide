@@ -209,6 +209,18 @@ python3 dev.py --help
 
 ---
 
+### Using Docker (recommended for quick setup)
+
+You can run integration tests without installing dependencies locally:
+
+```bash
+docker buildx bake -f docker-bake.test.hcl python-test --load
+docker run --rm python-test                                  # all tests (asyncio)
+docker run --rm -e TEST_ARGS="-k test_ping" python-test      # filter by name
+```
+
+### Using local environment
+
 Ensure you have installed `valkey-server` and `valkey-cli` on your host (or `redis-server` and `redis-cli`).
 See the [Valkey installation guide](https://valkey.io/topics/installation/) to install the Valkey server and CLI.
 

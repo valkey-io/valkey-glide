@@ -1,0 +1,26 @@
+# Dockerfile for running FFI (Rust) tests locally.
+# Base image (Rust + protoc + python3 + Valkey + pre-compiled deps) via docker-bake.test.hcl.
+#
+# Usage (from repo root):
+#   docker buildx bake ffi-test --load
+#   docker run --rm ffi-test
+#   docker run --rm -e TEST_ARGS="-- test_name_filter" ffi-test
+
+FROM base
+
+ENV CARGO_TARGET_DIR=/app/target
+
+# Full source → build test binaries (deps already compiled in rust-base)
+COPY . .
+
+# --- Lint (matches CI: .github/workflows/lint-rust/action.yml) ---
+RUN cd ffi && cargo fmt --all -- --check
+RUN cd ffi && cargo clippy --all-features --all-targets -- -D warnings
+RUN cd ffi && cargo clippy --all-targets -- -D warnings
+RUN cd ffi && RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+
+RUN cd ffi && cargo test --no-run
+
+# Optional: TEST_ARGS for extra cargo test flags.
+ENV CARGO_TERM_COLOR=always
+CMD ["bash", "-c", "cd ffi && cargo test $TEST_ARGS"]

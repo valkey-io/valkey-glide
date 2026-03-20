@@ -161,6 +161,19 @@ Before starting this step, make sure you've installed all software requirments.
 
 ### Test
 
+#### Using Docker (recommended for quick setup)
+
+You can run integration tests without installing dependencies locally:
+
+```bash
+docker buildx bake -f docker-bake.test.hcl node-test --load
+docker run --rm node-test                                        # all tests
+docker run --rm -e TEST_FILE=GlideClient.test.ts node-test       # specific file
+docker run --rm -e TEST_PATTERN="ping" node-test                 # filter by name
+```
+
+#### Using local environment
+
 To run tests, use the following command:
 
 ```bash

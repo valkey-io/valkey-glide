@@ -1,0 +1,44 @@
+# Dockerfile for running glide-core (Rust) integration tests locally.
+# Replicates the CI pipeline (rust.yml).
+# Base image (Rust + protoc + python3 + Valkey + pre-compiled deps) via docker-bake.test.hcl.
+#
+# Usage (from repo root):
+#   docker buildx bake glide-core-test --load
+#   docker run --rm glide-core-test
+#   docker run --rm -e TEST_ARGS="--test test_client" glide-core-test
+
+FROM base
+
+ENV CARGO_TARGET_DIR=/app/target
+
+# openssl needed for TLS certificate generation in tests
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# DNS entries required by DNS tests
+RUN echo "127.0.0.1 valkey.glide.test.tls.com" >> /etc/hosts.docker && \
+    echo "127.0.0.1 valkey.glide.test.no_tls.com" >> /etc/hosts.docker && \
+    echo "::1 valkey.glide.test.tls.com" >> /etc/hosts.docker && \
+    echo "::1 valkey.glide.test.no_tls.com" >> /etc/hosts.docker
+
+# Full source → build test binaries (deps already compiled in rust-base)
+COPY . .
+
+# --- Lint (matches CI: .github/workflows/lint-rust/action.yml) ---
+RUN cd glide-core && cargo fmt --all -- --check
+RUN cd glide-core && cargo clippy --all-features --all-targets -- -D warnings
+RUN cd glide-core && cargo clippy --all-targets -- -D warnings
+RUN cd glide-core && RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+
+RUN cd glide-core && cargo test --features "proto,socket-layer,standalone_heartbeat" --no-run
+
+# Optional: TEST_ARGS for extra cargo test flags (e.g. "--test test_client").
+ENV CARGO_TERM_COLOR=always
+ENV VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+CMD ["bash", "-c", "\
+  cat /etc/hosts.docker >> /etc/hosts 2>/dev/null; \
+  cd glide-core && \
+  cargo test --features 'proto,socket-layer,standalone_heartbeat' $TEST_ARGS && \
+  cd telemetry && cargo test --all-features -- --test-threads=1 \
+"]

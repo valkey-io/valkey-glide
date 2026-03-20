@@ -1,0 +1,68 @@
+# Shared base image for running integration tests locally.
+# Provides: Rust toolchain, protoc, python3 (for cluster_manager.py), Valkey binaries,
+# and pre-compiled Rust dependencies for all language targets.
+#
+# Language-specific Dockerfiles (e.g. node/Dockerfile.test) reference this via
+# `FROM base` — the dependency is resolved by docker-bake.test.hcl.
+
+FROM ghcr.io/valkey-io/valkey:9.0.3@sha256:2bce660b767cb62c8c0ea020e94a230093be63dbd6af4f21b044960517a5842d AS valkey
+
+FROM rust:1.94.0-trixie@sha256:0e6da0c8f06f25e9591f21c0f741cd4ff1086e271c3330f29f6e4e95869c7843
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# python3 is needed by cluster_manager.py to start/stop Valkey instances during tests
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends python3 && \
+    rm -rf /var/lib/apt/lists/*
+
+ARG PROTOC_VERSION=25.1
+RUN curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-aarch_64.zip" \
+      -o /tmp/protoc.zip && \
+    unzip /tmp/protoc.zip -d /usr/local && \
+    rm /tmp/protoc.zip
+
+COPY --from=valkey /usr/local/bin/valkey-server /usr/local/bin/
+COPY --from=valkey /usr/local/bin/valkey-cli /usr/local/bin/
+
+WORKDIR /app
+
+# Install lint tools (matches CI: .github/workflows/lint-rust/action.yml)
+RUN rustup component add rustfmt clippy
+
+# --- Pre-compile shared Rust dependencies ---
+# All crates share one target directory for maximum cache reuse.
+ENV CARGO_TARGET_DIR=/app/target
+
+# Copy ALL Cargo manifests and lock files from every crate.
+COPY glide-core/Cargo.toml glide-core/Cargo.lock glide-core/
+COPY glide-core/redis-rs/Cargo.toml glide-core/redis-rs/Cargo.lock glide-core/redis-rs/
+COPY glide-core/redis-rs/redis/Cargo.toml glide-core/redis-rs/redis/
+COPY glide-core/telemetry/Cargo.toml glide-core/telemetry/Cargo.lock glide-core/telemetry/
+COPY logger_core/Cargo.toml logger_core/
+COPY node/rust-client/Cargo.toml node/rust-client/Cargo.lock node/rust-client/
+COPY python/glide-async/Cargo.toml python/glide-async/
+COPY ffi/Cargo.toml ffi/Cargo.lock ffi/
+
+# Create stub source files so cargo can resolve the dependency graph.
+RUN mkdir -p glide-core/src && echo "" > glide-core/src/lib.rs && \
+    mkdir -p glide-core/benches && \
+    touch glide-core/benches/connections_benchmark.rs \
+          glide-core/benches/memory_benchmark.rs \
+          glide-core/benches/rotating_buffer_benchmark.rs && \
+    mkdir -p glide-core/redis-rs/redis/src && echo "" > glide-core/redis-rs/redis/src/lib.rs && \
+    mkdir -p glide-core/telemetry/src && echo "" > glide-core/telemetry/src/lib.rs && \
+    mkdir -p logger_core/src && echo "" > logger_core/src/lib.rs && \
+    mkdir -p node/rust-client/src && echo "" > node/rust-client/src/lib.rs && \
+    mkdir -p python/glide-async/src && echo "" > python/glide-async/src/lib.rs && \
+    mkdir -p ffi/src && echo "" > ffi/src/lib.rs
+
+# Fetch all crate registries once.
+RUN cd glide-core && cargo fetch && \
+    cd ../node/rust-client && cargo fetch && \
+    cd ../../ffi && cargo fetch && \
+    cd ../python/glide-async && cargo fetch
+
+# Pre-compile shared dependencies by building glide-core with all features.
+# This compiles tokio, redis, rustls, protobuf, etc. which all targets need.
+RUN cd glide-core && cargo build --features "proto,socket-layer,standalone_heartbeat" 2>/dev/null || true

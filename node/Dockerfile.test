@@ -1,0 +1,50 @@
+# Dockerfile for running Node.js integration tests locally.
+# Replicates the CI pipeline (node.yml).
+# Base image (Rust + protoc + python3 + Valkey + pre-compiled deps) via docker-bake.test.hcl.
+#
+# Usage (from repo root):
+#   docker buildx bake node-test --load
+#   docker run --rm -e TEST_FILE=GlideClient.test.ts node-test
+
+FROM base
+
+ENV CARGO_TARGET_DIR=/app/target
+
+# Install Node.js
+ARG NODE_MAJOR=24
+RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# L1: npm dependency cache
+COPY node/package.json node/package-lock.json node/
+COPY node/rust-client/package.json node/rust-client/
+COPY utils/package.json utils/
+RUN cd node && npm install --ignore-scripts && \
+    cd ../node/rust-client && npm install --ignore-scripts && \
+    cd ../../utils && npm install
+
+# L2: Full source → lint → build
+COPY . .
+
+# --- Rust lint (matches CI: .github/workflows/lint-rust/action.yml) ---
+RUN cd node/rust-client && cargo fmt --all -- --check
+RUN cd node/rust-client && cargo clippy --all-features --all-targets -- -D warnings
+RUN cd node/rust-client && cargo clippy --all-targets -- -D warnings
+RUN cd node/rust-client && RUSTDOCFLAGS="-Dwarnings" cargo doc --no-deps --document-private-items
+
+# --- TS lint (matches CI: .github/workflows/lint-ts.yml) ---
+RUN cd node && npm run lint
+
+RUN cd utils && npm run build
+RUN cd node && npm run build
+
+# Optional: TEST_FILE to run a specific test file, TEST_PATTERN to filter by test name.
+ENV JEST_HTML_REPORTER_OUTPUT_PATH=test-report-node.html
+CMD ["bash", "-c", "\
+  cd node && \
+  ARGS='--verbose --forceExit --testPathIgnorePatterns=ServerModules'; \
+  [ -n \"$TEST_FILE\" ] && ARGS=\"$ARGS --testPathPattern=$TEST_FILE\"; \
+  [ -n \"$TEST_PATTERN\" ] && ARGS=\"$ARGS --testNamePattern=$TEST_PATTERN\"; \
+  npx jest $ARGS \
+"]
