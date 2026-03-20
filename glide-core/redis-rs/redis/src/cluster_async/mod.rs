@@ -307,9 +307,9 @@ where
     }
 
     /// Send commands in `pipeline` to the given `route`. If `route` is [None], it will be computed from `pipeline`.
-    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+    /// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+    ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+    ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
     ///     TODO: add wiki link.
     pub async fn route_pipeline<'a>(
         &'a mut self,
@@ -721,9 +721,9 @@ enum CmdArg<C> {
         count: usize,
         route: Option<InternalSingleNodeRouting<C>>,
         sub_pipeline: bool,
-        /// Configures retry behavior for pipeline commands.  
-        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+        /// Configures retry behavior for pipeline commands.
+        ///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+        ///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
         pipeline_retry_strategy: PipelineRetryStrategy,
     },
     ClusterScan {
@@ -3823,6 +3823,9 @@ where
     let read_from_replicas = inner
         .get_cluster_param(|params| params.read_from_replicas.clone())
         .expect(MUTEX_READ_ERR);
+    let address_resolver = inner
+        .get_cluster_param(|params| params.address_resolver.clone())
+        .expect(MUTEX_READ_ERR);
     TopologyQueryResult {
         topology_result: calculate_topology(
             topology_values,
@@ -3830,6 +3833,7 @@ where
             tls_mode,
             num_of_nodes_to_query,
             read_from_replicas,
+            address_resolver.as_ref().map(Arc::as_ref),
         ),
         failed_connections: Some(failed_addresses),
     }

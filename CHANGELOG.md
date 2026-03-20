@@ -36,6 +36,7 @@
 * CORE: Add OpenTelemetry DB semantic convention attributes to command spans ([#5416](https://github.com/valkey-io/valkey-glide/issues/5416))
 * Python Sync: Accept `bytearray` and `memoryview` as command argument types to improve performance by reducing copies ([#5492](https://github.com/valkey-io/valkey-glide/pull/5492))
 * Python Sync: Add response buffer support to get() to improve performance by reducing copies ([#5493](https://github.com/valkey-io/valkey-glide/pull/5493))
+* JAVA: Support custom socket address resolution when connecting to valkey ([#4396](https://github.com/valkey-io/valkey-glide/issues/4396))
 
 #### Fixes
 * CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.

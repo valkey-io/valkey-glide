@@ -2,8 +2,10 @@
 
 #[allow(unused_imports)]
 use logger_core::log_warn;
+use redis::AddressResolver;
 #[allow(unused_imports)]
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(feature = "proto")]
@@ -42,6 +44,7 @@ pub struct ConnectionRequest {
     pub tcp_nodelay: bool,
     pub pubsub_reconciliation_interval_ms: Option<u32>,
     pub read_only: bool,
+    pub address_resolver: Option<Arc<dyn AddressResolver>>,
 }
 
 /// Default connection timeout used when not specified in the request.
@@ -374,6 +377,8 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,
             read_only,
+            // Address resolver is not set from protobuf - it's set programmatically
+            address_resolver: None,
         }
     }
 }
