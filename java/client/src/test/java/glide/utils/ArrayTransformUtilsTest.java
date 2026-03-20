@@ -159,6 +159,42 @@ class ArrayTransformUtilsTest {
     }
 
     @Test
+    void convertMapToValueKeyStringArray_nullValue_propagatesNull() {
+        Map<String, Double> map = new HashMap<>();
+        map.put("k1", null);
+        String[] result = ArrayTransformUtils.convertMapToValueKeyStringArray(map);
+        assertNull(result[0]);
+        assertEquals("k1", result[1]);
+    }
+
+    @Test
+    void convertMapToValueKeyStringArray_nullKey_propagatesNull() {
+        Map<String, Double> map = new HashMap<>();
+        map.put(null, 1.0);
+        String[] result = ArrayTransformUtils.convertMapToValueKeyStringArray(map);
+        assertEquals("1.0", result[0]);
+        assertNull(result[1]);
+    }
+
+    @Test
+    void convertMapToValueKeyStringArrayBinary_nullValue_propagatesNull() {
+        Map<GlideString, Double> map = new HashMap<>();
+        map.put(gs("k1"), null);
+        GlideString[] result = ArrayTransformUtils.convertMapToValueKeyStringArrayBinary(map);
+        assertNull(result[0]);
+        assertEquals(gs("k1"), result[1]);
+    }
+
+    @Test
+    void convertMapToValueKeyStringArrayBinary_nullKey_propagatesNull() {
+        Map<GlideString, Double> map = new HashMap<>();
+        map.put(null, 3.0);
+        GlideString[] result = ArrayTransformUtils.convertMapToValueKeyStringArrayBinary(map);
+        assertEquals(gs("3.0"), result[0]);
+        assertNull(result[1]);
+    }
+
+    @Test
     void convertMapToKeyValueStringArray_nullValue_propagatesNull() {
         Map<String, String> map = new HashMap<>();
         map.put("k1", null);
