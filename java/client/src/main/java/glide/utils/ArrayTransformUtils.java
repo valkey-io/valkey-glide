@@ -28,8 +28,9 @@ public class ArrayTransformUtils {
         String[] result = new String[args.size() * 2];
         int i = 0;
         for (Map.Entry<String, ?> entry : args.entrySet()) {
+            Object value = entry.getValue();
             result[i++] = entry.getKey();
-            result[i++] = entry.getValue().toString();
+            result[i++] = value != null ? value.toString() : null;
         }
         return result;
     }
@@ -100,7 +101,8 @@ public class ArrayTransformUtils {
         String[] result = new String[args.size() * 2];
         int i = 0;
         for (Map.Entry<String, Double> entry : args.entrySet()) {
-            result[i++] = entry.getValue().toString();
+            Double value = entry.getValue();
+            result[i++] = value != null ? value.toString() : null;
             result[i++] = entry.getKey();
         }
         return result;
@@ -117,7 +119,8 @@ public class ArrayTransformUtils {
         GlideString[] result = new GlideString[args.size() * 2];
         int i = 0;
         for (Map.Entry<GlideString, Double> entry : args.entrySet()) {
-            result[i++] = gs(entry.getValue().toString());
+            Double value = entry.getValue();
+            result[i++] = value != null ? gs(value.toString()) : null;
             result[i++] = entry.getKey();
         }
         return result;
@@ -356,8 +359,10 @@ public class ArrayTransformUtils {
         GlideString[] result = new GlideString[args.size() * 2];
         int i = 0;
         for (Map.Entry<?, ?> entry : args.entrySet()) {
-            result[i++] = GlideString.of(entry.getKey());
-            result[i++] = GlideString.of(entry.getValue());
+            Object key = entry.getKey();
+            Object value = entry.getValue();
+            result[i++] = key != null ? GlideString.of(key) : null;
+            result[i++] = value != null ? GlideString.of(value) : null;
         }
         return result;
     }
@@ -395,8 +400,10 @@ public class ArrayTransformUtils {
         GlideString[] result = new GlideString[args.size() * 2];
         int i = 0;
         for (Map.Entry<?, ?> entry : args.entrySet()) {
-            result[i++] = GlideString.of(entry.getValue());
-            result[i++] = GlideString.of(entry.getKey());
+            Object value = entry.getValue();
+            Object key = entry.getKey();
+            result[i++] = value != null ? GlideString.of(value) : null;
+            result[i++] = key != null ? GlideString.of(key) : null;
         }
         return result;
     }
@@ -413,8 +420,10 @@ public class ArrayTransformUtils {
         GlideString[] result = new GlideString[size * 2];
         int i = 0;
         for (Map.Entry<?, ?> entry : args.entrySet()) {
-            result[i] = GlideString.of(entry.getKey());
-            result[i + size] = GlideString.of(entry.getValue());
+            Object key = entry.getKey();
+            Object value = entry.getValue();
+            result[i] = key != null ? GlideString.of(key) : null;
+            result[i + size] = value != null ? GlideString.of(value) : null;
             i++;
         }
         return result;

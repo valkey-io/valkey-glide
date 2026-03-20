@@ -4,8 +4,10 @@ package glide.utils;
 import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import glide.api.models.GlideString;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -154,5 +156,85 @@ class ArrayTransformUtilsTest {
         assertEquals(n * 2, ArrayTransformUtils.convertMapToKeyValueGlideStringArray(map).length);
         assertEquals(n * 2, ArrayTransformUtils.flattenMapToGlideStringArray(map).length);
         assertEquals(n * 2, ArrayTransformUtils.flattenAllKeysFollowedByAllValues(map).length);
+    }
+
+    @Test
+    void convertMapToKeyValueStringArray_nullValue_propagatesNull() {
+        Map<String, String> map = new HashMap<>();
+        map.put("k1", null);
+        String[] result = ArrayTransformUtils.convertMapToKeyValueStringArray(map);
+        assertEquals("k1", result[0]);
+        assertNull(result[1]);
+    }
+
+    @Test
+    void convertMapToKeyValueStringArray_nullKey_propagatesNull() {
+        Map<String, String> map = new HashMap<>();
+        map.put(null, "v1");
+        String[] result = ArrayTransformUtils.convertMapToKeyValueStringArray(map);
+        assertNull(result[0]);
+        assertEquals("v1", result[1]);
+    }
+
+    @Test
+    void convertMapToKeyValueGlideStringArray_nullValue_propagatesNull() {
+        Map<GlideString, GlideString> map = new HashMap<>();
+        map.put(gs("k1"), null);
+        GlideString[] result = ArrayTransformUtils.convertMapToKeyValueGlideStringArray(map);
+        assertEquals(gs("k1"), result[0]);
+        assertNull(result[1]);
+    }
+
+    @Test
+    void convertMapToKeyValueGlideStringArray_nullKey_propagatesNull() {
+        Map<GlideString, GlideString> map = new HashMap<>();
+        map.put(null, gs("v1"));
+        GlideString[] result = ArrayTransformUtils.convertMapToKeyValueGlideStringArray(map);
+        assertNull(result[0]);
+        assertEquals(gs("v1"), result[1]);
+    }
+
+    @Test
+    void flattenMapToGlideStringArray_nullValue_propagatesNull() {
+        Map<String, String> map = new HashMap<>();
+        map.put("k1", null);
+        GlideString[] result = ArrayTransformUtils.flattenMapToGlideStringArray(map);
+        assertEquals(gs("k1"), result[0]);
+        assertNull(result[1]);
+    }
+
+    @Test
+    void flattenMapToGlideStringArray_nullKey_propagatesNull() {
+        Map<String, String> map = new HashMap<>();
+        map.put(null, "v1");
+        GlideString[] result = ArrayTransformUtils.flattenMapToGlideStringArray(map);
+        assertNull(result[0]);
+        assertEquals(gs("v1"), result[1]);
+    }
+
+    @Test
+    void flattenAllKeysFollowedByAllValues_nullValue_propagatesNull() {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put("k1", null);
+        map.put("k2", "v2");
+        GlideString[] result = ArrayTransformUtils.flattenAllKeysFollowedByAllValues(map);
+        // keys: [k1, k2], values: [null, v2]
+        assertEquals(gs("k1"), result[0]);
+        assertEquals(gs("k2"), result[1]);
+        assertNull(result[2]);
+        assertEquals(gs("v2"), result[3]);
+    }
+
+    @Test
+    void flattenAllKeysFollowedByAllValues_nullKey_propagatesNull() {
+        Map<String, String> map = new LinkedHashMap<>();
+        map.put(null, "v1");
+        map.put("k2", "v2");
+        GlideString[] result = ArrayTransformUtils.flattenAllKeysFollowedByAllValues(map);
+        // keys: [null, k2], values: [v1, v2]
+        assertNull(result[0]);
+        assertEquals(gs("k2"), result[1]);
+        assertEquals(gs("v1"), result[2]);
+        assertEquals(gs("v2"), result[3]);
     }
 }
