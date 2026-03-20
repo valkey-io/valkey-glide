@@ -3276,6 +3276,156 @@ describe("Server Module Tests", () => {
             },
         );
 
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.SEARCH with NOCONTENT on HASH",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const prefix = "{" + getRandomKey() + "}:";
+                const index = prefix + "index";
+                const query = "*=>[KNN 2 @VEC $query_vec]";
+
+                // setup a hash index with a 2D HNSW vector field
+                expect(
+                    await GlideFt.create(
+                        client,
+                        index,
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "vec",
+                                alias: "VEC",
+                                attributes: {
+                                    algorithm: "HNSW",
+                                    distanceMetric: "L2",
+                                    dimensions: 2,
+                                },
+                            },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        },
+                    ),
+                ).toEqual("OK");
+
+                const binaryValue1 = Buffer.alloc(8);
+                expect(
+                    await client.hset(Buffer.from(prefix + "0"), [
+                        { field: "vec", value: binaryValue1 },
+                    ]),
+                ).toEqual(1);
+
+                const binaryValue2: Buffer = Buffer.alloc(8);
+                binaryValue2[6] = 0x80;
+                binaryValue2[7] = 0xbf;
+                expect(
+                    await client.hset(Buffer.from(prefix + "1"), [
+                        { field: "vec", value: binaryValue2 },
+                    ]),
+                ).toEqual(1);
+
+                // let server digest the data and update index
+                const sleep = new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+                await sleep;
+
+                const result: FtSearchReturnType = await GlideFt.search(
+                    client,
+                    index,
+                    query,
+                    {
+                        params: [{ key: "query_vec", value: binaryValue1 }],
+                        nocontent: true,
+                    },
+                );
+
+                // NOCONTENT returns count and keys with empty value arrays
+                expect(result[0]).toEqual(2);
+
+                for (const doc of result[1]) {
+                    expect(doc.value).toEqual([]);
+                }
+
+                await GlideFt.dropindex(client, index);
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.SEARCH with DIALECT on HASH",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const prefix = "{" + getRandomKey() + "}:";
+                const index = prefix + "index";
+                const query = "*=>[KNN 1 @VEC $query_vec]";
+
+                // setup a hash index with a 2D HNSW vector field
+                expect(
+                    await GlideFt.create(
+                        client,
+                        index,
+                        [
+                            {
+                                type: "VECTOR",
+                                name: "vec",
+                                alias: "VEC",
+                                attributes: {
+                                    algorithm: "HNSW",
+                                    distanceMetric: "L2",
+                                    dimensions: 2,
+                                },
+                            },
+                        ],
+                        {
+                            dataType: "HASH",
+                            prefixes: [prefix],
+                        },
+                    ),
+                ).toEqual("OK");
+
+                const binaryValue1 = Buffer.alloc(8);
+                expect(
+                    await client.hset(Buffer.from(prefix + "0"), [
+                        { field: "vec", value: binaryValue1 },
+                    ]),
+                ).toEqual(1);
+
+                // let server digest the data and update index
+                const sleep = new Promise((resolve) =>
+                    setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+                );
+                await sleep;
+
+                const result: FtSearchReturnType = await GlideFt.search(
+                    client,
+                    index,
+                    query,
+                    {
+                        decoder: Decoder.Bytes,
+                        params: [{ key: "query_vec", value: binaryValue1 }],
+                        dialect: 2,
+                    },
+                );
+
+                // DIALECT 2 returns count and documents with field content
+                expect(result[0]).toEqual(1);
+                expect(result[1].length).toEqual(1);
+                expect(result[1][0].value.length).toBeGreaterThan(0);
+
+                await GlideFt.dropindex(client, index);
+            },
+        );
+
         it("FT.EXPLAIN ft.explain FT.EXPLAINCLI ft.explaincli", async () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(
@@ -3479,6 +3629,679 @@ describe("Server Module Tests", () => {
             expect(result.sort(compareFunction)).toEqual(
                 expected.sort(compareFunction),
             );
+        });
+
+        it("FT.SEARCH 1.2 - SORTBY on HASH", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const prefix = "{" + getRandomKey() + "}:";
+            const index = prefix + "index";
+
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [
+                        { type: "NUMERIC", name: "price", sortable: true },
+                        { type: "TEXT", name: "name" },
+                    ],
+                    { dataType: "HASH", prefixes: [prefix] },
+                ),
+            ).toEqual("OK");
+
+            await client.hset(prefix + "1", [
+                { field: "price", value: "10" },
+                { field: "name", value: "Aardvark" },
+            ]);
+            await client.hset(prefix + "2", [
+                { field: "price", value: "20" },
+                { field: "name", value: "Mango" },
+            ]);
+            await client.hset(prefix + "3", [
+                { field: "price", value: "30" },
+                { field: "name", value: "Zebra" },
+            ]);
+
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+
+            // SORTBY price ASC - verify count and ordering
+            let result: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "@price:[1 +inf]",
+                { sortby: "price", sortbyOrder: SortOrder.ASC },
+            );
+            expect(result[0]).toEqual(3);
+            const getPrices = (r: FtSearchReturnType) =>
+                (r[1] as GlideRecord<GlideRecord<GlideString>>).map((doc) =>
+                    (doc.value as GlideRecord<GlideString>)
+                        .find((f) => f.key.toString() === "price")
+                        ?.value.toString(),
+                );
+            expect(getPrices(result)).toEqual(["10", "20", "30"]);
+
+            // SORTBY price DESC - first result should have highest price
+            result = await GlideFt.search(client, index, "@price:[1 +inf]", {
+                sortby: "price",
+                sortbyOrder: SortOrder.DESC,
+            });
+            expect(result[0]).toEqual(3);
+            expect(getPrices(result)).toEqual(["30", "20", "10"]);
+
+            await GlideFt.dropindex(client, index);
+        });
+
+        it("FT.SEARCH 1.2 - WITHSORTKEYS on HASH", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const prefix = "{" + getRandomKey() + "}:";
+            const index = prefix + "index";
+
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [
+                        { type: "NUMERIC", name: "price", sortable: true },
+                        { type: "TEXT", name: "name" },
+                    ],
+                    { dataType: "HASH", prefixes: [prefix] },
+                ),
+            ).toEqual("OK");
+
+            await client.hset(prefix + "1", [
+                { field: "price", value: "10" },
+                { field: "name", value: "Aardvark" },
+            ]);
+            await client.hset(prefix + "2", [
+                { field: "price", value: "20" },
+                { field: "name", value: "Mango" },
+            ]);
+            await client.hset(prefix + "3", [
+                { field: "price", value: "30" },
+                { field: "name", value: "Zebra" },
+            ]);
+
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+
+            // WITHSORTKEYS — each doc value becomes [sortKey, fieldMap]
+            const result = await GlideFt.search(
+                client,
+                index,
+                "@price:[1 +inf]",
+                {
+                    sortby: "price",
+                    sortbyOrder: SortOrder.ASC,
+                    withsortkeys: true,
+                },
+            );
+            expect(result[0]).toEqual(3);
+
+            // Each doc value is [sortKey, fieldMap] as a GlideRecord
+            const docs = result[1] as unknown as GlideRecord<
+                [GlideString, GlideRecord<GlideString>]
+            >;
+            const sortKeys = docs.map((doc) => doc.value[0]?.toString());
+            expect(sortKeys).toEqual(["#10", "#20", "#30"]);
+
+            // Field maps are still accessible at index 1
+            const fieldPrices = docs.map((doc) =>
+                (doc.value[1] as GlideRecord<GlideString>)
+                    .find((f) => f.key.toString() === "price")
+                    ?.value.toString(),
+            );
+            expect(fieldPrices).toEqual(["10", "20", "30"]);
+
+            await GlideFt.dropindex(client, index);
+        });
+
+        it("FT.SEARCH 1.2 - VERBATIM, INORDER, SLOP on HASH", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const prefix = "{" + getRandomKey() + "}:";
+            const index = prefix + "index";
+
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title" }],
+                    { dataType: "HASH", prefixes: [prefix] },
+                ),
+            ).toEqual("OK");
+
+            await client.hset(prefix + "1", [
+                { field: "title", value: "hello world" },
+            ]);
+            await client.hset(prefix + "2", [
+                { field: "title", value: "hello there" },
+            ]);
+            await client.hset(prefix + "3", [
+                { field: "title", value: "goodbye world" },
+            ]);
+            await client.hset(prefix + "4", [
+                { field: "title", value: "world hello" },
+            ]);
+
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+
+            // VERBATIM - no stemming applied
+            const verbatimResult: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "hello",
+                { verbatim: true },
+            );
+            // hello world, hello there, world hello
+            expect(Number(verbatimResult[0])).toEqual(3);
+
+            // SLOP without INORDER - allows reordering
+            const slopResult: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "hello world",
+                { slop: 1 },
+            );
+            // hello world, world hello
+            expect(Number(slopResult[0])).toEqual(2);
+
+            // INORDER + SLOP - terms must appear in order
+            const inorderResult: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "hello world",
+                { inorder: true, slop: 1 },
+            );
+            // only "hello world"
+            expect(Number(inorderResult[0])).toEqual(1);
+
+            await GlideFt.dropindex(client, index);
+        });
+
+        it("FT.SEARCH 1.2 - SHARDSCOPE and CONSISTENCY on HASH", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const prefix = "{" + getRandomKey() + "}:";
+            const index = prefix + "index";
+
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [
+                        { type: "TAG", name: "tag" },
+                        { type: "NUMERIC", name: "score" },
+                    ],
+                    { dataType: "HASH", prefixes: [prefix] },
+                ),
+            ).toEqual("OK");
+
+            await client.hset(prefix + "1", [
+                { field: "tag", value: "test" },
+                { field: "score", value: "1" },
+            ]);
+            await client.hset(prefix + "2", [
+                { field: "tag", value: "test" },
+                { field: "score", value: "2" },
+            ]);
+
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+
+            // SOMESHARDS + INCONSISTENT
+            const someResult: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "@tag:{test}",
+                { shardScope: "SOMESHARDS", consistency: "INCONSISTENT" },
+            );
+            // In a healthy cluster, SOMESHARDS still returns all results
+            expect(someResult[0]).toEqual(2);
+
+            // ALLSHARDS + CONSISTENT (defaults)
+            const allResult: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "@tag:{test}",
+                { shardScope: "ALLSHARDS", consistency: "CONSISTENT" },
+            );
+            expect(allResult[0]).toEqual(2);
+
+            await GlideFt.dropindex(client, index);
+        });
+
+        it("FT.INFO 1.2 - LOCAL, PRIMARY, CLUSTER scope", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const prefix = "{" + getRandomKey() + "}:";
+            const index = prefix + "index";
+
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title" }],
+                    { dataType: "HASH", prefixes: [prefix] },
+                ),
+            ).toEqual("OK");
+
+            await client.hset(prefix + "1", [
+                { field: "title", value: "hello world" },
+            ]);
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+
+            // LOCAL scope - always works
+            const localInfo = await GlideFt.info(client, index, {
+                scope: "LOCAL",
+            });
+            expect(localInfo["index_name"]).toBeDefined();
+            expect(localInfo["num_docs"]).toBeDefined();
+
+            // LOCAL with ALLSHARDS + CONSISTENT - smoke test flags are accepted
+            const localWithFlags = await GlideFt.info(client, index, {
+                scope: "LOCAL",
+                shardScope: "ALLSHARDS",
+                consistency: "CONSISTENT",
+            });
+            expect(localWithFlags["index_name"]).toBeDefined();
+
+            // LOCAL with SOMESHARDS + INCONSISTENT - smoke test
+            const localAlt = await GlideFt.info(client, index, {
+                scope: "LOCAL",
+                shardScope: "SOMESHARDS",
+                consistency: "INCONSISTENT",
+            });
+            expect(localAlt["index_name"]).toBeDefined();
+
+            // PRIMARY scope - works with coordinator, otherwise rejected
+            try {
+                const primaryInfo = await GlideFt.info(client, index, {
+                    scope: "PRIMARY",
+                });
+                expect(primaryInfo["index_name"]).toBeDefined();
+                expect(primaryInfo["mode"]).toEqual("PRIMARY");
+            } catch (e) {
+                expect(String(e)).toContain("PRIMARY option is not valid");
+            }
+
+            // CLUSTER scope - works with coordinator, otherwise rejected
+            try {
+                const clusterInfo = await GlideFt.info(client, index, {
+                    scope: "CLUSTER",
+                });
+                expect(clusterInfo["index_name"]).toBeDefined();
+                expect(clusterInfo["mode"]).toEqual("CLUSTER");
+            } catch (e) {
+                expect(String(e)).toContain("CLUSTER option is not valid");
+            }
+
+            await GlideFt.dropindex(client, index);
+        });
+
+        it("FT.AGGREGATE 1.2 - VERBATIM, INORDER, SLOP, DIALECT", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const prefix = "{" + getRandomKey() + "}:";
+            const index = prefix + "index";
+
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [
+                        { type: "NUMERIC", name: "score" },
+                        { type: "TEXT", name: "title" },
+                    ],
+                    { dataType: "HASH", prefixes: [prefix] },
+                ),
+            ).toEqual("OK");
+
+            await client.hset(prefix + "1", [
+                { field: "score", value: "10" },
+                { field: "title", value: "hello world" },
+            ]);
+            await client.hset(prefix + "2", [
+                { field: "score", value: "20" },
+                { field: "title", value: "hello there" },
+            ]);
+
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+
+            // VERBATIM - disables stemming on the query
+            let result: FtAggregateReturnType = await GlideFt.aggregate(
+                client,
+                index,
+                "@score:[1 +inf]",
+                { verbatim: true },
+            );
+            // Both docs match; no LOAD so each record is an empty map
+            expect(result.length).toEqual(2);
+            expect(result[0].length).toEqual(0);
+            expect(result[1].length).toEqual(0);
+
+            // INORDER + SLOP - proximity matching flags
+            result = await GlideFt.aggregate(client, index, "@score:[1 +inf]", {
+                inorder: true,
+                slop: 1,
+            });
+            expect(result.length).toEqual(2);
+            expect(result[0].length).toEqual(0);
+            expect(result[1].length).toEqual(0);
+
+            // DIALECT
+            result = await GlideFt.aggregate(client, index, "@score:[1 +inf]", {
+                dialect: 2,
+            });
+            expect(result.length).toEqual(2);
+            expect(result[0].length).toEqual(0);
+            expect(result[1].length).toEqual(0);
+
+            // LOAD - load all fields, filter to single doc
+            result = await GlideFt.aggregate(
+                client,
+                index,
+                "@score:[20 +inf]",
+                { loadAll: true },
+            );
+            expect(result.length).toEqual(1);
+            expect(result[0].length).toBeGreaterThan(0);
+            const titleEntry = result[0].find(
+                (entry) => entry.key.toString() === "title",
+            );
+            expect(titleEntry?.value?.toString()).toEqual("hello there");
+
+            await GlideFt.dropindex(client, index);
+        });
+
+        it("FT.CREATE 1.2 - index-level options", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const prefix = "{" + getRandomKey() + "}:";
+
+            // SCORE + LANGUAGE + SKIPINITIALSCAN
+            let index = prefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title" }],
+                    {
+                        dataType: "HASH",
+                        prefixes: [prefix],
+                        score: 1.0, // only 1.0 is supported in valkey-search 1.2
+                        language: "english",
+                        skipInitialScan: true,
+                    },
+                ),
+            ).toEqual("OK");
+            await GlideFt.dropindex(client, index);
+
+            // MINSTEMSIZE — with isolated prefix to avoid cross-contamination
+            const stemPrefix = "{" + getRandomKey() + "}:";
+            index = stemPrefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title" }],
+                    {
+                        dataType: "HASH",
+                        prefixes: [stemPrefix],
+                        minStemSize: 6,
+                    },
+                ),
+            ).toEqual("OK");
+            await client.hset(stemPrefix + "1", [
+                { field: "title", value: "running" },
+            ]);
+            await client.hset(stemPrefix + "2", [
+                { field: "title", value: "plays" },
+            ]);
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+            // "running" (7 chars) is stemmed to "run"
+            let stemResult = await GlideFt.search(client, index, "run");
+            expect(stemResult[0]).toEqual(1);
+            // "plays" (5 chars) is NOT stemmed (< 6 chars)
+            stemResult = await GlideFt.search(client, index, "play");
+            expect(stemResult[0]).toEqual(0);
+            await GlideFt.dropindex(client, index);
+
+            // NOSTOPWORDS — all words are indexed, including default stop words
+            const nostopPrefix = "{" + getRandomKey() + "}:";
+            index = nostopPrefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title" }],
+                    {
+                        dataType: "HASH",
+                        prefixes: [nostopPrefix],
+                        noStopWords: true,
+                    },
+                ),
+            ).toEqual("OK");
+            await client.hset(nostopPrefix + "1", [
+                { field: "title", value: "the quick fox" },
+            ]);
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+            // "the" is normally a stop word, but NOSTOPWORDS makes it searchable
+            const nostopResult = await GlideFt.search(client, index, "the");
+            expect(nostopResult[0]).toEqual(1);
+            await GlideFt.dropindex(client, index);
+
+            // STOPWORDS — custom stop words are rejected in queries
+            const stopPrefix = "{" + getRandomKey() + "}:";
+            index = stopPrefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title" }],
+                    {
+                        dataType: "HASH",
+                        prefixes: [stopPrefix],
+                        stopWords: ["fox", "an"],
+                    },
+                ),
+            ).toEqual("OK");
+            await client.hset(stopPrefix + "1", [
+                { field: "title", value: "the quick fox" },
+            ]);
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+            // Non-stop words are searchable
+            const stopResult = await GlideFt.search(client, index, "the");
+            expect(stopResult[0]).toEqual(1);
+            const stopResult2 = await GlideFt.search(client, index, "quick");
+            expect(stopResult2[0]).toEqual(1);
+            // Custom stop word "fox" should be rejected
+            await expect(
+                GlideFt.search(client, index, "fox"),
+            ).rejects.toThrow();
+            await GlideFt.dropindex(client, index);
+
+            // NOOFFSETS — disables per-word offsets (slop queries rejected)
+            const nooffPrefix = "{" + getRandomKey() + "}:";
+            index = nooffPrefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title" }],
+                    {
+                        dataType: "HASH",
+                        prefixes: [nooffPrefix],
+                        noOffsets: true,
+                    },
+                ),
+            ).toEqual("OK");
+            await client.hset(nooffPrefix + "1", [
+                { field: "title", value: "hello" },
+            ]);
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+            // Basic search works
+            const nooffResult = await GlideFt.search(client, index, "hello");
+            expect(nooffResult[0]).toEqual(1);
+            // SLOP queries should be rejected when NOOFFSETS is set
+            await expect(
+                GlideFt.search(client, index, "hello", { slop: 1 }),
+            ).rejects.toThrow();
+            await GlideFt.dropindex(client, index);
+        });
+
+        it("FT.CREATE 1.2 - field-level options (nostem, weight, sortable, withsuffixtrie, nosuffixtrie)", async () => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+
+            // TEXT with nostem, weight, sortable — each sub-test uses its own prefix
+            const nostemPrefix = "{" + getRandomKey() + "}:";
+            let index = nostemPrefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [
+                        {
+                            type: "TEXT",
+                            name: "title",
+                            nostem: true,
+                            weight: 1.0, // only 1.0 is supported in valkey-search 1.2
+                            sortable: true,
+                        },
+                        { type: "NUMERIC", name: "price", sortable: true },
+                        {
+                            type: "TAG",
+                            name: "tag",
+                            separator: ",",
+                            sortable: true,
+                        },
+                    ],
+                    { dataType: "HASH", prefixes: [nostemPrefix] },
+                ),
+            ).toEqual("OK");
+
+            await client.hset(nostemPrefix + "1", [
+                { field: "title", value: "hello" },
+                { field: "price", value: "10" },
+                { field: "tag", value: "a,b" },
+            ]);
+
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+
+            // Verify sortable field works
+            const result: FtSearchReturnType = await GlideFt.search(
+                client,
+                index,
+                "@price:[1 +inf]",
+                { sortby: "price", sortbyOrder: SortOrder.ASC },
+            );
+            expect(result[0]).toEqual(1);
+
+            // NOSTEM: "hello" matches exactly, but "hellos" should not (no stemming)
+            const nostemExact = await GlideFt.search(client, index, "hello");
+            expect(nostemExact[0]).toEqual(1);
+            const nostemStemmed = await GlideFt.search(client, index, "hellos");
+            expect(nostemStemmed[0]).toEqual(0);
+
+            await GlideFt.dropindex(client, index);
+
+            // TEXT with withsuffixtrie — suffix queries like *orld should work
+            const suffixPrefix = "{" + getRandomKey() + "}:";
+            index = suffixPrefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title", withsuffixtrie: true }],
+                    { dataType: "HASH", prefixes: [suffixPrefix] },
+                ),
+            ).toEqual("OK");
+            await client.hset(suffixPrefix + "1", [
+                { field: "title", value: "hello world" },
+            ]);
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+            // Suffix query should work with suffix trie
+            const suffixResult = await GlideFt.search(client, index, "*orld");
+            expect(suffixResult[0]).toEqual(1);
+            await GlideFt.dropindex(client, index);
+
+            // TEXT with nosuffixtrie — suffix queries should NOT work
+            const nosuffixPrefix = "{" + getRandomKey() + "}:";
+            index = nosuffixPrefix + getRandomKey();
+            expect(
+                await GlideFt.create(
+                    client,
+                    index,
+                    [{ type: "TEXT", name: "title", nosuffixtrie: true }],
+                    { dataType: "HASH", prefixes: [nosuffixPrefix] },
+                ),
+            ).toEqual("OK");
+            await client.hset(nosuffixPrefix + "1", [
+                { field: "title", value: "hello world" },
+            ]);
+            await new Promise((resolve) =>
+                setTimeout(resolve, DATA_PROCESSING_TIMEOUT),
+            );
+            // Suffix query should NOT work with NOSUFFIXTRIE
+            await expect(
+                GlideFt.search(client, index, "*orld"),
+            ).rejects.toThrow();
+            await GlideFt.dropindex(client, index);
         });
     });
 });

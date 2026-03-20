@@ -73,9 +73,12 @@ from .commands.server_modules.ft_options.ft_profile_options import (
     QueryType,
 )
 from .commands.server_modules.ft_options.ft_search_options import (
+    ConsistencyMode,
     FtSearchLimit,
     FtSearchOptions,
+    InfoScope,
     ReturnField,
+    ShardScope,
 )
 from .commands.server_modules.json_options import (
     JsonArrIndexOptions,
@@ -331,6 +334,9 @@ __all__ = [
     "FtSearchLimit",
     "ReturnField",
     "FtSearchOptions",
+    "InfoScope",
+    "ShardScope",
+    "ConsistencyMode",
     "FtAggregateApply",
     "FtAggregateFilter",
     "FtAggregateClause",

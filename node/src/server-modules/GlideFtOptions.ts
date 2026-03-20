@@ -10,6 +10,8 @@ interface BaseField {
     name: GlideString;
     /** An alias for field. */
     alias?: GlideString;
+    /** If set, the field value can be used for sorting. Applies to TEXT, TAG, and NUMERIC fields. */
+    sortable?: boolean;
 }
 
 /**
@@ -18,6 +20,20 @@ interface BaseField {
 export type TextField = BaseField & {
     /** Field identifier */
     type: "TEXT";
+    /** If set, disables stemming when indexing the field. */
+    nostem?: boolean;
+    /** Declares the importance of this field when calculating result accuracy. Default is 1. */
+    weight?: number;
+    /**
+     * If set, keeps a suffix trie for the field to optimize contains and suffix queries.
+     * Mutually exclusive with `nosuffixtrie`.
+     */
+    withsuffixtrie?: boolean;
+    /**
+     * If set, disables the suffix trie for the field.
+     * Mutually exclusive with `withsuffixtrie`.
+     */
+    nosuffixtrie?: boolean;
 };
 
 /**
@@ -61,13 +77,15 @@ interface VectorFieldAttributes {
     /** Number of dimensions in the vector. Equivalent to `DIM` in the module API. */
     dimensions: number;
     /**
-     * The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`. Equivalent to `DISTANCE_METRIC` in the module API.
+     * The distance metric used in vector type field. Can be one of `[L2 | IP | COSINE]`.
+     * Equivalent to `DISTANCE_METRIC` in the module API.
      */
     distanceMetric: "L2" | "IP" | "COSINE";
     /** Vector type. The only supported type is FLOAT32. */
     type?: "FLOAT32";
     /**
-     * Initial vector capacity in the index affecting memory allocation size of the index. Defaults to `1024`. Equivalent to `INITIAL_CAP` in the module API.
+     * Initial vector capacity in the index affecting memory allocation size of the index.
+     * Defaults to `1024`. Equivalent to `INITIAL_CAP` in the module API.
      */
     initialCap?: number;
 }
@@ -91,18 +109,18 @@ export type VectorFieldAttributesFlat = VectorFieldAttributes & {
 export type VectorFieldAttributesHnsw = VectorFieldAttributes & {
     algorithm: "HNSW";
     /**
-     * Number of maximum allowed outgoing edges for each node in the graph in each layer. Default is `16`, maximum is `512`.
-     * Equivalent to `M` in the module API.
+     * Number of maximum allowed outgoing edges for each node in the graph in each layer.
+     * Default is `16`, maximum is `512`. Equivalent to `M` in the module API.
      */
     numberOfEdges?: number;
     /**
-     * Controls the number of vectors examined during index construction. Default value is `200`, Maximum value is `4096`.
-     * Equivalent to `EF_CONSTRUCTION` in the module API.
+     * Controls the number of vectors examined during index construction.
+     * Default value is `200`, Maximum value is `4096`. Equivalent to `EF_CONSTRUCTION` in the module API.
      */
     vectorsExaminedOnConstruction?: number;
     /**
-     * Controls the number of vectors examined during query operations. Default value is `10`, Maximum value is `4096`.
-     * Equivalent to `EF_RUNTIME` in the module API.
+     * Controls the number of vectors examined during query operations.
+     * Default value is `10`, Maximum value is `4096`. Equivalent to `EF_RUNTIME` in the module API.
      */
     vectorsExaminedOnRuntime?: number;
 };
@@ -118,6 +136,36 @@ export interface FtCreateOptions {
     dataType: "JSON" | "HASH";
     /** The prefix of the key to be indexed. */
     prefixes?: GlideString[];
+    /** Default score for documents in the index. Default is 1.0. */
+    score?: number;
+    /** Default language for documents in the index. */
+    language?: string;
+    /** If set, does not scan and index existing documents on index creation. */
+    skipInitialScan?: boolean;
+    /** Minimum word length to stem. Words shorter than this are not stemmed. */
+    minStemSize?: number;
+    /**
+     * If set, stores term offsets for document fields.
+     * Mutually exclusive with `noOffsets`.
+     */
+    withOffsets?: boolean;
+    /**
+     * If set, does not store term offsets.
+     * Mutually exclusive with `withOffsets`.
+     */
+    noOffsets?: boolean;
+    /**
+     * If set, disables stop-word filtering.
+     * Mutually exclusive with `stopWords`.
+     */
+    noStopWords?: boolean;
+    /**
+     * Custom list of stop words.
+     * Mutually exclusive with `noStopWords`.
+     */
+    stopWords?: GlideString[];
+    /** Custom punctuation characters to use during tokenization. */
+    punctuation?: GlideString;
 }
 
 /** Additional parameters for {@link GlideFt.aggregate | FT.AGGREGATE} command. */
@@ -142,6 +190,14 @@ export type FtAggregateOptions = {
      * the parameter name.
      */
     params?: GlideRecord<GlideString>;
+    /** If set, stemming is not applied to term searches. */
+    verbatim?: boolean;
+    /** If set, proximity matching of terms must be in order. */
+    inorder?: boolean;
+    /** Specifies a slop value for proximity matching of terms. */
+    slop?: number;
+    /** The query dialect version to use. */
+    dialect?: number;
 } & (
     | {
           /** List of fields to load from the index. */
@@ -247,6 +303,49 @@ export type FtSearchOptions = {
      * the parameter name.
      */
     params?: GlideRecord<GlideString>;
+
+    /** If true, returns only document IDs without field content.
+     * The document entries in the result will have empty value arrays. */
+    nocontent?: boolean;
+
+    /** Query dialect version. Only dialect 2 is currently supported in valkey-search. */
+    dialect?: number;
+
+    /** If set, stemming is not applied to text terms in the query. */
+    verbatim?: boolean;
+
+    /** If set, proximity matching of text terms must be in order. */
+    inorder?: boolean;
+
+    /** Specifies a slop value for proximity matching of text terms. */
+    slop?: number;
+
+    /** Field name to sort results by. Sorting is applied before the LIMIT clause. */
+    sortby?: GlideString;
+
+    /** Sort direction for `sortby`. Only used when `sortby` is set. */
+    sortbyOrder?: SortOrder | "ASC" | "DESC";
+
+    /** If set and `sortby` is specified, augments the output with the sort key value.
+     * When enabled, each document value in the result map becomes a two-element array
+     * `[sortKey, fieldMap]` instead of just `fieldMap`. The sort key is the value of the
+     * field used for sorting, or `null` if the field is missing from the document.
+     */
+    withsortkeys?: boolean;
+
+    /**
+     * Controls shard participation in cluster mode.
+     * `ALLSHARDS` terminates with timeout error if not all shards respond (default).
+     * `SOMESHARDS` generates a best-effort reply if not all shards respond within the timeout.
+     */
+    shardScope?: "ALLSHARDS" | "SOMESHARDS";
+
+    /**
+     * Controls consistency requirements in cluster mode.
+     * `CONSISTENT` terminates with an error if the cluster is in an inconsistent state (default).
+     * `INCONSISTENT` generates a best-effort reply if the cluster remains inconsistent within the timeout.
+     */
+    consistency?: "CONSISTENT" | "INCONSISTENT";
 } & (
     | {
           /**
@@ -269,3 +368,13 @@ export type FtSearchOptions = {
           limit?: never;
       }
 );
+
+/** Additional parameters for {@link GlideFt.info | FT.INFO} command. */
+export interface FtInfoOptions {
+    /** Controls which nodes provide index information in cluster mode. */
+    scope?: "LOCAL" | "PRIMARY" | "CLUSTER";
+    /** Controls shard participation in cluster mode. */
+    shardScope?: "ALLSHARDS" | "SOMESHARDS";
+    /** Controls consistency requirements in cluster mode. */
+    consistency?: "CONSISTENT" | "INCONSISTENT";
+}
