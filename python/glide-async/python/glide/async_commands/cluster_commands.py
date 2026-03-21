@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Set, Union, cast
+from typing import Dict, List, Mapping, Optional, Set, Tuple, cast
 
 from glide.glide import ClusterScanCursor, Script
 from glide_shared.commands.batch import ClusterBatch
@@ -1247,7 +1247,7 @@ class ClusterCommands(CoreCommands):
         count: Optional[int] = None,
         type: Optional[ObjectType] = None,
         allow_non_covered_slots: bool = False,
-    ) -> List[Union[ClusterScanCursor, List[bytes]]]:
+    ) -> Tuple[ClusterScanCursor, List[bytes]]:
         """
         Incrementally iterates over the keys in the cluster.
         The method returns a list containing the next cursor and a list of keys.
@@ -1279,8 +1279,8 @@ class ClusterCommands(CoreCommands):
                 and the method loses its way to validate the progress of the scan. Defaults to False.
 
         Returns:
-            List[Union[ClusterScanCursor, List[TEncodable]]]: A list containing the next cursor and a list of keys,
-            formatted as [ClusterScanCursor, [key1, key2, ...]].
+            Tuple[ClusterScanCursor, List[TEncodable]]: A tuple containing the next cursor and a list of keys,
+            formatted as (ClusterScanCursor, [key1, key2, ...]).
 
         Examples:
             >>> # Iterate over all keys in the cluster.
@@ -1319,14 +1319,14 @@ class ClusterCommands(CoreCommands):
             >>> print(all_keys)  # [b'key1', b'key2', b'key3']
         """
         return cast(
-            List[Union[ClusterScanCursor, List[bytes]]],
-            await self._cluster_scan(
+            Tuple[ClusterScanCursor, List[bytes]],
+            tuple(await self._cluster_scan(
                 cursor=cursor,
                 match=match,
                 count=count,
                 type=type,
                 allow_non_covered_slots=allow_non_covered_slots,
-            ),
+            )),
         )
 
     async def script_exists(
