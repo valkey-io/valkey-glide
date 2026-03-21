@@ -191,10 +191,13 @@ def copy_readme_to_package(package_dir: Path) -> None:
     copy2(source, dest)
 
 
-def install_glide_shared(env: Dict[str, str]) -> None:
+def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     shared_dir = PYTHON_DIR / "glide-shared"
+    cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
+    if release:
+        cmd += ["--release"]
     run_command(
-        [str(venv_ctx["python_exe"]), "-m", "pip", "install", "."],
+        cmd,
         cwd=shared_dir,
         env=env,
         label="install glide-shared",
@@ -272,7 +275,7 @@ def build_async_client(
             "GLIDE_VERSION": glide_version,
         }
     )
-    install_glide_shared(env)
+    install_glide_shared(env, release=release)
     generate_protobuf_files()
 
     if wheel:
@@ -334,11 +337,8 @@ def build_sync_client(
     )
     generate_protobuf_files()
     env = activate_venv(no_cache)
-    env = {
-        "GLIDE_NAME": GLIDE_SYNC_NAME,
-        "GLIDE_VERSION": glide_version,
-        **os.environ,
-    }
+    env["GLIDE_NAME"] = GLIDE_SYNC_NAME
+    env["GLIDE_VERSION"] = glide_version
     if release:
         env["RELEASE_MODE"] = "1"
 
@@ -354,7 +354,7 @@ def build_sync_client(
     if wheel:
         return build_sync_client_wheel(env)
 
-    install_glide_shared(env)
+    install_glide_shared(env, release=release)
     env.update(
         {  # Update it with your GLIDE variables
             "GLIDE_NAME": GLIDE_SYNC_NAME,

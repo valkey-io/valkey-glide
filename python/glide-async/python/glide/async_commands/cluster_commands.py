@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Set, Union, cast
 
-from glide.glide import ClusterScanCursor, Script
+from glide.async_commands.core import RequestType
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.command_args import ObjectType
@@ -22,8 +23,8 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
+from glide_shared.script import Script
 
 from .core import CoreCommands
 

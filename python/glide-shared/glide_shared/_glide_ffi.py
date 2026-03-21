@@ -23,7 +23,18 @@ def find_libglide_ffi(lib_dir: Path) -> Path:
 
     lib_path = lib_dir / lib_name
     if not lib_path.exists():
-        raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
+        # Library may be installed alongside glide_sync package
+        try:
+            import importlib.util
+
+            spec = importlib.util.find_spec("glide_sync")
+            if spec and spec.origin:
+                glide_sync_dir = Path(spec.origin).resolve().parent
+                lib_path = glide_sync_dir / lib_name
+        except (ImportError, AttributeError, ValueError):
+            pass
+        if not lib_path.exists():
+            raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
 
     return lib_path
 
