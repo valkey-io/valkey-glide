@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Set, cast, Tuple
+from typing import Dict, List, Mapping, Optional, Set, Tuple, cast
 
 from glide.glide import ClusterScanCursor, Script
 from glide_shared.commands.batch import ClusterBatch
