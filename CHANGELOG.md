@@ -5,7 +5,8 @@
 #### Fixes
 
 #### Operational Enhancements
-
+* Python Sync: Use `current_thread` tokio runtime for sync FFI clients, eliminating cross-thread condvar wake overhead on every command ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083), [#5624](https://github.com/valkey-io/valkey-glide/issues/5624))
+* Python: Add arena-based response allocator and PyO3 fast response parser to eliminate per-node heap allocations and replace CFFI-based recursive Python traversal for large responses ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083), [#5624](https://github.com/valkey-io/valkey-glide/issues/5624))
 
 ## 2.3
 
