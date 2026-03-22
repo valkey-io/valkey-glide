@@ -27,22 +27,31 @@ public class ArrayTransformUtils {
      * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
      */
     public static String[] convertMapToKeyValueStringArray(Map<String, ?> args) {
-        return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-                .toArray(String[]::new);
+        final String[] result = new String[args.size() * 2];
+        int i = 0;
+        for (Map.Entry<String, ?> entry : args.entrySet()) {
+            result[i++] = entry.getKey();
+            Object value = entry.getValue();
+            result[i++] = value == null ? null : String.valueOf(value);
+        }
+        return result;
     }
 
     /**
      * Converts a map of GlideString keys and values to an array of GlideStrings.
      *
      * @param args Map of GlideString keys to values of GlideString.
-     * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
+     * @return Array of GlideStrings [key1, value1, key2, value2, ...].
      */
     public static GlideString[] convertMapToKeyValueGlideStringArray(
             Map<GlideString, GlideString> args) {
-        return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
-                .toArray(GlideString[]::new);
+        final GlideString[] result = new GlideString[args.size() * 2];
+        int i = 0;
+        for (Map.Entry<GlideString, GlideString> entry : args.entrySet()) {
+            result[i++] = entry.getKey();
+            result[i++] = entry.getValue();
+        }
+        return result;
     }
 
     /**
