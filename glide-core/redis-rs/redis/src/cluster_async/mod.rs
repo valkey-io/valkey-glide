@@ -60,7 +60,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicUsize, Ordering},
+        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     task::{self, Poll},
@@ -919,6 +919,92 @@ pin_project! {
             #[pin]
             future: BoxFuture<'static, RedisResult<()>>,
         },
+    }
+}
+
+/// Arc-based inflight slot guard. Reserves one inflight slot on creation
+/// (decrements counter), releases it when the **last** clone is dropped
+/// (increments counter). Stored on `Cmd` so it flows naturally through
+/// the pipeline: Cmd → Message → PendingRequest → in_flight_requests.
+///
+/// For fan-out commands, `Arc<Cmd>` is cloned per shard — each clone
+/// shares the same tracker. The slot is released only when all
+/// sub-commands finish.
+struct InflightSlotGuard(Arc<AtomicIsize>);
+
+impl Drop for InflightSlotGuard {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// Cloneable handle to an inflight slot. Clone = Arc refcount bump.
+/// Last drop triggers `InflightSlotGuard::Drop` which releases the slot.
+#[derive(Clone)]
+pub struct InflightRequestTracker {
+    /// Held solely for its `Drop` impl which releases the inflight slot.
+    _guard: Arc<InflightSlotGuard>,
+}
+
+impl InflightRequestTracker {
+    /// Try to reserve one inflight slot atomically. Returns `None` if
+    /// no slots are available (counter <= 0).
+    pub fn try_new(counter: Arc<AtomicIsize>) -> Option<Self> {
+        loop {
+            let current = counter.load(Ordering::SeqCst);
+            if current <= 0 {
+                return None;
+            }
+            if counter
+                .compare_exchange(current, current - 1, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return Some(Self {
+                    _guard: Arc::new(InflightSlotGuard(counter)),
+                });
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod inflight_tracker_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn tracker_reserves_and_releases_slot() {
+        let counter = Arc::new(AtomicIsize::new(5));
+        let tracker = InflightRequestTracker::try_new(counter.clone()).unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 4); // reserved
+        drop(tracker);
+        assert_eq!(counter.load(Ordering::Relaxed), 5); // released
+    }
+
+    #[test]
+    fn try_new_returns_none_when_no_slots() {
+        let counter = Arc::new(AtomicIsize::new(0));
+        assert!(InflightRequestTracker::try_new(counter).is_none());
+    }
+
+    #[test]
+    fn cloned_tracker_releases_only_when_last_clone_drops() {
+        let counter = Arc::new(AtomicIsize::new(5));
+        let tracker = InflightRequestTracker::try_new(counter.clone()).unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+        let clone1 = tracker.clone();
+        let clone2 = tracker.clone();
+
+        drop(clone1);
+        assert_eq!(counter.load(Ordering::Relaxed), 4); // still held
+
+        drop(tracker);
+        assert_eq!(counter.load(Ordering::Relaxed), 4); // still held
+
+        drop(clone2);
+        assert_eq!(counter.load(Ordering::Relaxed), 5); // last clone → released
     }
 }
 
@@ -2504,10 +2590,7 @@ where
     ) -> OperationResult {
         trace!("execute_on_multiple_nodes");
 
-        // This function maps the connections to senders & receivers of one-shot channels, and the receivers are mapped to `PendingRequest`s.
-        // This allows us to pass the new `PendingRequest`s to `try_request`, while letting `execute_on_multiple_nodes` wait on the receivers
-        // for all of the individual requests to complete.
-        #[allow(clippy::type_complexity)] // The return value is complex, but indentation and linebreaks make it human readable.
+        #[allow(clippy::type_complexity)]
         fn into_channels<C>(
             iterator: impl Iterator<
                 Item = Option<(Arc<Cmd>, ConnectionAndAddress<ConnectionFuture<C>>)>,
@@ -2608,7 +2691,6 @@ where
         core: Core<C>,
     ) -> OperationResult {
         let routing = match routing {
-            // commands that are sent to multiple nodes are handled here.
             InternalRoutingInfo::MultiNode((multi_node_routing, response_policy)) => {
                 return Self::execute_on_multiple_nodes(
                     &cmd,
@@ -2623,15 +2705,13 @@ where
         };
         trace!("route request to single node");
 
-        // if we reached this point, we're sending the command only to single node, and we need to find the
-        // right connection to the node.
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
-        // Update OTel span with actual routed node address
         if let Some(span) = cmd.span() {
             set_routed_node_on_span(&span, &address);
         }
+
         conn.req_packed_command(&cmd)
             .await
             .map(Response::Single)
@@ -2646,10 +2726,10 @@ where
     ) -> OperationResult {
         trace!("try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
-        // Update OTel span with actual routed node address
         if let Some(span) = pipeline.span() {
             set_routed_node_on_span(&span, &address);
         }
+
         conn.req_packed_commands(&pipeline, offset, count, None)
             .await
             .map(Response::Multiple)
@@ -2668,7 +2748,6 @@ where
                 pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
-                    // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines (i.e., the pipeline is already routed to a specific node), we can send it as is, with no need to split it into sub-pipelines.
                     Self::try_pipeline_request(
                         pipeline,
                         offset,
