@@ -1,6 +1,7 @@
 ## Pending 2.4
 
 #### Changes
+* Core: Maintain throughput during cluster failover by making reconnection non-blocking ([#4990](https://github.com/valkey-io/valkey-glide/issues/4990))
 
 #### Fixes
 
