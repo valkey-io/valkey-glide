@@ -277,6 +277,29 @@ jobs:
                   echo "Native libraries staged:"
                   find java/client/build/native-libs-staging -type f
 
+            - name: Organize jedis native libraries for uber JAR
+              shell: bash
+              run: |
+                  # Create staging directory for jedis native libraries
+                  # Reuse the same native-libs-downloaded artifacts, preserving the
+                  # natives/{platform}/{arch}/ directory structure
+                  mkdir -p java/jedis-compatibility/build/native-libs-staging/natives
+
+                  for artifact_dir in native-libs-downloaded/native-lib-*; do
+                      if [ -d "$artifact_dir" ]; then
+                          echo "Processing $artifact_dir"
+                          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
+                              rel_path="${lib_file#$artifact_dir/}"
+                              target_path="java/jedis-compatibility/build/native-libs-staging/natives/$rel_path"
+                              mkdir -p "$(dirname "$target_path")"
+                              cp "$lib_file" "$target_path"
+                          done
+                      fi
+                  done
+
+                  echo "Jedis native libraries staged:"
+                  find java/jedis-compatibility/build/native-libs-staging -type f
+
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
               with:
@@ -312,9 +335,19 @@ jobs:
                   GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
                   UBER_JAR_BUILD: "true"
               run: |
-                  # Build uber JAR and publish to Maven local in one step
+                  # Build client uber JAR and publish to Maven local first.
                   # UBER_JAR_BUILD env var signals build.gradle to use copyAllNativeLibs
                   ./gradlew --build-cache :client:publishToMavenLocal \
+                  -x buildRust -x copyNativeLib \
+                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
+                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+                  # Build jedis-compatibility uber JAR. With UBER_JAR_BUILD=true it will:
+                  # - Depend on the published uber valkey-glide Maven artifact (from mavenLocal above)
+                  # - Use copyAllNativeLibs to bundle all platform native libraries
+                  # - Produce a classifier-less, platform-independent JAR
+                  ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal \
                   -x buildRust -x copyNativeLib \
                   -Psigning.secretKeyRingFile=secring.gpg \
                   -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
@@ -324,6 +357,7 @@ jobs:
               working-directory: java
               shell: bash
               run: |
+                  # Bundle client uber JAR
                   src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
                   cd $src_folder
                   jar -cvf bundle.jar *
@@ -331,11 +365,21 @@ jobs:
                   cd -
                   cp $src_folder/bundle.jar bundle-uber-jar.jar
 
+                  # Bundle jedis-compatibility uber JAR
+                  jedis_src_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+                  cd $jedis_src_folder
+                  jar -cvf jedis-bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $jedis_src_folder/jedis-bundle.jar jedis-bundle-uber-jar.jar
+
             - name: Upload uber JAR artifact
               uses: actions/upload-artifact@v4
               with:
                   name: java-uber-jar
-                  path: java/bundle-uber-jar.jar
+                  path: |
+                      java/bundle-uber-jar.jar
+                      java/jedis-bundle-uber-jar.jar
 
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
