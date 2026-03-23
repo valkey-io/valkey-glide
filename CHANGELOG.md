@@ -3,6 +3,7 @@
 #### Changes
 
 #### Fixes
+* CORE: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
 
 #### Operational Enhancements
 
