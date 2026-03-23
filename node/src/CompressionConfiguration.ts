@@ -82,9 +82,7 @@ export function validateCompressionConfiguration(
         config.compressionLevel !== undefined &&
         !Number.isInteger(config.compressionLevel)
     ) {
-        throw new ConfigurationError(
-            "compressionLevel must be an integer",
-        );
+        throw new ConfigurationError("compressionLevel must be an integer");
     }
 }
 

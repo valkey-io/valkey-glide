@@ -16,6 +16,7 @@ import {
     CompressionBackend,
     CompressionConfiguration,
     ConfigurationError,
+    Decoder,
     GlideClient,
     GlideClusterClient,
     ProtocolVersion,
@@ -35,6 +36,20 @@ function generateCompressibleText(sizeBytes: number): string {
     return pattern.repeat(repeats).slice(0, sizeBytes);
 }
 
+/** getStatistics() returns string values; convert to numbers for assertions. */
+function getNumericStats(
+    client: GlideClient | GlideClusterClient,
+): Record<string, number> {
+    const raw = client.getStatistics() as Record<string, string>;
+    const result: Record<string, number> = {};
+
+    for (const [k, v] of Object.entries(raw)) {
+        result[k] = Number(v);
+    }
+
+    return result;
+}
+
 describe("Compression", () => {
     let standaloneCluster: ValkeyCluster;
     let clusterCluster: ValkeyCluster;
@@ -48,12 +63,7 @@ describe("Compression", () => {
                   parseEndpoints(standaloneAddresses),
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(
-                  false,
-                  1,
-                  1,
-                  getServerVersion,
-              );
+            : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
 
         const clusterAddresses = global.CLUSTER_ENDPOINTS as string;
         clusterCluster = clusterAddresses
@@ -62,12 +72,7 @@ describe("Compression", () => {
                   parseEndpoints(clusterAddresses),
                   getServerVersion,
               )
-            : await ValkeyCluster.createCluster(
-                  true,
-                  3,
-                  1,
-                  getServerVersion,
-              );
+            : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
     }, TIMEOUT);
 
     afterEach(async () => {
@@ -80,9 +85,7 @@ describe("Compression", () => {
         await clusterCluster?.close();
     }, TIMEOUT);
 
-    function getAddresses(
-        clusterMode: boolean,
-    ): [string, number][] {
+    function getAddresses(clusterMode: boolean): [string, number][] {
         return (
             clusterMode ? clusterCluster : standaloneCluster
         ).getAddresses();
@@ -108,21 +111,25 @@ describe("Compression", () => {
 
     // --- Configuration validation tests ---
 
-    it("compression_disabled_by_default", async () => {
-        client = await GlideClient.createClient(
-            getClientConfigurationOption(
-                getAddresses(false),
-                ProtocolVersion.RESP3,
-            ),
-        );
-        const stats = client.getStatistics() as Record<string, number>;
-        expect(stats).toHaveProperty("total_values_compressed");
-        await client.set("test_key", generateCompressibleText(1024));
-        const statsAfter = client.getStatistics() as Record<string, number>;
-        expect(statsAfter.total_values_compressed).toBe(
-            stats.total_values_compressed,
-        );
-    }, TIMEOUT);
+    it(
+        "compression_disabled_by_default",
+        async () => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    getAddresses(false),
+                    ProtocolVersion.RESP3,
+                ),
+            );
+            const stats = getNumericStats(client);
+            expect(stats).toHaveProperty("total_values_compressed");
+            await client.set("test_key", generateCompressibleText(1024));
+            const statsAfter = getNumericStats(client);
+            expect(statsAfter.total_values_compressed).toBe(
+                stats.total_values_compressed,
+            );
+        },
+        TIMEOUT,
+    );
 
     it("compression_config_invalid_min_size", () => {
         expect(() => {
@@ -141,7 +148,7 @@ describe("Compression", () => {
             client = await createCompressedClient(clusterMode, {
                 enabled: true,
             });
-            const stats = client.getStatistics() as Record<string, number>;
+            const stats = getNumericStats(client);
             const initialCompressed = stats.total_values_compressed;
 
             const key = `compression_basic_${Date.now()}`;
@@ -151,10 +158,7 @@ describe("Compression", () => {
             const retrieved = await (client as GlideClient).get(key);
             expect(retrieved).toBe(value);
 
-            const statsAfter = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsAfter = getNumericStats(client);
             expect(statsAfter.total_values_compressed).toBeGreaterThan(
                 initialCompressed,
             );
@@ -170,10 +174,7 @@ describe("Compression", () => {
             client = await createCompressedClient(clusterMode, {
                 enabled: true,
             });
-            const statsBefore = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsBefore = getNumericStats(client);
             const initialCompressed = statsBefore.total_values_compressed;
             const initialOriginalBytes = statsBefore.total_original_bytes;
             const initialBytesCompressed = statsBefore.total_bytes_compressed;
@@ -182,10 +183,7 @@ describe("Compression", () => {
             const value = generateCompressibleText(10240);
             await (client as GlideClient).set(key, value);
 
-            const statsAfter = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsAfter = getNumericStats(client);
             expect(statsAfter.total_values_compressed).toBeGreaterThan(
                 initialCompressed,
             );
@@ -214,23 +212,15 @@ describe("Compression", () => {
                 enabled: true,
                 minCompressionSize: 256,
             });
-            const statsBefore = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsBefore = getNumericStats(client);
             const initialCompressed = statsBefore.total_values_compressed;
             const initialSkipped = statsBefore.compression_skipped_count;
 
             // Value below threshold — should not compress
             const smallKey = `compression_small_${Date.now()}`;
             await (client as GlideClient).set(smallKey, "A".repeat(100));
-            const statsSmall = client.getStatistics() as Record<
-                string,
-                number
-            >;
-            expect(statsSmall.total_values_compressed).toBe(
-                initialCompressed,
-            );
+            const statsSmall = getNumericStats(client);
+            expect(statsSmall.total_values_compressed).toBe(initialCompressed);
             expect(statsSmall.compression_skipped_count).toBeGreaterThan(
                 initialSkipped,
             );
@@ -241,10 +231,7 @@ describe("Compression", () => {
                 largeKey,
                 generateCompressibleText(1024),
             );
-            const statsLarge = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsLarge = getNumericStats(client);
             expect(statsLarge.total_values_compressed).toBeGreaterThan(
                 initialCompressed,
             );
@@ -261,10 +248,7 @@ describe("Compression", () => {
                 enabled: true,
                 backend,
             });
-            const statsBefore = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsBefore = getNumericStats(client);
             const initialCompressed = statsBefore.total_values_compressed;
 
             const key = `compression_backend_${backend}_${Date.now()}`;
@@ -273,10 +257,7 @@ describe("Compression", () => {
                 generateCompressibleText(1024),
             );
 
-            const statsAfter = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsAfter = getNumericStats(client);
             expect(statsAfter.total_values_compressed).toBeGreaterThan(
                 initialCompressed,
             );
@@ -313,12 +294,15 @@ describe("Compression", () => {
                 const compressedRead = await compressedClient.get(key);
                 expect(compressedRead).toBe(value);
 
-                // Read with normal client — gets raw compressed bytes (won't match)
-                const normalRead = await normalClient.get(key);
-                // The normal client reads the compressed data as-is
-                // It should NOT equal the original value since it's compressed
-                // (unless the value was below threshold)
-                expect(normalRead).not.toBe(value);
+                // Read with normal client using Bytes decoder to avoid UTF-8 decoding error
+                // on raw compressed data
+                const normalRead = await normalClient.get(key, {
+                    decoder: Decoder.Bytes,
+                });
+                // The normal client reads the compressed bytes as-is,
+                // which should differ from the original value
+                expect(Buffer.isBuffer(normalRead)).toBe(true);
+                expect((normalRead as Buffer).toString()).not.toBe(value);
             } finally {
                 compressedClient.close();
                 normalClient.close();
@@ -335,10 +319,7 @@ describe("Compression", () => {
             client = await createCompressedClient(clusterMode, {
                 enabled: true,
             });
-            const statsBefore = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsBefore = getNumericStats(client);
             const initialCompressed = statsBefore.total_values_compressed;
 
             // Test with different data patterns
@@ -359,10 +340,7 @@ describe("Compression", () => {
                 expect(retrieved).toBe(patterns[i]);
             }
 
-            const statsAfter = client.getStatistics() as Record<
-                string,
-                number
-            >;
+            const statsAfter = getNumericStats(client);
             expect(statsAfter.total_values_compressed).toBeGreaterThan(
                 initialCompressed,
             );
