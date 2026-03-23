@@ -1337,14 +1337,15 @@ def main():
                 "One of following arguments is required: --cluster-folder or --prefix"
             )
         tic = time.perf_counter()
+        stop_prefix = f"tls-{args.prefix}" if args.tls and args.prefix else args.prefix
         logging.info(
-            f"{datetime.now(timezone.utc)} Stopping script for cluster/s {args.cluster_folder or f'{args.prefix}*'} in {args.folder_path}"
+            f"{datetime.now(timezone.utc)} Stopping script for cluster/s {args.cluster_folder or f'{stop_prefix}*'} in {args.folder_path}"
         )
 
         stop_clusters(
             args.host,
             args.folder_path,
-            args.prefix,
+            stop_prefix,
             args.cluster_folder,
             args.tls,
             args.auth,
