@@ -33,6 +33,11 @@ pub struct Cmd {
     no_response: bool,
     /// The span associated with this command
     span: Option<GlideSpan>,
+    /// Inflight slot tracker. When set, the slot is released when the last
+    /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
+    /// timeout from internal pipeline cleanup.
+    #[cfg(feature = "cluster-async")]
+    inflight_tracker: Option<crate::cluster_async::InflightRequestTracker>,
 }
 
 /// Represents a redis iterator.
@@ -326,6 +331,8 @@ impl Cmd {
             cursor: None,
             no_response: false,
             span: None,
+            #[cfg(feature = "cluster-async")]
+            inflight_tracker: None,
         }
     }
 
@@ -337,6 +344,8 @@ impl Cmd {
             cursor: None,
             no_response: false,
             span: None,
+            #[cfg(feature = "cluster-async")]
+            inflight_tracker: None,
         }
     }
 
@@ -603,6 +612,14 @@ impl Cmd {
     #[inline]
     pub fn span(&self) -> Option<GlideSpan> {
         self.span.clone()
+    }
+
+    /// Attach an inflight slot tracker. The slot is released when the last
+    /// clone of this Cmd (or its `Arc<Cmd>`) is dropped.
+    #[cfg(feature = "cluster-async")]
+    #[inline]
+    pub fn set_inflight_tracker(&mut self, tracker: crate::cluster_async::InflightRequestTracker) {
+        self.inflight_tracker = Some(tracker);
     }
 }
 
