@@ -1848,7 +1848,9 @@ pub(crate) mod shared_client_tests {
                 .blpop(&key2, 2.0)
                 .get(&key2);
 
-            let res = test_basics
+            // Pipeline containing BLPOP with 2s block exceeds the 1s request_timeout,
+            // so it should time out.
+            let result = test_basics
                 .client
                 .send_pipeline(
                     &pipeline,
@@ -1861,12 +1863,13 @@ pub(crate) mod shared_client_tests {
                     },
                 )
                 .await;
+
             assert!(
-                res.is_err(),
-                "Pipeline should fail with blocking command taking too long"
+                result.is_err(),
+                "Pipeline with blocking command exceeding timeout should fail"
             );
-            let err = res.unwrap_err();
-            assert!(err.is_timeout(), "Pipeline should fail with timeout error");
+            let err = result.unwrap_err();
+            assert!(err.is_timeout(), "Expected timeout error, got: {err:?}");
         });
     }
 
@@ -2644,6 +2647,8 @@ pub(crate) mod shared_client_tests {
 
             // Kill the connection to simulate a network drop
             kill_connection(&mut test_basics.client).await;
+            // Allow TCP close to propagate before sending the next command
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
             // Try to send another command - this should trigger reconnection
             let res = test_basics
@@ -2674,7 +2679,8 @@ pub(crate) mod shared_client_tests {
                     assert!(client_info.contains("db=5"));
                 }
                 Ok(response) => {
-                    // Command succeeded, extract new client ID and compare
+                    // Command succeeded — reconnection completed within the timeout.
+                    // Extract new client ID and verify it changed (new connection).
                     let new_client_info = match response {
                         Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
                         Value::VerbatimString { text, .. } => text,
@@ -2778,6 +2784,8 @@ pub(crate) mod shared_client_tests {
 
             // Kill the connection to simulate a network drop
             kill_connection(&mut test_basics.client).await;
+            // Allow TCP close to propagate before sending the next command
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
             // Try to send another command - this should trigger reconnection
             let res = test_basics
@@ -2808,7 +2816,8 @@ pub(crate) mod shared_client_tests {
                     assert!(client_info.contains("name=2ndName"));
                 }
                 Ok(response) => {
-                    // Command succeeded, extract new client ID and compare
+                    // Command succeeded — reconnection completed within the timeout.
+                    // Extract new client ID and verify it changed (new connection).
                     let new_client_info = match response {
                         Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
                         Value::VerbatimString { text, .. } => text,
@@ -2821,7 +2830,6 @@ pub(crate) mod shared_client_tests {
                         "Client ID should change after reconnection if command succeeds"
                     );
                     // Check that the client name is still 2ndName (from CLIENT SETNAME command)
-                    println!("{}", new_client_info);
                     assert!(new_client_info.contains("name=2ndName"));
                 }
             }
@@ -3081,6 +3089,8 @@ pub(crate) mod shared_client_tests {
 
             // Kill the connection to simulate a network drop
             kill_connection(&mut test_basics.client).await;
+            // Allow TCP close to propagate before sending the next command
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
             // Try to send another command - this should trigger reconnection
             let res = test_basics.client.send_command(&mut hello_cmd, None).await;
@@ -3105,7 +3115,7 @@ pub(crate) mod shared_client_tests {
                     assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
                 }
                 Ok(response) => {
-                    // Command succeeded, extract new client ID and compare
+                    // Command succeeded — reconnection completed within the timeout.
                     let new_hello: std::collections::HashMap<String, Value> =
                         redis::from_owned_redis_value(response).unwrap();
                     assert_eq!(new_hello.get("proto").unwrap(), &Value::Int(3));

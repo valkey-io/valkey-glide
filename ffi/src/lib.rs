@@ -1367,15 +1367,9 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         Routes::default()
     };
 
-    // Check inflight request limit
-    if !client_adapter.core.client.reserve_inflight_request() {
-        let err = RedisError::from((ErrorKind::ClientError, "Reached maximum inflight requests"));
-        return unsafe { client_adapter.handle_redis_error(err, request_id) };
-    }
-
+    // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
-    let client_for_release = client_adapter.core.client.clone();
 
     let buf_option = if response_buf.is_null() {
         None
@@ -1387,9 +1381,7 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         request_id,
         async move {
             let routing_info = get_route(route, Some(&cmd))?;
-            let result = client.send_command(&mut cmd, routing_info).await;
-            client_for_release.release_inflight_request();
-            result
+            client.send_command(&mut cmd, routing_info).await
         },
         buf_option,
     );
