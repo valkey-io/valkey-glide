@@ -15,7 +15,6 @@ import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.exceptions.ConfigurationError;
 import java.util.Base64;
-import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Stream;
