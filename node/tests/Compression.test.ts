@@ -19,9 +19,9 @@ import {
     GlideClient,
     GlideClusterClient,
     ProtocolVersion,
+    validateCompressionConfiguration,
 } from "../build-ts";
 import {
-    flushAndCloseClient,
     getClientConfigurationOption,
     getServerVersion,
     parseEndpoints,
@@ -126,8 +126,6 @@ describe("Compression", () => {
 
     it("compression_config_invalid_min_size", () => {
         expect(() => {
-            const { validateCompressionConfiguration } =
-                require("../build-ts") as typeof import("../build-ts");
             validateCompressionConfiguration({
                 enabled: true,
                 minCompressionSize: 3,
