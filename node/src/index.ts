@@ -12,6 +12,7 @@ export * from "../build-ts/native";
 export * from "./BaseClient.js";
 export * from "./Batch.js";
 export * from "./Commands.js";
+export * from "./CompressionConfiguration.js";
 export * from "./Errors.js";
 export * from "./GlideClient.js";
 export * from "./GlideClusterClient.js";
