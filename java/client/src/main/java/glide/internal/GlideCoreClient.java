@@ -213,7 +213,7 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
+                correlationId = AsyncRegistry.register(future, handle, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -261,7 +261,7 @@ public class GlideCoreClient implements AutoCloseable {
             CompletableFuture<Object> future = new CompletableFuture<>();
             long correlationId;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
+                correlationId = AsyncRegistry.register(future, handle, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -299,7 +299,7 @@ public class GlideCoreClient implements AutoCloseable {
                             ? timeoutOverrideMs
                             : this.requestTimeoutMillis;
             try {
-                correlationId = AsyncRegistry.register(future, this.maxInflightRequests, handle, timeoutMs);
+                correlationId = AsyncRegistry.register(future, handle, timeoutMs);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -339,8 +339,7 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
             try {
                 correlationId =
-                        AsyncRegistry.register(
-                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                        AsyncRegistry.register(future, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -373,8 +372,7 @@ public class GlideCoreClient implements AutoCloseable {
         long correlationId;
         try {
             correlationId =
-                    AsyncRegistry.register(
-                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                    AsyncRegistry.register(future, handle, this.requestTimeoutMillis);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -398,8 +396,7 @@ public class GlideCoreClient implements AutoCloseable {
         long correlationId;
         try {
             correlationId =
-                    AsyncRegistry.register(
-                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                    AsyncRegistry.register(future, handle, this.requestTimeoutMillis);
         } catch (glide.api.models.exceptions.RequestException e) {
             future.completeExceptionally(e);
             return future;
@@ -431,8 +428,7 @@ public class GlideCoreClient implements AutoCloseable {
             long correlationId;
             try {
                 correlationId =
-                        AsyncRegistry.register(
-                                future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+                        AsyncRegistry.register(future, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
                 future.completeExceptionally(e);
                 return future;
@@ -503,7 +499,6 @@ public class GlideCoreClient implements AutoCloseable {
             }
             try {
                 // Clean up per-client inflight tracking
-                AsyncRegistry.cleanupClient(handle);
                 GlideNativeBridge.closeClient(handle);
             } finally {
                 // Reset AsyncRegistry only when no clients remain (test isolation / full shutdown)
@@ -544,7 +539,6 @@ public class GlideCoreClient implements AutoCloseable {
             if (ptr != 0) {
                 nativeState.nativePtr = 0;
                 // Clean up per-client inflight tracking
-                AsyncRegistry.cleanupClient(ptr);
                 GlideNativeBridge.closeClient(ptr);
             }
         }

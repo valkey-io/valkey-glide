@@ -12,7 +12,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -22,30 +21,25 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <ul>
  *   <li>Maintain a thread-safe mapping from correlation id to the original future
- *   <li>Enforce per-client max inflight requests in Java (0 = defer to core default)
  *   <li>Schedule optional Java-side timeouts with cancellable tasks
  *   <li>Perform atomic cleanup on completion to avoid races and leaks
  * </ul>
  *
+ * <p>Inflight request limits are enforced exclusively by the Rust core via {@code
+ * InflightRequestTracker}. Java does not maintain its own counter — this avoids desync between
+ * Java-side and Rust-side counters that previously allowed zombie sub-command accumulation.
+ *
  * <p>Timeouts can be enforced at the Java layer (for immediate user feedback) or deferred to the
- * Rust core (when timeoutMillis = 0). Backpressure defaults and concurrency tuning are handled by
- * the Rust core.
+ * Rust core (when timeoutMillis = 0).
  */
 public final class AsyncRegistry {
 
     /** Thread-safe storage for active futures. Using ConcurrentHashMap for lock-free operations. */
     private static final ConcurrentHashMap<Long, CompletableFuture<Object>> activeFutures =
-            new ConcurrentHashMap<>(estimateInitialCapacity());
+            new ConcurrentHashMap<>();
 
     /** Scheduled timeout tasks mapped by correlation ID for cancellation on completion. */
     private static final ConcurrentHashMap<Long, ScheduledFuture<?>> timeoutTasks =
-            new ConcurrentHashMap<>();
-
-    /**
-     * Per-client inflight request counters. Maps client handle to the number of active requests for
-     * that client.
-     */
-    private static final ConcurrentHashMap<Long, AtomicInteger> clientInflightCounts =
             new ConcurrentHashMap<>();
 
     /** Thread-safe ID generator for correlation IDs. */
@@ -78,45 +72,20 @@ public final class AsyncRegistry {
         }
     }
 
-    /** Estimate initial capacity for the active futures map using inflight limit with margin. */
-    private static int estimateInitialCapacity() {
-        String env = System.getenv("GLIDE_MAX_INFLIGHT_REQUESTS");
-        if (env != null) {
-            try {
-                int v = Integer.parseInt(env.trim());
-                if (v > 0) return Math.max(16, v * 2);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        String prop = System.getProperty("glide.maxInflightRequests");
-        if (prop != null) {
-            try {
-                int v = Integer.parseInt(prop.trim());
-                if (v > 0) return Math.max(16, v * 2);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        return 2000; // Default with margin over core's 1000
-    }
-
     /**
-     * Register future with client-specific inflight limit, client handle for per-client tracking, and
-     * optional Java-side timeout.
+     * Register a future for native callback correlation with optional Java-side timeout.
      *
      * <p>If the registry is shutting down, the future will be completed exceptionally with a
      * ClosingException and a special correlation ID (0) will be returned to indicate the registration
      * failed.
      *
      * @param future the future to register
-     * @param maxInflightRequests per-client limit (0 = no Java-side limit, defer to core)
-     * @param clientHandle native client handle for tracking
+     * @param clientHandle native client handle (reserved for future per-client tracking)
      * @param timeoutMillis Java-side timeout in milliseconds (0 = use Rust default timeout)
      * @return correlation ID for native callback, or 0 if shutdown is in progress
      */
     public static <T> long register(
-            CompletableFuture<T> future, int maxInflightRequests, long clientHandle, long timeoutMillis) {
+            CompletableFuture<T> future, long clientHandle, long timeoutMillis) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
         }
@@ -127,12 +96,6 @@ public final class AsyncRegistry {
             future.completeExceptionally(
                     new ClosingException("Client is shutting down, cannot register new requests"));
             return 0L; // Special ID indicating registration failed
-        }
-
-        // Client-specific inflight limit check
-        // 0 means "use native/core defaults" - no limit enforcement in Java layer
-        if (maxInflightRequests > 0) {
-            enforceInflightLimit(clientHandle, maxInflightRequests);
         }
 
         long correlationId = nextId.getAndIncrement();
@@ -148,9 +111,6 @@ public final class AsyncRegistry {
         // If shutdown started between our first check and the put(), clean up and fail
         if (isShutdown.get()) {
             activeFutures.remove(correlationId);
-            if (maxInflightRequests > 0) {
-                decrementInflightCount(clientHandle);
-            }
             future.completeExceptionally(
                     new ClosingException("Client is shutting down, cannot register new requests"));
             return 0L;
@@ -163,23 +123,9 @@ public final class AsyncRegistry {
 
         // Set up cleanup on the original future
         // This ensures proper resource cleanup when completed
-        setupCleanup(correlationId, originalFuture, maxInflightRequests, clientHandle);
+        setupCleanup(correlationId, originalFuture);
 
         return correlationId;
-    }
-
-    /** Enforce per-client inflight limit, throwing RequestException if exceeded. */
-    private static void enforceInflightLimit(long clientHandle, int maxInflightRequests) {
-        clientInflightCounts.compute(
-                clientHandle,
-                (key, counter) -> {
-                    AtomicInteger value = counter != null ? counter : new AtomicInteger(0);
-                    if (value.incrementAndGet() > maxInflightRequests) {
-                        value.decrementAndGet();
-                        throw new RequestException("Client reached maximum inflight requests");
-                    }
-                    return value;
-                });
     }
 
     /**
@@ -205,11 +151,7 @@ public final class AsyncRegistry {
      * Set up cleanup handler for when the future completes (success, error, or timeout). Performs
      * atomic cleanup to avoid races and leaks.
      */
-    private static void setupCleanup(
-            long correlationId,
-            CompletableFuture<Object> future,
-            int maxInflightRequests,
-            long clientHandle) {
+    private static void setupCleanup(long correlationId, CompletableFuture<Object> future) {
         future.whenComplete(
                 (result, error) -> {
                     // Atomic cleanup - no race conditions
@@ -221,23 +163,6 @@ public final class AsyncRegistry {
                     if (timeoutTask != null) {
                         timeoutTask.cancel(false);
                     }
-
-                    // Decrement per-client counter if applicable
-                    if (maxInflightRequests > 0) {
-                        decrementInflightCount(clientHandle);
-                    }
-                });
-    }
-
-    /** Decrement inflight count for client, removing the entry when it reaches zero. */
-    private static void decrementInflightCount(long clientHandle) {
-        clientInflightCounts.computeIfPresent(
-                clientHandle,
-                (key, counter) -> {
-                    int remaining = counter.decrementAndGet();
-                    // Clean up the entry when no more inflight requests
-                    // to avoid leaking counters for inactive clients
-                    return remaining <= 0 ? null : counter;
                 });
     }
 
@@ -315,7 +240,6 @@ public final class AsyncRegistry {
         // Cancel user futures with interrupt (may be blocked waiting)
         activeFutures.values().forEach(future -> future.cancel(true));
         activeFutures.clear();
-        clientInflightCounts.clear();
 
         // Shutdown the timeout scheduler
         timeoutScheduler.shutdownNow();
@@ -342,12 +266,6 @@ public final class AsyncRegistry {
 
         timeoutTasks.values().forEach(task -> task.cancel(false));
         timeoutTasks.clear();
-        clientInflightCounts.clear();
-    }
-
-    /** Clean up per-client tracking when a client is closed. */
-    public static void cleanupClient(long clientHandle) {
-        clientInflightCounts.remove(clientHandle);
     }
 
     /** Reset all internal state. Intended for test isolation and client shutdown cleanup. */
@@ -359,7 +277,6 @@ public final class AsyncRegistry {
         timeoutTasks.values().forEach(task -> task.cancel(false));
         timeoutTasks.clear();
         activeFutures.clear();
-        clientInflightCounts.clear();
         nextId.set(1);
     }
 

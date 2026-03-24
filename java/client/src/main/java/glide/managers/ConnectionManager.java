@@ -420,8 +420,6 @@ public class ConnectionManager {
                 () -> {
                     if (!isClosed && nativeClientHandle != 0) {
                         try {
-                            // Clean up any pending async operations for this client
-                            AsyncRegistry.cleanupClient(nativeClientHandle);
                             GlideNativeBridge.closeClient(nativeClientHandle);
                         } finally {
                             isClosed = true;
@@ -441,9 +439,6 @@ public class ConnectionManager {
         try {
             // Mark as closed immediately to prevent new commands
             isClosed = true;
-
-            // Clean up any pending async operations for this client
-            AsyncRegistry.cleanupClient(nativeClientHandle);
 
             // Close the native client handle
             if (nativeClientHandle != 0) {

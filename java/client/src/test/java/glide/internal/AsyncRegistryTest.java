@@ -27,9 +27,9 @@ public class AsyncRegistryTest {
         CompletableFuture<Object> f3 = new CompletableFuture<>();
 
         // timeoutMillis=0 avoids native call to markTimedOut
-        AsyncRegistry.register(f1, 0, 1L, 0);
-        AsyncRegistry.register(f2, 0, 1L, 0);
-        AsyncRegistry.register(f3, 0, 1L, 0);
+        AsyncRegistry.register(f1, 1L, 0);
+        AsyncRegistry.register(f2, 1L, 0);
+        AsyncRegistry.register(f3, 1L, 0);
 
         assertEquals(3, AsyncRegistry.getActiveFutureCount());
 
@@ -49,7 +49,7 @@ public class AsyncRegistryTest {
     @Test
     void failAllWithError_withNullMessage_usesDefault() {
         CompletableFuture<Object> f = new CompletableFuture<>();
-        AsyncRegistry.register(f, 0, 1L, 0);
+        AsyncRegistry.register(f, 1L, 0);
 
         AsyncRegistry.failAllWithError(null);
 
@@ -60,7 +60,7 @@ public class AsyncRegistryTest {
     @Test
     void failAllWithError_withEmptyMessage_usesDefault() {
         CompletableFuture<Object> f = new CompletableFuture<>();
-        AsyncRegistry.register(f, 0, 1L, 0);
+        AsyncRegistry.register(f, 1L, 0);
 
         AsyncRegistry.failAllWithError("");
 
@@ -78,7 +78,7 @@ public class AsyncRegistryTest {
     @Test
     void failAllWithError_raceWithNormalCompletion() {
         CompletableFuture<Object> f = new CompletableFuture<>();
-        long id = AsyncRegistry.register(f, 0, 1L, 0);
+        long id = AsyncRegistry.register(f, 1L, 0);
 
         // Complete normally first
         AsyncRegistry.completeCallback(id, "normal result");
@@ -91,20 +91,6 @@ public class AsyncRegistryTest {
         assertEquals("normal result", f.getNow(null));
     }
 
-    @Test
-    void failAllWithError_clearsInflightCounters() {
-        CompletableFuture<Object> f1 = new CompletableFuture<>();
-        // Register with inflight limit of 1
-        AsyncRegistry.register(f1, 1, 42L, 0);
-
-        // Sweep clears counters
-        AsyncRegistry.failAllWithError("msg");
-
-        // Should be able to register again on the same client (counter was reset)
-        CompletableFuture<Object> f2 = new CompletableFuture<>();
-        assertDoesNotThrow(() -> AsyncRegistry.register(f2, 1, 42L, 0));
-    }
-
     // ==================== Shutdown Race Condition Tests ====================
 
     @Test
@@ -115,7 +101,7 @@ public class AsyncRegistryTest {
 
         // Now try to register a new future
         CompletableFuture<Object> f = new CompletableFuture<>();
-        long id = AsyncRegistry.register(f, 0, 1L, 0);
+        long id = AsyncRegistry.register(f, 1L, 0);
 
         // Should return 0 (special ID indicating registration failed)
         assertEquals(0L, id);
@@ -150,31 +136,10 @@ public class AsyncRegistryTest {
 
         // Should be able to register again
         CompletableFuture<Object> f = new CompletableFuture<>();
-        long id = AsyncRegistry.register(f, 0, 1L, 0);
+        long id = AsyncRegistry.register(f, 1L, 0);
 
         assertTrue(id > 0);
         assertEquals(1, AsyncRegistry.getActiveFutureCount());
-    }
-
-    @Test
-    void register_afterShutdown_doesNotIncrementInflightCounter() {
-        // Trigger shutdown
-        AsyncRegistry.failAllWithError("shutdown");
-
-        // Try to register with inflight limit
-        CompletableFuture<Object> f = new CompletableFuture<>();
-        long id = AsyncRegistry.register(f, 10, 42L, 0);
-
-        assertEquals(0L, id);
-
-        // Reset and verify we can register the full limit (counter wasn't incremented)
-        AsyncRegistry.reset();
-
-        for (int i = 0; i < 10; i++) {
-            CompletableFuture<Object> fi = new CompletableFuture<>();
-            long regId = AsyncRegistry.register(fi, 10, 42L, 0);
-            assertTrue(regId > 0, "Registration " + i + " should succeed");
-        }
     }
 
     @Test
