@@ -203,7 +203,7 @@ public class SharedClientTests {
 
         // The last request should complete exceptionally
         try {
-            responses.get(inflightRequestsLimit).get(100, TimeUnit.MILLISECONDS);
+            responses.get(inflightRequestsLimit).get(10, TimeUnit.SECONDS);
             fail("Expected the last request to throw an exception");
         } catch (ExecutionException e) {
             assertInstanceOf(RequestException.class, e.getCause());

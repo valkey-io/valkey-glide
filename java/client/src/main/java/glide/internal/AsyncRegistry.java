@@ -12,83 +12,33 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <ul>
  *   <li>Maintain a thread-safe mapping from correlation id to the original future
- *   <li>Enforce per-client max inflight requests in Java (0 = defer to core default)
  *   <li>Perform atomic cleanup on completion to avoid races and leaks
  *   <li>Provide batched completion helpers to reduce native call overhead
  * </ul>
  *
- * <p>Timeouts, backpressure defaults, and concurrency tuning are handled by the Rust core.
+ * <p>Inflight request limits are enforced exclusively by the Rust core via {@code
+ * InflightRequestTracker}. Java does not maintain its own counter — this avoids desync between
+ * Java-side and Rust-side counters that previously allowed zombie sub-command accumulation.
  */
 public final class AsyncRegistry {
 
     /** Thread-safe storage for active futures Using ConcurrentHashMap for lock-free operations */
     private static final ConcurrentHashMap<Long, CompletableFuture<Object>> activeFutures =
-            // Size based on max inflight requests with a small margin
-            new ConcurrentHashMap<>(estimateInitialCapacity());
-
-    /**
-     * Per-client inflight request counters Maps client handle to the number of active requests for
-     * that client
-     */
-    private static final ConcurrentHashMap<Long, java.util.concurrent.atomic.AtomicInteger>
-            clientInflightCounts = new ConcurrentHashMap<>();
+            new ConcurrentHashMap<>();
 
     /** Thread-safe ID generator */
     private static final AtomicLong nextId = new AtomicLong(1);
 
-    // ==================== CONFIGURABLE CONSTANTS ====================
-
-    /** Estimate initial capacity for the active futures map using inflight limit with margin */
-    private static int estimateInitialCapacity() {
-        String env = System.getenv("GLIDE_MAX_INFLIGHT_REQUESTS");
-        if (env != null) {
-            try {
-                int v = Integer.parseInt(env.trim());
-                if (v > 0) return Math.max(16, v * 2);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        String prop = System.getProperty("glide.maxInflightRequests");
-        if (prop != null) {
-            try {
-                int v = Integer.parseInt(prop.trim());
-                if (v > 0) return Math.max(16, v * 2);
-            } catch (NumberFormatException ignored) {
-            }
-        }
-
-        // Fall back to Rust core default (1000) with margin
-        return 2000;
-    }
-
     /**
-     * Register future with client-specific inflight limit and client handle for per-client tracking
+     * Register future for native callback correlation.
+     *
+     * @param future the future to register
+     * @param clientHandle native client handle (reserved for future per-client tracking)
+     * @return correlation ID for native callback
      */
-    public static <T> long register(
-            CompletableFuture<T> future, int maxInflightRequests, long clientHandle) {
+    public static <T> long register(CompletableFuture<T> future, long clientHandle) {
         if (future == null) {
             throw new IllegalArgumentException("Future cannot be null");
-        }
-
-        // Client-specific inflight limit check
-        // 0 means "use native/core defaults" - no limit enforcement in Java layer
-        if (maxInflightRequests > 0) {
-            clientInflightCounts.compute(
-                    clientHandle,
-                    (key, counter) -> {
-                        java.util.concurrent.atomic.AtomicInteger value =
-                                counter != null ? counter : new java.util.concurrent.atomic.AtomicInteger(0);
-
-                        int updated = value.incrementAndGet();
-                        if (updated > maxInflightRequests) {
-                            value.decrementAndGet();
-                            throw new glide.api.models.exceptions.RequestException(
-                                    "Client reached maximum inflight requests");
-                        }
-
-                        return value;
-                    });
         }
 
         long correlationId = nextId.getAndIncrement();
@@ -106,23 +56,6 @@ public final class AsyncRegistry {
                 (result, throwable) -> {
                     // Atomic cleanup - no race conditions
                     activeFutures.remove(correlationId);
-
-                    // Decrement per-client counter if applicable
-                    if (maxInflightRequests > 0) {
-                        clientInflightCounts.compute(
-                                clientHandle,
-                                (key, counter) -> {
-                                    if (counter == null) {
-                                        return null;
-                                    }
-
-                                    int remaining = counter.decrementAndGet();
-
-                                    // Clean up the entry when no more inflight requests to avoid
-                                    // leaking counters for inactive clients.
-                                    return remaining <= 0 ? null : counter;
-                                });
-                    }
                 });
 
         return correlationId;
@@ -206,18 +139,11 @@ public final class AsyncRegistry {
 
         // Clear the map
         activeFutures.clear();
-        clientInflightCounts.clear();
-    }
-
-    /** Clean up per-client tracking when a client is closed */
-    public static void cleanupClient(long clientHandle) {
-        clientInflightCounts.remove(clientHandle);
     }
 
     /** Reset all internal state. Intended for test isolation and client shutdown cleanup. */
     public static void reset() {
         activeFutures.clear();
-        clientInflightCounts.clear();
         nextId.set(1);
     }
 
