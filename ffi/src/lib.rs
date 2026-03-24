@@ -3017,6 +3017,65 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
     })
 }
 
+/// Get cache metrics for the client.
+///
+/// This function retrieves cache performance metrics such as hit rate, miss rate, 
+/// entry count, evictions, and expirations based on the specified metrics type.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid client returned from [`create_client`].
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
+/// * `metrics_type`: Integer representing the type of cache metrics to retrieve:
+///   - 0: HitRate - Cache hit rate as a double (0.0 to 1.0)
+///   - 1: MissRate - Cache miss rate as a double (0.0 to 1.0)  
+///   - 2: EntryCount - Number of entries in cache as an integer
+///   - 3: Evictions - Number of cache evictions as an integer
+///   - 4: Expirations - Number of cache expirations as an integer
+///
+/// # Returns
+///
+/// * A pointer to a [`CommandResult`] containing the requested metric value on success, or an error if:
+///   - Client-side caching is not enabled
+///   - Metrics tracking is disabled
+///   - Invalid metrics type is specified
+///   - Client is closed or invalid
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn get_cache_metrics(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    metrics_type: i32,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let client = client_adapter.core.client.clone();
+    client_adapter.execute_request(request_id, async move {
+        match metrics_type {
+            0 => client.cache_hit_rate().map_err(|err| err.into()), // HitRate
+            1 => client.cache_miss_rate().map_err(|err| err.into()), // MissRate  
+            2 => client.cache_entry_count().map_err(|err| err.into()), // EntryCount
+            3 => client.cache_evictions().map_err(|err| err.into()), // Evictions
+            4 => client.cache_expirations().map_err(|err| err.into()), // Expirations
+            _ => Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Invalid cache metrics type",
+                format!("Unsupported metrics type: {}", metrics_type),
+            ))),
+        }
+    })
+}
+
 /// Executes a Lua script.
 ///
 /// # Parameters
