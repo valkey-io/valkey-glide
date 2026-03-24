@@ -229,8 +229,10 @@ async fn execute_command_request_and_complete(
                 })?;
 
                 // Apply compression to command arguments if compression is enabled
-                if let Err(e) = process_command_for_compression(&mut cmd, &client) {
-                    log::warn!("Compression processing failed: {e}, continuing with original command");
+                if client.is_compression_enabled() {
+                    if let Err(e) = process_command_for_compression(&mut cmd, &client) {
+                        log::warn!("Compression processing failed: {e}, continuing with original command");
+                    }
                 }
 
                 // Compute routing
@@ -289,8 +291,10 @@ async fn execute_command_request_and_complete(
                         ))
                     })?;
                     // Apply compression to each command in the batch
-                    if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
-                        log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                    if client.is_compression_enabled() {
+                        if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
+                            log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                        }
                     }
                     pipeline.add_command(valkey_cmd);
                 }
