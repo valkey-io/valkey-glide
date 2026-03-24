@@ -963,7 +963,12 @@ impl Client {
 
             cmd.set_inflight_tracker(tracker);
 
-            let compression_manager = self.compression_manager.clone();
+            // Clone compression_manager reference only if compression is enabled
+            let compression_manager = if self.is_compression_enabled() {
+                self.compression_manager.clone()
+            } else {
+                None
+            };
             let self_clone = self.clone();
             let owned_cmd = Arc::new(cmd.clone());
 
