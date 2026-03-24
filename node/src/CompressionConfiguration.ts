@@ -23,6 +23,8 @@ const DEFAULT_MIN_COMPRESSION_SIZE = 64;
 /**
  * Configuration for automatic compression of values sent to the server.
  *
+ * NOTE: This is an experimental feature. The API may change in future releases.
+ *
  * When compression is enabled, values that meet the minimum size threshold
  * will be automatically compressed before being sent to the server and
  * decompressed when retrieved.
