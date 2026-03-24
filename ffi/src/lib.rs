@@ -1212,6 +1212,7 @@ pub unsafe extern "C-unwind" fn command(
         Routes::default()
     };
 
+    // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
     let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
     let result = client_adapter.execute_request(request_id, async move {
