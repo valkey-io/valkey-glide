@@ -6,16 +6,9 @@ use once_cell::sync::Lazy;
 use sha1_smol::Sha1;
 use std::cell::Cell;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-// Helper to create a runtime for sync wrappers
-fn create_runtime() -> tokio::runtime::Runtime {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .expect("Failed to create Tokio runtime")
-}
+const LOCK_ERR: &str = "Failed to acquire the scripts container lock";
 
 /// A script entry stored in the global container.
 ///
@@ -29,7 +22,7 @@ struct ScriptEntry {
 static CONTAINER: Lazy<Mutex<HashMap<String, ScriptEntry>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-pub async fn add_script_async(script: &[u8]) -> String {
+pub fn add_script(script: &[u8]) -> String {
     let mut hash = Sha1::new();
     hash.update(script);
     let hash = hash.digest().to_string();
@@ -38,7 +31,7 @@ pub async fn add_script_async(script: &[u8]) -> String {
         format!("Added script with hash: `{hash}`"),
     );
 
-    let mut container = CONTAINER.lock().await;
+    let mut container = CONTAINER.lock().expect(LOCK_ERR);
     let entry = container
         .entry(hash.clone())
         .or_insert_with(|| ScriptEntry {
@@ -54,30 +47,16 @@ pub async fn add_script_async(script: &[u8]) -> String {
     hash
 }
 
-pub fn add_script(script: &[u8]) -> String {
-    let script = script.to_vec();
-    std::thread::spawn(move || create_runtime().block_on(add_script_async(&script)))
-        .join()
-        .expect("Thread panicked")
-}
-
-pub async fn get_script_async(hash: &str) -> Option<Arc<BytesMut>> {
+pub fn get_script(hash: &str) -> Option<Arc<BytesMut>> {
     CONTAINER
         .lock()
-        .await
+        .expect(LOCK_ERR)
         .get(hash)
         .map(|entry| entry.script.clone())
 }
 
-pub fn get_script(hash: &str) -> Option<Arc<BytesMut>> {
-    let hash = hash.to_string();
-    std::thread::spawn(move || create_runtime().block_on(get_script_async(&hash)))
-        .join()
-        .expect("Thread panicked")
-}
-
-pub async fn remove_script_async(hash: &str) {
-    let mut container = CONTAINER.lock().await;
+pub fn remove_script(hash: &str) {
+    let mut container = CONTAINER.lock().expect(LOCK_ERR);
     if let Some(entry) = container.get(hash) {
         let new_count = entry.ref_count.get() - 1;
         entry.ref_count.set(new_count);
@@ -102,47 +81,40 @@ pub async fn remove_script_async(hash: &str) {
     }
 }
 
-pub fn remove_script(hash: &str) {
-    let hash = hash.to_string();
-    std::thread::spawn(move || create_runtime().block_on(remove_script_async(&hash)))
-        .join()
-        .expect("Thread panicked")
-}
-
 #[cfg(test)]
 mod script_tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_add_and_get_script() {
+    #[test]
+    fn test_add_and_get_script() {
         let script = b"print('Hello, World!')";
-        let hash = add_script_async(script).await;
+        let hash = add_script(script);
 
-        let retrieved = get_script_async(&hash).await;
+        let retrieved = get_script(&hash);
         assert!(retrieved.is_some());
         assert_eq!(&retrieved.unwrap()[..], script);
     }
 
-    #[tokio::test]
-    async fn test_reference_counting_and_removal() {
+    #[test]
+    fn test_reference_counting_and_removal() {
         let script_1 = b"print('ref count test')";
         let script_2 = b"print('ref count test')";
-        let hash = add_script_async(script_1).await;
-        let hash_2 = add_script_async(script_2).await; // Increase ref count to 2
+        let hash = add_script(script_1);
+        let hash_2 = add_script(script_2); // Increase ref count to 2
         assert_eq!(hash, hash_2);
 
         // First removal should decrement but not remove
-        remove_script_async(&hash).await;
-        assert!(get_script_async(&hash).await.is_some());
+        remove_script(&hash);
+        assert!(get_script(&hash).is_some());
 
         // Second removal should remove the script
-        remove_script_async(&hash).await;
-        assert!(get_script_async(&hash).await.is_none());
+        remove_script(&hash);
+        assert!(get_script(&hash).is_none());
     }
 
-    #[tokio::test]
-    async fn test_remove_non_existent_script() {
+    #[test]
+    fn test_remove_non_existent_script() {
         let fake_hash = "nonexistenthash";
-        remove_script_async(fake_hash).await; // Should not panic
+        remove_script(fake_hash); // Should not panic
     }
 }
