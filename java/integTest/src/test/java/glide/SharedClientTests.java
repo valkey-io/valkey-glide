@@ -177,23 +177,15 @@ public class SharedClientTests {
         BaseClient testClient;
         String keyName = "nonexistkeylist" + RandomString.make(4);
 
-        // Use a long request timeout so BLPOP commands stay pending in Rust
-        // (default 2s would cause them to time out before we verify).
         if (clusterMode) {
             testClient =
                     GlideClient.createClient(
-                                    commonClientConfig()
-                                            .inflightRequestsLimit(inflightRequestsLimit)
-                                            .requestTimeout(10000)
-                                            .build())
+                                    commonClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
                             .get();
         } else {
             testClient =
                     GlideClusterClient.createClient(
-                                    commonClusterClientConfig()
-                                            .inflightRequestsLimit(inflightRequestsLimit)
-                                            .requestTimeout(10000)
-                                            .build())
+                                    commonClusterClientConfig().inflightRequestsLimit(inflightRequestsLimit).build())
                             .get();
         }
 
@@ -203,19 +195,19 @@ public class SharedClientTests {
             responses.add(testClient.blpop(new String[] {keyName}, 0));
         }
 
-        // verify — single tokio worker processes tasks in spawn order, so
-        // the last request is the one that hits the full counter.
+        // verify
+        // Check that all requests except the last one are still pending
+        for (int i = 0; i < inflightRequestsLimit; i++) {
+            assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
+        }
+
+        // The last request should complete exceptionally
         try {
             responses.get(inflightRequestsLimit).get(10, TimeUnit.SECONDS);
             fail("Expected the last request to throw an exception");
         } catch (ExecutionException e) {
             assertInstanceOf(RequestException.class, e.getCause());
             assertTrue(e.getCause().getMessage().contains("maximum inflight requests"));
-        }
-
-        // First N requests should still be pending (BLPOP blocks server-side)
-        for (int i = 0; i < inflightRequestsLimit; i++) {
-            assertFalse(responses.get(i).isDone(), "Request " + i + " should still be pending");
         }
 
         BaseClient cleanupClient;
