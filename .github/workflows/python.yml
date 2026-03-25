@@ -20,6 +20,7 @@ on:
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - .github/workflows/start-valkey-docker/action.yml
 
     pull_request:
         paths:
@@ -36,6 +37,7 @@ on:
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - .github/workflows/start-valkey-docker/action.yml
 
     workflow_dispatch:
         inputs:
@@ -482,8 +484,63 @@ jobs:
                       utils/clusters/**
                       benchmarks/results/**
 
+    test-modules-linux:
+        name: Modules Tests (Linux)
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-python
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "9.0"
+
+            - name: Start module servers via Docker
+              uses: ./.github/workflows/start-valkey-docker
+              with:
+                  engine-version: "9.0"
+
+            - name: Run modules tests
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args \
+                    --standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
+                    --cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }} \
+                    -k server_modules \
+                    --async-backend=asyncio \
+                    --html=pytest_report.html \
+                    --self-contained-html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules-python-docker
+                  path: |
+                      python/tests/pytest_report.html
+
     test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
+        if: github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true'
         environment: AWS_ACTIONS
         name: Running Module Tests
         runs-on: [self-hosted, linux, ARM64, persistent]

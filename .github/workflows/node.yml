@@ -21,6 +21,7 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
+            - .github/workflows/start-valkey-docker/action.yml
     pull_request:
         paths:
             - glide-core/src/**
@@ -34,6 +35,7 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
+            - .github/workflows/start-valkey-docker/action.yml
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -413,8 +415,65 @@ jobs:
                       utils/clusters/**
                       benchmarks/results/**
 
+    test-modules-linux:
+        name: Modules Tests (Linux)
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install shared dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "9.0"
+
+            - name: Setup Node
+              uses: actions/setup-node@v5
+              with:
+                  node-version: latest
+
+            - name: Start module servers via Docker
+              uses: ./.github/workflows/start-valkey-docker
+              with:
+                  engine-version: "9.0"
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-node
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
+
+            - name: Install and build
+              working-directory: ./node
+              run: |
+                  npm install
+                  npm run build:release
+
+            - name: Run modules tests
+              working-directory: ./node
+              run: |
+                  npm run test:modules -- \
+                    --standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
+                    --cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules-node-docker
+                  path: |
+                      node/test-report*.html
+
     test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
+        if: github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true'
         environment: AWS_ACTIONS
         name: Running Module Tests
         runs-on: [self-hosted, linux, ARM64, persistent]

@@ -21,6 +21,7 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - .github/workflows/start-valkey-docker/action.yml
 
     pull_request:
         paths:
@@ -35,6 +36,7 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+            - .github/workflows/start-valkey-docker/action.yml
 
     workflow_dispatch:
         inputs:
@@ -572,8 +574,79 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint java rust
 
+    test-modules-linux:
+        name: Modules Tests (Linux)
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: 17
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "9.0"
+                  language: java
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Start module servers via Docker
+              uses: ./.github/workflows/start-valkey-docker
+              with:
+                  engine-version: "9.0"
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      java/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-java
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
+
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-
+
+            - name: Build and run modules tests
+              working-directory: java
+              env:
+                  GLIDE_DOCKER_SERVERS: "true"
+              run: |
+                  ./gradlew :integTest:modulesTest \
+                    -Dstandalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
+                    -Dcluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules-java-docker
+                  path: |
+                      java/integTest/build/reports/**
+
     test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
+        if: github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true'
         environment: AWS_ACTIONS
         name: Modules Tests
         runs-on: [self-hosted, linux, ARM64, persistent]
