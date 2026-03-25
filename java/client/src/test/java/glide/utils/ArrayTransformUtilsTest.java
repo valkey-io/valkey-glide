@@ -225,6 +225,40 @@ class ArrayTransformUtilsTest {
     }
 
     @Test
+    void convertMapToValueKeyStringArrayBinary_empty() {
+        assertEquals(
+                0,
+                ArrayTransformUtils.convertMapToValueKeyStringArrayBinary(new LinkedHashMap<>())
+                        .length);
+    }
+
+    @Test
+    void flattenMapToGlideStringArrayValueFirst_empty() {
+        assertEquals(
+                0,
+                ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst(new LinkedHashMap<>())
+                        .length);
+    }
+
+    @Test
+    void flattenMapToGlideStringArrayValueFirst_nullValue_propagatesNull() {
+        Map<String, String> map = new HashMap<>();
+        map.put("k1", null);
+        GlideString[] result = ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst(map);
+        assertNull(result[0]);
+        assertEquals(gs("k1"), result[1]);
+    }
+
+    @Test
+    void flattenMapToGlideStringArrayValueFirst_nullKey_propagatesNull() {
+        Map<String, String> map = new HashMap<>();
+        map.put(null, "v1");
+        GlideString[] result = ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst(map);
+        assertEquals(gs("v1"), result[0]);
+        assertNull(result[1]);
+    }
+
+    @Test
     void convertMapToKeyValueStringArray_nullValue_propagatesNull() {
         Map<String, String> map = new HashMap<>();
         map.put("k1", null);
