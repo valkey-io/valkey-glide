@@ -34,6 +34,19 @@ pub enum ReconnectReason {
     CreateError,
 }
 
+/// Token handle to the IAM token cache, used by the reconnection path
+/// to ensure the latest token is applied before attempting AUTH.
+///
+/// This avoids a circular reference to `IAMTokenManager` by only holding
+/// the two `Arc` handles needed: the cached token and the change flag.
+#[derive(Clone)]
+pub struct IAMTokenHandle {
+    /// Shared reference to the cached IAM token (same Arc owned by IAMTokenManager)
+    pub(crate) cached_token: Arc<tokio::sync::RwLock<String>>,
+    /// Atomic flag set to `true` by the background refresh task when a new token is available
+    pub(crate) token_changed: Arc<AtomicBool>,
+}
+
 /// The object that is used in order to recreate a connection after a disconnect.
 struct ConnectionBackend {
     /// This signal is reset when a connection disconnects, and set when a new `ConnectionState` has been set with a `Connected` state.
@@ -42,6 +55,8 @@ struct ConnectionBackend {
     connection_info: RwLock<redis::Client>,
     /// Once this flag is set, the internal connection needs no longer try to reconnect to the server, because all the outer clients were dropped.
     client_dropped_flagged: AtomicBool,
+    /// Optional handle to the IAM token cache for refreshing the password before reconnection.
+    iam_token_handle: Option<IAMTokenHandle>,
 }
 
 /// State of the current connection. Allows the user to use a connection only when a reconnect isn't in progress or has failed.
@@ -144,6 +159,8 @@ async fn create_connection(
         connection_retry_strategy: Some(retry_strategy),
         tcp_nodelay,
         pubsub_synchronizer,
+        iam_token_cache: None,
+        iam_token_changed: None,
     };
 
     // Wrap retry loop in timeout so total time respects connection_timeout
@@ -252,6 +269,7 @@ impl ReconnectingConnection {
         tls_params: Option<redis::TlsConnParams>,
         tcp_nodelay: bool,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
+        iam_token_handle: Option<IAMTokenHandle>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -263,6 +281,7 @@ impl ReconnectingConnection {
             connection_info: RwLock::new(connection_info),
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
+            iam_token_handle,
         };
         create_connection(
             backend,
@@ -347,14 +366,6 @@ impl ReconnectingConnection {
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
-            // Get a clone of the client with the current connection info
-            // updates made via update_connection_database(). This ensures reconnection uses the
-            // correct database as selected by previous SELECT commands.
-            let client = {
-                let guard = connection_clone.inner.backend.get_backend_client();
-                guard.clone()
-            };
-
             let infinite_backoff_dur_iterator = connection_clone
                 .connection_options
                 .connection_retry_strategy
@@ -369,6 +380,42 @@ impl ReconnectingConnection {
                     // Client was dropped, reconnection attempts can stop
                     return;
                 }
+
+                // If IAM authentication is configured, ensure the connection uses the
+                // latest token before attempting to reconnect.  The background refresh
+                // task may have rotated the token while the client was idle, so we pull
+                // the freshest value from the shared cache and update the stored
+                // password.  We also clear the `token_changed` flag so that the
+                // pull-model check in `send_command` does not redundantly re-apply the
+                // same token.
+                if let Some(handle) = &connection_clone.inner.backend.iam_token_handle {
+                    let latest_token = {
+                        let guard = handle.cached_token.read().await;
+                        guard.clone()
+                    };
+                    if !latest_token.is_empty() {
+                        let mut client = connection_clone
+                            .inner
+                            .backend
+                            .connection_info
+                            .write()
+                            .expect(WRITE_LOCK_ERR);
+                        client.update_password(Some(latest_token));
+                        handle.token_changed.store(false, Ordering::Release);
+                        log_debug(
+                            "reconnect",
+                            "Updated connection password with latest IAM token before reconnection attempt",
+                        );
+                    }
+                }
+
+                // Clone the client *after* the potential password update so the new
+                // connection attempt uses the freshest credentials.
+                let client = {
+                    let guard = connection_clone.inner.backend.get_backend_client();
+                    guard.clone()
+                };
+
                 match get_multiplexed_connection(&client, &connection_clone.connection_options)
                     .await
                 {

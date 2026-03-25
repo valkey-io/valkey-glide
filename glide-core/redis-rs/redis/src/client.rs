@@ -103,6 +103,14 @@ pub struct GlideConnectionOptions {
     pub tcp_nodelay: bool,
     /// Optional PubSub synchronizer for managing subscription state
     pub pubsub_synchronizer: Option<Arc<dyn PubSubSynchronizer>>,
+    /// Optional shared reference to an IAM token cache.
+    /// When set, the cluster reconnection loop will read the latest token from this
+    /// cache and update `ClusterParams.password` before each connection attempt,
+    /// ensuring that reconnections after token rotation use fresh credentials.
+    pub iam_token_cache: Option<Arc<tokio::sync::RwLock<String>>>,
+    /// Optional atomic flag that is set to `true` when the IAM token has been refreshed.
+    /// Used together with `iam_token_cache` to efficiently detect token changes.
+    pub iam_token_changed: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
 /// To enable async support you need to enable the feature: `tokio-comp`

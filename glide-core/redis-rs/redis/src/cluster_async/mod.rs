@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None, None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -155,12 +155,16 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_cache: Option<Arc<tokio::sync::RwLock<String>>>,
+        iam_token_changed: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> RedisResult<ClusterConnection<C>> {
         ClusterConnInner::new(
             initial_nodes,
             cluster_params,
             push_sender,
             pubsub_synchronizer,
+            iam_token_cache,
+            iam_token_changed,
         )
         .await
         .map(|inner| {
@@ -206,7 +210,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None, None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -1278,6 +1282,8 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_cache: Option<Arc<tokio::sync::RwLock<String>>>,
+        iam_token_changed: Option<Arc<std::sync::atomic::AtomicBool>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1304,6 +1310,8 @@ where
             connection_retry_strategy: Some(connection_retry_strategy),
             tcp_nodelay: cluster_params.tcp_nodelay,
             pubsub_synchronizer,
+            iam_token_cache,
+            iam_token_changed,
         };
 
         let connections = Self::create_initial_connections(
@@ -1693,6 +1701,30 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
+                    // If IAM authentication is configured, pull the latest token from
+                    // the shared cache and update cluster_params.password before the
+                    // connection attempt.  This mirrors the standalone fix and ensures
+                    // reconnections after token rotation use fresh credentials even
+                    // when the client is idle.
+                    if let (Some(token_cache), Some(token_changed)) = (
+                        &inner_clone.glide_connection_options.iam_token_cache,
+                        &inner_clone.glide_connection_options.iam_token_changed,
+                    ) {
+                        if token_changed.load(std::sync::atomic::Ordering::Acquire) {
+                            let latest_token = token_cache.read().await.clone();
+                            if !latest_token.is_empty() {
+                                if let Ok(mut params) = inner_clone.cluster_params.write() {
+                                    params.password = Some(latest_token);
+                                }
+                                token_changed.store(false, std::sync::atomic::Ordering::Release);
+                                debug!(
+                                    "Updated cluster_params password with latest IAM token before reconnection attempt to {}",
+                                    address_clone_for_task
+                                );
+                            }
+                        }
+                    }
+
                     let cluster_params = inner_clone
                         .cluster_params
                         .read()

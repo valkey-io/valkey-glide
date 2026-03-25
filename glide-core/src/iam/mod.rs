@@ -389,6 +389,18 @@ impl IAMTokenManager {
         self.token_changed.store(false, Ordering::Release)
     }
 
+    /// Create a lightweight handle to the token cache for use by the reconnection path.
+    ///
+    /// The returned handle shares the same `Arc`s as this manager, so any token
+    /// refresh performed by the background task is immediately visible through
+    /// the handle without requiring a reference back to the full `IAMTokenManager`.
+    pub fn get_token_handle(&self) -> crate::client::IAMTokenHandle {
+        crate::client::IAMTokenHandle {
+            cached_token: Arc::clone(&self.cached_token),
+            token_changed: Arc::clone(&self.token_changed),
+        }
+    }
+
     /// Generate IAM authentication token using SigV4 signing (valid for 15 minutes)
     async fn generate_token_static(state: &IamTokenState) -> Result<String, GlideIAMError> {
         let service_name: &'static str = state.service_type.into();
