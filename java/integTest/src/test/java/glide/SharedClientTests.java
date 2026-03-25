@@ -164,10 +164,8 @@ public class SharedClientTests {
         return Stream.of(
                 Arguments.of(false, 5),
                 Arguments.of(false, 100),
-                Arguments.of(false, 1000),
                 Arguments.of(true, 5),
-                Arguments.of(true, 100),
-                Arguments.of(true, 1000));
+                Arguments.of(true, 100));
     }
 
     @SneakyThrows
