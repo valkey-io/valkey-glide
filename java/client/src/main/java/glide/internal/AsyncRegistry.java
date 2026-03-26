@@ -3,6 +3,7 @@ package glide.internal;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -35,6 +36,12 @@ public final class AsyncRegistry {
 
     /** Thread-safe ID generator */
     private static final AtomicLong nextId = new AtomicLong(1);
+
+    /**
+     * Shutdown flag to prevent race conditions between register() and shutdown()/failAllWithError().
+     * Once set to true, register() will return pre-failed futures instead of adding to the registry.
+     */
+    private static final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
     // ==================== CONFIGURABLE CONSTANTS ====================
 
@@ -71,6 +78,14 @@ public final class AsyncRegistry {
             throw new IllegalArgumentException("Future cannot be null");
         }
 
+        // Check shutdown flag before registering to prevent race conditions
+        if (isShutdown.get()) {
+            future.completeExceptionally(
+                    new glide.api.models.exceptions.ClosingException(
+                            "Client is shutting down, cannot register new requests"));
+            return 0L;
+        }
+
         // Client-specific inflight limit check
         // 0 means "use native/core defaults" - no limit enforcement in Java layer
         if (maxInflightRequests > 0) {
@@ -99,6 +114,23 @@ public final class AsyncRegistry {
 
         // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
+
+        // Double-check shutdown flag after insertion to handle race with shutdown()
+        if (isShutdown.get()) {
+            activeFutures.remove(correlationId);
+            if (maxInflightRequests > 0) {
+                clientInflightCounts.computeIfPresent(
+                        clientHandle,
+                        (key, counter) -> {
+                            int remaining = counter.decrementAndGet();
+                            return remaining <= 0 ? null : counter;
+                        });
+            }
+            future.completeExceptionally(
+                    new glide.api.models.exceptions.ClosingException(
+                            "Client is shutting down, cannot register new requests"));
+            return 0L;
+        }
 
         // Set up cleanup on the original future
         // This ensures proper resource cleanup when completed
@@ -194,6 +226,8 @@ public final class AsyncRegistry {
 
     /** Shutdown cleanup - cancel all pending operations during client shutdown */
     public static void shutdown() {
+        isShutdown.set(true);
+
         // Complete all pending futures with cancellation
         activeFutures
                 .values()
@@ -219,6 +253,8 @@ public final class AsyncRegistry {
     public static void failAllWithError(String errorMessage) {
         // Best-effort sweep: only called when callback infrastructure is dead,
         // so any future registered concurrently would also fail to complete.
+        isShutdown.set(true);
+
         String msg =
                 (errorMessage == null || errorMessage.isEmpty())
                         ? "Native callback infrastructure failed"
@@ -237,6 +273,7 @@ public final class AsyncRegistry {
 
     /** Reset all internal state. Intended for test isolation and client shutdown cleanup. */
     public static void reset() {
+        isShutdown.set(false);
         activeFutures.clear();
         clientInflightCounts.clear();
         nextId.set(1);
@@ -251,6 +288,15 @@ public final class AsyncRegistry {
         if (!"false".equalsIgnoreCase(System.getProperty("glide.autoShutdownHook", "true"))) {
             Runtime.getRuntime().addShutdownHook(shutdownHook);
         }
+    }
+
+    /**
+     * Returns whether the registry is in shutdown state. Intended for testing and diagnostics.
+     *
+     * @return true if shutdown() or failAllWithError() has been called
+     */
+    public static boolean isShutdown() {
+        return isShutdown.get();
     }
 
     /**
