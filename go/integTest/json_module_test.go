@@ -11,126 +11,135 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/servermodules/glidejson"
 )
 
-func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Standalone() {
+const (
+	jsonTestPath      = "$"
+	jsonTestValue     = `{"a": 1.0, "b": 2}`
+	jsonTestKeyPrefix = "{json-key}-"
+)
+
+// jsonSetGetOps abstracts the JSON set/get operations for both standalone and cluster clients.
+type jsonSetGetOps struct {
+	set              func(ctx context.Context, key, path, value string) (string, error)
+	setWithCondition func(ctx context.Context, key, path, value string, c constants.ConditionalSet) (string, error)
+	get              func(ctx context.Context, key string) (string, error)
+	getWithPaths     func(ctx context.Context, key string, paths []string) (string, error)
+	getWithOptions   func(ctx context.Context, key string, paths []string, o *options.JsonGetOptions) (string, error)
+}
+
+func (suite *GlideTestSuite) standaloneJsonOps() jsonSetGetOps {
 	client := suite.defaultClient()
+	return jsonSetGetOps{
+		set: func(ctx context.Context, key, path, value string) (string, error) {
+			return glidejson.JsonSet(client, ctx, key, path, value)
+		},
+		setWithCondition: func(ctx context.Context, key, path, value string, c constants.ConditionalSet) (string, error) {
+			return glidejson.JsonSetWithCondition(client, ctx, key, path, value, c)
+		},
+		get: func(ctx context.Context, key string) (string, error) {
+			return glidejson.JsonGet(client, ctx, key)
+		},
+		getWithPaths: func(ctx context.Context, key string, paths []string) (string, error) {
+			return glidejson.JsonGetWithPaths(client, ctx, key, paths)
+		},
+		getWithOptions: func(ctx context.Context, key string, paths []string, o *options.JsonGetOptions) (string, error) {
+			return glidejson.JsonGetWithOptions(client, ctx, key, paths, o)
+		},
+	}
+}
+
+func (suite *GlideTestSuite) clusterJsonOps() jsonSetGetOps {
+	client := suite.defaultClusterClient()
+	return jsonSetGetOps{
+		set: func(ctx context.Context, key, path, value string) (string, error) {
+			return glidejson.ClusterJsonSet(client, ctx, key, path, value)
+		},
+		setWithCondition: func(ctx context.Context, key, path, value string, c constants.ConditionalSet) (string, error) {
+			return glidejson.ClusterJsonSetWithCondition(client, ctx, key, path, value, c)
+		},
+		get: func(ctx context.Context, key string) (string, error) {
+			return glidejson.ClusterJsonGet(client, ctx, key)
+		},
+		getWithPaths: func(ctx context.Context, key string, paths []string) (string, error) {
+			return glidejson.ClusterJsonGetWithPaths(client, ctx, key, paths)
+		},
+		getWithOptions: func(ctx context.Context, key string, paths []string, o *options.JsonGetOptions) (string, error) {
+			return glidejson.ClusterJsonGetWithOptions(client, ctx, key, paths, o)
+		},
+	}
+}
+
+func (suite *GlideTestSuite) verifyJsonSetAndGet(ops jsonSetGetOps) {
+	t := suite.T()
 	ctx := context.Background()
-	key := "{json-key}-1-" + suite.T().Name()
+	key := jsonTestKeyPrefix + t.Name()
 
-	// Set a JSON value
-	result, err := glidejson.JsonSet(client, ctx, key, "$", `{"a": 1.0, "b": 2}`)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", result)
+	result, err := ops.set(ctx, key, jsonTestPath, jsonTestValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
 
-	// Get the JSON value
-	getResult, err := glidejson.JsonGet(client, ctx, key)
-	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), getResult, `"a"`)
-	assert.Contains(suite.T(), getResult, `"b"`)
+	getResult, err := ops.get(ctx, key)
+	assert.NoError(t, err)
+	assert.Contains(t, getResult, `"a"`)
+	assert.Contains(t, getResult, `"b"`)
 
-	// Get with specific paths
-	getPathResult, err := glidejson.JsonGetWithPaths(client, ctx, key, []string{"$.a", "$.b"})
-	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), getPathResult, "$.a")
-	assert.Contains(suite.T(), getPathResult, "$.b")
+	getPathResult, err := ops.getWithPaths(ctx, key, []string{"$.a", "$.b"})
+	assert.NoError(t, err)
+	assert.Contains(t, getPathResult, "$.a")
+	assert.Contains(t, getPathResult, "$.b")
 
-	// Get non-existing key
-	getResult, err = glidejson.JsonGet(client, ctx, "non_existing_key")
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "", getResult)
+	getResult, err = ops.get(ctx, "non_existing_key")
+	assert.NoError(t, err)
+	assert.Equal(t, "", getResult)
+}
+
+func (suite *GlideTestSuite) verifyJsonSetWithCondition(ops jsonSetGetOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	// NX - should succeed on new key
+	result, err := ops.setWithCondition(ctx, key, jsonTestPath, `{"a": 1.0}`, constants.OnlyIfDoesNotExist)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// NX again - should fail (key exists)
+	result, err = ops.setWithCondition(ctx, key, jsonTestPath, `{"a": 2.0}`, constants.OnlyIfDoesNotExist)
+	assert.NoError(t, err)
+	assert.Equal(t, "", result)
+
+	// XX - should succeed (key exists)
+	result, err = ops.setWithCondition(ctx, key, jsonTestPath, `{"a": 3.0}`, constants.OnlyIfExists)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+}
+
+func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Standalone() {
+	suite.verifyJsonSetAndGet(suite.standaloneJsonOps())
 }
 
 func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Standalone() {
-	client := suite.defaultClient()
-	ctx := context.Background()
-	key := "{json-key}-2-" + suite.T().Name()
-
-	// Set with NX (only if does not exist) - should succeed
-	result, err := glidejson.JsonSetWithCondition(
-		client, ctx, key, "$", `{"a": 1.0}`, constants.OnlyIfDoesNotExist,
-	)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", result)
-
-	// Set with NX again - should fail (key already exists)
-	result, err = glidejson.JsonSetWithCondition(
-		client, ctx, key, "$", `{"a": 2.0}`, constants.OnlyIfDoesNotExist,
-	)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "", result)
-
-	// Set with XX (only if exists) - should succeed
-	result, err = glidejson.JsonSetWithCondition(
-		client, ctx, key, "$", `{"a": 3.0}`, constants.OnlyIfExists,
-	)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", result)
+	suite.verifyJsonSetWithCondition(suite.standaloneJsonOps())
 }
 
 func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Standalone() {
-	client := suite.defaultClient()
+	ops := suite.standaloneJsonOps()
+	t := suite.T()
 	ctx := context.Background()
-	key := "{json-key}-3-" + suite.T().Name()
+	key := jsonTestKeyPrefix + t.Name()
 
-	_, err := glidejson.JsonSet(client, ctx, key, "$", `{"a": 1, "b": 2}`)
-	assert.NoError(suite.T(), err)
+	_, err := ops.set(ctx, key, jsonTestPath, `{"a": 1, "b": 2}`)
+	assert.NoError(t, err)
 
 	opts := options.NewJsonGetOptions().SetIndent("  ").SetNewline("\n").SetSpace(" ")
-	result, err := glidejson.JsonGetWithOptions(client, ctx, key, []string{"$"}, opts)
-	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), result, "\n")
+	result, err := ops.getWithOptions(ctx, key, []string{jsonTestPath}, opts)
+	assert.NoError(t, err)
+	assert.Contains(t, result, "\n")
 }
 
 func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Cluster() {
-	client := suite.defaultClusterClient()
-	ctx := context.Background()
-	key := "{json-key}-4-" + suite.T().Name()
-
-	// Set a JSON value
-	result, err := glidejson.ClusterJsonSet(client, ctx, key, "$", `{"a": 1.0, "b": 2}`)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", result)
-
-	// Get the JSON value
-	getResult, err := glidejson.ClusterJsonGet(client, ctx, key)
-	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), getResult, `"a"`)
-	assert.Contains(suite.T(), getResult, `"b"`)
-
-	// Get with specific paths
-	getPathResult, err := glidejson.ClusterJsonGetWithPaths(client, ctx, key, []string{"$.a", "$.b"})
-	assert.NoError(suite.T(), err)
-	assert.Contains(suite.T(), getPathResult, "$.a")
-	assert.Contains(suite.T(), getPathResult, "$.b")
-
-	// Get non-existing key
-	getResult, err = glidejson.ClusterJsonGet(client, ctx, "non_existing_key")
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "", getResult)
+	suite.verifyJsonSetAndGet(suite.clusterJsonOps())
 }
 
 func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Cluster() {
-	client := suite.defaultClusterClient()
-	ctx := context.Background()
-	key := "{json-key}-5-" + suite.T().Name()
-
-	// Set with NX - should succeed
-	result, err := glidejson.ClusterJsonSetWithCondition(
-		client, ctx, key, "$", `{"a": 1.0}`, constants.OnlyIfDoesNotExist,
-	)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", result)
-
-	// Set with NX again - should fail
-	result, err = glidejson.ClusterJsonSetWithCondition(
-		client, ctx, key, "$", `{"a": 2.0}`, constants.OnlyIfDoesNotExist,
-	)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "", result)
-
-	// Set with XX - should succeed
-	result, err = glidejson.ClusterJsonSetWithCondition(
-		client, ctx, key, "$", `{"a": 3.0}`, constants.OnlyIfExists,
-	)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), "OK", result)
+	suite.verifyJsonSetWithCondition(suite.clusterJsonOps())
 }
