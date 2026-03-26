@@ -209,6 +209,27 @@ public final class AsyncRegistry {
         clientInflightCounts.clear();
     }
 
+    /**
+     * Fail all pending futures with a {@link glide.api.models.exceptions.ClosingException}. Called
+     * from the native layer when a fatal infrastructure failure is detected (e.g., callback worker
+     * threads terminated). This ensures no future is left dangling.
+     *
+     * @param errorMessage description of the failure cause
+     */
+    public static void failAllWithError(String errorMessage) {
+        // Best-effort sweep: only called when callback infrastructure is dead,
+        // so any future registered concurrently would also fail to complete.
+        String msg =
+                (errorMessage == null || errorMessage.isEmpty())
+                        ? "Native callback infrastructure failed"
+                        : errorMessage;
+        activeFutures.forEach(
+                (id, future) ->
+                        future.completeExceptionally(new glide.api.models.exceptions.ClosingException(msg)));
+        activeFutures.clear();
+        clientInflightCounts.clear();
+    }
+
     /** Clean up per-client tracking when a client is closed */
     public static void cleanupClient(long clientHandle) {
         clientInflightCounts.remove(clientHandle);
