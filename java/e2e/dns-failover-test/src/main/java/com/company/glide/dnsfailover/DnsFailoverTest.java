@@ -88,14 +88,15 @@ public class DnsFailoverTest {
         String keyB = "test_key_cluster_b";
         String valueB = "value_from_cluster_b";
         // Retry during reconnection - non-blocking reconnect may still be in progress
-        for (int i = 0; i < 20; i++) {
+        int maxRetries = 20;
+        for (int i = 0; i < maxRetries; i++) {
             try {
                 client.set(keyB, valueB).get();
                 break;
             } catch (Exception e) {
                 if (e.getMessage() != null
                         && e.getMessage().contains("AllConnectionsUnavailable")
-                        && i < 19) {
+                        && i < maxRetries - 1) {
                     Thread.sleep(500);
                     continue;
                 }

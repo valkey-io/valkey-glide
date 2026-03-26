@@ -829,17 +829,20 @@ mod cluster_client_tests {
         });
     }
 
-    /// Test for #4990: Failover causes near-zero throughput
-    /// See: https://github.com/valkey-io/valkey-glide/issues/4990
     #[cfg(unix)]
     #[rstest]
     #[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
     fn test_reconnect_to_initial_nodes_doesnt_block_throughput() {
+        // Test for #4990: Failover causes near-zero throughput
+        // See: https://github.com/valkey-io/valkey-glide/issues/4990
+        //
+        // Kills all cluster nodes with a TCP blackhole as seed node, then measures how many
+        // commands complete in a time window during reconnection. Without fixes, poll_flush blocks
+        // and causes commands to not be processed, leading to near-zero throughput (~1 completes
+        // every few seconds instead of immediately).
         block_on_all(async {
             const CONNECTION_TIMEOUT_MS: u64 = 2000;
             const WINDOW_MS: u64 = 3000;
-            // With bug: each command blocks ~2000ms → ~1 completes in 3000ms
-            // With fix: commands return immediately → 10+ complete in 3000ms
             const MIN_COMMANDS_WITH_FIX: u32 = 10;
 
             // TCP blackhole: accepts connections but never responds.
@@ -904,9 +907,7 @@ mod cluster_client_tests {
             // Wait for connection health checks to detect failures
             tokio::time::sleep(Duration::from_millis(500)).await;
 
-            // Measure how many commands complete (success or error) in the window.
-            // With bug: poll_flush blocks on ready!(reconnect_future) → ~1 command per 2000ms
-            // With fix: poll_flush uses now_or_never() → commands return errors immediately
+            // Measure how many commands complete (success or error) in the window
             let mut completed: u32 = 0;
             let mut cmd = redis::cmd("GET");
             cmd.arg("{test}key");

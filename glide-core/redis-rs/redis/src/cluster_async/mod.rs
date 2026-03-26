@@ -798,7 +798,7 @@ struct Message<C: Sized> {
 enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
     ReconnectToInitialNodes(JoinHandle<()>),
-    Reconnect(JoinHandle<Vec<Arc<Notify>>>),
+    Reconnect(JoinHandle<()>),
 }
 
 enum ConnectionState {
@@ -3286,7 +3286,7 @@ where
             RecoverFuture::Reconnect(ref mut handle) => {
                 // Check if the task has completed
                 match handle.now_or_never() {
-                    Some(Ok(_notifiers)) => {
+                    Some(Ok(())) => {
                         trace!("Reconnected connections");
                         self.state = ConnectionState::PollComplete;
                     }
@@ -3611,7 +3611,7 @@ where
                             RefreshConnectionType::OnlyUserConnection,
                             true,
                         )
-                        .await
+                        .await;
                     });
                     self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
                 }
