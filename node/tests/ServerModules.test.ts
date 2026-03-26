@@ -3287,45 +3287,21 @@ describe("Server Module Tests", () => {
                 );
                 const prefix = "{" + getRandomKey() + "}:";
                 const index = prefix + "index";
-                const query = "*=>[KNN 2 @VEC $query_vec]";
 
-                // setup a hash index with a 2D HNSW vector field
+                // setup a simple hash index with a text field
                 expect(
                     await GlideFt.create(
                         client,
                         index,
-                        [
-                            {
-                                type: "VECTOR",
-                                name: "vec",
-                                alias: "VEC",
-                                attributes: {
-                                    algorithm: "HNSW",
-                                    distanceMetric: "L2",
-                                    dimensions: 2,
-                                },
-                            },
-                        ],
-                        {
-                            dataType: "HASH",
-                            prefixes: [prefix],
-                        },
+                        [{ type: "TEXT", name: "title" }],
+                        { dataType: "HASH", prefixes: [prefix] },
                     ),
                 ).toEqual("OK");
 
-                const binaryValue1 = Buffer.alloc(8);
+                const key = prefix + "doc";
                 expect(
-                    await client.hset(Buffer.from(prefix + "0"), [
-                        { field: "vec", value: binaryValue1 },
-                    ]),
-                ).toEqual(1);
-
-                const binaryValue2: Buffer = Buffer.alloc(8);
-                binaryValue2[6] = 0x80;
-                binaryValue2[7] = 0xbf;
-                expect(
-                    await client.hset(Buffer.from(prefix + "1"), [
-                        { field: "vec", value: binaryValue2 },
+                    await client.hset(key, [
+                        { field: "title", value: "hello world" },
                     ]),
                 ).toEqual(1);
 
@@ -3338,19 +3314,13 @@ describe("Server Module Tests", () => {
                 const result: FtSearchReturnType = await GlideFt.search(
                     client,
                     index,
-                    query,
-                    {
-                        params: [{ key: "query_vec", value: binaryValue1 }],
-                        nocontent: true,
-                    },
+                    "hello",
+                    { nocontent: true },
                 );
 
-                // NOCONTENT returns count and keys with empty value arrays
-                expect(result[0]).toEqual(2);
-
-                for (const doc of result[1]) {
-                    expect(doc.value).toEqual([]);
-                }
+                // NOCONTENT: count is 1, key is returned with empty value array
+                expect(result[0]).toEqual(1);
+                expect(result[1][0].value).toEqual([]);
 
                 await GlideFt.dropindex(client, index);
             },
@@ -3421,6 +3391,36 @@ describe("Server Module Tests", () => {
                 expect(result[0]).toEqual(1);
                 expect(result[1].length).toEqual(1);
                 expect(result[1][0].value.length).toBeGreaterThan(0);
+
+                await GlideFt.dropindex(client, index);
+            },
+        );
+
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "FT.SEARCH with invalid DIALECT throws error",
+            async (protocol) => {
+                client = await GlideClusterClient.createClient(
+                    getClientConfigurationOption(
+                        cluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+                const prefix = "{" + getRandomKey() + "}:";
+                const index = prefix + "index";
+
+                expect(
+                    await GlideFt.create(
+                        client,
+                        index,
+                        [{ type: "TEXT", name: "title" }],
+                        { dataType: "HASH", prefixes: [prefix] },
+                    ),
+                ).toEqual("OK");
+
+                // dialect < 2 is not supported; expect an error
+                await expect(
+                    GlideFt.search(client, index, "hello", { dialect: 1 }),
+                ).rejects.toThrow(/DIALECT/);
 
                 await GlideFt.dropindex(client, index);
             },

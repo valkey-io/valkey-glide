@@ -322,75 +322,27 @@ public class VectorSearchTests {
     public void ft_search_nocontent() {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
+        String key = prefix + "doc";
 
         assertEquals(
                 OK,
                 FT.create(
                                 client,
                                 index,
-                                new FieldInfo[] {
-                                    new FieldInfo("vec", "VEC", VectorFieldFlat.builder(DistanceMetric.L2, 2).build())
-                                },
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
                                 FTCreateOptions.builder()
                                         .dataType(DataType.HASH)
                                         .prefixes(new String[] {prefix})
                                         .build())
                         .get());
 
-        String key1 = prefix + "0";
-        String key2 = prefix + "1";
-
-        assertEquals(
-                1L,
-                client
-                        .hset(
-                                gs(key1),
-                                createMap(
-                                        gs("vec"),
-                                        gs(
-                                                new byte[] {
-                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
-                                                    (byte) 0
-                                                })))
-                        .get());
-        assertEquals(
-                1L,
-                client
-                        .hset(
-                                gs(key2),
-                                createMap(
-                                        gs("vec"),
-                                        gs(
-                                                new byte[] {
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0,
-                                                    (byte) 0x80,
-                                                    (byte) 0xBF
-                                                })))
-                        .get());
+        assertEquals(1L, client.hset(gs(key), createMap(gs("title"), gs("hello world"))).get());
         Thread.sleep(DATA_PROCESSING_TIMEOUT);
 
-        FTSearchOptions options =
-                FTSearchOptions.builder()
-                        .nocontent()
-                        .params(
-                                createMap(
-                                        gs("query_vec"),
-                                        gs(
-                                                new byte[] {
-                                                    (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0,
-                                                    (byte) 0
-                                                })))
-                        .build();
-        String query = "*=>[KNN 2 @VEC $query_vec]";
-        Object[] ftsearch = FT.search(client, index, query, options).get();
-
-        assertArrayEquals(
-                new Object[] {2L, createMap(gs(key1), createMap(), gs(key2), createMap())}, ftsearch);
+        // NOCONTENT: only keys are returned, no field content
+        Object[] result =
+                FT.search(client, index, "hello", FTSearchOptions.builder().nocontent().build()).get();
+        assertArrayEquals(new Object[] {1L, createMap(gs(key), createMap())}, result);
     }
 
     @SneakyThrows
@@ -420,6 +372,35 @@ public class VectorSearchTests {
                 FT.search(client, index, "hello", FTSearchOptions.builder().dialect(2).build()).get();
         assertEquals(2, result.length);
         assertEquals(1L, result[0]);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_dialect_invalid() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        // dialect < 2 is not supported; expect an error
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                FT.search(client, index, "hello", FTSearchOptions.builder().dialect(1).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("DIALECT"));
     }
 
     @SneakyThrows

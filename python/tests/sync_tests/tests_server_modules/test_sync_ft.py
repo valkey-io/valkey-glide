@@ -1322,3 +1322,33 @@ class TestSyncFt:
             assert len(doc_fields) > 0
 
         assert ft.dropindex(glide_sync_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_ft_search_dialect_invalid(
+        self, glide_sync_client: GlideClusterClient
+    ):
+        prefix = "{dialect-invalid-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "idx"
+
+        assert (
+            ft.create(
+                glide_sync_client,
+                index,
+                schema=[TextField(name="title")],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+        # dialect < 2 is not currently supported; expect an error
+        with pytest.raises(RequestError) as exc_info:
+            ft.search(
+                glide_sync_client,
+                index,
+                "hello",
+                options=FtSearchOptions(dialect=1),
+            )
+        assert "DIALECT" in str(exc_info.value)
+
+        assert ft.dropindex(glide_sync_client, index) == OK
