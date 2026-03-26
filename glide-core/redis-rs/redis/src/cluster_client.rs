@@ -613,16 +613,14 @@ impl ClusterClient {
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
-        iam_token_cache: Option<Arc<tokio::sync::RwLock<String>>>,
-        iam_token_changed: Option<Arc<std::sync::atomic::AtomicBool>>,
+        iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> RedisResult<cluster_async::ClusterConnection> {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
             push_sender,
             pubsub_synchronizer,
-            iam_token_cache,
-            iam_token_changed,
+            iam_token_provider,
         )
         .await
     }
@@ -659,7 +657,6 @@ impl ClusterClient {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
-            None,
             None,
             None,
             None,

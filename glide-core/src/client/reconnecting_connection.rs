@@ -34,17 +34,79 @@ pub enum ReconnectReason {
     CreateError,
 }
 
-/// Token handle to the IAM token cache, used by the reconnection path
-/// to ensure the latest token is applied before attempting AUTH.
+/// Token handle to the IAM token cache for use during reconnection.
 ///
-/// This avoids a circular reference to `IAMTokenManager` by only holding
-/// the two `Arc` handles needed: the cached token and the change flag.
+/// Holds shared references to the cached token, its creation timestamp, and the
+/// IAM configuration needed to generate a fresh token on demand. On every
+/// reconnection attempt the handle returns the best available token — refreshing
+/// it via SigV4 signing when the current one has expired — so the AUTH command
+/// always uses valid credentials without requiring a reference back to the full
+/// `IAMTokenManager`.
 #[derive(Clone)]
 pub struct IAMTokenHandle {
-    /// Shared reference to the cached IAM token (same Arc owned by IAMTokenManager)
+    /// Shared cached IAM token (same `Arc` owned by `IAMTokenManager`).
     pub(crate) cached_token: Arc<tokio::sync::RwLock<String>>,
-    /// Atomic flag set to `true` by the background refresh task when a new token is available
-    pub(crate) token_changed: Arc<AtomicBool>,
+    /// When the cached token was last generated or refreshed.
+    pub(crate) token_created_at: Arc<tokio::sync::RwLock<tokio::time::Instant>>,
+    /// IAM configuration (cluster name, region, etc.) for on-demand token generation.
+    pub(crate) iam_token_state: crate::iam::IamTokenState,
+}
+
+impl IAMTokenHandle {
+    /// Returns the best available token, refreshing it first if expired.
+    ///
+    /// If the token has expired, attempts to generate a fresh one via SigV4.
+    /// On refresh failure, falls back to the existing cached token so that
+    /// the password is always updated on every reconnection attempt.
+    /// Returns `None` only if the cache is completely empty.
+    pub(crate) async fn get_valid_token_inner(&self) -> Option<String> {
+        use crate::iam::TOKEN_TTL_SECONDS;
+
+        let is_expired = {
+            let ts = self.token_created_at.read().await;
+            ts.elapsed() >= std::time::Duration::from_secs(TOKEN_TTL_SECONDS)
+        };
+
+        if is_expired {
+            logger_core::log_info(
+                "IAM reconnect",
+                "Token expired, generating a fresh token before reconnection",
+            );
+            match crate::iam::IAMTokenManager::generate_token_with_backoff(&self.iam_token_state)
+                .await
+            {
+                Ok(new_token) => {
+                    {
+                        let mut guard = self.cached_token.write().await;
+                        *guard = new_token.clone();
+                    }
+                    {
+                        let mut ts = self.token_created_at.write().await;
+                        *ts = tokio::time::Instant::now();
+                    }
+                    return Some(new_token);
+                }
+                Err(err) => {
+                    logger_core::log_error(
+                        "IAM reconnect",
+                        format!("Failed to generate fresh IAM token, using cached token: {err}"),
+                    );
+                    // Fall through to return the cached (possibly expired) token
+                }
+            }
+        }
+
+        let guard = self.cached_token.read().await;
+        let token = guard.clone();
+        if token.is_empty() { None } else { Some(token) }
+    }
+}
+
+#[async_trait::async_trait]
+impl redis::IAMTokenProvider for IAMTokenHandle {
+    async fn get_valid_token(&self) -> Option<String> {
+        self.get_valid_token_inner().await
+    }
 }
 
 /// The object that is used in order to recreate a connection after a disconnect.
@@ -159,8 +221,7 @@ async fn create_connection(
         connection_retry_strategy: Some(retry_strategy),
         tcp_nodelay,
         pubsub_synchronizer,
-        iam_token_cache: None,
-        iam_token_changed: None,
+        iam_token_provider: None,
     };
 
     // Wrap retry loop in timeout so total time respects connection_timeout
@@ -381,32 +442,23 @@ impl ReconnectingConnection {
                     return;
                 }
 
-                // If IAM authentication is configured, ensure the connection uses the
-                // latest token before attempting to reconnect.  The background refresh
-                // task may have rotated the token while the client was idle, so we pull
-                // the freshest value from the shared cache and update the stored
-                // password.  We also clear the `token_changed` flag so that the
-                // pull-model check in `send_command` does not redundantly re-apply the
-                // same token.
-                if let Some(handle) = &connection_clone.inner.backend.iam_token_handle {
-                    let latest_token = {
-                        let guard = handle.cached_token.read().await;
-                        guard.clone()
-                    };
-                    if !latest_token.is_empty() {
-                        let mut client = connection_clone
-                            .inner
-                            .backend
-                            .connection_info
-                            .write()
-                            .expect(WRITE_LOCK_ERR);
-                        client.update_password(Some(latest_token));
-                        handle.token_changed.store(false, Ordering::Release);
-                        log_debug(
-                            "reconnect",
-                            "Updated connection password with latest IAM token before reconnection attempt",
-                        );
-                    }
+                // If IAM authentication is configured, ensure the connection uses a
+                // valid token before attempting to reconnect.  If the cached token has
+                // expired, a fresh one is generated on demand via SigV4 signing.
+                if let Some(handle) = &connection_clone.inner.backend.iam_token_handle
+                    && let Some(valid_token) = handle.get_valid_token_inner().await
+                {
+                    let mut client = connection_clone
+                        .inner
+                        .backend
+                        .connection_info
+                        .write()
+                        .expect(WRITE_LOCK_ERR);
+                    client.update_password(Some(valid_token));
+                    log_debug(
+                        "reconnect",
+                        "Updated connection password with valid IAM token before reconnection attempt",
+                    );
                 }
 
                 // Clone the client *after* the potential password update so the new

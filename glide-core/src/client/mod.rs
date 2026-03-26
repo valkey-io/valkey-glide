@@ -1682,21 +1682,11 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
-    let (iam_token_cache, iam_token_changed) = match iam_token_manager {
-        Some(manager) => {
-            let handle = manager.get_token_handle();
-            (Some(handle.cached_token), Some(handle.token_changed))
-        }
-        None => (None, None),
-    };
+    let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
+        .map(|manager| Arc::new(manager.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>);
 
     let mut con = client
-        .get_async_connection(
-            push_sender,
-            Some(pubsub_synchronizer),
-            iam_token_cache,
-            iam_token_changed,
-        )
+        .get_async_connection(push_sender, Some(pubsub_synchronizer), iam_token_provider)
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
