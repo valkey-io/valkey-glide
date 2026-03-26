@@ -1,6 +1,7 @@
 ## Pending 2.4
 
 #### Changes
+* Go: Add JSON.SET and JSON.GET commands ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
 
 #### Fixes
 * CORE: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
