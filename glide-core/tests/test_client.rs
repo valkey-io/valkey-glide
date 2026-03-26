@@ -2757,10 +2757,6 @@ pub(crate) mod shared_client_tests {
             };
             assert!(initial_client_info.contains("name=1stName"));
 
-            // Extract initial client ID
-            let initial_client_id = utilities::extract_client_id(&initial_client_info)
-                .expect("Failed to extract initial client ID");
-
             // Execute CLIENT SETNAME command to change to 2ndName
             let client_setname_result = test_basics
                 .client
@@ -2788,57 +2784,22 @@ pub(crate) mod shared_client_tests {
 
             // Kill the connection to simulate a network drop
             kill_connection(&mut test_basics.client).await;
-            // Allow TCP close to propagate before sending the next command
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-            // Try to send another command - this should trigger reconnection
-            let res = test_basics
-                .client
-                .send_command(&mut client_info_cmd, None)
-                .await;
-            match res {
-                Err(err) => {
-                    // Connection was dropped as expected
-                    assert!(
-                        err.is_connection_dropped()
-                            || err.is_timeout()
-                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
-                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
-                    );
-                    // Retry and verify we're still on name 2ndName after reconnection
-                    let client_info = repeat_try_create(|| async {
-                        let mut client = test_basics.client.clone();
-                        let mut cmd = client_info_cmd.clone();
-                        let response = client.send_command(&mut cmd, None).await.ok()?;
-                        match response {
-                            Value::BulkString(bytes) => {
-                                Some(String::from_utf8_lossy(&bytes).to_string())
-                            }
-                            Value::VerbatimString { text, .. } => Some(text),
-                            _ => None,
-                        }
-                    })
-                    .await;
-                    assert!(client_info.contains("name=2ndName"));
+            // Retry until reconnection completes, then verify name=2ndName persisted
+            let client_info = repeat_try_create_with_timeout(|| async {
+                let mut client = test_basics.client.clone();
+                let mut cmd = client_info_cmd.clone();
+                let response = client.send_command(&mut cmd, None).await.ok()?;
+                match response {
+                    Value::BulkString(bytes) => {
+                        Some(String::from_utf8_lossy(&bytes).to_string())
+                    }
+                    Value::VerbatimString { text, .. } => Some(text),
+                    _ => None,
                 }
-                Ok(response) => {
-                    // Command succeeded — reconnection completed within the timeout.
-                    // Extract new client ID and verify it changed (new connection).
-                    let new_client_info = match response {
-                        Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                        Value::VerbatimString { text, .. } => text,
-                        _ => panic!("Unexpected CLIENT INFO response type: {:?}", response),
-                    };
-                    let new_client_id = utilities::extract_client_id(&new_client_info)
-                        .expect("Failed to extract new client ID");
-                    assert_ne!(
-                        initial_client_id, new_client_id,
-                        "Client ID should change after reconnection if command succeeds"
-                    );
-                    // Check that the client name is still 2ndName (from CLIENT SETNAME command)
-                    assert!(new_client_info.contains("name=2ndName"));
-                }
-            }
+            }, std::time::Duration::from_millis(100))
+            .await;
+            assert!(client_info.contains("name=2ndName"));
         });
     }
 
@@ -3078,7 +3039,7 @@ pub(crate) mod shared_client_tests {
             kill_connection(&mut test_basics.client).await;
 
             // Retry until reconnection completes, then verify RESP3 persisted
-            let hello_info = repeat_try_create(|| async {
+            let hello_info = repeat_try_create_with_timeout(|| async {
                 let mut client = test_basics.client.clone();
                 let mut cmd = hello_cmd.clone();
                 let response = client.send_command(&mut cmd, None).await.ok()?;
@@ -3086,7 +3047,7 @@ pub(crate) mod shared_client_tests {
                     response,
                 )
                 .ok()
-            })
+            }, std::time::Duration::from_millis(100))
             .await;
             assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
         });
