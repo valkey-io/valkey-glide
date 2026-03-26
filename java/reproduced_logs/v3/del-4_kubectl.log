@@ -1,0 +1,227 @@
+Valkey-GLIDE async client
+
+===== Warmup Phase (1000ms timeout) =====
+Pre-populating 100000 keys (2KB each) with 100 byte values...
+Warmup progress: 10,000/100,000 keys (10.0%)
+Warmup progress: 20,000/100,000 keys (20.0%)
+Warmup progress: 30,000/100,000 keys (30.0%)
+Warmup progress: 40,000/100,000 keys (40.0%)
+Warmup progress: 50,000/100,000 keys (50.0%)
+Warmup progress: 60,000/100,000 keys (60.0%)
+Warmup progress: 70,000/100,000 keys (70.0%)
+Warmup progress: 80,000/100,000 keys (80.0%)
+Warmup progress: 90,000/100,000 keys (90.0%)
+Warmup progress: 100,000/100,000 keys (100.0%)
+Warmup complete: 100000 keys in 73.59 seconds (1359 keys/sec)
+
+ =====> glide <===== 1 clients 60 concurrent 100 data size 
+
+
+============================================================
+BENCHMARK CONFIGURATION
+============================================================
+Start time:        2026-03-16 22:19:32
+Client:            glide
+Clients:           1
+Concurrent tasks:  60
+Data size:         100 bytes
+Key size:          2000 bytes
+Operation type:    delete
+TCP_NODELAY:       false
+Duration:          86400 seconds (24.0 hours)
+Metrics interval:  60 seconds
+Metrics dir:       /metrics
+============================================================
+
+Metrics CSV file: /metrics/benchmark_glide_100_0_tcpnodelay-false_1773699572469.csv
+Metrics collection started (every 60 seconds)
+[2026-03-16 22:20:32] 0.02h | TPS: 7549 | Success: 452,960 (GET: 0, SET: 0, DEL: 452960) | Timeouts: 17 (total: 17) | Other Errors: 0 (total: 0) | P50: 8.0ms | P99: 22.6ms | Max: 31.1ms
+[2026-03-16 22:21:32] 0.03h | TPS: 3754 | Success: 678,211 (GET: 0, SET: 0, DEL: 225251) | Timeouts: 0 (total: 17) | Other Errors: 0 (total: 0) | P50: 21.6ms | P99: 28.5ms | Max: 36.3ms
+[2026-03-16 22:22:32] 0.05h | TPS: 3524 | Success: 889,656 (GET: 0, SET: 0, DEL: 211445) | Timeouts: 0 (total: 17) | Other Errors: 0 (total: 0) | P50: 22.2ms | P99: 29.0ms | Max: 38.9ms
+[2026-03-16 22:23:32] 0.07h | TPS: 3268 | Success: 1,085,742 (GET: 0, SET: 0, DEL: 196086) | Timeouts: 0 (total: 17) | Other Errors: 0 (total: 0) | P50: 25.5ms | P99: 29.7ms | Max: 36.0ms
+[2026-03-16 22:24:32] 0.08h | TPS: 3167 | Success: 1,275,750 (GET: 0, SET: 0, DEL: 190008) | Timeouts: 0 (total: 17) | Other Errors: 0 (total: 0) | P50: 25.4ms | P99: 29.9ms | Max: 37.5ms
+[2026-03-16 22:25:32] 0.10h | TPS: 3161 | Success: 1,465,412 (GET: 0, SET: 0, DEL: 189662) | Timeouts: 0 (total: 17) | Other Errors: 0 (total: 0) | P50: 25.4ms | P99: 30.9ms | Max: 37.2ms
+[2026-03-16 22:26:32] 0.12h | TPS: 3031 | Success: 1,647,268 (GET: 0, SET: 0, DEL: 181856) | Timeouts: 4 (total: 21) | Other Errors: 0 (total: 0) | P50: 26.7ms | P99: 39.5ms | Max: 50.5ms
+[2026-03-16 22:27:32] 0.13h | TPS: 2947 | Success: 1,824,078 (GET: 0, SET: 0, DEL: 176810) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 27.3ms | P99: 33.4ms | Max: 49.2ms
+[2026-03-16 22:28:32] 0.15h | TPS: 2816 | Success: 1,993,050 (GET: 0, SET: 0, DEL: 168972) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 28.8ms | P99: 38.7ms | Max: 44.0ms
+[2026-03-16 22:29:32] 0.17h | TPS: 2783 | Success: 2,160,048 (GET: 0, SET: 0, DEL: 166998) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 28.7ms | P99: 34.3ms | Max: 44.5ms
+[2026-03-16 22:30:32] 0.18h | TPS: 2777 | Success: 2,326,657 (GET: 0, SET: 0, DEL: 166609) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.1ms | P99: 36.2ms | Max: 46.1ms
+[2026-03-16 22:31:32] 0.20h | TPS: 2775 | Success: 2,493,167 (GET: 0, SET: 0, DEL: 166510) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 28.8ms | P99: 35.3ms | Max: 44.2ms
+[2026-03-16 22:32:32] 0.22h | TPS: 2782 | Success: 2,660,093 (GET: 0, SET: 0, DEL: 166926) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 28.7ms | P99: 37.8ms | Max: 43.8ms
+[2026-03-16 22:33:32] 0.23h | TPS: 2774 | Success: 2,826,534 (GET: 0, SET: 0, DEL: 166441) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.3ms | P99: 33.3ms | Max: 45.9ms
+[2026-03-16 22:34:32] 0.25h | TPS: 2765 | Success: 2,992,441 (GET: 0, SET: 0, DEL: 165907) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.1ms | P99: 36.7ms | Max: 45.1ms
+[2026-03-16 22:35:32] 0.27h | TPS: 2762 | Success: 3,158,150 (GET: 0, SET: 0, DEL: 165709) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.0ms | P99: 33.9ms | Max: 46.4ms
+[2026-03-16 22:36:32] 0.28h | TPS: 2732 | Success: 3,322,054 (GET: 0, SET: 0, DEL: 163904) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 28.9ms | P99: 39.8ms | Max: 45.1ms
+[2026-03-16 22:37:32] 0.30h | TPS: 2730 | Success: 3,485,865 (GET: 0, SET: 0, DEL: 163811) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.0ms | P99: 36.8ms | Max: 46.5ms
+[2026-03-16 22:38:32] 0.32h | TPS: 2717 | Success: 3,648,906 (GET: 0, SET: 0, DEL: 163041) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.8ms | P99: 38.9ms | Max: 45.5ms
+[2026-03-16 22:39:32] 0.33h | TPS: 2737 | Success: 3,813,113 (GET: 0, SET: 0, DEL: 164207) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.4ms | P99: 34.2ms | Max: 42.4ms
+[2026-03-16 22:40:32] 0.35h | TPS: 2731 | Success: 3,976,966 (GET: 0, SET: 0, DEL: 163853) | Timeouts: 0 (total: 21) | Other Errors: 0 (total: 0) | P50: 29.3ms | P99: 37.3ms | Max: 45.8ms
+[2026-03-16 22:41:32] 0.37h | TPS: 2498 | Success: 4,126,853 (GET: 0, SET: 0, DEL: 149887) | Timeouts: 519 (total: 540) | Other Errors: 0 (total: 0) | P50: 31.9ms | P99: 37.7ms | Max: 51.2ms
+[2026-03-16 22:42:32] 0.38h | TPS: 2470 | Success: 4,275,044 (GET: 0, SET: 0, DEL: 148191) | Timeouts: 814 (total: 1354) | Other Errors: 0 (total: 0) | P50: 32.2ms | P99: 38.6ms | Max: 51.4ms
+[2026-03-16 22:43:32] 0.40h | TPS: 2052 | Success: 4,398,152 (GET: 0, SET: 0, DEL: 123108) | Timeouts: 337 (total: 1691) | Other Errors: 0 (total: 0) | P50: 39.6ms | P99: 44.1ms | Max: 51.4ms
+[2026-03-16 22:44:32] 0.42h | TPS: 2038 | Success: 4,520,455 (GET: 0, SET: 0, DEL: 122303) | Timeouts: 543 (total: 2234) | Other Errors: 0 (total: 0) | P50: 39.2ms | P99: 44.4ms | Max: 51.7ms
+[2026-03-16 22:45:32] 0.43h | TPS: 2020 | Success: 4,641,672 (GET: 0, SET: 0, DEL: 121217) | Timeouts: 250 (total: 2484) | Other Errors: 0 (total: 0) | P50: 38.4ms | P99: 44.9ms | Max: 51.5ms
+[2026-03-16 22:46:32] 0.45h | TPS: 2027 | Success: 4,763,268 (GET: 0, SET: 0, DEL: 121596) | Timeouts: 588 (total: 3072) | Other Errors: 0 (total: 0) | P50: 38.4ms | P99: 45.7ms | Max: 51.8ms
+[2026-03-16 22:47:32] 0.47h | TPS: 2032 | Success: 4,885,216 (GET: 0, SET: 0, DEL: 121948) | Timeouts: 612 (total: 3684) | Other Errors: 0 (total: 0) | P50: 37.9ms | P99: 45.1ms | Max: 51.5ms
+[2026-03-16 22:48:32] 0.48h | TPS: 2022 | Success: 5,006,531 (GET: 0, SET: 0, DEL: 121315) | Timeouts: 516 (total: 4200) | Other Errors: 0 (total: 0) | P50: 39.9ms | P99: 45.2ms | Max: 51.4ms
+[2026-03-16 22:49:32] 0.50h | TPS: 2042 | Success: 5,129,021 (GET: 0, SET: 0, DEL: 122490) | Timeouts: 367 (total: 4567) | Other Errors: 0 (total: 0) | P50: 36.8ms | P99: 44.1ms | Max: 51.7ms
+[2026-03-16 22:50:32] 0.52h | TPS: 2030 | Success: 5,250,845 (GET: 0, SET: 0, DEL: 121824) | Timeouts: 256 (total: 4823) | Other Errors: 0 (total: 0) | P50: 39.2ms | P99: 44.5ms | Max: 51.5ms
+[2026-03-16 22:51:32] 0.53h | TPS: 2048 | Success: 5,373,740 (GET: 0, SET: 0, DEL: 122895) | Timeouts: 262 (total: 5085) | Other Errors: 0 (total: 0) | P50: 38.0ms | P99: 44.6ms | Max: 51.5ms
+[2026-03-16 22:52:32] 0.55h | TPS: 2022 | Success: 5,495,072 (GET: 0, SET: 0, DEL: 121332) | Timeouts: 422 (total: 5507) | Other Errors: 0 (total: 0) | P50: 39.8ms | P99: 45.7ms | Max: 51.3ms
+[2026-03-16 22:53:32] 0.57h | TPS: 2041 | Success: 5,617,524 (GET: 0, SET: 0, DEL: 122452) | Timeouts: 233 (total: 5740) | Other Errors: 0 (total: 0) | P50: 39.1ms | P99: 44.7ms | Max: 51.0ms
+[2026-03-16 22:54:32] 0.58h | TPS: 2025 | Success: 5,739,041 (GET: 0, SET: 0, DEL: 121517) | Timeouts: 415 (total: 6155) | Other Errors: 0 (total: 0) | P50: 39.9ms | P99: 44.7ms | Max: 51.6ms
+[2026-03-16 22:55:32] 0.60h | TPS: 2033 | Success: 5,861,049 (GET: 0, SET: 0, DEL: 122008) | Timeouts: 185 (total: 6340) | Other Errors: 0 (total: 0) | P50: 39.4ms | P99: 44.8ms | Max: 51.3ms
+[2026-03-16 22:56:32] 0.62h | TPS: 2019 | Success: 5,982,184 (GET: 0, SET: 0, DEL: 121135) | Timeouts: 703 (total: 7043) | Other Errors: 0 (total: 0) | P50: 39.3ms | P99: 46.4ms | Max: 51.8ms
+[2026-03-16 22:57:32] 0.63h | TPS: 2035 | Success: 6,104,281 (GET: 0, SET: 0, DEL: 122097) | Timeouts: 504 (total: 7547) | Other Errors: 0 (total: 0) | P50: 37.0ms | P99: 44.8ms | Max: 51.5ms
+[2026-03-16 22:58:32] 0.65h | TPS: 2030 | Success: 6,226,080 (GET: 0, SET: 0, DEL: 121799) | Timeouts: 357 (total: 7904) | Other Errors: 0 (total: 0) | P50: 39.5ms | P99: 44.6ms | Max: 51.6ms
+[2026-03-16 22:59:32] 0.67h | TPS: 2033 | Success: 6,348,064 (GET: 0, SET: 0, DEL: 121984) | Timeouts: 308 (total: 8212) | Other Errors: 0 (total: 0) | P50: 38.9ms | P99: 44.7ms | Max: 51.4ms
+[2026-03-16 23:00:32] 0.68h | TPS: 2008 | Success: 6,468,558 (GET: 0, SET: 0, DEL: 120494) | Timeouts: 1711 (total: 9923) | Other Errors: 0 (total: 0) | P50: 36.8ms | P99: 44.4ms | Max: 51.6ms
+[2026-03-16 23:01:32] 0.70h | TPS: 2024 | Success: 6,589,996 (GET: 0, SET: 0, DEL: 121438) | Timeouts: 477 (total: 10400) | Other Errors: 0 (total: 0) | P50: 39.9ms | P99: 45.0ms | Max: 51.6ms
+[2026-03-16 23:02:32] 0.72h | TPS: 2032 | Success: 6,711,891 (GET: 0, SET: 0, DEL: 121895) | Timeouts: 327 (total: 10727) | Other Errors: 0 (total: 0) | P50: 39.7ms | P99: 45.0ms | Max: 51.5ms
+[2026-03-16 23:03:32] 0.73h | TPS: 2032 | Success: 6,833,839 (GET: 0, SET: 0, DEL: 121948) | Timeouts: 237 (total: 10964) | Other Errors: 0 (total: 0) | P50: 38.5ms | P99: 44.7ms | Max: 51.4ms
+[2026-03-16 23:04:32] 0.75h | TPS: 2034 | Success: 6,955,852 (GET: 0, SET: 0, DEL: 122013) | Timeouts: 344 (total: 11308) | Other Errors: 0 (total: 0) | P50: 38.1ms | P99: 45.0ms | Max: 51.6ms
+[2026-03-16 23:05:32] 0.77h | TPS: 2035 | Success: 7,077,924 (GET: 0, SET: 0, DEL: 122072) | Timeouts: 364 (total: 11672) | Other Errors: 0 (total: 0) | P50: 38.9ms | P99: 44.9ms | Max: 51.8ms
+[2026-03-16 23:06:32] 0.78h | TPS: 2022 | Success: 7,199,267 (GET: 0, SET: 0, DEL: 121343) | Timeouts: 594 (total: 12266) | Other Errors: 0 (total: 0) | P50: 38.8ms | P99: 46.1ms | Max: 51.5ms
+[2026-03-16 23:07:32] 0.80h | TPS: 2026 | Success: 7,320,822 (GET: 0, SET: 0, DEL: 121555) | Timeouts: 335 (total: 12601) | Other Errors: 0 (total: 0) | P50: 39.6ms | P99: 45.1ms | Max: 51.7ms
+[2026-03-16 23:08:32] 0.82h | TPS: 2013 | Success: 7,441,572 (GET: 0, SET: 0, DEL: 120750) | Timeouts: 704 (total: 13305) | Other Errors: 0 (total: 0) | P50: 40.1ms | P99: 45.5ms | Max: 51.3ms
+[2026-03-16 23:09:32] 0.83h | TPS: 2023 | Success: 7,562,942 (GET: 0, SET: 0, DEL: 121370) | Timeouts: 266 (total: 13571) | Other Errors: 0 (total: 0) | P50: 39.9ms | P99: 45.0ms | Max: 51.3ms
+[2026-03-16 23:10:32] 0.85h | TPS: 2029 | Success: 7,684,659 (GET: 0, SET: 0, DEL: 121717) | Timeouts: 345 (total: 13916) | Other Errors: 0 (total: 0) | P50: 40.0ms | P99: 45.2ms | Max: 51.2ms
+[2026-03-16 23:11:32] 0.87h | TPS: 2028 | Success: 7,806,313 (GET: 0, SET: 0, DEL: 121654) | Timeouts: 712 (total: 14628) | Other Errors: 0 (total: 0) | P50: 38.4ms | P99: 44.7ms | Max: 51.3ms
+[2026-03-16 23:12:32] 0.88h | TPS: 2026 | Success: 7,927,885 (GET: 0, SET: 0, DEL: 121572) | Timeouts: 750 (total: 15378) | Other Errors: 0 (total: 0) | P50: 39.0ms | P99: 46.3ms | Max: 51.5ms
+[2026-03-16 23:13:32] 0.90h | TPS: 2025 | Success: 8,049,395 (GET: 0, SET: 0, DEL: 121510) | Timeouts: 390 (total: 15768) | Other Errors: 0 (total: 0) | P50: 39.7ms | P99: 44.6ms | Max: 51.4ms
+[2026-03-16 23:14:32] 0.92h | TPS: 2029 | Success: 8,171,128 (GET: 0, SET: 0, DEL: 121733) | Timeouts: 180 (total: 15948) | Other Errors: 0 (total: 0) | P50: 39.6ms | P99: 45.4ms | Max: 51.4ms
+[2026-03-16 23:15:32] 0.93h | TPS: 2030 | Success: 8,292,930 (GET: 0, SET: 0, DEL: 121802) | Timeouts: 334 (total: 16282) | Other Errors: 0 (total: 0) | P50: 39.6ms | P99: 44.6ms | Max: 51.3ms
+[2026-03-16 23:16:32] 0.95h | TPS: 2013 | Success: 8,413,701 (GET: 0, SET: 0, DEL: 120771) | Timeouts: 823 (total: 17105) | Other Errors: 0 (total: 0) | P50: 38.6ms | P99: 47.9ms | Max: 51.8ms
+[2026-03-16 23:17:32] 0.97h | TPS: 1928 | Success: 8,529,393 (GET: 0, SET: 0, DEL: 115692) | Timeouts: 4414 (total: 21519) | Other Errors: 0 (total: 0) | P50: 39.6ms | P99: 48.6ms | Max: 51.5ms
+[2026-03-16 23:18:32] 0.98h | TPS: 1879 | Success: 8,642,117 (GET: 0, SET: 0, DEL: 112724) | Timeouts: 7294 (total: 28813) | Other Errors: 0 (total: 0) | P50: 39.4ms | P99: 44.7ms | Max: 51.6ms
+[2026-03-16 23:19:32] 1.00h | TPS: 492 | Success: 8,671,611 (GET: 0, SET: 0, DEL: 29494) | Timeouts: 69681 (total: 98494) | Other Errors: 0 (total: 0) | P50: 1.2ms | P99: 5.2ms | Max: 16.2ms
+[2026-03-16 23:20:32] 1.02h | TPS: 492 | Success: 8,701,129 (GET: 0, SET: 0, DEL: 29518) | Timeouts: 69684 (total: 168178) | Other Errors: 0 (total: 0) | P50: 1.2ms | P99: 5.1ms | Max: 19.5ms
+[2026-03-16 23:20:40.772] [SLOW DEL] took 2032ms
+[2026-03-16 23:20:40.802] [SLOW DEL] took 2062ms
+[2026-03-16 23:20:40.849] [SLOW DEL] took 2108ms
+[2026-03-16 23:20:40.889] [SLOW DEL] took 2148ms
+[2026-03-16 23:20:40.910] [SLOW DEL] took 2168ms
+[2026-03-16 23:20:40.954] [SLOW DEL] took 2213ms
+[2026-03-16 23:20:41.020] [SLOW DEL] took 2279ms
+[2026-03-16 23:20:41.058] [SLOW DEL] took 2317ms
+[2026-03-16 23:20:41.092] [SLOW DEL] took 2350ms
+[2026-03-16 23:20:41.122] [SLOW DEL] took 2379ms
+[2026-03-16 23:20:41.157] [SLOW DEL] took 2414ms
+[2026-03-16 23:20:41.194] [SLOW DEL] took 2451ms
+[2026-03-16 23:20:41.220] [SLOW DEL] took 2477ms
+[2026-03-16 23:20:41.245] [SLOW DEL] took 2502ms
+[2026-03-16 23:20:41.279] [SLOW DEL] took 2536ms
+[2026-03-16 23:20:41.299] [SLOW DEL] took 2555ms
+[2026-03-16 23:20:41.340] [SLOW DEL] took 2596ms
+[2026-03-16 23:20:41.356] [SLOW DEL] took 2612ms
+[2026-03-16 23:20:41.394] [SLOW DEL] took 2649ms
+[2026-03-16 23:20:41.418] [SLOW DEL] took 2673ms
+[2026-03-16 23:20:41.436] [SLOW DEL] took 2690ms
+[2026-03-16 23:20:41.472] [SLOW DEL] took 2725ms
+[2026-03-16 23:20:41.492] [SLOW DEL] took 2743ms
+[2026-03-16 23:20:41.523] [SLOW DEL] took 2739ms
+[2026-03-16 23:20:41.540] [SLOW DEL] took 2756ms
+[2026-03-16 23:20:41.576] [SLOW DEL] took 2792ms
+[2026-03-16 23:20:41.613] [SLOW DEL] took 2828ms
+[2026-03-16 23:20:41.623] [SLOW DEL] took 2838ms
+[2026-03-16 23:20:41.661] [SLOW DEL] took 2876ms
+[2026-03-16 23:20:41.786] !!! DEL STUCK after 3s | thread=pool-1-thread-49 | key0=3256800000...
+[2026-03-16 23:20:41.845] !!! DEL FAILED after 3060ms | thread=pool-1-thread-49 | error=timed out
+[2026-03-16 23:20:41.845] [SLOW DEL] took 3060ms
+[2026-03-16 23:20:41.891] [SLOW DEL] took 2140ms
+[2026-03-16 23:20:41.937] [SLOW DEL] took 2024ms
+[2026-03-16 23:20:42.039] [SLOW DEL] took 2004ms
+[2026-03-16 23:20:42.070] [SLOW DEL] took 2013ms
+[2026-03-16 23:20:42.113] [SLOW DEL] took 2023ms
+[2026-03-16 23:20:42.183] [SLOW DEL] took 2069ms
+[2026-03-16 23:20:42.236] [SLOW DEL] took 2089ms
+[2026-03-16 23:20:42.317] [SLOW DEL] took 2121ms
+[2026-03-16 23:20:42.412] [SLOW DEL] took 2204ms
+[2026-03-16 23:20:43.290] !!! DEL STUCK after 3s | thread=pool-1-thread-48 | key0=9017400000...
+[2026-03-16 23:20:43.300] !!! DEL FAILED after 3016ms | thread=pool-1-thread-48 | error=timed out
+[2026-03-16 23:20:43.300] [SLOW DEL] took 3016ms
+[2026-03-16 23:20:43.320] !!! DEL STUCK after 3s | thread=pool-1-thread-59 | key0=2125400000...
+[2026-03-16 23:20:43.352] !!! DEL STUCK after 3s | thread=pool-1-thread-51 | key0=1313700000...
+[2026-03-16 23:20:43.374] !!! DEL STUCK after 3s | thread=pool-1-thread-24 | key0=8763700000...
+[2026-03-16 23:20:43.377] !!! DEL FAILED after 3064ms | thread=pool-1-thread-59 | error=timed out
+[2026-03-16 23:20:43.377] [SLOW DEL] took 3064ms
+[2026-03-16 23:20:43.395] !!! DEL STUCK after 3s | thread=pool-1-thread-50 | key0=9759300000...
+[2026-03-16 23:20:43.439] !!! DEL STUCK after 3s | thread=pool-1-thread-32 | key0=6664900000...
+[2026-03-16 23:20:43.452] !!! DEL STUCK after 3s | thread=pool-1-thread-55 | key0=4026700000...
+[2026-03-16 23:20:43.467] !!! DEL STUCK after 3s | thread=pool-1-thread-21 | key0=7017300000...
+[2026-03-16 23:20:43.493] !!! DEL STUCK after 3s | thread=pool-1-thread-39 | key0=4950000000...
+[2026-03-16 23:20:43.522] !!! DEL FAILED after 3176ms | thread=pool-1-thread-51 | error=timed out
+[2026-03-16 23:20:43.522] [SLOW DEL] took 3176ms
+[2026-03-16 23:20:43.529] !!! DEL STUCK after 3s | thread=pool-1-thread-29 | key0=5680000000...
+[2026-03-16 23:20:43.553] !!! DEL STUCK after 3s | thread=pool-1-thread-41 | key0=9641200000...
+[2026-03-16 23:20:43.590] !!! DEL STUCK after 3s | thread=pool-1-thread-5 | key0=2470800000...
+[2026-03-16 23:20:43.615] !!! DEL STUCK after 3s | thread=pool-1-thread-33 | key0=3425400000...
+[2026-03-16 23:20:43.630] !!! DEL FAILED after 3266ms | thread=pool-1-thread-24 | error=timed out
+[2026-03-16 23:20:43.631] [SLOW DEL] took 3267ms
+[2026-03-16 23:20:43.636] !!! DEL STUCK after 3s | thread=pool-1-thread-30 | key0=1297200000...
+[2026-03-16 23:20:43.667] !!! DEL STUCK after 3s | thread=pool-1-thread-54 | key0=8801200000...
+[2026-03-16 23:20:43.707] !!! DEL STUCK after 3s | thread=pool-1-thread-4 | key0=6704900000...
+[2026-03-16 23:20:43.721] !!! DEL STUCK after 3s | thread=pool-1-thread-56 | key0=5985400000...
+[2026-03-16 23:20:43.742] !!! DEL STUCK after 3s | thread=pool-1-thread-15 | key0=8536500000...
+[2026-03-16 23:20:43.764] !!! DEL FAILED after 3376ms | thread=pool-1-thread-50 | error=timed out
+[2026-03-16 23:20:43.765] [SLOW DEL] took 3377ms
+[2026-03-16 23:20:43.785] !!! DEL STUCK after 3s | thread=pool-1-thread-17 | key0=2620200000...
+[2026-03-16 23:20:43.811] !!! DEL STUCK after 3s | thread=pool-1-thread-7 | key0=3996500000...
+[2026-03-16 23:20:43.861] !!! DEL STUCK after 3s | thread=pool-1-thread-10 | key0=7458600000...
+[2026-03-16 23:20:43.901] !!! DEL STUCK after 3s | thread=pool-1-thread-18 | key0=6368600000...
+[2026-03-16 23:20:43.916] !!! DEL FAILED after 3485ms | thread=pool-1-thread-32 | error=timed out
+[2026-03-16 23:20:43.916] [SLOW DEL] took 3485ms
+[2026-03-16 23:20:43.920] !!! DEL STUCK after 3s | thread=pool-1-thread-43 | key0=9707800000...
+[2026-03-16 23:20:43.964] !!! DEL STUCK after 3s | thread=pool-1-thread-6 | key0=7143400000...
+[2026-03-16 23:20:44.008] !!! DEL STUCK after 3s | thread=pool-1-thread-20 | key0=2663200000...
+[2026-03-16 23:20:44.022] !!! DEL FAILED after 3577ms | thread=pool-1-thread-55 | error=timed out
+[2026-03-16 23:20:44.022] [SLOW DEL] took 3577ms
+[2026-03-16 23:20:44.028] !!! DEL STUCK after 3s | thread=pool-1-thread-22 | key0=6440600000...
+[2026-03-16 23:20:44.063] !!! DEL STUCK after 3s | thread=pool-1-thread-14 | key0=2764500000...
+[2026-03-16 23:20:44.100] !!! DEL STUCK after 3s | thread=pool-1-thread-1 | key0=9108400000...
+[2026-03-16 23:20:44.128] !!! DEL STUCK after 3s | thread=pool-1-thread-53 | key0=7708200000...
+[2026-03-16 23:20:44.150] !!! DEL FAILED after 3691ms | thread=pool-1-thread-21 | error=timed out
+[2026-03-16 23:20:44.150] [SLOW DEL] took 3691ms
+[2026-03-16 23:20:44.168] !!! DEL STUCK after 3s | thread=pool-1-thread-44 | key0=6382000000...
+[2026-03-16 23:20:44.206] !!! DEL STUCK after 3s | thread=pool-1-thread-45 | key0=9748300000...
+[2026-03-16 23:20:44.228] !!! DEL STUCK after 3s | thread=pool-1-thread-23 | key0=5484700000...
+[2026-03-16 23:20:44.256] !!! DEL STUCK after 3s | thread=pool-1-thread-9 | key0=2819000000...
+[2026-03-16 23:20:44.291] !!! DEL STUCK after 3s | thread=pool-1-thread-26 | key0=2055000000...
+[2026-03-16 23:20:44.307] !!! DEL STUCK after 3s | thread=pool-1-thread-27 | key0=4610900000...
+[2026-03-16 23:20:44.349] !!! DEL STUCK after 3s | thread=pool-1-thread-11 | key0=2780800000...
+[2026-03-16 23:20:44.367] !!! DEL STUCK after 3s | thread=pool-1-thread-46 | key0=7234600000...
+[2026-03-16 23:20:44.377] !!! DEL FAILED after 3892ms | thread=pool-1-thread-39 | error=timed out
+[2026-03-16 23:20:44.377] [SLOW DEL] took 3892ms
+[2026-03-16 23:20:44.399] !!! DEL STUCK after 3s | thread=pool-1-thread-47 | key0=8125300000...
+[2026-03-16 23:20:44.428] !!! DEL STUCK after 3s | thread=pool-1-thread-8 | key0=2604300000...
+[2026-03-16 23:20:44.441] !!! DEL STUCK after 3s | thread=pool-1-thread-2 | key0=7526100000...
+[2026-03-16 23:20:44.484] !!! DEL STUCK after 3s | thread=pool-1-thread-31 | key0=1174000000...
+[2026-03-16 23:20:44.501] !!! DEL STUCK after 3s | thread=pool-1-thread-37 | key0=1951800000...
+[2026-03-16 23:20:44.504] !!! DEL FAILED after 3984ms | thread=pool-1-thread-29 | error=timed out
+[2026-03-16 23:20:44.504] [SLOW DEL] took 3984ms
+[2026-03-16 23:20:44.529] !!! DEL STUCK after 3s | thread=pool-1-thread-19 | key0=5158400000...
+[2026-03-16 23:20:44.547] !!! DEL STUCK after 3s | thread=pool-1-thread-34 | key0=1196800000...
+[2026-03-16 23:20:44.586] !!! DEL STUCK after 3s | thread=pool-1-thread-12 | key0=9873500000...
+[2026-03-16 23:20:44.610] !!! DEL FAILED after 4066ms | thread=pool-1-thread-41 | error=timed out
+[2026-03-16 23:20:44.610] [SLOW DEL] took 4066ms
+[2026-03-16 23:20:44.622] !!! DEL STUCK after 3s | thread=pool-1-thread-36 | key0=5798800000...
+[2026-03-16 23:20:44.630] !!! DEL STUCK after 3s | thread=pool-1-thread-52 | key0=9327300000...
+[2026-03-16 23:20:44.674] !!! DEL STUCK after 3s | thread=pool-1-thread-16 | key0=5961900000...
+[2026-03-16 23:20:44.791] !!! DEL FAILED after 4209ms | thread=pool-1-thread-5 | error=timed out
+[2026-03-16 23:20:44.791] [SLOW DEL] took 4209ms
+[2026-03-16 23:20:44.859] !!! DEL STUCK after 3s | thread=pool-1-thread-49 | key0=4694400000...
+[2026-03-16 23:20:44.901] !!! DEL STUCK after 3s | thread=pool-1-thread-40 | key0=2366300000...
+[2026-03-16 23:20:44.946] !!! DEL STUCK after 3s | thread=pool-1-thread-42 | key0=6807900000...
+[2026-03-16 23:20:44.956] !!! DEL FAILED after 4347ms | thread=pool-1-thread-33 | error=timed out
+[2026-03-16 23:20:44.956] [SLOW DEL] took 4347ms
+[2026-03-16 23:20:44.970] !!! DEL STUCK after 3s | thread=pool-1-thread-28 | key0=6249900000...
+[2026-03-16 23:20:45.004] !!! DEL STUCK after 3s | thread=pool-1-thread-60 | key0=6300400000...
+[2026-03-16 23:20:45.050] !!! DEL STUCK after 3s | thread=pool-1-thread-58 | key0=8642200000...
+[2026-03-16 23:20:45.079] !!! DEL STUCK after 3s | thread=pool-1-thread-3 | key0=7527500000...
+[2026-03-16 23:20:45.093] !!! DEL FAILED after 4464ms | thread=pool-1-thread-30 | error=timed out
+[2026-03-16 23:20:45.093] [SLOW DEL] took 4464ms
+[2026-03-16 23:20:45.125] !!! DEL STUCK after 3s | thread=pool-1-thread-25 | key0=1135400000...
+[2026-03-16 23:20:45.228] !!! DEL STUCK after 3s | thread=pool-1-thread-35 | key0=4906100000...
+[2026-03-16 23:20:45.255] !!! DEL STUCK after 3s | thread=pool-1-thread-13 | key0=3074000000...
+[2026-03-16 23:20:45.255] !!! DEL FAILED after 4594ms | thread=pool-1-thread-54 | error=timed out
+[2026-03-16 23:20:45.255] [SLOW DEL] took 4594ms

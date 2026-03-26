@@ -1,0 +1,777 @@
+[2m2026-03-16T16:19:54.998014Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.025365Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3046000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.096137Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653686 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:55.154] !!! DEL FAILED after 6064ms | thread=pool-1-thread-21 | error=timed out
+[2026-03-16 16:19:55.154] [SLOW DEL] took 6064ms
+[2m2026-03-16T16:19:55.156686Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.173054Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9181200000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.214025Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653698 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:55.233] !!! DEL FAILED after 6144ms | thread=pool-1-thread-48 | error=timed out
+[2026-03-16 16:19:55.233] [SLOW DEL] took 6144ms
+[2m2026-03-16T16:19:55.247357Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.257419Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8182500000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.294361Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653703 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:55.330] !!! DEL FAILED after 6238ms | thread=pool-1-thread-19 | error=timed out
+[2026-03-16 16:19:55.330] [SLOW DEL] took 6238ms
+[2m2026-03-16T16:19:55.328068Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.358491Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2129700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.386576Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653704 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:55.423] !!! DEL FAILED after 6331ms | thread=pool-1-thread-45 | error=timed out
+[2026-03-16 16:19:55.423] [SLOW DEL] took 6331ms
+[2m2026-03-16T16:19:55.449718Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.454946Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3937200000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.484848Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653759 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:55.525035Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.550623Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3994600000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.604464Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.595293Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653684 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:55.609726Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2411700000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:55.621] !!! DEL FAILED after 6531ms | thread=pool-1-thread-50 | error=timed out
+[2026-03-16 16:19:55.621] [SLOW DEL] took 6531ms
+[2m2026-03-16T16:19:55.644404Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653678 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:55.664] !!! DEL FAILED after 6574ms | thread=pool-1-thread-35 | error=timed out
+[2026-03-16 16:19:55.664] [SLOW DEL] took 6574ms
+[2m2026-03-16T16:19:55.671383Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.703318Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4294500000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.739664Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653705 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:55.756] !!! DEL FAILED after 6664ms | thread=pool-1-thread-6 | error=timed out
+[2026-03-16 16:19:55.756] [SLOW DEL] took 6664ms
+[2m2026-03-16T16:19:55.758981Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.777311Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(7485100000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.824204Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653671 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:55.840027Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:55.845] !!! DEL FAILED after 6755ms | thread=pool-1-thread-7 | error=timed out
+[2026-03-16 16:19:55.845] [SLOW DEL] took 6755ms
+[2m2026-03-16T16:19:55.857703Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4063300000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:55.909574Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:55.896918Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653675 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:55.916229Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9690800000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:55.917] !!! DEL STUCK after 3s | thread=pool-1-thread-3 | key0=4706100000...
+[2026-03-16 16:19:55.924] !!! DEL FAILED after 6834ms | thread=pool-1-thread-15 | error=timed out
+[2026-03-16 16:19:55.924] [SLOW DEL] took 6834ms
+[2m2026-03-16T16:19:55.958566Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653721 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:55.993] !!! DEL FAILED after 5182ms | thread=pool-1-thread-55 | error=timed out
+[2026-03-16 16:19:55.993] [SLOW DEL] took 5182ms
+[2m2026-03-16T16:19:56.052997Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:56.063764Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2703900000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:56.100077Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653722 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:56.124] !!! DEL FAILED after 5313ms | thread=pool-1-thread-30 | error=timed out
+[2026-03-16 16:19:56.125] [SLOW DEL] took 5314ms
+[2m2026-03-16T16:19:56.130415Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:56.149482Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2910500000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:56.183627Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653724 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:56.200] !!! DEL FAILED after 5311ms | thread=pool-1-thread-59 | error=timed out
+[2026-03-16 16:19:56.201] [SLOW DEL] took 5312ms
+[2m2026-03-16T16:19:56.199723Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:56.219427Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(7973900000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:56.272312Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653723 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:56.294] !!! DEL FAILED after 5405ms | thread=pool-1-thread-13 | error=timed out
+[2026-03-16 16:19:56.295] [SLOW DEL] took 5406ms
+[2m2026-03-16T16:19:56.293902Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:56.319] !!! DEL STUCK after 3s | thread=pool-1-thread-28 | key0=8773000000...
+[2m2026-03-16T16:19:56.318118Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9677100000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:56.360612Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653725 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:56.377] !!! DEL FAILED after 5403ms | thread=pool-1-thread-18 | error=timed out
+[2026-03-16 16:19:56.377] [SLOW DEL] took 5403ms
+[2m2026-03-16T16:19:56.397582Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:56.403705Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2042000000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:56.413] !!! DEL STUCK after 3s | thread=pool-1-thread-4 | key0=4166700000...
+[2m2026-03-16T16:19:56.443752Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653726 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:56.462] !!! DEL FAILED after 5488ms | thread=pool-1-thread-33 | error=timed out
+[2026-03-16 16:19:56.462] [SLOW DEL] took 5488ms
+[2m2026-03-16T16:19:56.472385Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:56.488527Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4464900000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:56.513] !!! DEL STUCK after 3s | thread=pool-1-thread-32 | key0=2069800000...
+[2m2026-03-16T16:19:56.512233Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653727 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:56.539] !!! DEL FAILED after 5470ms | thread=pool-1-thread-47 | error=timed out
+[2026-03-16 16:19:56.539] [SLOW DEL] took 5470ms
+[2m2026-03-16T16:19:56.539938Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:56.560263Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3014600000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:56.602774Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653728 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:56.615] !!! DEL STUCK after 3s | thread=pool-1-thread-52 | key0=8401000000...
+[2026-03-16 16:19:56.618] !!! DEL FAILED after 5549ms | thread=pool-1-thread-14 | error=timed out
+[2026-03-16 16:19:56.618] [SLOW DEL] took 5549ms
+[2m2026-03-16T16:19:56.637633Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m AsyncRegistry - DIAG AsyncRegistry: pending=59 done_but_pending=0 total_registered=1653789 completed=716352 errors=937378 rejected=0 already_done=0
+[2m2026-03-16T16:19:56.637632Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG event_loop: poll_flush=14 recover(ready=14,pending=0) complete(ready=0,pending=14) in_flight=285992 connections=9 pending_queue=48
+[2m2026-03-16T16:19:56.663705Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4738ms ok=true
+[2m2026-03-16T16:19:56.686937Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4759ms ok=true
+[2026-03-16 16:19:56.703] !!! DEL STUCK after 3s | thread=pool-1-thread-38 | key0=4273900000...
+[2m2026-03-16T16:19:56.711038Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4783ms ok=true
+[2m2026-03-16T16:19:56.732328Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4805ms ok=true
+[2m2026-03-16T16:19:56.756170Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4829ms ok=true
+[2m2026-03-16T16:19:56.778976Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4851ms ok=true
+[2026-03-16 16:19:56.784] !!! DEL STUCK after 3s | thread=pool-1-thread-9 | key0=7186000000...
+[2m2026-03-16T16:19:56.801373Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4875ms ok=true
+[2m2026-03-16T16:19:56.824614Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4897ms ok=true
+[2m2026-03-16T16:19:56.848193Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4921ms ok=true
+[2026-03-16 16:19:56.854] !!! DEL STUCK after 3s | thread=pool-1-thread-25 | key0=6256700000...
+[2m2026-03-16T16:19:56.868534Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4839ms ok=true
+[2m2026-03-16T16:19:56.890530Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4861ms ok=true
+[2m2026-03-16T16:19:56.912983Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4843ms ok=true
+[2m2026-03-16T16:19:56.938123Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4867ms ok=true
+[2026-03-16 16:19:56.947] !!! DEL STUCK after 3s | thread=pool-1-thread-5 | key0=8947000000...
+[2m2026-03-16T16:19:56.962224Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4675ms ok=true
+[2m2026-03-16T16:19:56.986817Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4567ms ok=true
+[2m2026-03-16T16:19:57.013089Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4476ms ok=true
+[2m2026-03-16T16:19:57.038273Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4388ms ok=true
+[2m2026-03-16T16:19:57.061658Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4362ms ok=true
+[2m2026-03-16T16:19:57.089749Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0003-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4390ms ok=true
+[2026-03-16 16:19:57.094] !!! DEL STUCK after 3s | thread=pool-1-thread-24 | key0=6789200000...
+[2m2026-03-16T16:19:57.109102Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=6458ms ok=true
+[2m2026-03-16T16:19:57.135448Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=6483ms ok=true
+[2m2026-03-16T16:19:57.157836Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5235ms ok=true
+[2026-03-16 16:19:57.167] !!! DEL STUCK after 3s | thread=pool-1-thread-40 | key0=3480100000...
+[2m2026-03-16T16:19:57.185680Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5257ms ok=true
+[2m2026-03-16T16:19:57.211623Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5283ms ok=true
+[2026-03-16 16:19:57.235] !!! DEL STUCK after 3s | thread=pool-1-thread-54 | key0=1034900000...
+[2m2026-03-16T16:19:57.234997Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5307ms ok=true
+[2m2026-03-16T16:19:57.262361Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5334ms ok=true
+[2026-03-16 16:19:57.278] !!! DEL STUCK after 3s | thread=pool-1-thread-56 | key0=9009700000...
+[2m2026-03-16T16:19:57.286028Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5359ms ok=true
+[2m2026-03-16T16:19:57.309139Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5382ms ok=true
+[2m2026-03-16T16:19:57.332318Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5403ms ok=true
+[2026-03-16 16:19:57.343] !!! DEL STUCK after 3s | thread=pool-1-thread-8 | key0=2520800000...
+[2m2026-03-16T16:19:57.358235Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5431ms ok=true
+[2m2026-03-16T16:19:57.385273Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5359ms ok=true
+[2m2026-03-16T16:19:57.409230Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5339ms ok=true
+[2026-03-16 16:19:57.420] !!! DEL STUCK after 3s | thread=pool-1-thread-20 | key0=5919700000...
+[2m2026-03-16T16:19:57.434301Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5219ms ok=true
+[2m2026-03-16T16:19:57.460155Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=5043ms ok=true
+[2m2026-03-16T16:19:57.484595Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4947ms ok=true
+[2m2026-03-16T16:19:57.508110Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0001-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=4851ms ok=true
+[2026-03-16 16:19:57.536] !!! DEL STUCK after 3s | thread=pool-1-thread-22 | key0=4897800000...
+[2m2026-03-16T16:19:57.534882Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120001ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544129Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120014ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544960Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120015ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544964Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120014ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544967Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120014ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544970Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120013ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544974Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120012ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544977Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120012ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544981Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120012ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544984Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120012ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544988Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120012ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544991Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120011ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544994Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120011ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.544998Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120011ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545002Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120005ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545005Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120004ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545009Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120003ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545013Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120003ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545016Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120003ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545020Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120002ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545023Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120002ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545026Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 120002ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545030Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119997ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545033Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119997ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545038Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119996ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545044Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119996ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545048Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119994ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545052Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119994ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545055Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119994ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545058Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119994ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545061Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119993ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545064Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119993ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545067Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119993ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545071Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119993ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545074Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119992ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545078Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119990ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545081Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119990ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545084Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119990ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545088Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119989ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545092Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119989ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545095Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119989ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545097Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119989ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545101Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119987ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545104Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119987ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545108Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119986ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545112Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119985ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.545115Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 119985ms (backpressure from slow TCP)
+[2m2026-03-16T16:19:57.589432Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG poll_complete: pending_queue=48 in_flight=285973 shed=1 new=47 done=36 cancelled=30 retry=0 refresh=0 reconnect=0
+[2026-03-16 16:19:57.608] !!! DEL STUCK after 3s | thread=pool-1-thread-16 | key0=3256400000...
+[2026-03-16 16:19:57.674] !!! DEL STUCK after 3s | thread=pool-1-thread-60 | key0=6833000000...
+[2m2026-03-16T16:19:57.706666Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:57.715668Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9516400000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:57.748] !!! DEL STUCK after 3s | thread=pool-1-thread-2 | key0=1150800000...
+[2m2026-03-16T16:19:57.743567Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653729 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:57.764] !!! DEL FAILED after 6622ms | thread=pool-1-thread-43 | error=timed out
+[2026-03-16 16:19:57.764] [SLOW DEL] took 6622ms
+[2m2026-03-16T16:19:57.762873Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:57.784381Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(1797100000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:57.814233Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653732 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:57.831] !!! DEL FAILED after 6635ms | thread=pool-1-thread-11 | error=timed out
+[2026-03-16 16:19:57.831] [SLOW DEL] took 6635ms
+[2m2026-03-16T16:19:57.832588Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:57.854328Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2687000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:57.888960Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653731 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:57.898026Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:57.904] !!! DEL STUCK after 3s | thread=pool-1-thread-17 | key0=1239400000...
+[2026-03-16 16:19:57.904] !!! DEL FAILED after 6708ms | thread=pool-1-thread-34 | error=timed out
+[2026-03-16 16:19:57.905] [SLOW DEL] took 6709ms
+[2m2026-03-16T16:19:57.912146Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(1264600000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:57.951] !!! DEL STUCK after 3s | thread=pool-1-thread-46 | key0=1776900000...
+[2m2026-03-16T16:19:57.949622Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653733 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:57.958041Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:57.962650Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9414700000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:57.964] !!! DEL FAILED after 6701ms | thread=pool-1-thread-41 | error=timed out
+[2026-03-16 16:19:57.964] [SLOW DEL] took 6701ms
+[2m2026-03-16T16:19:57.985699Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653734 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.002] !!! DEL FAILED after 6739ms | thread=pool-1-thread-44 | error=timed out
+[2026-03-16 16:19:58.003] [SLOW DEL] took 6740ms
+[2m2026-03-16T16:19:58.000492Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:58.022] !!! DEL STUCK after 3s | thread=pool-1-thread-26 | key0=3206900000...
+[2m2026-03-16T16:19:58.025263Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8825400000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:58.062772Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653735 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.082] !!! DEL FAILED after 6752ms | thread=pool-1-thread-57 | error=timed out
+[2026-03-16 16:19:58.083] [SLOW DEL] took 6753ms
+[2m2026-03-16T16:19:58.081223Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.105281Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4388000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:58.138743Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653736 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:58.147081Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.151322Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(7264500000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:58.151] !!! DEL FAILED after 6821ms | thread=pool-1-thread-58 | error=timed out
+[2026-03-16 16:19:58.152] [SLOW DEL] took 6822ms
+[2026-03-16 16:19:58.164] !!! DEL STUCK after 3s | thread=pool-1-thread-21 | key0=4812800000...
+[2m2026-03-16T16:19:58.175257Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653737 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.188] !!! DEL FAILED after 6804ms | thread=pool-1-thread-51 | error=timed out
+[2026-03-16 16:19:58.188] [SLOW DEL] took 6804ms
+[2m2026-03-16T16:19:58.203894Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.218609Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(5460700000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:58.249] !!! DEL STUCK after 3s | thread=pool-1-thread-48 | key0=8862000000...
+[2m2026-03-16T16:19:58.264796Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653738 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:58.289942Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:58.306] !!! DEL FAILED after 6922ms | thread=pool-1-thread-53 | error=timed out
+[2026-03-16 16:19:58.306] [SLOW DEL] took 6922ms
+[2m2026-03-16T16:19:58.317400Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3850000000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:58.354] !!! DEL STUCK after 3s | thread=pool-1-thread-19 | key0=8808000000...
+[2m2026-03-16T16:19:58.368990Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653739 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.399] !!! DEL FAILED after 6966ms | thread=pool-1-thread-29 | error=timed out
+[2026-03-16 16:19:58.400] [SLOW DEL] took 6967ms
+[2m2026-03-16T16:19:58.398413Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.423858Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3991800000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:58.445] !!! DEL STUCK after 3s | thread=pool-1-thread-45 | key0=9882700000...
+[2m2026-03-16T16:19:58.469550Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653740 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:58.485292Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:58.500] !!! DEL FAILED after 7067ms | thread=pool-1-thread-12 | error=timed out
+[2026-03-16 16:19:58.500] [SLOW DEL] took 7067ms
+[2m2026-03-16T16:19:58.511587Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9412300000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:58.541] !!! DEL STUCK after 3s | thread=pool-1-thread-27 | key0=8942600000...
+[2m2026-03-16T16:19:58.565598Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653742 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.590] !!! DEL FAILED after 7095ms | thread=pool-1-thread-37 | error=timed out
+[2026-03-16 16:19:58.590] [SLOW DEL] took 7095ms
+[2m2026-03-16T16:19:58.605870Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.624549Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(5148700000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:58.640] !!! DEL STUCK after 3s | thread=pool-1-thread-50 | key0=8942000000...
+[2m2026-03-16T16:19:58.673287Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653741 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.695] !!! DEL STUCK after 3s | thread=pool-1-thread-35 | key0=6127900000...
+[2026-03-16 16:19:58.695] !!! DEL FAILED after 7200ms | thread=pool-1-thread-36 | error=timed out
+[2026-03-16 16:19:58.696] [SLOW DEL] took 7201ms
+[2m2026-03-16T16:19:58.713329Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.723263Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(1305500000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:58.770] !!! DEL STUCK after 3s | thread=pool-1-thread-6 | key0=9472700000...
+[2m2026-03-16T16:19:58.761413Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653743 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.795] !!! DEL FAILED after 7202ms | thread=pool-1-thread-49 | error=timed out
+[2026-03-16 16:19:58.795] [SLOW DEL] took 7202ms
+[2m2026-03-16T16:19:58.798277Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.820565Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3102600000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:58.845523Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.846742Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653790 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.859] [SLOW DEL] took 2241ms
+[2026-03-16 16:19:58.864] !!! DEL STUCK after 3s | thread=pool-1-thread-7 | key0=9707000000...
+[2m2026-03-16T16:19:58.872238Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4699600000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:58.923284Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653745 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:58.954] !!! DEL STUCK after 3s | thread=pool-1-thread-15 | key0=9848000000...
+[2026-03-16 16:19:58.955] !!! DEL FAILED after 7295ms | thread=pool-1-thread-39 | error=timed out
+[2026-03-16 16:19:58.955] [SLOW DEL] took 7295ms
+[2m2026-03-16T16:19:58.950741Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:58.989266Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9131600000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:59.022] !!! DEL STUCK after 3s | thread=pool-1-thread-55 | key0=3531700000...
+[2m2026-03-16T16:19:59.023646Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653744 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:59.039700Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:59.057] !!! DEL FAILED after 7464ms | thread=pool-1-thread-1 | error=timed out
+[2026-03-16 16:19:59.057] [SLOW DEL] took 7464ms
+[2m2026-03-16T16:19:59.057541Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9652400000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.100471Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653746 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:59.123] !!! DEL FAILED after 7463ms | thread=pool-1-thread-23 | error=timed out
+[2026-03-16 16:19:59.123] [SLOW DEL] took 7463ms
+[2m2026-03-16T16:19:59.131916Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:59.145] !!! DEL STUCK after 3s | thread=pool-1-thread-30 | key0=2986600000...
+[2m2026-03-16T16:19:59.155855Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(6798000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.189854Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653748 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:59.202652Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:59.218] !!! DEL FAILED after 7504ms | thread=pool-1-thread-42 | error=timed out
+[2026-03-16 16:19:59.218] [SLOW DEL] took 7505ms
+[2026-03-16 16:19:59.219] !!! DEL STUCK after 3s | thread=pool-1-thread-59 | key0=8382600000...
+[2m2026-03-16T16:19:59.218775Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9398700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.293541Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:59.282753Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653747 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:59.306] !!! DEL FAILED after 7592ms | thread=pool-1-thread-31 | error=timed out
+[2026-03-16 16:19:59.306] [SLOW DEL] took 7593ms
+[2026-03-16 16:19:59.316] !!! DEL STUCK after 3s | thread=pool-1-thread-13 | key0=6411500000...
+[2m2026-03-16T16:19:59.308548Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2130300000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.388487Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:59.370213Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653749 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:59.397] !!! DEL STUCK after 3s | thread=pool-1-thread-18 | key0=8928000000...
+[2026-03-16 16:19:59.409] !!! DEL FAILED after 7621ms | thread=pool-1-thread-10 | error=timed out
+[2026-03-16 16:19:59.409] [SLOW DEL] took 7621ms
+[2m2026-03-16T16:19:59.421024Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4706100000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.467568Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653750 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:59.481] !!! DEL STUCK after 3s | thread=pool-1-thread-33 | key0=3272100000...
+[2026-03-16 16:19:59.488] !!! DEL FAILED after 6599ms | thread=pool-1-thread-3 | error=timed out
+[2026-03-16 16:19:59.488] [SLOW DEL] took 6599ms
+[2m2026-03-16T16:19:59.492572Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:59.534578Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8773000000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:19:59.560] !!! DEL STUCK after 3s | thread=pool-1-thread-47 | key0=4043900000...
+[2m2026-03-16T16:19:59.566146Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653751 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:59.594791Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:59.596] !!! DEL FAILED after 6288ms | thread=pool-1-thread-28 | error=timed out
+[2026-03-16 16:19:59.596] [SLOW DEL] took 6288ms
+[2m2026-03-16T16:19:59.607907Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4166700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.643539Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653752 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:19:59.661] !!! DEL FAILED after 6264ms | thread=pool-1-thread-4 | error=timed out
+[2026-03-16 16:19:59.661] [SLOW DEL] took 6264ms
+[2m2026-03-16T16:19:59.661875Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:59.687959Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2069800000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.726714Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653753 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:59.746] !!! DEL FAILED after 6257ms | thread=pool-1-thread-32 | error=timed out
+[2026-03-16 16:19:59.746] [SLOW DEL] took 6257ms
+[2m2026-03-16T16:19:59.779440Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:59.784267Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8401000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.823862Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653754 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:19:59.853904Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:19:59.862] !!! DEL FAILED after 6268ms | thread=pool-1-thread-52 | error=timed out
+[2026-03-16 16:19:59.862] [SLOW DEL] took 6268ms
+[2m2026-03-16T16:19:59.880136Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4273900000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:19:59.918620Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653755 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:19:59.951] !!! DEL FAILED after 6262ms | thread=pool-1-thread-38 | error=timed out
+[2026-03-16 16:19:59.951] [SLOW DEL] took 6262ms
+[2m2026-03-16T16:19:59.948161Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:19:59.983005Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(7186000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:00.016304Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653756 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:00.040] !!! DEL FAILED after 6266ms | thread=pool-1-thread-9 | error=timed out
+[2026-03-16 16:20:00.040] [SLOW DEL] took 6266ms
+[2m2026-03-16T16:20:00.041069Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:00.074652Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(6256700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:00.134058Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653757 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:00.153] !!! DEL FAILED after 6324ms | thread=pool-1-thread-25 | error=timed out
+[2026-03-16 16:20:00.153] [SLOW DEL] took 6324ms
+[2m2026-03-16T16:20:00.173028Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:00.204274Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8947000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:00.243306Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653758 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:00.261] !!! DEL FAILED after 6334ms | thread=pool-1-thread-5 | error=timed out
+[2026-03-16 16:20:00.261] [SLOW DEL] took 6334ms
+[2m2026-03-16T16:20:00.276766Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122708ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.289759Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122722ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297423Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122733ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297443Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122731ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297447Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122730ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297452Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122730ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297456Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122730ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297460Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122730ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297464Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122730ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297469Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122730ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297473Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122729ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297477Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122728ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297482Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122728ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297486Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122727ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297490Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122727ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297494Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122727ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297498Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122726ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297503Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122726ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297507Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122725ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297515Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122723ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297519Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122723ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297523Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122723ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297527Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122723ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297532Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122723ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297536Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122723ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297540Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122722ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297546Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122722ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297550Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122722ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297554Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122719ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297559Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122719ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297563Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122718ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297568Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122717ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297574Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122714ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297578Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122714ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297584Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122713ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297589Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122712ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297594Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122702ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297600Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122702ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297604Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122702ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297609Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122702ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297613Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122701ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297617Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122701ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297623Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122701ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297627Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122701ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297632Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122698ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297636Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122698ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.297640Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 122698ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:00.299902Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122798ms ok=true
+[2m2026-03-16T16:20:00.343720Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122836ms ok=true
+[2m2026-03-16T16:20:00.370801Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122863ms ok=true
+[2m2026-03-16T16:20:00.395286Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122887ms ok=true
+[2m2026-03-16T16:20:00.422913Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122914ms ok=true
+[2m2026-03-16T16:20:00.446576Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122940ms ok=true
+[2m2026-03-16T16:20:00.476321Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122969ms ok=true
+[2m2026-03-16T16:20:00.500472Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=122990ms ok=true
+[2m2026-03-16T16:20:00.527608Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123016ms ok=true
+[2m2026-03-16T16:20:00.558396Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123045ms ok=true
+[2m2026-03-16T16:20:00.581718Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123068ms ok=true
+[2m2026-03-16T16:20:00.602208Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123089ms ok=true
+[2m2026-03-16T16:20:00.625075Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123112ms ok=true
+[2m2026-03-16T16:20:00.651942Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123137ms ok=true
+[2m2026-03-16T16:20:00.675572Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123160ms ok=true
+[2m2026-03-16T16:20:00.701933Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123186ms ok=true
+[2m2026-03-16T16:20:00.727623Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123209ms ok=true
+[2m2026-03-16T16:20:00.749569Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123231ms ok=true
+[2026-03-16 16:20:00.778] !!! DEL STUCK after 3s | thread=pool-1-thread-43 | key0=5063000000...
+[2m2026-03-16T16:20:00.776391Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123258ms ok=true
+[2m2026-03-16T16:20:00.802307Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123283ms ok=true
+[2m2026-03-16T16:20:00.827852Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123307ms ok=true
+[2026-03-16 16:20:00.851] !!! DEL STUCK after 3s | thread=pool-1-thread-11 | key0=2869300000...
+[2m2026-03-16T16:20:00.855310Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123332ms ok=true
+[2m2026-03-16T16:20:00.884147Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123360ms ok=true
+[2m2026-03-16T16:20:00.911471Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123386ms ok=true
+[2026-03-16 16:20:00.919] !!! DEL STUCK after 3s | thread=pool-1-thread-34 | key0=7189100000...
+[2m2026-03-16T16:20:00.935687Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123412ms ok=true
+[2m2026-03-16T16:20:00.961387Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123437ms ok=true
+[2026-03-16 16:20:00.977] !!! DEL STUCK after 3s | thread=pool-1-thread-41 | key0=7574000000...
+[2m2026-03-16T16:20:00.986286Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123462ms ok=true
+[2m2026-03-16T16:20:01.013730Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123490ms ok=true
+[2026-03-16 16:20:01.022] !!! DEL STUCK after 3s | thread=pool-1-thread-44 | key0=9506100000...
+[2m2026-03-16T16:20:01.041726Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123516ms ok=true
+[2m2026-03-16T16:20:01.065700Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123541ms ok=true
+[2m2026-03-16T16:20:01.089211Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123568ms ok=true
+[2026-03-16 16:20:01.104] !!! DEL STUCK after 3s | thread=pool-1-thread-57 | key0=1279100000...
+[2m2026-03-16T16:20:01.113658Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123590ms ok=true
+[2m2026-03-16T16:20:01.137762Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123615ms ok=true
+[2m2026-03-16T16:20:01.161194Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123636ms ok=true
+[2026-03-16 16:20:01.170] !!! DEL STUCK after 3s | thread=pool-1-thread-58 | key0=5074900000...
+[2m2026-03-16T16:20:01.186652Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123660ms ok=true
+[2026-03-16 16:20:01.205] !!! DEL STUCK after 3s | thread=pool-1-thread-51 | key0=7789000000...
+[2m2026-03-16T16:20:01.213704Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123689ms ok=true
+[2m2026-03-16T16:20:01.239623Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123713ms ok=true
+[2m2026-03-16T16:20:01.267379Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123740ms ok=true
+[2m2026-03-16T16:20:01.291340Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123767ms ok=true
+[2m2026-03-16T16:20:01.318452Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123792ms ok=true
+[2026-03-16 16:20:01.327] !!! DEL STUCK after 3s | thread=pool-1-thread-53 | key0=4077600000...
+[2m2026-03-16T16:20:01.344280Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123817ms ok=true
+[2m2026-03-16T16:20:01.368912Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123843ms ok=true
+[2m2026-03-16T16:20:01.393867Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123864ms ok=true
+[2026-03-16 16:20:01.423] !!! DEL STUCK after 3s | thread=pool-1-thread-29 | key0=6645200000...
+[2m2026-03-16T16:20:01.420808Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123890ms ok=true
+[2m2026-03-16T16:20:01.443899Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123916ms ok=true
+[2m2026-03-16T16:20:01.471384Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123941ms ok=true
+[2m2026-03-16T16:20:01.497596Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123968ms ok=true
+[2m2026-03-16T16:20:01.521744Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=123993ms ok=true
+[2026-03-16 16:20:01.532] !!! DEL STUCK after 3s | thread=pool-1-thread-12 | key0=2973000000...
+[2m2026-03-16T16:20:01.550352Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=124021ms ok=true
+[2m2026-03-16T16:20:01.576505Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=124045ms ok=true
+[2026-03-16 16:20:01.617] !!! DEL STUCK after 3s | thread=pool-1-thread-37 | key0=8872700000...
+[2m2026-03-16T16:20:01.625568Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG poll_complete: pending_queue=163 in_flight=285940 shed=1 new=162 done=50 cancelled=145 retry=0 refresh=0 reconnect=0
+[2026-03-16 16:20:01.714] !!! DEL STUCK after 3s | thread=pool-1-thread-36 | key0=1304900000...
+[2m2026-03-16T16:20:01.757566Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:01.772213Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(6789200000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:01.814] !!! DEL STUCK after 3s | thread=pool-1-thread-49 | key0=6851300000...
+[2m2026-03-16T16:20:01.814312Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653760 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:01.832] !!! DEL FAILED after 7756ms | thread=pool-1-thread-24 | error=timed out
+[2026-03-16 16:20:01.832] [SLOW DEL] took 7756ms
+[2m2026-03-16T16:20:01.831858Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:01.843801Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m AsyncRegistry - DIAG AsyncRegistry: pending=59 done_but_pending=0 total_registered=1653820 completed=716352 errors=937409 rejected=0 already_done=0
+[2m2026-03-16T16:20:01.854659Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3480100000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:01.882] !!! DEL STUCK after 3s | thread=pool-1-thread-14 | key0=8773100000...
+[2m2026-03-16T16:20:01.895747Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653761 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:01.907] !!! DEL FAILED after 7760ms | thread=pool-1-thread-40 | error=timed out
+[2026-03-16 16:20:01.907] [SLOW DEL] took 7760ms
+[2m2026-03-16T16:20:01.914855Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:01.933854Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(1034900000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:01.972662Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653762 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:01.984] !!! DEL STUCK after 3s | thread=pool-1-thread-39 | key0=5891600000...
+[2m2026-03-16T16:20:01.984927Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:01.996] !!! DEL FAILED after 7776ms | thread=pool-1-thread-54 | error=timed out
+[2026-03-16 16:20:01.996] [SLOW DEL] took 7776ms
+[2m2026-03-16T16:20:02.010805Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9009700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:02.068024Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:02.058743Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653763 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.072] !!! DEL STUCK after 3s | thread=pool-1-thread-1 | key0=2395300000...
+[2026-03-16 16:20:02.078] !!! DEL FAILED after 7813ms | thread=pool-1-thread-56 | error=timed out
+[2026-03-16 16:20:02.078] [SLOW DEL] took 7813ms
+[2m2026-03-16T16:20:02.082561Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2520800000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:02.130789Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653764 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.149] !!! DEL FAILED after 7817ms | thread=pool-1-thread-8 | error=timed out
+[2026-03-16 16:20:02.149] [SLOW DEL] took 7817ms
+[2026-03-16 16:20:02.152] !!! DEL STUCK after 3s | thread=pool-1-thread-23 | key0=5030900000...
+[2m2026-03-16T16:20:02.152661Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:02.178131Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(5919700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:02.215572Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653765 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.231] !!! DEL FAILED after 7826ms | thread=pool-1-thread-20 | error=timed out
+[2026-03-16 16:20:02.231] [SLOW DEL] took 7826ms
+[2026-03-16 16:20:02.233] !!! DEL STUCK after 3s | thread=pool-1-thread-42 | key0=3384800000...
+[2m2026-03-16T16:20:02.237584Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:02.256625Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4897800000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:02.289956Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653766 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.315] !!! DEL FAILED after 7802ms | thread=pool-1-thread-22 | error=timed out
+[2026-03-16 16:20:02.315] [SLOW DEL] took 7802ms
+[2m2026-03-16T16:20:02.320925Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:02.338] !!! DEL STUCK after 3s | thread=pool-1-thread-31 | key0=3344800000...
+[2m2026-03-16T16:20:02.347547Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3256400000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:02.382701Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653767 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.412] !!! DEL FAILED after 7819ms | thread=pool-1-thread-16 | error=timed out
+[2026-03-16 16:20:02.412] [SLOW DEL] took 7819ms
+[2m2026-03-16T16:20:02.411477Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:02.439282Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(6833000000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:02.442] !!! DEL STUCK after 3s | thread=pool-1-thread-10 | key0=6031000000...
+[2m2026-03-16T16:20:02.474552Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653768 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.491] !!! DEL FAILED after 7831ms | thread=pool-1-thread-60 | error=timed out
+[2026-03-16 16:20:02.491] [SLOW DEL] took 7831ms
+[2m2026-03-16T16:20:02.491485Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:02.512976Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(1150800000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:02.517] !!! DEL STUCK after 3s | thread=pool-1-thread-3 | key0=4492500000...
+[2m2026-03-16T16:20:02.547529Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653769 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.592] !!! DEL FAILED after 7866ms | thread=pool-1-thread-2 | error=timed out
+[2026-03-16 16:20:02.592] [SLOW DEL] took 7866ms
+[2m2026-03-16T16:20:02.585497Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:02.612] !!! DEL STUCK after 3s | thread=pool-1-thread-28 | key0=8290300000...
+[2m2026-03-16T16:20:02.634224Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(1239400000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:02.682] !!! DEL STUCK after 3s | thread=pool-1-thread-4 | key0=1721500000...
+[2m2026-03-16T16:20:02.713227Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653770 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.775] !!! DEL STUCK after 3s | thread=pool-1-thread-32 | key0=4886000000...
+[2026-03-16 16:20:02.781] !!! DEL FAILED after 7889ms | thread=pool-1-thread-17 | error=timed out
+[2026-03-16 16:20:02.782] [SLOW DEL] took 7890ms
+[2m2026-03-16T16:20:02.767906Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:02.842125Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(1776900000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:02.882] !!! DEL STUCK after 3s | thread=pool-1-thread-52 | key0=8058100000...
+[2m2026-03-16T16:20:02.910715Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653771 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:02.959] !!! DEL FAILED after 8018ms | thread=pool-1-thread-46 | error=timed out
+[2026-03-16 16:20:02.959] [SLOW DEL] took 8018ms
+[2026-03-16 16:20:02.981] !!! DEL STUCK after 3s | thread=pool-1-thread-38 | key0=8896400000...
+[2m2026-03-16T16:20:02.981215Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:03.068] !!! DEL STUCK after 3s | thread=pool-1-thread-9 | key0=8911400000...
+[2m2026-03-16T16:20:03.059001Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3206900000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:03.162650Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653772 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:03.193] !!! DEL STUCK after 3s | thread=pool-1-thread-25 | key0=3060000000...
+[2026-03-16 16:20:03.205] !!! DEL FAILED after 8206ms | thread=pool-1-thread-26 | error=timed out
+[2026-03-16 16:20:03.205] [SLOW DEL] took 8206ms
+[2m2026-03-16T16:20:03.207079Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:03.251603Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(6815800000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:03.280] !!! DEL STUCK after 3s | thread=pool-1-thread-5 | key0=6815800000...
+[2m2026-03-16T16:20:03.316571Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653820 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:03.338] !!! DEL FAILED after 3077ms | thread=pool-1-thread-5 | error=timed out
+[2026-03-16 16:20:03.338] [SLOW DEL] took 3077ms
+[2m2026-03-16T16:20:03.355292Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:03.392324Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4812800000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:03.448603Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653773 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:03.496] !!! DEL FAILED after 8342ms | thread=pool-1-thread-21 | error=timed out
+[2026-03-16 16:20:03.496] [SLOW DEL] took 8342ms
+[2m2026-03-16T16:20:03.492306Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:03.526930Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8862000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:03.621038Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653774 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:03.719] !!! DEL FAILED after 8486ms | thread=pool-1-thread-48 | error=timed out
+[2026-03-16 16:20:03.719] [SLOW DEL] took 8486ms
+[2m2026-03-16T16:20:03.710979Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:03.783913Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8808000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:03.867192Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653775 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2m2026-03-16T16:20:03.896534Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:03.919] !!! DEL FAILED after 8589ms | thread=pool-1-thread-19 | error=timed out
+[2026-03-16 16:20:03.919] [SLOW DEL] took 8589ms
+[2m2026-03-16T16:20:03.918763Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9882700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:04.004717Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653776 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:04.041] !!! DEL FAILED after 8617ms | thread=pool-1-thread-45 | error=timed out
+[2026-03-16 16:20:04.041] [SLOW DEL] took 8617ms
+[2m2026-03-16T16:20:04.063537Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:04.085198Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8942600000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:04.135808Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653777 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:04.174] !!! DEL FAILED after 8650ms | thread=pool-1-thread-27 | error=timed out
+[2026-03-16 16:20:04.174] [SLOW DEL] took 8650ms
+[2m2026-03-16T16:20:04.164664Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:04.203283Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8942000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:04.271866Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653778 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:04.327] !!! DEL FAILED after 8705ms | thread=pool-1-thread-50 | error=timed out
+[2026-03-16 16:20:04.327] [SLOW DEL] took 8706ms
+[2m2026-03-16T16:20:04.323811Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:04.375420Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(6127900000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:04.424187Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653779 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:04.483] !!! DEL FAILED after 8818ms | thread=pool-1-thread-35 | error=timed out
+[2026-03-16 16:20:04.483] [SLOW DEL] took 8818ms
+[2m2026-03-16T16:20:04.494574Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:04.562257Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9472700000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:04.630255Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653780 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:20:04.678146Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:04.697] !!! DEL FAILED after 8940ms | thread=pool-1-thread-6 | error=timed out
+[2026-03-16 16:20:04.697] [SLOW DEL] took 8940ms
+[2m2026-03-16T16:20:04.718666Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9707000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:04.787012Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653781 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:04.845] !!! DEL FAILED after 9000ms | thread=pool-1-thread-7 | error=timed out
+[2026-03-16 16:20:04.845] [SLOW DEL] took 9000ms
+[2026-03-16 16:20:04.860] !!! DEL STUCK after 3s | thread=pool-1-thread-24 | key0=2496200000...
+[2m2026-03-16T16:20:04.864246Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:04.913000Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(9848000000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:04.925] !!! DEL STUCK after 3s | thread=pool-1-thread-40 | key0=5397000000...
+[2m2026-03-16T16:20:04.969239Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653782 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:20:05.000764Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:05.012] !!! DEL FAILED after 9088ms | thread=pool-1-thread-15 | error=timed out
+[2026-03-16 16:20:05.012] [SLOW DEL] took 9088ms
+[2026-03-16 16:20:05.020] !!! DEL STUCK after 3s | thread=pool-1-thread-54 | key0=1535000000...
+[2m2026-03-16T16:20:05.036932Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3531700000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:05.093] !!! DEL STUCK after 3s | thread=pool-1-thread-56 | key0=3286800000...
+[2m2026-03-16T16:20:05.090249Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653783 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:05.119] !!! DEL FAILED after 9126ms | thread=pool-1-thread-55 | error=timed out
+[2026-03-16 16:20:05.119] [SLOW DEL] took 9126ms
+[2m2026-03-16T16:20:05.154186Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:05.173] !!! DEL STUCK after 3s | thread=pool-1-thread-8 | key0=4570500000...
+[2m2026-03-16T16:20:05.177691Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2986600000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:05.248] !!! DEL STUCK after 3s | thread=pool-1-thread-20 | key0=7215800000...
+[2m2026-03-16T16:20:05.241957Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653784 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:20:05.260141Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:05.276] !!! DEL FAILED after 9151ms | thread=pool-1-thread-30 | error=timed out
+[2026-03-16 16:20:05.276] [SLOW DEL] took 9151ms
+[2m2026-03-16T16:20:05.277900Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8382600000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:05.331] !!! DEL STUCK after 3s | thread=pool-1-thread-22 | key0=4816200000...
+[2m2026-03-16T16:20:05.361236Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653785 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:05.394] !!! DEL FAILED after 9193ms | thread=pool-1-thread-59 | error=timed out
+[2026-03-16 16:20:05.395] [SLOW DEL] took 9194ms
+[2026-03-16 16:20:05.422] !!! DEL STUCK after 3s | thread=pool-1-thread-16 | key0=4006200000...
+[2m2026-03-16T16:20:05.390772Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:05.456259Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(6411500000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:05.510] !!! DEL STUCK after 3s | thread=pool-1-thread-60 | key0=5753600000...
+[2m2026-03-16T16:20:05.543222Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653786 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:20:05.568144Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:05.590] !!! DEL FAILED after 9295ms | thread=pool-1-thread-13 | error=timed out
+[2026-03-16 16:20:05.591] [SLOW DEL] took 9296ms
+[2m2026-03-16T16:20:05.586017Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(8928000000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:05.635] !!! DEL STUCK after 3s | thread=pool-1-thread-2 | key0=3696000000...
+[2m2026-03-16T16:20:05.651600Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653787 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:05.691] !!! DEL FAILED after 9314ms | thread=pool-1-thread-18 | error=timed out
+[2026-03-16 16:20:05.691] [SLOW DEL] took 9314ms
+[2m2026-03-16T16:20:05.691235Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:05.735873Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(3272100000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:05.823] !!! DEL STUCK after 3s | thread=pool-1-thread-17 | key0=6379400000...
+[2m2026-03-16T16:20:05.812459Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653788 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2m2026-03-16T16:20:05.873218Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2026-03-16 16:20:05.900] !!! DEL FAILED after 9438ms | thread=pool-1-thread-33 | error=timed out
+[2026-03-16 16:20:05.900] [SLOW DEL] took 9438ms
+[2m2026-03-16T16:20:05.930546Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(4043900000000000000000000000000000000000...) timeout=50ms
+[2026-03-16 16:20:06.025] !!! DEL STUCK after 3s | thread=pool-1-thread-46 | key0=6517900000...
+[2m2026-03-16T16:20:06.081093Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG event_loop: poll_flush=2 recover(ready=2,pending=0) complete(ready=0,pending=2) in_flight=285940 connections=9 pending_queue=123
+[2m2026-03-16T16:20:06.046517Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653789 ERROR_CALLBACK: thread=glide-jni-callback-0 error_code=2 msg=timed out    
+[2026-03-16 16:20:06.130] !!! DEL FAILED after 9589ms | thread=pool-1-thread-47 | error=timed out
+[2026-03-16 16:20:06.130] [SLOW DEL] took 9590ms
+[2m2026-03-16T16:20:06.141758Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128530ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.205458Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128572ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.233763Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128631ms (backpressure from slow TCP)
+[2026-03-16 16:20:06.244] !!! DEL STUCK after 3s | thread=pool-1-thread-26 | key0=4463300000...
+[2m2026-03-16T16:20:06.249395Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128645ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258240Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128654ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258261Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128654ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258266Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128653ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258271Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128653ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258275Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128653ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258279Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128653ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258283Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128652ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258287Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128652ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258292Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128651ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258297Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128649ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258301Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128648ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258306Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128648ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258311Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128647ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258316Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128647ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258320Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128645ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258325Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128645ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258329Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128645ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258334Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128645ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258339Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128644ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258344Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128643ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258348Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128643ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258353Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128643ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258357Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128641ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258362Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128639ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258367Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128639ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258372Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128639ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258377Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128637ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258381Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128637ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258386Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128636ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258391Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128635ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258396Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128634ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258401Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128634ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258405Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128634ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258409Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128633ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258414Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128633ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258419Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128633ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258423Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128633ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258427Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128633ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258432Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128633ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258435Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128632ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258439Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128632ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258442Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128632ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.258447Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 128629ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:06.261584Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128731ms ok=true
+[2m2026-03-16T16:20:06.317246Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128781ms ok=true
+[2m2026-03-16T16:20:06.361691Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128822ms ok=true
+[2026-03-16 16:20:06.372] !!! DEL STUCK after 3s | thread=pool-1-thread-5 | key0=4960900000...
+[2m2026-03-16T16:20:06.412870Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128872ms ok=true
+[2m2026-03-16T16:20:06.439988Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128903ms ok=true
+[2m2026-03-16T16:20:06.465996Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128927ms ok=true
+[2m2026-03-16T16:20:06.493917Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128954ms ok=true
+[2026-03-16 16:20:06.523] !!! DEL STUCK after 3s | thread=pool-1-thread-21 | key0=5963300000...
+[2m2026-03-16T16:20:06.519644Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=128979ms ok=true
+[2m2026-03-16T16:20:06.545551Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129006ms ok=true
+[2m2026-03-16T16:20:06.581515Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129031ms ok=true
+[2m2026-03-16T16:20:06.617251Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129076ms ok=true
+[2m2026-03-16T16:20:06.644651Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129103ms ok=true
+[2m2026-03-16T16:20:06.676634Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129131ms ok=true
+[2m2026-03-16T16:20:06.749110Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129196ms ok=true
+[2026-03-16 16:20:06.794] !!! DEL STUCK after 3s | thread=pool-1-thread-48 | key0=5783700000...
+[2m2026-03-16T16:20:06.825992Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129264ms ok=true
+[2m2026-03-16T16:20:06.861363Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129312ms ok=true
+[2m2026-03-16T16:20:06.908917Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129355ms ok=true
+[2m2026-03-16T16:20:06.949454Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129398ms ok=true
+[2026-03-16 16:20:06.970] !!! DEL STUCK after 3s | thread=pool-1-thread-19 | key0=1940000000...
+[2m2026-03-16T16:20:06.996149Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129447ms ok=true
+[2m2026-03-16T16:20:07.023187Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129475ms ok=true
+[2026-03-16 16:20:07.071] !!! DEL STUCK after 3s | thread=pool-1-thread-45 | key0=4206200000...
+[2m2026-03-16T16:20:07.073941Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129521ms ok=true
+[2m2026-03-16T16:20:07.098581Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129548ms ok=true
+[2m2026-03-16T16:20:07.126375Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129571ms ok=true
+[2m2026-03-16T16:20:07.153362Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129596ms ok=true
+[2m2026-03-16T16:20:07.181940Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129626ms ok=true
+[2026-03-16 16:20:07.202] !!! DEL STUCK after 3s | thread=pool-1-thread-27 | key0=4223200000...
+[2m2026-03-16T16:20:07.209439Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129654ms ok=true
+[2m2026-03-16T16:20:07.245630Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129687ms ok=true
+[2m2026-03-16T16:20:07.288819Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129729ms ok=true
+[2m2026-03-16T16:20:07.321269Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129761ms ok=true
+[2m2026-03-16T16:20:07.351102Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129791ms ok=true
+[2026-03-16 16:20:07.371] !!! DEL STUCK after 3s | thread=pool-1-thread-50 | key0=5006200000...
+[2m2026-03-16T16:20:07.386218Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129826ms ok=true
+[2m2026-03-16T16:20:07.419905Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129861ms ok=true
+[2m2026-03-16T16:20:07.447933Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129891ms ok=true
+[2m2026-03-16T16:20:07.496598Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129938ms ok=true
+[2m2026-03-16T16:20:07.537910Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=129963ms ok=true
+[2026-03-16 16:20:07.548] !!! DEL STUCK after 3s | thread=pool-1-thread-35 | key0=2475100000...
+[2m2026-03-16T16:20:07.579547Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130019ms ok=true
+[2m2026-03-16T16:20:07.606210Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130044ms ok=true
+[2m2026-03-16T16:20:07.650993Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130080ms ok=true
+[2m2026-03-16T16:20:07.683909Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130121ms ok=true
+[2m2026-03-16T16:20:07.716129Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130152ms ok=true
+[2026-03-16 16:20:07.735] !!! DEL STUCK after 3s | thread=pool-1-thread-6 | key0=7747600000...
+[2m2026-03-16T16:20:07.742929Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130181ms ok=true
+[2m2026-03-16T16:20:07.772015Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130209ms ok=true
+[2m2026-03-16T16:20:07.809947Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130240ms ok=true
+[2m2026-03-16T16:20:07.863051Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130290ms ok=true
+[2026-03-16 16:20:07.877] !!! DEL STUCK after 3s | thread=pool-1-thread-7 | key0=1490000000...
+[2m2026-03-16T16:20:07.910753Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130331ms ok=true
+[2m2026-03-16T16:20:07.953382Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG try_cmd_request: node=shohame-global-data-store-iad-0002-001.shohame-global-data-store-iad.ime4qh.use1.cache.amazonaws.com:6379 elapsed=130386ms ok=true
+[2m2026-03-16T16:20:07.992167Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 6376ms (backpressure from slow TCP)
+[2m2026-03-16T16:20:08.018183Z[0m [33m WARN[0m [2mredis::aio::multiplexed_connection[0m[2m:[0m DIAG send_recv: pipeline channel send took 6400ms (backpressure from slow TCP)
+[2026-03-16 16:20:08.034] !!! DEL STUCK after 3s | thread=pool-1-thread-15 | key0=5866100000...
+[2m2026-03-16T16:20:08.097248Z[0m [33m WARN[0m [2mredis::cluster_async[0m[2m:[0m DIAG poll_complete: pending_queue=123 in_flight=285909 shed=1 new=122 done=46 cancelled=107 retry=0 refresh=0 reconnect=0
+[2026-03-16 16:20:08.163] !!! DEL STUCK after 3s | thread=pool-1-thread-55 | key0=4927000000...
+[2026-03-16 16:20:08.312] !!! DEL STUCK after 3s | thread=pool-1-thread-30 | key0=1840300000...
+[2m2026-03-16T16:20:08.332173Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:08.350091Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(5063000000000000000000000000000000000000...) timeout=50ms
+[2m2026-03-16T16:20:08.444452Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m run_with_timeout - request timed out after 50ms
+[2m2026-03-16T16:20:08.423560Z[0m [33m WARN[0m [2mglide_rs::jni_client[0m[2m:[0m DIAG cb=1653791 ERROR_CALLBACK: thread=glide-jni-callback-1 error_code=2 msg=timed out    
+[2026-03-16 16:20:08.447] !!! DEL STUCK after 3s | thread=pool-1-thread-59 | key0=2223000000...
+[2026-03-16 16:20:08.462] !!! DEL FAILED after 10698ms | thread=pool-1-thread-43 | error=timed out
+[2026-03-16 16:20:08.462] [SLOW DEL] took 10698ms
+[2m2026-03-16T16:20:08.464491Z[0m [33m WARN[0m [2mlogger_core[0m[2m:[0m send_command - DIAG TIMEOUT: cmd=DEL(2869300000000000000000000000000000000000...) timeout=50ms

@@ -6,9 +6,13 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.logging.Logger;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.PeriodicChecksManualInterval;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
 import java.util.concurrent.CompletableFuture;
@@ -21,17 +25,31 @@ public class GlideAsyncClient implements AsyncClient<String> {
 
     @Override
     public void connectToValkey(ConnectionSettings connectionSettings) {
+        Logger.init(Logger.Level.INFO, "glide.log");
 
         if (connectionSettings.clusterMode) {
-            GlideClusterClientConfiguration config =
-                    GlideClusterClientConfiguration.builder()
-                            .address(
-                                    NodeAddress.builder()
-                                            .host(connectionSettings.host)
-                                            .port(connectionSettings.port)
-                                            .build())
-                            .useTLS(connectionSettings.useSsl)
+            // Build advanced config with tcpNoDelay
+            AdvancedGlideClusterClientConfiguration adv =
+                    AdvancedGlideClusterClientConfiguration.builder()
+                            .refreshTopologyFromInitialNodes(true)
+                            .periodicChecks(
+                                    PeriodicChecksManualInterval.builder().durationInSec(600).build()) // 10 minutes
+                            .tlsAdvancedConfiguration(
+                                    TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
                             .build();
+            var configBuilder =
+                    GlideClusterClientConfiguration.builder()
+                            .address(NodeAddress.builder().host(connectionSettings.host).port(6379).build())
+                            .useTLS(true)
+                            .advancedConfiguration(adv)
+                            // .readFrom(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY)
+                            // .clientAZ("us-east-1c")
+                            .requestTimeout(connectionSettings.requestTimeoutMs);
+            if (connectionSettings.inflightLimit > 0) {
+                configBuilder.inflightRequestsLimit(connectionSettings.inflightLimit);
+                System.out.printf("Setting inflight requests limit to %d%n", connectionSettings.inflightLimit);
+            }
+            GlideClusterClientConfiguration config = configBuilder.build();
             try {
                 glideClient = GlideClusterClient.createClient(config).get(10, SECONDS);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -68,6 +86,11 @@ public class GlideAsyncClient implements AsyncClient<String> {
     }
 
     @Override
+    public CompletableFuture<Long> asyncDel(String[] keys) {
+        return glideClient.del(keys);
+    }
+
+    @Override
     public void closeConnection() {
         try {
             glideClient.close();
@@ -80,4 +103,8 @@ public class GlideAsyncClient implements AsyncClient<String> {
     public String getName() {
         return "glide";
     }
+
+    public BaseClient getGlideClient() {
+    return glideClient;
+}
 }

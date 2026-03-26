@@ -15,6 +15,8 @@ public interface AsyncClient<T> extends Client {
 
     Future<String> asyncGet(String key);
 
+    Future<Long> asyncDel(String[] keys);
+
     default <T> T waitForResult(Future<T> future) {
         return waitForResult(future, DEFAULT_TIMEOUT_MILLISECOND);
     }

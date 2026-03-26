@@ -1,0 +1,10 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker
+  - role: worker
+networking:
+  # Use host network so pods can reach ElastiCache in the VPC
+  apiServerAddress: "127.0.0.1"

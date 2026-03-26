@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bench-writer
+  labels:
+    app: glide-bench
+    role: writer
+spec:
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+  containers:
+    - name: benchmark
+      image: glide-bench:latest
+      imagePullPolicy: Never
+      resources:
+        requests:
+          cpu: "2"
+          memory: "2Gi"
+        limits:
+          cpu: "2"
+          memory: "4Gi"
+      args:
+        - "--clients"
+        - "glide"
+        - "--clientCount"
+        - "1"
+        - "--host"
+        - "clustercfg.glide-bench-cluster.ime4qh.use1.cache.amazonaws.com"
+        - "--port"
+        - "6379"
+        - "--tls"
+        - "--clusterModeEnabled"
+        - "--operations"
+        - "write"
+        - "--concurrentTasks"
+        - "60"
+        - "--duration"
+        - "86400"
+        - "--dataSize"
+        - "100"
+        - "--metricsDir"
+        - "/metrics"
+        - "--metricsInterval"
+        - "60"
+      volumeMounts:
+        - name: metrics
+          mountPath: /metrics
+  volumes:
+    - name: metrics
+      hostPath:
+        path: /tmp/metrics-writer
+        type: DirectoryOrCreate
+  restartPolicy: Never
