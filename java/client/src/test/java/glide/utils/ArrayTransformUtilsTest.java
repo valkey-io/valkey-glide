@@ -104,8 +104,7 @@ class ArrayTransformUtilsTest {
     @Test
     void convertMapToValueKeyStringArray_empty() {
         assertEquals(
-                0,
-                ArrayTransformUtils.convertMapToValueKeyStringArray(new LinkedHashMap<>()).length);
+                0, ArrayTransformUtils.convertMapToValueKeyStringArray(new LinkedHashMap<>()).length);
     }
 
     @Test
@@ -132,8 +131,7 @@ class ArrayTransformUtilsTest {
 
     @Test
     void flattenMapToGlideStringArray_empty() {
-        assertEquals(
-                0, ArrayTransformUtils.flattenMapToGlideStringArray(new LinkedHashMap<>()).length);
+        assertEquals(0, ArrayTransformUtils.flattenMapToGlideStringArray(new LinkedHashMap<>()).length);
     }
 
     @Test
@@ -171,9 +169,7 @@ class ArrayTransformUtilsTest {
     @Test
     void flattenAllKeysFollowedByAllValues_empty() {
         assertEquals(
-                0,
-                ArrayTransformUtils.flattenAllKeysFollowedByAllValues(new LinkedHashMap<>())
-                        .length);
+                0, ArrayTransformUtils.flattenAllKeysFollowedByAllValues(new LinkedHashMap<>()).length);
     }
 
     @Test
@@ -227,17 +223,14 @@ class ArrayTransformUtilsTest {
     @Test
     void convertMapToValueKeyStringArrayBinary_empty() {
         assertEquals(
-                0,
-                ArrayTransformUtils.convertMapToValueKeyStringArrayBinary(new LinkedHashMap<>())
-                        .length);
+                0, ArrayTransformUtils.convertMapToValueKeyStringArrayBinary(new LinkedHashMap<>()).length);
     }
 
     @Test
     void flattenMapToGlideStringArrayValueFirst_empty() {
         assertEquals(
                 0,
-                ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst(new LinkedHashMap<>())
-                        .length);
+                ArrayTransformUtils.flattenMapToGlideStringArrayValueFirst(new LinkedHashMap<>()).length);
     }
 
     @Test

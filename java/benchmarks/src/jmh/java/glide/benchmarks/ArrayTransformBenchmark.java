@@ -23,8 +23,8 @@ import org.openjdk.jmh.annotations.Warmup;
 /**
  * JMH microbenchmarks for ArrayTransformUtils methods.
  *
- * <p>Measures the for-loop + pre-sized array implementations. GC profiler captures
- * allocations/op alongside latency.
+ * <p>Measures the for-loop + pre-sized array implementations. GC profiler captures allocations/op
+ * alongside latency.
  *
  * <p>Run: ./gradlew :benchmarks:jmh
  *
@@ -101,8 +101,8 @@ public class ArrayTransformBenchmark {
     }
 
     /**
-     * Worst case: 2 ArrayLists + 2 intermediate arrays + concatenateArrays stream internally.
-     * Used by commands that need keys-first, values-second layout.
+     * Worst case: 2 ArrayLists + 2 intermediate arrays + concatenateArrays stream internally. Used by
+     * commands that need keys-first, values-second layout.
      */
     @Benchmark
     public GlideString[] flattenAllKeysFollowedByAllValues() {
