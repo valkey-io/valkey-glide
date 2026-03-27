@@ -116,15 +116,21 @@ jobs:
               env:
                   RELEASE: ${{ steps.pull-request-params.outputs.release_version || steps.workflow-dispatch-params.outputs.release_version || steps.tag-push-params.outputs.release_version }}
               run: |
-                  # npm-tag logic - simple latest/next determination
                   if [[ "$RELEASE" == *-rc* ]]; then
-                    # Any release candidate version gets "next" tag
+                    # RC versions always get "next"
                     TAG="next"
                   else
-                    # Regular releases get "latest" tag
-                    TAG="latest"
+                    # Check if a newer version is already published as "latest"
+                    CURRENT_LATEST=$(npm view @valkey/valkey-glide dist-tags.latest 2>/dev/null || echo "0.0.0")
+                    LOWER=$(printf '%s\n%s' "$RELEASE" "$CURRENT_LATEST" | sort -V | head -n1)
+                    if [[ "$LOWER" == "$RELEASE" && "$RELEASE" != "$CURRENT_LATEST" ]]; then
+                      # RELEASE is older than current latest - tag as latest-MAJOR.MINOR
+                      MINOR=$(echo "$RELEASE" | cut -d. -f1-2)
+                      TAG="latest-${MINOR}"
+                    else
+                      TAG="latest"
+                    fi
                   fi
-
                   echo "Using npm tag: $TAG"
                   echo "npm_tag=$TAG" >> $GITHUB_OUTPUT
 
@@ -153,18 +159,18 @@ jobs:
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .runner = (
-                          if (.CD_RUNNER != null) 
-                          then .CD_RUNNER 
-                          elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER 
+                          if (.CD_RUNNER != null)
+                          then .CD_RUNNER
+                          elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER
                           else "ubuntu-latest"
                           end
                       )
                       | .build_type = (
-                          if (.TARGET | contains("musl")) 
-                          then "musl" 
-                          elif (.TARGET | contains("gnu")) 
-                          then "gnu" 
-                          else "mac" 
+                          if (.TARGET | contains("musl"))
+                          then "musl"
+                          elif (.TARGET | contains("gnu"))
+                          then "gnu"
+                          else "mac"
                           end
                       )
                       | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
@@ -503,7 +509,7 @@ jobs:
                   if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
                       echo "Installing Valkey on GNU/Linux..."
                       sudo apt update
-                      sudo apt install -y valkey || { 
+                      sudo apt install -y valkey || {
                           echo "Valkey not found in default repos, trying alternative source..."
                           curl -fsSL https://packages.redis.io/valkey/setup-valkey | sudo bash -
                           sudo apt install -y valkey || {
@@ -625,7 +631,7 @@ jobs:
                       elif [[ "$build_type" == "gnu" ]]; then
                         additional_suffix="-gnu"
                       fi
-                      
+
                       package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
                       attempt_deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}"
                     else
