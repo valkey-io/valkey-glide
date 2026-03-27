@@ -107,7 +107,7 @@ export type PeriodicChecks =
 export namespace GlideClusterClientConfiguration {
     /**
      * Enum representing pubsub subscription modes.
-     * @see {@link https://valkey.io/docs/topics/pubsub/|Valkey PubSub Documentation} for more details.
+     * @see [Valkey PubSub Documentation](https://valkey.io/docs/topics/pubsub/) for more details.
      */
     export enum PubSubChannelModes {
         /**
@@ -518,7 +518,7 @@ export type SingleNodeRoute =
  * Client used for connection to cluster servers.
  * Use {@link createClient} to request a client.
  *
- * @see For full documentation refer to {@link https://glide.valkey.io/how-to/client-initialization/#cluster | Valkey GLIDE Documentation}.
+ * @see For full documentation refer to [Valkey GLIDE Documentation](https://glide.valkey.io/how-to/client-initialization/#cluster).
  */
 export class GlideClusterClient extends BaseClient {
     /**
@@ -730,13 +730,13 @@ export class GlideClusterClient extends BaseClient {
      * Using the same cursor object for multiple iterations may result in unexpected behavior.
      *
      * For more information about the Cluster Scan implementation, see
-     * {@link https://glide.valkey.io/concepts/client-features/cluster-scan/ | Cluster Scan}.
+     * [Cluster Scan](https://glide.valkey.io/concepts/client-features/cluster-scan/).
      *
      * This method can iterate over all keys in the database from the start of the scan until it ends.
      * The same key may be returned in multiple scan iterations.
      * The API does not accept `route` as it go through all slots in the cluster.
      *
-     * @see {@link https://valkey.io/commands/scan/ | valkey.io} for more details.
+     * @see [valkey.io](https://valkey.io/commands/scan/) for more details.
      *
      * @param cursor - The cursor object that wraps the scan state.
      *   To start a new scan, create a new empty `ClusterScanCursor` using {@link ClusterScanCursor}.
@@ -795,7 +795,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
-     * @see {@link https://glide.valkey.io/concepts/client-features/custom-commands/|Glide for Valkey Wiki} for details on the restrictions and limitations of the custom command API.
+     * @see [Glide for Valkey Wiki](https://glide.valkey.io/concepts/client-features/custom-commands/) for details on the restrictions and limitations of the custom command API.
      *
      * @param args - A list including the command name and arguments for the custom command.
      * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}
@@ -830,7 +830,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * - **Atomic Batches (Transactions):** All key-based commands must map to the same hash slot. If keys span different slots, the transaction will fail. If the transaction fails due to a `WATCH` command, `exec` will return `null`.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey GLIDE Documentation} for details on Valkey Transactions.
+     * @see [Valkey GLIDE Documentation](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction) for details on Valkey Transactions.
      *
      * **Retry and Redirection:**
      *
@@ -849,8 +849,8 @@ export class GlideClusterClient extends BaseClient {
      * @returns A Promise resolving to an array of results, where each entry corresponds to a command’s execution result.
      *   - If the transaction fails due to a `WATCH` command, the promise resolves to `null`.
      *
-     * @see {@link https://valkey.io/docs/topics/transactions/|Valkey Transactions (Atomic Batches)}
-     * @see {@link https://valkey.io/docs/topics/pipelining/|Valkey Pipelines (Non-Atomic Batches)}
+     * @see [Valkey Transactions (Atomic Batches)](https://valkey.io/docs/topics/transactions/)
+     * @see [Valkey Pipelines (Non-Atomic Batches)](https://valkey.io/docs/topics/pipelining/)
      * @example
      * ```typescript
      * // Atomic batch (transaction): all keys must share the same hash slot
@@ -897,7 +897,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/ping/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/ping/) for details.
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `message` : a message to include in the `PING` command.
@@ -937,7 +937,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * Starting from server version 7, command supports multiple section arguments.
      *
-     * @see {@link https://valkey.io/commands/info/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/info/) for details.
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `sections`: a list of {@link InfoOptions} values specifying which sections of information to retrieve.
@@ -968,7 +968,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/client-getname/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/client-getname/) for details.
      *
      * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      *
@@ -1004,7 +1004,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a all nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/config-rewrite/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/config-rewrite/) for details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns `"OK"` when the configuration was rewritten properly. Otherwise, an error is thrown.
@@ -1028,7 +1028,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/config-resetstat/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/config-resetstat/) for details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns always `"OK"`.
@@ -1052,7 +1052,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/client-id/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/client-id/) for details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns The ID of the connection. When specifying a route other than a single node,
@@ -1079,7 +1079,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/config-get/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/config-get/) for details.
      *
      * @param parameters - A list of configuration parameter names to retrieve values for.
      * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
@@ -1118,7 +1118,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/config-set/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/config-set/) for details.
      *
      * @param parameters - A map consisting of configuration parameters and their respective values to set.
      * @param options - (Optional) See {@link RouteOption}.
@@ -1146,7 +1146,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/echo/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/echo/) for details.
      *
      * @param message - The message to be echoed back.
      * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
@@ -1181,7 +1181,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/time/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/time/) for details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      *
@@ -1220,7 +1220,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/lolwut/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/lolwut/) for details.
      *
      * @param options - (Optional) The LOLWUT options - see {@link LolwutOptions} and {@link RouteOption}.
      * @returns A piece of generative computer art along with the current server version.
@@ -1245,7 +1245,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/fcall/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param func - The function name.
@@ -1275,7 +1275,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/fcall/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/fcall/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param func - The function name.
@@ -1304,7 +1304,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Deletes a library and all its functions.
      *
-     * @see {@link https://valkey.io/commands/function-delete/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-delete/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The library name to delete.
@@ -1331,7 +1331,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Loads a library to Valkey.
      *
-     * @see {@link https://valkey.io/commands/function-load/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-load/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param libraryCode - The source code that implements the library.
@@ -1365,7 +1365,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Deletes all function libraries.
      *
-     * @see {@link https://valkey.io/commands/function-flush/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-flush/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param options - (Optional) Additional parameters:
@@ -1395,7 +1395,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/function-list/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-list/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param options - (Optional) See {@link FunctionListOptions}, {@link DecoderOption}, and {@link RouteOption}.
@@ -1446,7 +1446,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/function-stats/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-stats/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param options - (Optional) See {@link DecoderOption} and {@link RouteOption}.
@@ -1506,7 +1506,7 @@ export class GlideClusterClient extends BaseClient {
      * Kills a function that is currently executing.
      * `FUNCTION KILL` terminates read-only functions only.
      *
-     * @see {@link https://valkey.io/commands/function-kill/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-kill/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param options - (Optional) See {@link RouteOption}.
@@ -1527,7 +1527,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns the serialized payload of all loaded libraries.
      *
-     * @see {@link https://valkey.io/commands/function-dump/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-dump/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param options - (Optional) See {@link RouteOption}.
@@ -1551,7 +1551,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Restores libraries from the serialized payload returned by {@link functionDump}.
      *
-     * @see {@link https://valkey.io/commands/function-restore/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/function-restore/) for details.
      * @remarks Since Valkey version 7.0.0.
      *
      * @param payload - The serialized data from {@link functionDump}.
@@ -1581,7 +1581,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/flushall/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/flushall/) for details.
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
@@ -1610,7 +1610,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/flushdb/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/flushdb/) for details.
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
@@ -1639,7 +1639,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/dbsize/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/dbsize/) for details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns The number of keys in the database.
@@ -1660,7 +1660,7 @@ export class GlideClusterClient extends BaseClient {
      * The mode is selected using the 'sharded' parameter.
      * For both sharded and non-sharded mode, request is routed using hashed channel as key.
      *
-     * @see {@link https://valkey.io/commands/publish} and {@link https://valkey.io/commands/spublish} for more details.
+     * @see [https://valkey.io/commands/publish](https://valkey.io/commands/publish) and [https://valkey.io/commands/spublish](https://valkey.io/commands/spublish) for more details.
      *
      * @param message - Message to publish.
      * @param channel - Channel to publish the message on.
@@ -1695,7 +1695,7 @@ export class GlideClusterClient extends BaseClient {
      * Lists the currently active shard channels.
      * The command is routed to all nodes, and aggregates the response to a single array.
      *
-     * @see {@link https://valkey.io/commands/pubsub-shardchannels/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/pubsub-shardchannels/) for details.
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `pattern`: A glob-style pattern to match active shard channels.
@@ -1727,7 +1727,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Returns the number of subscribers (exclusive of clients subscribed to patterns) for the specified shard channels.
      *
-     * @see {@link https://valkey.io/commands/pubsub-shardnumsub/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/pubsub-shardnumsub/) for details.
      * @remarks The command is routed to all nodes, and aggregates the response into a single list.
      *
      * @param channels - The list of shard channels to query for the number of subscribers.
@@ -1764,7 +1764,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/lastsave/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/lastsave/) for details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns `UNIX TIME` of the last DB save executed with success.
@@ -1789,7 +1789,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for details.
+     * @see [valkey.io](https://valkey.io/commands/randomkey/) for details.
      *
      * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
      * @returns A random existing key name.
@@ -1812,7 +1812,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to all primary nodes, unless `route` is provided
      *
-     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey GLIDE Documentation} for more details.
+     * @see [valkey.io](https://valkey.io/commands/unwatch/) and [Valkey GLIDE Documentation](https://valkey.io/topics/transactions/#cas) for more details.
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns A simple `"OK"` response.
@@ -1838,7 +1838,7 @@ export class GlideClusterClient extends BaseClient {
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
-     * @see {@link https://valkey.io/commands/script-load/|SCRIPT LOAD} and {@link https://valkey.io/commands/evalsha/|EVALSHA} on valkey.io for details.
+     * @see [SCRIPT LOAD](https://valkey.io/commands/script-load/) and [EVALSHA](https://valkey.io/commands/evalsha/) on valkey.io for details.
      *
      * @param script - The Lua script to execute.
      * @param options - (Optional) Additional parameters:
@@ -1904,7 +1904,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Checks existence of scripts in the script cache by their SHA1 digest.
      *
-     * @see {@link https://valkey.io/commands/script-exists/|valkey.io} for more details.
+     * @see [valkey.io](https://valkey.io/commands/script-exists/) for more details.
      *
      * @param sha1s - List of SHA1 digests of the scripts to check.
      * @param options - (Optional) See {@link RouteOption}.
@@ -1926,7 +1926,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Flushes the Lua scripts cache.
      *
-     * @see {@link https://valkey.io/commands/script-flush/|valkey.io} for more details.
+     * @see [valkey.io](https://valkey.io/commands/script-flush/) for more details.
      *
      * @param options - (Optional) Additional parameters:
      * - (Optional) `mode`: the flushing mode, could be either {@link FlushMode.SYNC} or {@link FlushMode.ASYNC}.
@@ -1953,7 +1953,7 @@ export class GlideClusterClient extends BaseClient {
     /**
      * Kills the currently executing Lua script, assuming no write operation was yet performed by the script.
      *
-     * @see {@link https://valkey.io/commands/script-kill/|valkey.io} for more details.
+     * @see [valkey.io](https://valkey.io/commands/script-kill/) for more details.
      * @remarks The command is routed to all nodes, and aggregates the response to a single array.
      *
      * @param options - (Optional) See {@link RouteOption}.

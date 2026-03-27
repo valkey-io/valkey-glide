@@ -2763,7 +2763,7 @@ export function createFunctionDump(): command_request.Command {
  * Option for `FUNCTION RESTORE` command: {@link GlideClient.functionRestore} and
  * {@link GlideClusterClient.functionRestore}.
  *
- * @see {@link https://valkey.io/commands/function-restore/"|valkey.io} for more details.
+ * @see [valkey.io](https://valkey.io/commands/function-restore/) for more details.
  */
 export enum FunctionRestorePolicy {
     /**
@@ -2803,7 +2803,7 @@ export function createFunctionRestore(
  * are assumed. If `BIT` is specified, `start=0` and `end=2` means to look at the first three bits. If `BYTE` is
  * specified, `start=0` and `end=2` means to look at the first three bytes.
  *
- * @see {@link https://valkey.io/commands/bitcount/ | bitcount} and {@link https://valkey.io/commands/bitpos/ | bitpos} for more details.
+ * @see [bitcount](https://valkey.io/commands/bitcount/) and [bitpos](https://valkey.io/commands/bitpos/) for more details.
  */
 export interface BitOffsetOptions {
     /** The starting offset index. */
@@ -3398,7 +3398,7 @@ export function createDump(key: GlideString): command_request.Command {
 /**
  * Optional arguments for `RESTORE` command.
  *
- * @See {@link https://valkey.io/commands/restore/|valkey.io} for details.
+ * @See [valkey.io](https://valkey.io/commands/restore/) for details.
  * @remarks `IDLETIME` and `FREQ` modifiers cannot be set at the same time.
  */
 export interface RestoreOptions {
@@ -3697,10 +3697,10 @@ export enum HashExpirationCondition {
  * };
  * ```
  *
- * @see {@link https://valkey.io/commands/hexpire/|HEXPIRE}
- * @see {@link https://valkey.io/commands/hpexpire/|HPEXPIRE}
- * @see {@link https://valkey.io/commands/hexpireat/|HEXPIREAT}
- * @see {@link https://valkey.io/commands/hpexpireat/|HPEXPIREAT}
+ * @see [HEXPIRE](https://valkey.io/commands/hexpire/)
+ * @see [HPEXPIRE](https://valkey.io/commands/hpexpire/)
+ * @see [HEXPIREAT](https://valkey.io/commands/hexpireat/)
+ * @see [HPEXPIREAT](https://valkey.io/commands/hpexpireat/)
  */
 export interface HExpireOptions {
     /**
