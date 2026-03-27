@@ -2786,18 +2786,21 @@ pub(crate) mod shared_client_tests {
             kill_connection(&mut test_basics.client).await;
 
             // Retry until reconnection completes, then verify name=2ndName persisted
-            let client_info = repeat_try_create_with_timeout(|| async {
-                let mut client = test_basics.client.clone();
-                let mut cmd = client_info_cmd.clone();
-                let response = client.send_command(&mut cmd, None).await.ok()?;
-                match response {
-                    Value::BulkString(bytes) => {
-                        Some(String::from_utf8_lossy(&bytes).to_string())
+            let client_info = repeat_try_create_with_timeout(
+                || async {
+                    let mut client = test_basics.client.clone();
+                    let mut cmd = client_info_cmd.clone();
+                    let response = client.send_command(&mut cmd, None).await.ok()?;
+                    match response {
+                        Value::BulkString(bytes) => {
+                            Some(String::from_utf8_lossy(&bytes).to_string())
+                        }
+                        Value::VerbatimString { text, .. } => Some(text),
+                        _ => None,
                     }
-                    Value::VerbatimString { text, .. } => Some(text),
-                    _ => None,
-                }
-            }, std::time::Duration::from_millis(100))
+                },
+                std::time::Duration::from_millis(100),
+            )
             .await;
             assert!(client_info.contains("name=2ndName"));
         });
@@ -2993,7 +2996,9 @@ pub(crate) mod shared_client_tests {
     /// This ensures that protocol version changed via HELLO command persists across reconnections.
     fn test_protocol_persistence_after_reconnection(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
-            println!("Running test_protocol_persistence_after_reconnection with use_cluster={use_cluster}");
+            println!(
+                "Running test_protocol_persistence_after_reconnection with use_cluster={use_cluster}"
+            );
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
@@ -3039,15 +3044,18 @@ pub(crate) mod shared_client_tests {
             kill_connection(&mut test_basics.client).await;
 
             // Retry until reconnection completes, then verify RESP3 persisted
-            let hello_info = repeat_try_create_with_timeout(|| async {
-                let mut client = test_basics.client.clone();
-                let mut cmd = hello_cmd.clone();
-                let response = client.send_command(&mut cmd, None).await.ok()?;
-                redis::from_owned_redis_value::<std::collections::HashMap<String, Value>>(
-                    response,
-                )
-                .ok()
-            }, std::time::Duration::from_millis(100))
+            let hello_info = repeat_try_create_with_timeout(
+                || async {
+                    let mut client = test_basics.client.clone();
+                    let mut cmd = hello_cmd.clone();
+                    let response = client.send_command(&mut cmd, None).await.ok()?;
+                    redis::from_owned_redis_value::<std::collections::HashMap<String, Value>>(
+                        response,
+                    )
+                    .ok()
+                },
+                std::time::Duration::from_millis(100),
+            )
             .await;
             assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
         });

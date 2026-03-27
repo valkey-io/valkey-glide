@@ -658,13 +658,24 @@ pub async fn repeat_try_create<T, Fut>(f: impl Fn() -> Fut) -> T
 where
     Fut: Future<Output = Option<T>>,
 {
-    for _ in 0..500 {
+    repeat_try_create_with_timeout(f, std::time::Duration::from_millis(3000)).await
+}
+
+pub async fn repeat_try_create_with_timeout<T, Fut>(
+    f: impl Fn() -> Fut,
+    timeout: std::time::Duration,
+) -> T
+where
+    Fut: Future<Output = Option<T>>,
+{
+    let start = tokio::time::Instant::now();
+    while start.elapsed() < timeout {
         if let Some(value) = f().await {
             return value;
         }
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
-    panic!("Couldn't create object");
+    panic!("Couldn't create object within {:?}", timeout);
 }
 
 pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {
