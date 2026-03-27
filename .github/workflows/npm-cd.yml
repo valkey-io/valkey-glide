@@ -124,8 +124,9 @@ jobs:
                     CURRENT_LATEST=$(npm view @valkey/valkey-glide dist-tags.latest 2>/dev/null || echo "0.0.0")
                     LOWER=$(printf '%s\n%s' "$RELEASE" "$CURRENT_LATEST" | sort -V | head -n1)
                     if [[ "$LOWER" == "$RELEASE" && "$RELEASE" != "$CURRENT_LATEST" ]]; then
-                      # RELEASE is older than current latest - this is a backport
-                      TAG="previous"
+                      # RELEASE is older than current latest - tag as latest-MAJOR.MINOR
+                      MINOR=$(echo "$RELEASE" | cut -d. -f1-2)
+                      TAG="latest-${MINOR}"
                     else
                       TAG="latest"
                     fi
