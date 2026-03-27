@@ -139,7 +139,7 @@ async fn get_signing_identity(
 
 /// Internal state structure for IAM token management
 #[derive(Clone, Debug)]
-pub struct IamTokenState {
+pub(crate) struct IamTokenState {
     /// AWS region for signing requests
     region: String,
     /// ElastiCache/MemoryDB cluster name
@@ -312,7 +312,7 @@ impl IAMTokenManager {
     /// Generate a token with exponential backoff + ±20% jitter.
     /// Retries up to `TOKEN_GEN_MAX_ATTEMPTS`, doubling backoff each time (capped).
     /// Returns token on success, last error on failure.
-    pub async fn generate_token_with_backoff(
+    pub(crate) async fn generate_token_with_backoff(
         state: &IamTokenState,
     ) -> Result<String, GlideIAMError> {
         let mut attempt: u32 = 0;
