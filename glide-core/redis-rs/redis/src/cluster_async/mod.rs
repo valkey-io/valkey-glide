@@ -1010,6 +1010,146 @@ mod inflight_tracker_tests {
     }
 }
 
+#[cfg(test)]
+mod iam_token_refresh_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Mock IAM token provider that returns a configurable token and tracks call count.
+    struct MockTokenProvider {
+        token: std::sync::Mutex<String>,
+        call_count: AtomicUsize,
+    }
+
+    impl MockTokenProvider {
+        fn new(token: &str) -> Arc<Self> {
+            Arc::new(Self {
+                token: std::sync::Mutex::new(token.to_string()),
+                call_count: AtomicUsize::new(0),
+            })
+        }
+
+        fn set_token(&self, token: &str) {
+            *self.token.lock().unwrap() = token.to_string();
+        }
+
+        fn calls(&self) -> usize {
+            self.call_count.load(Ordering::Relaxed)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::client::IAMTokenProvider for MockTokenProvider {
+        async fn get_valid_token(&self) -> Option<String> {
+            self.call_count.fetch_add(1, Ordering::Relaxed);
+            let token = self.token.lock().unwrap().clone();
+            if token.is_empty() {
+                None
+            } else {
+                Some(token)
+            }
+        }
+    }
+
+    /// Helper to build a minimal GlideConnectionOptions with an IAM provider.
+    fn options_with_provider(
+        provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+    ) -> GlideConnectionOptions {
+        GlideConnectionOptions {
+            push_sender: None,
+            disconnect_notifier: None,
+            discover_az: false,
+            connection_timeout: None,
+            connection_retry_strategy: None,
+            tcp_nodelay: false,
+            pubsub_synchronizer: None,
+            iam_token_provider: provider,
+        }
+    }
+
+    /// Helper to build a minimal InnerCore with the given password and IAM provider.
+    fn build_inner(
+        initial_password: Option<String>,
+        provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+    ) -> Arc<InnerCore<crate::aio::MultiplexedConnection>> {
+        use crate::cluster_client::ClusterParams;
+        use connections_container::ConnectionsContainer;
+
+        let params = ClusterParams::default_for_test(initial_password);
+
+        Arc::new(InnerCore {
+            conn_lock: StdRwLock::new(ConnectionsContainer::default()),
+            cluster_params: StdRwLock::new(params),
+            pending_requests: Mutex::new(Vec::new()),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: options_with_provider(provider),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    fn read_password(inner: &Arc<InnerCore<crate::aio::MultiplexedConnection>>) -> Option<String> {
+        inner.cluster_params.read().unwrap().password.clone()
+    }
+
+    #[tokio::test]
+    async fn refresh_updates_password_when_provider_returns_token() {
+        let provider = MockTokenProvider::new("fresh-token-123");
+        let inner = build_inner(Some("old-token".into()), Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("fresh-token-123".into()));
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn refresh_does_not_change_password_when_provider_returns_none() {
+        let provider = MockTokenProvider::new(""); // returns None
+        let inner = build_inner(Some("old-token".into()), Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("old-token".into()));
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn refresh_is_noop_when_no_provider_configured() {
+        let inner = build_inner(Some("static-password".into()), None);
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("static-password".into()));
+    }
+
+    #[tokio::test]
+    async fn refresh_sets_password_when_initially_none() {
+        let provider = MockTokenProvider::new("first-token");
+        let inner = build_inner(None, Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("first-token".into()));
+    }
+
+    #[tokio::test]
+    async fn refresh_picks_up_new_token_on_second_call() {
+        let provider = MockTokenProvider::new("token-v1");
+        let inner = build_inner(None, Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+        assert_eq!(read_password(&inner), Some("token-v1".into()));
+
+        provider.set_token("token-v2");
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+        assert_eq!(read_password(&inner), Some("token-v2".into()));
+        assert_eq!(provider.calls(), 2);
+    }
+}
+
 struct PendingRequest<C> {
     retry: u32,
     sender: oneshot::Sender<RedisResult<Response>>,
