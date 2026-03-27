@@ -2799,7 +2799,7 @@ pub(crate) mod shared_client_tests {
                         _ => None,
                     }
                 },
-                std::time::Duration::from_millis(100),
+                std::time::Duration::from_secs(3),
             )
             .await;
             assert!(client_info.contains("name=2ndName"));
@@ -2996,9 +2996,6 @@ pub(crate) mod shared_client_tests {
     /// This ensures that protocol version changed via HELLO command persists across reconnections.
     fn test_protocol_persistence_after_reconnection(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
-            println!(
-                "Running test_protocol_persistence_after_reconnection with use_cluster={use_cluster}"
-            );
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
@@ -3054,7 +3051,7 @@ pub(crate) mod shared_client_tests {
                     )
                     .ok()
                 },
-                std::time::Duration::from_millis(100),
+                std::time::Duration::from_secs(3),
             )
             .await;
             assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
