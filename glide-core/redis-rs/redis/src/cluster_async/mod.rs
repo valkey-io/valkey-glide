@@ -1494,19 +1494,32 @@ where
         Ok(connections.0)
     }
 
+    /// If IAM authentication is configured, refresh the token in `cluster_params` so that
+    /// any subsequent connection attempts use a valid credential.
+    async fn refresh_iam_token_in_cluster_params(inner: &Arc<InnerCore<C>>) {
+        if let Some(ref token_provider) = inner.glide_connection_options.iam_token_provider {
+            if let Some(valid_token) = token_provider.get_valid_token().await {
+                if let Ok(mut params) = inner.cluster_params.write() {
+                    params.password = Some(valid_token);
+                }
+            }
+        }
+    }
+
     // Reconnect to the initial nodes provided by the user in the creation of the client,
     // and try to refresh the slots based on the initial connections.
     // Being used when all cluster connections are unavailable.
     fn reconnect_to_initial_nodes(inner: Arc<InnerCore<C>>) -> impl Future<Output = ()> {
         let inner = inner.clone();
-        let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
-            Ok(params) => params,
-            Err(err) => {
-                warn!("Failed to get cluster params: {}", err);
-                return async {}.boxed();
-            }
-        };
         Box::pin(async move {
+            Self::refresh_iam_token_in_cluster_params(&inner).await;
+            let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
+                Ok(params) => params,
+                Err(err) => {
+                    warn!("Failed to get cluster params: {}", err);
+                    return;
+                }
+            };
             let connection_map = match Self::create_initial_connections(
                 &inner.initial_nodes,
                 &cluster_params,
@@ -1697,22 +1710,7 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
-                    // If IAM authentication is configured, ensure the connection uses a
-                    // valid token before attempting to reconnect.  If the cached token
-                    // has expired, a fresh one is generated on demand via SigV4 signing.
-                    if let Some(ref token_provider) =
-                        inner_clone.glide_connection_options.iam_token_provider
-                    {
-                        if let Some(valid_token) = token_provider.get_valid_token().await {
-                            if let Ok(mut params) = inner_clone.cluster_params.write() {
-                                params.password = Some(valid_token);
-                            }
-                            debug!(
-                                "Updated cluster_params password with valid IAM token before reconnection attempt to {}",
-                                address_clone_for_task
-                            );
-                        }
-                    }
+                    Self::refresh_iam_token_in_cluster_params(&inner_clone).await;
 
                     let cluster_params = inner_clone
                         .cluster_params
@@ -2413,6 +2411,8 @@ where
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
 
+        // Ensure cluster_params has a fresh IAM token before creating connections
+        Self::refresh_iam_token_in_cluster_params(&inner).await;
         let cluster_params = inner
             .get_cluster_param(|params| params.clone())
             .expect(MUTEX_READ_ERR);
