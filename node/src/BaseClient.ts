@@ -4335,7 +4335,7 @@ export class BaseClient {
 
     /** Gets the intersection of all the given sets.
      *
-     * @see [valkey.io](https://valkey.io/docs/latest/commands/sinter/) for more details.
+     * @see [valkey.io](https://valkey.io/commands/sinter/) for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The `keys` of the sets to get the intersection.
