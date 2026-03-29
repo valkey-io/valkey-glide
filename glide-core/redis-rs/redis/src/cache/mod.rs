@@ -8,9 +8,7 @@ pub mod lfu_cache;
 pub mod lru_cache;
 
 use glide_cache::{CacheConfig, GlideCache};
-use lfu_cache::GlideLfuCache;
-use logger_core::{log_debug, log_info};
-use lru_cache::GlideLruCache;
+use logger_core::{log_debug, log_info, log_warn};
 use std::{
     collections::HashMap,
     sync::{Arc, LazyLock, RwLock, Weak},
@@ -40,7 +38,7 @@ pub enum EvictionPolicy {
 }
 
 /// Creates (or retrieves) a cache with the given ID.
-/// If the cache already exists, returns the existing one.
+/// If the cache already exists, returns the existing one (new config is ignored).
 /// If it doesn't exist, creates a new one with the specified configuration.
 ///
 /// # Arguments
@@ -64,9 +62,14 @@ pub fn get_or_create_cache(
         .get(cache_id)
         .and_then(Weak::upgrade)
     {
-        log_debug(
+        log_warn(
             "cache_lifetime",
-            format!("Retrieved existing cache `{cache_id}`"),
+            format!(
+                "Cache `{cache_id}` already exists — returning existing instance. \
+                 New config parameters (max_cache_kb={max_cache_kb}, ttl_sec={ttl_sec:?}, \
+                 eviction_policy={eviction_policy:?}, enable_metrics={enable_metrics}) are ignored. \
+                 Drop all references to recreate with different config."
+            ),
         );
         return cache;
     }
@@ -76,9 +79,12 @@ pub fn get_or_create_cache(
 
     // Double-check: another thread may have created the cache while we waited
     if let Some(cache) = registry.get(cache_id).and_then(Weak::upgrade) {
-        log_debug(
+        log_warn(
             "cache_lifetime",
-            format!("Retrieved existing cache `{cache_id}` (after write lock)"),
+            format!(
+                "Cache `{cache_id}` already exists (after write lock) — returning existing instance. \
+                 New config parameters are ignored."
+            ),
         );
         return cache;
     }
@@ -93,8 +99,8 @@ pub fn get_or_create_cache(
     // Create cache based on eviction policy
     let policy = eviction_policy.unwrap_or_default();
     let cache: Arc<dyn GlideCache> = match policy {
-        EvictionPolicy::Lru => GlideLruCache::new(config),
-        EvictionPolicy::Lfu => GlideLfuCache::new(config),
+        EvictionPolicy::Lru => lru_cache::new_lru_cache(config),
+        EvictionPolicy::Lfu => lfu_cache::new_lfu_cache(config),
     };
 
     log_info(

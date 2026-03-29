@@ -1,4 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+use logger_core::{log_debug, log_warn};
+
+/// Core caching interfaces and utilities for Glide
 use crate::{
     cluster_routing::{Routable, RoutingInfo},
     cmd::cacheable_cmd_type,
@@ -7,9 +10,14 @@ use crate::{
 /// Core caching interfaces and utilities for Glide
 use std::{
     fmt::Debug,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
     time::{Duration, Instant},
 };
+
+// ==================== Configuration ====================
 
 /// Configuration for cache instances
 #[derive(Debug, Clone)]
@@ -23,6 +31,8 @@ pub struct CacheConfig {
     /// Enable metrics collection (hits, misses, evictions, expirations)
     pub enable_metrics: bool,
 }
+
+// ==================== Metrics ====================
 
 /// Metrics about cache performance
 #[derive(Debug, Default)]
@@ -124,6 +134,8 @@ impl Clone for CacheMetrics {
     }
 }
 
+// ==================== Cache Entry ====================
+
 /// Type of Valkey key being cached
 /// Used to prevent type mismatches (e.g., running HGETALL on a string key)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -135,8 +147,6 @@ pub enum CachedKeyType {
     /// Set type (SMEMBERS)
     Set,
 }
-
-// ==================== Shared Cache Entry ====================
 
 /// Cache entry containing the cached value and metadata
 #[derive(Debug)]
@@ -177,7 +187,7 @@ impl CacheEntry {
     }
 }
 
-// ==================== Shared Cache Core ====================
+// ==================== Cache Core ====================
 
 /// Shared cache core that handles configuration, memory tracking, and metrics
 #[derive(Debug)]
@@ -271,7 +281,138 @@ impl CacheCore {
     }
 }
 
-// ==================== Cache Trait ====================
+// ==================== Eviction Strategy ====================
+
+/// Pluggable eviction strategy — only the data structure operations.
+///
+/// Implementors only need to handle storage and ordering.
+/// All shared logic (TTL, memory, metrics) is handled by `GlideCacheImpl`.
+pub trait EvictionStrategy: Send + Sync + Debug {
+    /// Returns a display name for logging (e.g., "LRU", "LFU").
+    fn policy_name(&self) -> &'static str;
+
+    // Promote an entry according to the eviction policy.
+    /// (LRU: moves to front, LFU: increments frequency)
+    /// Called after peek() confirms the entry is valid.
+    fn promote(&mut self, key: &[u8]);
+
+    /// Look up an entry **without** promoting it.
+    /// Used for expiration checks to avoid polluting eviction ordering.
+    fn peek(&self, key: &[u8]) -> Option<&CacheEntry>;
+
+    /// Insert a new entry. Caller guarantees the key does not already exist.
+    fn insert(&mut self, key: Vec<u8>, entry: CacheEntry);
+
+    /// Remove a specific key, returning its entry if present.
+    fn remove(&mut self, key: &[u8]) -> Option<CacheEntry>;
+
+    /// Evict one entry according to the policy. Returns the evicted entry.
+    fn evict_one(&mut self) -> Option<CacheEntry>;
+
+    /// Current number of entries.
+    fn len(&self) -> usize;
+}
+
+// ==================== GlideCacheImpl ====================
+/// Generic cache implementation parameterized by eviction strategy.
+///
+/// All shared logic lives here:
+/// - TTL expiration (lazy, on access and during eviction)
+/// - Memory accounting (charge/uncharge)
+/// - Metrics (hits, misses, evictions, expirations, invalidations)
+/// - Entry-too-big rejection
+/// - Evict-until-space-available loop
+#[derive(Debug)]
+pub struct GlideCacheImpl<S: EvictionStrategy> {
+    pub(crate) store: Mutex<S>,
+    core: CacheCore,
+}
+impl<S: EvictionStrategy> GlideCacheImpl<S> {
+    /// Creates a new GlideCacheImpl with the given eviction strategy and configuration
+    pub fn new(strategy: S, config: CacheConfig) -> std::sync::Arc<Self> {
+        log_debug(
+            "cache",
+            format!(
+                "Creating {} cache with max_memory={}KB,{} metrics_enabled={}",
+                strategy.policy_name(),
+                config.max_memory_bytes / 1024,
+                config
+                    .ttl
+                    .map_or(String::new(), |ttl| format!(" ttl={:?},", ttl)),
+                config.enable_metrics
+            ),
+        );
+        std::sync::Arc::new(Self {
+            store: Mutex::new(strategy),
+            core: CacheCore::new(config),
+        })
+    }
+
+    /// Remove an expired entry if present, updating memory and stats.
+    /// Uses `peek` to avoid affecting eviction ordering.
+    fn remove_if_expired(&self, store: &mut S, key: &[u8]) -> bool {
+        let is_expired = store.peek(key).map_or(false, |e| e.is_expired());
+        if !is_expired {
+            return false;
+        }
+
+        if let Some(entry) = store.remove(key) {
+            self.core.uncharge(entry.size);
+            if let Some(stats) = self.core.stats() {
+                stats.record_expiration();
+            }
+
+            log_debug(
+                "cache_expiration",
+                format!(
+                    "[{}] Expired entry (type={:?}, size={}B, remaining_memory={}B)",
+                    store.policy_name(),
+                    entry.key_type,
+                    entry.size,
+                    self.core.current_memory()
+                ),
+            );
+            return true;
+        }
+        false
+    }
+
+    /// Evict entries until we have enough space for `required_space` bytes.
+    /// Expired entries encountered during eviction are counted as expirations.
+    fn evict_until_space_available(&self, store: &mut S, required_space: u64) {
+        while self.core.needs_eviction(required_space) {
+            let Some(entry) = store.evict_one() else {
+                break;
+            };
+
+            self.core.uncharge(entry.size); // dont we uncharge twice?
+            let is_expired = entry.is_expired();
+            if let Some(stats) = self.core.stats() {
+                if is_expired {
+                    stats.record_expiration();
+                } else {
+                    stats.record_eviction();
+                }
+            }
+            log_debug(
+                format!(
+                    "cache_{}",
+                    if is_expired { "expiration" } else { "eviction" }
+                ),
+                format!(
+                    "[{}] {} entry (type={:?}, size={}B, remaining_memory={}B)",
+                    store.policy_name(),
+                    if is_expired { "Expired" } else { "Evicted" },
+                    entry.key_type,
+                    entry.size,
+                    self.core.current_memory()
+                ),
+            );
+        }
+    }
+}
+
+// ==================== GlideCache Trait ====================
 
 /// Core caching interface for Glide
 pub trait GlideCache: Send + Sync + Debug {
@@ -389,7 +530,123 @@ pub trait GlideCache: Send + Sync + Debug {
     }
 }
 
-// ==================== Helper Functions ====================
+// ==================== GlideCache for GlideCacheImpl ====================
+
+impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
+    fn core(&self) -> &CacheCore {
+        &self.core
+    }
+
+    fn get(&self, key: &[u8], expected_type: CachedKeyType) -> Option<Value> {
+        let mut store = self.store.lock().unwrap();
+
+        // Check expiration without promoting
+        if self.remove_if_expired(&mut store, key) {
+            return None;
+        }
+
+        // Peek first (no promotion) — check type + clone value
+        let value = {
+            let entry = store.peek(key)?;
+            if entry.key_type != expected_type {
+                log_debug(
+                    "cache_type_mismatch",
+                    format!(
+                        "[{}] Type mismatch: cached as {:?}, requested as {:?}",
+                        store.policy_name(),
+                        entry.key_type,
+                        expected_type
+                    ),
+                );
+                return None;
+            }
+            entry.value.clone()
+        };
+        // Immutable borrow dropped here
+
+        // Now promote (mutates LRU order / LFU frequency)
+        store.promote(key);
+
+        Some(value)
+    }
+
+    fn insert(&self, key: Vec<u8>, key_type: CachedKeyType, value: Value) {
+        let entry_size = calculate_entry_size(&key, &value);
+
+        if self.core.entry_too_big(entry_size) {
+            log_warn(
+                "cache_insert",
+                format!(
+                    "Entry too large for cache: {}B > {}B (max), skipping",
+                    entry_size,
+                    self.core.max_memory()
+                ),
+            );
+            return;
+        }
+
+        let mut store = self.store.lock().unwrap();
+
+        // Remove existing entry if present
+        if let Some(existing) = store.remove(&key) {
+            self.core.uncharge(existing.size);
+        }
+
+        // Evict until space available
+        self.evict_until_space_available(&mut store, entry_size);
+
+        // Insert new entry
+        let expires_at = self.core.compute_expires_at();
+        let entry = CacheEntry::new(value, key_type, expires_at, entry_size);
+
+        store.insert(key, entry);
+        self.core.charge(entry_size);
+
+        log_debug(
+            "cache_insert",
+            format!(
+                "[{}] Inserted entry (type={:?}, size={}B{})",
+                store.policy_name(),
+                key_type,
+                entry_size,
+                if expires_at.is_some() {
+                    ", with TTL"
+                } else {
+                    ""
+                }
+            ),
+        );
+    }
+
+    fn invalidate(&self, key: &[u8]) {
+        let mut store = self.store.lock().unwrap();
+
+        if let Some(entry) = store.remove(key) {
+            self.core.uncharge(entry.size);
+
+            if let Some(stats) = self.core.stats() {
+                stats.record_invalidation();
+            }
+
+            log_debug(
+                "cache_invalidate",
+                format!(
+                    "[{}] Invalidated entry (type={:?}, size={}B, remaining_memory={}B)",
+                    store.policy_name(),
+                    entry.key_type,
+                    entry.size,
+                    self.core.current_memory()
+                ),
+            );
+        }
+    }
+
+    fn entry_count(&self) -> u64 {
+        self.store.lock().unwrap().len() as u64
+    }
+}
+
+// ==================== Size Calculation ====================
 
 /// Calculates the total memory size of a Redis Value in bytes
 ///
