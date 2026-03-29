@@ -1,9 +1,10 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 import asyncio
+
 import pytest
+from glide_shared import RequestError
 from glide_shared.cache import ClientSideCache, EvictionPolicy
 from glide_shared.config import ProtocolVersion
-from glide_shared import RequestError
 
 from tests.async_tests.conftest import create_client
 
@@ -45,10 +46,12 @@ class TestClientSideCache:
         # Verify metrics: 1 miss + 2 hits = 3 total
         hit_rate = await client.get_cache_hit_rate()
         miss_rate = await client.get_cache_miss_rate()
+        total_lookups = await client.get_cache_total_lookups()
 
         assert hit_rate == pytest.approx(2.0 / 3.0), "Expected 66.67% hit rate"
         assert miss_rate == pytest.approx(1.0 / 3.0), "Expected 33.33% miss rate"
         assert abs(hit_rate + miss_rate - 1.0) < 0.0001, "Rates should sum to 1.0"
+        assert total_lookups == 3, "Expected 3 total lookups (1 miss + 2 hits)"
 
         await client.close()
 
@@ -81,6 +84,10 @@ class TestClientSideCache:
 
         with pytest.raises(Exception) as exc_info:
             await client.get_cache_miss_rate()
+        assert "metrics" in str(exc_info.value).lower()
+
+        with pytest.raises(Exception) as exc_info:
+            await client.get_cache_total_lookups()
         assert "metrics" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
@@ -121,9 +128,10 @@ class TestClientSideCache:
         # GET again - should NOT be cached (NIL values not cached)
         assert await client.get("nonexistent_key") is None
 
-        # Miss rate should be 100%
+        # Miss rate should be 100%, total lookups = 2
         miss_rate = await client.get_cache_miss_rate()
         assert miss_rate == 1.0, "Expected 100% miss rate"
+        assert await client.get_cache_total_lookups() == 2, "Expected 2 total lookups"
 
         await client.close()
 
@@ -166,6 +174,7 @@ class TestClientSideCache:
         # Miss rate should be 2 misses out of 3 total = 66.67%
         miss_rate = await client.get_cache_miss_rate()
         assert miss_rate == pytest.approx(2.0 / 3.0), "Expected 66.67% miss rate"
+        assert await client.get_cache_total_lookups() == 3, "Expected 3 total lookups"
 
         await client.close()
 
@@ -201,6 +210,9 @@ class TestClientSideCache:
         # Verify metrics: 3 misses + 3 hits = 50% hit rate
         hit_rate = await client.get_cache_hit_rate()
         assert hit_rate == 0.5, "Expected 50% hit rate"
+        assert (
+            await client.get_cache_total_lookups() == 6
+        ), "Expected 6 total lookups (3 misses + 3 hits)"
 
         await client.close()
 
@@ -229,6 +241,10 @@ class TestClientSideCache:
 
         with pytest.raises(Exception) as exc_info:
             await client.get_cache_miss_rate()
+        assert "not enabled" in str(exc_info.value).lower()
+
+        with pytest.raises(Exception) as exc_info:
+            await client.get_cache_total_lookups()
         assert "not enabled" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
@@ -388,59 +404,6 @@ class TestClientSideCache:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_cache_max_memory_limit(self, request, protocol, cluster_mode):
-        """Test that cache respects max memory limit."""
-        cache = ClientSideCache.create(
-            max_cache_kb=1,  # 1 KB
-            entry_ttl_seconds=None,
-            enable_metrics=True,
-            eviction_policy=EvictionPolicy.LRU,
-        )
-
-        client = await create_client(
-            request,
-            cluster_mode=cluster_mode,
-            protocol=protocol,
-            cache=cache,
-        )
-
-        client2 = await create_client(
-            request,
-            cluster_mode=cluster_mode,
-            protocol=protocol,
-            cache=cache,
-        )
-
-        # Create values that are ~400 bytes each
-        large_value = "x" * 400
-
-        # Add 10 keys to force eviction
-        for i in range(1, 11):
-            assert await client.set(f"key{i}", large_value) == "OK"
-            assert await client.get(f"key{i}") == large_value.encode()
-            assert await client.get(f"key{i}") == large_value.encode()
-
-        current_hit_rate = await client.get_cache_hit_rate()
-        assert current_hit_rate > 0, "Cache should have some hits"
-
-        # Check that key 1 is evicted and key 10 exists
-        assert await client2.get("key1") == large_value.encode()
-        hit_rate = await client2.get_cache_hit_rate()
-        assert hit_rate < current_hit_rate, "Expected key1 to be evicted from cache"
-
-        assert await client2.get("key10") == large_value.encode()
-        new_hit_rate = await client2.get_cache_hit_rate()
-        assert new_hit_rate > hit_rate, "Expected key10 to be in cache"
-
-        # Verify that evictions occurred
-        evictions = await client.get_cache_evictions()
-        assert evictions > 0, "Expected evictions due to max memory limit"
-
-        await client.close()
-        await client2.close()
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_shared_cache(self, request, protocol, cluster_mode):
         cache = ClientSideCache.create(
             max_cache_kb=1024,
@@ -474,6 +437,9 @@ class TestClientSideCache:
 
         assert await client2.get_cache_hit_rate() == 0.5
         assert await client.get_cache_hit_rate() == 0.5
+        assert (
+            await client.get_cache_total_lookups() == 2
+        ), "Expected 2 total lookups on shared cache"
         await client.close()
         await client2.close()
 

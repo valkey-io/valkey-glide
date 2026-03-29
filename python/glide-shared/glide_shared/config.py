@@ -628,6 +628,7 @@ class BaseClientConfiguration:
             If ReadFrom strategy is AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed
             to nodes (first replicas then primary) within the specified AZ if they exist.
         advanced_config (Optional[AdvancedBaseClientConfiguration]): Advanced configuration settings for the client.
+
         lazy_connect (Optional[bool]): Enables lazy connection mode, where physical connections to the server(s)
             are deferred until the first command is sent. This can reduce startup latency and allow for client
             creation in disconnected environments.
@@ -655,20 +656,13 @@ class BaseClientConfiguration:
             If not set, compression is disabled.
 
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
-            See `ClientSideCache` for more information.
+            See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
 
-            **Important**:
-            - Glide currently supports TTL-based caching only. Invalidation-based
-            client-side caching (where the server notifies clients of key changes) is not
-            currently supported. This means cached values may become stale if updated on
-            the server before the TTL expires.
-            - Expired entries are removed lazily (only when accessed after TTL expires),
-            not proactively in the background.
+            In order for 2 clients to share the same cache, they must be
+            created with the same ``ClientSideCache`` instance.
 
-            **Note**: In order for 2 clients to share the same cache, they must be
-            created with the same `ClientSideCache` instance.
-            - Clients with different `ClientSideCache` instances will have separate caches,
-            even if the configurations are identical.
+            - Clients with different ``ClientSideCache`` instances will have separate caches,
+              even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
     """
@@ -934,20 +928,13 @@ class GlideClientConfiguration(BaseClientConfiguration):
             read strategies.
             Defaults to False.
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
-            See `ClientSideCache` for more information.
+            See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
 
-            **Important**:
-            - Glide currently supports TTL-based caching only. Invalidation-based
-            client-side caching (where the server notifies clients of key changes) is not
-            currently supported. This means cached values may become stale if updated on
-            the server before the TTL expires.
-            - Expired entries are removed lazily (only when accessed after TTL expires),
-            not proactively in the background.
+            In order for 2 clients to share the same cache, they must be
+            created with the same ``ClientSideCache`` instance.
 
-            **Note**: In order for 2 clients to share the same cache, they must be
-            created with the same `ClientSideCache` instance.
-            - Clients with different `ClientSideCache` instances will have separate caches,
-            even if the configurations are identical.
+            - Clients with different ``ClientSideCache`` instances will have separate caches,
+              even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
     """
@@ -1170,20 +1157,13 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             values for get-type commands. This can reduce bandwidth usage and storage requirements.
             If not set, compression is disabled.
         client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
-            See `ClientSideCache` for more information.
+            See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
 
-            **Important**:
-            - Glide currently supports TTL-based caching only. Invalidation-based
-            client-side caching (where the server notifies clients of key changes) is not
-            currently supported. This means cached values may become stale if updated on
-            the server before the TTL expires.
-            - Expired entries are removed lazily (only when accessed after TTL expires),
-            not proactively in the background.
+            In order for 2 clients to share the same cache, they must be
+            created with the same ``ClientSideCache`` instance.
 
-            **Note**: In order for 2 clients to share the same cache, they must be
-            created with the same `ClientSideCache` instance.
-            - Clients with different `ClientSideCache` instances will have separate caches,
-            even if the configurations are identical.
+            - Clients with different ``ClientSideCache`` instances will have separate caches,
+              even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
 

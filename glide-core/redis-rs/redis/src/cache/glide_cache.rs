@@ -1,5 +1,5 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-use logger_core::{log_debug, log_warn};
+use tracing::{debug, warn};
 
 /// Core caching interfaces and utilities for Glide
 use crate::{
@@ -99,11 +99,16 @@ impl CacheMetrics {
         self.invalidations.fetch_add(1, Ordering::Relaxed);
     }
 
-    // ==================== Rates ====================
+    // ==================== Aggregates ====================
 
-    /// Calculate the hit rate (hits / total requests)
+    /// Returns the total number of cache lookups (hits + misses)
+    pub fn total_lookups(&self) -> u64 {
+        self.hits() + self.misses()
+    }
+
+    /// Calculate the hit rate (hits / total lookups)
     pub fn hit_rate(&self) -> f64 {
-        let total = self.hits() + self.misses();
+        let total = self.total_lookups();
         if total == 0 {
             0.0
         } else {
@@ -111,9 +116,9 @@ impl CacheMetrics {
         }
     }
 
-    /// Calculate the miss rate (misses / total requests)
+    /// Calculate the miss rate (misses / total lookups)
     pub fn miss_rate(&self) -> f64 {
-        let total = self.hits() + self.misses();
+        let total = self.total_lookups();
         if total == 0 {
             0.0
         } else {
@@ -183,7 +188,7 @@ impl CacheEntry {
     /// Check if this entry is expired
     #[inline]
     pub fn is_expired(&self) -> bool {
-        self.expires_at.map_or(false, |exp| Instant::now() >= exp)
+        self.expires_at.is_some_and(|exp| Instant::now() >= exp)
     }
 }
 
@@ -311,6 +316,11 @@ pub trait EvictionStrategy: Send + Sync + Debug {
 
     /// Current number of entries.
     fn len(&self) -> usize;
+
+    /// Returns true if the cache is empty.
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 // ==================== GlideCacheImpl ====================
@@ -330,17 +340,14 @@ pub struct GlideCacheImpl<S: EvictionStrategy> {
 impl<S: EvictionStrategy> GlideCacheImpl<S> {
     /// Creates a new GlideCacheImpl with the given eviction strategy and configuration
     pub fn new(strategy: S, config: CacheConfig) -> std::sync::Arc<Self> {
-        log_debug(
-            "cache",
-            format!(
-                "Creating {} cache with max_memory={}KB,{} metrics_enabled={}",
-                strategy.policy_name(),
-                config.max_memory_bytes / 1024,
-                config
-                    .ttl
-                    .map_or(String::new(), |ttl| format!(" ttl={:?},", ttl)),
-                config.enable_metrics
-            ),
+        debug!(
+            "cache - Creating {} cache with max_memory={}KB,{} metrics_enabled={}",
+            strategy.policy_name(),
+            config.max_memory_bytes / 1024,
+            config
+                .ttl
+                .map_or(String::new(), |ttl| format!(" ttl={:?},", ttl)),
+            config.enable_metrics
         );
         std::sync::Arc::new(Self {
             store: Mutex::new(strategy),
@@ -351,7 +358,7 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
     /// Remove an expired entry if present, updating memory and stats.
     /// Uses `peek` to avoid affecting eviction ordering.
     fn remove_if_expired(&self, store: &mut S, key: &[u8]) -> bool {
-        let is_expired = store.peek(key).map_or(false, |e| e.is_expired());
+        let is_expired = store.peek(key).is_some_and(|e| e.is_expired());
         if !is_expired {
             return false;
         }
@@ -362,15 +369,12 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
                 stats.record_expiration();
             }
 
-            log_debug(
-                "cache_expiration",
-                format!(
-                    "[{}] Expired entry (type={:?}, size={}B, remaining_memory={}B)",
-                    store.policy_name(),
-                    entry.key_type,
-                    entry.size,
-                    self.core.current_memory()
-                ),
+            debug!(
+                "cache_expiration - [{}] Expired entry (type={:?}, size={}B, remaining_memory={}B)",
+                store.policy_name(),
+                entry.key_type,
+                entry.size,
+                self.core.current_memory()
             );
             return true;
         }
@@ -385,7 +389,7 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
                 break;
             };
 
-            self.core.uncharge(entry.size); // dont we uncharge twice?
+            self.core.uncharge(entry.size);
             let is_expired = entry.is_expired();
             if let Some(stats) = self.core.stats() {
                 if is_expired {
@@ -394,19 +398,14 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
                     stats.record_eviction();
                 }
             }
-            log_debug(
-                format!(
-                    "cache_{}",
-                    if is_expired { "expiration" } else { "eviction" }
-                ),
-                format!(
-                    "[{}] {} entry (type={:?}, size={}B, remaining_memory={}B)",
-                    store.policy_name(),
-                    if is_expired { "Expired" } else { "Evicted" },
-                    entry.key_type,
-                    entry.size,
-                    self.core.current_memory()
-                ),
+            debug!(
+                "cache_{} - [{}] {} entry (type={:?}, size={}B, remaining_memory={}B)",
+                if is_expired { "expiration" } else { "eviction" },
+                store.policy_name(),
+                if is_expired { "Expired" } else { "Evicted" },
+                entry.key_type,
+                entry.size,
+                self.core.current_memory()
             );
         }
     }
@@ -494,9 +493,9 @@ pub trait GlideCache: Send + Sync + Debug {
     fn get_cached_cmd(&self, cmd: &Cmd) -> Option<Value> {
         let cmd_name = cmd.command()?;
         let key_type = cacheable_cmd_type(cmd_name.as_ref())?;
-        let cmd_key = RoutingInfo::key_for_routable(cmd)?;
+        let cmd_key = RoutingInfo::key_for_command(cmd)?;
 
-        let result = self.get(&cmd_key, key_type);
+        let result = self.get(cmd_key, key_type);
 
         if result.is_some() {
             self.increment_hit();
@@ -524,7 +523,7 @@ pub trait GlideCache: Send + Sync + Debug {
             None => return,
         };
 
-        if let Some(cmd_key) = RoutingInfo::key_for_routable(cmd) {
+        if let Some(cmd_key) = RoutingInfo::key_for_command(cmd) {
             self.insert(cmd_key.to_vec(), key_type, value);
         }
     }
@@ -549,14 +548,11 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
         let value = {
             let entry = store.peek(key)?;
             if entry.key_type != expected_type {
-                log_debug(
-                    "cache_type_mismatch",
-                    format!(
-                        "[{}] Type mismatch: cached as {:?}, requested as {:?}",
-                        store.policy_name(),
-                        entry.key_type,
-                        expected_type
-                    ),
+                debug!(
+                    "cache_type_mismatch - [{}] Type mismatch: cached as {:?}, requested as {:?}",
+                    store.policy_name(),
+                    entry.key_type,
+                    expected_type
                 );
                 return None;
             }
@@ -574,13 +570,10 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
         let entry_size = calculate_entry_size(&key, &value);
 
         if self.core.entry_too_big(entry_size) {
-            log_warn(
-                "cache_insert",
-                format!(
-                    "Entry too large for cache: {}B > {}B (max), skipping",
-                    entry_size,
-                    self.core.max_memory()
-                ),
+            warn!(
+                "cache_insert - Entry too large for cache: {}B > {}B (max), skipping",
+                entry_size,
+                self.core.max_memory()
             );
             return;
         }
@@ -602,19 +595,16 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
         store.insert(key, entry);
         self.core.charge(entry_size);
 
-        log_debug(
-            "cache_insert",
-            format!(
-                "[{}] Inserted entry (type={:?}, size={}B{})",
-                store.policy_name(),
-                key_type,
-                entry_size,
-                if expires_at.is_some() {
-                    ", with TTL"
-                } else {
-                    ""
-                }
-            ),
+        debug!(
+            "cache_insert - [{}] Inserted entry (type={:?}, size={}B{})",
+            store.policy_name(),
+            key_type,
+            entry_size,
+            if expires_at.is_some() {
+                ", with TTL"
+            } else {
+                ""
+            }
         );
     }
 
@@ -628,15 +618,12 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
                 stats.record_invalidation();
             }
 
-            log_debug(
-                "cache_invalidate",
-                format!(
-                    "[{}] Invalidated entry (type={:?}, size={}B, remaining_memory={}B)",
-                    store.policy_name(),
-                    entry.key_type,
-                    entry.size,
-                    self.core.current_memory()
-                ),
+            debug!(
+                "cache_invalidate - [{}] Invalidated entry (type={:?}, size={}B, remaining_memory={}B)",
+                store.policy_name(),
+                entry.key_type,
+                entry.size,
+                self.core.current_memory()
             );
         }
     }
@@ -777,6 +764,7 @@ mod tests {
     #[test]
     fn test_hit_miss_rate_zero_requests() {
         let metrics = CacheMetrics::default();
+        assert_eq!(metrics.total_lookups(), 0);
         assert_eq!(metrics.hit_rate(), 0.0);
         assert_eq!(metrics.miss_rate(), 0.0);
     }
@@ -788,6 +776,7 @@ mod tests {
             misses: 25.into(),
             ..Default::default()
         };
+        assert_eq!(metrics.total_lookups(), 100);
         assert_eq!(metrics.hit_rate(), 0.75);
         assert_eq!(metrics.miss_rate(), 0.25);
     }

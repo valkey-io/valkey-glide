@@ -1081,7 +1081,21 @@ impl Client {
         })?;
 
         let metrics = cache.metrics()?;
-        Ok(Value::Int(metrics.evictions as i64))
+        Ok(Value::Int(metrics.evictions() as i64))
+    }
+
+    /// Returns the total number of cache lookups (hits + misses).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_total_lookups(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.total_lookups() as i64))
     }
 
     /// Returns the total number of expired entries that were removed from the cache.
@@ -1095,7 +1109,7 @@ impl Client {
         })?;
 
         let metrics = cache.metrics()?;
-        Ok(Value::Int(metrics.expirations as i64))
+        Ok(Value::Int(metrics.expirations() as i64))
     }
 
     // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
@@ -2020,6 +2034,11 @@ impl Client {
         // Create compression manager from configuration
         let compression_manager = create_compression_manager(request.compression_config.clone())?;
 
+        let reconciliation_interval = match request.pubsub_reconciliation_interval_ms {
+            Some(ms) if ms > 0 => Some(Duration::from_millis(ms as u64)),
+            _ => None,
+        };
+
         let client_side_cache = request.client_side_cache.as_ref().map(|config| {
             get_or_create_cache(
                 &config.cache_id,
@@ -2030,7 +2049,7 @@ impl Client {
             )
         });
 
-        tokio::time::timeout(DEFAULT_CLIENT_CREATION_TIMEOUT, async move {
+        tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
             let internal_client_arc =

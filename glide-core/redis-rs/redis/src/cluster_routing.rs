@@ -921,7 +921,7 @@ impl RoutingInfo {
     }
 
     /// Returns the first key from a routable command, if one exists.
-    pub fn key_for_routable<'a, R>(r: &'a R) -> Option<&'a [u8]>
+    pub fn key_for_command<R>(r: &R) -> Option<&[u8]>
     where
         R: Routable + ?Sized,
     {

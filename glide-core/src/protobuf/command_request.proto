@@ -551,6 +551,7 @@ enum CacheMetricsType {
     EntryCount = 2;
     Evictions = 3;
     Expirations = 4;
+    TotalLookups = 5;
 }
 
 message CommandRequest {

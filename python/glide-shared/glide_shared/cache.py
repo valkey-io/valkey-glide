@@ -37,15 +37,11 @@ class ClientSideCache:
     uses Time-To-Live (TTL) based expiration, where entries are automatically
     removed after a specified duration.
 
-    **Important**:
-    - Glide currently supports TTL-based caching only. Invalidation-based
-        client-side caching (where the server notifies clients of key changes) is not
-        currently supported. This means cached values may become stale if updated on
-        the server before the TTL expires.
-    - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
-        are removed only when accessed after their TTL has expired. There is no proactive
-        background cleanup of expired entries.
-    - Currently, only read commands that retrieve entire values are cached (GET, HGETALL, SMEMBERS).
+    Cached entries expire based on TTL. Server-side key changes are not propagated
+    to the cache, so values may become stale before TTL expires.
+    Expiration is lazy — entries are removed when accessed after their TTL, not
+    proactively in the background.
+    Supported read commands: GET, HGETALL, SMEMBERS.
     """
 
     # Class variables - shared across all instances
@@ -71,26 +67,12 @@ class ClientSideCache:
         """
         Create a new client-side cache configuration with an auto-generated unique ID.
 
-        This class configures a local cache that stores read command responses
-        on the client side to reduce network round-trips and server load. The cache
-        uses Time-To-Live (TTL) based expiration, where entries are automatically
-        removed after a specified duration.
+        In order for 2 clients to share the same cache, they must be created with the
+        same ``ClientSideCache`` instance.
 
-        **Important**:
-        - Glide currently supports TTL-based caching only. Invalidation-based
-            client-side caching (where the server notifies clients of key changes) is not
-            currently supported. This means cached values may become stale if updated on
-            the server before the TTL expires.
-        - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
-            are removed only when accessed after their TTL has expired. There is no proactive
-            background cleanup of expired entries.
-        - Currently, only read commands that retrieve entire values are cached (GET, HGETALL, SMEMBERS).
-
-        **Note**: In order for 2 clients to share the same cache, they must be
-        created with the same `ClientSideCache` instance.
-        - Clients with different `ClientSideCache` instances will have separate caches,
-            even if the configurations are identical.
-        - Clients using different db's cannot share the same cache.
+        - Clients with different ``ClientSideCache`` instances will have separate caches,
+          even if the configurations are identical.
+        - Clients using different DBs cannot share the same cache.
         - Clients using different ACL users cannot share the same cache.
 
         Args:

@@ -1037,7 +1037,7 @@ pub async fn assert_command_count(
     };
 
     let res = client
-        .send_command(&info_cmd, routing)
+        .send_command(&mut info_cmd, routing)
         .await
         .expect("INFO commandstats command failed");
 

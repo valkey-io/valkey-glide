@@ -8,21 +8,27 @@ pub mod lfu_cache;
 pub mod lru_cache;
 
 use glide_cache::{CacheConfig, GlideCache};
-use logger_core::{log_debug, log_info, log_warn};
+use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock, RwLock, Weak},
+    sync::{Arc, RwLock, Weak},
     time::Duration,
 };
 use tokio::task::JoinHandle;
+use tracing::{debug, info, warn};
 
-/// Registry of all active caches (weak references)
-static CACHE_REGISTRY: LazyLock<RwLock<HashMap<String, Weak<dyn GlideCache>>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Interval between cache registry housekeeping runs (cleanup of dead weak references)
+const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(60 * 5); // Every 5 minutes
 
-/// Handle to the background housekeeping task
-static HOUSEKEEPING_HANDLE: LazyLock<std::sync::Mutex<Option<JoinHandle<()>>>> =
-    LazyLock::new(|| std::sync::Mutex::new(None));
+lazy_static! {
+    /// Registry of all active caches (weak references)
+    static ref CACHE_REGISTRY: RwLock<HashMap<String, Weak<dyn GlideCache>>> =
+        RwLock::new(HashMap::new());
+
+    /// Handle to the background housekeeping task
+    static ref HOUSEKEEPING_HANDLE: std::sync::Mutex<Option<JoinHandle<()>>> =
+        std::sync::Mutex::new(None);
+}
 
 /// Cache eviction policy
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -62,14 +68,11 @@ pub fn get_or_create_cache(
         .get(cache_id)
         .and_then(Weak::upgrade)
     {
-        log_warn(
-            "cache_lifetime",
-            format!(
-                "Cache `{cache_id}` already exists — returning existing instance. \
-                 New config parameters (max_cache_kb={max_cache_kb}, ttl_sec={ttl_sec:?}, \
-                 eviction_policy={eviction_policy:?}, enable_metrics={enable_metrics}) are ignored. \
-                 Drop all references to recreate with different config."
-            ),
+        warn!(
+            "cache_lifetime - Cache `{cache_id}` already exists — returning existing instance. \
+             New config parameters (max_cache_kb={max_cache_kb}, ttl_sec={ttl_sec:?}, \
+             eviction_policy={eviction_policy:?}, enable_metrics={enable_metrics}) are ignored. \
+             Drop all references to recreate with different config."
         );
         return cache;
     }
@@ -79,12 +82,9 @@ pub fn get_or_create_cache(
 
     // Double-check: another thread may have created the cache while we waited
     if let Some(cache) = registry.get(cache_id).and_then(Weak::upgrade) {
-        log_warn(
-            "cache_lifetime",
-            format!(
-                "Cache `{cache_id}` already exists (after write lock) — returning existing instance. \
-                 New config parameters are ignored."
-            ),
+        warn!(
+            "cache_lifetime - Cache `{cache_id}` already exists (after write lock) — returning existing instance. \
+             New config parameters are ignored."
         );
         return cache;
     }
@@ -103,12 +103,9 @@ pub fn get_or_create_cache(
         EvictionPolicy::Lfu => lfu_cache::new_lfu_cache(config),
     };
 
-    log_info(
-        "cache_creation",
-        format!(
-            "Creating {policy:?} cache `{cache_id}` (max={}KB, ttl={:?})",
-            max_cache_kb, ttl_sec
-        ),
+    info!(
+        "cache_creation - Creating {policy:?} cache `{cache_id}` (max={}KB, ttl={ttl_sec:?})",
+        max_cache_kb
     );
 
     // Store weak reference in registry
@@ -123,10 +120,7 @@ pub fn get_or_create_cache(
 
 /// Periodically cleans up dead weak references from the cache registry
 async fn periodic_cache_housekeeping(interval: Duration) {
-    log_info(
-        "cache_housekeeping",
-        format!("Started cache registry cleanup task (interval: {interval:?})"),
-    );
+    info!("cache_housekeeping - Started cache registry cleanup task (interval: {interval:?})");
 
     loop {
         tokio::time::sleep(interval).await;
@@ -138,9 +132,9 @@ async fn periodic_cache_housekeeping(interval: Duration) {
             let after = registry.len();
 
             if before > after {
-                log_debug(
-                    "cache_housekeeping",
-                    format!("Cleaned up {} dead cache references", before - after),
+                debug!(
+                    "cache_housekeeping - Cleaned up {} dead cache references",
+                    before - after
                 );
             }
             after
@@ -148,20 +142,14 @@ async fn periodic_cache_housekeeping(interval: Duration) {
 
         // If no live caches remain, stop the housekeeping task
         if live_count == 0 {
-            log_info(
-                "cache_housekeeping",
-                "No live caches remaining, stopping registry cleanup task",
-            );
+            info!("cache_housekeeping - No live caches remaining, stopping registry cleanup task");
             break;
         }
 
-        log_debug(
-            "cache_housekeeping",
-            format!("Registry health: {live_count} live caches"),
-        );
+        debug!("cache_housekeeping - Registry health: {live_count} live caches");
     }
 
-    log_info("cache_housekeeping", "Cache registry cleanup task stopped");
+    info!("cache_housekeeping - Cache registry cleanup task stopped");
 }
 
 /// Start the cache housekeeping background task if not already running
@@ -170,14 +158,14 @@ fn start_cache_housekeeping() {
 
     // Check if task exists AND is still running
     if handle_guard.as_ref().is_some_and(|h| !h.is_finished()) {
-        log_debug("cache_housekeeping", "Housekeeping task already running");
+        debug!("cache_housekeeping - Housekeeping task already running");
         return;
     }
 
-    log_info("cache_housekeeping", "Started cache housekeeping task");
+    info!("cache_housekeeping - Started cache housekeeping task");
 
     *handle_guard = Some(tokio::spawn(periodic_cache_housekeeping(
-        Duration::from_secs(5 * 60),
+        HOUSEKEEPING_INTERVAL,
     )));
 }
 

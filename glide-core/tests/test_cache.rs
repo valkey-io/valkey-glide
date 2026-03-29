@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+mod test_constants;
 mod utilities;
 
 pub(crate) mod test_cache {
@@ -38,7 +39,11 @@ pub(crate) mod test_cache {
             // Reset command stats for a clean slate
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
-            test_basics.client.send_command(&reset_cmd, None).await.ok();
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .ok();
 
             // Set a key
             let mut set_cmd = redis::Cmd::new();
@@ -46,13 +51,13 @@ pub(crate) mod test_cache {
                 .arg("SET")
                 .arg("cache_test_key")
                 .arg("cache_test_value");
-            let set_result = test_basics.client.send_command(&set_cmd, None).await;
+            let set_result = test_basics.client.send_command(&mut set_cmd, None).await;
             assert!(set_result.is_ok());
 
             // First GET - should hit the server (cache miss)
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("cache_test_key");
-            let get_result = test_basics.client.send_command(&get_cmd, None).await;
+            let get_result = test_basics.client.send_command(&mut get_cmd, None).await;
             assert!(get_result.is_ok());
             assert_eq!(
                 get_result.unwrap(),
@@ -66,7 +71,7 @@ pub(crate) mod test_cache {
             // Second GET - should come from cache, NOT hit server
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("cache_test_key");
-            let get_result = test_basics.client.send_command(&get_cmd, None).await;
+            let get_result = test_basics.client.send_command(&mut get_cmd, None).await;
             assert!(get_result.is_ok());
             assert_eq!(
                 get_result.unwrap(),
@@ -76,7 +81,7 @@ pub(crate) mod test_cache {
             // Third GET - should also come from cache
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("cache_test_key");
-            let get_result = test_basics.client.send_command(&get_cmd, None).await;
+            let get_result = test_basics.client.send_command(&mut get_cmd, None).await;
             assert!(get_result.is_ok());
             assert_eq!(
                 get_result.unwrap(),
@@ -106,6 +111,9 @@ pub(crate) mod test_cache {
                 (hit_rate + miss_rate - 1.0).abs() < 0.0001,
                 "Rates should sum to 1.0"
             );
+
+            let total_lookups = test_basics.client.cache_total_lookups().unwrap();
+            assert_eq!(total_lookups, Value::Int(3), "Expected 3 total lookups");
         });
     }
 
@@ -134,14 +142,18 @@ pub(crate) mod test_cache {
             // Reset command stats for a clean slate
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
-            test_basics.client.send_command(&reset_cmd, None).await.ok();
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .ok();
 
             // Cache should work
             let mut set_cmd = redis::Cmd::new();
             set_cmd.arg("SET").arg("key").arg("value");
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -149,13 +161,13 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("key");
             test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             // Should come from cache
             test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
 
@@ -195,6 +207,14 @@ pub(crate) mod test_cache {
                     .to_string()
                     .contains("Cache metrics tracking is not enabled")
             );
+            let total_lookups = test_basics.client.cache_total_lookups();
+            assert!(total_lookups.is_err());
+            assert!(
+                total_lookups
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Cache metrics tracking is not enabled")
+            );
 
             // Entry count should still work
             let entry_count = test_basics.client.cache_entry_count().unwrap();
@@ -226,14 +246,18 @@ pub(crate) mod test_cache {
 
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
-            test_basics.client.send_command(&reset_cmd, None).await.ok();
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .ok();
 
             // GET non-existent key (returns NIL)
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("nonexistent_key");
             let result = test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(result, Value::Nil);
@@ -247,7 +271,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("nonexistent_key");
             let result = test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(result, Value::Nil);
@@ -262,6 +286,9 @@ pub(crate) mod test_cache {
                 _ => panic!("Expected Value::Double, got {:?}", miss_rate),
             };
             assert_eq!(miss_rate, 1.0, "Expected 100% miss rate");
+
+            let total_lookups = test_basics.client.cache_total_lookups().unwrap();
+            assert_eq!(total_lookups, Value::Int(2), "Expected 2 total lookups");
         });
     }
 
@@ -289,14 +316,18 @@ pub(crate) mod test_cache {
 
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
-            test_basics.client.send_command(&reset_cmd, None).await.ok();
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .ok();
 
             // Set and GET
             let mut set_cmd = redis::Cmd::new();
             set_cmd.arg("SET").arg("ttl_key").arg("ttl_value");
             let set_res = test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(set_res, Value::Okay);
@@ -305,7 +336,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("ttl_key");
             let mut get_res = test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec()));
@@ -317,7 +348,7 @@ pub(crate) mod test_cache {
             // Second GET - from cache
             get_res = test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec()));
@@ -333,7 +364,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("ttl_key");
             get_res = test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(get_res, Value::BulkString(b"ttl_value".to_vec()));
@@ -352,6 +383,9 @@ pub(crate) mod test_cache {
                 _ => panic!("Expected Value::Double, got {:?}", miss_rate),
             };
             assert_eq!(miss_rate, (2.0 / 3.0), "Expected 66.67% miss rate");
+
+            let total_lookups = test_basics.client.cache_total_lookups().unwrap();
+            assert_eq!(total_lookups, Value::Int(3), "Expected 3 total lookups");
         });
     }
 
@@ -379,7 +413,11 @@ pub(crate) mod test_cache {
 
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
-            test_basics.client.send_command(&reset_cmd, None).await.ok();
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .ok();
 
             // Set 3 keys
             for i in 1..=3 {
@@ -390,7 +428,7 @@ pub(crate) mod test_cache {
                     .arg(format!("value{}", i));
                 test_basics
                     .client
-                    .send_command(&set_cmd, None)
+                    .send_command(&mut set_cmd, None)
                     .await
                     .unwrap();
             }
@@ -401,12 +439,12 @@ pub(crate) mod test_cache {
                 get_cmd.arg("GET").arg(format!("key{}", i));
                 test_basics
                     .client
-                    .send_command(&get_cmd, None)
+                    .send_command(&mut get_cmd, None)
                     .await
                     .unwrap();
                 test_basics
                     .client
-                    .send_command(&get_cmd, None)
+                    .send_command(&mut get_cmd, None)
                     .await
                     .unwrap();
             }
@@ -425,6 +463,9 @@ pub(crate) mod test_cache {
                 _ => panic!("Expected Value::Double, got {:?}", hit_rate),
             };
             assert_eq!(hit_rate, 0.5);
+
+            let total_lookups = test_basics.client.cache_total_lookups().unwrap();
+            assert_eq!(total_lookups, Value::Int(6), "Expected 6 total lookups");
         });
     }
 
@@ -445,13 +486,17 @@ pub(crate) mod test_cache {
 
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
-            test_basics.client.send_command(&reset_cmd, None).await.ok();
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .ok();
 
             let mut set_cmd = redis::Cmd::new();
             set_cmd.arg("SET").arg("key").arg("value");
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -461,7 +506,7 @@ pub(crate) mod test_cache {
                 get_cmd.arg("GET").arg("key");
                 test_basics
                     .client
-                    .send_command(&get_cmd, None)
+                    .send_command(&mut get_cmd, None)
                     .await
                     .unwrap();
             }
@@ -495,6 +540,14 @@ pub(crate) mod test_cache {
                     .contains("Client-side caching is not enabled")
             );
             result = test_basics.client.cache_expirations();
+            assert!(result.is_err());
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Client-side caching is not enabled")
+            );
+            result = test_basics.client.cache_total_lookups();
             assert!(result.is_err());
             assert!(
                 result
@@ -548,7 +601,7 @@ pub(crate) mod test_cache {
                 set_cmd.arg("SET").arg(format!("lru_key{}", i)).arg(&value);
                 test_basics
                     .client
-                    .send_command(&set_cmd, None)
+                    .send_command(&mut set_cmd, None)
                     .await
                     .unwrap();
 
@@ -556,7 +609,7 @@ pub(crate) mod test_cache {
                 get_cmd.arg("GET").arg(format!("lru_key{}", i));
                 test_basics
                     .client
-                    .send_command(&get_cmd, None)
+                    .send_command(&mut get_cmd, None)
                     .await
                     .unwrap();
             }
@@ -570,7 +623,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("lru_key1");
             test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
 
@@ -580,7 +633,7 @@ pub(crate) mod test_cache {
                 set_cmd.arg("SET").arg(format!("lru_key{}", i)).arg(&value);
                 test_basics
                     .client
-                    .send_command(&set_cmd, None)
+                    .send_command(&mut set_cmd, None)
                     .await
                     .unwrap();
 
@@ -588,7 +641,7 @@ pub(crate) mod test_cache {
                 get_cmd.arg("GET").arg(format!("lru_key{}", i));
                 test_basics
                     .client
-                    .send_command(&get_cmd, None)
+                    .send_command(&mut get_cmd, None)
                     .await
                     .unwrap();
             }
@@ -661,7 +714,7 @@ pub(crate) mod test_cache {
             set_cmd.arg("SET").arg("lfu_key1").arg(&value);
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -671,7 +724,7 @@ pub(crate) mod test_cache {
                 get_cmd.arg("GET").arg("lfu_key1");
                 test_basics
                     .client
-                    .send_command(&get_cmd, None)
+                    .send_command(&mut get_cmd, None)
                     .await
                     .unwrap();
             }
@@ -682,7 +735,7 @@ pub(crate) mod test_cache {
             set_cmd.arg("SET").arg("lfu_key2").arg(&value);
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -691,7 +744,7 @@ pub(crate) mod test_cache {
                 get_cmd.arg("GET").arg("lfu_key2");
                 test_basics
                     .client
-                    .send_command(&get_cmd, None)
+                    .send_command(&mut get_cmd, None)
                     .await
                     .unwrap();
             }
@@ -702,14 +755,14 @@ pub(crate) mod test_cache {
             set_cmd.arg("SET").arg("lfu_key3").arg(&value);
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("lfu_key3");
             test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             // lfu_key3 frequency = 1
@@ -723,7 +776,7 @@ pub(crate) mod test_cache {
             set_cmd.arg("SET").arg("lfu_key4").arg(&value);
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -731,7 +784,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("lfu_key4");
             test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
 
@@ -814,7 +867,7 @@ pub(crate) mod test_cache {
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
             test_basics1
                 .client
-                .send_command(&reset_cmd, None)
+                .send_command(&mut reset_cmd, None)
                 .await
                 .ok();
 
@@ -823,7 +876,7 @@ pub(crate) mod test_cache {
             set_cmd.arg("SET").arg("shared_key").arg("shared_value");
             test_basics1
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -831,7 +884,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("shared_key");
             let result = test_basics1
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(result, Value::BulkString(b"shared_value".to_vec()));
@@ -845,7 +898,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("shared_key");
             let result = test_basics2
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(result, Value::BulkString(b"shared_value".to_vec()));
@@ -870,6 +923,13 @@ pub(crate) mod test_cache {
             // Metrics are shared
             assert_eq!(hit_rate1, 0.5);
             assert_eq!(hit_rate2, 0.5);
+
+            let total_lookups = test_basics1.client.cache_total_lookups().unwrap();
+            assert_eq!(
+                total_lookups,
+                Value::Int(2),
+                "Expected 2 total lookups on shared cache"
+            );
         });
     }
 
@@ -902,14 +962,14 @@ pub(crate) mod test_cache {
             set_cmd.arg("SET").arg("string_key").arg("string_value");
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
             let mut get_cmd = redis::Cmd::new();
             get_cmd.arg("GET").arg("string_key");
             let result = test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(result, Value::BulkString(b"string_value".to_vec()));
@@ -921,7 +981,10 @@ pub(crate) mod test_cache {
             // Perform HGETALL operation on the same key (wrong type)
             let mut hgetall_cmd = redis::Cmd::new();
             hgetall_cmd.arg("HGETALL").arg("string_key");
-            let hgetall_result = test_basics.client.send_command(&hgetall_cmd, None).await;
+            let hgetall_result = test_basics
+                .client
+                .send_command(&mut hgetall_cmd, None)
+                .await;
             assert!(
                 hgetall_result.is_err(),
                 "HGETALL on string key should error"
@@ -979,7 +1042,7 @@ pub(crate) mod test_cache {
                 .arg("cacheable_value");
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -987,7 +1050,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("cacheable_key");
             let result = test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(result, Value::BulkString(b"cacheable_value".to_vec()));
@@ -1005,7 +1068,7 @@ pub(crate) mod test_cache {
                 .arg("value1");
             test_basics
                 .client
-                .send_command(&hset_cmd, None)
+                .send_command(&mut hset_cmd, None)
                 .await
                 .unwrap();
 
@@ -1013,7 +1076,7 @@ pub(crate) mod test_cache {
             hgetall_cmd.arg("HGETALL").arg("hash_key");
             let hgetall_result = test_basics
                 .client
-                .send_command(&hgetall_cmd, None)
+                .send_command(&mut hgetall_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(
@@ -1033,14 +1096,14 @@ pub(crate) mod test_cache {
             sadd_cmd.arg("SADD").arg("set_key").arg("member1");
             test_basics
                 .client
-                .send_command(&sadd_cmd, None)
+                .send_command(&mut sadd_cmd, None)
                 .await
                 .unwrap();
             let mut smembers_cmd = redis::Cmd::new();
             smembers_cmd.arg("SMEMBERS").arg("set_key");
             let smembers_result = test_basics
                 .client
-                .send_command(&smembers_cmd, None)
+                .send_command(&mut smembers_cmd, None)
                 .await
                 .unwrap();
             assert_eq!(
@@ -1078,7 +1141,11 @@ pub(crate) mod test_cache {
 
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("CONFIG").arg("RESETSTAT");
-            test_basics.client.send_command(&reset_cmd, None).await.ok();
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .ok();
 
             // Create value larger than cache (2KB > 1KB)
             let large_value = "x".repeat(2048);
@@ -1087,7 +1154,7 @@ pub(crate) mod test_cache {
             set_cmd.arg("SET").arg("large_key").arg(&large_value);
             test_basics
                 .client
-                .send_command(&set_cmd, None)
+                .send_command(&mut set_cmd, None)
                 .await
                 .unwrap();
 
@@ -1095,7 +1162,7 @@ pub(crate) mod test_cache {
             get_cmd.arg("GET").arg("large_key");
             test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
 
@@ -1110,7 +1177,7 @@ pub(crate) mod test_cache {
             // Second GET should hit server again
             test_basics
                 .client
-                .send_command(&get_cmd, None)
+                .send_command(&mut get_cmd, None)
                 .await
                 .unwrap();
             assert_command_count(&mut test_basics.client, "GET", 2, use_cluster).await;

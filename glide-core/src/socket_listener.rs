@@ -782,10 +782,9 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                     .map_err(|err| err.into()),
 
                 command_request::Command::GetCacheMetrics(get_cache_metrics) => {
-                    let metrics_type =
-                        get_cache_metrics.metrics_types.enum_value().map_err(|_| {
-                            ClientUsageError::Internal("Invalid cache metrics type".to_string())
-                        });
+                    let metrics_type = get_cache_metrics.metrics_types.enum_value().map_err(|_| {
+                        ClientUsageError::Internal("Invalid cache metrics type".to_string())
+                    });
                     match metrics_type {
                         Ok(crate::command_request::CacheMetricsType::HitRate) => {
                             client.cache_hit_rate().map_err(|err| err.into())
@@ -801,6 +800,9 @@ fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer
                         }
                         Ok(crate::command_request::CacheMetricsType::Expirations) => {
                             client.cache_expirations().map_err(|err| err.into())
+                        }
+                        Ok(crate::command_request::CacheMetricsType::TotalLookups) => {
+                            client.cache_total_lookups().map_err(|err| err.into())
                         }
                         Err(e) => Err(e),
                     }

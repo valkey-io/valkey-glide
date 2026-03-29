@@ -232,9 +232,26 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._get_cache_metrics(CacheMetricsType.Evictions))
 
+    async def get_cache_total_lookups(self) -> int:
+        """
+        Get the total number of cache lookups (hits + misses).
+
+        Returns:
+            int: The total number of cache lookups.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+
+        Example:
+            >>> total = await client.get_cache_total_lookups()
+            >>> print(f"Total cache lookups: {total}")
+            Total cache lookups: 5000
+        """
+        return cast(int, await self._get_cache_metrics(CacheMetricsType.TotalLookups))
+
     async def get_cache_expirations(self) -> int:
         """
-        Get the total number of entries expired from the client-side cache.
+        Get the total number of entries removed from the client-side cache due to TTL expiration.
 
         Returns:
             int: The number of expirations.
