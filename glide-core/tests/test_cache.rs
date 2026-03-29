@@ -650,14 +650,6 @@ pub(crate) mod test_cache {
             let evictions = test_basics.client.cache_evictions().unwrap();
             assert_eq!(evictions, Value::Int(2));
 
-            // TODO: CHECK MEMORY ??????????/
-            // // Check cache after eviction
-            // let (_entry_count, weighted_size) =
-            //     get_cache_stats(cache_id).expect("Cache should exist");
-
-            // // Verify size is under limit
-            // assert!(weighted_size <= 1024, "Cache size should not exceed 1 KB");
-
             // Verify LRU behavior: key1 should still be cached (was accessed recently)
             assert!(
                 is_key_cached(cache_id, b"lru_key1", CachedKeyType::String),

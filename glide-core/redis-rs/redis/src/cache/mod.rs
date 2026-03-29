@@ -91,7 +91,7 @@ pub fn get_or_create_cache(
 
     // Create cache configuration
     let config = CacheConfig {
-        max_memory_bytes: max_cache_kb * 1024, // Convert KB to bytes
+        max_memory_bytes: max_cache_kb.saturating_mul(1024), // Convert KB to bytes
         ttl: ttl_sec.map(Duration::from_secs),
         enable_metrics,
     };
@@ -327,5 +327,91 @@ mod tests {
         assert_eq!(cache.entry_count(), 0);
 
         cleanup_cache("test_operations");
+    }
+
+    // ==================== Concurrent Access ====================
+
+    fn run_concurrent_cache_test(cache: std::sync::Arc<dyn glide_cache::GlideCache>) {
+        use glide_cache::CachedKeyType;
+        use std::sync::Arc;
+        use std::thread;
+
+        // Pre-populate
+        for i in 0..50 {
+            cache.insert(
+                format!("key{i}").into_bytes(),
+                CachedKeyType::String,
+                crate::Value::BulkString(format!("val{i}").into_bytes()),
+            );
+        }
+
+        let mut handles = vec![];
+
+        // Spawn readers
+        for _ in 0..4 {
+            let c = Arc::clone(&cache);
+            handles.push(thread::spawn(move || {
+                for i in 0..200 {
+                    let key = format!("key{}", i % 50);
+                    c.get(key.as_bytes(), CachedKeyType::String);
+                }
+            }));
+        }
+
+        // Spawn writers
+        for t in 0..4 {
+            let c = Arc::clone(&cache);
+            handles.push(thread::spawn(move || {
+                for i in 0..200 {
+                    let key = format!("key{}", (t * 200) + i);
+                    c.insert(
+                        key.into_bytes(),
+                        CachedKeyType::String,
+                        crate::Value::BulkString(b"new_val".to_vec()),
+                    );
+                }
+            }));
+        }
+
+        // Spawn invalidators
+        for _ in 0..2 {
+            let c = Arc::clone(&cache);
+            handles.push(thread::spawn(move || {
+                for i in 0..100 {
+                    let key = format!("key{}", i % 50);
+                    c.invalidate(key.as_bytes());
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().expect("Thread panicked");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_lru_cache() {
+        let cache = get_or_create_cache(
+            "test_concurrent_lru",
+            100,
+            None,
+            Some(EvictionPolicy::Lru),
+            true,
+        );
+        run_concurrent_cache_test(cache);
+        cleanup_cache("test_concurrent_lru");
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_lfu_cache() {
+        let cache = get_or_create_cache(
+            "test_concurrent_lfu",
+            100,
+            None,
+            Some(EvictionPolicy::Lfu),
+            true,
+        );
+        run_concurrent_cache_test(cache);
+        cleanup_cache("test_concurrent_lfu");
     }
 }

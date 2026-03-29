@@ -1,13 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 use tracing::{debug, warn};
 
-/// Core caching interfaces and utilities for Glide
 use crate::{
     cluster_routing::{Routable, RoutingInfo},
     cmd::cacheable_cmd_type,
     Cmd, ErrorKind, RedisError, RedisResult, Value,
 };
-/// Core caching interfaces and utilities for Glide
 use std::{
     fmt::Debug,
     sync::{

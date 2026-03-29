@@ -1,9 +1,6 @@
-use super::GlideCache;
-
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-use super::glide_cache::CacheConfig;
-
-use super::glide_cache::{CacheEntry, EvictionStrategy, GlideCacheImpl};
+use super::glide_cache::{CacheConfig, CacheEntry, EvictionStrategy, GlideCacheImpl};
+use super::GlideCache;
 use lru::LruCache;
 use std::sync::Arc;
 
