@@ -45,6 +45,7 @@ EXCLUDED_API_FUNCTIONS = {
         "get_cache_entry_count",
         "get_cache_evictions",
         "get_cache_expirations",
+        "get_cache_total_lookups",
     ],
     "sync_only": [],
 }
