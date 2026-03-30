@@ -4,6 +4,7 @@
 * CORE: Add OpenTelemetry DB semantic convention attributes to command spans ([#5416](https://github.com/valkey-io/valkey-glide/issues/5416))
 * CORE: Prevent zombie subcommand accumulation with InflightTracker ([#5632](https://github.com/valkey-io/valkey-glide/issues/5632))
 * JAVA: Fix swallowed errors in JNI async bridge that left CompletableFutures dangling ([#5536](https://github.com/valkey-io/valkey-glide/issues/5536))
+* CORE: Add IAM token cache support for cluster reconnections — switch from push to pull model for IAM token refresh, add `IAMTokenProvider` trait so the cluster reconnection loop fetches a fresh IAM token before each connection attempt, preventing AUTH failures when tokens expire during node downtime ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
 
 ## 2.3.0
 
