@@ -44,7 +44,7 @@ on:
                 type: boolean
                 default: false
             run-with-macos:
-                description: "Run with macos included (only when necessary)"
+                description: Include macOS runs (avoid GitHub runners unless specifically required)
                 type: choice
                 options:
                     - false
@@ -71,6 +71,10 @@ on:
                 default: false
             run-dynamic-pubsub-with-mock:
                 description: "Build with mock pubsub and run dynamic pubsub tests"
+                type: boolean
+                default: false
+            containers-only:
+                description: "Run only container tests (skip regular test-python job)"
                 type: boolean
                 default: false
 
@@ -121,6 +125,7 @@ jobs:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -128,6 +133,8 @@ jobs:
                 python: ${{ fromJson(needs.get-matrices.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-matrices.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-matrices.outputs.host-matrix-output) }}
+        env:
+            VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
         steps:
             - uses: actions/checkout@v4
 
@@ -164,29 +171,49 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - name: Configure DNS for tests
+              uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
+
             - name: Test with pytest
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               env:
                   TEST_NAME_ARG: ${{ inputs.name && format('-k {0}', inputs.name) || '' }}
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
             - name: Test with pytest (full matrix, all async backends)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (async only)
               if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (sync only)
               if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
@@ -211,6 +238,7 @@ jobs:
         name: Python PubSubTests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -312,6 +340,7 @@ jobs:
 
     lint:
         runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v4
@@ -336,6 +365,7 @@ jobs:
 
     docs-test:
         runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v4
@@ -357,7 +387,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event.inputs.containers-only == 'true' || github.event_name == 'schedule' }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -383,6 +413,8 @@ jobs:
                 # python: ${{ fromJson(needs.get-containers.outputs.version-matrix-output) }}
                 engine: ${{ fromJson(needs.get-containers.outputs.engine-matrix-output) }}
                 host: ${{ fromJson(needs.get-containers.outputs.host-matrix-output) }}
+        env:
+            VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
         container:
             image: ${{ matrix.host.IMAGE }}
             options: ${{ join(' -q ', matrix.host.CONTAINER_OPTIONS) }} # adding `-q` to bypass empty options
@@ -414,15 +446,28 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
+            - name: Configure DNS for tests
+              uses: ./.github/actions/setup-dns-tests
+              with:
+                  os: ${{ matrix.host.OS }}
+
             - name: Test with pytest (asyncio only)
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 

@@ -59,8 +59,7 @@ public class StandaloneTlsCertificateTest {
                 TestUtilities.createStandaloneConfigWithRootCert(caCert, nodeAddr);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
-            String result = client.ping().get();
-            assertEquals("PONG", result);
+            TestUtilities.assertConnected(client);
         }
     }
 
@@ -74,8 +73,7 @@ public class StandaloneTlsCertificateTest {
                 TestUtilities.createStandaloneConfigWithRootCert(certBundle, nodeAddr);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
-            String result = client.ping().get();
-            assertEquals("PONG", result);
+            TestUtilities.assertConnected(client);
         }
     }
 
@@ -104,6 +102,28 @@ public class StandaloneTlsCertificateTest {
                 () -> {
                     GlideClient.createClient(config).get();
                 });
+    }
+
+    @Test
+    void testStandaloneTlsWithIpv4Succeeds() throws ExecutionException, InterruptedException {
+        NodeAddress ipv4Node = NodeAddress.builder().host("127.0.0.1").port(nodeAddr.getPort()).build();
+        GlideClientConfiguration config =
+                TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv4Node);
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            TestUtilities.assertConnected(client);
+        }
+    }
+
+    @Test
+    void testStandaloneTlsWithIpv6Succeeds() throws ExecutionException, InterruptedException {
+        NodeAddress ipv6Node = NodeAddress.builder().host("::1").port(nodeAddr.getPort()).build();
+        GlideClientConfiguration config =
+                TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv6Node);
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            TestUtilities.assertConnected(client);
+        }
     }
 
     @Test
@@ -144,8 +164,7 @@ public class StandaloneTlsCertificateTest {
             ;
 
             try (GlideClient client = GlideClient.createClient(config).get()) {
-                String result = client.ping().get();
-                assertEquals("PONG", result);
+                TestUtilities.assertConnected(client);
             }
         } finally {
             Files.deleteIfExists(keyStorePath);

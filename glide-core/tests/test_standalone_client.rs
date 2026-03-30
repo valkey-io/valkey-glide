@@ -1,19 +1,20 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+mod test_constants;
 mod utilities;
 
 #[cfg(test)]
 mod standalone_client_tests {
-    use crate::utilities::mocks::{Mock, ServerMock};
-    use std::collections::HashMap;
-
     use super::*;
+    use crate::test_constants::{HOST_IPV4, HOST_IPV6};
+    use crate::utilities::mocks::{Mock, ServerMock};
     use glide_core::{
         client::{Client as GlideClient, ConnectionError, StandaloneClient},
         connection_request::{ProtocolVersion, ReadFrom},
     };
     use redis::{FromRedisValue, Value};
     use rstest::rstest;
+    use std::collections::HashMap;
     use utilities::*;
 
     async fn get_connected_clients(client: &mut StandaloneClient) -> usize {
@@ -120,13 +121,7 @@ mod standalone_client_tests {
 
             assert!(info_clients.contains("connected_clients:2"));
 
-            // validate connection works
-            let ping_result = validation_client
-                .client
-                .send_command(&redis::cmd("PING"))
-                .await
-                .ok();
-            assert_eq!(ping_result, Some(Value::SimpleString("PONG".to_string())));
+            assert_connected(&mut validation_client.client).await;
         });
     }
 
@@ -615,19 +610,7 @@ mod standalone_client_tests {
                     "Sending first command to lazy client (PING) (protocol={protocol:?} on dedicated server)"
                 ),
             );
-            let ping_response = lazy_glide_client_enum
-                .send_command(&mut redis::cmd("PING"), None)
-                .await;
-            assert!(
-                ping_response.is_ok(),
-                "PING command failed (on dedicated server): {:?}. protocol={:?}",
-                ping_response.as_ref().err(),
-                protocol
-            );
-            assert_eq!(
-                ping_response.unwrap(),
-                redis::Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut lazy_glide_client_enum).await;
 
             // 8. Assert that a new connection was made by the lazy client on the dedicated server
             let clients_after_first_command = get_connected_clients(monitoring_client).await; // Pass &mut StandaloneClient
@@ -651,25 +634,10 @@ mod standalone_client_tests {
     fn test_tls_connection_with_custom_root_cert() {
         block_on_all(async move {
             // Create a dedicated TLS server with custom certificates
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
-
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(tls_paths),
-                &[],
-                false,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(tls_paths));
 
             let server_addr = server.get_client_addr();
             // Skip wait_for_server_to_become_ready since it uses default OS verifier
@@ -693,12 +661,7 @@ mod standalone_client_tests {
                     .await
                     .expect("Failed to create client with custom root cert");
 
-            // Verify connection works by sending a command
-            let ping_result = client.send_command(&redis::cmd("PING")).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 
@@ -708,32 +671,15 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_wrong_root_cert() {
         block_on_all(async move {
             // Create a TLS server with one set of certificates
-            let tempdir1 = tempfile::Builder::new()
-                .prefix("tls_test_server")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir1);
+            let server_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let server_tls_paths = build_tls_file_paths(&server_tempdir);
 
             // Create different CA certificate for client
-            let tempdir2 = tempfile::Builder::new()
-                .prefix("tls_test_client")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let client_tls_paths = build_keys_and_certs_for_tls(&tempdir2);
+            let client_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let client_tls_paths = build_tls_file_paths(&client_tempdir);
             let wrong_ca_cert_bytes = client_tls_paths.read_ca_cert_as_bytes();
 
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(server_tls_paths),
-                &[],
-                false,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(server_tls_paths));
 
             let server_addr = server.get_client_addr();
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -775,7 +721,7 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_invalid_cert_bytes() {
         block_on_all(async move {
             let server_addr = redis::ConnectionAddr::TcpTls {
-                host: "127.0.0.1".to_string(),
+                host: HOST_IPV4.to_string(),
                 port: get_available_port(),
                 insecure: false,
                 tls_params: None,
@@ -814,7 +760,7 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_custom_certs_and_no_tls() {
         block_on_all(async move {
             let server_addr =
-                redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), get_available_port());
+                redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), get_available_port());
 
             let mut connection_request = create_connection_request(
                 &[server_addr],
@@ -851,33 +797,16 @@ mod standalone_client_tests {
     fn test_tls_connection_with_multiple_root_certs_first_invalid() {
         block_on_all(async move {
             // Create server with valid certificates
-            let tempdir_server = tempfile::Builder::new()
-                .prefix("tls_test_server")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let server_tls_paths = build_keys_and_certs_for_tls(&tempdir_server);
+            let server_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let server_tls_paths = build_tls_file_paths(&server_tempdir);
             let valid_ca_cert_bytes = server_tls_paths.read_ca_cert_as_bytes();
 
             // Create invalid CA certificate
-            let tempdir_invalid = tempfile::Builder::new()
-                .prefix("tls_test_invalid")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let invalid_tls_paths = build_keys_and_certs_for_tls(&tempdir_invalid);
+            let invalid_tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let invalid_tls_paths = build_tls_file_paths(&invalid_tempdir);
             let invalid_ca_cert_bytes = invalid_tls_paths.read_ca_cert_as_bytes();
 
-            let server = RedisServer::new_with_addr_tls_modules_and_spawner(
-                redis::ConnectionAddr::TcpTls {
-                    host: "127.0.0.1".to_string(),
-                    port: get_available_port(),
-                    insecure: false,
-                    tls_params: None,
-                },
-                Some(server_tls_paths),
-                &[],
-                false,
-                |cmd| cmd.spawn().expect("Failed to spawn server"),
-            );
+            let server = RedisServer::new_with_tls(true, Some(server_tls_paths));
 
             let server_addr = server.get_client_addr();
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -901,26 +830,22 @@ mod standalone_client_tests {
                     .await
                     .expect("Failed to create client with multiple root certs");
 
-            let ping_result = client.send_command(&redis::cmd("PING")).await;
-            assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
-            );
+            assert_connected(&mut client).await;
         });
     }
 
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_tls_connection_with_with_client_tls_auth() {
+    fn test_tls_connection_with_client_tls_auth() {
         block_on_all(async move {
             // Create a dedicated TLS server with custom certificates
-            let tempdir = tempfile::Builder::new()
-                .prefix("tls_test")
-                .tempdir()
-                .expect("Failed to create temp dir");
-            let tls_paths = build_keys_and_certs_for_tls(&tempdir);
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+
             let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+            let client_cert_bytes = tls_paths.read_redis_cert_as_bytes();
+            let client_key_bytes = tls_paths.read_redis_key_as_bytes();
 
             let server = RedisServer::new_with_addr_tls_modules_and_spawner(
                 redis::ConnectionAddr::TcpTls {
@@ -950,8 +875,8 @@ mod standalone_client_tests {
             );
             connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
             connection_request.root_certs = vec![ca_cert_bytes.into()];
-            connection_request.client_cert = tls_paths.read_redis_cert_as_bytes().clone().into();
-            connection_request.client_key = tls_paths.read_redis_key_as_bytes().clone().into();
+            connection_request.client_cert = client_cert_bytes.into();
+            connection_request.client_key = client_key_bytes.into();
 
             // Test that connection works with custom root cert and client TLS auth
             let mut client =
@@ -959,11 +884,440 @@ mod standalone_client_tests {
                     .await
                     .expect("Failed to create client with custom root cert");
 
-            // Verify connection works by sending a command
-            let ping_result = client.send_command(&redis::cmd("PING")).await;
+            assert_connected(&mut client).await;
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_tls_connection_with_ip_address_succeeds(#[values(HOST_IPV4, HOST_IPV6)] host: &str) {
+        block_on_all(async move {
+            let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
+            let tls_paths = build_tls_file_paths(&tempdir);
+            let ca_cert_bytes = tls_paths.read_ca_cert_as_bytes();
+
+            let ip_addr = redis::ConnectionAddr::TcpTls {
+                host: host.to_string(),
+                port: get_available_port(),
+                insecure: false,
+                tls_params: None,
+            };
+
+            let _server = RedisServer::new_with_addr_tls_modules_and_spawner(
+                ip_addr.clone(),
+                Some(tls_paths.clone()),
+                &[],
+                false,
+                |cmd| cmd.spawn().expect("Failed to spawn server"),
+            );
+
+            // Wait to ensure server is ready before connecting.
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+
+            let mut connection_request = create_connection_request(
+                &[ip_addr],
+                &TestConfiguration {
+                    use_tls: true,
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+            connection_request.tls_mode = glide_core::connection_request::TlsMode::SecureTls.into();
+            connection_request.root_certs = vec![ca_cert_bytes.into()];
+
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with IP address");
+
+            assert_connected(&mut client).await;
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_connection_with_ip_address_succeeds(#[values(HOST_IPV4, HOST_IPV6)] host: &str) {
+        block_on_all(async move {
+            let ip_addr = redis::ConnectionAddr::Tcp(host.to_string(), get_available_port());
+
+            let _server = RedisServer::new_with_addr_and_modules(ip_addr.clone(), &[]);
+
+            // Wait to ensure server is ready before connecting.
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+
+            let connection_request = create_connection_request(
+                &[ip_addr],
+                &TestConfiguration {
+                    shared_server: false,
+                    ..Default::default()
+                },
+            );
+
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .expect("Failed to create client with IP address");
+
+            assert_connected(&mut client).await;
+        });
+    }
+
+    // ==================== Read-Only Mode Tests ====================
+
+    /// Creates mock responses for a replica-only server (no primary detection needed)
+    fn create_replica_only_responses() -> HashMap<String, Value> {
+        let mut responses = std::collections::HashMap::new();
+        responses.insert(
+            "*1\r\n$4\r\nPING\r\n".to_string(),
+            Value::BulkString(b"PONG".to_vec()),
+        );
+        // GET command response
+        responses.insert(
+            "*2\r\n$3\r\nGET\r\n$3\r\nfoo\r\n".to_string(),
+            Value::BulkString(b"bar".to_vec()),
+        );
+        // SET command response (for testing write blocking)
+        responses.insert(
+            "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n".to_string(),
+            Value::Okay,
+        );
+        responses
+    }
+
+    fn create_replica_only_mock() -> ServerMock {
+        let listener = get_listener_on_available_port();
+        ServerMock::new_with_listener(create_replica_only_responses(), listener)
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_connects_without_primary() {
+        // Create a mock server that doesn't respond to INFO REPLICATION as a primary
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            // This should succeed because read_only mode doesn't require a primary
+            let client_result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                client_result.is_ok(),
+                "read_only mode should connect without requiring a primary node"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_blocks_write_commands() {
+        // Use a primary mock so the connection succeeds, then test write blocking
+        let servers = create_primary_mock_with_replicas(0);
+        let mock = &servers[0];
+
+        let mut get_cmd = redis::cmd("GET");
+        get_cmd.arg("foo");
+        mock.add_response(&get_cmd, "$3\r\nbar\r\n".to_string());
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+
+            // Write command should be blocked before reaching the server
+            let mut set_cmd = redis::cmd("SET");
+            set_cmd.arg("foo").arg("bar");
+            let result = client.send_command(&set_cmd).await;
+            assert!(result.is_err(), "Write command should be blocked");
+            let err = result.unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("write commands are not allowed in read-only mode"),
+                "Error message should indicate write commands are not allowed, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_allows_read_commands() {
+        // Use a primary mock so the connection succeeds
+        let servers = create_primary_mock_with_replicas(0);
+        let mock = &servers[0];
+
+        let mut get_cmd = redis::cmd("GET");
+        get_cmd.arg("foo");
+        mock.add_response(&get_cmd, "$3\r\nbar\r\n".to_string());
+
+        let addresses = get_mock_addresses(&servers);
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            let mut client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+
+            // Read command should be allowed
+            let result = client.send_command(&get_cmd).await;
+            assert!(
+                result.is_ok(),
+                "Read command should be allowed in read-only mode, got error: {:?}",
+                result.err()
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_rejects_az_affinity() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::AZAffinity.into();
+        connection_request.client_az = "us-east-1a".into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_err(),
+                "AZAffinity should be rejected with read_only mode"
+            );
+            let err = format!("{:?}", result.unwrap_err());
+            assert!(
+                err.contains("read-only mode is not compatible with AZAffinity"),
+                "Error message should indicate AZAffinity incompatibility, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_rejects_az_affinity_replicas_and_primary() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::AZAffinityReplicasAndPrimary.into();
+        connection_request.client_az = "us-east-1a".into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_err(),
+                "AZAffinityReplicasAndPrimary should be rejected with read_only mode"
+            );
+            let err = format!("{:?}", result.unwrap_err());
+            assert!(
+                err.contains("read-only mode is not compatible with AZAffinity"),
+                "Error message should indicate AZAffinity incompatibility, got: {}",
+                err
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_accepts_prefer_replica() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::PreferReplica.into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_ok(),
+                "PreferReplica should be accepted with read_only mode"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_accepts_primary_read_from() {
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+        connection_request.read_from = ReadFrom::Primary.into();
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            assert!(
+                result.is_ok(),
+                "Primary ReadFrom should be accepted with read_only mode (reads go to connected nodes)"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_skips_info_replication() {
+        // Create a mock that tracks received commands
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let mut connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        connection_request.read_only = Some(true);
+
+        block_on_all(async {
+            let _client =
+                StandaloneClient::create_client(connection_request.into(), None, None, None)
+                    .await
+                    .unwrap();
+
+            // In read_only mode, INFO REPLICATION should not be sent
+            // The mock should only receive connection-related commands, not INFO REPLICATION
+            // Note: This test verifies the behavior indirectly - if INFO REPLICATION was sent,
+            // the mock would fail because it doesn't have a response for it
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_normal_mode_requires_primary() {
+        // Create a mock that responds as a replica (not primary)
+        let mock = create_replica_only_mock();
+        let addresses = get_mock_addresses(&[mock]);
+
+        let connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        // read_only is false by default
+
+        block_on_all(async {
+            let result =
+                StandaloneClient::create_client(connection_request.into(), None, None, None).await;
+            // Normal mode should fail because no primary is found
+            assert!(
+                result.is_err(),
+                "Normal mode should fail without a primary node"
+            );
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_only_mode_primary_writes_replica_reads() {
+        // Create a primary mock and a replica mock
+        let servers = create_primary_mock_with_replicas(1);
+        let primary_mock = &servers[0];
+        let replica_mock = &servers[1];
+
+        // Add SET command response to primary
+        let mut set_cmd = redis::cmd("SET");
+        set_cmd.arg("test_key").arg("test_value");
+        primary_mock.add_response(&set_cmd, "+OK\r\n".to_string());
+
+        // Add GET command response to replica (simulating replicated data)
+        let mut get_cmd = redis::cmd("GET");
+        get_cmd.arg("test_key");
+        replica_mock.add_response(&get_cmd, "$10\r\ntest_value\r\n".to_string());
+
+        let addresses = get_mock_addresses(&servers);
+        let primary_address = vec![addresses[0].clone()];
+        let replica_address = vec![addresses[1].clone()];
+
+        block_on_all(async {
+            // Create a normal client connected to the primary for writes
+            let primary_connection_request =
+                create_connection_request(primary_address.as_slice(), &Default::default());
+            let mut primary_client = StandaloneClient::create_client(
+                primary_connection_request.into(),
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Primary client should connect successfully");
+
+            // Create a read-only client connected to the replica for reads
+            let mut replica_connection_request =
+                create_connection_request(replica_address.as_slice(), &Default::default());
+            replica_connection_request.read_only = Some(true);
+            let mut replica_client = StandaloneClient::create_client(
+                replica_connection_request.into(),
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Read-only replica client should connect successfully");
+
+            // Write to primary using normal client
+            let write_result = primary_client.send_command(&set_cmd).await;
+            assert!(
+                write_result.is_ok(),
+                "Write to primary should succeed, got error: {:?}",
+                write_result.err()
+            );
+
+            // Read from replica using read-only client
+            let read_result = replica_client.send_command(&get_cmd).await;
+            assert!(
+                read_result.is_ok(),
+                "Read from replica should succeed in read-only mode, got error: {:?}",
+                read_result.err()
+            );
+            let value = read_result.unwrap();
             assert_eq!(
-                ping_result.unwrap(),
-                Value::SimpleString("PONG".to_string())
+                value,
+                Value::BulkString(b"test_value".to_vec()),
+                "Read value should match written value"
+            );
+
+            // Verify that write commands are blocked on the read-only replica client
+            let blocked_write_result = replica_client.send_command(&set_cmd).await;
+            assert!(
+                blocked_write_result.is_err(),
+                "Write command should be blocked on read-only client"
+            );
+            let err = blocked_write_result.unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("write commands are not allowed in read-only mode"),
+                "Error message should indicate write commands are not allowed, got: {}",
+                err
             );
         });
     }

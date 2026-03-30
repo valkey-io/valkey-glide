@@ -5,6 +5,7 @@ package integTest
 import (
 	"context"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -13,126 +14,148 @@ import (
 
 // TestPubSubExactCoexistence tests WaitForMessage and Pop working together
 func (suite *GlideTestSuite) TestPubSubExactCoexistence() {
-	channel := "coexist_test"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			channel := "coexist_test"
 
-	publisher := suite.defaultClient()
-	defer publisher.Close()
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	ctx := context.Background()
-	queue, _ := receiver.(*glide.Client).GetQueue()
+			ctx := context.Background()
+			var queue *glide.PubSubMessageQueue
+			if clientType == StandaloneClient {
+				publisher := suite.defaultClient()
+				defer publisher.Close()
+				queue, _ = receiver.(*glide.Client).GetQueue()
 
-	time.Sleep(100 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
-	// Publish two messages
-	publisher.Publish(ctx, channel, "msg1")
-	publisher.Publish(ctx, channel, "msg2")
+				// Publish two messages
+				publisher.Publish(ctx, channel, "msg1")
+				publisher.Publish(ctx, channel, "msg2")
+			} else {
+				publisher := suite.defaultClusterClient()
+				defer publisher.Close()
+				queue, _ = receiver.(*glide.ClusterClient).GetQueue()
 
-	time.Sleep(200 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
-	// Receive first with WaitForMessage (async style)
-	select {
-	case msg1 := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), "msg1", msg1.Message)
-	case <-time.After(3 * time.Second):
-		suite.T().Fatal("Timeout waiting for msg1")
+				// Publish two messages
+				publisher.Publish(ctx, channel, "msg1", false)
+				publisher.Publish(ctx, channel, "msg2", false)
+			}
+
+			time.Sleep(200 * time.Millisecond)
+
+			// Receive first with WaitForMessage (async style)
+			select {
+			case msg1 := <-queue.WaitForMessage():
+				assert.Equal(t, "msg1", msg1.Message)
+			case <-time.After(3 * time.Second):
+				t.Fatal("Timeout waiting for msg1")
+			}
+
+			// Receive second with Pop (sync style)
+			msg2 := queue.Pop()
+			assert.NotNil(t, msg2)
+			assert.Equal(t, "msg2", msg2.Message)
+		})
 	}
-
-	// Receive second with Pop (sync style)
-	msg2 := queue.Pop()
-	assert.NotNil(suite.T(), msg2)
-	assert.Equal(suite.T(), "msg2", msg2.Message)
 }
 
 // TestPubSubPatternCoexistence tests pattern subscription with both retrieval methods
 func (suite *GlideTestSuite) TestPubSubPatternCoexistence() {
-	pattern := "news.*"
-	channel := "news.sports"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{{Channel: pattern, Mode: PatternMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			pattern := "news.*"
+			channel := "news.sports"
 
-	publisher := suite.defaultClient()
-	defer publisher.Close()
+			channels := []ChannelDefn{{Channel: pattern, Mode: PatternMode}}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	ctx := context.Background()
-	queue, _ := receiver.(*glide.Client).GetQueue()
+			ctx := context.Background()
+			var queue *glide.PubSubMessageQueue
+			if clientType == StandaloneClient {
+				publisher := suite.defaultClient()
+				defer publisher.Close()
+				queue, _ = receiver.(*glide.Client).GetQueue()
 
-	time.Sleep(100 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
-	publisher.Publish(ctx, channel, "msg1")
-	publisher.Publish(ctx, channel, "msg2")
+				publisher.Publish(ctx, channel, "msg1")
+				publisher.Publish(ctx, channel, "msg2")
+			} else {
+				publisher := suite.defaultClusterClient()
+				defer publisher.Close()
+				queue, _ = receiver.(*glide.ClusterClient).GetQueue()
 
-	time.Sleep(200 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
-	select {
-	case msg1 := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), "msg1", msg1.Message)
-	case <-time.After(3 * time.Second):
-		suite.T().Fatal("Timeout waiting for msg1")
+				publisher.Publish(ctx, channel, "msg1", false)
+				publisher.Publish(ctx, channel, "msg2", false)
+			}
+
+			time.Sleep(200 * time.Millisecond)
+
+			select {
+			case msg1 := <-queue.WaitForMessage():
+				assert.Equal(t, "msg1", msg1.Message)
+			case <-time.After(3 * time.Second):
+				t.Fatal("Timeout waiting for msg1")
+			}
+
+			msg2 := queue.Pop()
+			assert.NotNil(t, msg2)
+			assert.Equal(t, "msg2", msg2.Message)
+		})
 	}
-
-	msg2 := queue.Pop()
-	assert.NotNil(suite.T(), msg2)
-	assert.Equal(suite.T(), "msg2", msg2.Message)
 }
 
 // TestPubSubMaxSizeMessage tests large message handling
 func (suite *GlideTestSuite) TestPubSubMaxSizeMessage() {
-	channel := "max_size_test"
-	largeMsg := strings.Repeat("a", 1024*1024)
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			channel := "max_size_test"
+			largeMsg := strings.Repeat("a", 1024*1024)
 
-	publisher := suite.defaultClient()
-	defer publisher.Close()
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	ctx := context.Background()
-	queue, _ := receiver.(*glide.Client).GetQueue()
+			ctx := context.Background()
+			var queue *glide.PubSubMessageQueue
+			if clientType == StandaloneClient {
+				publisher := suite.defaultClient()
+				defer publisher.Close()
+				queue, _ = receiver.(*glide.Client).GetQueue()
 
-	time.Sleep(100 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 
-	publisher.Publish(ctx, channel, string(largeMsg))
+				publisher.Publish(ctx, channel, string(largeMsg))
+			} else {
+				publisher := suite.defaultClusterClient()
+				defer publisher.Close()
+				queue, _ = receiver.(*glide.ClusterClient).GetQueue()
 
-	select {
-	case msg := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), string(largeMsg), msg.Message)
-	case <-time.After(5 * time.Second):
-		suite.T().Fatal("Timeout waiting for large message")
-	}
-}
+				time.Sleep(100 * time.Millisecond)
 
-// TestPubSubCustomCommand tests using CustomCommand with pubsub
-func (suite *GlideTestSuite) TestPubSubCustomCommand() {
-	channel := "custom_cmd_test"
+				publisher.Publish(ctx, channel, string(largeMsg), false)
+			}
 
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
-	defer receiver.Close()
-
-	publisher := suite.defaultClient()
-	defer publisher.Close()
-
-	ctx := context.Background()
-	queue, _ := receiver.(*glide.Client).GetQueue()
-
-	time.Sleep(100 * time.Millisecond)
-
-	// Use CustomCommand to publish
-	publisher.CustomCommand(ctx, []string{"PUBLISH", channel, "test_msg"})
-
-	time.Sleep(100 * time.Millisecond)
-
-	select {
-	case msg := <-queue.WaitForMessage():
-		assert.Equal(suite.T(), "test_msg", msg.Message)
-	case <-time.After(3 * time.Second):
-		suite.T().Fatal("Timeout waiting for custom command message")
+			select {
+			case msg := <-queue.WaitForMessage():
+				assert.Equal(t, string(largeMsg), msg.Message)
+			case <-time.After(5 * time.Second):
+				t.Fatal("Timeout waiting for large message")
+			}
+		})
 	}
 }

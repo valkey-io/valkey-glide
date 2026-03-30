@@ -16,13 +16,13 @@ public interface PubSubClusterCommands {
 
     /**
      * Constant representing "unsubscribe from all sharded channels". Pass this to {@link
-     * #sunsubscribe(Set)} or {@link #sunsubscribe(Set, int)} to unsubscribe from all sharded
+     * #sunsubscribeLazy(Set)} or {@link #sunsubscribe(Set, int)} to unsubscribe from all sharded
      * channels.
      *
      * @example
      *     <pre>{@code
      * // Unsubscribe from all sharded channels
-     * client.sunsubscribe(PubSubClusterCommands.ALL_SHARDED_CHANNELS).get();
+     * client.sunsubscribeLazy(PubSubClusterCommands.ALL_SHARDED_CHANNELS).get();
      * }</pre>
      */
     Set<String> ALL_SHARDED_CHANNELS = Collections.emptySet();
@@ -154,25 +154,35 @@ public interface PubSubClusterCommands {
     /**
      * Subscribes the client to the specified sharded channels.
      *
-     * <p>Sharded pubsub (available in Redis 7.0+) allows messages to be published to specific cluster
-     * shards, reducing overhead compared to cluster-wide pubsub.
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to subscribe asynchronously in the background.
+     *
+     * <p>Sharded pubsub (available in Valkey 7.0+) allows messages to be published to specific
+     * cluster shards, reducing overhead compared to cluster-wide pubsub.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
      *
      * @param channels A set of sharded channel names to subscribe to
      * @return A {@link CompletableFuture} that completes when the subscription request is processed
      * @example
      *     <pre>{@code
-     * client.ssubscribe(Set.of("shard-news", "shard-updates")).get();
+     * client.ssubscribeLazy(Set.of("shard-news", "shard-updates")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/ssubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> ssubscribe(Set<String> channels);
+    CompletableFuture<Void> ssubscribeLazy(Set<String> channels);
 
     /**
      * Subscribes the client to the specified sharded channels with a timeout.
      *
+     * <p>This command updates the client's internal desired subscription state and waits for server
+     * confirmation.
+     *
      * @param channels A set of sharded channel names to subscribe to
-     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation
+     * @param timeoutMs Maximum time in milliseconds to wait for subscription confirmation. A value of
+     *     0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the subscription is confirmed or times
      *     out
      * @example
@@ -187,35 +197,51 @@ public interface PubSubClusterCommands {
     /**
      * Unsubscribes the client from all currently subscribed sharded channels.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.sunsubscribe().get();
+     * client.sunsubscribeLazy().get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> sunsubscribe();
+    CompletableFuture<Void> sunsubscribeLazy();
 
     /**
      * Unsubscribes the client from the specified sharded channels.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @param channels A set of sharded channel names to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.sunsubscribe(Set.of("shard-news", "shard-updates")).get();
+     * client.sunsubscribeLazy(Set.of("shard-news", "shard-updates")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> sunsubscribe(Set<String> channels);
+    CompletableFuture<Void> sunsubscribeLazy(Set<String> channels);
 
     /**
      * Unsubscribes the client from the specified sharded channels with a timeout.
      *
+     * <p>This command updates the client's internal desired subscription state and waits for server
+     * confirmation.
+     *
      * @param channels A set of sharded channel names to unsubscribe from
-     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation
+     * @param timeoutMs Maximum time in milliseconds to wait for unsubscription confirmation. A value
+     *     of 0 blocks indefinitely until confirmation.
      * @return A {@link CompletableFuture} that completes when the unsubscription is confirmed or
      *     times out
      * @example

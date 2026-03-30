@@ -38,6 +38,7 @@ import {
     createFunctionLoad,
     createFunctionRestore,
     createFunctionStats,
+    createGetSubscriptions,
     createInfo,
     createLastSave,
     createLolwut,
@@ -99,6 +100,43 @@ export namespace GlideClientConfiguration {
 }
 
 /**
+ * Represents the subscription state for a standalone client.
+ *
+ * @remarks
+ * This interface provides information about the current PubSub subscriptions for a standalone client.
+ * It includes both the desired subscriptions (what the client wants to maintain) and the actual
+ * subscriptions (what is currently established on the server).
+ *
+ * The subscriptions are organized by channel mode:
+ * - {@link GlideClientConfiguration.PubSubChannelModes.Exact | Exact}: Exact channel names
+ * - {@link GlideClientConfiguration.PubSubChannelModes.Pattern | Pattern}: Channel patterns using glob-style matching
+ *
+ * @example
+ * ```typescript
+ * const state = await client.getSubscriptions();
+ * console.log("Desired exact channels:", state.desiredSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+ * console.log("Actual exact channels:", state.actualSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+ * ```
+ */
+export interface StandalonePubSubState {
+    /**
+     * Desired subscriptions organized by channel mode.
+     * These are the subscriptions the client wants to maintain.
+     */
+    desiredSubscriptions: Partial<
+        Record<GlideClientConfiguration.PubSubChannelModes, Set<GlideString>>
+    >;
+
+    /**
+     * Actual subscriptions currently active on the server.
+     * These are the subscriptions that are actually established.
+     */
+    actualSubscriptions: Partial<
+        Record<GlideClientConfiguration.PubSubChannelModes, Set<GlideString>>
+    >;
+}
+
+/**
  * Configuration options for creating a {@link GlideClient | GlideClient}.
  *
  * Extends `BaseClientConfiguration` with properties specific to `GlideClient`, such as
@@ -135,6 +173,24 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Advanced configuration settings for the client.
      */
     advancedConfiguration?: AdvancedGlideClientConfiguration;
+    /**
+     * When true, enables read-only mode for the standalone client.
+     *
+     * In read-only mode:
+     * - The client skips primary node detection (INFO REPLICATION command)
+     * - All connected nodes are treated as valid read targets
+     * - Write commands are blocked and will return an error
+     * - The default ReadFrom strategy becomes PreferReplica if not explicitly set
+     *
+     * This is useful for connecting to replica-only deployments or when you want to
+     * prevent accidental write operations.
+     *
+     * Note: read-only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
+     * read strategies.
+     *
+     * Defaults to false.
+     */
+    readOnly?: boolean;
 };
 
 /**
@@ -158,7 +214,7 @@ export type AdvancedGlideClientConfiguration =
  * Client used for connection to standalone servers.
  * Use {@link createClient} to request a client.
  *
- * @see For full documentation refer to {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#standalone | Valkey Glide Wiki}.
+ * @see For full documentation refer to {@link https://glide.valkey.io/how-to/client-initialization/#standalone | Valkey GLIDE Documentation}.
  */
 export class GlideClient extends BaseClient {
     /**
@@ -176,6 +232,11 @@ export class GlideClient extends BaseClient {
                 options.advancedConfiguration,
                 configuration,
             );
+        }
+
+        // Set read-only mode if specified
+        if (options.readOnly !== undefined) {
+            configuration.readOnly = options.readOnly;
         }
 
         return configuration;
@@ -261,7 +322,7 @@ export class GlideClient extends BaseClient {
      * **Notes:**
      * - **Atomic Batches - Transactions:** If the transaction fails due to a `WATCH` command, `EXEC` will return `null`.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey Glide Wiki} for details on Valkey Transactions.
+     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper#transaction|Valkey GLIDE Documentation} for details on Valkey Transactions.
      *
      * @param batch - A {@link Batch} object containing a list of commands to be executed.
      * @param raiseOnError - Determines how errors are handled within the batch response.
@@ -322,7 +383,7 @@ export class GlideClient extends BaseClient {
      *
      * Note: An error will occur if the string decoder is used with commands that return only bytes as a response.
      *
-     * @see {@link https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command|Valkey Glide Wiki} for details on the restrictions and limitations of the custom command API.
+     * @see {@link https://glide.valkey.io/concepts/client-features/custom-commands/|Valkey GLIDE Documentation} for details on the restrictions and limitations of the custom command API.
      *
      * @param args - A list including the command name and arguments for the custom command.
      * @param options - (Optional) See {@link DecoderOption}.
@@ -947,7 +1008,7 @@ export class GlideClient extends BaseClient {
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
      *
-     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey Glide Wiki} for more details.
+     * @see {@link https://valkey.io/commands/unwatch/|valkey.io} and {@link https://valkey.io/topics/transactions/#cas|Valkey GLIDE Documentation} for more details.
      *
      * @returns A simple `"OK"` response.
      *
@@ -1066,5 +1127,29 @@ export class GlideClient extends BaseClient {
         options?: ScanOptions & DecoderOption,
     ): Promise<[GlideString, GlideString[]]> {
         return this.createWritePromise(createScan(cursor, options), options);
+    }
+
+    /**
+     * Returns the current subscription state for the client.
+     *
+     * @see {@link https://valkey.io/commands/pubsub/|valkey.io} for details.
+     *
+     * @returns A promise that resolves to the subscription state containing
+     *          desired and actual subscriptions organized by channel mode.
+     *
+     * @example
+     * ```typescript
+     * const state = await client.getSubscriptions();
+     * console.log("Desired exact channels:", state.desiredSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+     * console.log("Actual exact channels:", state.actualSubscriptions[GlideClientConfiguration.PubSubChannelModes.Exact]);
+     * ```
+     */
+    public async getSubscriptions(): Promise<StandalonePubSubState> {
+        const response = await this.createWritePromise<unknown[]>(
+            createGetSubscriptions(),
+        );
+        return this.parseGetSubscriptionsResponse<GlideClientConfiguration.PubSubChannelModes>(
+            response,
+        );
     }
 }

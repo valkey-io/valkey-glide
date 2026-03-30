@@ -233,7 +233,7 @@ public final class SetOptions {
      * @return GlideString[]
      */
     public GlideString[] toArgsBinary() {
-        final var argsBuilder = new ArgsBuilder();
+        final ArgsBuilder argsBuilder = new ArgsBuilder();
         if (conditionalSet != null) {
             argsBuilder.add(conditionalSet.valkeyApi);
             if (conditionalSet == ConditionalSet.ONLY_IF_EQUAL) {

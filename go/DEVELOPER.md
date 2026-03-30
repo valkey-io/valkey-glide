@@ -220,6 +220,45 @@ By default, those test suites start standalone and cluster servers without TLS a
 make integ-test standalone-endpoints=localhost:6379 cluster-endpoints=localhost:7000 tls=true
 ```
 
+#### IAM Authentication Tests
+
+To run [IAM authentication tests](integTest/auth_test.go) locally with mock credentials:
+
+```bash
+# Run from the `go/` directory
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+make integ-test test-filter=TestIamAuthentication
+```
+
+If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+
+#### DNS Tests
+
+To run [DNS tests](integTest/dns_test.go) locally:
+
+1. Add the following entries to your hosts file:
+   - Linux/macOS: `/etc/hosts`
+   - Windows: `C:\Windows\System32\drivers\etc\hosts`
+
+   ```text
+   127.0.0.1 valkey.glide.test.tls.com
+   127.0.0.1 valkey.glide.test.no_tls.com
+   ::1 valkey.glide.test.tls.com
+   ::1 valkey.glide.test.no_tls.com
+   ```
+
+2. Set the environment variable:
+
+   ```bash
+   export VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+   ```
+
+If the environment variable is not set, DNS tests will be skipped.
+
 #### Test Reports and Results
 
 Alongside terminal output, test reports are generated in `reports` folder.

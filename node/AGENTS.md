@@ -11,6 +11,7 @@ This is the Node.js/TypeScript client binding for Valkey GLIDE, providing both s
 **Architecture:** TypeScript wrapper around Rust FFI core with NAPI-RS bindings
 
 **Key Components:**
+
 - `src/` - Main TypeScript client library
 - `rust-client/` - Rust NAPI bindings and FFI integration
 - `build-ts/` - Compiled TypeScript output
@@ -25,15 +26,17 @@ This is the Node.js/TypeScript client binding for Valkey GLIDE, providing both s
 **Protocol:** Protobuf communication with Rust core
 
 **Supported Platforms:**
+
 - Linux: glibc 2.17+, musl libc 1.2.3+ (Alpine)
 - macOS: 13.5+ (x86_64), 15.0+ (aarch64/Apple Silicon)
-- Node.js: 20+ (npm 11+ recommended for Linux)
+- Node.js: 16+ (npm 11+ recommended for Linux)
 
 **Package:** `@valkey/valkey-glide` on npm
 
 ## Build and Test Rules (Agents)
 
 ### Preferred (npm Scripts)
+
 ```bash
 # Build commands
 npm run build                    # Development build (fast, unoptimized)
@@ -64,6 +67,7 @@ npm run clean                   # Complete cleanup including node_modules
 ```
 
 ### Raw Equivalents
+
 ```bash
 # Manual TypeScript compilation
 npx tsc
@@ -85,6 +89,7 @@ npx prettier --check .
 ```
 
 ### Test Execution Options
+
 ```bash
 # Run with existing endpoints
 npm run test:debug -- --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
@@ -134,17 +139,20 @@ Use conventional commit format:
 ### Code Quality Requirements
 
 **ESLint + Prettier:**
+
 ```bash
 npm run lint                    # Must pass before commit
 npm run lint:fix                # Fix linting and formatting issues
 ```
 
 **TypeScript Compilation:**
+
 ```bash
 npm run build:ts                # Must compile without errors
 ```
 
 **Rust Components:**
+
 ```bash
 # From rust-client/ directory
 cargo clippy --all-features --all-targets -- -D warnings
@@ -154,6 +162,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 ## Guardrails & Policies
 
 ### Generated Outputs (Never Commit)
+
 - `build-ts/` - Compiled TypeScript output
 - `node_modules/` - Node.js dependencies
 - `rust-client/node_modules/` - Rust client dependencies
@@ -167,7 +176,8 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - `package-lock.json`, `yarn.lock` - Lock files (project uses npm)
 
 ### Node.js-Specific Rules
-- **Node.js 20+ Required:** Minimum runtime version
+
+- **Node.js 16+ Required:** Minimum runtime version
 - **npm 11+ Recommended:** For Linux users (better libc support)
 - **Promise-based APIs:** All client methods return Promises
 - **Resource Management:** Call `client.close()` to cleanup connections
@@ -175,6 +185,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - **NAPI Bindings:** Native module built per platform/architecture
 
 ### TypeScript Guidelines
+
 - Maintain strict TypeScript configuration
 - Export all public APIs through `index.ts`
 - Use proper type definitions for all public interfaces
@@ -221,7 +232,7 @@ node/
 **Key Features:** TypeScript support, NAPI-RS native bindings, protobuf communication
 **Testing:** Jest test framework, interactive REPL, package manager compatibility tests
 **Platforms:** Linux (glibc/musl), macOS (Intel/Apple Silicon)
-**Dependencies:** Node.js 20+, protobufjs, long, platform-specific native binaries
+**Dependencies:** Node.js 16+, protobufjs, long, platform-specific native binaries
 
 ## If You Need More
 
@@ -229,7 +240,7 @@ node/
 - **Development Setup:** [DEVELOPER.md](./DEVELOPER.md)
 - **Examples:** [../examples/node/](../examples/node/)
 - **API Documentation:** [Valkey GLIDE Node.js docs](https://valkey.io/valkey-glide/node/)
-- **Wiki:** [NodeJS wrapper wiki](https://github.com/valkey-io/valkey-glide/wiki/NodeJS-wrapper)
+- **Documentation:** [GLIDE Docs](https://glide.valkey.io/)
 - **Test Suites:** [tests/](./tests/) directory
 - **Package Manager Tests:** [pm-and-types-tests/](./pm-and-types-tests/)
 - **Rust Client:** [rust-client/](./rust-client/) directory

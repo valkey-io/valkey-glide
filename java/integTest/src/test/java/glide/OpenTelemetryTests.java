@@ -13,6 +13,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -107,7 +108,10 @@ public class OpenTelemetryTests {
         List<String> spanNames = new ArrayList<>();
         spanData = new String(Files.readAllBytes(Paths.get(path)));
 
-        spans = spanData.lines().filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
+        spans =
+                Arrays.stream(spanData.split("\n"))
+                        .filter(line -> !line.trim().isEmpty())
+                        .collect(Collectors.toList());
 
         // Check that we have spans
         if (spans.isEmpty()) {
@@ -499,7 +503,7 @@ public class OpenTelemetryTests {
 
         // Execute multiple concurrent commands
         List<java.util.concurrent.CompletableFuture<?>> commands =
-                List.of(
+                Arrays.asList(
                         client.set("test_key1", "value1"),
                         client.get("test_key1"),
                         client.set("test_key2", "value2"),

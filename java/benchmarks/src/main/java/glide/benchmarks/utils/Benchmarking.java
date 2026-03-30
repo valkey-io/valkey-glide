@@ -54,7 +54,7 @@ public class Benchmarking {
 
     public static Pair<ChosenAction, Long> measurePerformance(
             Client client, Map<ChosenAction, Operation> actions) {
-        var action = randomAction();
+        ChosenAction action = randomAction();
         long before = System.nanoTime();
         try {
             actions.get(action).go(client);
@@ -143,7 +143,7 @@ public class Benchmarking {
                         clients.add(newClient);
                     }
 
-                    var clientName = clients.get(0).getName();
+                    String clientName = clients.get(0).getName();
 
                     System.out.printf(
                             "%n =====> %s <===== %d clients %d concurrent %d data size %n%n",
@@ -188,24 +188,23 @@ public class Benchmarking {
                     long after = System.nanoTime();
 
                     // Map to save latency results separately for each action
-                    Map<ChosenAction, List<Long>> actionResults =
-                            Map.of(
-                                    ChosenAction.GET_EXISTING, new ArrayList<>(),
-                                    ChosenAction.GET_NON_EXISTING, new ArrayList<>(),
-                                    ChosenAction.SET, new ArrayList<>());
+                    Map<ChosenAction, List<Long>> actionResults = new HashMap<>();
+                    actionResults.put(ChosenAction.GET_EXISTING, new ArrayList<>());
+                    actionResults.put(ChosenAction.GET_NON_EXISTING, new ArrayList<>());
+                    actionResults.put(ChosenAction.SET, new ArrayList<>());
 
                     // for each task, call future.get() to retrieve & save the result in the map
                     asyncTasks.forEach(
                             future -> {
                                 try {
-                                    var futureResult = future.get();
+                                    Map<ChosenAction, ArrayList<Long>> futureResult = future.get();
                                     futureResult.forEach(
                                             (action, result) -> actionResults.get(action).addAll(result));
                                 } catch (Exception e) {
                                     e.printStackTrace();
                                 }
                             });
-                    var calculatedResults = calculateResults(actionResults);
+                    Map<ChosenAction, LatencyResults> calculatedResults = calculateResults(actionResults);
 
                     clients.forEach(Client::closeConnection);
 
@@ -243,12 +242,11 @@ public class Benchmarking {
             boolean debugLogging) {
         return CompletableFuture.supplyAsync(
                 () -> {
-                    var taskActionResults =
-                            Map.of(
-                                    ChosenAction.GET_EXISTING, new ArrayList<Long>(),
-                                    ChosenAction.GET_NON_EXISTING, new ArrayList<Long>(),
-                                    ChosenAction.SET, new ArrayList<Long>());
-                    var actions = getActionMap(dataSize, async);
+                    Map<ChosenAction, ArrayList<Long>> taskActionResults = new HashMap<>();
+                    taskActionResults.put(ChosenAction.GET_EXISTING, new ArrayList<>());
+                    taskActionResults.put(ChosenAction.GET_NON_EXISTING, new ArrayList<>());
+                    taskActionResults.put(ChosenAction.SET, new ArrayList<>());
+                    Map<ChosenAction, Operation> actions = getActionMap(dataSize, async);
 
                     if (debugLogging) {
                         System.out.printf("%n concurrent = %d/%d%n", taskNumDebugging, concurrentNum);
@@ -272,33 +270,45 @@ public class Benchmarking {
                 executor);
     }
 
+    private static String repeatString(String str, int count) {
+        StringBuilder sb = new StringBuilder(str.length() * count);
+        for (int i = 0; i < count; i++) {
+            sb.append(str);
+        }
+        return sb.toString();
+    }
+
     public static Map<ChosenAction, Operation> getActionMap(int dataSize, boolean async) {
 
-        String value = "0".repeat(dataSize);
-        return Map.of(
+        String value = repeatString("0", dataSize);
+        Map<ChosenAction, Operation> actions = new HashMap<>();
+        actions.put(
                 ChosenAction.GET_EXISTING,
-                        (client) -> {
-                            if (async) {
-                                ((AsyncClient) client).asyncGet(generateKeySet()).get();
-                            } else {
-                                ((SyncClient) client).get(generateKeySet());
-                            }
-                        },
+                (client) -> {
+                    if (async) {
+                        ((AsyncClient) client).asyncGet(generateKeySet()).get();
+                    } else {
+                        ((SyncClient) client).get(generateKeySet());
+                    }
+                });
+        actions.put(
                 ChosenAction.GET_NON_EXISTING,
-                        (client) -> {
-                            if (async) {
-                                ((AsyncClient) client).asyncGet(generateKeyGet()).get();
-                            } else {
-                                ((SyncClient) client).get(generateKeyGet());
-                            }
-                        },
+                (client) -> {
+                    if (async) {
+                        ((AsyncClient) client).asyncGet(generateKeyGet()).get();
+                    } else {
+                        ((SyncClient) client).get(generateKeyGet());
+                    }
+                });
+        actions.put(
                 ChosenAction.SET,
-                        (client) -> {
-                            if (async) {
-                                ((AsyncClient) client).asyncSet(generateKeySet(), value).get();
-                            } else {
-                                ((SyncClient) client).set(generateKeySet(), value);
-                            }
-                        });
+                (client) -> {
+                    if (async) {
+                        ((AsyncClient) client).asyncSet(generateKeySet(), value).get();
+                    } else {
+                        ((SyncClient) client).set(generateKeySet(), value);
+                    }
+                });
+        return actions;
     }
 }

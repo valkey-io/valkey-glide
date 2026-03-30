@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import os
 import platform
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -102,7 +103,9 @@ from glide_shared.routes import (
 )
 
 from tests.async_tests.conftest import create_client
+from tests.test_constants import HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6
 from tests.utils.utils import (
+    assert_connected,
     check_function_list_response,
     check_function_stats_response,
     check_if_server_version_lt,
@@ -268,7 +271,7 @@ class TestGlideClients:
             with pytest.raises(RequestError) as e:
                 # This client isn't authorized to perform SET
                 await testuser_client.set("foo", "bar")
-            assert "NOPERM" in str(e)
+            assert "PermissionDenied" in str(e)
             await testuser_client.close()
         finally:
             # Delete this user
@@ -590,8 +593,40 @@ class TestGlideClients:
             with anyio.fail_after(0.1):
                 await glide_client.blpop(["random_key"], timeout=2)
 
-        # Ensure client can still perform a simple operation
-        assert await glide_client.set(get_random_string(10), "value") == OK
+        await assert_connected(glide_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_usable_after_cancelled_commands(
+        self, glide_client: TGlideClient
+    ):
+        """Verify the client remains usable after repeated command cancellations (issue #5442)."""
+
+        for _ in range(50):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(glide_client.exists, ["cancel_test_key"])
+                # Yield to let the command dispatch to the server
+                await anyio.sleep(0)
+                tg.cancel_scope.cancel()
+
+        # Wait for in-flight server responses to arrive and be processed
+        await anyio.sleep(1)
+        await assert_connected(glide_client)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("ip_address", [HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6])
+    async def test_connect_with_ip_address_succeeds(
+        self, cluster_mode: bool, ip_address: str
+    ):
+        """Test connection with IPv4 and IPv6 addresses."""
+        cluster = pytest.valkey_cluster if cluster_mode else pytest.standalone_cluster  # type: ignore
+        port = cluster.nodes_addr[0].port
+        address = NodeAddress(ip_address, port)
+
+        client = await create_client(cluster_mode=cluster_mode, addresses=[address])
+
+        await assert_connected(client)
+        await client.close()
 
 
 @pytest.mark.anyio
@@ -604,6 +639,34 @@ class TestCommands:
         value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
         assert await glide_client.set(key, value) == OK
         assert await glide_client.get(key) == value.encode()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_get_with_bytearray_and_memoryview(
+        self, glide_client: TGlideClient
+    ):
+        """Test that set() accepts bytearray and memoryview keys and values."""
+        data = os.urandom(256)
+
+        # bytearray value
+        key_ba = get_random_string(10)
+        assert await glide_client.set(key_ba, bytearray(data)) == OK
+        assert await glide_client.get(key_ba) == data
+
+        # memoryview value
+        key_mv = get_random_string(10)
+        assert await glide_client.set(key_mv, memoryview(bytearray(data))) == OK
+        assert await glide_client.get(key_mv) == data
+
+        # bytearray key
+        key_ba_key = bytearray(b"ba_key_" + os.urandom(8))
+        assert await glide_client.set(key_ba_key, b"value1") == OK
+        assert await glide_client.get(key_ba_key) == b"value1"
+
+        # memoryview key
+        key_mv_key = memoryview(bytearray(b"mv_key_" + os.urandom(8)))
+        assert await glide_client.set(key_mv_key, b"value2") == OK
+        assert await glide_client.get(key_mv_key) == b"value2"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
@@ -12249,7 +12312,7 @@ class TestScripts:
             cluster_client = await GlideClusterClient.create(cluster_config)
             try:
                 # Verify client can connect and execute commands
-                assert await cluster_client.ping() == b"PONG"
+                await assert_connected(cluster_client)
                 assert await cluster_client.set("key", "value") == "OK"
                 assert await cluster_client.get("key") == b"value"
                 # Clean up test key
@@ -12266,7 +12329,7 @@ class TestScripts:
             standalone_client = await GlideClient.create(standalone_config)
             try:
                 # Verify client can connect and execute commands
-                assert await standalone_client.ping() == b"PONG"
+                await assert_connected(standalone_client)
                 assert await standalone_client.set("key", "value") == "OK"
                 assert await standalone_client.get("key") == b"value"
                 # Clean up test key

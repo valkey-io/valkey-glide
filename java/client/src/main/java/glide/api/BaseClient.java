@@ -328,9 +328,9 @@ import glide.managers.ConnectionManager;
 import glide.utils.ArgsBuilder;
 import glide.utils.BufferUtils;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -497,7 +497,7 @@ public abstract class BaseClient
                             });
         } catch (Exception e) {
             // Something bad happened during initial setup
-            var future = new CompletableFuture<T>();
+            CompletableFuture<T> future = new CompletableFuture<>();
             future.completeExceptionally(e);
             return future;
         }
@@ -692,7 +692,7 @@ public abstract class BaseClient
     }
 
     protected byte[] handleBytesOrNullResponse(Response response) throws GlideException {
-        var result =
+        GlideString result =
                 handleValkeyResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
         if (result == null) return null;
 
@@ -867,7 +867,7 @@ public abstract class BaseClient
         Map<String, Object>[] data = castArray(response, Map.class);
         for (Map<String, Object> libraryInfo : data) {
             Object[] functions = (Object[]) libraryInfo.get("functions");
-            var functionInfo = castArray(functions, Map.class);
+            Map<String, Object>[] functionInfo = castArray(functions, Map.class);
             libraryInfo.put("functions", functionInfo);
         }
         return data;
@@ -879,7 +879,7 @@ public abstract class BaseClient
         Map<GlideString, Object>[] data = castArray(response, Map.class);
         for (Map<GlideString, Object> libraryInfo : data) {
             Object[] functions = (Object[]) libraryInfo.get(gs("functions"));
-            var functionInfo = castArray(functions, Map.class);
+            Map<String, Object>[] functionInfo = castArray(functions, Map.class);
             libraryInfo.put(gs("functions"), functionInfo);
         }
         return data;
@@ -914,7 +914,7 @@ public abstract class BaseClient
             return ClusterValue.ofSingleValue(handleFunctionStatsResponse(handleMapResponse(response)));
         } else {
             Map<String, Map<String, Map<String, Object>>> data = handleMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
+            for (Map.Entry<String, Map<String, Map<String, Object>>> nodeInfo : data.entrySet()) {
                 nodeInfo.setValue(handleFunctionStatsResponse(nodeInfo.getValue()));
             }
             return ClusterValue.ofMultiValue(data);
@@ -930,7 +930,8 @@ public abstract class BaseClient
         } else {
             Map<GlideString, Map<GlideString, Map<GlideString, Object>>> data =
                     handleBinaryStringMapResponse(response);
-            for (var nodeInfo : data.entrySet()) {
+            for (Map.Entry<GlideString, Map<GlideString, Map<GlideString, Object>>> nodeInfo :
+                    data.entrySet()) {
                 nodeInfo.setValue(handleFunctionStatsBinaryResponse(nodeInfo.getValue()));
             }
             return ClusterValue.ofMultiValueBinary(data);
@@ -2466,10 +2467,16 @@ public abstract class BaseClient
     public CompletableFuture<Object> invokeScript(@NonNull Script script) {
         if (script.getBinaryOutput()) {
             return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleBinaryObjectOrNullResponse);
+                    script,
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    this::handleBinaryObjectOrNullResponse);
         } else {
             return commandManager.submitScript(
-                    script, List.of(), List.of(), this::handleObjectOrNullResponse);
+                    script,
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    this::handleObjectOrNullResponse);
         }
     }
 
@@ -5459,15 +5466,15 @@ public abstract class BaseClient
         if (o instanceof byte[]) {
             o = GlideString.of((byte[]) o);
         } else if (o.getClass().isArray()) {
-            var array = (Object[]) o;
-            for (var i = 0; i < array.length; i++) {
+            Object[] array = (Object[]) o;
+            for (int i = 0; i < array.length; i++) {
                 array[i] = convertByteArrayToGlideString(array[i]);
             }
         } else if (o instanceof Set) {
-            var set = (Set<?>) o;
+            Set<?> set = (Set<?>) o;
             o = set.stream().map(this::convertByteArrayToGlideString).collect(Collectors.toSet());
         } else if (o instanceof Map) {
-            var map = (Map<?, ?>) o;
+            Map<?, ?> map = (Map<?, ?>) o;
             o =
                     map.entrySet().stream()
                             .collect(
@@ -6251,7 +6258,7 @@ public abstract class BaseClient
                 AclWhoami, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
-    public CompletableFuture<Void> subscribe(Set<String> channels) {
+    public CompletableFuture<Void> subscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 Subscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6269,7 +6276,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(SubscribeBlocking, args, response -> null);
     }
 
-    public CompletableFuture<Void> psubscribe(Set<String> patterns) {
+    public CompletableFuture<Void> psubscribeLazy(Set<String> patterns) {
         return commandManager.submitNewCommand(
                 PSubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6287,11 +6294,11 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(PSubscribeBlocking, args, response -> null);
     }
 
-    public CompletableFuture<Void> unsubscribe() {
+    public CompletableFuture<Void> unsubscribeLazy() {
         return commandManager.submitNewCommand(Unsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
-    public CompletableFuture<Void> unsubscribe(Set<String> channels) {
+    public CompletableFuture<Void> unsubscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 Unsubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6317,11 +6324,11 @@ public abstract class BaseClient
                 UnsubscribeBlocking, new String[] {String.valueOf(timeoutMs)}, response -> null);
     }
 
-    public CompletableFuture<Void> punsubscribe() {
+    public CompletableFuture<Void> punsubscribeLazy() {
         return commandManager.submitNewCommand(PUnsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
-    public CompletableFuture<Void> punsubscribe(Set<String> patterns) {
+    public CompletableFuture<Void> punsubscribeLazy(Set<String> patterns) {
         return commandManager.submitNewCommand(
                 PUnsubscribe, patterns.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -6349,11 +6356,15 @@ public abstract class BaseClient
 
     protected Object parseSubscriptionState(Object response) {
         if (!(response instanceof Object[])) {
-            throw new RuntimeException("Invalid response format from GetSubscriptions");
+            throw new RuntimeException(
+                    "Invalid response format from GetSubscriptions: expected Object[], got "
+                            + (response == null ? "null" : response.getClass().getName()));
         }
         Object[] arr = (Object[]) response;
         if (arr.length != 4) {
-            throw new RuntimeException("Invalid response format from GetSubscriptions");
+            throw new RuntimeException(
+                    "Invalid response format from GetSubscriptions: expected array length 4, got "
+                            + arr.length);
         }
 
         @SuppressWarnings("unchecked")

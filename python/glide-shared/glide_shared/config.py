@@ -804,10 +804,6 @@ class BaseClientConfiguration:
             request.compression_config.CopyFrom(self.compression._to_protobuf())
         return request
 
-    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
-    def _is_pubsub_configured(self) -> bool:
-        return False
-
     def _get_pubsub_callback_and_context(
         self,
     ) -> Tuple[Optional[Callable[[PubSubMsg, Any], None]], Any]:
@@ -882,6 +878,17 @@ class GlideClientConfiguration(BaseClientConfiguration):
             When enabled, the client will automatically compress values for set-type commands and decompress
             values for get-type commands. This can reduce bandwidth usage and storage requirements.
             If not set, compression is disabled.
+        read_only (bool): When True, enables read-only mode for the standalone client.
+            In read-only mode:
+            - The client skips primary node detection (INFO REPLICATION command)
+            - Write commands are blocked and will return an error
+            - All connected nodes are treated as valid read targets
+            - If no ReadFrom strategy is specified, defaults to PreferReplica
+            This is useful for connecting to replica-only deployments or when you want to
+            prevent accidental write operations.
+            Note: read_only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
+            read strategies.
+            Defaults to False.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -940,6 +947,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         advanced_config: Optional[AdvancedGlideClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
+        read_only: bool = False,
     ):
         super().__init__(
             addresses=addresses,
@@ -958,12 +966,16 @@ class GlideClientConfiguration(BaseClientConfiguration):
             compression=compression,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
+        self.read_only = read_only
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
         assert cluster_mode is False
         request = super()._create_a_protobuf_conn_request(cluster_mode)
+
+        # Set read_only mode
+        request.read_only = self.read_only
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
@@ -988,10 +1000,6 @@ class GlideClientConfiguration(BaseClientConfiguration):
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
 
         return request
-
-    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
-    def _is_pubsub_configured(self) -> bool:
-        return self.pubsub_subscriptions is not None
 
     def _get_pubsub_callback_and_context(
         self,
@@ -1223,10 +1231,6 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         if self.lazy_connect is not None:
             request.lazy_connect = self.lazy_connect
         return request
-
-    # TODO: remove this function once dynamic pubsub is implemented for the python wrappers
-    def _is_pubsub_configured(self) -> bool:
-        return self.pubsub_subscriptions is not None
 
     def _get_pubsub_callback_and_context(
         self,

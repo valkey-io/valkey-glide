@@ -24,3 +24,4 @@ logger_core = { path = "../../logger_core" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread", "time"] }
+tempfile = "3"

@@ -170,7 +170,7 @@ jobs:
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }}
-                    
+
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
@@ -179,7 +179,7 @@ jobs:
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-                    
+
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
@@ -214,9 +214,133 @@ jobs:
                       java/bundle*.jar
                       java/jedis-bundle*.jar
 
+            - name: Upload native library for uber JAR assembly
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: native-lib-${{ matrix.host.TARGET }}
+                  path: java/client/build/resources/main/natives/**/*
+
+    create-uber-jar:
+        needs: [set-release-version, create-binaries-to-publish]
+        if: github.repository_owner == 'valkey-io'
+        timeout-minutes: 25
+        runs-on: ubuntu-latest
+        env:
+            JAVA_VERSION: "11"
+            RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up JDK
+              uses: actions/setup-java@v4
+              with:
+                  distribution: "temurin"
+                  java-version: ${{ env.JAVA_VERSION }}
+
+            - name: Download all native library artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  pattern: native-lib-*
+                  path: native-libs-downloaded
+
+            - name: List downloaded artifacts
+              run: |
+                  echo "Downloaded native library artifacts:"
+                  find native-libs-downloaded -type f
+
+            - name: Organize native libraries for uber JAR
+              shell: bash
+              run: |
+                  # Create staging directory for native libraries
+                  mkdir -p java/client/build/native-libs-staging/natives
+
+                  # Copy all native libraries from downloaded artifacts
+                  # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
+                  # Target structure: java/client/build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
+                  for artifact_dir in native-libs-downloaded/native-lib-*; do
+                      if [ -d "$artifact_dir" ]; then
+                          echo "Processing $artifact_dir"
+                          # Find all native library files and copy them preserving the platform/arch structure
+                          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
+                              # Extract the relative path from the artifact directory
+                              rel_path="${lib_file#$artifact_dir/}"
+                              target_path="java/client/build/native-libs-staging/natives/$rel_path"
+                              # Create target directory if it doesn't exist
+                              mkdir -p "$(dirname "$target_path")"
+                              # Copy the file
+                              cp "$lib_file" "$target_path"
+                          done
+                      fi
+                  done
+
+                  echo "Native libraries staged:"
+                  find java/client/build/native-libs-staging -type f
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "29.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Cache Gradle dependencies
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.gradle/caches
+                      ~/.gradle/wrapper
+                  key: ${{ runner.os }}-gradle-uber-jar-${{ hashFiles('java/**/*.gradle*', 'java/**/gradle-wrapper.properties') }}
+                  restore-keys: |
+                      ${{ runner.os }}-gradle-cd-
+                      ${{ runner.os }}-gradle-
+
+            - name: Create secret key ring file for all Java submodules
+              working-directory: java/client
+              shell: bash
+              run: |
+                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
+                  if [ -d ../jedis-compatibility ]; then
+                    cp ./secring.gpg ../jedis-compatibility/secring.gpg
+                  fi
+              env:
+                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
+
+            - name: Build uber JAR (no Rust compilation needed)
+              working-directory: java
+              shell: bash
+              env:
+                  GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+                  UBER_JAR_BUILD: "true"
+              run: |
+                  # Build uber JAR and publish to Maven local in one step
+                  # UBER_JAR_BUILD env var signals build.gradle to use copyAllNativeLibs
+                  ./gradlew --build-cache :client:publishToMavenLocal \
+                  -x buildRust -x copyNativeLib \
+                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
+                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+            - name: Bundle uber JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  src_folder=~/.m2/repository/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
+                  cd $src_folder
+                  jar -cvf bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $src_folder/bundle.jar bundle-uber-jar.jar
+
+            - name: Upload uber JAR artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: java-uber-jar
+                  path: java/bundle-uber-jar.jar
+
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}
-        needs: [set-release-version, create-binaries-to-publish]
+        needs:
+            [set-release-version, create-binaries-to-publish, create-uber-jar]
         runs-on: ubuntu-latest
         outputs:
             DEPLOYMENT_ID: ${{ steps.maven-deployment.outputs.DEPLOYMENT_ID }}
@@ -314,6 +438,8 @@ jobs:
                 exclude:
                     - host:
                           TARGET: aarch64-unknown-linux-musl
+                    - host:
+                          OS: windows
         runs-on: ${{ matrix.host.test-runner || matrix.host.runner }}
         container:
             image: ${{ matrix.host.IMAGE || ''}}
@@ -375,12 +501,14 @@ jobs:
             - name: Start standalone Valkey server
               working-directory: utils
               id: port
+              shell: bash
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
                   echo "PORT=$PORT" >> $GITHUB_OUTPUT
 
             - name: Test deployment
               working-directory: java
+              shell: bash
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
               run: |

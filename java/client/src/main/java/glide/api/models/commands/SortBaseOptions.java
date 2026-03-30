@@ -2,6 +2,7 @@
 package glide.api.models.commands;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -90,7 +91,7 @@ public abstract class SortBaseOptions {
 
         if (limit != null) {
             optionArgs.addAll(
-                    List.of(
+                    Arrays.asList(
                             LIMIT_COMMAND_STRING,
                             Long.toString(this.limit.offset),
                             Long.toString(this.limit.count)));
