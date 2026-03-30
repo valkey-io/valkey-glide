@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None, None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -155,12 +155,14 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> RedisResult<ClusterConnection<C>> {
         ClusterConnInner::new(
             initial_nodes,
             cluster_params,
             push_sender,
             pubsub_synchronizer,
+            iam_token_provider,
         )
         .await
         .map(|inner| {
@@ -206,7 +208,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None, None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -1008,6 +1010,146 @@ mod inflight_tracker_tests {
     }
 }
 
+#[cfg(test)]
+mod iam_token_refresh_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Mock IAM token provider that returns a configurable token and tracks call count.
+    struct MockTokenProvider {
+        token: std::sync::Mutex<String>,
+        call_count: AtomicUsize,
+    }
+
+    impl MockTokenProvider {
+        fn new(token: &str) -> Arc<Self> {
+            Arc::new(Self {
+                token: std::sync::Mutex::new(token.to_string()),
+                call_count: AtomicUsize::new(0),
+            })
+        }
+
+        fn set_token(&self, token: &str) {
+            *self.token.lock().unwrap() = token.to_string();
+        }
+
+        fn calls(&self) -> usize {
+            self.call_count.load(Ordering::Relaxed)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::client::IAMTokenProvider for MockTokenProvider {
+        async fn get_valid_token(&self) -> Option<String> {
+            self.call_count.fetch_add(1, Ordering::Relaxed);
+            let token = self.token.lock().unwrap().clone();
+            if token.is_empty() {
+                None
+            } else {
+                Some(token)
+            }
+        }
+    }
+
+    /// Helper to build a minimal GlideConnectionOptions with an IAM provider.
+    fn options_with_provider(
+        provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+    ) -> GlideConnectionOptions {
+        GlideConnectionOptions {
+            push_sender: None,
+            disconnect_notifier: None,
+            discover_az: false,
+            connection_timeout: None,
+            connection_retry_strategy: None,
+            tcp_nodelay: false,
+            pubsub_synchronizer: None,
+            iam_token_provider: provider,
+        }
+    }
+
+    /// Helper to build a minimal InnerCore with the given password and IAM provider.
+    fn build_inner(
+        initial_password: Option<String>,
+        provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+    ) -> Arc<InnerCore<crate::aio::MultiplexedConnection>> {
+        use crate::cluster_client::ClusterParams;
+        use connections_container::ConnectionsContainer;
+
+        let params = ClusterParams::default_for_test(initial_password);
+
+        Arc::new(InnerCore {
+            conn_lock: StdRwLock::new(ConnectionsContainer::default()),
+            cluster_params: StdRwLock::new(params),
+            pending_requests: Mutex::new(Vec::new()),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: options_with_provider(provider),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    fn read_password(inner: &Arc<InnerCore<crate::aio::MultiplexedConnection>>) -> Option<String> {
+        inner.cluster_params.read().unwrap().password.clone()
+    }
+
+    #[tokio::test]
+    async fn refresh_updates_password_when_provider_returns_token() {
+        let provider = MockTokenProvider::new("fresh-token-123");
+        let inner = build_inner(Some("old-token".into()), Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("fresh-token-123".into()));
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn refresh_does_not_change_password_when_provider_returns_none() {
+        let provider = MockTokenProvider::new(""); // returns None
+        let inner = build_inner(Some("old-token".into()), Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("old-token".into()));
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn refresh_is_noop_when_no_provider_configured() {
+        let inner = build_inner(Some("static-password".into()), None);
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("static-password".into()));
+    }
+
+    #[tokio::test]
+    async fn refresh_sets_password_when_initially_none() {
+        let provider = MockTokenProvider::new("first-token");
+        let inner = build_inner(None, Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("first-token".into()));
+    }
+
+    #[tokio::test]
+    async fn refresh_picks_up_new_token_on_second_call() {
+        let provider = MockTokenProvider::new("token-v1");
+        let inner = build_inner(None, Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+        assert_eq!(read_password(&inner), Some("token-v1".into()));
+
+        provider.set_token("token-v2");
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+        assert_eq!(read_password(&inner), Some("token-v2".into()));
+        assert_eq!(provider.calls(), 2);
+    }
+}
+
 struct PendingRequest<C> {
     retry: u32,
     sender: oneshot::Sender<RedisResult<Response>>,
@@ -1278,6 +1420,7 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1304,6 +1447,7 @@ where
             connection_retry_strategy: Some(connection_retry_strategy),
             tcp_nodelay: cluster_params.tcp_nodelay,
             pubsub_synchronizer,
+            iam_token_provider,
         };
 
         let connections = Self::create_initial_connections(
@@ -1490,19 +1634,32 @@ where
         Ok(connections.0)
     }
 
+    /// If IAM authentication is configured, refresh the token in `cluster_params` so that
+    /// any subsequent connection attempts use a valid credential.
+    async fn refresh_iam_token_in_cluster_params(inner: &Arc<InnerCore<C>>) {
+        if let Some(ref token_provider) = inner.glide_connection_options.iam_token_provider {
+            if let Some(valid_token) = token_provider.get_valid_token().await {
+                if let Ok(mut params) = inner.cluster_params.write() {
+                    params.password = Some(valid_token);
+                }
+            }
+        }
+    }
+
     // Reconnect to the initial nodes provided by the user in the creation of the client,
     // and try to refresh the slots based on the initial connections.
     // Being used when all cluster connections are unavailable.
     fn reconnect_to_initial_nodes(inner: Arc<InnerCore<C>>) -> impl Future<Output = ()> {
         let inner = inner.clone();
-        let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
-            Ok(params) => params,
-            Err(err) => {
-                warn!("Failed to get cluster params: {}", err);
-                return async {}.boxed();
-            }
-        };
         Box::pin(async move {
+            Self::refresh_iam_token_in_cluster_params(&inner).await;
+            let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
+                Ok(params) => params,
+                Err(err) => {
+                    warn!("Failed to get cluster params: {}", err);
+                    return;
+                }
+            };
             let connection_map = match Self::create_initial_connections(
                 &inner.initial_nodes,
                 &cluster_params,
@@ -1693,6 +1850,8 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
+                    Self::refresh_iam_token_in_cluster_params(&inner_clone).await;
+
                     let cluster_params = inner_clone
                         .cluster_params
                         .read()
@@ -2392,6 +2551,8 @@ where
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
 
+        // Ensure cluster_params has a fresh IAM token before creating connections
+        Self::refresh_iam_token_in_cluster_params(&inner).await;
         let cluster_params = inner
             .get_cluster_param(|params| params.clone())
             .expect(MUTEX_READ_ERR);

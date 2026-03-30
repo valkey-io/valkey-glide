@@ -33,6 +33,7 @@ pub use types::*;
 
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
+pub use reconnecting_connection::IAMTokenHandle;
 mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
@@ -1681,8 +1682,11 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
+    let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
+        .map(|manager| Arc::new(manager.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>);
+
     let mut con = client
-        .get_async_connection(push_sender, Some(pubsub_synchronizer))
+        .get_async_connection(push_sender, Some(pubsub_synchronizer), iam_token_provider)
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
