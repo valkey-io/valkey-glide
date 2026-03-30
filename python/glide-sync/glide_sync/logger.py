@@ -111,11 +111,7 @@ class Logger:
         if log_level.value > Logger.logger_level.value:
             return
         if err:
-<<<<<<< HEAD
-            message = f"{message}: {''.join(traceback.format_exception(type(err), err, err.__traceback__))}"
-=======
             message = f"{message}: {traceback.format_exception(type(err), err, err.__traceback__)}"
->>>>>>> 7e3038f9d7ed4c7c1e7b0f8123ff00d0f9402f5c
         c_identifier = Logger._ffi.new("char[]", log_identifier.encode(ENCODING))
         c_message = Logger._ffi.new("char[]", message.encode(ENCODING))
         result_ptr = Logger._lib.glide_log(log_level.value, c_identifier, c_message)
