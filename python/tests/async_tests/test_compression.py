@@ -397,7 +397,9 @@ class TestBasicCompression:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_compression_msetnx_compression(self, compression_client: TGlideClient):
+    async def test_compression_msetnx_compression(
+        self, compression_client: TGlideClient
+    ):
         """Verify MSETNX compresses values above threshold."""
         # Create test data with unique keys to ensure MSETNX succeeds
         keys_and_values = {}
