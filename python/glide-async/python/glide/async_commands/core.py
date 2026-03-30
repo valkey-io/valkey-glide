@@ -63,25 +63,6 @@ from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
 
-# PubSub constants for unsubscribing from all channels/patterns
-ALL_CHANNELS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all channels'.
-Pass this to unsubscribe() to unsubscribe from all channels.
-"""
-
-ALL_PATTERNS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all patterns'.
-Pass this to punsubscribe() to unsubscribe from all patterns.
-"""
-
-ALL_SHARDED_CHANNELS: Optional[Set[str]] = None
-"""
-Constant representing 'unsubscribe from all sharded channels'.
-Pass this to sunsubscribe() to unsubscribe from all sharded channels.
-"""
-
 
 class CoreCommands(Protocol):
     async def _execute_command(
@@ -1797,7 +1778,7 @@ class CoreCommands(Protocol):
         Note:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BLPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -1876,7 +1857,7 @@ class CoreCommands(Protocol):
         Note:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BLMPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/blmpop/) for details.
@@ -2123,7 +2104,7 @@ class CoreCommands(Protocol):
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BRPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         Args:
@@ -2249,7 +2230,7 @@ class CoreCommands(Protocol):
         Notes:
             1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
             2. `BLMOVE` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/blmove/) for details.
@@ -5005,7 +4986,7 @@ class CoreCommands(Protocol):
             1. When in cluster mode, all keys must map to the same hash slot.
             2. `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
             3. `BZPOPMAX` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/bzpopmax) for more details.
@@ -5078,7 +5059,7 @@ class CoreCommands(Protocol):
             1. When in cluster mode, all keys must map to the same hash slot.
             2. `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
             3. `BZPOPMIN` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         See [valkey.io](https://valkey.io/commands/bzpopmin) for more details.
@@ -6160,7 +6141,7 @@ class CoreCommands(Protocol):
         Notes:
             1. When in cluster mode, all `keys` must map to the same hash slot.
             2. `BZMPOP` is a client blocking command, see
-               [blocking commands](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#blocking-commands)
+               [blocking commands](https://glide.valkey.io/how-to/connection-management/#blocking-commands)
                for more details and best practices.
 
         Args:

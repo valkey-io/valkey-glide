@@ -2,6 +2,8 @@
 package glide.api.models.configuration;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -78,7 +80,11 @@ public abstract class BaseClientConfiguration {
      */
     private final ProtocolVersion protocol;
 
+    /** Returns the subscription configuration for the client. */
     public abstract BaseSubscriptionConfiguration getSubscriptionConfiguration();
+
+    /** Returns the advanced configuration settings for the client. */
+    public abstract AdvancedBaseClientConfiguration getAdvancedConfiguration();
 
     /**
      * The maximum number of concurrent requests allowed to be in-flight (sent but not yet completed).
@@ -128,7 +134,19 @@ public abstract class BaseClientConfiguration {
      */
     @Builder.Default private final boolean lazyConnect = false;
 
+    /**
+     * Configuration for automatic transparent compression of values.
+     *
+     * <p>When set, values sent to the server will be compressed using the specified backend if they
+     * meet the minimum size threshold. Compressed values are automatically decompressed on retrieval.
+     *
+     * <p><b>Note:</b> This feature is experimental. Currently only applies to GET and SET commands.
+     *
+     * @see CompressionConfiguration
+     */
+    private final CompressionConfiguration compressionConfiguration;
+
     public List<NodeAddress> getAddresses() {
-        return List.copyOf(addresses);
+        return Collections.unmodifiableList(new ArrayList<>(addresses));
     }
 }

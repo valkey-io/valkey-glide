@@ -43,9 +43,10 @@ type runConfiguration struct {
 }
 
 const (
-	goRedis     = "go-redis"
-	valkeyGlide = "glide"
-	all         = "all"
+	goRedis               = "go-redis"
+	valkeyGlide           = "glide"
+	valkeyGlideCompressed = "glide-compressed"
+	all                   = "all"
 )
 
 func main() {
@@ -78,7 +79,7 @@ func parseArguments() *options {
 	resultsFile := flag.String("resultsFile", "results/go-results.json", "Result filepath")
 	dataSize := flag.String("dataSize", "[100]", "Data block size")
 	concurrentTasks := flag.String("concurrentTasks", "[1 10 100 1000]", "Number of concurrent tasks")
-	clientNames := flag.String("clients", "all", "One of: all|go-redis|glide")
+	clientNames := flag.String("clients", "all", "One of: all|go-redis|glide|glide-compressed")
 	host := flag.String("host", config.DefaultHost, "Hostname")
 	port := flag.Int("port", config.DefaultPort, "Port number")
 	clientCount := flag.String("clientCount", "[1]", "Number of clients to run")
@@ -152,10 +153,13 @@ func verifyOptions(opts *options) (*runConfiguration, error) {
 	case strings.EqualFold(opts.clients, valkeyGlide):
 		runConfig.clientNames = append(runConfig.clientNames, valkeyGlide)
 
+	case strings.EqualFold(opts.clients, valkeyGlideCompressed):
+		runConfig.clientNames = append(runConfig.clientNames, valkeyGlideCompressed)
+
 	case strings.EqualFold(opts.clients, all):
-		runConfig.clientNames = append(runConfig.clientNames, goRedis, valkeyGlide)
+		runConfig.clientNames = append(runConfig.clientNames, goRedis, valkeyGlide, valkeyGlideCompressed)
 	default:
-		return nil, fmt.Errorf("invalid clients option, should be one of: all|go-redis|glide")
+		return nil, fmt.Errorf("invalid clients option, should be one of: all|go-redis|glide|glide-compressed")
 	}
 
 	runConfig.host = opts.host

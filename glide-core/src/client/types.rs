@@ -41,6 +41,7 @@ pub struct ConnectionRequest {
     pub compression_config: Option<CompressionConfig>,
     pub tcp_nodelay: bool,
     pub pubsub_reconciliation_interval_ms: Option<u32>,
+    pub read_only: bool,
 }
 
 /// Default connection timeout used when not specified in the request.
@@ -110,6 +111,13 @@ impl ::std::fmt::Display for NodeAddress {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         write!(f, "Host: `{}`, Port: {}", self.host, self.port)
     }
+}
+
+/// Initial connection metadata used as default OTel span attributes.
+#[derive(Clone, Debug)]
+pub struct OTelMetadata {
+    pub address: NodeAddress,
+    pub db_namespace: String,
 }
 
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
@@ -339,6 +347,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let tcp_nodelay = value.tcp_nodelay.unwrap_or(true);
         let pubsub_reconciliation_interval_ms =
             value.pubsub_reconciliation_interval_ms.filter(|&v| v != 0);
+        let read_only = value.read_only.unwrap_or(false);
 
         ConnectionRequest {
             read_from,
@@ -364,6 +373,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             compression_config,
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,
+            read_only,
         }
     }
 }

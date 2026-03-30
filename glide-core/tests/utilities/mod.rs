@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![allow(dead_code)]
+use crate::test_constants::{HOST_IPV4, HOST_IPV6, HOSTNAME_TLS};
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
@@ -17,7 +18,6 @@ use std::{
     env, fs, io, net::SocketAddr, net::TcpListener, ops::Deref, path::PathBuf, process,
     sync::Mutex, time::Duration,
 };
-use tempfile::TempDir;
 use tokio::sync::mpsc;
 use versions::Versioning;
 
@@ -88,20 +88,51 @@ pub enum Module {
     Json,
 }
 
+pub fn get_available_port() -> u16 {
+    let attempts = 100;
+    for _ in 0..attempts {
+        let port = rand::random::<u16>().max(6379);
+
+        let addr4 = format!("{}:{}", HOST_IPV4, port)
+            .parse::<SocketAddr>()
+            .unwrap()
+            .into();
+
+        let sock4 = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
+        if sock4.bind(&addr4).is_err() {
+            continue;
+        }
+
+        let addr6 = format!("[{}]:{}", HOST_IPV6, port)
+            .parse::<SocketAddr>()
+            .unwrap()
+            .into();
+
+        let sock6 = Socket::new(Domain::IPV6, Type::STREAM, None).unwrap();
+        sock6.set_only_v6(true).unwrap();
+        if sock6.bind(&addr6).is_err() {
+            continue;
+        }
+
+        return port;
+    }
+
+    panic!("Failed to find available port after {} attempts", attempts);
+}
+
 pub fn get_listener_on_available_port() -> TcpListener {
-    let addr = &"127.0.0.1:0".parse::<SocketAddr>().unwrap().into();
+    let port = get_available_port();
+    let addr = &format!("{}:{}", HOST_IPV4, port)
+        .parse::<SocketAddr>()
+        .unwrap()
+        .into();
+
     let socket = Socket::new(Domain::IPV4, Type::STREAM, None).unwrap();
     socket.set_reuse_address(true).unwrap();
     socket.bind(addr).unwrap();
     socket.listen(1).unwrap();
-    TcpListener::from(socket)
-}
 
-pub fn get_available_port() -> u16 {
-    // this is technically a race but we can't do better with
-    // the tools that redis gives us :(
-    let listener = get_listener_on_available_port();
-    listener.local_addr().unwrap().port()
+    TcpListener::from(socket)
 }
 
 impl RedisServer {
@@ -115,13 +146,13 @@ impl RedisServer {
                 let redis_port = get_available_port();
                 if tls {
                     redis::ConnectionAddr::TcpTls {
-                        host: "127.0.0.1".to_string(),
+                        host: HOST_IPV4.to_string(),
                         port: redis_port,
                         insecure: true,
                         tls_params: None,
                     }
                 } else {
-                    redis::ConnectionAddr::Tcp("127.0.0.1".to_string(), redis_port)
+                    redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
                 }
             }
             ServerType::Unix => {
@@ -131,6 +162,25 @@ impl RedisServer {
             }
         };
         RedisServer::new_with_addr_and_modules(addr, modules)
+    }
+
+    pub fn new_with_tls(use_tls: bool, tls_paths: Option<TlsFilePaths>) -> RedisServer {
+        let redis_port = get_available_port();
+        let addr = if use_tls {
+            redis::ConnectionAddr::TcpTls {
+                host: HOST_IPV4.to_string(),
+                port: redis_port,
+                insecure: true,
+                tls_params: None,
+            }
+        } else {
+            redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
+        };
+
+        RedisServer::new_with_addr_tls_modules_and_spawner(addr, tls_paths, &[], false, |cmd| {
+            cmd.spawn()
+                .unwrap_or_else(|err| panic!("Failed to run {cmd:?}: {err}"))
+        })
     }
 
     pub fn new_with_addr_and_modules(
@@ -188,7 +238,7 @@ impl RedisServer {
                 }
             }
             redis::ConnectionAddr::TcpTls { ref host, port, .. } => {
-                let tls_paths = tls_paths.unwrap_or_else(|| build_keys_and_certs_for_tls(&tempdir));
+                let tls_paths = tls_paths.unwrap_or_else(|| build_tls_file_paths(&tempdir));
                 let tls_auth_clients_arg_value = match tls_auth_clients {
                     true => "yes",
                     _ => "no",
@@ -348,15 +398,18 @@ pub struct TlsFilePaths {
     ca_crt: PathBuf,
 }
 
-pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
+/// Build and returns TLS file paths using the provided temp directory.
+pub fn build_tls_file_paths(tempdir: &tempfile::TempDir) -> TlsFilePaths {
     // Based on shell script in redis's server tests
     // https://github.com/redis/redis/blob/8c291b97b95f2e011977b522acf77ead23e26f55/utils/gen-test-certs.sh
-    let ca_crt = tempdir.path().join("ca.crt");
-    let ca_key = tempdir.path().join("ca.key");
-    let ca_serial = tempdir.path().join("ca.txt");
-    let redis_crt = tempdir.path().join("redis.crt");
-    let redis_key = tempdir.path().join("redis.key");
-    let ext_file = tempdir.path().join("openssl.cnf");
+
+    let temp_dir_path: &std::path::Path = tempdir.path();
+    let ca_crt = temp_dir_path.join("ca.crt");
+    let ca_key = temp_dir_path.join("ca.key");
+    let ca_serial = temp_dir_path.join("ca.txt");
+    let redis_crt = temp_dir_path.join("redis.crt");
+    let redis_key = temp_dir_path.join("redis.key");
+    let ext_file = temp_dir_path.join("openssl.cnf");
 
     fn make_key<S: AsRef<std::ffi::OsStr>>(name: S, size: usize) {
         process::Command::new("openssl")
@@ -400,9 +453,15 @@ pub fn build_keys_and_certs_for_tls(tempdir: &TempDir) -> TlsFilePaths {
         .wait()
         .expect("failed to create CA cert");
 
-    // Build x509v3 extensions file with SAN for 127.0.0.1
-    fs::write(&ext_file, b"keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:127.0.0.1,DNS:localhost")
-        .expect("failed to create x509v3 extensions file");
+    // Build x509v3 extensions file with SAN for IPv4, IPv6, localhost, and test hostname
+    fs::write(
+        &ext_file,
+        format!(
+            "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{},IP:{},DNS:localhost,DNS:{}",
+            HOST_IPV4, HOST_IPV6, HOSTNAME_TLS
+        ),
+    )
+    .expect("failed to create x509v3 extensions file");
 
     // Read redis key
     let mut key_cmd = process::Command::new("openssl")
@@ -869,4 +928,14 @@ pub fn extract_client_id(client_info: &str) -> Option<String> {
         .find(|part| part.starts_with("id="))
         .and_then(|id_part| id_part.strip_prefix("id="))
         .map(|id| id.to_string())
+}
+
+/// Assert that a client is connected by sending a PING command
+pub async fn assert_connected(client: &mut impl glide_core::client::GlideClientForTests) {
+    let mut ping_cmd = redis::cmd("PING");
+    let ping_result = client.send_command(&mut ping_cmd, None).await;
+    assert_eq!(
+        ping_result.unwrap(),
+        Value::SimpleString("PONG".to_string())
+    );
 }

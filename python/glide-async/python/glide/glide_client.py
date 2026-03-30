@@ -132,6 +132,7 @@ class BaseClient(CoreCommands):
         self.config: BaseClientConfiguration = config
         self._available_futures: Dict[int, "TFuture"] = {}
         self._available_callback_indexes: List[int] = list()
+        self._next_callback_index: int = 1  # 0 is reserved for connection setup
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
         self.socket_path: Optional[str] = None
@@ -380,6 +381,8 @@ class BaseClient(CoreCommands):
         if isinstance(arg, str):
             # TODO: Allow passing different encoding options
             return bytes(arg, encoding="utf8")
+        if isinstance(arg, (bytearray, memoryview)):
+            return bytes(arg)
         return arg
 
     def _encode_and_sum_size(
@@ -401,7 +404,7 @@ class BaseClient(CoreCommands):
         if not args_list:
             return (encoded_args_list, args_size)
         for arg in args_list:
-            encoded_arg = self._encode_arg(arg) if isinstance(arg, str) else arg
+            encoded_arg = self._encode_arg(arg)
             encoded_args_list.append(encoded_arg)
             args_size += len(encoded_arg)
         return (encoded_args_list, args_size)
@@ -427,8 +430,7 @@ class BaseClient(CoreCommands):
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = [
-            bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
-            for elem in args
+            self._encode_arg(elem) for elem in args
         ]
         encoded_args, args_size = self._encode_and_sum_size(args)
         if args_size < MAX_REQUEST_ARGS_LEN:
@@ -644,14 +646,17 @@ class BaseClient(CoreCommands):
         try:
             return self._available_callback_indexes.pop()
         except IndexError:
-            # The list is empty
-            return len(self._available_futures)
+            # Use monotonic counter to avoid index collisions with cancelled futures
+            idx = self._next_callback_index
+            self._next_callback_index += 1
+            return idx
 
     async def _process_response(self, response: Response) -> None:
         res_future = self._available_futures.pop(response.callback_idx, None)
         if res_future is not None and res_future.done():
             # Future is already completed (e.g. request was cancelled while awaiting).
-            # Do not error to keep client in a valid state.
+            # Recycle the callback index to prevent index leaks.
+            self._available_callback_indexes.append(response.callback_idx)
             ClientLogger.log(
                 LogLevel.DEBUG,
                 "completed response",
@@ -845,7 +850,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     Client used for connection to cluster servers.
     Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#cluster)
+    [Valkey GLIDE Documentation](https://glide.valkey.io/how-to/client-initialization/#cluster)
     """
 
     async def _cluster_scan(
@@ -932,7 +937,7 @@ class GlideClient(BaseClient, StandaloneCommands):
     Client used for connection to standalone servers.
     Use :func:`~BaseClient.create` to request a client.
     For full documentation, see
-    [Valkey GLIDE Wiki](https://github.com/valkey-io/valkey-glide/wiki/Python-wrapper#standalone)
+    [Valkey GLIDE Documentation](https://glide.valkey.io/how-to/client-initialization/#standalone)
     """
 
     async def get_subscriptions(

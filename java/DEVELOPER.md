@@ -77,7 +77,6 @@ It is not necessary to **Install `ziglang` and `zigbuild`** for MacOS.
 
 **Step 1: Install WSL**
 
-
 See the [How to install Linux on Windows with WSL](https://learn.microsoft.com/en-us/windows/wsl/install) for instructions how to install WSL.
 
 **Step 2: Install Valkey in WSL**
@@ -155,6 +154,7 @@ Various platform-specific zips can be found [here](https://github.com/protocolbu
 Choose the appropriate zip for your system and run the commands below, adjusting for the zip you chose:
 
 For Linux-x86_64:
+
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 curl -LO $PB_REL/download/v29.1/protoc-29.1-linux-x86_64.zip
@@ -165,6 +165,7 @@ protoc --version
 ```
 
 For Windows (PowerShell):
+
 ```powershell
 # Download protoc for Windows
 $PB_REL = "https://github.com/protocolbuffers/protobuf/releases"
@@ -213,7 +214,7 @@ Before starting this step, make sure you've installed all software dependencies.
     cd java
     ```
 
-    2. Build the project:
+    1. Build the project:
 
     ```bash
     ./gradlew :client:buildAll
@@ -386,6 +387,45 @@ To run server modules test (it doesn't start servers):
 ./gradlew :integTest:modulesTest -Dcluster-endpoints=localhost:7000 -Dtls=true
 ```
 
+#### IAM Authentication Tests
+
+To run [IAM authentication tests](integTest/src/test/java/glide/AuthTest.java) locally, set the following environment variables:
+
+```bash
+export AWS_ACCESS_KEY_ID=test_access_key
+export AWS_SECRET_ACCESS_KEY=test_secret_key
+export AWS_SESSION_TOKEN=test_session_token
+```
+
+If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+
+**Important:** `System.setProperty()` does NOT work for setting AWS credentials because the Rust AWS SDK reads from the OS process environment, not JVM properties. Credentials must be set as OS environment variables **before** the JVM starts.
+
+#### DNS Tests
+
+To run [DNS tests](integTest/src/test/java/glide/DnsTest.java) locally:
+
+1. Add the following entries to your hosts file:
+   - Linux/macOS: `/etc/hosts`
+   - Windows: `C:\Windows\System32\drivers\etc\hosts`
+
+   ```text
+   127.0.0.1 valkey.glide.test.tls.com
+   127.0.0.1 valkey.glide.test.no_tls.com
+   ::1 valkey.glide.test.tls.com
+   ::1 valkey.glide.test.no_tls.com
+   ```
+
+2. Set the environment variable:
+
+   ```bash
+   export VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+   ```
+
+If the environment variable is not set, DNS tests will be skipped.
+
 ### JaCoCo Code Coverage Results
 
 JaCoCo results are automatically generated just by running the tests (due to the `finalizedBy jacocoTestReport` task). The generated files are located in `client/build/reports/jacoco` and `integTest/build/reports/jacoco`
@@ -422,6 +462,7 @@ Implement unit tests in the following files:
 These files are found in the java/client/src/test/java/glide/api path.
 
 Implement integration tests in the following files:
+
 - [BatchTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/client/src/test/java/glide/api/models/BatchTests.java) (standalone and cluster).
 - [BatchTestsUtilities.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/BatchTestUtilities.java) (standalone and cluster).
 - [SharedCommandTests.java](https://github.com/valkey-io/valkey-glide/blob/main/java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone and cluster).

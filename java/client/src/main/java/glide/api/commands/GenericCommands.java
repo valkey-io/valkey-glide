@@ -16,9 +16,8 @@ public interface GenericCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
-     * @see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
-     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
+     * @see <a href="https://glide.valkey.io/concepts/client-features/custom-commands/">Valkey GLIDE
+     *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
      * @return The returned value for the custom command.
      * @example
@@ -35,9 +34,8 @@ public interface GenericCommands {
      * Executes a single command, without checking inputs. Every part of the command, including
      * subcommands, should be added as a separate value in <code>args</code>.
      *
-     * @see <a
-     *     href="https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#custom-command">Valkey
-     *     GLIDE Wiki</a> for details on the restrictions and limitations of the custom command API.
+     * @see <a href="https://glide.valkey.io/concepts/client-features/custom-commands/">Valkey GLIDE
+     *     Wiki</a> for details on the restrictions and limitations of the custom command API.
      * @param args Arguments for the custom command.
      * @return The returned value for the custom command.
      * @example

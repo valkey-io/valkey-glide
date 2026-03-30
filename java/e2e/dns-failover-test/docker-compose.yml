@@ -1,0 +1,154 @@
+name: dns-failover-test
+
+services:
+  # DNS Server - initially points to Cluster A
+  dnsmasq:
+    image: andyshinn/dnsmasq:latest
+    container_name: dns-server
+    cap_add:
+      - NET_ADMIN
+    command: >
+      --log-queries
+      --no-resolv
+      --address=/cluster.local/172.31.0.11
+    networks:
+      test-net:
+        ipv4_address: 172.31.0.2
+
+  # Cluster A
+  cluster-a-node-1:
+    image: valkey/valkey:latest
+    container_name: cluster-a-node-1
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      test-net:
+        ipv4_address: 172.31.0.11
+
+  cluster-a-node-2:
+    image: valkey/valkey:latest
+    container_name: cluster-a-node-2
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      test-net:
+        ipv4_address: 172.31.0.12
+
+  cluster-a-node-3:
+    image: valkey/valkey:latest
+    container_name: cluster-a-node-3
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      test-net:
+        ipv4_address: 172.31.0.13
+
+  # Cluster B
+  cluster-b-node-1:
+    image: valkey/valkey:latest
+    container_name: cluster-b-node-1
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      test-net:
+        ipv4_address: 172.31.0.21
+
+  cluster-b-node-2:
+    image: valkey/valkey:latest
+    container_name: cluster-b-node-2
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      test-net:
+        ipv4_address: 172.31.0.22
+
+  cluster-b-node-3:
+    image: valkey/valkey:latest
+    container_name: cluster-b-node-3
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      test-net:
+        ipv4_address: 172.31.0.23
+
+  # Initialize Cluster A
+  cluster-a-init:
+    image: valkey/valkey:latest
+    container_name: cluster-a-init
+    depends_on:
+      - cluster-a-node-1
+      - cluster-a-node-2
+      - cluster-a-node-3
+    command: >
+      sh -c "sleep 5 && valkey-cli --cluster create 172.31.0.11:6379 172.31.0.12:6379 172.31.0.13:6379 --cluster-replicas 0 --cluster-yes"
+    networks:
+      - test-net
+    restart: "no"
+
+  # Initialize Cluster B
+  cluster-b-init:
+    image: valkey/valkey:latest
+    container_name: cluster-b-init
+    depends_on:
+      - cluster-b-node-1
+      - cluster-b-node-2
+      - cluster-b-node-3
+    command: >
+      sh -c "sleep 5 && valkey-cli --cluster create 172.31.0.21:6379 172.31.0.22:6379 172.31.0.23:6379 --cluster-replicas 0 --cluster-yes"
+    networks:
+      - test-net
+    restart: "no"
+
+  # Test runner
+  test-runner:
+    build: .
+    container_name: dns-failover-test-runner
+    depends_on:
+      cluster-a-init:
+        condition: service_completed_successfully
+      cluster-b-init:
+        condition: service_completed_successfully
+    dns:
+      - 172.31.0.2  # Use dnsmasq for DNS resolution
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock  # Allow Docker commands from inside container
+    networks:
+      - test-net
+    restart: "no"
+
+networks:
+  test-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/16

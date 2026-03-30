@@ -3,6 +3,7 @@
 package integTest
 
 import (
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -11,32 +12,48 @@ import (
 
 // TestSubscriptionSyncTimestampMetricOnSuccess tests that sync timestamp is updated on successful subscription
 func (suite *GlideTestSuite) TestSubscriptionSyncTimestampMetricOnSuccess() {
-	channel := "sync_timestamp_test"
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 1, false, suite.T())
-	defer receiver.Close()
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			channel := "sync_timestamp_test"
 
-	// Get initial statistics
-	initialStats := receiver.(*glide.Client).GetStatistics()
-	initialTimestamp := initialStats["subscription_last_sync_timestamp"]
+			channels := []ChannelDefn{{Channel: channel, Mode: ExactMode}}
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 1, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	suite.T().Logf("Initial sync timestamp: %d", initialTimestamp)
+			// Get initial statistics
+			var initialStats map[string]uint64
+			if clientType == StandaloneClient {
+				initialStats = receiver.(*glide.Client).GetStatistics()
+			} else {
+				initialStats = receiver.(*glide.ClusterClient).GetStatistics()
+			}
+			initialTimestamp := initialStats["subscription_last_sync_timestamp"]
 
-	// Verify timestamp is set (non-zero)
-	assert.Greater(suite.T(), initialTimestamp, uint64(0),
-		"Sync timestamp should be set after successful subscription")
+			t.Logf("Initial sync timestamp: %d", initialTimestamp)
 
-	// Wait a bit and check it's been updated
-	time.Sleep(1500 * time.Millisecond)
+			// Verify timestamp is set (non-zero)
+			assert.Greater(t, initialTimestamp, uint64(0),
+				"Sync timestamp should be set after successful subscription")
 
-	updatedStats := receiver.(*glide.Client).GetStatistics()
-	updatedTimestamp := updatedStats["subscription_last_sync_timestamp"]
+			// Wait a bit and check it's been updated
+			time.Sleep(1500 * time.Millisecond)
 
-	suite.T().Logf("Updated sync timestamp: %d", updatedTimestamp)
+			var updatedStats map[string]uint64
+			if clientType == StandaloneClient {
+				updatedStats = receiver.(*glide.Client).GetStatistics()
+			} else {
+				updatedStats = receiver.(*glide.ClusterClient).GetStatistics()
+			}
+			updatedTimestamp := updatedStats["subscription_last_sync_timestamp"]
 
-	// Timestamp should be recent (within last few seconds)
-	now := uint64(time.Now().UnixMilli())
-	assert.Less(suite.T(), now-updatedTimestamp, uint64(5000),
-		"Sync timestamp should be recent")
+			t.Logf("Updated sync timestamp: %d", updatedTimestamp)
+
+			// Timestamp should be recent (within last few seconds)
+			now := uint64(time.Now().UnixMilli())
+			assert.Less(t, now-updatedTimestamp, uint64(5000),
+				"Sync timestamp should be recent")
+		})
+	}
 }

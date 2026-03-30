@@ -32,8 +32,11 @@ import glide.api.models.exceptions.RequestException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
 import glide.internal.GlideCoreClient;
 import glide.utils.BufferUtils;
+import glide.utils.Java8Utils;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -50,28 +53,72 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class CommandManager {
 
-    /**
-     * Set of blocking command names (uppercase) that have their own timeout in the command arguments.
-     * These commands should NOT use Java-side timeout - Rust handles their timeout based on the
-     * command's timeout argument.
-     */
     private static final Set<String> BLOCKING_COMMAND_NAMES =
-            Set.of(
-                    "BLPOP",
-                    "BRPOP",
-                    "BLMOVE",
-                    "BZPOPMAX",
-                    "BZPOPMIN",
-                    "BRPOPLPUSH",
-                    "BLMPOP",
-                    "BZMPOP",
-                    "XREAD",
-                    "XREADGROUP",
-                    "WAIT",
-                    "WAITAOF");
+            Collections.unmodifiableSet(
+                    Java8Utils.createSet(
+                            "BLPOP",
+                            "BRPOP",
+                            "BLMOVE",
+                            "BZPOPMAX",
+                            "BZPOPMIN",
+                            "BRPOPLPUSH",
+                            "BLMPOP",
+                            "BZMPOP",
+                            "XREAD",
+                            "XREADGROUP",
+                            "WAIT",
+                            "WAITAOF"));
 
     /** Core client connection. */
     private final GlideCoreClient coreClient;
+
+    /**
+     * Apply a response handler with cleanup on exception. If the handler throws, the stored object in
+     * JniResponseRegistry is removed to prevent memory leaks.
+     *
+     * @param response the Response to process
+     * @param responseHandler the handler to apply
+     * @return the result from the handler
+     * @throws RuntimeException if the handler throws (after cleanup)
+     */
+    private static <T> T applyHandlerWithCleanup(
+            Response response, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        long objectId = response.getRespPointer();
+        try {
+            return responseHandler.apply(response);
+        } catch (RuntimeException e) {
+            // Clean up stored object on handler exception to prevent memory leak
+            if (objectId != 0L) {
+                JniResponseRegistry.remove(objectId);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Apply a response handler with cleanup on exception, using a pre-computed objectId. If the
+     * handler throws, the stored object in JniResponseRegistry is removed to prevent memory leaks.
+     *
+     * @param response the Response to process
+     * @param objectId the registry ID to clean up on exception (may be 0 if nothing stored)
+     * @param responseHandler the handler to apply
+     * @return the result from the handler
+     * @throws RuntimeException if the handler throws (after cleanup)
+     */
+    private static <T> T applyHandlerWithCleanup(
+            Response response,
+            long objectId,
+            GlideExceptionCheckedFunction<Response, T> responseHandler) {
+        try {
+            return responseHandler.apply(response);
+        } catch (RuntimeException e) {
+            // Clean up stored object on handler exception to prevent memory leak
+            if (objectId != 0L) {
+                JniResponseRegistry.remove(objectId);
+            }
+            throw e;
+        }
+    }
 
     /** Internal interface for exposing implementation details about a ClusterScanCursor. */
     public interface ClusterScanCursorDetail extends ClusterScanCursor {
@@ -309,7 +356,7 @@ public class CommandManager {
             List<GlideString> args,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit script."));
             return errorFuture;
@@ -334,10 +381,10 @@ public class CommandManager {
 
             return jniFuture
                     .thenApply(result -> createDirectResponse(result, expectUtf8Response))
-                    .thenApply(responseHandler::apply)
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -350,7 +397,7 @@ public class CommandManager {
             Route route,
             GlideExceptionCheckedFunction<Response, T> responseHandler) {
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit script."));
             return errorFuture;
@@ -377,10 +424,10 @@ public class CommandManager {
 
             return jniFuture
                     .thenApply(result -> createDirectResponse(result, expectUtf8Response))
-                    .thenApply(responseHandler::apply)
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -470,7 +517,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit cluster scan."));
             return errorFuture;
@@ -514,23 +561,29 @@ public class CommandManager {
                                 }
                                 long objectId = JniResponseRegistry.storeObject(normalized);
                                 builder.setRespPointer(objectId);
-                                T out = responseHandler.apply(builder.build());
-                                if (out == null) {
-                                    @SuppressWarnings("unchecked")
-                                    T fallback =
-                                            (T)
-                                                    new Object[] {
-                                                        glide.ffi.resolvers.ClusterScanCursorResolver
-                                                                .getFinishedCursorHandleConstant(),
-                                                        new Object[0]
-                                                    };
-                                    return fallback;
+                                try {
+                                    T out = responseHandler.apply(builder.build());
+                                    if (out == null) {
+                                        @SuppressWarnings("unchecked")
+                                        T fallback =
+                                                (T)
+                                                        new Object[] {
+                                                            glide.ffi.resolvers.ClusterScanCursorResolver
+                                                                    .getFinishedCursorHandleConstant(),
+                                                            new Object[0]
+                                                        };
+                                        return fallback;
+                                    }
+                                    return out;
+                                } catch (RuntimeException e) {
+                                    // Clean up stored object on handler exception to prevent memory leak
+                                    JniResponseRegistry.remove(objectId);
+                                    throw e;
                                 }
-                                return out;
                             })
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -635,7 +688,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit command."));
             return errorFuture;
@@ -654,26 +707,11 @@ public class CommandManager {
                             : coreClient.executeBinaryCommandAsync(requestBytes); // Allow binary conversion
 
             return jniFuture
-                    .thenApply(
-                            result -> {
-                                Response.Builder builder = Response.newBuilder();
-                                Object toStore = result;
-                                if (result == null) {
-                                    builder.setRespPointer(0L);
-                                } else if ("OK".equals(result)) {
-                                    builder.setConstantResponse(ConstantResponse.OK);
-                                } else {
-                                    if (result instanceof ByteBuffer) {
-                                        toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
-                                    }
-                                    long objectId = JniResponseRegistry.storeObject(toStore);
-                                    builder.setRespPointer(objectId);
-                                }
-                                return responseHandler.apply(builder.build());
-                            })
+                    .thenApply(result -> buildResponseFromJniResult(result, expectUtf8Response))
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -690,7 +728,7 @@ public class CommandManager {
             boolean expectUtf8Response) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit command."));
             return errorFuture;
@@ -707,29 +745,38 @@ public class CommandManager {
                             : coreClient.executeBinaryCommandAsyncNoTimeout(requestBytes);
 
             return jniFuture
-                    .thenApply(
-                            result -> {
-                                Response.Builder builder = Response.newBuilder();
-                                Object toStore = result;
-                                if (result == null) {
-                                    builder.setRespPointer(0L);
-                                } else if ("OK".equals(result)) {
-                                    builder.setConstantResponse(ConstantResponse.OK);
-                                } else {
-                                    if (result instanceof ByteBuffer) {
-                                        toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
-                                    }
-                                    long objectId = JniResponseRegistry.storeObject(toStore);
-                                    builder.setRespPointer(objectId);
-                                }
-                                return responseHandler.apply(builder.build());
-                            })
+                    .thenApply(result -> buildResponseFromJniResult(result, expectUtf8Response))
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
+    }
+
+    /**
+     * Build a Response from JNI result, storing the result in JniResponseRegistry if needed.
+     *
+     * @param result the raw result from JNI
+     * @param expectUtf8Response whether to expect UTF-8 encoded response
+     * @return the built Response
+     */
+    private Response buildResponseFromJniResult(Object result, boolean expectUtf8Response) {
+        Response.Builder builder = Response.newBuilder();
+        Object toStore = result;
+        if (result == null) {
+            builder.setRespPointer(0L);
+        } else if ("OK".equals(result)) {
+            builder.setConstantResponse(ConstantResponse.OK);
+        } else {
+            if (result instanceof ByteBuffer) {
+                toStore = normalizeDirectBuffer((ByteBuffer) result, expectUtf8Response);
+            }
+            long objectId = JniResponseRegistry.storeObject(toStore);
+            builder.setRespPointer(objectId);
+        }
+        return builder.build();
     }
 
     private Object normalizeDirectBuffer(ByteBuffer buffer, boolean expectUtf8Response) {
@@ -759,26 +806,94 @@ public class CommandManager {
     }
 
     /**
+     * Validate that the buffer has at least the required number of bytes remaining.
+     *
+     * @param buffer the buffer to check
+     * @param required the minimum number of bytes required
+     * @param context description of what is being read (for error message)
+     * @throws IllegalArgumentException if buffer has insufficient bytes
+     */
+    private static void requireBufferBytes(ByteBuffer buffer, int required, String context) {
+        if (buffer.remaining() < required) {
+            throw new IllegalArgumentException(
+                    "Buffer too small for " + context + ": " + buffer.remaining() + " bytes");
+        }
+    }
+
+    /**
+     * Validate a length field read from the buffer.
+     *
+     * @param length the length value to validate
+     * @param buffer the buffer to check remaining bytes against
+     * @param typeName description of the data type (for error message), capitalized (e.g., "Key",
+     *     "Value")
+     * @param index the element/entry index (for error message)
+     * @throws IllegalArgumentException if length is negative or exceeds buffer remaining
+     */
+    private static void validateLength(int length, ByteBuffer buffer, String typeName, int index) {
+        if (length < 0) {
+            throw new IllegalArgumentException(
+                    "Invalid negative "
+                            + typeName.toLowerCase()
+                            + " length at element "
+                            + index
+                            + ": "
+                            + length);
+        }
+        if (length > buffer.remaining()) {
+            throw new IllegalArgumentException(
+                    typeName
+                            + " length "
+                            + length
+                            + " exceeds buffer remaining "
+                            + buffer.remaining()
+                            + " at element "
+                            + index);
+        }
+    }
+
+    /**
      * Deserialize a ByteBuffer containing a serialized map back to Map<?,?>. Format: '%' + count(u32
      * BE) + repeated [keyLen(u32) + keyBytes + valLen(u32) + valBytes]
+     *
+     * <p>This method includes defense-in-depth validation to protect against malformed buffers from
+     * the native layer (due to bugs or memory corruption).
+     *
+     * @throws IllegalArgumentException if the buffer format is invalid or contains out-of-bounds
+     *     values
      */
     private java.util.LinkedHashMap<Object, Object> deserializeByteBufferMap(
             ByteBuffer buffer, boolean expectUtf8) {
         buffer.order(ByteOrder.BIG_ENDIAN);
         buffer.rewind();
 
+        // Validate minimum buffer size for marker + count
+        requireBufferBytes(buffer, 5, "map header");
+
         byte marker = buffer.get();
         if (marker != '%') {
             throw new IllegalArgumentException("Expected map marker '%', got: " + (char) marker);
         }
+
         int count = buffer.getInt();
+
+        // Validate count is non-negative (primary protection is per-element bounds checking)
+        if (count < 0) {
+            throw new IllegalArgumentException("Invalid negative map count: " + count);
+        }
+
+        // Use reasonable initial capacity to avoid huge upfront allocation
+        // The actual elements will be validated one-by-one against buffer bounds
         java.util.LinkedHashMap<Object, Object> map =
-                new java.util.LinkedHashMap<>(Math.max(16, count));
+                new java.util.LinkedHashMap<>(Math.min(count, 1024));
+
         for (int i = 0; i < count; i++) {
+            requireBufferBytes(buffer, 4, "key length at entry " + i);
             int klen = buffer.getInt();
+            validateLength(klen, buffer, "Key", i);
+
             Object key;
             if (expectUtf8) {
-                // Decode UTF-8 directly from buffer
                 key = BufferUtils.decodeUtf8(buffer, klen);
             } else {
                 byte[] kbytes = new byte[klen];
@@ -786,10 +901,12 @@ public class CommandManager {
                 key = glide.api.models.GlideString.gs(kbytes);
             }
 
+            requireBufferBytes(buffer, 4, "value length at entry " + i);
             int vlen = buffer.getInt();
+            validateLength(vlen, buffer, "Value", i);
+
             Object val;
             if (expectUtf8) {
-                // Decode UTF-8 directly from buffer
                 val = BufferUtils.decodeUtf8(buffer, vlen);
             } else {
                 byte[] vbytes = new byte[vlen];
@@ -811,7 +928,7 @@ public class CommandManager {
             Integer timeoutOverrideMs) {
 
         if (!coreClient.isConnected()) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(
                     new ClosingException("Client closed: Unable to submit batch."));
             return errorFuture;
@@ -822,13 +939,15 @@ public class CommandManager {
             byte[] requestBytes = command.build().toByteArray();
 
             // Execute via JNI and convert response
+            // Stage 1: Convert JNI result to Response
+            // Stage 2: Apply response handler with cleanup on exception
             return coreClient
                     .executeBatchAsync(requestBytes, expectUtf8Response, timeoutOverrideMs)
                     .thenApply(result -> convertJniToProtobufResponse(result, expectUtf8Response))
-                    .thenApply(responseHandler::apply)
+                    .thenApply(response -> applyHandlerWithCleanup(response, responseHandler))
                     .exceptionally(this::exceptionHandler);
         } catch (Exception e) {
-            var errorFuture = new CompletableFuture<T>();
+            CompletableFuture<T> errorFuture = new CompletableFuture<T>();
             errorFuture.completeExceptionally(e);
             return errorFuture;
         }
@@ -957,10 +1076,19 @@ public class CommandManager {
      * Deserialize a ByteBuffer containing a serialized array back to Object[]. This handles
      * DirectByteBuffer responses for large data (>16KB). Format uses Redis-like protocol: '*' +
      * array_len(4 bytes BE) + elements Each element: type_marker + data
+     *
+     * <p>This method includes defense-in-depth validation to protect against malformed buffers from
+     * the native layer (due to bugs or memory corruption).
+     *
+     * @throws IllegalArgumentException if the buffer format is invalid or contains out-of-bounds
+     *     values
      */
     private Object[] deserializeByteBufferArray(ByteBuffer buffer, boolean expectUtf8Response) {
         buffer.order(ByteOrder.BIG_ENDIAN); // Rust uses big-endian
         buffer.rewind();
+
+        // Validate minimum buffer size for marker + count
+        requireBufferBytes(buffer, 5, "array header");
 
         // Read array marker ('*')
         byte marker = buffer.get();
@@ -970,20 +1098,29 @@ public class CommandManager {
 
         // Read array element count (4 bytes, big-endian)
         int count = buffer.getInt();
+
+        // Validate count is non-negative (primary protection is per-element bounds checking)
+        if (count < 0) {
+            throw new IllegalArgumentException("Invalid negative array count: " + count);
+        }
+
         Object[] result = new Object[count];
 
         for (int i = 0; i < count; i++) {
+            requireBufferBytes(buffer, 1, "type marker at element " + i);
+
             // Read element type marker
             byte typeMarker = buffer.get();
 
             switch (typeMarker) {
                 case '$': // Bulk string
+                    requireBufferBytes(buffer, 4, "bulk string length at element " + i);
                     int bulkLen = buffer.getInt();
                     if (bulkLen == -1) {
                         result[i] = null;
                     } else {
+                        validateLength(bulkLen, buffer, "bulk string", i);
                         if (expectUtf8Response) {
-                            // Decode UTF-8 directly from buffer
                             result[i] = BufferUtils.decodeUtf8(buffer, bulkLen);
                         } else {
                             byte[] data = new byte[bulkLen];
@@ -994,21 +1131,41 @@ public class CommandManager {
                     break;
 
                 case '+': // Simple string (includes "OK")
+                    requireBufferBytes(buffer, 4, "simple string length at element " + i);
                     int simpleLen = buffer.getInt();
-                    // Simple strings are always UTF-8
+                    validateLength(simpleLen, buffer, "simple string", i);
                     String simpleString = BufferUtils.decodeUtf8(buffer, simpleLen);
                     result[i] = simpleString.equalsIgnoreCase("ok") ? "OK" : simpleString;
                     break;
 
                 case ':': // Integer
-                    long intValue = buffer.getLong();
-                    result[i] = intValue;
+                    requireBufferBytes(buffer, 8, "integer at element " + i);
+                    result[i] = buffer.getLong();
+                    break;
+
+                case ',': // Double
+                    requireBufferBytes(buffer, 8, "double at element " + i);
+                    result[i] = buffer.getDouble();
+                    break;
+
+                case '?': // Boolean
+                    requireBufferBytes(buffer, 1, "boolean at element " + i);
+                    result[i] = buffer.get() != 0;
+                    break;
+
+                case '(': // BigNumber
+                    requireBufferBytes(buffer, 4, "big number length at element " + i);
+                    int bigNumberLen = buffer.getInt();
+                    validateLength(bigNumberLen, buffer, "big number", i);
+                    String bigNumberStr = BufferUtils.decodeUtf8(buffer, bigNumberLen);
+                    result[i] = new BigInteger(bigNumberStr);
                     break;
 
                 case '#': // Complex type (serialized as string)
+                    requireBufferBytes(buffer, 4, "complex type length at element " + i);
                     int complexLen = buffer.getInt();
+                    validateLength(complexLen, buffer, "complex type", i);
                     if (expectUtf8Response) {
-                        // Decode UTF-8 directly from buffer
                         result[i] = BufferUtils.decodeUtf8(buffer, complexLen);
                     } else {
                         byte[] complexData = new byte[complexLen];
@@ -1051,7 +1208,7 @@ public class CommandManager {
             spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
         }
 
-        var builder =
+        CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
@@ -1073,7 +1230,7 @@ public class CommandManager {
             spanPtr = OpenTelemetryResolver.createLeakedOtelSpan(requestType.name());
         }
 
-        var builder =
+        CommandRequest.Builder builder =
                 CommandRequest.newBuilder()
                         .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
@@ -1100,7 +1257,8 @@ public class CommandManager {
 
         if (options.isPresent()) {
             BatchOptions opts = options.get();
-            var batchBuilder = prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
+            CommandRequestOuterClass.Batch.Builder batchBuilder =
+                    prepareCommandRequestBatchOptions(batch.getProtobufBatch(), opts);
             builder.setBatch(batchBuilder.setRaiseOnError(raiseOnError).build());
         } else {
             builder.setBatch(batch.getProtobufBatch().setRaiseOnError(raiseOnError).build());

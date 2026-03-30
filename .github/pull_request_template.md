@@ -14,7 +14,8 @@ Add a summary describing the changes
 
 ### Issue link
 
-This Pull Request is linked to issue (URL): [REPLACE ME]
+This Pull Request is linked to issue: [<Issue Title>](<Issue URL>)
+Closes <Issue #>
 
 ### Features / Behaviour Changes
 
@@ -30,13 +31,13 @@ Describe the implementation details. Highlight key code changes and call out any
 
 ### Limitations
 
-<!-- 
+<!--
 Describe any features or use cases that are not implemented or are only partially supported
 -->
 
 ### Testing
 
-<!-- 
+<!--
 Describe what tests have been conducted and any relevant test results
 -->
 

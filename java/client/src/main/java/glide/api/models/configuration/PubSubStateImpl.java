@@ -2,9 +2,11 @@
 package glide.api.models.configuration;
 
 import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.Getter;
 
 /** Package-private implementation of PubSubState. */
@@ -20,8 +22,11 @@ public final class PubSubStateImpl<T extends ChannelMode> implements PubSubState
     }
 
     private static <T extends ChannelMode> Map<T, Set<String>> deepCopy(Map<T, Set<String>> map) {
-        return map.entrySet().stream()
-                .collect(
-                        Collectors.toUnmodifiableMap(Map.Entry::getKey, entry -> Set.copyOf(entry.getValue())));
+        Map<T, Set<String>> result = new LinkedHashMap<>();
+        for (Map.Entry<T, Set<String>> entry : map.entrySet()) {
+            Set<String> copiedSet = new LinkedHashSet<>(entry.getValue());
+            result.put(entry.getKey(), Collections.unmodifiableSet(copiedSet));
+        }
+        return Collections.unmodifiableMap(result);
     }
 }

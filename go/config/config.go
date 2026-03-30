@@ -196,6 +196,7 @@ type baseClientConfiguration struct {
 	reconnectStrategy *BackoffStrategy
 	lazyConnect       bool
 	DatabaseId        *int `json:"database_id,omitempty"`
+	compressionConfig *CompressionConfiguration
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -248,6 +249,14 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	if config.DatabaseId != nil {
 		request.DatabaseId = uint32(*config.DatabaseId)
+	}
+
+	if config.compressionConfig != nil {
+		compressionPb, err := config.compressionConfig.toProtobuf()
+		if err != nil {
+			return nil, fmt.Errorf("invalid compression configuration: %w", err)
+		}
+		request.CompressionConfig = compressionPb
 	}
 
 	return &request, nil
@@ -314,6 +323,10 @@ type ClientConfiguration struct {
 	baseClientConfiguration
 	subscriptionConfig *StandaloneSubscriptionConfig
 	AdvancedClientConfiguration
+	// readOnly enables read-only mode for the standalone client.
+	// When enabled, the client will skip primary node detection during connection initialization
+	// and will reject write commands. This is useful for connecting to replica-only deployments.
+	readOnly bool
 }
 
 // NewClientConfiguration returns a [ClientConfiguration] with default configuration settings. For further
@@ -328,6 +341,16 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 		return nil, err
 	}
 	request.ClusterModeEnabled = false
+
+	// Handle read-only mode validation and configuration
+	if config.readOnly {
+		// Validate that read-only mode is not combined with AZAffinity strategies
+		if request.ReadFrom == protobuf.ReadFrom_AZAffinity ||
+			request.ReadFrom == protobuf.ReadFrom_AZAffinityReplicasAndPrimary {
+			return nil, errors.New("read-only mode is not compatible with AZAffinity strategies")
+		}
+		request.ReadOnly = &config.readOnly
+	}
 
 	if config.subscriptionConfig != nil {
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
@@ -461,6 +484,16 @@ func (config *ClientConfiguration) WithDatabaseId(id int) *ClientConfiguration {
 	return config
 }
 
+// WithCompressionConfiguration sets the compression configuration for the client.
+// When configured, values sent to the server will be automatically compressed if they
+// meet the minimum size threshold.
+func (config *ClientConfiguration) WithCompressionConfiguration(
+	compressionConfig *CompressionConfiguration,
+) *ClientConfiguration {
+	config.compressionConfig = compressionConfig
+	return config
+}
+
 // WithAdvancedConfiguration sets the advanced configuration settings for the client.
 func (config *ClientConfiguration) WithAdvancedConfiguration(
 	advancedConfig *AdvancedClientConfiguration,
@@ -474,6 +507,18 @@ func (config *ClientConfiguration) WithSubscriptionConfig(
 	subscriptionConfig *StandaloneSubscriptionConfig,
 ) *ClientConfiguration {
 	config.subscriptionConfig = subscriptionConfig
+	return config
+}
+
+// WithReadOnly enables read-only mode for the standalone client.
+// When enabled, the client will skip primary node detection during connection initialization
+// and will reject write commands. This is useful for connecting to replica-only deployments.
+//
+// Note: Read-only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
+// read strategies. Attempting to use these combinations will result in an error during
+// client creation.
+func (config *ClientConfiguration) WithReadOnly(readOnly bool) *ClientConfiguration {
+	config.readOnly = readOnly
 	return config
 }
 
@@ -646,6 +691,16 @@ func (config *ClusterClientConfiguration) WithReconnectStrategy(
 // WithDatabaseId sets the index of the logical database to connect to.
 func (config *ClusterClientConfiguration) WithDatabaseId(id int) *ClusterClientConfiguration {
 	config.DatabaseId = &id
+	return config
+}
+
+// WithCompressionConfiguration sets the compression configuration for the cluster client.
+// When configured, values sent to the server will be automatically compressed if they
+// meet the minimum size threshold.
+func (config *ClusterClientConfiguration) WithCompressionConfiguration(
+	compressionConfig *CompressionConfiguration,
+) *ClusterClientConfiguration {
+	config.compressionConfig = compressionConfig
 	return config
 }
 

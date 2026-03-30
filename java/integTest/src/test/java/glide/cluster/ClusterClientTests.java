@@ -2,6 +2,8 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.IAM_USERNAME;
+import static glide.TestUtilities.assertConnected;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
@@ -14,23 +16,26 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.TestUtilities;
 import glide.api.GlideClusterClient;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
-import java.util.Map;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @Timeout(10) // seconds
 public class ClusterClientTests {
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void register_client_name_and_version() {
         String minVersion = "7.2.0";
         assumeTrue(
@@ -48,8 +53,8 @@ public class ClusterClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void can_connect_with_auth_requirepass() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -85,8 +90,8 @@ public class ClusterClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void can_connect_with_auth_acl() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -139,8 +144,8 @@ public class ClusterClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void client_name() {
         GlideClusterClient client =
                 GlideClusterClient.createClient(
@@ -154,8 +159,8 @@ public class ClusterClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void select_cluster_database_id() {
         String minVersion = "9.0.0";
         assumeTrue(
@@ -184,8 +189,8 @@ public class ClusterClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password() {
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -204,7 +209,7 @@ public class ClusterClientTests {
 
             // Update server password
             // Kill all other clients to force reconnection
-            assertEquals("OK", adminClient.configSet(Map.of("requirepass", pwd)).get());
+            assertEquals("OK", adminClient.configSet(Collections.singletonMap("requirepass", pwd)).get());
             adminClient.customCommand(new String[] {"CLIENT", "KILL", "TYPE", "NORMAL"}).get();
 
             // Give some time for it to go through
@@ -213,33 +218,33 @@ public class ClusterClientTests {
             // Verify client auto-reconnects with new password
             assertNotNull(testClient.info().get());
         } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", "")).get();
             adminClient.close();
         }
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_auth_non_valid_pass() {
         // Test Client fails on call to updateConnectionPassword with invalid parameters
         try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
-            var emptyPasswordException =
+            ExecutionException emptyPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
             assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
 
-            var noPasswordException =
+            ExecutionException noPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
             assertInstanceOf(RequestException.class, noPasswordException.getCause());
         }
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_no_server_auth() {
-        var pwd = UUID.randomUUID().toString();
+        String pwd = UUID.randomUUID().toString();
 
         try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
@@ -247,17 +252,17 @@ public class ClusterClientTests {
             assertNotNull(testClient.info().get());
 
             // Test that immediate re-authentication fails when no server password is set.
-            var exception =
+            ExecutionException exception =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
             assertInstanceOf(RequestException.class, exception.getCause());
         }
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_long() {
-        var pwd = RandomStringUtils.randomAlphabetic(1000);
+        String pwd = RandomStringUtils.randomAlphabetic(1000);
 
         try (GlideClusterClient testClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
@@ -270,11 +275,11 @@ public class ClusterClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_replace_password_immediateAuth_wrong_password() {
-        var pwd = UUID.randomUUID().toString();
-        var notThePwd = UUID.randomUUID().toString();
+        String pwd = UUID.randomUUID().toString();
+        String notThePwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -284,10 +289,10 @@ public class ClusterClientTests {
             assertNotNull(testClient.info().get());
 
             // set the password to something else
-            adminClient.configSet(Map.of("requirepass", notThePwd)).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", notThePwd)).get();
 
             // Test that re-authentication fails when using wrong password.
-            var exception =
+            ExecutionException exception =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(pwd, true).get());
             assertInstanceOf(RequestException.class, exception.getCause());
@@ -295,18 +300,18 @@ public class ClusterClientTests {
             // But using something else password returns OK
             assertEquals(OK, testClient.updateConnectionPassword(notThePwd, true).get());
         } finally {
-            adminClient.configSet(Map.of("requirepass", "")).get();
+            adminClient.configSet(Collections.singletonMap("requirepass", "")).get();
             adminClient.close();
         }
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -356,12 +361,12 @@ public class ClusterClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_reconnection_with_immediate_auth_with_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -400,12 +405,12 @@ public class ClusterClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -440,12 +445,12 @@ public class ClusterClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_non_valid_auth_acl_user() {
-        var username = "username";
-        var pwd = UUID.randomUUID().toString();
-        var newPwd = UUID.randomUUID().toString();
+        String username = "username";
+        String pwd = UUID.randomUUID().toString();
+        String newPwd = UUID.randomUUID().toString();
 
         GlideClusterClient adminClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
@@ -462,18 +467,76 @@ public class ClusterClientTests {
                                             .build())
                             .get();
 
-            var emptyPasswordException =
+            ExecutionException emptyPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword("", true).get());
             assertInstanceOf(RequestException.class, emptyPasswordException.getCause());
 
-            var noPasswordException =
+            ExecutionException noPasswordException =
                     assertThrows(
                             ExecutionException.class, () -> testClient.updateConnectionPassword(true).get());
             assertInstanceOf(RequestException.class, noPasswordException.getCause());
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
+        }
+    }
+
+    @SneakyThrows
+    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        // Note: useTLS is inherited from commonClusterClientConfig() which respects the -Dtls system
+        // property
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig().credentials(credentials).build())
+                .get();
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_with_mock_credentials() {
+        // See DEVELOPER.md for instructions on running IAM authentication tests
+
+        // Create client with IAM authentication
+        try (GlideClusterClient client = createClusterClientWithIam(5)) {
+
+            // Verify connection works
+            assertConnected(client);
+
+            // Test basic operations
+            assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+            assertEquals("iam_test_value", client.get("iam_test_key").get());
+
+            // Verify operations still work after token refresh
+            assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+            assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+
+            // Test manual token refresh
+            client.refreshIamToken().get();
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_automatic_token_refresh()
+            throws InterruptedException, ExecutionException {
+        // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+
+        try (GlideClusterClient client = createClusterClientWithIam(2)) {
+
+            // Verify initial connection
+            assertConnected(client);
+
+            // Wait for automatic token refresh to occur
+            Thread.sleep(3000);
+
+            // Verify client still works after automatic refresh
+            assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+            assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
         }
     }
 }
