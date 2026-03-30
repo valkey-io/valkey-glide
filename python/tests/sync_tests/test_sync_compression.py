@@ -383,6 +383,45 @@ class TestBasicCompression:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_compression_msetnx_compression(self, compression_client: TGlideClient):
+        """Test MSETNX compression of values."""
+        num_keys = 5
+        key_value_map = {}
+
+        # Get initial statistics
+        initial_stats = compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Create key-value pairs with unique keys to ensure MSETNX succeeds
+        for i in range(num_keys):
+            key = f"{{msetnx_test}}_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(1024)  # 1KB
+            key_value_map[key] = value
+
+        # Use MSETNX to set all values
+        result = compression_client.msetnx(
+            cast(dict[Union[str, bytes], Union[str, bytes]], key_value_map)
+        )
+        assert result is True, "MSETNX should succeed for new keys"
+
+        # Verify compression was applied to all values
+        stats = compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count >= num_keys
+        ), f"MSETNX should compress values above threshold. Compressed: {compressed_count}, Expected: >= {num_keys}"
+
+        # Verify all values can be retrieved and decompressed
+        for key, expected_value in key_value_map.items():
+            retrieved = compression_client.get(key)
+            assert retrieved == expected_value.encode(), f"Value mismatch for key {key}"
+
+        # Cleanup
+        keys_to_delete = cast(List[Union[str, bytes]], list(key_value_map.keys()))
+        compression_client.delete(keys_to_delete)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_compression_setex_compression(self, compression_client: TGlideClient):
         """Test SETEX compression of values."""
         key = f"setex_test_{get_random_string(8)}"

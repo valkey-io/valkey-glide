@@ -847,6 +847,7 @@ impl RequestType {
         match self {
             RequestType::Set => CommandCompressionBehavior::CompressValues,
             RequestType::MSet => CommandCompressionBehavior::CompressValues,
+            RequestType::MSetNX => CommandCompressionBehavior::CompressValues,
             RequestType::SetEx => CommandCompressionBehavior::CompressValues,
             RequestType::PSetEx => CommandCompressionBehavior::CompressValues,
             RequestType::SetNX => CommandCompressionBehavior::CompressValues,

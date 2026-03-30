@@ -75,18 +75,14 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
     let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
 
     // Map command names to RequestType for decompression
+    // Only read commands that return values needing decompression are included
     match command_str.as_str() {
         "GET" => Some(RequestType::Get),
         "MGET" => Some(RequestType::MGet),
         "GETEX" => Some(RequestType::GetEx),
         "GETDEL" => Some(RequestType::GetDel),
         "GETSET" => Some(RequestType::GetSet),
-        "SET" => Some(RequestType::Set),
-        "MSET" => Some(RequestType::MSet),
-        "SETEX" => Some(RequestType::SetEx),
-        "PSETEX" => Some(RequestType::PSetEx),
-        "SETNX" => Some(RequestType::SetNX),
-        _ => None, // Unknown command, no compression/decompression needed
+        _ => None, // Unknown command or write command, no decompression needed
     }
 }
 

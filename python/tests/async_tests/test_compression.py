@@ -397,6 +397,44 @@ class TestBasicCompression:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_msetnx_compression(self, compression_client: TGlideClient):
+        """Verify MSETNX compresses values above threshold."""
+        # Create test data with unique keys to ensure MSETNX succeeds
+        keys_and_values = {}
+        for i in range(3):
+            key = f"{{msetnx_test}}_{i}_{get_random_string(8)}"
+            value = generate_compressible_text(
+                1024
+            )  # 1KB - above compression threshold
+            keys_and_values[key] = value
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+
+        # Use MSETNX to set all values (should be compressed)
+        result = await compression_client.msetnx(cast(dict, keys_and_values))
+        assert result is True, "MSETNX should succeed for new keys"
+
+        # Check statistics: compression should have been applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"]
+
+        assert compressed_count > initial_compressed, (
+            f"MSETNX should compress values above threshold. "
+            f"Compressed: {compressed_count}, Initial: {initial_compressed}"
+        )
+
+        # Verify values can be retrieved and decompressed
+        for key, expected_value in keys_and_values.items():
+            retrieved = await compression_client.get(key)
+            assert retrieved == expected_value.encode()
+
+        # Cleanup
+        await compression_client.delete(list(keys_and_values.keys()))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_compression_setex_compression(
         self, compression_client: TGlideClient
     ):

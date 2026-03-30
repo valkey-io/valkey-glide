@@ -717,7 +717,7 @@ pub fn process_command_args_for_compression(
 
     match request_type {
         RequestType::Set => compress_single_value_command(args, manager, 1),
-        RequestType::MSet => compress_mset_command(args, manager),
+        RequestType::MSet | RequestType::MSetNX => compress_mset_command(args, manager),
         RequestType::SetEx => compress_single_value_command(args, manager, 2),
         RequestType::PSetEx => compress_single_value_command(args, manager, 2),
         RequestType::SetNX => compress_single_value_command(args, manager, 1),
