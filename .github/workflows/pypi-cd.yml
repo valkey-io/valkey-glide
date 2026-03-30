@@ -62,9 +62,9 @@ jobs:
                   # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
                       .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          if (.RUNNER | type == "array")
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
                           end
                       )
                   )' | jq -c .)
@@ -228,34 +228,34 @@ jobs:
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
                     PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
                     PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_arm64
-                    
+
                     echo "Downloading PyPy 3.9 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.10 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.11 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                   elif [[ "$ARCH" == "x86_64" ]]; then
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
                     PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
                     PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_x86_64
-                    
+
                     echo "Downloading PyPy 3.9 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.10 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.11 for x86_64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2" 
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                   fi
 
@@ -510,7 +510,7 @@ jobs:
                   TWINE_USERNAME: __token__
                   TWINE_PASSWORD: ${{ secrets.LIVEPYPI_API_TOKEN }}
               run: |
-                  twine upload python/glide-sync/wheels/* python/glide-sync/dist/*
+                  twine upload --skip-existing python/glide-sync/wheels/* python/glide-sync/dist/*
 
             - name: Sync client - Upload built wheels and sdist as GitHub artifacts
               uses: actions/upload-artifact@v4
@@ -557,7 +557,7 @@ jobs:
                       echo "Downloading PyPy 3.10 for x86_64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     elif [[ "$ARCH" == "aarch64" ]]; then
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
                       echo "Downloading PyPy 3.10 for aarch64"
@@ -573,7 +573,7 @@ jobs:
                       echo "Downloading PyPy 3.10 for arm64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     else
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
                       echo "Downloading PyPy 3.10 for x86_64"
