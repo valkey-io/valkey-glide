@@ -144,7 +144,7 @@ class CompressionConfiguration:
     """
     Represents the compression configuration for automatic compression of values.
 
-    ⚠️ WARNING: This feature is experimental and not recommended for production use.
+    WARNING: This feature is experimental and not recommended for production use.
 
     Compression is NOT compatible with commands that manipulate string data on the server side:
     - APPEND, GETRANGE, SETRANGE, STRLEN, LCS

@@ -438,6 +438,7 @@ fn process_command_for_compression(
     let request_type = match command_str.as_str() {
         "SET" => crate::request_type::RequestType::Set,
         "MSET" => crate::request_type::RequestType::MSet,
+        "MSETNX" => crate::request_type::RequestType::MSetNX,
         "SETEX" => crate::request_type::RequestType::SetEx,
         "PSETEX" => crate::request_type::RequestType::PSetEx,
         "SETNX" => crate::request_type::RequestType::SetNX,
