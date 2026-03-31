@@ -5728,7 +5728,7 @@ mod cluster_async {
                     .expect("Failed executing CLIENT LIST");
                 let mut client_list_parts = client_list.split('\n');
                 if client_list_parts
-                .any(|line| line.contains(MANAGEMENT_CONN_NAME) && line.contains("cmd=cluster")) 
+                .any(|line| line.contains(MANAGEMENT_CONN_NAME) && line.contains("cmd=cluster"))
                 && client_list.matches(MANAGEMENT_CONN_NAME).count() == 1 {
                     return Ok::<_, RedisError>(());
                 }
@@ -6529,6 +6529,165 @@ mod cluster_async {
             Ok::<_, RedisError>(())
         })
         .unwrap();
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_pending_requests_channel_throughput() {
+        // Validates that the lock-free channel (mpsc::UnboundedChannel) for pending_requests
+        // handles high request rates without blocking the Tokio runtime.
+        let cluster = TestClusterContext::new(3, 0);
+        let connection = cluster.async_connection(None).await;
+
+        let request_count = 10_000;
+        let start = std::time::Instant::now();
+
+        // Spawn many concurrent operations (SET) that go to pending_requests channel
+        let tasks: Vec<_> = (0..request_count)
+            .map(|i| {
+                let mut connection = connection.clone();
+                tokio::spawn(async move {
+                    let key = format!("key:{}", i);
+                    let _: () = connection.set(&key, i).await?;
+                    Ok::<_, RedisError>(())
+                })
+            })
+            .collect();
+
+        let results = futures::future::join_all(tasks).await;
+        let elapsed = start.elapsed();
+
+        // All operations should succeed
+        for result in results {
+            result.unwrap().unwrap();
+        }
+
+        // Verify minimal throughput of pending_requests channel
+        let throughput = request_count as f64 / elapsed.as_secs_f64();
+        let min_throughput = 1000.0;
+        assert!(
+            throughput > min_throughput,
+            "Throughput too low: {:.0} req/sec (possible blocking in pending_requests channel)",
+            throughput
+        );
+
+        println!(
+            "{} requests completed in {:.2}s ({:.0} req/sec)",
+            request_count,
+            elapsed.as_secs_f64(),
+            throughput
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_high_concurrency_no_runtime_blocking() {
+        // Validates that under high concurrency, operations complete without Tokio runtime
+        // starvation.
+        let cluster = TestClusterContext::new(3, 0);
+        let connection = cluster.async_connection(None).await;
+
+        let concurrent_ops = 5_000;
+
+        // Spawn many concurrent operations (GET, SET, DEL)
+        let tasks: Vec<_> = (0..concurrent_ops)
+            .map(|i| {
+                let mut connection = connection.clone();
+                tokio::spawn(async move {
+                    let key = format!("key:{}", i);
+                    let start = std::time::Instant::now();
+
+                    let _: () = connection.set(&key, i).await?;
+                    let _: Option<i32> = connection.get(&key).await?;
+                    let _: u32 = connection.del(&key).await?;
+
+                    Ok::<_, RedisError>(start.elapsed())
+                })
+            })
+            .collect();
+
+        let results = futures::future::join_all(tasks).await;
+
+        // Validate no operation took too long (indicating runtime blocking)
+        let max_acceptable = Duration::from_secs(2);
+        for (i, result) in results.iter().enumerate() {
+            let duration = result.as_ref().unwrap().as_ref().unwrap();
+            assert!(
+                duration < &max_acceptable,
+                "Operation {} took too long: {:?}ms (possible runtime blocking)",
+                i,
+                duration.as_millis()
+            );
+        }
+
+        let total_duration: Duration = results
+            .iter()
+            .map(|r| *r.as_ref().unwrap().as_ref().unwrap())
+            .sum();
+        let avg_duration = total_duration / concurrent_ops as u32;
+        println!(
+            "{} concurrent ops completed, avg {:.2}ms per op",
+            concurrent_ops,
+            avg_duration.as_secs_f64() * 1000.0
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_cluster_params_concurrent_access() {
+        // Validates that the async RwLock for cluster_params doesn't block the Tokio runtime
+        // when accessed concurrently (read or write).
+        let cluster = TestClusterContext::new(3, 0);
+        let connection = cluster.async_connection(None).await;
+
+        let concurrent_ops = 5_000;
+
+        // Spawn concurrent operations (GET and SET)
+        let tasks: Vec<_> = (0..concurrent_ops)
+            .map(|i| {
+                let mut connection = connection.clone();
+                tokio::spawn(async move {
+                    let start = std::time::Instant::now();
+                    let key = format!("key:{}", i);
+
+                    // SET calls get_cluster_param()
+                    let _: () = connection.set(&key, i).await?;
+
+                    // Periodically try GET, which might call set_cluster_param()
+                    if i % 10 == 0 {
+                        let _: Option<String> =
+                            connection.get(&format!("trigger:{}", i)).await.ok();
+                    }
+
+                    Ok::<_, RedisError>(start.elapsed())
+                })
+            })
+            .collect();
+
+        let results = futures::future::join_all(tasks).await;
+
+        // Validate no operation took too long (indicating blocking on cluster_params access)
+        let max_acceptable = Duration::from_secs(2);
+        for (i, result) in results.iter().enumerate() {
+            let duration = result.as_ref().unwrap().as_ref().unwrap();
+            assert!(
+                duration < &max_acceptable,
+                "Operation {} blocked on cluster_params: {:?}ms",
+                i,
+                duration.as_millis()
+            );
+        }
+
+        let total_duration: Duration = results
+            .iter()
+            .map(|r| *r.as_ref().unwrap().as_ref().unwrap())
+            .sum();
+        let avg_duration = total_duration / concurrent_ops as u32;
+        println!(
+            "{} concurrent ops completed, avg {:.2}ms per op",
+            concurrent_ops,
+            avg_duration.as_secs_f64() * 1000.0
+        );
     }
 
     mod mtls_test {
