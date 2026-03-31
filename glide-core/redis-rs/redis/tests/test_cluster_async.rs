@@ -5114,6 +5114,9 @@ mod cluster_async {
                         let err_str = e.to_string();
                         if !err_str.contains("ConnectionNotFoundForRoute")
                             && !err_str.contains("timed out")
+                            && !e.is_connection_dropped()
+                            && e.kind() != ErrorKind::AllConnectionsUnavailable
+                            && e.kind() != ErrorKind::FatalSendError
                         {
                             panic!("Unexpected error on SET to blocked shard: {e:?}");
                         }
@@ -5643,12 +5646,12 @@ mod cluster_async {
                 if contains_slice(cmd, b"PING") {
                     let connect_attempt = ping_attempts_clone.fetch_add(1, Ordering::Relaxed);
                     let past_get_attempts = get_attempts.load(Ordering::Relaxed);
-                    // We want connection checks to fail after the first GET attempt, until it retries. Hence, we wait for 5 PINGs -
+                    // We want connection checks to fail after the first GET attempt, until it retries. Hence, we expect 4-5 PINGs -
                     // 1. initial connection,
                     // 2. refresh slots on client creation,
                     // 3. refresh_connections `check_connection` after first GET failed,
                     // 4. refresh_connections `connect_and_check` after first GET failed,
-                    // 5. reconnect on 2nd GET attempt.
+                    // 5. reconnect on 2nd GET attempt (may not occur with non-blocking reconnection).
                     // more than 5 attempts mean that the server reconnects more than once, which is the behavior we're testing against.
                     if past_get_attempts != 1 || connect_attempt > 3 {
                         respond_startup_two_nodes(name, cmd)?;
@@ -5688,8 +5691,11 @@ mod cluster_async {
             assert_eq!(value, Ok(Some(123)));
         }
         // If you need to change the number here due to a change in the cluster, you probably also need to adjust the test.
-        // See the PING counts above to explain why 5 is the target number.
-        assert_eq!(ping_attempts.load(Ordering::Acquire), 5);
+        // See the PING counts above to explain why 4-5 is the expected range.
+        // With non-blocking reconnection, the reconnect path may complete with fewer PINGs
+        // since the poll loop isn't blocked waiting for reconnection futures.
+        let pings = ping_attempts.load(Ordering::Acquire);
+        assert!((4..=5).contains(&pings), "Expected 4-5 pings, got {pings}");
     }
 
     #[test]
