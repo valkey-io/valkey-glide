@@ -1218,52 +1218,33 @@ class TestSyncFt:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_ft_search_nocontent(self, glide_sync_client: GlideClusterClient):
         prefix = "{nocontent-search-" + str(uuid.uuid4()) + "}:"
-        key1 = prefix + "1"
-        key2 = prefix + "2"
+        key = prefix + "doc"
         index = prefix + "idx"
-        vec_field = "vec"
-
-        vector1 = array.array("f", [1.0, 0.0]).tobytes()
-        vector2 = array.array("f", [0.0, 1.0]).tobytes()
 
         assert (
             ft.create(
                 glide_sync_client,
                 index,
-                schema=[
-                    VectorField(
-                        name=vec_field,
-                        algorithm=VectorAlgorithm.FLAT,
-                        attributes=VectorFieldAttributesFlat(
-                            dimensions=2,
-                            distance_metric=DistanceMetricType.L2,
-                            type=VectorType.FLOAT32,
-                        ),
-                    )
-                ],
+                schema=[TextField(name="title")],
                 options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
             )
             == OK
         )
-        assert glide_sync_client.hset(key1, {vec_field: vector1}) == 1
-        assert glide_sync_client.hset(key2, {vec_field: vector2}) == 1
+        assert glide_sync_client.hset(key, {"title": "hello world"}) == 1
         time.sleep(self.sleep_wait_time)
 
-        knn_query = f"*=>[KNN 2 @{vec_field} $query_vec]"
         result = ft.search(
             glide_sync_client,
             index,
-            knn_query,
-            options=FtSearchOptions(
-                params={"query_vec": vector1},
-                nocontent=True,
-            ),
+            "hello",
+            options=FtSearchOptions(nocontent=True),
         )
-        # NOCONTENT: count is 2, each doc entry has an empty fields map
-        assert result[0] == 2
+        # NOCONTENT: count is 1, doc entry has an empty fields map
+        assert result[0] == 1
         result_map = cast(
             Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
         )
+        assert len(result_map) == 1
         for doc_fields in result_map.values():
             assert doc_fields == {}
 
