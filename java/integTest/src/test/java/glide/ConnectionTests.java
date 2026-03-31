@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -460,7 +461,7 @@ public class ConnectionTests {
         Map<String, String> infoData = infoResult.getMultiValue();
 
         // Get replica count for the slot that handles key "foo"
-        var clusterInfo =
+        ClusterValue<Object> clusterInfo =
                 client
                         .customCommand(
                                 new String[] {"INFO", "REPLICATION"},
@@ -482,8 +483,8 @@ public class ConnectionTests {
                         .count();
 
         // Verify that primary + replicas for this slot received calls (slot-based routing)
-        assertEquals(nReplicas + 1, nodesWithCalls, 
-                "ALL_NODES should route to primary and all replicas for the slot. Expected " + 
+        assertEquals(nReplicas + 1, nodesWithCalls,
+                "ALL_NODES should route to primary and all replicas for the slot. Expected " +
                 (nReplicas + 1) + " nodes, got " + nodesWithCalls);
 
         // Verify both primary and replicas received calls
