@@ -16178,7 +16178,7 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
-    public void unsubscribe_returns_success() {
+    public void unsubscribe_blocking_returns_success() {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
@@ -16214,7 +16214,7 @@ public class GlideClientTest {
 
     @SneakyThrows
     @Test
-    public void punsubscribe_returns_success() {
+    public void punsubscribe_blocking_returns_success() {
         // setup
         CompletableFuture<Void> testResponse = new CompletableFuture<>();
         testResponse.complete(null);
@@ -16226,6 +16226,48 @@ public class GlideClientTest {
 
         // exercise
         CompletableFuture<Void> response = service.punsubscribe(createSet("pattern*"), 2000);
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void unsubscribe_lazy_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(
+                        eq(command_request.CommandRequestOuterClass.RequestType.Unsubscribe),
+                        any(String[].class),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.unsubscribeLazy(createSet("channel1"));
+
+        // verify
+        assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void punsubscribe_lazy_returns_success() {
+        // setup
+        CompletableFuture<Void> testResponse = new CompletableFuture<>();
+        testResponse.complete(null);
+
+        // match on protobuf request
+        when(commandManager.<Void>submitNewCommand(
+                        eq(command_request.CommandRequestOuterClass.RequestType.PUnsubscribe),
+                        any(String[].class),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Void> response = service.punsubscribeLazy(createSet("pattern*"));
 
         // verify
         assertNull(response.get());

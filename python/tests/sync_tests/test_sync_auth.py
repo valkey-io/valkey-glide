@@ -4,21 +4,59 @@
 import time
 
 import pytest
-from glide_shared.config import ProtocolVersion
+from glide_shared.config import (
+    IamAuthConfig,
+    ProtocolVersion,
+    ServerCredentials,
+    ServiceType,
+)
 from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 from glide_sync.glide_client import TGlideClient
 
+from tests.sync_tests.conftest import create_sync_client
+from tests.test_constants import (
+    IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
+    IAM_TEST_CLUSTER_NAME,
+    IAM_TEST_REGION_US_EAST_1,
+    IAM_USERNAME,
+)
 from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
+    assert_connected_sync,
     auth_client,
     config_set_new_password,
     delete_acl_username_and_password,
     kill_connections,
     set_new_acl_username_with_password,
 )
+
+
+def create_iam_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    refresh_interval_seconds: int = IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
+):
+    """Helper to create a sync client with IAM authentication."""
+    iam_config = IamAuthConfig(
+        cluster_name=IAM_TEST_CLUSTER_NAME,
+        service=ServiceType.ELASTICACHE,
+        region=IAM_TEST_REGION_US_EAST_1,
+        refresh_interval_seconds=refresh_interval_seconds,
+    )
+
+    credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
+
+    # Note: use_tls is set from request which respects the --tls flag
+    return create_sync_client(
+        request=request,
+        cluster_mode=cluster_mode,
+        protocol=protocol,
+        credentials=credentials,
+    )
 
 
 class TestSyncAuthCommands:
@@ -330,3 +368,60 @@ class TestSyncAuthCommands:
             acl_glide_sync_client.update_connection_password(None, immediate_auth=True)
         with pytest.raises(RequestError):
             acl_glide_sync_client.update_connection_password("", immediate_auth=True)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_iam_authentication_with_mock_credentials(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """
+        Test IAM authentication using mock AWS credentials.
+
+        This test verifies:
+        1. Client can connect using IAM authentication with mock credentials
+        2. Basic operations work after IAM authentication
+        3. Operations continue to work after token refresh
+        """
+        client = create_iam_client(request, cluster_mode, protocol)
+
+        # Verify connection works
+        assert_connected_sync(client)
+
+        # Test manual token refresh
+        client.refresh_iam_token()
+
+        # Test basic operations
+        client.set("iam_test_key", "iam_test_value")
+        value = client.get("iam_test_key")
+        assert value == b"iam_test_value"
+
+        # Verify operations still work after token refresh
+        client.set("iam_test_key2", "iam_test_value2")
+        value2 = client.get("iam_test_key2")
+        assert value2 == b"iam_test_value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_iam_authentication_automatic_token_refresh(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """
+        Test automatic IAM token refresh.
+
+        This test verifies that the client automatically refreshes the IAM token
+        at the configured interval and continues to work correctly.
+        """
+        client = create_iam_client(
+            request, cluster_mode, protocol, refresh_interval_seconds=2
+        )
+
+        # Verify initial connection
+        assert_connected_sync(client)
+
+        # Wait for automatic token refresh to occur
+        time.sleep(3)
+
+        # Verify client still works after automatic refresh
+        client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+        value = client.get("iam_auto_refresh_key")
+        assert value == b"iam_auto_refresh_value"

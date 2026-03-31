@@ -15,7 +15,7 @@
 //! async fn fetch_an_integer() -> String {
 //!     let nodes = vec!["redis://127.0.0.1/"];
 //!     let client = ClusterClient::new(nodes).unwrap();
-//!     let mut connection = client.get_async_connection(None, None).await.unwrap();
+//!     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
 //!     let _: () = connection.set("test", "test_data").await.unwrap();
 //!     let rv: String = connection.get("test").await.unwrap();
 //!     return rv;
@@ -60,7 +60,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     pin::Pin,
     sync::{
-        atomic::{self, AtomicUsize, Ordering},
+        atomic::{self, AtomicIsize, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     task::{self, Poll},
@@ -72,7 +72,7 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "tokio-comp")]
 use crate::aio::DisconnectNotifier;
-use telemetrylib::{GlideOpenTelemetry, Telemetry};
+use telemetrylib::{GlideOpenTelemetry, GlideSpan, Telemetry};
 
 use crate::{
     aio::{get_socket_addrs, ConnectionLike, MultiplexedConnection, Runtime},
@@ -121,6 +121,23 @@ use self::{
 };
 use crate::types::RetryMethod;
 
+/// Parses a `"host:port"` address string into its components.
+/// Returns `None` if the address has no `:` separator or the port is not a valid integer.
+fn parse_node_address(address: &str) -> Option<(&str, i64)> {
+    let (host, port_str) = address.rsplit_once(':')?;
+    let port = port_str.parse::<i64>().ok()?;
+    Some((host, port))
+}
+
+/// Sets the routed node's address on the command span for OTel reporting.
+/// Called after cluster routing resolves the actual target node.
+fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
+    if let Some((host, port)) = parse_node_address(address) {
+        span.set_attribute("server.address", host.to_string());
+        span.set_attribute_i64("server.port", port);
+    }
+}
+
 pub(crate) const MUTEX_READ_ERR: &str = "Failed to obtain read lock. Poisoned mutex?";
 const MUTEX_WRITE_ERR: &str = "Failed to obtain write lock. Poisoned mutex?";
 /// This represents an async Cluster connection. It stores the
@@ -138,12 +155,14 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> RedisResult<ClusterConnection<C>> {
         ClusterConnInner::new(
             initial_nodes,
             cluster_params,
             push_sender,
             pubsub_synchronizer,
+            iam_token_provider,
         )
         .await
         .map(|inner| {
@@ -189,7 +208,7 @@ where
     /// async fn scan_all_cluster() -> Vec<String> {
     ///     let nodes = vec!["redis://127.0.0.1/"];
     ///     let client = ClusterClient::new(nodes).unwrap();
-    ///     let mut connection = client.get_async_connection(None, None).await.unwrap();
+    ///     let mut connection = client.get_async_connection(None, None, None).await.unwrap();
     ///     let mut scan_state_rc = ScanStateRC::new();
     ///     let mut keys: Vec<String> = vec![];
     ///     let cluster_scan_args = ClusterScanArgs::builder().with_count(1000).with_object_type(ObjectType::String).build();
@@ -905,6 +924,232 @@ pin_project! {
     }
 }
 
+/// Arc-based inflight slot guard. Reserves one inflight slot on creation
+/// (decrements counter), releases it when the **last** clone is dropped
+/// (increments counter). Stored on `Cmd` so it flows naturally through
+/// the pipeline: Cmd → Message → PendingRequest → in_flight_requests.
+///
+/// For fan-out commands, `Arc<Cmd>` is cloned per shard — each clone
+/// shares the same tracker. The slot is released only when all
+/// sub-commands finish.
+struct InflightSlotGuard(Arc<AtomicIsize>);
+
+impl Drop for InflightSlotGuard {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// Cloneable handle to an inflight slot. Clone = Arc refcount bump.
+/// Last drop triggers `InflightSlotGuard::Drop` which releases the slot.
+#[derive(Clone)]
+pub struct InflightRequestTracker {
+    /// Held solely for its `Drop` impl which releases the inflight slot.
+    _guard: Arc<InflightSlotGuard>,
+}
+
+impl InflightRequestTracker {
+    /// Try to reserve one inflight slot atomically. Returns `None` if
+    /// no slots are available (counter <= 0).
+    pub fn try_new(counter: Arc<AtomicIsize>) -> Option<Self> {
+        loop {
+            let current = counter.load(Ordering::SeqCst);
+            if current <= 0 {
+                return None;
+            }
+            if counter
+                .compare_exchange(current, current - 1, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return Some(Self {
+                    _guard: Arc::new(InflightSlotGuard(counter)),
+                });
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod inflight_tracker_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn tracker_reserves_and_releases_slot() {
+        let counter = Arc::new(AtomicIsize::new(5));
+        let tracker = InflightRequestTracker::try_new(counter.clone()).unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 4); // reserved
+        drop(tracker);
+        assert_eq!(counter.load(Ordering::Relaxed), 5); // released
+    }
+
+    #[test]
+    fn try_new_returns_none_when_no_slots() {
+        let counter = Arc::new(AtomicIsize::new(0));
+        assert!(InflightRequestTracker::try_new(counter).is_none());
+    }
+
+    #[test]
+    fn cloned_tracker_releases_only_when_last_clone_drops() {
+        let counter = Arc::new(AtomicIsize::new(5));
+        let tracker = InflightRequestTracker::try_new(counter.clone()).unwrap();
+        assert_eq!(counter.load(Ordering::Relaxed), 4);
+
+        let clone1 = tracker.clone();
+        let clone2 = tracker.clone();
+
+        drop(clone1);
+        assert_eq!(counter.load(Ordering::Relaxed), 4); // still held
+
+        drop(tracker);
+        assert_eq!(counter.load(Ordering::Relaxed), 4); // still held
+
+        drop(clone2);
+        assert_eq!(counter.load(Ordering::Relaxed), 5); // last clone → released
+    }
+}
+
+#[cfg(test)]
+mod iam_token_refresh_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Mock IAM token provider that returns a configurable token and tracks call count.
+    struct MockTokenProvider {
+        token: std::sync::Mutex<String>,
+        call_count: AtomicUsize,
+    }
+
+    impl MockTokenProvider {
+        fn new(token: &str) -> Arc<Self> {
+            Arc::new(Self {
+                token: std::sync::Mutex::new(token.to_string()),
+                call_count: AtomicUsize::new(0),
+            })
+        }
+
+        fn set_token(&self, token: &str) {
+            *self.token.lock().unwrap() = token.to_string();
+        }
+
+        fn calls(&self) -> usize {
+            self.call_count.load(Ordering::Relaxed)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl crate::client::IAMTokenProvider for MockTokenProvider {
+        async fn get_valid_token(&self) -> Option<String> {
+            self.call_count.fetch_add(1, Ordering::Relaxed);
+            let token = self.token.lock().unwrap().clone();
+            if token.is_empty() {
+                None
+            } else {
+                Some(token)
+            }
+        }
+    }
+
+    /// Helper to build a minimal GlideConnectionOptions with an IAM provider.
+    fn options_with_provider(
+        provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+    ) -> GlideConnectionOptions {
+        GlideConnectionOptions {
+            push_sender: None,
+            disconnect_notifier: None,
+            discover_az: false,
+            connection_timeout: None,
+            connection_retry_strategy: None,
+            tcp_nodelay: false,
+            pubsub_synchronizer: None,
+            iam_token_provider: provider,
+        }
+    }
+
+    /// Helper to build a minimal InnerCore with the given password and IAM provider.
+    fn build_inner(
+        initial_password: Option<String>,
+        provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
+    ) -> Arc<InnerCore<crate::aio::MultiplexedConnection>> {
+        use crate::cluster_client::ClusterParams;
+        use connections_container::ConnectionsContainer;
+
+        let params = ClusterParams::default_for_test(initial_password);
+
+        Arc::new(InnerCore {
+            conn_lock: StdRwLock::new(ConnectionsContainer::default()),
+            cluster_params: StdRwLock::new(params),
+            pending_requests: Mutex::new(Vec::new()),
+            slot_refresh_state: SlotRefreshState::new(
+                crate::cluster_client::SlotsRefreshRateLimit::default(),
+            ),
+            initial_nodes: Vec::new(),
+            glide_connection_options: options_with_provider(provider),
+            topology_refresh_lock: tokio::sync::Mutex::new(()),
+        })
+    }
+
+    fn read_password(inner: &Arc<InnerCore<crate::aio::MultiplexedConnection>>) -> Option<String> {
+        inner.cluster_params.read().unwrap().password.clone()
+    }
+
+    #[tokio::test]
+    async fn refresh_updates_password_when_provider_returns_token() {
+        let provider = MockTokenProvider::new("fresh-token-123");
+        let inner = build_inner(Some("old-token".into()), Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("fresh-token-123".into()));
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn refresh_does_not_change_password_when_provider_returns_none() {
+        let provider = MockTokenProvider::new(""); // returns None
+        let inner = build_inner(Some("old-token".into()), Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("old-token".into()));
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn refresh_is_noop_when_no_provider_configured() {
+        let inner = build_inner(Some("static-password".into()), None);
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("static-password".into()));
+    }
+
+    #[tokio::test]
+    async fn refresh_sets_password_when_initially_none() {
+        let provider = MockTokenProvider::new("first-token");
+        let inner = build_inner(None, Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+
+        assert_eq!(read_password(&inner), Some("first-token".into()));
+    }
+
+    #[tokio::test]
+    async fn refresh_picks_up_new_token_on_second_call() {
+        let provider = MockTokenProvider::new("token-v1");
+        let inner = build_inner(None, Some(provider.clone()));
+
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+        assert_eq!(read_password(&inner), Some("token-v1".into()));
+
+        provider.set_token("token-v2");
+        ClusterConnInner::refresh_iam_token_in_cluster_params(&inner).await;
+        assert_eq!(read_password(&inner), Some("token-v2".into()));
+        assert_eq!(provider.calls(), 2);
+    }
+}
+
 struct PendingRequest<C> {
     retry: u32,
     sender: oneshot::Sender<RedisResult<Response>>,
@@ -1175,6 +1420,7 @@ where
         cluster_params: ClusterParams,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> RedisResult<Disposable<Self>> {
         let disconnect_notifier = {
             #[cfg(feature = "tokio-comp")]
@@ -1201,6 +1447,7 @@ where
             connection_retry_strategy: Some(connection_retry_strategy),
             tcp_nodelay: cluster_params.tcp_nodelay,
             pubsub_synchronizer,
+            iam_token_provider,
         };
 
         let connections = Self::create_initial_connections(
@@ -1315,48 +1562,67 @@ where
     ) -> RedisResult<ConnectionMap<C>> {
         let initial_nodes: Vec<(String, Option<SocketAddr>)> =
             Self::try_to_expand_initial_nodes(initial_nodes).await;
-        let connections = stream::iter(initial_nodes.iter().cloned())
-            .map(|(node_addr, socket_addr)| {
-                let params: ClusterParams = params.clone();
-                let glide_connection_options = glide_connection_options.clone();
-                // set subscriptions to none, they will be applied upon the topology discovery
+        let connections =
+            stream::iter(initial_nodes.iter().cloned())
+                .map(|(node_addr, socket_addr)| {
+                    let params: ClusterParams = params.clone();
+                    let glide_connection_options = glide_connection_options.clone();
+                    // set subscriptions to none, they will be applied upon the topology discovery
 
-                async move {
-                    let result = connect_and_check(
-                        &node_addr,
-                        params,
-                        socket_addr,
-                        RefreshConnectionType::AllConnections,
-                        None,
-                        glide_connection_options,
-                    )
-                    .await
-                    .get_node();
-                    let node_address = if let Some(socket_addr) = socket_addr {
-                        socket_addr.to_string()
-                    } else {
-                        node_addr
-                    };
-                    result.map(|node| (node_address, node))
-                }
-            })
-            .buffer_unordered(initial_nodes.len())
-            .fold(
-                (
-                    ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
-                    None,
-                ),
-                |connections: (ConnectionMap<C>, Option<String>), addr_conn_res| async move {
-                    match addr_conn_res {
-                        Ok((addr, node)) => {
-                            connections.0 .0.insert(addr, node);
-                            (connections.0, None)
+                    async move {
+                        let result = connect_and_check::<C>(
+                            &node_addr,
+                            params,
+                            socket_addr,
+                            RefreshConnectionType::AllConnections,
+                            None,
+                            glide_connection_options,
+                        )
+                        .await
+                        .get_node();
+                        // The PushManager is initialized with connection_info.addr
+                        // (the original hostname, e.g. "localhost:6379"), but the
+                        // ConnectionsMap key uses the resolved IP from socket_addr
+                        // (e.g. "127.0.0.1:6379"). When these differ, align them so
+                        // PubSub synchronization can match subscriptions to nodes.
+                        let (node_address, push_manager_needs_update) =
+                            if let Some(socket_addr) = socket_addr {
+                                let resolved = socket_addr.to_string();
+                                let differs = resolved != node_addr;
+                                (resolved, differs)
+                            } else {
+                                (node_addr, false)
+                            };
+                        if push_manager_needs_update {
+                            if let Ok(ref node) = result {
+                                node.user_connection
+                                    .conn
+                                    .clone()
+                                    .await
+                                    .update_push_manager_node_address(node_address.clone());
+                            }
                         }
-                        Err(e) => (connections.0, Some(e.to_string())),
+                        result.map(|node| (node_address, node))
                     }
-                },
-            )
-            .await;
+                })
+                .buffer_unordered(initial_nodes.len())
+                .fold(
+                    (
+                        ConnectionsMap(DashMap::with_capacity(initial_nodes.len())),
+                        None,
+                    ),
+                    |connections: (ConnectionMap<C>, Option<String>),
+                     addr_conn_res: RedisResult<_>| async move {
+                        match addr_conn_res {
+                            Ok((addr, node)) => {
+                                connections.0 .0.insert(addr, node);
+                                (connections.0, None)
+                            }
+                            Err(e) => (connections.0, Some(e.to_string())),
+                        }
+                    },
+                )
+                .await;
         if connections.0 .0.is_empty() {
             return Err(RedisError::from((
                 ErrorKind::IoError,
@@ -1368,19 +1634,32 @@ where
         Ok(connections.0)
     }
 
+    /// If IAM authentication is configured, refresh the token in `cluster_params` so that
+    /// any subsequent connection attempts use a valid credential.
+    async fn refresh_iam_token_in_cluster_params(inner: &Arc<InnerCore<C>>) {
+        if let Some(ref token_provider) = inner.glide_connection_options.iam_token_provider {
+            if let Some(valid_token) = token_provider.get_valid_token().await {
+                if let Ok(mut params) = inner.cluster_params.write() {
+                    params.password = Some(valid_token);
+                }
+            }
+        }
+    }
+
     // Reconnect to the initial nodes provided by the user in the creation of the client,
     // and try to refresh the slots based on the initial connections.
     // Being used when all cluster connections are unavailable.
     fn reconnect_to_initial_nodes(inner: Arc<InnerCore<C>>) -> impl Future<Output = ()> {
         let inner = inner.clone();
-        let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
-            Ok(params) => params,
-            Err(err) => {
-                warn!("Failed to get cluster params: {}", err);
-                return async {}.boxed();
-            }
-        };
         Box::pin(async move {
+            Self::refresh_iam_token_in_cluster_params(&inner).await;
+            let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
+                Ok(params) => params,
+                Err(err) => {
+                    warn!("Failed to get cluster params: {}", err);
+                    return;
+                }
+            };
             let connection_map = match Self::create_initial_connections(
                 &inner.initial_nodes,
                 &cluster_params,
@@ -1571,6 +1850,8 @@ where
                 )));
                 let mut first_attempt = true;
                 for backoff_duration in infinite_backoff_iter {
+                    Self::refresh_iam_token_in_cluster_params(&inner_clone).await;
+
                     let cluster_params = inner_clone
                         .cluster_params
                         .read()
@@ -2111,7 +2392,12 @@ where
                 Self::refresh_slots(inner.clone(), curr_retry, trigger)
                     .await
                     .map_err(|err| {
-                        if err.kind() == ErrorKind::AllConnectionsUnavailable {
+                        if matches!(
+                            err.kind(),
+                            ErrorKind::AllConnectionsUnavailable
+                                | ErrorKind::PermissionDenied
+                                | ErrorKind::AuthenticationFailed
+                        ) {
                             RetryError::permanent(err)
                         } else {
                             RetryError::transient(err)
@@ -2265,6 +2551,8 @@ where
         let nodes = new_slots.all_node_addresses();
         let nodes_len = nodes.len();
 
+        // Ensure cluster_params has a fresh IAM token before creating connections
+        Self::refresh_iam_token_in_cluster_params(&inner).await;
         let cluster_params = inner
             .get_cluster_param(|params| params.clone())
             .expect(MUTEX_READ_ERR);
@@ -2463,10 +2751,7 @@ where
     ) -> OperationResult {
         trace!("execute_on_multiple_nodes");
 
-        // This function maps the connections to senders & receivers of one-shot channels, and the receivers are mapped to `PendingRequest`s.
-        // This allows us to pass the new `PendingRequest`s to `try_request`, while letting `execute_on_multiple_nodes` wait on the receivers
-        // for all of the individual requests to complete.
-        #[allow(clippy::type_complexity)] // The return value is complex, but indentation and linebreaks make it human readable.
+        #[allow(clippy::type_complexity)]
         fn into_channels<C>(
             iterator: impl Iterator<
                 Item = Option<(Arc<Cmd>, ConnectionAndAddress<ConnectionFuture<C>>)>,
@@ -2567,7 +2852,6 @@ where
         core: Core<C>,
     ) -> OperationResult {
         let routing = match routing {
-            // commands that are sent to multiple nodes are handled here.
             InternalRoutingInfo::MultiNode((multi_node_routing, response_policy)) => {
                 return Self::execute_on_multiple_nodes(
                     &cmd,
@@ -2582,11 +2866,13 @@ where
         };
         trace!("route request to single node");
 
-        // if we reached this point, we're sending the command only to single node, and we need to find the
-        // right connection to the node.
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
             .map_err(|err| (OperationTarget::NotFound, err))?;
+        if let Some(span) = cmd.span() {
+            set_routed_node_on_span(&span, &address);
+        }
+
         conn.req_packed_command(&cmd)
             .await
             .map(Response::Single)
@@ -2601,6 +2887,10 @@ where
     ) -> OperationResult {
         trace!("try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
+        if let Some(span) = pipeline.span() {
+            set_routed_node_on_span(&span, &address);
+        }
+
         conn.req_packed_commands(&pipeline, offset, count, None)
             .await
             .map(Response::Multiple)
@@ -2619,7 +2909,6 @@ where
                 pipeline_retry_strategy,
             } => {
                 if pipeline.is_atomic() || sub_pipeline {
-                    // If the pipeline is atomic (i.e., a transaction) or if the pipeline is already splitted into sub-pipelines (i.e., the pipeline is already routed to a specific node), we can send it as is, with no need to split it into sub-pipelines.
                     Self::try_pipeline_request(
                         pipeline,
                         offset,
@@ -3748,10 +4037,9 @@ where
             }),
     );
 
-    // Check for NOPERM errors early and return immediately if found
-    // Note: NOPERM is an ACL error. ACL permissions are applied cluster wide.
-    // If NOPERM is found it should be surfaced first.
-    // Other errors are passed to the existing flow.
+    // Check for PermissionDenied errors (NOPERM) and return early if found
+    // Note: NOPERM is an ACL error. ACL permissions are expected to be applied cluster wide.
+    // If NOPERM is found it should be surfaced first, otherwise we continue.
     if let Some(noperm_err) = topology_join_results.iter().find_map(|(_, res)| {
         res.as_ref()
             .err()
@@ -4198,5 +4486,53 @@ mod pipeline_routing_tests {
             route_for_pipeline(&pipeline),
             Ok(Some(Route::new(12182, SlotAddr::Master)))
         );
+    }
+}
+
+#[cfg(test)]
+mod parse_node_address_tests {
+    use super::parse_node_address;
+
+    #[test]
+    fn host_and_port() {
+        assert_eq!(
+            parse_node_address("127.0.0.1:6379"),
+            Some(("127.0.0.1", 6379))
+        );
+    }
+
+    #[test]
+    fn hostname_and_port() {
+        assert_eq!(
+            parse_node_address("redis.example.com:6380"),
+            Some(("redis.example.com", 6380))
+        );
+    }
+
+    #[test]
+    fn ipv6_and_port() {
+        // rsplit_once splits on the last colon, giving the IPv6 prefix as host
+        assert_eq!(parse_node_address("::1:6379"), Some(("::1", 6379)));
+    }
+
+    #[test]
+    fn no_colon_returns_none() {
+        assert_eq!(parse_node_address("localhost"), None);
+    }
+
+    #[test]
+    fn invalid_port_returns_none() {
+        assert_eq!(parse_node_address("host:notaport"), None);
+    }
+
+    #[test]
+    fn empty_string_returns_none() {
+        assert_eq!(parse_node_address(""), None);
+    }
+
+    #[test]
+    fn port_only() {
+        // ":6379" → host="", port=6379
+        assert_eq!(parse_node_address(":6379"), Some(("", 6379)));
     }
 }

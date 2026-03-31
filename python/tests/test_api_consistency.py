@@ -51,6 +51,7 @@ EXCLUDED_TESTS = {
         "test_statistics",
         "test_UDS_socket_connection_failure",
         "test_cancelled_request_handled_gracefully",
+        "test_client_usable_after_cancelled_commands",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
         # Dynamic PubSub tests helper functions
@@ -68,7 +69,16 @@ EXCLUDED_TESTS = {
         # OpenTelemetry async helper function
         "wait_for_spans_to_be_flushed",
     ],
-    "sync_only": ["test_sync_fork", "sync_poll_for_timestamp_change"],
+    "sync_only": [
+        "test_sync_fork",
+        "sync_poll_for_timestamp_change",
+        # get() with buffer — sync-only FFI path, no async equivalent
+        "test_sync_get_into_buffer",
+        "test_sync_get_into_buffer_nonexistent_key",
+        "test_sync_get_into_buffer_larger_buffer",
+        "test_sync_get_into_buffer_readonly_raises",
+        "test_sync_get_into_buffer_too_small_raises",
+    ],
 }
 
 EXCLUDED_TESTS_FILENAMES = {

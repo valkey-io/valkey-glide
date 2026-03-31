@@ -25,8 +25,10 @@ import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
 import java.nio.file.Files;
@@ -54,6 +56,13 @@ public class TestUtilities {
     private static final String VALKEY_VERSION_KEY = "valkey_version";
 
     private static final String REDIS_VERSION_KEY = "redis_version";
+
+    /** IAM authentication test constants */
+    public static final String IAM_USERNAME = "default";
+
+    public static final String IAM_TEST_CLUSTER_NAME = "test-cluster";
+
+    public static final String IAM_TEST_REGION_US_EAST_1 = "us-east-1";
 
     /**
      * Checks if the current operating system is Windows.
@@ -723,5 +732,20 @@ public class TestUtilities {
                         .findFirst()
                         .orElseThrow(
                                 () -> new RuntimeException("connected_slaves not found in INFO REPLICATION")));
+    }
+
+    /**
+     * Creates a test IAM authentication configuration.
+     *
+     * @param refreshIntervalSeconds The refresh interval in seconds for IAM token refresh
+     * @return IamAuthConfig configured for testing
+     */
+    public static IamAuthConfig createTestIamConfig(int refreshIntervalSeconds) {
+        return IamAuthConfig.builder()
+                .clusterName(IAM_TEST_CLUSTER_NAME)
+                .service(ServiceType.ELASTICACHE)
+                .region(IAM_TEST_REGION_US_EAST_1)
+                .refreshIntervalSeconds(refreshIntervalSeconds)
+                .build();
     }
 }

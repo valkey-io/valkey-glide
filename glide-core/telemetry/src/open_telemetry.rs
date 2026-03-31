@@ -327,6 +327,22 @@ impl GlideSpanInner {
         }
     }
 
+    /// Set a string attribute on this span.
+    pub fn set_attribute(&self, key: &str, value: impl Into<opentelemetry::Value>) {
+        self.span
+            .write()
+            .expect(SPAN_WRITE_LOCK_ERR)
+            .set_attribute(opentelemetry::KeyValue::new(key.to_string(), value.into()));
+    }
+
+    /// Set an integer attribute on this span.
+    pub fn set_attribute_i64(&self, key: &str, value: i64) {
+        self.span
+            .write()
+            .expect(SPAN_WRITE_LOCK_ERR)
+            .set_attribute(opentelemetry::KeyValue::new(key.to_string(), value));
+    }
+
     /// Create new span, add it as a child to this span and return it.
     /// Returns an error if the child span creation fails.
     pub fn add_span(&self, name: &str) -> Result<GlideSpanInner, TraceError> {
@@ -431,6 +447,16 @@ impl GlideSpan {
 
     pub fn set_status(&self, status: GlideSpanStatus) {
         self.inner.set_status(status)
+    }
+
+    /// Set a string attribute on this span.
+    pub fn set_attribute(&self, key: &str, value: impl Into<opentelemetry::Value>) {
+        self.inner.set_attribute(key, value)
+    }
+
+    /// Set an integer attribute on this span.
+    pub fn set_attribute_i64(&self, key: &str, value: i64) {
+        self.inner.set_attribute_i64(key, value)
     }
 
     /// Add child span to this span and return it

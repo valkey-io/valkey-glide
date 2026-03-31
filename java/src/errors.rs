@@ -69,21 +69,11 @@ pub fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option
     }
 }
 
-// This function handles Rust panics by converting them into Java exceptions and throwing them.
-// `func` returns an `Option<T>` because this is intended to wrap the output of `handle_errors`.
-pub fn handle_panics<T, F: std::panic::UnwindSafe + FnOnce() -> Option<T>>(
-    func: F,
-    ffi_func_name: &str,
-) -> Option<T> {
-    match std::panic::catch_unwind(func) {
-        Ok(value) => value,
-        Err(_err) => {
-            // Following https://github.com/jni-rs/jni-rs/issues/76#issuecomment-363523906
-            // and throwing a runtime exception is not feasible here because of https://github.com/jni-rs/jni-rs/issues/432
-            error!("Native function {ffi_func_name} panicked.");
-            None
-        }
-    }
+/// Execute a JNI entry point body. Provides a closure scope so callers can use
+/// early `return Some(...)` for error paths.
+#[inline(always)]
+pub fn run_ffi<T>(func: impl FnOnce() -> Option<T>) -> Option<T> {
+    func()
 }
 
 pub fn throw_java_exception(env: &mut JNIEnv, exception_type: ExceptionType, message: &str) {

@@ -1,6 +1,26 @@
+## Pending 2.4
+
+#### Changes
+
+#### Fixes
+* CORE: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
+
+#### Operational Enhancements
+
+
+## 2.3.1
+
+#### Fixes
+* CORE: Add IAM token cache support for cluster reconnections — switch from push to pull model for IAM token refresh, add `IAMTokenProvider` trait so the cluster reconnection loop fetches a fresh IAM token before each connection attempt, preventing AUTH failures when tokens expire during node downtime ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
+* CORE: Refresh IAM token before slot refresh and initial node reconnection — ensure `cluster_params.password` has a valid IAM token in `refresh_slots_inner` and `reconnect_to_initial_nodes`, not just the per-node reconnection loop ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
+
+#### Operational Enhancements
+
+
 ## 2.3
 
 #### Changes
+* Node: add dynamic PubSub support ([#5295](https://github.com/valkey-io/valkey-glide/pull/5295))
 * Java: Add uber JAR support for multi-platform builds ([5484](https://github.com/valkey-io/valkey-glide/issues/5484))
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
 * CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
@@ -14,7 +34,7 @@
 * Python: Add inflight request limit support to sync client
 * Python Sync: Add OpenTelemetry support with traces and metrics configuration
 * Python: Move OpenTelemetry config classes to glide_shared for code reuse between async and sync clients
-* JAVA: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
+* JAVA: Add dynamic PubSub methods (subscribe, psubscribe, ssubscribe, unsubscribe, punsubscribe, sunsubscribe and their non-blocking "Lazy" variants), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
 * Go: Add ALLOW_NON_COVERED_SLOTS flag support for cluster scan ([#4895](https://github.com/valkey-io/valkey-glide/issues/4895))
 * CORE: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
 * CORE: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
@@ -23,8 +43,13 @@
 * Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
 * JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 * CORE: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
+* CORE: Add OpenTelemetry DB semantic convention attributes to command spans ([#5416](https://github.com/valkey-io/valkey-glide/issues/5416))
+* Python Sync: Accept `bytearray` and `memoryview` as command argument types to improve performance by reducing copies ([#5492](https://github.com/valkey-io/valkey-glide/pull/5492))
+* Python Sync: Add response buffer support to get() to improve performance by reducing copies ([#5493](https://github.com/valkey-io/valkey-glide/pull/5493))
 
 #### Fixes
+* Java: Fix thread safety issue in NativeClusterScanCursor causing potential JVM crash ([#5527](https://github.com/valkey-io/valkey-glide/issues/5527))
+* Java: optimize `convertMapToKeyValueStringArray` and `convertMapToKeyValueGlideStringArray` to fix performance bottleneck and ArrayStoreException ([#5602](https://github.com/valkey-io/valkey-glide/issues/5602))
 * CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.
 * Node: Fix to handle non-string types in toBuffersArray ([#4842](https://github.com/valkey-io/valkey-glide/issues/4842))
 * CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
@@ -37,6 +62,7 @@
 * Java: Fix hanging issue in AWS Lambda when response exceeds 16KB ([#5081](https://github.com/valkey-io/valkey-glide/issues/5081))
 * Core: Fixed a bug where permission errors for CLUSTER SLOTS command is not surfaced during initial connection ([#5486](https://github.com/valkey-io/valkey-glide/pull/5486))
 * Core: Move credential fetching to token generation time ([#5508](https://github.com/valkey-io/valkey-glide/pull/5508))
+* Python: Fix async client becoming permanently unusable after cancelled commands due to callback index collisions ([#5442](https://github.com/valkey-io/valkey-glide/issues/5442))
 
 #### Operational Enhancements
 * Docs: Add missing references to windows-x86_64 classifier ([#5028](https://github.com/valkey-io/valkey-glide/pull/5028))

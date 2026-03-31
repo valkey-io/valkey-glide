@@ -5,6 +5,8 @@ import static glide.Constants.IP_ADDRESS_V4;
 import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.TestUtilities.IAM_USERNAME;
+import static glide.TestUtilities.assertConnected;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.deleteAclUser;
 import static glide.TestUtilities.getRandomString;
@@ -17,9 +19,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.TestUtilities;
 import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -32,12 +36,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @Timeout(20) // seconds
 public class StandaloneClientTests {
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void register_client_name_and_version() {
         String minVersion = "7.2.0";
         assumeTrue(
@@ -53,8 +58,8 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void can_connect_with_auth_require_pass() {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -89,8 +94,8 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void can_connect_with_auth_acl() {
         GlideClient client = GlideClient.createClient(commonClientConfig().build()).get();
 
@@ -140,8 +145,8 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void select_standalone_database_id() {
         GlideClient client = GlideClient.createClient(commonClientConfig().databaseId(4).build()).get();
 
@@ -151,8 +156,8 @@ public class StandaloneClientTests {
         client.close();
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void client_name() {
         GlideClient client =
                 GlideClient.createClient(commonClientConfig().clientName("TEST_CLIENT_NAME").build()).get();
@@ -174,8 +179,8 @@ public class StandaloneClientTests {
         assertInstanceOf(ClosingException.class, executionException.getCause());
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void update_connection_password_auth_non_valid_pass() {
         // Test Client fails on call to updateConnectionPassword with invalid parameters
         try (GlideClient testClient = GlideClient.createClient(commonClientConfig().build()).get()) {
@@ -191,8 +196,8 @@ public class StandaloneClientTests {
         }
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void update_connection_password_no_server_auth() {
         String pwd = UUID.randomUUID().toString();
 
@@ -208,8 +213,8 @@ public class StandaloneClientTests {
         }
     }
 
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void update_connection_password_long() {
         String pwd = RandomStringUtils.randomAlphabetic(1000);
 
@@ -223,8 +228,8 @@ public class StandaloneClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void replace_password_immediateAuth_wrong_password() {
         String pwd = UUID.randomUUID().toString();
         String notThePwd = UUID.randomUUID().toString();
@@ -252,8 +257,8 @@ public class StandaloneClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -303,8 +308,8 @@ public class StandaloneClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_connection_lost_before_password_update_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -353,8 +358,8 @@ public class StandaloneClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_replace_password_immediateAuth_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -390,8 +395,8 @@ public class StandaloneClientTests {
     }
 
     @Timeout(50)
-    @SneakyThrows
     @Test
+    @SneakyThrows
     public void test_update_connection_password_non_valid_auth_acl_user() {
         String username = "username";
         String pwd = UUID.randomUUID().toString();
@@ -429,7 +434,7 @@ public class StandaloneClientTests {
     @ParameterizedTest
     @ValueSource(strings = {IP_ADDRESS_V4, IP_ADDRESS_V6})
     @SneakyThrows
-    public void testStandaloneConnectWithIpAddressSucceeds(String ipAddress) {
+    public void test_connect_with_ip_address_succeeds(String ipAddress) {
         Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
         NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
         GlideClientConfiguration config = commonClientConfig().address(address).build();
@@ -437,5 +442,60 @@ public class StandaloneClientTests {
         try (GlideClient client = GlideClient.createClient(config).get()) {
             glide.TestUtilities.assertConnected(client);
         }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_with_mock_credentials() {
+        // See DEVELOPER.md for instructions on running IAM authentication tests
+
+        // Create client with IAM authentication
+        try (GlideClient client = createStandaloneClientWithIam(5)) {
+
+            // Verify connection works
+            assertConnected(client);
+
+            // Test basic operations
+            assertEquals("OK", client.set("iam_test_key", "iam_test_value").get());
+            assertEquals("iam_test_value", client.get("iam_test_key").get());
+
+            // Test manual token refresh
+            client.refreshIamToken().get();
+
+            // Verify operations still work after token refresh
+            assertEquals("OK", client.set("iam_test_key2", "iam_test_value2").get());
+            assertEquals("iam_test_value2", client.get("iam_test_key2").get());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    @EnabledIfEnvironmentVariable(named = "AWS_ACCESS_KEY_ID", matches = ".*")
+    public void test_iam_authentication_automatic_token_refresh()
+            throws InterruptedException, ExecutionException {
+        // NOTE: See test_iam_authentication_with_mock_credentials for setup instructions
+
+        try (GlideClient client = createStandaloneClientWithIam(2)) {
+
+            // Verify initial connection
+            assertConnected(client);
+
+            // Wait for automatic token refresh to occur
+            Thread.sleep(3000);
+
+            // Verify client still works after automatic refresh
+            assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
+            assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
+        }
+    }
+
+    @SneakyThrows
+    private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        // Note: useTLS is inherited from commonClientConfig() which respects the -Dtls system property
+        return GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get();
     }
 }

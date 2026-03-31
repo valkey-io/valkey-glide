@@ -506,6 +506,96 @@ class TestCommands:
         assert glide_sync_client.get(key) == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer(self, glide_sync_client: TGlideClient):
+        """Test get with buffer writes value directly into caller's buffer."""
+        key = get_random_string(10)
+        data = os.urandom(4096)
+        assert glide_sync_client.set(key, data) == OK
+
+        buf = bytearray(4096)
+        n = glide_sync_client.get(key, buffer=memoryview(buf))
+        assert n == b"4096"
+        assert buf == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_nonexistent_key(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test get with buffer returns None for missing key."""
+        key = get_random_string(10)
+        buf = bytearray(64)
+        n = glide_sync_client.get(key, buffer=memoryview(buf))
+        assert n is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_larger_buffer(self, glide_sync_client: TGlideClient):
+        """Test get with buffer when buffer is larger than value."""
+        key = get_random_string(10)
+        data = os.urandom(100)
+        assert glide_sync_client.set(key, data) == OK
+
+        buf = bytearray(4096)
+        n = glide_sync_client.get(key, buffer=memoryview(buf))
+        assert n == b"100"
+        assert buf[:100] == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_readonly_raises(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test get with buffer rejects read-only buffer."""
+        key = get_random_string(10)
+        readonly_buf = memoryview(b"\x00" * 64)
+        with pytest.raises(TypeError):
+            glide_sync_client.get(key, buffer=readonly_buf)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_too_small_raises(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test get with buffer raises when buffer is smaller than value."""
+        key = get_random_string(10)
+        data = os.urandom(256)
+        assert glide_sync_client.set(key, data) == OK
+
+        small_buf = bytearray(64)
+        with pytest.raises(RequestError, match="exceeds buffer capacity"):
+            glide_sync_client.get(key, buffer=memoryview(small_buf))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_set_get_with_bytearray_and_memoryview(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Test that set() accepts bytearray and memoryview keys and values."""
+        data = os.urandom(256)
+
+        # bytearray value
+        key_ba = get_random_string(10)
+        assert glide_sync_client.set(key_ba, bytearray(data)) == OK
+        assert glide_sync_client.get(key_ba) == data
+
+        # memoryview value
+        key_mv = get_random_string(10)
+        assert glide_sync_client.set(key_mv, memoryview(bytearray(data))) == OK
+        assert glide_sync_client.get(key_mv) == data
+
+        # bytearray key
+        key_ba_key = bytearray(b"ba_key_" + os.urandom(8))
+        assert glide_sync_client.set(key_ba_key, b"value1") == OK
+        assert glide_sync_client.get(key_ba_key) == b"value1"
+
+        # memoryview key
+        key_mv_key = memoryview(bytearray(b"mv_key_" + os.urandom(8)))
+        assert glide_sync_client.set(key_mv_key, b"value2") == OK
+        assert glide_sync_client.get(key_mv_key) == b"value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     def test_sync_use_resp3_protocol(self, glide_sync_client: TGlideClient):
         result = cast(Dict[bytes, bytes], glide_sync_client.custom_command(["HELLO"]))

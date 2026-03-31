@@ -159,6 +159,9 @@ jobs:
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools
@@ -332,6 +335,9 @@ jobs:
               env:
                   RC_VERSION: ${{ github.event.inputs.rc-version }}
                   VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   if [[ -n "$RC_VERSION" ]]; then
                     make install-tools

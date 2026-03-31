@@ -15,25 +15,25 @@ import java.util.concurrent.CompletableFuture;
 public interface PubSubBaseCommands {
 
     /**
-     * Constant representing "unsubscribe from all channels". Pass this to {@link #unsubscribe(Set)}
-     * or {@link #unsubscribe(Set, int)} to unsubscribe from all channels.
+     * Constant representing "unsubscribe from all channels". Pass this to {@link
+     * #unsubscribeLazy(Set)} or {@link #unsubscribe(Set, int)} to unsubscribe from all channels.
      *
      * @example
      *     <pre>{@code
      * // Unsubscribe from all channels
-     * client.unsubscribe(PubSubBaseCommands.ALL_CHANNELS).get();
+     * client.unsubscribeLazy(PubSubBaseCommands.ALL_CHANNELS).get();
      * }</pre>
      */
     Set<String> ALL_CHANNELS = Collections.emptySet();
 
     /**
-     * Constant representing "unsubscribe from all patterns". Pass this to {@link #punsubscribe(Set)}
-     * or {@link #punsubscribe(Set, int)} to unsubscribe from all patterns.
+     * Constant representing "unsubscribe from all patterns". Pass this to {@link
+     * #punsubscribeLazy(Set)} or {@link #punsubscribe(Set, int)} to unsubscribe from all patterns.
      *
      * @example
      *     <pre>{@code
      * // Unsubscribe from all patterns
-     * client.punsubscribe(PubSubBaseCommands.ALL_PATTERNS).get();
+     * client.punsubscribeLazy(PubSubBaseCommands.ALL_PATTERNS).get();
      * }</pre>
      */
     Set<String> ALL_PATTERNS = Collections.emptySet();
@@ -279,29 +279,41 @@ public interface PubSubBaseCommands {
     /**
      * Unsubscribes the client from all currently subscribed channels.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.unsubscribe().get();
+     * client.unsubscribeLazy().get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> unsubscribe();
+    CompletableFuture<Void> unsubscribeLazy();
 
     /**
      * Unsubscribes the client from the specified channels.
+     *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
      *
      * @param channels A set of channel names to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.unsubscribe(Set.of("news", "updates")).get();
+     * client.unsubscribeLazy(Set.of("news", "updates")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/unsubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> unsubscribe(Set<String> channels);
+    CompletableFuture<Void> unsubscribeLazy(Set<String> channels);
 
     /**
      * Unsubscribes the client from the specified channels with a timeout.
@@ -341,29 +353,41 @@ public interface PubSubBaseCommands {
     /**
      * Unsubscribes the client from all currently subscribed patterns.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.punsubscribe().get();
+     * client.punsubscribeLazy().get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> punsubscribe();
+    CompletableFuture<Void> punsubscribeLazy();
 
     /**
      * Unsubscribes the client from the specified patterns.
+     *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
      *
      * @param patterns A set of glob patterns to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.punsubscribe(Set.of("news.*", "updates.*")).get();
+     * client.punsubscribeLazy(Set.of("news.*", "updates.*")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/punsubscribe/">valkey.io</a> for details
      */
-    CompletableFuture<Void> punsubscribe(Set<String> patterns);
+    CompletableFuture<Void> punsubscribeLazy(Set<String> patterns);
 
     /**
      * Unsubscribes the client from the specified patterns with a timeout.

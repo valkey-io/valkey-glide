@@ -100,6 +100,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -1426,7 +1427,7 @@ public class GlideClusterClient extends BaseClient
 
         private final String cursorHandle;
         private final boolean isFinished;
-        private boolean isClosed = false;
+        private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
         // This is for internal use only.
         public NativeClusterScanCursor(@NonNull String cursorHandle) {
@@ -1465,7 +1466,7 @@ public class GlideClusterClient extends BaseClient
         }
 
         private void internalClose() {
-            if (!isClosed) {
+            if (isClosed.compareAndSet(false, true)) {
                 try {
                     ClusterScanCursorResolver.releaseNativeCursor(cursorHandle);
                 } catch (Exception ex) {
@@ -1474,9 +1475,6 @@ public class GlideClusterClient extends BaseClient
                             "ClusterScanCursor",
                             () -> "Error releasing cursor " + cursorHandle,
                             ex);
-                } finally {
-                    // Mark the cursor as closed to avoid double-free (if close() gets called more than once).
-                    isClosed = true;
                 }
             }
         }
@@ -1532,31 +1530,43 @@ public class GlideClusterClient extends BaseClient
     /**
      * Unsubscribes the client from all currently subscribed sharded channels.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.sunsubscribe().get();
+     * client.sunsubscribeLazy().get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
-    public CompletableFuture<Void> sunsubscribe() {
+    public CompletableFuture<Void> sunsubscribeLazy() {
         return commandManager.submitNewCommand(SUnsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
     /**
      * Unsubscribes the client from the specified sharded channels.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @param channels A set of sharded channel names to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.sunsubscribe(Set.of("shard-news", "shard-updates")).get();
+     * client.sunsubscribeLazy(Set.of("shard-news", "shard-updates")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
-    public CompletableFuture<Void> sunsubscribe(Set<String> channels) {
+    public CompletableFuture<Void> sunsubscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 SUnsubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }

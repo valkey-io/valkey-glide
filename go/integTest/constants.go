@@ -10,4 +10,10 @@ const (
 	HOSTNAME_NO_TLS = "valkey.glide.test.no_tls.com"
 	IP_ADDRESS_V4   = "127.0.0.1"
 	IP_ADDRESS_V6   = "::1"
+
+	// TODO #5513
+    // IAM authentication test constants
+	TestClusterName   = "test-cluster"
+	TestRegionUsEast1 = "us-east-1"
+	TestIamUsername   = "default"
 )
