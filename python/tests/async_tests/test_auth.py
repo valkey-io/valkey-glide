@@ -14,7 +14,7 @@ from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 
 from tests.async_tests.conftest import create_client
-from tests.test_constants import (
+from tests.constants import (
     IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
     IAM_TEST_CLUSTER_NAME,
     IAM_TEST_REGION_US_EAST_1,
