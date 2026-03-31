@@ -4,7 +4,7 @@ skip = [".env", "glide-shared/glide_shared/protobuf", "build"]
 known_first_party = ["glide-sync", "glide-async", "glide-shared", "tests"]
 
 [tool.black]
-target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
+target-version = ['py39', 'py310', 'py311', 'py312']
 
 [tool.mypy]
 exclude = "^(.*\\/)?(\\.env|glide-shared/glide_shared/protobuf|utils/release-candidate-testing|target|ort|build)(\\/|$)"
