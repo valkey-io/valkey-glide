@@ -12,7 +12,7 @@ const (
 	IP_ADDRESS_V6   = "::1"
 
 	// TODO #5513
-    // IAM authentication test constants
+	// IAM authentication test constants
 	TestClusterName   = "test-cluster"
 	TestRegionUsEast1 = "us-east-1"
 	TestIamUsername   = "default"
