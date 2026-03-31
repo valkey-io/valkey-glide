@@ -454,7 +454,7 @@ jobs:
               working-directory: ./node
               run: |
                   npm install
-                  npm run build:release
+                  npm run build:benchmark
 
             - name: Run modules tests
               working-directory: ./node
