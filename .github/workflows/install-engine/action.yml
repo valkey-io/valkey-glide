@@ -87,6 +87,15 @@ runs:
               fi
               echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
+        - name: Install build dependencies
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
+          shell: bash
+          run: |
+              if command -v apt-get &> /dev/null; then
+                  sudo apt-get update -q
+                  sudo apt-get install -y pkg-config libssl-dev
+              fi
+
         - name: Build and install engine
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true'}}
           shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
@@ -112,7 +121,7 @@ runs:
               echo 'Configuring system for cluster mode...'
               sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
               sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
-                
+
               echo 'WSL Configuration complete'
 
         - name: Verify Valkey installation and symlinks
