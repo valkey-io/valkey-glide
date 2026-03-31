@@ -1065,10 +1065,12 @@ mod iam_token_refresh_tests {
 
         let params = ClusterParams::default_for_test(initial_password);
 
+        let (pending_requests_tx, pending_requests_rx) = tokio::sync::mpsc::unbounded_channel();
         Arc::new(InnerCore {
-            conn_lock: StdRwLock::new(ConnectionsContainer::default()),
-            cluster_params: StdRwLock::new(params),
-            pending_requests: Mutex::new(Vec::new()),
+            conn_lock: ParkingLotRwLock::new(ConnectionsContainer::default()),
+            cluster_params: ParkingLotRwLock::new(params),
+            pending_requests_tx,
+            pending_requests_rx: std::sync::Mutex::new(pending_requests_rx),
             slot_refresh_state: SlotRefreshState::new(
                 crate::cluster_client::SlotsRefreshRateLimit::default(),
             ),
@@ -1079,7 +1081,7 @@ mod iam_token_refresh_tests {
     }
 
     fn read_password(inner: &Arc<InnerCore<crate::aio::MultiplexedConnection>>) -> Option<String> {
-        inner.cluster_params.read().unwrap().password.clone()
+        inner.cluster_params.read().password.clone()
     }
 
     #[tokio::test]
