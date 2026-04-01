@@ -71,25 +71,35 @@ class TestSyncReadFromStrategy:
                 get_calls = int(get_calls_match.group(1))
                 node_calls.append(get_calls)
                 total_get_calls += get_calls
-                
+
                 if is_primary:
                     primary_calls += get_calls
                 else:
                     replica_calls += get_calls
 
         # Verify total calls match expected
-        assert total_get_calls == GET_CALLS, f"Expected {GET_CALLS} total calls, got {total_get_calls}"
-        
+        assert (
+            total_get_calls == GET_CALLS
+        ), f"Expected {GET_CALLS} total calls, got {total_get_calls}"
+
         # Verify both primary and replicas received calls
-        assert primary_calls > 0, f"Primary should receive calls with ALL_NODES strategy. Primary: {primary_calls}, Replicas: {replica_calls}"
-        assert replica_calls > 0, f"Replicas should receive calls with ALL_NODES strategy. Primary: {primary_calls}, Replicas: {replica_calls}"
-        
+        assert (
+            primary_calls > 0
+        ), f"Primary should receive calls with ALL_NODES strategy. Primary: {primary_calls}, Replicas: {replica_calls}"
+        assert (
+            replica_calls > 0
+        ), f"Replicas should receive calls with ALL_NODES strategy. Primary: {primary_calls}, Replicas: {replica_calls}"
+
         # Verify fair distribution - each node should get roughly equal calls
         expected_calls_per_node = GET_CALLS // len(node_calls)
-        tolerance = max(3, expected_calls_per_node // 3)  # Allow 33% variance or minimum 3
-        
+        tolerance = max(
+            3, expected_calls_per_node // 3
+        )  # Allow 33% variance or minimum 3
+
         for calls in node_calls:
-            assert calls > 0, f"All nodes should receive calls with ALL_NODES strategy. Node calls: {node_calls}"
+            assert (
+                calls > 0
+            ), f"All nodes should receive calls with ALL_NODES strategy. Node calls: {node_calls}"
             assert abs(calls - expected_calls_per_node) <= tolerance, (
                 f"Node calls should be roughly equal. Expected ~{expected_calls_per_node} per node, "
                 f"got {node_calls}, tolerance: ±{tolerance}"
