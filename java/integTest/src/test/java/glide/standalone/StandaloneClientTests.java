@@ -440,7 +440,7 @@ public class StandaloneClientTests {
         GlideClientConfiguration config = commonClientConfig().address(address).build();
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
-            glide.TestUtilities.assertConnected(client);
+            assertConnected(client);
         }
     }
 

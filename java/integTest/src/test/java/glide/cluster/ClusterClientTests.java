@@ -526,7 +526,7 @@ public class ClusterClientTests {
         GlideClusterClientConfiguration config = commonClusterClientConfig().address(address).build();
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
-            glide.TestUtilities.assertConnected(client);
+            assertConnected(client);
         }
     }
 
