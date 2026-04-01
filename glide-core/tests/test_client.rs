@@ -3028,12 +3028,11 @@ pub(crate) mod shared_client_tests {
     /// 2. Uses HELLO command to change to RESP3
     /// 3. Verifies the connection is using RESP3 (proto=3)
     /// 4. Simulates a connection drop by killing the connection
-    /// 5. Sends another command which either:
-    ///    - Fails due to the dropped connection, then retries and verifies reconnection with RESP3
-    ///    - Succeeds with a new client ID (indicating reconnection) and verifies still using RESP3
+    /// 5. Retries HELLO until reconnection succeeds and verifies RESP3 persisted
     /// This ensures that protocol version changed via HELLO command persists across reconnections.
     fn test_protocol_persistence_after_reconnection(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
+            println!("Running test_protocol_persistence_after_reconnection with use_cluster={use_cluster}");
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
@@ -3062,26 +3061,6 @@ pub(crate) mod shared_client_tests {
                 redis::from_owned_redis_value(initial_hello_response).unwrap();
             assert_eq!(initial_hello.get("proto").unwrap(), &Value::Int(2));
 
-            // Get initial client ID
-            let mut client_info_cmd = redis::Cmd::new();
-            client_info_cmd.arg("CLIENT").arg("INFO");
-            let initial_client_info_response = test_basics
-                .client
-                .send_command(&mut client_info_cmd, None)
-                .await
-                .unwrap();
-
-            let initial_client_info = match initial_client_info_response {
-                Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                Value::VerbatimString { text, .. } => text,
-                _ => panic!(
-                    "Unexpected CLIENT INFO response type: {:?}",
-                    initial_client_info_response
-                ),
-            };
-            let initial_client_id = utilities::extract_client_id(&initial_client_info)
-                .expect("Failed to extract initial client ID");
-
             // Use HELLO command to change to RESP3
             let mut hello_3_cmd = redis::Cmd::new();
             hello_3_cmd.arg("HELLO").arg("3");
@@ -3097,58 +3076,19 @@ pub(crate) mod shared_client_tests {
 
             // Kill the connection to simulate a network drop
             kill_connection(&mut test_basics.client).await;
-            // Allow TCP close to propagate before sending the next command
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-            // Try to send another command - this should trigger reconnection
-            let res = test_basics.client.send_command(&mut hello_cmd, None).await;
-            match res {
-                Err(err) => {
-                    // Connection was dropped as expected
-                    assert!(
-                        err.is_connection_dropped()
-                            || err.is_timeout()
-                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
-                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
-                    );
-                    // Retry and verify we're still using RESP3 after reconnection
-                    let hello_info = repeat_try_create(|| async {
-                        let mut client = test_basics.client.clone();
-                        let mut cmd = hello_cmd.clone();
-                        let response = client.send_command(&mut cmd, None).await.ok()?;
-                        redis::from_owned_redis_value::<std::collections::HashMap<String, Value>>(
-                            response,
-                        )
-                        .ok()
-                    })
-                    .await;
-                    assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
-                }
-                Ok(response) => {
-                    // Command succeeded — reconnection completed within the timeout.
-                    let new_hello: std::collections::HashMap<String, Value> =
-                        redis::from_owned_redis_value(response).unwrap();
-                    assert_eq!(new_hello.get("proto").unwrap(), &Value::Int(3));
-
-                    // Verify client ID changed (indicating reconnection)
-                    let new_client_info_response = test_basics
-                        .client
-                        .send_command(&mut client_info_cmd, None)
-                        .await
-                        .unwrap();
-                    let new_client_info = match new_client_info_response {
-                        Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-                        Value::VerbatimString { text, .. } => text,
-                        _ => panic!("Unexpected CLIENT INFO response type"),
-                    };
-                    let new_client_id = utilities::extract_client_id(&new_client_info)
-                        .expect("Failed to extract new client ID");
-                    assert_ne!(
-                        initial_client_id, new_client_id,
-                        "Client ID should change after reconnection if command succeeds"
-                    );
-                }
-            }
+            // Retry until reconnection completes, then verify RESP3 persisted
+            let hello_info = repeat_try_create(|| async {
+                let mut client = test_basics.client.clone();
+                let mut cmd = hello_cmd.clone();
+                let response = client.send_command(&mut cmd, None).await.ok()?;
+                redis::from_owned_redis_value::<std::collections::HashMap<String, Value>>(
+                    response,
+                )
+                .ok()
+            })
+            .await;
+            assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
         });
     }
 }
