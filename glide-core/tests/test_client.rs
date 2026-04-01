@@ -55,9 +55,9 @@ pub(crate) mod shared_client_tests {
     #[cfg(feature = "iam_tests")]
     const TEST_STANDALONE_NAME: &str = "test-standalone";
 
-    // Import IAM test constants from test_constants module
+    // Import IAM test constants from constants module
     #[cfg(feature = "iam_tests")]
-    use test_constants::{IAM_TEST_CLUSTER_NAME, IAM_TEST_REGION_US_EAST_1, IAM_USERNAME};
+    use constants::{IAM_TEST_CLUSTER_NAME, IAM_TEST_REGION_US_EAST_1, IAM_USERNAME};
 
     struct TestBasics {
         server: BackingServer,
