@@ -42,6 +42,9 @@ func JsonSet(client standaloneClient, ctx context.Context, key string, path stri
 	if err != nil {
 		return "", err
 	}
+	if result == nil {
+		return "", nil
+	}
 	return result.(string), nil
 }
 
@@ -218,7 +221,11 @@ func ClusterJsonSet(
 	if err != nil {
 		return "", err
 	}
-	return result.SingleValue().(string), nil
+	val := result.SingleValue()
+	if val == nil {
+		return "", nil
+	}
+	return val.(string), nil
 }
 
 // ClusterJsonSetWithCondition sets the JSON value at the specified path stored at key with a conditional

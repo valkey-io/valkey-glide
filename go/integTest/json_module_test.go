@@ -121,8 +121,7 @@ func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Standalone() {
 	suite.verifyJsonSetWithCondition(suite.standaloneJsonOps())
 }
 
-func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Standalone() {
-	ops := suite.standaloneJsonOps()
+func (suite *GlideTestSuite) verifyJsonGetWithOptions(ops jsonSetGetOps) {
 	t := suite.T()
 	ctx := context.Background()
 	key := jsonTestKeyPrefix + t.Name()
@@ -134,6 +133,11 @@ func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Standalone() {
 	result, err := ops.getWithOptions(ctx, key, []string{jsonTestPath}, opts)
 	assert.NoError(t, err)
 	assert.Contains(t, result, "\n")
+	t.Logf("JSON.GET with options response:\n%s", result)
+}
+
+func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Standalone() {
+	suite.verifyJsonGetWithOptions(suite.standaloneJsonOps())
 }
 
 func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Cluster() {
@@ -142,4 +146,8 @@ func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Cluster() {
 
 func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Cluster() {
 	suite.verifyJsonSetWithCondition(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Cluster() {
+	suite.verifyJsonGetWithOptions(suite.clusterJsonOps())
 }
