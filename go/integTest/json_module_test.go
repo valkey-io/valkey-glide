@@ -133,7 +133,6 @@ func (suite *GlideTestSuite) verifyJsonGetWithOptions(ops jsonSetGetOps) {
 	result, err := ops.getWithOptions(ctx, key, []string{jsonTestPath}, opts)
 	assert.NoError(t, err)
 	assert.Contains(t, result, "\n")
-	t.Logf("JSON.GET with options response:\n%s", result)
 }
 
 func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Standalone() {

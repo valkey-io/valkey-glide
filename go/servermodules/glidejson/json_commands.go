@@ -10,6 +10,11 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
+const (
+	jsonSetCommand = "JSON.SET"
+	jsonGetCommand = "JSON.GET"
+)
+
 // standaloneClient is the interface for standalone client JSON operations.
 type standaloneClient interface {
 	CustomCommand(ctx context.Context, args []string) (any, error)
@@ -38,7 +43,7 @@ type clusterClient interface {
 //
 // [valkey.io]: https://valkey.io/commands/json.set/
 func JsonSet(client standaloneClient, ctx context.Context, key string, path string, value string) (string, error) {
-	result, err := client.CustomCommand(ctx, []string{options.JsonSetCommandName, key, path, value})
+	result, err := client.CustomCommand(ctx, []string{jsonSetCommand, key, path, value})
 	if err != nil {
 		return "", err
 	}
@@ -78,7 +83,7 @@ func JsonSetWithCondition(
 ) (string, error) {
 	result, err := client.CustomCommand(
 		ctx,
-		[]string{options.JsonSetCommandName, key, path, value, string(setCondition)},
+		[]string{jsonSetCommand, key, path, value, string(setCondition)},
 	)
 	if err != nil {
 		return "", err
@@ -105,7 +110,7 @@ func JsonSetWithCondition(
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
 func JsonGet(client standaloneClient, ctx context.Context, key string) (string, error) {
-	result, err := client.CustomCommand(ctx, []string{options.JsonGetCommandName, key})
+	result, err := client.CustomCommand(ctx, []string{jsonGetCommand, key})
 	if err != nil {
 		return "", err
 	}
@@ -142,7 +147,7 @@ func JsonGetWithPaths(
 	key string,
 	paths []string,
 ) (string, error) {
-	args := append([]string{options.JsonGetCommandName, key}, paths...)
+	args := append([]string{jsonGetCommand, key}, paths...)
 	result, err := client.CustomCommand(ctx, args)
 	if err != nil {
 		return "", err
@@ -178,7 +183,7 @@ func JsonGetWithOptions(
 	paths []string,
 	opts *options.JsonGetOptions,
 ) (string, error) {
-	args := []string{options.JsonGetCommandName, key}
+	args := []string{jsonGetCommand, key}
 	if opts != nil {
 		args = append(args, opts.ToArgs()...)
 	}
@@ -217,7 +222,7 @@ func ClusterJsonSet(
 	path string,
 	value string,
 ) (string, error) {
-	result, err := client.CustomCommand(ctx, []string{options.JsonSetCommandName, key, path, value})
+	result, err := client.CustomCommand(ctx, []string{jsonSetCommand, key, path, value})
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +263,7 @@ func ClusterJsonSetWithCondition(
 ) (string, error) {
 	result, err := client.CustomCommand(
 		ctx,
-		[]string{options.JsonSetCommandName, key, path, value, string(setCondition)},
+		[]string{jsonSetCommand, key, path, value, string(setCondition)},
 	)
 	if err != nil {
 		return "", err
@@ -286,7 +291,7 @@ func ClusterJsonSetWithCondition(
 //
 // [valkey.io]: https://valkey.io/commands/json.get/
 func ClusterJsonGet(client clusterClient, ctx context.Context, key string) (string, error) {
-	result, err := client.CustomCommand(ctx, []string{options.JsonGetCommandName, key})
+	result, err := client.CustomCommand(ctx, []string{jsonGetCommand, key})
 	if err != nil {
 		return "", err
 	}
@@ -319,7 +324,7 @@ func ClusterJsonGetWithPaths(
 	key string,
 	paths []string,
 ) (string, error) {
-	args := append([]string{options.JsonGetCommandName, key}, paths...)
+	args := append([]string{jsonGetCommand, key}, paths...)
 	result, err := client.CustomCommand(ctx, args)
 	if err != nil {
 		return "", err
@@ -357,7 +362,7 @@ func ClusterJsonGetWithOptions(
 	paths []string,
 	opts *options.JsonGetOptions,
 ) (string, error) {
-	args := []string{options.JsonGetCommandName, key}
+	args := []string{jsonGetCommand, key}
 	if opts != nil {
 		args = append(args, opts.ToArgs()...)
 	}

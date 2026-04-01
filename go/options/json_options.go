@@ -3,17 +3,9 @@
 package options
 
 const (
-	// JsonSetCommandName is the command name for JSON.SET.
-	JsonSetCommandName = "JSON.SET"
-	// JsonGetCommandName is the command name for JSON.GET.
-	JsonGetCommandName = "JSON.GET"
-
-	// JsonIndentKeyword is the INDENT subcommand keyword for JSON.GET.
-	JsonIndentKeyword = "INDENT"
-	// JsonNewlineKeyword is the NEWLINE subcommand keyword for JSON.GET.
-	JsonNewlineKeyword = "NEWLINE"
-	// JsonSpaceKeyword is the SPACE subcommand keyword for JSON.GET.
-	JsonSpaceKeyword = "SPACE"
+	jsonIndentKeyword  = "INDENT"
+	jsonNewlineKeyword = "NEWLINE"
+	jsonSpaceKeyword   = "SPACE"
 )
 
 // JsonGetOptions represents optional arguments for the JSON.GET command.
@@ -50,13 +42,13 @@ func (o *JsonGetOptions) SetSpace(space string) *JsonGetOptions {
 func (o *JsonGetOptions) ToArgs() []string {
 	var args []string
 	if o.indent != nil {
-		args = append(args, JsonIndentKeyword, *o.indent)
+		args = append(args, jsonIndentKeyword, *o.indent)
 	}
 	if o.newline != nil {
-		args = append(args, JsonNewlineKeyword, *o.newline)
+		args = append(args, jsonNewlineKeyword, *o.newline)
 	}
 	if o.space != nil {
-		args = append(args, JsonSpaceKeyword, *o.space)
+		args = append(args, jsonSpaceKeyword, *o.space)
 	}
 	return args
 }
