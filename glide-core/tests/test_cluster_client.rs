@@ -1,6 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-mod test_constants;
+mod constants;
 mod utilities;
 
 #[cfg(test)]
@@ -9,7 +9,7 @@ mod cluster_client_tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use crate::test_constants::{HOST_IPV4, HOST_IPV6};
+    use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
     use crate::utilities::{
         cluster::{
             LONG_CLUSTER_TEST_TIMEOUT, RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT,
@@ -675,7 +675,7 @@ mod cluster_client_tests {
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_tls_connection_with_ip_address_succeeds(
-        #[values(HOST_IPV4, HOST_IPV6)] host: &str,
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
     ) {
         block_on_all(async move {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
@@ -721,7 +721,7 @@ mod cluster_client_tests {
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_cluster_connection_with_ip_address_succeeds(
-        #[values(HOST_IPV4, HOST_IPV6)] host: &str,
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
     ) {
         block_on_all(async move {
             let cluster = RedisCluster::new(false, &None, None, None);
