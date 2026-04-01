@@ -2,9 +2,20 @@
 
 #### Changes
 * Go: Add JSON.SET and JSON.GET commands ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
+* CORE: Fix Tokio runtime blocking in cluster async code by replacing std::sync locks with async-safe alternatives ([#5450](https://github.com/valkey-io/valkey-glide/issues/5450))
+* Core: Maintain throughput during cluster failover by making reconnection non-blocking ([#4990](https://github.com/valkey-io/valkey-glide/issues/4990))
 
 #### Fixes
 * CORE: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
+
+#### Operational Enhancements
+
+
+## 2.3.1
+
+#### Fixes
+* CORE: Add IAM token cache support for cluster reconnections — switch from push to pull model for IAM token refresh, add `IAMTokenProvider` trait so the cluster reconnection loop fetches a fresh IAM token before each connection attempt, preventing AUTH failures when tokens expire during node downtime ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
+* CORE: Refresh IAM token before slot refresh and initial node reconnection — ensure `cluster_params.password` has a valid IAM token in `refresh_slots_inner` and `reconnect_to_initial_nodes`, not just the per-node reconnection loop ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
 
 #### Operational Enhancements
 

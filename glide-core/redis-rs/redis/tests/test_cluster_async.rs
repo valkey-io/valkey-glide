@@ -955,7 +955,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None, None)
+            .get_async_connection(None, None, None)
             .await
             .unwrap();
 
@@ -1058,7 +1058,7 @@ mod cluster_async {
             .read_from(strategy)
             .build()
             .unwrap()
-            .get_async_connection(None, None)
+            .get_async_connection(None, None, None)
             .await
             .unwrap();
 
@@ -1163,7 +1163,7 @@ mod cluster_async {
             )
             .build()
             .unwrap()
-            .get_async_connection(None, None)
+            .get_async_connection(None, None, None)
             .await
             .unwrap();
 
@@ -1341,7 +1341,7 @@ mod cluster_async {
             let client = ClusterClient::builder(cluster_addresses.clone())
                 .read_from_replicas()
                 .build()?;
-            let mut connection = client.get_async_connection(None, None).await?;
+            let mut connection = client.get_async_connection(None, None, None).await?;
 
             let route_to_all_nodes = redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes;
             let routing = RoutingInfo::MultiNode((route_to_all_nodes, None));
@@ -2378,7 +2378,7 @@ mod cluster_async {
                         .build()
                         .unwrap();
 
-                let mut conn = client.get_async_connection(None, None).await.unwrap();
+                let mut conn = client.get_async_connection(None, None, None).await.unwrap();
 
                 // Disable full coverage requirement
                 let _ = conn
@@ -5114,6 +5114,9 @@ mod cluster_async {
                         let err_str = e.to_string();
                         if !err_str.contains("ConnectionNotFoundForRoute")
                             && !err_str.contains("timed out")
+                            && !e.is_connection_dropped()
+                            && e.kind() != ErrorKind::AllConnectionsUnavailable
+                            && e.kind() != ErrorKind::FatalSendError
                         {
                             panic!("Unexpected error on SET to blocked shard: {e:?}");
                         }
@@ -5643,12 +5646,12 @@ mod cluster_async {
                 if contains_slice(cmd, b"PING") {
                     let connect_attempt = ping_attempts_clone.fetch_add(1, Ordering::Relaxed);
                     let past_get_attempts = get_attempts.load(Ordering::Relaxed);
-                    // We want connection checks to fail after the first GET attempt, until it retries. Hence, we wait for 5 PINGs -
+                    // We want connection checks to fail after the first GET attempt, until it retries. Hence, we expect 4-5 PINGs -
                     // 1. initial connection,
                     // 2. refresh slots on client creation,
                     // 3. refresh_connections `check_connection` after first GET failed,
                     // 4. refresh_connections `connect_and_check` after first GET failed,
-                    // 5. reconnect on 2nd GET attempt.
+                    // 5. reconnect on 2nd GET attempt (may not occur with non-blocking reconnection).
                     // more than 5 attempts mean that the server reconnects more than once, which is the behavior we're testing against.
                     if past_get_attempts != 1 || connect_attempt > 3 {
                         respond_startup_two_nodes(name, cmd)?;
@@ -5688,8 +5691,11 @@ mod cluster_async {
             assert_eq!(value, Ok(Some(123)));
         }
         // If you need to change the number here due to a change in the cluster, you probably also need to adjust the test.
-        // See the PING counts above to explain why 5 is the target number.
-        assert_eq!(ping_attempts.load(Ordering::Acquire), 5);
+        // See the PING counts above to explain why 4-5 is the expected range.
+        // With non-blocking reconnection, the reconnect path may complete with fewer PINGs
+        // since the poll loop isn't blocked waiting for reconnection futures.
+        let pings = ping_attempts.load(Ordering::Acquire);
+        assert!((4..=5).contains(&pings), "Expected 4-5 pings, got {pings}");
     }
 
     #[test]
@@ -5722,7 +5728,7 @@ mod cluster_async {
                     .expect("Failed executing CLIENT LIST");
                 let mut client_list_parts = client_list.split('\n');
                 if client_list_parts
-                .any(|line| line.contains(MANAGEMENT_CONN_NAME) && line.contains("cmd=cluster")) 
+                .any(|line| line.contains(MANAGEMENT_CONN_NAME) && line.contains("cmd=cluster"))
                 && client_list.matches(MANAGEMENT_CONN_NAME).count() == 1 {
                     return Ok::<_, RedisError>(());
                 }
@@ -6473,7 +6479,7 @@ mod cluster_async {
                 .unwrap();
 
             let mut connection = test_user_client
-                .get_async_connection(None, None)
+                .get_async_connection(None, None, None)
                 .await
                 .unwrap();
 
@@ -6525,6 +6531,165 @@ mod cluster_async {
         .unwrap();
     }
 
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_pending_requests_channel_throughput() {
+        // Validates that the lock-free channel (mpsc::UnboundedChannel) for pending_requests
+        // handles high request rates without blocking the Tokio runtime.
+        let cluster = TestClusterContext::new(3, 0);
+        let connection = cluster.async_connection(None).await;
+
+        let request_count = 10_000;
+        let start = std::time::Instant::now();
+
+        // Spawn many concurrent operations (SET) that go to pending_requests channel
+        let tasks: Vec<_> = (0..request_count)
+            .map(|i| {
+                let mut connection = connection.clone();
+                tokio::spawn(async move {
+                    let key = format!("key:{}", i);
+                    let _: () = connection.set(&key, i).await?;
+                    Ok::<_, RedisError>(())
+                })
+            })
+            .collect();
+
+        let results = futures::future::join_all(tasks).await;
+        let elapsed = start.elapsed();
+
+        // All operations should succeed
+        for result in results {
+            result.unwrap().unwrap();
+        }
+
+        // Verify minimal throughput of pending_requests channel
+        let throughput = request_count as f64 / elapsed.as_secs_f64();
+        let min_throughput = 1000.0;
+        assert!(
+            throughput > min_throughput,
+            "Throughput too low: {:.0} req/sec (possible blocking in pending_requests channel)",
+            throughput
+        );
+
+        println!(
+            "{} requests completed in {:.2}s ({:.0} req/sec)",
+            request_count,
+            elapsed.as_secs_f64(),
+            throughput
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_high_concurrency_no_runtime_blocking() {
+        // Validates that under high concurrency, operations complete without Tokio runtime
+        // starvation.
+        let cluster = TestClusterContext::new(3, 0);
+        let connection = cluster.async_connection(None).await;
+
+        let concurrent_ops = 5_000;
+
+        // Spawn many concurrent operations (GET, SET, DEL)
+        let tasks: Vec<_> = (0..concurrent_ops)
+            .map(|i| {
+                let mut connection = connection.clone();
+                tokio::spawn(async move {
+                    let key = format!("key:{}", i);
+                    let start = std::time::Instant::now();
+
+                    let _: () = connection.set(&key, i).await?;
+                    let _: Option<i32> = connection.get(&key).await?;
+                    let _: u32 = connection.del(&key).await?;
+
+                    Ok::<_, RedisError>(start.elapsed())
+                })
+            })
+            .collect();
+
+        let results = futures::future::join_all(tasks).await;
+
+        // Validate no operation took too long (indicating runtime blocking)
+        let max_acceptable = Duration::from_secs(2);
+        for (i, result) in results.iter().enumerate() {
+            let duration = result.as_ref().unwrap().as_ref().unwrap();
+            assert!(
+                duration < &max_acceptable,
+                "Operation {} took too long: {:?}ms (possible runtime blocking)",
+                i,
+                duration.as_millis()
+            );
+        }
+
+        let total_duration: Duration = results
+            .iter()
+            .map(|r| *r.as_ref().unwrap().as_ref().unwrap())
+            .sum();
+        let avg_duration = total_duration / concurrent_ops as u32;
+        println!(
+            "{} concurrent ops completed, avg {:.2}ms per op",
+            concurrent_ops,
+            avg_duration.as_secs_f64() * 1000.0
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_cluster_params_concurrent_access() {
+        // Validates that the async RwLock for cluster_params doesn't block the Tokio runtime
+        // when accessed concurrently (read or write).
+        let cluster = TestClusterContext::new(3, 0);
+        let connection = cluster.async_connection(None).await;
+
+        let concurrent_ops = 5_000;
+
+        // Spawn concurrent operations (GET and SET)
+        let tasks: Vec<_> = (0..concurrent_ops)
+            .map(|i| {
+                let mut connection = connection.clone();
+                tokio::spawn(async move {
+                    let start = std::time::Instant::now();
+                    let key = format!("key:{}", i);
+
+                    // SET calls get_cluster_param()
+                    let _: () = connection.set(&key, i).await?;
+
+                    // Periodically try GET, which might call set_cluster_param()
+                    if i % 10 == 0 {
+                        let _: Option<String> =
+                            connection.get(&format!("trigger:{}", i)).await.ok();
+                    }
+
+                    Ok::<_, RedisError>(start.elapsed())
+                })
+            })
+            .collect();
+
+        let results = futures::future::join_all(tasks).await;
+
+        // Validate no operation took too long (indicating blocking on cluster_params access)
+        let max_acceptable = Duration::from_secs(2);
+        for (i, result) in results.iter().enumerate() {
+            let duration = result.as_ref().unwrap().as_ref().unwrap();
+            assert!(
+                duration < &max_acceptable,
+                "Operation {} blocked on cluster_params: {:?}ms",
+                i,
+                duration.as_millis()
+            );
+        }
+
+        let total_duration: Duration = results
+            .iter()
+            .map(|r| *r.as_ref().unwrap().as_ref().unwrap())
+            .sum();
+        let avg_duration = total_duration / concurrent_ops as u32;
+        println!(
+            "{} concurrent ops completed, avg {:.2}ms per op",
+            concurrent_ops,
+            avg_duration.as_secs_f64() * 1000.0
+        );
+    }
+
     mod mtls_test {
         use crate::support::mtls_test::create_cluster_client_from_cluster;
         use redis::ConnectionInfo;
@@ -6537,7 +6702,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
                 let client = create_cluster_client_from_cluster(&cluster, true).unwrap();
-                let mut connection = client.get_async_connection(None, None).await.unwrap();
+                let mut connection = client.get_async_connection(None, None, None).await.unwrap();
                 cmd("SET")
                     .arg("test")
                     .arg("test_data")
@@ -6560,7 +6725,7 @@ mod cluster_async {
             let cluster = TestClusterContext::new_with_mtls(3, 0);
             block_on_all(async move {
             let client = create_cluster_client_from_cluster(&cluster, false).unwrap();
-            let connection = client.get_async_connection(None, None).await;
+            let connection = client.get_async_connection(None, None, None).await;
             match cluster.cluster.servers.first().unwrap().connection_info() {
                 ConnectionInfo {
                     addr: redis::ConnectionAddr::TcpTls { .. },

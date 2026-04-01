@@ -24,7 +24,7 @@ const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 300; // 300 seconds (5min)
 /// Setting refresh intervals above this value may have performance consequences
 const WARNING_REFRESH_INTERVAL_SECONDS: u32 = 15 * 60; // 900 seconds
 /// SigV4 presign expiration (15 minutes)
-const TOKEN_TTL_SECONDS: u64 = 15 * 60; // 900
+pub const TOKEN_TTL_SECONDS: u64 = 15 * 60; // 900
 
 /// Exponential backoff settings for token generation
 const TOKEN_GEN_MAX_ATTEMPTS: u32 = 8;
@@ -139,7 +139,7 @@ async fn get_signing_identity(
 
 /// Internal state structure for IAM token management
 #[derive(Clone, Debug)]
-struct IamTokenState {
+pub(crate) struct IamTokenState {
     /// AWS region for signing requests
     region: String,
     /// ElastiCache/MemoryDB cluster name
@@ -162,6 +162,8 @@ pub struct IAMTokenManager {
     /// Cached auth token, stored in an `Arc<RwLock<String>>` to allow many concurrent readers,
     /// safe exclusive writes on refresh, and shared access across async tasks.
     cached_token: Arc<RwLock<String>>,
+    /// Timestamp of when the cached token was last generated/refreshed.
+    token_created_at: Arc<RwLock<tokio::time::Instant>>,
     /// IAM token state containing all configuration
     iam_token_state: IamTokenState,
     /// Background refresh task handle
@@ -219,6 +221,7 @@ impl IAMTokenManager {
 
         Ok(Self {
             cached_token: Arc::new(RwLock::new(initial_token)),
+            token_created_at: Arc::new(RwLock::new(tokio::time::Instant::now())),
             iam_token_state: state,
             refresh_task: None,
             shutdown_notify: Arc::new(Notify::new()),
@@ -234,12 +237,14 @@ impl IAMTokenManager {
 
         let iam_token_state = self.iam_token_state.clone();
         let cached_token = Arc::clone(&self.cached_token);
+        let token_created_at = Arc::clone(&self.token_created_at);
         let shutdown_notify = Arc::clone(&self.shutdown_notify);
         let token_changed = Arc::clone(&self.token_changed);
 
         let task = tokio::spawn(Self::token_refresh_task(
             iam_token_state,
             cached_token,
+            token_created_at,
             shutdown_notify,
             token_changed,
         ));
@@ -251,6 +256,7 @@ impl IAMTokenManager {
     async fn token_refresh_task(
         iam_token_state: IamTokenState,
         cached_token: Arc<RwLock<String>>,
+        token_created_at: Arc<RwLock<tokio::time::Instant>>,
         shutdown_notify: Arc<Notify>,
         token_changed: Arc<AtomicBool>,
     ) {
@@ -265,7 +271,7 @@ impl IAMTokenManager {
         loop {
             tokio::select! {
                 _ = interval_timer.tick() => {
-                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_changed).await;
+                    Self::handle_token_refresh(&iam_token_state, &cached_token, &token_created_at, &token_changed).await;
                 }
                 _ = shutdown_notify.notified() => {
                     log_info("IAM token refresh task shutting down", "");
@@ -281,11 +287,16 @@ impl IAMTokenManager {
     async fn handle_token_refresh(
         iam_token_state: &IamTokenState,
         cached_token: &Arc<RwLock<String>>,
+        token_created_at: &Arc<RwLock<tokio::time::Instant>>,
         token_changed: &Arc<AtomicBool>,
     ) {
         match Self::generate_token_with_backoff(iam_token_state).await {
             Ok(new_token) => {
                 Self::set_cached_token_static(cached_token, new_token.clone()).await;
+                {
+                    let mut ts = token_created_at.write().await;
+                    *ts = tokio::time::Instant::now();
+                }
                 token_changed.store(true, Ordering::Release);
             }
             Err(err) => {
@@ -301,7 +312,9 @@ impl IAMTokenManager {
     /// Generate a token with exponential backoff + ±20% jitter.
     /// Retries up to `TOKEN_GEN_MAX_ATTEMPTS`, doubling backoff each time (capped).
     /// Returns token on success, last error on failure.
-    async fn generate_token_with_backoff(state: &IamTokenState) -> Result<String, GlideIAMError> {
+    pub(crate) async fn generate_token_with_backoff(
+        state: &IamTokenState,
+    ) -> Result<String, GlideIAMError> {
         let mut attempt: u32 = 0;
         let mut backoff_ms = TOKEN_GEN_INITIAL_BACKOFF_MS;
 
@@ -353,6 +366,7 @@ impl IAMTokenManager {
         Self::handle_token_refresh(
             &self.iam_token_state,
             &self.cached_token,
+            &self.token_created_at,
             &self.token_changed,
         )
         .await;
@@ -387,6 +401,19 @@ impl IAMTokenManager {
     /// Clear the token changed flag after handling the change
     pub fn clear_token_changed(&self) {
         self.token_changed.store(false, Ordering::Release)
+    }
+
+    /// Create a lightweight handle to the token cache for use by the reconnection path.
+    ///
+    /// The returned handle shares the same `Arc`s as this manager, so any token
+    /// refresh performed by the background task is immediately visible through
+    /// the handle without requiring a reference back to the full `IAMTokenManager`.
+    pub fn get_token_handle(&self) -> crate::client::IAMTokenHandle {
+        crate::client::IAMTokenHandle {
+            cached_token: Arc::clone(&self.cached_token),
+            token_created_at: Arc::clone(&self.token_created_at),
+            iam_token_state: self.iam_token_state.clone(),
+        }
     }
 
     /// Generate IAM authentication token using SigV4 signing (valid for 15 minutes)
