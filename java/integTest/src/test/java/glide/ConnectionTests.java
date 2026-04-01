@@ -478,14 +478,16 @@ public class ConnectionTests {
 
         // Count nodes that received GET calls
         long nodesWithCalls =
-                infoData.values().stream()
-                        .filter(value -> value.contains("cmdstat_get:calls="))
-                        .count();
+                infoData.values().stream().filter(value -> value.contains("cmdstat_get:calls=")).count();
 
         // Verify that primary + replicas for this slot received calls (slot-based routing)
-        assertEquals(nReplicas + 1, nodesWithCalls,
-                "ALL_NODES should route to primary and all replicas for the slot. Expected " +
-                (nReplicas + 1) + " nodes, got " + nodesWithCalls);
+        assertEquals(
+                nReplicas + 1,
+                nodesWithCalls,
+                "ALL_NODES should route to primary and all replicas for the slot. Expected "
+                        + (nReplicas + 1)
+                        + " nodes, got "
+                        + nodesWithCalls);
 
         // Verify both primary and replicas received calls
         long primaryCalls =
