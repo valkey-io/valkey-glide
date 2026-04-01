@@ -523,7 +523,8 @@ public class ClusterClientTests {
     public void test_connect_with_ip_address_succeeds(String ipAddress) {
         Integer port = Integer.parseInt(CLUSTER_HOSTS[0].split(":")[1]);
         NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
-        GlideClusterClientConfiguration config = commonClusterClientConfig().address(address).build();
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder().address(address).useTLS(false).build();
 
         try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
             assertConnected(client);

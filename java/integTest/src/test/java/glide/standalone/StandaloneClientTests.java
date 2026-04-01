@@ -437,7 +437,8 @@ public class StandaloneClientTests {
     public void test_connect_with_ip_address_succeeds(String ipAddress) {
         Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
         NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
-        GlideClientConfiguration config = commonClientConfig().address(address).build();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder().address(address).useTLS(false).build();
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
             assertConnected(client);
