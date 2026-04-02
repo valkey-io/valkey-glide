@@ -1,7 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.Constants.IP_ADDRESS_V4;
+import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.IAM_USERNAME;
 import static glide.TestUtilities.assertConnected;
 import static glide.TestUtilities.commonClientConfig;
@@ -18,7 +21,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestUtilities;
 import glide.api.GlideClient;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -30,6 +35,8 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(20) // seconds
 public class StandaloneClientTests {
@@ -424,13 +431,18 @@ public class StandaloneClientTests {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {IP_ADDRESS_V4, IP_ADDRESS_V6})
     @SneakyThrows
-    private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
-        IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
-        ServerCredentials credentials =
-                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
-        // Note: useTLS is inherited from commonClientConfig() which respects the -Dtls system property
-        return GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get();
+    public void test_connect_with_ip_address_succeeds(String ipAddress) {
+        Integer port = Integer.parseInt(STANDALONE_HOSTS[0].split(":")[1]);
+        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder().address(address).useTLS(false).build();
+
+        try (GlideClient client = GlideClient.createClient(config).get()) {
+            assertConnected(client);
+        }
     }
 
     @Test
@@ -477,5 +489,14 @@ public class StandaloneClientTests {
             assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
             assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
         }
+    }
+
+    @SneakyThrows
+    private GlideClient createStandaloneClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        // Note: useTLS is inherited from commonClientConfig() which respects the -Dtls system property
+        return GlideClient.createClient(commonClientConfig().credentials(credentials).build()).get();
     }
 }
