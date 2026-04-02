@@ -315,7 +315,7 @@ func (suite *GlideTestSuite) verifyJsonType(ops jsonOps) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 
-	result, err = ops.jsonTypeWithPath(ctx, "non_existing_key", "$")
+	_, err = ops.jsonTypeWithPath(ctx, "non_existing_key", "$")
 	assert.NoError(t, err)
 }
 
