@@ -137,6 +137,16 @@ class TestGlideClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_context_manager(self, request, cluster_mode, protocol):
+        async with await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, request_timeout=5000
+        ) as client:
+            assert not client._is_closed
+
+        assert client._is_closed
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
         # Skip on macOS - the macOS tests run on self hosted VMs which have resource limits
         # making this test flaky with "no buffer space available" errors. See - https://github.com/valkey-io/valkey-glide/issues/4902
