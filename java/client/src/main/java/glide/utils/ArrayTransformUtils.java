@@ -7,11 +7,9 @@ import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -100,9 +98,14 @@ public class ArrayTransformUtils {
      * @return Array of strings [value1.toString(), key1, value2.toString(), key2, ...].
      */
     public static String[] convertMapToValueKeyStringArray(Map<String, Double> args) {
-        return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(entry.getValue().toString(), entry.getKey()))
-                .toArray(String[]::new);
+        String[] result = new String[args.size() * 2];
+        int i = 0;
+        for (Map.Entry<String, Double> entry : args.entrySet()) {
+            Double value = entry.getValue();
+            result[i++] = value != null ? value.toString() : null;
+            result[i++] = entry.getKey();
+        }
+        return result;
     }
 
     /**
@@ -113,9 +116,14 @@ public class ArrayTransformUtils {
      * @return Array of GlideStrings [gs(value1.toString()), key1, gs(value2.toString()), key2, ...].
      */
     public static GlideString[] convertMapToValueKeyStringArrayBinary(Map<GlideString, Double> args) {
-        return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(gs(entry.getValue().toString()), entry.getKey()))
-                .toArray(GlideString[]::new);
+        GlideString[] result = new GlideString[args.size() * 2];
+        int i = 0;
+        for (Map.Entry<GlideString, Double> entry : args.entrySet()) {
+            Double value = entry.getValue();
+            result[i++] = value != null ? gs(value.toString()) : null;
+            result[i++] = entry.getKey();
+        }
+        return result;
     }
 
     /**
@@ -348,10 +356,15 @@ public class ArrayTransformUtils {
      * @return Array of GlideString [key1, value1, key2, value2, ...].
      */
     public static GlideString[] flattenMapToGlideStringArray(Map<?, ?> args) {
-        return args.entrySet().stream()
-                .flatMap(
-                        entry -> Stream.of(GlideString.of(entry.getKey()), GlideString.of(entry.getValue())))
-                .toArray(GlideString[]::new);
+        GlideString[] result = new GlideString[args.size() * 2];
+        int i = 0;
+        for (Map.Entry<?, ?> entry : args.entrySet()) {
+            Object key = entry.getKey();
+            Object value = entry.getValue();
+            result[i++] = key != null ? GlideString.of(key) : null;
+            result[i++] = value != null ? GlideString.of(value) : null;
+        }
+        return result;
     }
 
     /**
@@ -384,10 +397,15 @@ public class ArrayTransformUtils {
      * @return Array of GlideString [value1, key1, value2, key2...].
      */
     public static GlideString[] flattenMapToGlideStringArrayValueFirst(Map<?, ?> args) {
-        return args.entrySet().stream()
-                .flatMap(
-                        entry -> Stream.of(GlideString.of(entry.getValue()), GlideString.of(entry.getKey())))
-                .toArray(GlideString[]::new);
+        GlideString[] result = new GlideString[args.size() * 2];
+        int i = 0;
+        for (Map.Entry<?, ?> entry : args.entrySet()) {
+            Object value = entry.getValue();
+            Object key = entry.getKey();
+            result[i++] = value != null ? GlideString.of(value) : null;
+            result[i++] = key != null ? GlideString.of(key) : null;
+        }
+        return result;
     }
 
     /**
@@ -398,16 +416,17 @@ public class ArrayTransformUtils {
      * @return Array of GlideString [key1, key2, value1, value2...].
      */
     public static GlideString[] flattenAllKeysFollowedByAllValues(Map<?, ?> args) {
-        List<GlideString> keysList = new ArrayList<>();
-        List<GlideString> valuesList = new ArrayList<>();
-
+        int size = args.size();
+        GlideString[] result = new GlideString[size * 2];
+        int i = 0;
         for (Map.Entry<?, ?> entry : args.entrySet()) {
-            keysList.add(GlideString.of(entry.getKey()));
-            valuesList.add(GlideString.of(entry.getValue()));
+            Object key = entry.getKey();
+            Object value = entry.getValue();
+            result[i] = key != null ? GlideString.of(key) : null;
+            result[i + size] = value != null ? GlideString.of(value) : null;
+            i++;
         }
-
-        return concatenateArrays(
-                keysList.toArray(new GlideString[0]), valuesList.toArray(new GlideString[0]));
+        return result;
     }
 
     /**
