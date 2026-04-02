@@ -9,6 +9,15 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
+const (
+	jsonArrAppendCommand = "JSON.ARRAPPEND"
+	jsonArrInsertCommand = "JSON.ARRINSERT"
+	jsonArrIndexCommand  = "JSON.ARRINDEX"
+	jsonArrLenCommand    = "JSON.ARRLEN"
+	jsonArrPopCommand    = "JSON.ARRPOP"
+	jsonArrTrimCommand   = "JSON.ARRTRIM"
+)
+
 // --- JSON.ARRAPPEND ---
 
 // JsonArrAppend appends one or more values to the JSON array at the specified path.

@@ -11,19 +11,13 @@ import (
 )
 
 const (
-	jsonSetCommand       = "JSON.SET"
-	jsonGetCommand       = "JSON.GET"
-	jsonDelCommand       = "JSON.DEL"
-	jsonForgetCommand    = "JSON.FORGET"
-	jsonClearCommand     = "JSON.CLEAR"
-	jsonMGetCommand      = "JSON.MGET"
-	jsonTypeCommand      = "JSON.TYPE"
-	jsonArrAppendCommand = "JSON.ARRAPPEND"
-	jsonArrInsertCommand = "JSON.ARRINSERT"
-	jsonArrIndexCommand  = "JSON.ARRINDEX"
-	jsonArrLenCommand    = "JSON.ARRLEN"
-	jsonArrPopCommand    = "JSON.ARRPOP"
-	jsonArrTrimCommand   = "JSON.ARRTRIM"
+	jsonSetCommand    = "JSON.SET"
+	jsonGetCommand    = "JSON.GET"
+	jsonDelCommand    = "JSON.DEL"
+	jsonForgetCommand = "JSON.FORGET"
+	jsonClearCommand  = "JSON.CLEAR"
+	jsonMGetCommand   = "JSON.MGET"
+	jsonTypeCommand   = "JSON.TYPE"
 )
 
 // standaloneClient is the interface for standalone client JSON operations.
