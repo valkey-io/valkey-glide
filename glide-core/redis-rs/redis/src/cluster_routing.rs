@@ -1119,7 +1119,6 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"SENTINEL MASTER"
             | b"SENTINEL MASTERS"
             | b"SENTINEL REPLICAS"
-            | b"SENTINEL SLAVES"
             | b"SENTINEL CKQUORUM"
             | b"SHUTDOWN"
             | b"SINTER"
@@ -2112,7 +2111,6 @@ mod tests_routing {
         assert!(is_readonly_cmd(b"SENTINEL MASTERS"));
         assert!(is_readonly_cmd(b"SENTINEL MASTER"));
         assert!(is_readonly_cmd(b"SENTINEL REPLICAS"));
-        assert!(is_readonly_cmd(b"SENTINEL SLAVES"));
         assert!(is_readonly_cmd(b"SENTINEL GET-MASTER-ADDR-BY-NAME"));
         assert!(is_readonly_cmd(b"SENTINEL CKQUORUM"));
 
