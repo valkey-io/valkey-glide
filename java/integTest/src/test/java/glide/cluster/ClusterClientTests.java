@@ -1,6 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
+import static glide.Constants.IP_ADDRESS_V4;
+import static glide.Constants.IP_ADDRESS_V6;
+import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.IAM_USERNAME;
 import static glide.TestUtilities.assertConnected;
@@ -18,7 +21,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestUtilities;
 import glide.api.GlideClusterClient;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
@@ -30,6 +35,8 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class ClusterClientTests {
@@ -394,10 +401,38 @@ public class ClusterClientTests {
             Thread.sleep(1000);
 
             // Ensure client can reconnect when updating the password with immediate auth
-            assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
+            // Retry during reconnection - non-blocking reconnect may still be in progress
+            int maxRetries = 20;
+            for (int i = 0; i < maxRetries; i++) {
+                try {
+                    assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
+                    break;
+                } catch (Exception e) {
+                    if (e.getMessage() != null
+                            && e.getMessage().contains("AllConnectionsUnavailable")
+                            && i < maxRetries - 1) {
+                        Thread.sleep(500);
+                        continue;
+                    }
+                    throw e;
+                }
+            }
 
-            // Validate client reconnected and is working
-            assertNotNull(testClient.info().get());
+            // Validate client reconnected and is working - retry during reconnection
+            for (int i = 0; i < maxRetries; i++) {
+                try {
+                    assertNotNull(testClient.info().get());
+                    break;
+                } catch (Exception e) {
+                    if (e.getMessage() != null
+                            && e.getMessage().contains("AllConnectionsUnavailable")
+                            && i < maxRetries - 1) {
+                        Thread.sleep(500);
+                        continue;
+                    }
+                    throw e;
+                }
+            }
         } finally {
             deleteAclUser(adminClient, username);
             adminClient.close();
@@ -482,16 +517,18 @@ public class ClusterClientTests {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {IP_ADDRESS_V4, IP_ADDRESS_V6})
     @SneakyThrows
-    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
-        IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
-        ServerCredentials credentials =
-                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
-        // Note: useTLS is inherited from commonClusterClientConfig() which respects the -Dtls system
-        // property
-        return GlideClusterClient.createClient(
-                        commonClusterClientConfig().credentials(credentials).build())
-                .get();
+    public void test_connect_with_ip_address_succeeds(String ipAddress) {
+        Integer port = Integer.parseInt(CLUSTER_HOSTS[0].split(":")[1]);
+        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
+        GlideClusterClientConfiguration config =
+                GlideClusterClientConfiguration.builder().address(address).useTLS(false).build();
+
+        try (GlideClusterClient client = GlideClusterClient.createClient(config).get()) {
+            assertConnected(client);
+        }
     }
 
     @Test
@@ -538,5 +575,17 @@ public class ClusterClientTests {
             assertEquals("OK", client.set("iam_auto_refresh_key", "iam_auto_refresh_value").get());
             assertEquals("iam_auto_refresh_value", client.get("iam_auto_refresh_key").get());
         }
+    }
+
+    @SneakyThrows
+    private GlideClusterClient createClusterClientWithIam(int refreshIntervalSeconds) {
+        IamAuthConfig iamConfig = TestUtilities.createTestIamConfig(refreshIntervalSeconds);
+        ServerCredentials credentials =
+                ServerCredentials.builder().username(IAM_USERNAME).iamConfig(iamConfig).build();
+        // Note: useTLS is inherited from commonClusterClientConfig() which respects the -Dtls system
+        // property
+        return GlideClusterClient.createClient(
+                        commonClusterClientConfig().credentials(credentials).build())
+                .get();
     }
 }

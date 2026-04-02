@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
+import static glide.Constants.IP_ADDRESS_V4;
+import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -25,6 +27,8 @@ import java.security.cert.CertificateFactory;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class StandaloneTlsCertificateTest {
 
@@ -104,22 +108,14 @@ public class StandaloneTlsCertificateTest {
                 });
     }
 
-    @Test
-    void testStandaloneTlsWithIpv4Succeeds() throws ExecutionException, InterruptedException {
-        NodeAddress ipv4Node = NodeAddress.builder().host("127.0.0.1").port(nodeAddr.getPort()).build();
+    @ParameterizedTest
+    @ValueSource(strings = {IP_ADDRESS_V4, IP_ADDRESS_V6})
+    void testStandaloneTlsWithIpAddressSucceeds(String ipAddress)
+            throws ExecutionException, InterruptedException {
+        Integer port = nodeAddr.getPort();
+        NodeAddress address = NodeAddress.builder().host(ipAddress).port(port).build();
         GlideClientConfiguration config =
-                TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv4Node);
-
-        try (GlideClient client = GlideClient.createClient(config).get()) {
-            TestUtilities.assertConnected(client);
-        }
-    }
-
-    @Test
-    void testStandaloneTlsWithIpv6Succeeds() throws ExecutionException, InterruptedException {
-        NodeAddress ipv6Node = NodeAddress.builder().host("::1").port(nodeAddr.getPort()).build();
-        GlideClientConfiguration config =
-                TestUtilities.createStandaloneConfigWithRootCert(caCert, ipv6Node);
+                TestUtilities.createStandaloneConfigWithRootCert(caCert, address);
 
         try (GlideClient client = GlideClient.createClient(config).get()) {
             TestUtilities.assertConnected(client);

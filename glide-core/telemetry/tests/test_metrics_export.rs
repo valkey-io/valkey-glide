@@ -227,6 +227,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_histogram_metrics<T>(
     metric_name: &str,
     sum: T,

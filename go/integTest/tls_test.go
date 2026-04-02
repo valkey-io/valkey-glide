@@ -238,7 +238,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Standalone() {
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv4,
+		Host: IPAddressV4,
 		Port: suite.standaloneHosts[0].Port,
 	}
 
@@ -267,7 +267,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv4AddressSucceeds_Cluster() {
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv4,
+		Host: IPAddressV4,
 		Port: suite.clusterHosts[0].Port,
 	}
 
@@ -296,7 +296,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Standalone() {
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv6,
+		Host: IPAddressV6,
 		Port: suite.standaloneHosts[0].Port,
 	}
 
@@ -325,7 +325,7 @@ func (suite *GlideTestSuite) TestTlsWithIPv6AddressSucceeds_Cluster() {
 	require.NoError(suite.T(), err)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv6,
+		Host: IPAddressV6,
 		Port: suite.clusterHosts[0].Port,
 	}
 

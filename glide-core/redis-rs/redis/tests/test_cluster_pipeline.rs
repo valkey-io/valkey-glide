@@ -252,7 +252,11 @@ mod test_cluster_pipeline {
         assert!(
             bad_results
                 .iter()
-                .all(|r| matches!(r, Value::ServerError(err) if err.err_code().contains("ConnectionNotFound"))),
+                .all(|r| matches!(r, Value::ServerError(err) if
+                    err.err_code().contains("ConnectionNotFound")
+                    || err.err_code().contains("FatalSendError")
+                    || err.err_code().contains("AllConnectionsUnavailable")
+                )),
             "Expected server error responses for the bad key operations, but got: {bad_results:?}"
         );
     }
@@ -1133,7 +1137,7 @@ mod test_cluster_pipeline {
             ))
             .build()
             .unwrap()
-            .get_async_connection(None, None)
+            .get_async_connection(None, None, None)
             .await
             .unwrap();
 

@@ -1052,8 +1052,11 @@ func (suite *GlideTestSuite) TestUpdateConnectionPasswordCluster() {
 	assert.NoError(suite.T(), err)
 
 	// Verify client auto-reconnects with new password
-	_, err = testClient.Info(context.Background())
-	assert.NoError(suite.T(), err)
+	// Retry during reconnection - non-blocking reconnect may still be in progress
+	assert.Eventually(suite.T(), func() bool {
+		_, err = testClient.Info(context.Background())
+		return err == nil
+	}, 10*time.Second, 500*time.Millisecond)
 
 	// test reset connection password
 	_, err = testClient.ResetConnectionPassword(context.Background())

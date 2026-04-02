@@ -218,6 +218,29 @@ npm run test-modules -- --cluster-endpoints=<address>:<port>
 
 Note: these tests don't run with standalone server as of now.
 
+### DNS Tests
+
+To run [DNS tests](tests/Dns.test.ts) locally:
+
+1. Add the following entries to your hosts file:
+    - Linux/macOS: `/etc/hosts`
+    - Windows: `C:\Windows\System32\drivers\etc\hosts`
+
+    ```text
+    127.0.0.1 valkey.glide.test.tls.com
+    127.0.0.1 valkey.glide.test.no_tls.com
+    ::1 valkey.glide.test.tls.com
+    ::1 valkey.glide.test.no_tls.com
+    ```
+
+2. Set the environment variable:
+
+    ```bash
+    export VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+    ```
+
+If the environment variable is not set, DNS tests will be skipped.
+
 ### Package Manager and TypeScript Types Testing
 
 The project includes tests for TypeScript types and package manager compatibility:

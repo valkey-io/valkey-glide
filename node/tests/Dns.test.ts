@@ -2,6 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+/**
+ * DNS resolution tests.
+ * See {@link ../DEVELOPER.md#dns-tests} for setup instructions.
+ */
+
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { TestTLSConfig, ValkeyCluster } from "../../utils/TestUtils.js";
 import { GlideClient, GlideClusterClient, ProtocolVersion } from "../build-ts";

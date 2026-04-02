@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 #![allow(dead_code)]
-use crate::test_constants::{HOST_IPV4, HOST_IPV6, HOSTNAME_TLS};
+use crate::constants::{HOSTNAME_TLS, IP_ADDRESS_V4, IP_ADDRESS_V6};
 use futures::Future;
 use glide_core::{
     client::{Client, StandaloneClient},
@@ -93,7 +93,7 @@ pub fn get_available_port() -> u16 {
     for _ in 0..attempts {
         let port = rand::random::<u16>().max(6379);
 
-        let addr4 = format!("{}:{}", HOST_IPV4, port)
+        let addr4 = format!("{}:{}", IP_ADDRESS_V4, port)
             .parse::<SocketAddr>()
             .unwrap()
             .into();
@@ -103,7 +103,7 @@ pub fn get_available_port() -> u16 {
             continue;
         }
 
-        let addr6 = format!("[{}]:{}", HOST_IPV6, port)
+        let addr6 = format!("[{}]:{}", IP_ADDRESS_V6, port)
             .parse::<SocketAddr>()
             .unwrap()
             .into();
@@ -122,7 +122,7 @@ pub fn get_available_port() -> u16 {
 
 pub fn get_listener_on_available_port() -> TcpListener {
     let port = get_available_port();
-    let addr = &format!("{}:{}", HOST_IPV4, port)
+    let addr = &format!("{}:{}", IP_ADDRESS_V4, port)
         .parse::<SocketAddr>()
         .unwrap()
         .into();
@@ -146,13 +146,13 @@ impl RedisServer {
                 let redis_port = get_available_port();
                 if tls {
                     redis::ConnectionAddr::TcpTls {
-                        host: HOST_IPV4.to_string(),
+                        host: IP_ADDRESS_V4.to_string(),
                         port: redis_port,
                         insecure: true,
                         tls_params: None,
                     }
                 } else {
-                    redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
+                    redis::ConnectionAddr::Tcp(IP_ADDRESS_V4.to_string(), redis_port)
                 }
             }
             ServerType::Unix => {
@@ -168,13 +168,13 @@ impl RedisServer {
         let redis_port = get_available_port();
         let addr = if use_tls {
             redis::ConnectionAddr::TcpTls {
-                host: HOST_IPV4.to_string(),
+                host: IP_ADDRESS_V4.to_string(),
                 port: redis_port,
                 insecure: true,
                 tls_params: None,
             }
         } else {
-            redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), redis_port)
+            redis::ConnectionAddr::Tcp(IP_ADDRESS_V4.to_string(), redis_port)
         };
 
         RedisServer::new_with_addr_tls_modules_and_spawner(addr, tls_paths, &[], false, |cmd| {
@@ -458,7 +458,7 @@ pub fn build_tls_file_paths(tempdir: &tempfile::TempDir) -> TlsFilePaths {
         &ext_file,
         format!(
             "keyUsage = digitalSignature, keyEncipherment\nsubjectAltName = IP:{},IP:{},DNS:localhost,DNS:{}",
-            HOST_IPV4, HOST_IPV6, HOSTNAME_TLS
+            IP_ADDRESS_V4, IP_ADDRESS_V6, HOSTNAME_TLS
         ),
     )
     .expect("failed to create x509v3 extensions file");
@@ -658,13 +658,24 @@ pub async fn repeat_try_create<T, Fut>(f: impl Fn() -> Fut) -> T
 where
     Fut: Future<Output = Option<T>>,
 {
-    for _ in 0..500 {
+    repeat_try_create_with_timeout(f, std::time::Duration::from_millis(3000)).await
+}
+
+pub async fn repeat_try_create_with_timeout<T, Fut>(
+    f: impl Fn() -> Fut,
+    timeout: std::time::Duration,
+) -> T
+where
+    Fut: Future<Output = Option<T>>,
+{
+    let start = tokio::time::Instant::now();
+    while start.elapsed() < timeout {
         if let Some(value) = f().await {
             return value;
         }
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
-    panic!("Couldn't create object");
+    panic!("Couldn't create object within {:?}", timeout);
 }
 
 pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {

@@ -411,7 +411,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Standalone() {
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv4,
+		Host: IPAddressV4,
 		Port: suite.standaloneHosts[0].Port,
 	}
 
@@ -431,7 +431,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv4AddressSucceeds_Cluster() {
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv4,
+		Host: IPAddressV4,
 		Port: suite.clusterHosts[0].Port,
 	}
 
@@ -450,7 +450,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Standalone() {
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv6,
+		Host: IPAddressV6,
 		Port: suite.standaloneHosts[0].Port,
 	}
 
@@ -469,7 +469,7 @@ func (suite *GlideTestSuite) TestConnectWithIPv6AddressSucceeds_Cluster() {
 	skipIfTlsEnabled(suite)
 
 	address := config.NodeAddress{
-		Host: HostAddressIPv6,
+		Host: IPAddressV6,
 		Port: suite.clusterHosts[0].Port,
 	}
 

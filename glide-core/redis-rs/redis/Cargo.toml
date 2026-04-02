@@ -18,6 +18,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 [lib]
 bench = false
 
+[lints.clippy]
+# Prevent blocking the async runtime
+await_holding_lock = "deny"
+# Additional async safety lints
+mutex_atomic = "warn"
+
 [dependencies]
 # These two are generally really common simple dependencies so it does not seem
 # much of a point to optimize these, but these could in theory be removed for
@@ -56,6 +62,7 @@ rand = { version = "0.9", optional = true }
 
 # Only needed for async cluster
 dashmap = { version = "6", optional = true }
+parking_lot = { version = "0.12", optional = true }
 
 async-trait = { version = "0.1", optional = true }
 
@@ -108,7 +115,7 @@ tls-rustls-insecure = []
 tokio-comp = ["aio", "tokio/net", "tokio-retry2"]
 tokio-rustls-comp = ["tokio-comp"]
 connection-manager = ["futures", "aio", "tokio-retry2"]
-cluster-async = ["cluster", "futures", "futures-util", "dashmap"]
+cluster-async = ["cluster", "futures", "futures-util", "dashmap", "parking_lot"]
 keep-alive = ["socket2"]
 sentinel = ["rand"]
 
