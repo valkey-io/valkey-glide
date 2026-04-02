@@ -337,7 +337,9 @@ async fn send_command(
     }
 
     // Process command arguments for compression if compression is enabled
-    if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
+    if client.is_compression_enabled()
+        && let Err(compression_error) = process_command_for_compression(&mut cmd, &client)
+    {
         log_warn(
             "send_command",
             format!(
@@ -437,6 +439,11 @@ fn process_command_for_compression(
     let command_str = String::from_utf8_lossy(command_name).to_uppercase();
     let request_type = match command_str.as_str() {
         "SET" => crate::request_type::RequestType::Set,
+        "MSET" => crate::request_type::RequestType::MSet,
+        "MSETNX" => crate::request_type::RequestType::MSetNX,
+        "SETEX" => crate::request_type::RequestType::SetEx,
+        "PSETEX" => crate::request_type::RequestType::PSetEx,
+        "SETNX" => crate::request_type::RequestType::SetNX,
         _ => return Ok(()), // Unknown command, no compression needed
     };
 
@@ -672,114 +679,123 @@ fn get_route(
 
 fn handle_request(request: CommandRequest, mut client: Client, writer: Rc<Writer>) {
     task::spawn_local(async move {
-        let mut updated_inflight_counter = true;
-        let client_clone = client.clone();
-
-        let result = match client.reserve_inflight_request() {
-            false => {
-                updated_inflight_counter = false;
-                Err(ClientUsageError::User(
-                    "Reached maximum inflight requests".to_string(),
-                ))
-            }
-            true => match request.command {
-                Some(action) => match action {
-                    command_request::Command::ClusterScan(cluster_scan_command) => {
-                        //TODO: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
-                        cluster_scan(cluster_scan_command, client).await
-                    }
-                    command_request::Command::SingleCommand(command) => {
-                        match get_redis_command(&command) {
-                            Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
-                                Ok(routes) => {
-                                    cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
-                                    send_command(cmd, client, routes).await
-                                }
-                                Err(e) => Err(e),
-                            },
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::Batch(batch) => {
-                        match get_route(request.route.0, None) {
-                            Ok(routes) => {
-                                let otel_command_span =
-                                    get_unsafe_span_from_ptr(request.root_span_ptr);
-                                send_batch(batch, &mut client, routes, otel_command_span).await
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::ScriptInvocation(script) => {
-                        match get_route(request.route.0, None) {
-                            Ok(routes) => {
-                                let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
-                                invoke_script(
-                                    script.hash,
-                                    Some(script.keys),
-                                    Some(script.args),
-                                    client,
-                                    routes,
-                                    otel_span,
-                                )
-                                .await
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::ScriptInvocationPointers(script) => {
-                        let keys = script
-                            .keys_pointer
-                            .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
-                        let args = script
-                            .args_pointer
-                            .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
-                        match get_route(request.route.0, None) {
-                            Ok(routes) => {
-                                let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
-                                invoke_script(script.hash, keys, args, client, routes, otel_span)
-                                    .await
-                            }
-                            Err(e) => Err(e),
-                        }
-                    }
-                    command_request::Command::UpdateConnectionPassword(
-                        update_connection_password_command,
-                    ) => client
-                        .update_connection_password(
-                            update_connection_password_command
-                                .password
-                                .map(|chars| chars.to_string()),
-                            update_connection_password_command.immediate_auth,
-                        )
-                        .await
-                        .map_err(|err| err.into()),
-
-                    command_request::Command::RefreshIamToken(_refresh) => client
-                        .refresh_iam_token()
-                        .await
-                        .map(|_| Value::SimpleString("OK".into()))
-                        .map_err(|err| err.into()),
-                },
+        // send_command() manages its own inflight tracking via InflightRequestTracker
+        // on the Cmd. All other paths (batch, pipeline, cluster_scan, script,
+        // update_password, refresh_iam) need inflight reservation at this level.
+        // The tracker's Drop releases the slot automatically.
+        let _inflight_guard = if !matches!(
+            &request.command,
+            Some(command_request::Command::SingleCommand(_))
+        ) {
+            match client.reserve_inflight_request() {
+                Some(tracker) => Some(tracker),
                 None => {
-                    log_debug(
-                        "received error",
-                        format!(
-                            "Received empty request for callback {}",
-                            request.callback_idx
-                        ),
-                    );
-                    Err(ClientUsageError::Internal(
-                        "Received empty request".to_string(),
-                    ))
+                    let _res = write_result(
+                        Err(ClientUsageError::User(
+                            "Reached maximum inflight requests".to_string(),
+                        )),
+                        request.callback_idx,
+                        &writer,
+                        request.root_span_ptr,
+                    )
+                    .await;
+                    return;
                 }
-            },
+            }
+        } else {
+            None
         };
 
-        if updated_inflight_counter {
-            client_clone.release_inflight_request();
-        }
+        let result = match request.command {
+            Some(action) => match action {
+                command_request::Command::ClusterScan(cluster_scan_command) => {
+                    //TODO: handle scan command - https://github.com/valkey-io/valkey-glide/issues/3506
+                    cluster_scan(cluster_scan_command, client).await
+                }
+                command_request::Command::SingleCommand(command) => {
+                    match get_redis_command(&command) {
+                        Ok(mut cmd) => match get_route(request.route.0, Some(&cmd)) {
+                            Ok(routes) => {
+                                cmd.set_span(get_unsafe_span_from_ptr(request.root_span_ptr));
+                                send_command(cmd, client, routes).await
+                            }
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
+                }
+                command_request::Command::Batch(batch) => match get_route(request.route.0, None) {
+                    Ok(routes) => {
+                        let otel_command_span = get_unsafe_span_from_ptr(request.root_span_ptr);
+                        send_batch(batch, &mut client, routes, otel_command_span).await
+                    }
+                    Err(e) => Err(e),
+                },
+                command_request::Command::ScriptInvocation(script) => {
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => {
+                            let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
+                            invoke_script(
+                                script.hash,
+                                Some(script.keys),
+                                Some(script.args),
+                                client,
+                                routes,
+                                otel_span,
+                            )
+                            .await
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                command_request::Command::ScriptInvocationPointers(script) => {
+                    let keys = script
+                        .keys_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    let args = script
+                        .args_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => {
+                            let otel_span = get_unsafe_span_from_ptr(request.root_span_ptr);
+                            invoke_script(script.hash, keys, args, client, routes, otel_span).await
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                command_request::Command::UpdateConnectionPassword(
+                    update_connection_password_command,
+                ) => client
+                    .update_connection_password(
+                        update_connection_password_command
+                            .password
+                            .map(|chars| chars.to_string()),
+                        update_connection_password_command.immediate_auth,
+                    )
+                    .await
+                    .map_err(|err| err.into()),
 
+                command_request::Command::RefreshIamToken(_refresh) => client
+                    .refresh_iam_token()
+                    .await
+                    .map(|_| Value::SimpleString("OK".into()))
+                    .map_err(|err| err.into()),
+            },
+            None => {
+                log_debug(
+                    "received error",
+                    format!(
+                        "Received empty request for callback {}",
+                        request.callback_idx
+                    ),
+                );
+                Err(ClientUsageError::Internal(
+                    "Received empty request".to_string(),
+                ))
+            }
+        };
+
+        // _inflight_guard is dropped here, releasing the slot automatically.
         let _res = write_result(result, request.callback_idx, &writer, request.root_span_ptr).await;
     });
 }

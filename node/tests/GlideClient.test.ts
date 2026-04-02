@@ -28,7 +28,7 @@ import {
 } from "../build-ts";
 import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
-import { HOST_ADDRESS_IPV4, HOST_ADDRESS_IPV6 } from "./Constants";
+import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
     assertConnected,
     batchTest,
@@ -2018,7 +2018,7 @@ describe("GlideClient", () => {
         "should connect with IPv4 address",
         async () => {
             const address = {
-                host: HOST_ADDRESS_IPV4,
+                host: IP_ADDRESS_V4,
                 port: cluster.ports()[0],
             };
             const client = await GlideClient.createClient({
@@ -2035,7 +2035,7 @@ describe("GlideClient", () => {
         "should connect with IPv6 address",
         async () => {
             const address = {
-                host: HOST_ADDRESS_IPV6,
+                host: IP_ADDRESS_V6,
                 port: cluster.ports()[0],
             };
             const client = await GlideClient.createClient({

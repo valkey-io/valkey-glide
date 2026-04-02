@@ -1,8 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 
-import asyncio
-
 import anyio
 import pytest
 from glide.glide_client import TGlideClient
@@ -16,7 +14,7 @@ from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 
 from tests.async_tests.conftest import create_client
-from tests.test_constants import (
+from tests.constants import (
     IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
     IAM_TEST_CLUSTER_NAME,
     IAM_TEST_REGION_US_EAST_1,
@@ -298,13 +296,31 @@ class TestAuthCommands:
         # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
         # TODO: We do not fully understand why such a long timeout is required.
-        result = await acl_glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
-        )
-        assert result == OK
+        # Retry during reconnection - non-blocking reconnect may still be in progress
+        max_retries = 20
+        for i in range(max_retries):
+            try:
+                result = await acl_glide_client.update_connection_password(
+                    NEW_PASSWORD, immediate_auth=True
+                )
+                assert result == OK
+                break
+            except Exception as e:
+                if "AllConnectionsUnavailable" in str(e) and i < max_retries - 1:
+                    await anyio.sleep(0.5)
+                    continue
+                raise
 
-        # Verify client is authenticated
-        assert await acl_glide_client.set("test_key", "test_value") == OK
+        # Verify client is authenticated - retry during reconnection
+        for i in range(max_retries):
+            try:
+                assert await acl_glide_client.set("test_key", "test_value") == OK
+                break
+            except Exception as e:
+                if "AllConnectionsUnavailable" in str(e) and i < max_retries - 1:
+                    await anyio.sleep(0.5)
+                    continue
+                raise
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
@@ -421,7 +437,7 @@ class TestAuthCommands:
         await assert_connected(client)
 
         # Wait for automatic token refresh to occur
-        await asyncio.sleep(3)
+        await anyio.sleep(3)
 
         # Verify client still works after automatic refresh
         await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")

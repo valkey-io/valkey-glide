@@ -187,6 +187,36 @@ impl ClusterParams {
     }
 }
 
+impl ClusterParams {
+    /// Create a `ClusterParams` with sensible defaults for unit tests.
+    #[cfg(test)]
+    pub(crate) fn default_for_test(password: Option<String>) -> Self {
+        Self {
+            password,
+            username: None,
+            read_from_replicas: ReadFromReplicaStrategy::AlwaysFromPrimary,
+            tls: None,
+            retry_params: Default::default(),
+            connection_timeout: Duration::from_secs(1),
+            #[cfg(feature = "cluster-async")]
+            topology_checks_interval: None,
+            #[cfg(feature = "cluster-async")]
+            slots_refresh_rate_limit: Default::default(),
+            #[cfg(feature = "cluster-async")]
+            connections_validation_interval: None,
+            tls_params: None,
+            client_name: None,
+            lib_name: None,
+            response_timeout: Duration::from_secs(1),
+            protocol: ProtocolVersion::RESP2,
+            reconnect_retry_strategy: None,
+            refresh_topology_from_initial_nodes: false,
+            database_id: 0,
+            tcp_nodelay: false,
+        }
+    }
+}
+
 /// Used to configure and build a [`ClusterClient`].
 pub struct ClusterClientBuilder {
     initial_nodes: RedisResult<Vec<ConnectionInfo>>,
@@ -613,12 +643,14 @@ impl ClusterClient {
         &self,
         push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
         pubsub_synchronizer: Option<Arc<dyn crate::pubsub_synchronizer::PubSubSynchronizer>>,
+        iam_token_provider: Option<Arc<dyn crate::client::IAMTokenProvider>>,
     ) -> RedisResult<cluster_async::ClusterConnection> {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
             push_sender,
             pubsub_synchronizer,
+            iam_token_provider,
         )
         .await
     }
@@ -655,6 +687,7 @@ impl ClusterClient {
         cluster_async::ClusterConnection::new(
             &self.initial_nodes,
             self.cluster_params.clone(),
+            None,
             None,
             None,
         )

@@ -188,11 +188,47 @@ tasks.register('copyNativeLib', Copy) {
     into "${sourceSets.main.output.resourcesDir}/${jarPath}"
 }
 
+// Task for uber JAR: copy all platform native libraries
+tasks.register('copyAllNativeLibs', Copy) {
+    description = 'Copy all platform native libraries for uber JAR build from downloaded artifacts'
+    
+    // This task expects native libraries to be pre-placed in a staging directory
+    // by the CI workflow after downloading artifacts from all platform builds
+    // Structure: build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
+    def stagingDir = file("${projectDir}/build/native-libs-staging/natives")
+    
+    from stagingDir
+    into "${sourceSets.main.output.resourcesDir}/natives"
+    include "**/*.dylib", "**/*.so", "**/*.dll"
+    
+    // Only run if staging directory exists and has content
+    onlyIf {
+        stagingDir.exists() && stagingDir.listFiles()?.length > 0
+    }
+    
+    // Run after processResources to avoid being deleted
+    mustRunAfter processResources
+    
+    doFirst {
+        println "Copying native libraries from staging: ${stagingDir}"
+        println "To resources dir: ${sourceSets.main.output.resourcesDir}/natives"
+    }
+}
+
 delombok.dependsOn('compileJava')
-shadowJar.dependsOn('copyNativeLib')
-javadoc.dependsOn('copyNativeLib')
-copyNativeLib.dependsOn('buildRust')
-compileTestJava.dependsOn('copyNativeLib')
+
+// For uber JAR builds, use copyAllNativeLibs instead of copyNativeLib
+if (System.getenv("UBER_JAR_BUILD") == "true") {
+    shadowJar.dependsOn('copyAllNativeLibs')
+    compileTestJava.dependsOn('copyAllNativeLibs')
+    javadoc.dependsOn('copyAllNativeLibs')
+} else {
+    shadowJar.dependsOn('copyNativeLib')
+    compileTestJava.dependsOn('copyNativeLib')
+    javadoc.dependsOn('copyNativeLib')
+    copyNativeLib.dependsOn('buildRust')
+}
+
 test.dependsOn('buildRust')
 
 sourceSets {
@@ -265,6 +301,7 @@ java {
 
 tasks.withType(GenerateModuleMetadata) {
     dependsOn shadowJar
+    enabled = false
 }
 
 tasks.withType(Sign) {

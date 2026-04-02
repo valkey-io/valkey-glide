@@ -35,6 +35,11 @@ pub struct Cmd {
     span: Option<GlideSpan>,
     //  A flag indicating whether this is a fenced command  (will have PING appended to ensure ordering)
     is_fenced: bool,
+    /// Inflight slot tracker. When set, the slot is released when the last
+    /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
+    /// timeout from internal pipeline cleanup.
+    #[cfg(feature = "cluster-async")]
+    inflight_tracker: Option<crate::cluster_async::InflightRequestTracker>,
 }
 
 /// The PING command used to fence other commands for ordering guarantees
@@ -344,6 +349,8 @@ impl Cmd {
             no_response: false,
             span: None,
             is_fenced: false,
+            #[cfg(feature = "cluster-async")]
+            inflight_tracker: None,
         }
     }
 
@@ -355,6 +362,8 @@ impl Cmd {
             cursor: None,
             no_response: false,
             span: None,
+            #[cfg(feature = "cluster-async")]
+            inflight_tracker: None,
             is_fenced: false,
         }
     }
@@ -647,6 +656,14 @@ impl Cmd {
     #[inline]
     pub fn is_fenced(&self) -> bool {
         self.is_fenced
+    }
+
+    /// Attach an inflight slot tracker. The slot is released when the last
+    /// clone of this Cmd (or its `Arc<Cmd>`) is dropped.
+    #[cfg(feature = "cluster-async")]
+    #[inline]
+    pub fn set_inflight_tracker(&mut self, tracker: crate::cluster_async::InflightRequestTracker) {
+        self.inflight_tracker = Some(tracker);
     }
 }
 

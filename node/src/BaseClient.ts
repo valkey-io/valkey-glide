@@ -32,6 +32,7 @@ import {
     Boundary,
     ClosingError,
     ClusterBatchOptions,
+    CompressionConfiguration,
     ConfigurationError,
     ConnectionError,
     CoordOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -283,6 +284,8 @@ import {
     createZUnionStore,
     dropOtelSpan,
     getStatistics,
+    compressionConfigToProtobuf,
+    validateCompressionConfiguration,
     valueFromSplitPointer,
 } from ".";
 import {
@@ -888,6 +891,21 @@ export interface BaseClientConfiguration {
      * ```
      */
     lazyConnect?: boolean;
+    /**
+     * Configuration for automatic compression of values.
+     * When enabled, values that meet the minimum size threshold will be
+     * automatically compressed before being sent to the server and
+     * decompressed when retrieved.
+     *
+     * @example
+     * ```typescript
+     * const client = await GlideClient.createClient({
+     *   addresses: [{ host: "localhost", port: 6379 }],
+     *   compression: { enabled: true },
+     * });
+     * ```
+     */
+    compression?: CompressionConfiguration;
 }
 
 /**
@@ -9258,7 +9276,7 @@ export class BaseClient {
             );
         }
 
-        return {
+        const request: connection_request.IConnectionRequest = {
             protocol,
             clientName: options.clientName,
             addresses: options.addresses,
@@ -9275,6 +9293,16 @@ export class BaseClient {
             connectionRetryStrategy: options.connectionBackoff,
             lazyConnect: options.lazyConnect ?? false,
         };
+
+        if (options.compression) {
+            validateCompressionConfiguration(options.compression);
+            request.compressionConfig = compressionConfigToProtobuf(
+                options.compression,
+                connection_request,
+            );
+        }
+
+        return request;
     }
 
     /**

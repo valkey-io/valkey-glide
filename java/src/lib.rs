@@ -36,6 +36,49 @@ use errors::{FFIError, handle_errors, run_ffi};
 use jni_client::*;
 use protobuf_bridge::*;
 
+/// Process command arguments for compression, matching the socket_listener pattern.
+/// Extracts args from the command, applies compression if applicable, and rebuilds the command.
+fn process_command_for_compression(
+    cmd: &mut redis::Cmd,
+    client: &glide_core::client::Client,
+) -> Result<(), glide_core::compression::CompressionError> {
+    let compression_manager = client.compression_manager();
+    let compression_manager_ref = compression_manager.as_deref();
+
+    let all_args: Vec<Vec<u8>> = cmd
+        .args_iter()
+        .filter_map(|arg| match arg {
+            redis::Arg::Simple(bytes) => Some(bytes.to_vec()),
+            redis::Arg::Cursor => None,
+        })
+        .collect();
+
+    if all_args.is_empty() {
+        return Ok(());
+    }
+
+    let command_name = &all_args[0];
+    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
+    let request_type = match command_str.as_str() {
+        "SET" => glide_core::request_type::RequestType::Set,
+        _ => return Ok(()),
+    };
+
+    let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
+    glide_core::compression::process_command_args_for_compression(
+        &mut args,
+        request_type,
+        compression_manager_ref,
+    )?;
+
+    *cmd = redis::Cmd::new();
+    cmd.arg(command_name);
+    for arg in args {
+        cmd.arg(arg);
+    }
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct RegistryMethodCache {
     class: GlobalRef,
@@ -185,6 +228,13 @@ async fn execute_command_request_and_complete(
                     ))
                 })?;
 
+                // Apply compression to command arguments if compression is enabled
+                if client.is_compression_enabled()
+                    && let Err(e) = process_command_for_compression(&mut cmd, &client)
+                {
+                    log::warn!("Compression processing failed: {e}, continuing with original command");
+                }
+
                 // Compute routing
                 let route_box = command_request.route.0;
                 let routing = if let Some(route_box) = route_box {
@@ -233,13 +283,19 @@ async fn execute_command_request_and_complete(
                     pipeline.atomic();
                 }
                 for c in &batch.commands {
-                    let valkey_cmd = protobuf_bridge::create_valkey_command(c).map_err(|e| {
+                    let mut valkey_cmd = protobuf_bridge::create_valkey_command(c).map_err(|e| {
                         redis::RedisError::from((
                             redis::ErrorKind::ClientError,
                             "Failed to create batch command",
                             e.to_string(),
                         ))
                     })?;
+                    // Apply compression to each command in the batch
+                    if client.is_compression_enabled()
+                        && let Err(e) = process_command_for_compression(&mut valkey_cmd, &client)
+                    {
+                        log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                    }
                     pipeline.add_command(valkey_cmd);
                 }
 
