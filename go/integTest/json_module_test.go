@@ -444,42 +444,55 @@ func (suite *GlideTestSuite) verifyJsonArrTrim(ops jsonOps) {
 func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Standalone() {
 	suite.verifyJsonSetAndGet(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Standalone() {
 	suite.verifyJsonSetWithCondition(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Standalone() {
 	suite.verifyJsonGetWithOptions(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonDel_Standalone() {
 	suite.verifyJsonDel(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonForget_Standalone() {
 	suite.verifyJsonForget(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonClear_Standalone() {
 	suite.verifyJsonClear(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonMGet_Standalone() {
 	suite.verifyJsonMGet(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonType_Standalone() {
 	suite.verifyJsonType(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrAppend_Standalone() {
 	suite.verifyJsonArrAppend(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrInsert_Standalone() {
 	suite.verifyJsonArrInsert(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrIndex_Standalone() {
 	suite.verifyJsonArrIndex(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrLen_Standalone() {
 	suite.verifyJsonArrLen(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrPop_Standalone() {
 	suite.verifyJsonArrPop(suite.standaloneJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrTrim_Standalone() {
 	suite.verifyJsonArrTrim(suite.standaloneJsonOps())
 }
@@ -489,9 +502,11 @@ func (suite *GlideTestSuite) TestModuleJsonArrTrim_Standalone() {
 func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Cluster() {
 	suite.verifyJsonSetAndGet(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Cluster() {
 	suite.verifyJsonSetWithCondition(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Cluster() {
 	suite.verifyJsonGetWithOptions(suite.clusterJsonOps())
 }
@@ -499,30 +514,39 @@ func (suite *GlideTestSuite) TestModuleJsonDel_Cluster() { suite.verifyJsonDel(s
 func (suite *GlideTestSuite) TestModuleJsonForget_Cluster() {
 	suite.verifyJsonForget(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonClear_Cluster() {
 	suite.verifyJsonClear(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonMGet_Cluster() {
 	suite.verifyJsonMGet(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonType_Cluster() {
 	suite.verifyJsonType(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrAppend_Cluster() {
 	suite.verifyJsonArrAppend(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrInsert_Cluster() {
 	suite.verifyJsonArrInsert(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrIndex_Cluster() {
 	suite.verifyJsonArrIndex(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrLen_Cluster() {
 	suite.verifyJsonArrLen(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrPop_Cluster() {
 	suite.verifyJsonArrPop(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonArrTrim_Cluster() {
 	suite.verifyJsonArrTrim(suite.clusterJsonOps())
 }
