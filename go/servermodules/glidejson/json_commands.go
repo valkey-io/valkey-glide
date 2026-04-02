@@ -36,7 +36,12 @@ type clusterClient interface {
 	CustomCommand(ctx context.Context, args []string) (models.ClusterValue[any], error)
 }
 
-// exec helpers to reduce duplication between standalone and cluster variants.
+func buildArgs(fixedArgs []string, varArgs []string) []string {
+	args := make([]string, 0, len(fixedArgs)+len(varArgs))
+	args = append(args, fixedArgs...)
+	args = append(args, varArgs...)
+	return args
+}
 
 func execStandalone(client standaloneClient, ctx context.Context, args []string) (any, error) {
 	return client.CustomCommand(ctx, args)
@@ -320,19 +325,13 @@ func ClusterJsonClearWithPath(client clusterClient, ctx context.Context, key, pa
 //
 // [valkey.io]: https://valkey.io/commands/json.mget/
 func JsonMGet(client standaloneClient, ctx context.Context, keys []string, path string) (any, error) {
-	args := make([]string, 0, len(keys)+2)
-	args = append(args, jsonMGetCommand)
-	args = append(args, keys...)
-	args = append(args, path)
+	args := buildArgs([]string{jsonMGetCommand}, append(keys, path))
 	return toAnyResult(execStandalone(client, ctx, args))
 }
 
 // ClusterJsonMGet is the cluster variant of [JsonMGet].
 func ClusterJsonMGet(client clusterClient, ctx context.Context, keys []string, path string) (any, error) {
-	args := make([]string, 0, len(keys)+2)
-	args = append(args, jsonMGetCommand)
-	args = append(args, keys...)
-	args = append(args, path)
+	args := buildArgs([]string{jsonMGetCommand}, append(keys, path))
 	return toAnyResult(execCluster(client, ctx, args))
 }
 

@@ -32,9 +32,7 @@ import (
 func JsonArrAppend(
 	client standaloneClient, ctx context.Context, key, path string, values []string,
 ) (any, error) {
-	args := make([]string, 0, 3+len(values))
-	args = append(args, jsonArrAppendCommand, key, path)
-	args = append(args, values...)
+	args := buildArgs([]string{jsonArrAppendCommand, key, path}, values)
 	return toAnyResult(execStandalone(client, ctx, args))
 }
 
@@ -42,9 +40,7 @@ func JsonArrAppend(
 func ClusterJsonArrAppend(
 	client clusterClient, ctx context.Context, key, path string, values []string,
 ) (any, error) {
-	args := make([]string, 0, 3+len(values))
-	args = append(args, jsonArrAppendCommand, key, path)
-	args = append(args, values...)
+	args := buildArgs([]string{jsonArrAppendCommand, key, path}, values)
 	return toAnyResult(execCluster(client, ctx, args))
 }
 
@@ -72,9 +68,7 @@ func ClusterJsonArrAppend(
 func JsonArrInsert(
 	client standaloneClient, ctx context.Context, key, path string, index int64, values []string,
 ) (any, error) {
-	args := make([]string, 0, 4+len(values))
-	args = append(args, jsonArrInsertCommand, key, path, strconv.FormatInt(index, 10))
-	args = append(args, values...)
+	args := buildArgs([]string{jsonArrInsertCommand, key, path, strconv.FormatInt(index, 10)}, values)
 	return toAnyResult(execStandalone(client, ctx, args))
 }
 
@@ -82,9 +76,7 @@ func JsonArrInsert(
 func ClusterJsonArrInsert(
 	client clusterClient, ctx context.Context, key, path string, index int64, values []string,
 ) (any, error) {
-	args := make([]string, 0, 4+len(values))
-	args = append(args, jsonArrInsertCommand, key, path, strconv.FormatInt(index, 10))
-	args = append(args, values...)
+	args := buildArgs([]string{jsonArrInsertCommand, key, path, strconv.FormatInt(index, 10)}, values)
 	return toAnyResult(execCluster(client, ctx, args))
 }
 
