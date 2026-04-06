@@ -29,7 +29,7 @@ dependencies {
     implementation project(':client')
 
     // Apache Commons Pool 2 for connection pooling - part of public API
-    api group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
+    api group: 'org.apache.commons', name: 'commons-pool2', version: '2.13.1'
 
     // Apache Commons Lang 3 for utility classes like Pair
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
@@ -46,7 +46,7 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     // SpotBugs annotations for static analysis (compile-only to avoid IDE errors)
-    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.0'
+    compileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.8'
 }
 
 java {
