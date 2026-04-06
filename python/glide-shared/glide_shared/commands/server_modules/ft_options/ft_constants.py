@@ -55,6 +55,8 @@ class FtSearchKeywords:
     LIMIT = "LIMIT"
     COUNT = "COUNT"
     AS = "AS"
+    NOCONTENT = "NOCONTENT"
+    DIALECT = "DIALECT"
 
 
 class FtAggregateKeywords:

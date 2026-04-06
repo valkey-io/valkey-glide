@@ -454,6 +454,7 @@ export class GlideFt {
      * @returns A two-element array, where the first element is the number of documents in the result set, and the
      * second element has the format: `GlideRecord<GlideRecord<GlideString>>`:
      * a mapping between document names and a map of their attributes.
+     * When `nocontent` is set, the attribute maps will be empty.
      *
      * If `count` or `limit` with values `{offset: 0, count: 0}` is
      * set, the command returns array with only one element: the number of documents.
@@ -824,6 +825,11 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
 
     const args: GlideString[] = [];
 
+    // NOCONTENT
+    if (options.nocontent) {
+        args.push("NOCONTENT");
+    }
+
     // RETURN
     if (options.returnFields) {
         const returnFields: GlideString[] = [];
@@ -865,6 +871,11 @@ function _addFtSearchOptions(options?: FtSearchOptions): GlideString[] {
     // COUNT
     if (options.count) {
         args.push("COUNT");
+    }
+
+    // DIALECT
+    if (options.dialect !== undefined) {
+        args.push("DIALECT", options.dialect.toString());
     }
 
     return args;

@@ -319,6 +319,92 @@ public class VectorSearchTests {
 
     @SneakyThrows
     @Test
+    public void ft_search_nocontent() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        String key = prefix + "doc";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        assertEquals(1L, client.hset(gs(key), createMap(gs("title"), gs("hello world"))).get());
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // NOCONTENT: only keys are returned, no field content
+        Object[] result =
+                FT.search(client, index, "hello", FTSearchOptions.builder().nocontent().build()).get();
+        assertArrayEquals(new Object[] {1L, createMap(gs(key), createMap())}, result);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_dialect() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+        String key = prefix + "doc";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        assertEquals(1L, client.hset(gs(key), createMap(gs("title"), gs("hello world"))).get());
+        Thread.sleep(DATA_PROCESSING_TIMEOUT);
+
+        // dialect 2 is accepted; assert the document is returned
+        Object[] result =
+                FT.search(client, index, "hello", FTSearchOptions.builder().dialect(2).build()).get();
+        assertEquals(2, result.length);
+        assertEquals(1L, result[0]);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ft_search_dialect_invalid() {
+        String prefix = "{" + UUID.randomUUID() + "}:";
+        String index = prefix + "index";
+
+        assertEquals(
+                OK,
+                FT.create(
+                                client,
+                                index,
+                                new FieldInfo[] {new FieldInfo("title", new TextField())},
+                                FTCreateOptions.builder()
+                                        .dataType(DataType.HASH)
+                                        .prefixes(new String[] {prefix})
+                                        .build())
+                        .get());
+
+        // dialect < 2 is not supported; expect an error
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                FT.search(client, index, "hello", FTSearchOptions.builder().dialect(1).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+        assertTrue(exception.getMessage().contains("DIALECT"));
+    }
+
+    @SneakyThrows
+    @Test
     public void ft_drop_and_ft_list() {
         GlideString index = gs(UUID.randomUUID().toString());
         assertEquals(
