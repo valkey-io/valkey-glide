@@ -181,7 +181,7 @@ fn sentinel_masters_cmd() -> crate::Cmd {
 
 fn sentinel_replicas_cmd(master_name: &str) -> crate::Cmd {
     let mut cmd = crate::cmd("SENTINEL");
-    cmd.arg("SLAVES"); // For compatibility with older redis versions
+    cmd.arg("REPLICAS");
     cmd.arg(master_name);
     cmd
 }
