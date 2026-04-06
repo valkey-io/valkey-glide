@@ -17,58 +17,149 @@ const (
 	jsonTestKeyPrefix = "{json-key}-"
 )
 
-// jsonSetGetOps abstracts the JSON set/get operations for both standalone and cluster clients.
-type jsonSetGetOps struct {
-	set              func(ctx context.Context, key, path, value string) (string, error)
-	setWithCondition func(ctx context.Context, key, path, value string, c constants.ConditionalSet) (string, error)
-	get              func(ctx context.Context, key string) (string, error)
-	getWithPaths     func(ctx context.Context, key string, paths []string) (string, error)
-	getWithOptions   func(ctx context.Context, key string, paths []string, o *options.JsonGetOptions) (string, error)
+// jsonOps abstracts all JSON operations for both standalone and cluster clients.
+type jsonOps struct {
+	set                 func(ctx context.Context, key, path, value string) (string, error)
+	setWithCondition    func(ctx context.Context, key, path, value string, c constants.ConditionalSet) (string, error)
+	get                 func(ctx context.Context, key string) (string, error)
+	getWithPaths        func(ctx context.Context, key string, paths []string) (string, error)
+	getWithOptions      func(ctx context.Context, key string, paths []string, o *options.JsonGetOptions) (string, error)
+	del                 func(ctx context.Context, key string) (any, error)
+	delWithPath         func(ctx context.Context, key, path string) (any, error)
+	forget              func(ctx context.Context, key string) (any, error)
+	forgetWithPath      func(ctx context.Context, key, path string) (any, error)
+	clear               func(ctx context.Context, key string) (any, error)
+	clearWithPath       func(ctx context.Context, key, path string) (any, error)
+	mget                func(ctx context.Context, keys []string, path string) (any, error)
+	jsonType            func(ctx context.Context, key string) (any, error)
+	jsonTypeWithPath    func(ctx context.Context, key, path string) (any, error)
+	arrAppend           func(ctx context.Context, key, path string, values []string) (any, error)
+	arrInsert           func(ctx context.Context, key, path string, index int64, values []string) (any, error)
+	arrIndex            func(ctx context.Context, key, path, scalar string) (any, error)
+	arrIndexWithOptions func(ctx context.Context, key, path, scalar string, o *options.JsonArrIndexOptions) (any, error)
+	arrLen              func(ctx context.Context, key string) (any, error)
+	arrLenWithPath      func(ctx context.Context, key, path string) (any, error)
+	arrPop              func(ctx context.Context, key string) (any, error)
+	arrPopWithPath      func(ctx context.Context, key, path string) (any, error)
+	arrPopWithPathIndex func(ctx context.Context, key, path string, index int64) (any, error)
+	arrTrim             func(ctx context.Context, key, path string, start, end int64) (any, error)
 }
 
-func (suite *GlideTestSuite) standaloneJsonOps() jsonSetGetOps {
-	client := suite.defaultClient()
-	return jsonSetGetOps{
-		set: func(ctx context.Context, key, path, value string) (string, error) {
-			return glidejson.JsonSet(client, ctx, key, path, value)
+func (suite *GlideTestSuite) standaloneJsonOps() jsonOps {
+	c := suite.defaultClient()
+	return jsonOps{
+		set: func(ctx context.Context, k, p, v string) (string, error) { return glidejson.JsonSet(c, ctx, k, p, v) },
+		setWithCondition: func(ctx context.Context, k, p, v string, cond constants.ConditionalSet) (string, error) {
+			return glidejson.JsonSetWithCondition(c, ctx, k, p, v, cond)
 		},
-		setWithCondition: func(ctx context.Context, key, path, value string, c constants.ConditionalSet) (string, error) {
-			return glidejson.JsonSetWithCondition(client, ctx, key, path, value, c)
+		get: func(ctx context.Context, k string) (string, error) { return glidejson.JsonGet(c, ctx, k) },
+		getWithPaths: func(ctx context.Context, k string, ps []string) (string, error) {
+			return glidejson.JsonGetWithPaths(c, ctx, k, ps)
 		},
-		get: func(ctx context.Context, key string) (string, error) {
-			return glidejson.JsonGet(client, ctx, key)
+		getWithOptions: func(ctx context.Context, k string, ps []string, o *options.JsonGetOptions) (string, error) {
+			return glidejson.JsonGetWithOptions(c, ctx, k, ps, o)
 		},
-		getWithPaths: func(ctx context.Context, key string, paths []string) (string, error) {
-			return glidejson.JsonGetWithPaths(client, ctx, key, paths)
+		del:            func(ctx context.Context, k string) (any, error) { return glidejson.JsonDel(c, ctx, k) },
+		delWithPath:    func(ctx context.Context, k, p string) (any, error) { return glidejson.JsonDelWithPath(c, ctx, k, p) },
+		forget:         func(ctx context.Context, k string) (any, error) { return glidejson.JsonForget(c, ctx, k) },
+		forgetWithPath: func(ctx context.Context, k, p string) (any, error) { return glidejson.JsonForgetWithPath(c, ctx, k, p) },
+		clear:          func(ctx context.Context, k string) (any, error) { return glidejson.JsonClear(c, ctx, k) },
+		clearWithPath:  func(ctx context.Context, k, p string) (any, error) { return glidejson.JsonClearWithPath(c, ctx, k, p) },
+		mget: func(ctx context.Context, ks []string, p string) (any, error) {
+			return glidejson.JsonMGet(c, ctx, ks, p)
 		},
-		getWithOptions: func(ctx context.Context, key string, paths []string, o *options.JsonGetOptions) (string, error) {
-			return glidejson.JsonGetWithOptions(client, ctx, key, paths, o)
+		jsonType:         func(ctx context.Context, k string) (any, error) { return glidejson.JsonType(c, ctx, k) },
+		jsonTypeWithPath: func(ctx context.Context, k, p string) (any, error) { return glidejson.JsonTypeWithPath(c, ctx, k, p) },
+		arrAppend: func(ctx context.Context, k, p string, vs []string) (any, error) {
+			return glidejson.JsonArrAppend(c, ctx, k, p, vs)
+		},
+		arrInsert: func(ctx context.Context, k, p string, i int64, vs []string) (any, error) {
+			return glidejson.JsonArrInsert(c, ctx, k, p, i, vs)
+		},
+		arrIndex: func(ctx context.Context, k, p, s string) (any, error) { return glidejson.JsonArrIndex(c, ctx, k, p, s) },
+		arrIndexWithOptions: func(ctx context.Context, k, p, s string, o *options.JsonArrIndexOptions) (any, error) {
+			return glidejson.JsonArrIndexWithOptions(c, ctx, k, p, s, o)
+		},
+		arrLen:         func(ctx context.Context, k string) (any, error) { return glidejson.JsonArrLen(c, ctx, k) },
+		arrLenWithPath: func(ctx context.Context, k, p string) (any, error) { return glidejson.JsonArrLenWithPath(c, ctx, k, p) },
+		arrPop:         func(ctx context.Context, k string) (any, error) { return glidejson.JsonArrPop(c, ctx, k) },
+		arrPopWithPath: func(ctx context.Context, k, p string) (any, error) { return glidejson.JsonArrPopWithPath(c, ctx, k, p) },
+		arrPopWithPathIndex: func(ctx context.Context, k, p string, i int64) (any, error) {
+			return glidejson.JsonArrPopWithPathAndIndex(c, ctx, k, p, i)
+		},
+		arrTrim: func(ctx context.Context, k, p string, s, e int64) (any, error) {
+			return glidejson.JsonArrTrim(c, ctx, k, p, s, e)
 		},
 	}
 }
 
-func (suite *GlideTestSuite) clusterJsonOps() jsonSetGetOps {
-	client := suite.defaultClusterClient()
-	return jsonSetGetOps{
-		set: func(ctx context.Context, key, path, value string) (string, error) {
-			return glidejson.ClusterJsonSet(client, ctx, key, path, value)
+func (suite *GlideTestSuite) clusterJsonOps() jsonOps {
+	c := suite.defaultClusterClient()
+	return jsonOps{
+		set: func(ctx context.Context, k, p, v string) (string, error) {
+			return glidejson.ClusterJsonSet(c, ctx, k, p, v)
 		},
-		setWithCondition: func(ctx context.Context, key, path, value string, c constants.ConditionalSet) (string, error) {
-			return glidejson.ClusterJsonSetWithCondition(client, ctx, key, path, value, c)
+		setWithCondition: func(ctx context.Context, k, p, v string, cond constants.ConditionalSet) (string, error) {
+			return glidejson.ClusterJsonSetWithCondition(c, ctx, k, p, v, cond)
 		},
-		get: func(ctx context.Context, key string) (string, error) {
-			return glidejson.ClusterJsonGet(client, ctx, key)
+		get: func(ctx context.Context, k string) (string, error) { return glidejson.ClusterJsonGet(c, ctx, k) },
+		getWithPaths: func(ctx context.Context, k string, ps []string) (string, error) {
+			return glidejson.ClusterJsonGetWithPaths(c, ctx, k, ps)
 		},
-		getWithPaths: func(ctx context.Context, key string, paths []string) (string, error) {
-			return glidejson.ClusterJsonGetWithPaths(client, ctx, key, paths)
+		getWithOptions: func(ctx context.Context, k string, ps []string, o *options.JsonGetOptions) (string, error) {
+			return glidejson.ClusterJsonGetWithOptions(c, ctx, k, ps, o)
 		},
-		getWithOptions: func(ctx context.Context, key string, paths []string, o *options.JsonGetOptions) (string, error) {
-			return glidejson.ClusterJsonGetWithOptions(client, ctx, key, paths, o)
+		del: func(ctx context.Context, k string) (any, error) { return glidejson.ClusterJsonDel(c, ctx, k) },
+		delWithPath: func(ctx context.Context, k, p string) (any, error) {
+			return glidejson.ClusterJsonDelWithPath(c, ctx, k, p)
+		},
+		forget: func(ctx context.Context, k string) (any, error) { return glidejson.ClusterJsonForget(c, ctx, k) },
+		forgetWithPath: func(ctx context.Context, k, p string) (any, error) {
+			return glidejson.ClusterJsonForgetWithPath(c, ctx, k, p)
+		},
+		clear: func(ctx context.Context, k string) (any, error) { return glidejson.ClusterJsonClear(c, ctx, k) },
+		clearWithPath: func(ctx context.Context, k, p string) (any, error) {
+			return glidejson.ClusterJsonClearWithPath(c, ctx, k, p)
+		},
+		mget: func(ctx context.Context, ks []string, p string) (any, error) {
+			return glidejson.ClusterJsonMGet(c, ctx, ks, p)
+		},
+		jsonType: func(ctx context.Context, k string) (any, error) { return glidejson.ClusterJsonType(c, ctx, k) },
+		jsonTypeWithPath: func(ctx context.Context, k, p string) (any, error) {
+			return glidejson.ClusterJsonTypeWithPath(c, ctx, k, p)
+		},
+		arrAppend: func(ctx context.Context, k, p string, vs []string) (any, error) {
+			return glidejson.ClusterJsonArrAppend(c, ctx, k, p, vs)
+		},
+		arrInsert: func(ctx context.Context, k, p string, i int64, vs []string) (any, error) {
+			return glidejson.ClusterJsonArrInsert(c, ctx, k, p, i, vs)
+		},
+		arrIndex: func(ctx context.Context, k, p, s string) (any, error) {
+			return glidejson.ClusterJsonArrIndex(c, ctx, k, p, s)
+		},
+		arrIndexWithOptions: func(ctx context.Context, k, p, s string, o *options.JsonArrIndexOptions) (any, error) {
+			return glidejson.ClusterJsonArrIndexWithOptions(c, ctx, k, p, s, o)
+		},
+		arrLen: func(ctx context.Context, k string) (any, error) { return glidejson.ClusterJsonArrLen(c, ctx, k) },
+		arrLenWithPath: func(ctx context.Context, k, p string) (any, error) {
+			return glidejson.ClusterJsonArrLenWithPath(c, ctx, k, p)
+		},
+		arrPop: func(ctx context.Context, k string) (any, error) { return glidejson.ClusterJsonArrPop(c, ctx, k) },
+		arrPopWithPath: func(ctx context.Context, k, p string) (any, error) {
+			return glidejson.ClusterJsonArrPopWithPath(c, ctx, k, p)
+		},
+		arrPopWithPathIndex: func(ctx context.Context, k, p string, i int64) (any, error) {
+			return glidejson.ClusterJsonArrPopWithPathAndIndex(c, ctx, k, p, i)
+		},
+		arrTrim: func(ctx context.Context, k, p string, s, e int64) (any, error) {
+			return glidejson.ClusterJsonArrTrim(c, ctx, k, p, s, e)
 		},
 	}
 }
 
-func (suite *GlideTestSuite) verifyJsonSetAndGet(ops jsonSetGetOps) {
+// --- Verify helpers ---
+
+func (suite *GlideTestSuite) verifyJsonSetAndGet(ops jsonOps) {
 	t := suite.T()
 	ctx := context.Background()
 	key := jsonTestKeyPrefix + t.Name()
@@ -92,36 +183,25 @@ func (suite *GlideTestSuite) verifyJsonSetAndGet(ops jsonSetGetOps) {
 	assert.Equal(t, "", getResult)
 }
 
-func (suite *GlideTestSuite) verifyJsonSetWithCondition(ops jsonSetGetOps) {
+func (suite *GlideTestSuite) verifyJsonSetWithCondition(ops jsonOps) {
 	t := suite.T()
 	ctx := context.Background()
 	key := jsonTestKeyPrefix + t.Name()
 
-	// NX - should succeed on new key
 	result, err := ops.setWithCondition(ctx, key, jsonTestPath, `{"a": 1.0}`, constants.OnlyIfDoesNotExist)
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", result)
 
-	// NX again - should fail (key exists)
 	result, err = ops.setWithCondition(ctx, key, jsonTestPath, `{"a": 2.0}`, constants.OnlyIfDoesNotExist)
 	assert.NoError(t, err)
 	assert.Equal(t, "", result)
 
-	// XX - should succeed (key exists)
 	result, err = ops.setWithCondition(ctx, key, jsonTestPath, `{"a": 3.0}`, constants.OnlyIfExists)
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", result)
 }
 
-func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Standalone() {
-	suite.verifyJsonSetAndGet(suite.standaloneJsonOps())
-}
-
-func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Standalone() {
-	suite.verifyJsonSetWithCondition(suite.standaloneJsonOps())
-}
-
-func (suite *GlideTestSuite) verifyJsonGetWithOptions(ops jsonSetGetOps) {
+func (suite *GlideTestSuite) verifyJsonGetWithOptions(ops jsonOps) {
 	t := suite.T()
 	ctx := context.Background()
 	key := jsonTestKeyPrefix + t.Name()
@@ -135,9 +215,289 @@ func (suite *GlideTestSuite) verifyJsonGetWithOptions(ops jsonSetGetOps) {
 	assert.Contains(t, result, "\n")
 }
 
+func (suite *GlideTestSuite) verifyJsonDel(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": 1, "nested": {"a": 2, "b": 3}}`)
+	assert.NoError(t, err)
+
+	result, err := ops.delWithPath(ctx, key, "$..a")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), result)
+
+	_, err = ops.set(ctx, key, "$", `{"x": 1}`)
+	assert.NoError(t, err)
+	result, err = ops.del(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), result)
+
+	result, err = ops.del(ctx, "non_existing_key")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), result)
+}
+
+func (suite *GlideTestSuite) verifyJsonForget(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": 1, "nested": {"a": 2, "b": 3}}`)
+	assert.NoError(t, err)
+
+	result, err := ops.forgetWithPath(ctx, key, "$..a")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), result)
+
+	result, err = ops.forget(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), result)
+}
+
+func (suite *GlideTestSuite) verifyJsonClear(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": 1, "b": [1, 2, 3]}`)
+	assert.NoError(t, err)
+
+	result, err := ops.clearWithPath(ctx, key, "$.*")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(2), result)
+
+	result, err = ops.clearWithPath(ctx, key, "$.*")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), result)
+
+	_, err = ops.set(ctx, key, "$", `{"a": 1}`)
+	assert.NoError(t, err)
+	result, err = ops.clear(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), result)
+}
+
+func (suite *GlideTestSuite) verifyJsonMGet(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key1 := jsonTestKeyPrefix + t.Name() + "-1"
+	key2 := jsonTestKeyPrefix + t.Name() + "-2"
+
+	_, err := ops.set(ctx, key1, "$", `{"a": 1}`)
+	assert.NoError(t, err)
+	_, err = ops.set(ctx, key2, "$", `{"a": 2}`)
+	assert.NoError(t, err)
+
+	result, err := ops.mget(ctx, []string{key1, key2, "non_existing"}, "$.a")
+	assert.NoError(t, err)
+	arr, ok := result.([]any)
+	assert.True(t, ok)
+	assert.Len(t, arr, 3)
+	assert.Equal(t, "[1]", arr[0])
+	assert.Equal(t, "[2]", arr[1])
+	assert.Nil(t, arr[2])
+}
+
+func (suite *GlideTestSuite) verifyJsonType(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": 1, "b": "hello", "c": [1, 2]}`)
+	assert.NoError(t, err)
+
+	result, err := ops.jsonTypeWithPath(ctx, key, "$.a")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	result, err = ops.jsonTypeWithPath(ctx, key, "$.c")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	_, err = ops.jsonTypeWithPath(ctx, "non_existing_key", "$")
+	assert.NoError(t, err)
+}
+
+func (suite *GlideTestSuite) verifyJsonArrAppend(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": [1, 2]}`)
+	assert.NoError(t, err)
+
+	result, err := ops.arrAppend(ctx, key, "$.a", []string{"3", "4"})
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	getResult, err := ops.get(ctx, key)
+	assert.NoError(t, err)
+	assert.Contains(t, getResult, "3")
+	assert.Contains(t, getResult, "4")
+}
+
+func (suite *GlideTestSuite) verifyJsonArrInsert(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": [1, 2, 3]}`)
+	assert.NoError(t, err)
+
+	result, err := ops.arrInsert(ctx, key, "$.a", 1, []string{`"x"`})
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	getResult, err := ops.get(ctx, key)
+	assert.NoError(t, err)
+	assert.Contains(t, getResult, `"x"`)
+}
+
+func (suite *GlideTestSuite) verifyJsonArrIndex(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": [1, 2, 3, 2]}`)
+	assert.NoError(t, err)
+
+	result, err := ops.arrIndex(ctx, key, "$.a", "2")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	result, err = ops.arrIndex(ctx, key, "$.a", "99")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	arrOpts := options.NewJsonArrIndexOptions(2)
+	result, err = ops.arrIndexWithOptions(ctx, key, "$.a", "2", arrOpts)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) verifyJsonArrLen(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `[1, 2, 3, 4, 5]`)
+	assert.NoError(t, err)
+
+	result, err := ops.arrLen(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5), result)
+
+	_, err = ops.set(ctx, key, "$", `{"a": [1, 2, 3]}`)
+	assert.NoError(t, err)
+	result, err = ops.arrLenWithPath(ctx, key, "$.a")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) verifyJsonArrPop(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `[1, 2, 3, "last"]`)
+	assert.NoError(t, err)
+
+	result, err := ops.arrPop(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, `"last"`, result)
+
+	_, err = ops.set(ctx, key, "$", `{"a": [10, 20, 30]}`)
+	assert.NoError(t, err)
+	result, err = ops.arrPopWithPath(ctx, key, "$.a")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	_, err = ops.set(ctx, key, "$", `{"a": [10, 20, 30]}`)
+	assert.NoError(t, err)
+	result, err = ops.arrPopWithPathIndex(ctx, key, "$.a", 0)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func (suite *GlideTestSuite) verifyJsonArrTrim(ops jsonOps) {
+	t := suite.T()
+	ctx := context.Background()
+	key := jsonTestKeyPrefix + t.Name()
+
+	_, err := ops.set(ctx, key, "$", `{"a": [1, 2, 3, 4, 5]}`)
+	assert.NoError(t, err)
+
+	result, err := ops.arrTrim(ctx, key, "$.a", 1, 3)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	getResult, err := ops.get(ctx, key)
+	assert.NoError(t, err)
+	assert.Contains(t, getResult, "2")
+	assert.Contains(t, getResult, "3")
+	assert.Contains(t, getResult, "4")
+}
+
+// --- Standalone tests ---
+
+func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Standalone() {
+	suite.verifyJsonSetAndGet(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Standalone() {
+	suite.verifyJsonSetWithCondition(suite.standaloneJsonOps())
+}
+
 func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Standalone() {
 	suite.verifyJsonGetWithOptions(suite.standaloneJsonOps())
 }
+
+func (suite *GlideTestSuite) TestModuleJsonDel_Standalone() {
+	suite.verifyJsonDel(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonForget_Standalone() {
+	suite.verifyJsonForget(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonClear_Standalone() {
+	suite.verifyJsonClear(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonMGet_Standalone() {
+	suite.verifyJsonMGet(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonType_Standalone() {
+	suite.verifyJsonType(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrAppend_Standalone() {
+	suite.verifyJsonArrAppend(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrInsert_Standalone() {
+	suite.verifyJsonArrInsert(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrIndex_Standalone() {
+	suite.verifyJsonArrIndex(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrLen_Standalone() {
+	suite.verifyJsonArrLen(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrPop_Standalone() {
+	suite.verifyJsonArrPop(suite.standaloneJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrTrim_Standalone() {
+	suite.verifyJsonArrTrim(suite.standaloneJsonOps())
+}
+
+// --- Cluster tests ---
 
 func (suite *GlideTestSuite) TestModuleJsonSetAndGet_Cluster() {
 	suite.verifyJsonSetAndGet(suite.clusterJsonOps())
@@ -149,4 +509,44 @@ func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Cluster() {
 
 func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Cluster() {
 	suite.verifyJsonGetWithOptions(suite.clusterJsonOps())
+}
+func (suite *GlideTestSuite) TestModuleJsonDel_Cluster() { suite.verifyJsonDel(suite.clusterJsonOps()) }
+func (suite *GlideTestSuite) TestModuleJsonForget_Cluster() {
+	suite.verifyJsonForget(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonClear_Cluster() {
+	suite.verifyJsonClear(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonMGet_Cluster() {
+	suite.verifyJsonMGet(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonType_Cluster() {
+	suite.verifyJsonType(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrAppend_Cluster() {
+	suite.verifyJsonArrAppend(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrInsert_Cluster() {
+	suite.verifyJsonArrInsert(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrIndex_Cluster() {
+	suite.verifyJsonArrIndex(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrLen_Cluster() {
+	suite.verifyJsonArrLen(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrPop_Cluster() {
+	suite.verifyJsonArrPop(suite.clusterJsonOps())
+}
+
+func (suite *GlideTestSuite) TestModuleJsonArrTrim_Cluster() {
+	suite.verifyJsonArrTrim(suite.clusterJsonOps())
 }
