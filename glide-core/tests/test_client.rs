@@ -1998,6 +1998,9 @@ pub(crate) mod shared_client_tests {
             )
             .await;
 
+            // Wait for the background connection checker to detect the dead connection and reconnect
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
             let res = test_basics
                 .client
                 .send_pipeline(
@@ -2011,7 +2014,7 @@ pub(crate) mod shared_client_tests {
                     },
                 )
                 .await
-                .expect("Pipeline failed");
+                .expect("Pipeline should've reconnected after connection drop.");
             assert_eq!(
                 res,
                 Value::Array(vec![
@@ -2150,6 +2153,9 @@ pub(crate) mod shared_client_tests {
             // Kill all connections.
             kill_connection(&mut test_basics.client).await;
 
+            // Wait for the background connection checker to detect the dead connection and reconnect
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
             let res = test_basics
                 .client
                 .send_pipeline(
@@ -2163,7 +2169,7 @@ pub(crate) mod shared_client_tests {
                     },
                 )
                 .await
-                .expect("Pipeline failed after killing all connections");
+                .expect("Pipeline should've connected after killing all connections");
 
             assert_eq!(
                 res,
