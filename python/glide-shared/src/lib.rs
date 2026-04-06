@@ -22,6 +22,49 @@ struct CommandResponse {
     arena_ptr: *mut std::ffi::c_void,
 }
 
+/// Cached reference to glide_shared.exceptions.RequestError class.
+static mut REQUEST_ERROR_CLASS: *mut ffi::PyObject = std::ptr::null_mut();
+
+/// Get (and cache) the RequestError class from glide_shared.exceptions.
+unsafe fn get_request_error_class() -> *mut ffi::PyObject {
+    unsafe {
+        if REQUEST_ERROR_CLASS.is_null() {
+            let mod_name = ffi::PyUnicode_FromStringAndSize(
+                b"glide_shared.exceptions\0".as_ptr() as *const c_char,
+                23,
+            );
+            if mod_name.is_null() {
+                ffi::PyErr_Clear();
+                return std::ptr::null_mut();
+            }
+            let module = ffi::PyImport_Import(mod_name);
+            ffi::Py_DECREF(mod_name);
+            if module.is_null() {
+                ffi::PyErr_Clear();
+                return std::ptr::null_mut();
+            }
+            let attr = ffi::PyUnicode_FromStringAndSize(
+                b"RequestError\0".as_ptr() as *const c_char,
+                12,
+            );
+            if attr.is_null() {
+                ffi::Py_DECREF(module);
+                ffi::PyErr_Clear();
+                return std::ptr::null_mut();
+            }
+            let cls = ffi::PyObject_GetAttr(module, attr);
+            ffi::Py_DECREF(attr);
+            ffi::Py_DECREF(module);
+            if cls.is_null() {
+                ffi::PyErr_Clear();
+                return std::ptr::null_mut();
+            }
+            REQUEST_ERROR_CLASS = cls; // keep one reference
+        }
+        REQUEST_ERROR_CLASS
+    }
+}
+
 unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
     if resp.is_null() {
         return unsafe { { let n = ffi::Py_None(); ffi::Py_INCREF(n); n } };
@@ -79,7 +122,21 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             ffi::PyUnicode_FromStringAndSize(b"OK\0".as_ptr() as *const c_char, 2)
         },
         9 => unsafe {
-            ffi::PyBytes_FromStringAndSize(r.string_value, r.string_value_len as isize)
+            // Error response: create a RequestError(message) instance
+            let cls = get_request_error_class();
+            if cls.is_null() {
+                // Fallback: return raw bytes if class not found
+                return ffi::PyBytes_FromStringAndSize(r.string_value, r.string_value_len as isize);
+            }
+            let msg = ffi::PyUnicode_FromStringAndSize(r.string_value, r.string_value_len as isize);
+            if msg.is_null() { ffi::PyErr_Clear(); return ffi::Py_None(); }
+            let args = ffi::PyTuple_New(1);
+            if args.is_null() { ffi::Py_DECREF(msg); ffi::PyErr_Clear(); return ffi::Py_None(); }
+            ffi::PyTuple_SetItem(args, 0, msg); // steals ref to msg
+            let obj = ffi::PyObject_CallObject(cls, args);
+            ffi::Py_DECREF(args);
+            if obj.is_null() { ffi::PyErr_Clear(); return ffi::Py_None(); }
+            obj
         },
         _ => unsafe { { let n = ffi::Py_None(); ffi::Py_INCREF(n); n } },
     }

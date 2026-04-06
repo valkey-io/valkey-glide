@@ -443,6 +443,11 @@ pub enum ClientType {
 /// A `GlideClient` adapter.
 pub struct ClientAdapter {
     runtime: Runtime,
+    /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
+    /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
+    /// client creation are directed here via _guard so they run independently of block_on.
+    /// For async/multi_thread clients this is None since the main runtime handles everything.
+    background_runtime: Option<Runtime>,
     core: Arc<CommandExecutionCore>,
     pubsub_callback: Arc<std::sync::RwLock<Option<PubSubCallback>>>,
 }
@@ -495,8 +500,19 @@ impl ClientAdapter {
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
-                // Block on the request for sync client
-                let result = self.runtime.block_on(request_future);
+                // Enter background runtime context inside the future so tokio::spawn
+                // calls within the command (e.g. reconnection, lazy subscribe) land
+                // on the background runtime where TCP I/O is registered.
+                // Note: block_on overrides any context entered before it, so the
+                // guard must be held inside the future being polled.
+                let bg = self
+                    .background_runtime
+                    .as_ref()
+                    .map(|rt| rt.handle().clone());
+                let result = self.runtime.block_on(async {
+                    let _guard = bg.as_ref().map(|h| h.enter());
+                    request_future.await
+                });
                 Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
@@ -866,15 +882,40 @@ fn create_client_internal(
         }
     };
 
+    // For sync clients, create a background runtime for spawned tasks (connection
+    // drivers, reconnection, cluster manager). Enter its context during client
+    // creation so tokio::spawn calls land on the background runtime, not the
+    // current_thread runtime which only polls tasks inside block_on.
+    let background_runtime = match &client_type {
+        ClientType::SyncClient => Some(
+            Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(1)
+                .thread_name("Valkey-GLIDE background")
+                .build()
+                .map_err(|err| {
+                    let redis_error: redis::RedisError = err.into();
+                    errors::error_message(&redis_error)
+                })?,
+        ),
+        _ => None,
+    };
+
     // Always create push channels to support dynamic pubsub
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let client = runtime
-        .block_on(GlideClient::new(
-            ConnectionRequest::from(request),
-            Some(push_tx),
-        ))
-        .map_err(|err| err.to_string())?;
+    let client = {
+        // Create the client on the background runtime so all TCP I/O and spawned
+        // tasks (connection drivers, cluster manager) are registered there.
+        // The current_thread runtime is only used for block_on in the command path.
+        let create_rt = background_runtime.as_ref().unwrap_or(&runtime);
+        create_rt
+            .block_on(GlideClient::new(
+                ConnectionRequest::from(request),
+                Some(push_tx),
+            ))
+            .map_err(|err| err.to_string())?
+    };
 
     // Create the client adapter that will be returned and used as conn_ptr
     let core = Arc::new(CommandExecutionCore {
@@ -884,14 +925,20 @@ fn create_client_internal(
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
         runtime,
+        background_runtime,
         core,
         pubsub_callback: pubsub_callback_store.clone(),
     });
     let client_adapter_ptr = Arc::as_ptr(&client_adapter).addr();
 
-    // Always spawn push handler to support dynamic pubsub
+    // Spawn push handler on the background runtime (if any) so it runs
+    // independently of block_on, otherwise on the main runtime.
+    let spawn_runtime = client_adapter
+        .background_runtime
+        .as_ref()
+        .unwrap_or(&client_adapter.runtime);
     let callback_store = pubsub_callback_store.clone();
-    client_adapter.runtime.spawn(async move {
+    spawn_runtime.spawn(async move {
         while let Some(push_msg) = push_rx.recv().await {
             if (push_msg.kind == redis::PushKind::Message
                 || push_msg.kind == redis::PushKind::PMessage
