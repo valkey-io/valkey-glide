@@ -74,7 +74,7 @@ pub(crate) mod shared_client_tests {
 
                 // TODO - this is a patch, handling the situation where the new server
                 // still isn't available to connection. This should be fixed in [RedisServer].
-                repeat_try_create(|| async {
+                retry(|| async {
                     Client::new(
                         create_connection_request(
                             std::slice::from_ref(&connection_addr),
@@ -1316,7 +1316,7 @@ pub(crate) mod shared_client_tests {
                                 "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                             );
                             // Retry and verify we can still connect with IAM auth after reconnection
-                            let client_info = repeat_try_create(|| async {
+                            let client_info = retry(|| async {
                                 let mut client_clone = client.clone();
                                 let mut cmd = client_info_cmd.clone();
                                 let response =
@@ -1998,30 +1998,32 @@ pub(crate) mod shared_client_tests {
             )
             .await;
 
-            let res = test_basics
-                .client
-                .send_pipeline(
-                    &pipeline,
-                    None,
-                    false,
-                    None,
-                    PipelineRetryStrategy {
-                        retry_server_error: true,
-                        retry_connection_error: false,
-                    },
-                )
-                .await
-                .expect("Pipeline failed");
-            assert_eq!(
-                res,
-                Value::Array(vec![
-                    Value::Okay,
-                    Value::BulkString(value.as_bytes().to_vec()),
-                    Value::Okay,
-                    Value::BulkString(value2.as_bytes().to_vec()),
-                ]),
-                "Pipeline result: {res:?}"
-            );
+            let res = retry(|| async {
+                let mut client = test_basics.client.clone();
+                client
+                    .send_pipeline(
+                        &pipeline,
+                        None,
+                        false,
+                        None,
+                        PipelineRetryStrategy {
+                            retry_server_error: true,
+                            retry_connection_error: false,
+                        },
+                    )
+                    .await
+                    .ok()
+            })
+            .await;
+
+            let expected = Value::Array(vec![
+                Value::Okay,
+                Value::BulkString(value.as_bytes().to_vec()),
+                Value::Okay,
+                Value::BulkString(value2.as_bytes().to_vec()),
+            ]);
+
+            assert_eq!(res, expected, "Pipeline result: {res:?}");
         });
     }
 
@@ -2150,31 +2152,32 @@ pub(crate) mod shared_client_tests {
             // Kill all connections.
             kill_connection(&mut test_basics.client).await;
 
-            let res = test_basics
-                .client
-                .send_pipeline(
-                    &pipeline,
-                    None,
-                    false,
-                    None,
-                    PipelineRetryStrategy {
-                        retry_server_error: true,
-                        retry_connection_error: false,
-                    },
-                )
-                .await
-                .expect("Pipeline failed after killing all connections");
+            let res = retry(|| async {
+                let mut client = test_basics.client.clone();
+                client
+                    .send_pipeline(
+                        &pipeline,
+                        None,
+                        false,
+                        None,
+                        PipelineRetryStrategy {
+                            retry_server_error: true,
+                            retry_connection_error: false,
+                        },
+                    )
+                    .await
+                    .ok()
+            })
+            .await;
 
-            assert_eq!(
-                res,
-                Value::Array(vec![
-                    Value::Okay,
-                    Value::BulkString("value1".as_bytes().to_vec()),
-                    Value::Okay,
-                    Value::BulkString("value2".as_bytes().to_vec()),
-                ]),
-                "Pipeline result: {res:?}"
-            );
+            let expected = Value::Array(vec![
+                Value::Okay,
+                Value::BulkString("value1".as_bytes().to_vec()),
+                Value::Okay,
+                Value::BulkString("value2".as_bytes().to_vec()),
+            ]);
+
+            assert_eq!(res, expected, "Pipeline result: {res:?}");
         });
     }
     #[rstest]
@@ -2667,7 +2670,7 @@ pub(crate) mod shared_client_tests {
                         "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
                     // Retry and verify we're still on database 5 after reconnection
-                    let client_info = repeat_try_create(|| async {
+                    let client_info = retry(|| async {
                         let mut client = test_basics.client.clone();
                         let mut cmd = client_info_cmd.clone();
                         let response = client.send_command(&mut cmd, None).await.ok()?;
@@ -2786,7 +2789,7 @@ pub(crate) mod shared_client_tests {
             kill_connection(&mut test_basics.client).await;
 
             // Retry until reconnection completes, then verify name=2ndName persisted
-            let client_info = repeat_try_create_with_timeout(
+            let client_info = retry_until_timeout(
                 || async {
                     let mut client = test_basics.client.clone();
                     let mut cmd = client_info_cmd.clone();
@@ -2932,7 +2935,7 @@ pub(crate) mod shared_client_tests {
                         "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
                     // Retry and verify we're still authenticated with same username after reconnection
-                    let client_info = repeat_try_create(|| async {
+                    let client_info = retry(|| async {
                         let mut client = test_basics.client.clone();
                         let mut cmd = client_info_cmd.clone();
                         let response = client.send_command(&mut cmd, None).await.ok()?;
@@ -3041,7 +3044,7 @@ pub(crate) mod shared_client_tests {
             kill_connection(&mut test_basics.client).await;
 
             // Retry until reconnection completes, then verify RESP3 persisted
-            let hello_info = repeat_try_create_with_timeout(
+            let hello_info = retry_until_timeout(
                 || async {
                     let mut client = test_basics.client.clone();
                     let mut cmd = hello_cmd.clone();
