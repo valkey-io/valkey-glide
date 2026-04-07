@@ -4,6 +4,7 @@
 * CORE, Python, Java, Node: Add missing NOCONTENT and DIALECT options for FT.SEARCH ([#5550](https://github.com/valkey-io/valkey-glide/pull/5550))
 * Go: Add JSON.SET and JSON.GET commands ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
 * Go: Add JSON module commands - DEL, FORGET, CLEAR, MGET, TYPE, and array operations ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
+* Go: Add JSON TOGGLE, RESP, DEBUG, numeric, string and object commands ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
 * CORE: Fix Tokio runtime blocking in cluster async code by replacing std::sync locks with async-safe alternatives ([#5450](https://github.com/valkey-io/valkey-glide/issues/5450))
 * Core: Maintain throughput during cluster failover by making reconnection non-blocking ([#4990](https://github.com/valkey-io/valkey-glide/issues/4990))
 * FFI: Add OpenTelemetry DB semantic convention attributes to FFI path ([#5596](https://github.com/valkey-io/valkey-glide/issues/5596))
