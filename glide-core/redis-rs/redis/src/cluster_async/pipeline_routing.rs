@@ -1144,10 +1144,11 @@ where
             }
         })?;
 
+    let resolved_address = ClusterConnInner::resolve_address(&core, &redirect_node.address);
     ClusterConnInner::update_upon_moved_error(
         core.clone(),
         redirect_node.slot,
-        redirect_node.address.into(),
+        resolved_address.into(),
     )
     .await
     .map_err(Into::into)

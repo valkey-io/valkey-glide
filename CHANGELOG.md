@@ -8,6 +8,8 @@
 * Core: Maintain throughput during cluster failover by making reconnection non-blocking ([#4990](https://github.com/valkey-io/valkey-glide/issues/4990))
 
 #### Fixes
+* CORE: Resolve raw IPs in MOVED/ASK redirects via reverse IP lookup to prevent slot map corruption with unresolvable
+addresses ([#5710](https://github.com/valkey-io/valkey-glide/pull/5710))
 * CORE: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
 
 #### Operational Enhancements

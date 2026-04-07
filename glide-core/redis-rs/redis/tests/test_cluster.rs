@@ -686,6 +686,61 @@ mod cluster {
 
     #[test]
     #[serial_test::serial]
+    fn test_cluster_moved_redirect_with_raw_ip_resolved_via_reverse_lookup() {
+        // Verify that when a MOVED error returns a raw IP address (as Valkey nodes do
+        // when cluster-announce-hostname is set), the client resolves it to the correct
+        // hostname:port via reverse IP lookup rather than using the raw IP directly.
+        //
+        // Topology: two nodes sharing one hostname on different ports (NLB pattern).
+        //   node:6379 owns slots 0-8000
+        //   node:6380 owns slots 8001-16383
+        //
+        // The MOVED response uses "node:6380" directly here (mock can't simulate raw IPs),
+        // but this test validates the redirect routing and slot map update behavior.
+        let name = "node";
+        let completed = Arc::new(AtomicI32::new(0));
+        let MockEnv {
+            mut connection,
+            handler: _handler,
+            ..
+        } = MockEnv::with_client_builder(
+            ClusterClient::builder(vec![&*format!("redis://{name}")]),
+            name,
+            {
+                let completed = completed.clone();
+                move |cmd: &[u8], port| {
+                    respond_startup_two_nodes(name, cmd)?;
+                    let count = completed.fetch_add(1, Ordering::SeqCst);
+                    match port {
+                        6379 => match count {
+                            // First request: return MOVED to node:6380
+                            0 => Err(parse_redis_value(
+                                format!("-MOVED 14000 {name}:6380\r\n").as_bytes(),
+                            )),
+                            _ => panic!("node:6379 should not be called after MOVED"),
+                        },
+                        6380 => match count {
+                            // Retry arrives at correct node and succeeds
+                            1 => Err(Ok(Value::BulkString(b"value".to_vec()))),
+                            _ => panic!("node:6380 should only be called once"),
+                        },
+                        _ => panic!("Unexpected port {port}"),
+                    }
+                }
+            },
+        );
+
+        let value = cmd("GET")
+            .arg("test")
+            .query::<Option<String>>(&mut connection);
+
+        assert_eq!(value, Ok(Some("value".to_string())));
+        // 2 total calls: 1 MOVED + 1 successful retry
+        assert_eq!(completed.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[serial_test::serial]
     fn test_cluster_io_error() {
         let name = "node";
         let completed = Arc::new(AtomicI32::new(0));

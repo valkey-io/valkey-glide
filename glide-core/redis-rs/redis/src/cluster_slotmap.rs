@@ -191,6 +191,32 @@ impl SlotMap {
         })
     }
 
+    /// Populates the IP→address reverse lookup table with freshly resolved IPs
+    /// captured from DNS resolution during slot refresh.
+    pub(crate) fn populate_ips(&self, resolved_ips: Vec<(String, IpAddr)>) {
+        for (addr, ip) in resolved_ips {
+            if let Some(mut entry) = self.nodes_map.get_mut(&addr) {
+                entry.0 = Some(ip);
+            }
+        }
+    }
+
+    /// Carries over IP mappings from the old slot map to the new one.
+    /// This ensures IPs survive topology rebuilds when nodes aren't reconnected.
+    /// Fresh IPs (from populate_ips) take priority over carried-over ones.
+    pub(crate) fn carry_over_ips_from(&self, old: &SlotMap) {
+        for entry in old.nodes_map.iter() {
+            let (addr, (ip, _)) = (entry.key(), entry.value());
+            if let Some(ip) = ip {
+                if let Some(mut new_entry) = self.nodes_map.get_mut(addr) {
+                    if new_entry.0.is_none() {
+                        new_entry.0 = Some(*ip);
+                    }
+                }
+            }
+        }
+    }
+
     /// Returns a set of all primary node addresses in the cluster.
     pub fn addresses_for_all_primaries(&self) -> HashSet<Arc<String>> {
         self.nodes_map
