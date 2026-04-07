@@ -78,6 +78,8 @@ EXCLUDED_TESTS = {
         "test_sync_get_into_buffer_larger_buffer",
         "test_sync_get_into_buffer_readonly_raises",
         "test_sync_get_into_buffer_too_small_raises",
+        # Script invocation span — async tracked in #5601
+        "test_sync_span_script_invocation",
     ],
 }
 

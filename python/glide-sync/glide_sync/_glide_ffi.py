@@ -142,7 +142,8 @@ class _GlideFFI:
                 const size_t* args,
                 const unsigned long* args_len,
                 const unsigned char* route_bytes,
-                size_t route_bytes_len
+                size_t route_bytes_len,
+                uint64_t span_ptr
             );
 
             CommandResult* update_connection_password(

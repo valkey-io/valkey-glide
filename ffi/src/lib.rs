@@ -8,6 +8,9 @@ use glide_core::command_request::{Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors::RequestErrorType;
 use glide_core::errors::{self, error_message};
+use glide_core::otel_db_semantics::{
+    set_db_attributes, set_db_batch_attributes, set_db_script_attributes,
+};
 use glide_core::request_type::RequestType;
 use glide_core::scripts_container;
 use glide_core::{
@@ -1350,6 +1353,10 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         cmd.set_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
 
+    if let Some(ref span) = cmd.span() {
+        set_db_attributes(span, &cmd, &client_adapter.core.client);
+    }
+
     let route = if !route_bytes.is_null() {
         let r_bytes = unsafe { std::slice::from_raw_parts(route_bytes, route_bytes_len) };
         match Routes::parse_from_bytes(r_bytes) {
@@ -1368,7 +1375,6 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
     };
 
     // Inflight tracking is handled by send_command() via InflightRequestTracker on Cmd.
-    let child_span = create_child_span(cmd.span().as_ref(), "send_command");
     let mut client = client_adapter.core.client.clone();
 
     let buf_option = if response_buf.is_null() {
@@ -1377,18 +1383,14 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         Some(ResponseBuffer(response_buf, response_buf_len))
     };
 
-    let result = client_adapter.execute_request_with_buffer(
+    client_adapter.execute_request_with_buffer(
         request_id,
         async move {
             let routing_info = get_route(route, Some(&cmd))?;
             client.send_command(&mut cmd, routing_info).await
         },
         buf_option,
-    );
-    if let Ok(span) = child_span {
-        span.end();
-    }
-    result
+    )
 }
 
 /// Creates a heap-allocated `CommandResult` containing a `CommandError`.
@@ -1864,6 +1866,7 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
 /// * `route_bytes` is an optional array of bytes that will be parsed into a Protobuf `Routes` object. The array must be allocated by the caller and subsequently freed by the caller after this function returns.
 /// * `route_bytes_len` is the number of bytes in `route_bytes`. It must also not be greater than the max value of a signed pointer-sized integer.
 /// * `route_bytes_len` must be 0 if `route_bytes` is null.
+/// * `span_ptr` is a valid pointer to [`Arc<GlideSpan>`], a span created by [`create_otel_span`] or `0`. The span must be valid until the command is finished.
 /// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn invoke_script(
@@ -1878,6 +1881,7 @@ pub unsafe extern "C-unwind" fn invoke_script(
     args_len: *const c_ulong,
     route_bytes: *const u8,
     route_bytes_len: usize,
+    span_ptr: u64,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
         // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
@@ -1906,6 +1910,18 @@ pub unsafe extern "C-unwind" fn invoke_script(
     } else {
         Vec::new()
     };
+
+    if span_ptr != 0
+        && let Some(span) = unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) }
+    {
+        set_db_script_attributes(
+            &span,
+            hash_str,
+            &keys_vec,
+            &args_vec,
+            &client_adapter.core.client,
+        );
+    }
 
     // Parse routing information if provided
     let route = if !route_bytes.is_null() {
@@ -2054,10 +2070,14 @@ pub unsafe extern "C" fn batch(
     if span_ptr != 0 {
         pipeline.set_pipeline_span(unsafe { get_unsafe_span_from_ptr(Some(span_ptr)) });
     }
-    let child_span = create_child_span(pipeline.span().as_ref(), "send_batch");
+
+    if let Some(ref span) = pipeline.span() {
+        set_db_batch_attributes(span, pipeline.commands(), &client_adapter.core.client);
+    }
+
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
-    let result = client_adapter.execute_request(callback_index, async move {
+    client_adapter.execute_request(callback_index, async move {
         if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
@@ -2073,12 +2093,7 @@ pub unsafe extern "C" fn batch(
                 )
                 .await
         }
-    });
-
-    if let Ok(span) = child_span {
-        span.end();
-    }
-    result
+    })
 }
 
 /// Convert raw C string to a rust string.
@@ -2858,19 +2873,6 @@ unsafe fn get_unsafe_span_from_ptr(command_span: Option<u64>) -> Option<GlideSpa
         Arc::increment_strong_count(command_span as *const GlideSpan);
         (*Arc::from_raw(command_span as *const GlideSpan)).clone()
     })
-}
-
-/// Creates a child span for telemetry if telemetry is enabled
-fn create_child_span(span: Option<&GlideSpan>, name: &str) -> Result<GlideSpan, String> {
-    // Early return if no parent span is provided
-    let parent_span = span.ok_or_else(|| "No parent span provided".to_string())?;
-
-    match parent_span.add_span(name) {
-        Ok(child_span) => Ok(child_span),
-        Err(error_msg) => Err(format!(
-            "Opentelemetry failed to create child span with name `{name}`. Error: {error_msg:?}"
-        )),
-    }
 }
 
 #[repr(C)]

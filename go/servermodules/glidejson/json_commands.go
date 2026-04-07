@@ -4,6 +4,7 @@ package glidejson
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -11,13 +12,24 @@ import (
 )
 
 const (
-	jsonSetCommand    = "JSON.SET"
-	jsonGetCommand    = "JSON.GET"
-	jsonDelCommand    = "JSON.DEL"
-	jsonForgetCommand = "JSON.FORGET"
-	jsonClearCommand  = "JSON.CLEAR"
-	jsonMGetCommand   = "JSON.MGET"
-	jsonTypeCommand   = "JSON.TYPE"
+	jsonSetCommand        = "JSON.SET"
+	jsonGetCommand        = "JSON.GET"
+	jsonDelCommand        = "JSON.DEL"
+	jsonForgetCommand     = "JSON.FORGET"
+	jsonClearCommand      = "JSON.CLEAR"
+	jsonMGetCommand       = "JSON.MGET"
+	jsonTypeCommand       = "JSON.TYPE"
+	jsonNumIncrByCommand  = "JSON.NUMINCRBY"
+	jsonNumMultByCommand  = "JSON.NUMMULTBY"
+	jsonToggleCommand     = "JSON.TOGGLE"
+	jsonStrAppendCommand  = "JSON.STRAPPEND"
+	jsonStrLenCommand     = "JSON.STRLEN"
+	jsonObjLenCommand     = "JSON.OBJLEN"
+	jsonObjKeysCommand    = "JSON.OBJKEYS"
+	jsonRespCommand       = "JSON.RESP"
+	jsonDebugCommand      = "JSON.DEBUG"
+	jsonDebugMemorySubCmd = "MEMORY"
+	jsonDebugFieldsSubCmd = "FIELDS"
 )
 
 // standaloneClient is the interface for standalone client JSON operations.
@@ -363,4 +375,383 @@ func ClusterJsonType(client clusterClient, ctx context.Context, key string) (any
 // ClusterJsonTypeWithPath is the cluster variant of [JsonTypeWithPath].
 func ClusterJsonTypeWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
 	return toAnyResult(execCluster(client, ctx, []string{jsonTypeCommand, key, path}))
+}
+
+// --- JSON.NUMINCRBY ---
+
+// JsonNumIncrBy increments the numeric value at the specified path by the given number.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the JSON document.
+//	path   - The path within the JSON document.
+//	number - The number to increment by.
+//
+// Return value:
+//
+//	For JSONPath: A string representation of an array of new values after increment, or null for non-numbers.
+//	For legacy path: A string representation of the new value.
+//
+// [valkey.io]: https://valkey.io/commands/json.numincrby/
+func JsonNumIncrBy(
+	client standaloneClient, ctx context.Context, key, path string, number float64,
+) (string, error) {
+	return toStringResult(
+		execStandalone(client, ctx, []string{jsonNumIncrByCommand, key, path, strconv.FormatFloat(number, 'f', -1, 64)}),
+	)
+}
+
+// ClusterJsonNumIncrBy is the cluster variant of [JsonNumIncrBy].
+func ClusterJsonNumIncrBy(
+	client clusterClient, ctx context.Context, key, path string, number float64,
+) (string, error) {
+	return toStringResult(
+		execCluster(client, ctx, []string{jsonNumIncrByCommand, key, path, strconv.FormatFloat(number, 'f', -1, 64)}),
+	)
+}
+
+// --- JSON.NUMMULTBY ---
+
+// JsonNumMultBy multiplies the numeric value at the specified path by the given number.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the JSON document.
+//	path   - The path within the JSON document.
+//	number - The number to multiply by.
+//
+// Return value:
+//
+//	For JSONPath: A string representation of an array of new values after multiplication, or null for non-numbers.
+//	For legacy path: A string representation of the new value.
+//
+// [valkey.io]: https://valkey.io/commands/json.nummultby/
+func JsonNumMultBy(
+	client standaloneClient, ctx context.Context, key, path string, number float64,
+) (string, error) {
+	return toStringResult(
+		execStandalone(client, ctx, []string{jsonNumMultByCommand, key, path, strconv.FormatFloat(number, 'f', -1, 64)}),
+	)
+}
+
+// ClusterJsonNumMultBy is the cluster variant of [JsonNumMultBy].
+func ClusterJsonNumMultBy(
+	client clusterClient, ctx context.Context, key, path string, number float64,
+) (string, error) {
+	return toStringResult(
+		execCluster(client, ctx, []string{jsonNumMultByCommand, key, path, strconv.FormatFloat(number, 'f', -1, 64)}),
+	)
+}
+
+// --- JSON.TOGGLE ---
+
+// JsonToggle toggles a boolean value at the root of the JSON document.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.toggle/
+func JsonToggle(client standaloneClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonToggleCommand, key}))
+}
+
+// JsonToggleWithPath toggles a boolean value at the specified path.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the JSON document.
+//	path   - The path within the JSON document.
+//
+// Return value:
+//
+//	For JSONPath: An array of booleans for each matched path, or nil for non-booleans.
+//	For legacy path: The toggled boolean value.
+//
+// [valkey.io]: https://valkey.io/commands/json.toggle/
+func JsonToggleWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonToggleCommand, key, path}))
+}
+
+// ClusterJsonToggle is the cluster variant of [JsonToggle].
+func ClusterJsonToggle(client clusterClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonToggleCommand, key}))
+}
+
+// ClusterJsonToggleWithPath is the cluster variant of [JsonToggleWithPath].
+func ClusterJsonToggleWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonToggleCommand, key, path}))
+}
+
+// --- JSON.STRAPPEND ---
+
+// JsonStrAppend appends a string value to the string at the root of the JSON document.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.strappend/
+func JsonStrAppend(client standaloneClient, ctx context.Context, key, value string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonStrAppendCommand, key, value}))
+}
+
+// JsonStrAppendWithPath appends a string value at the specified path.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the JSON document.
+//	path   - The path within the JSON document.
+//	value  - The string to append. Must be JSON-encoded (e.g., "\"foo\"" to append foo).
+//
+// Return value:
+//
+//	For JSONPath: An array of integers (new string lengths), or nil for non-strings.
+//	For legacy path: The new string length.
+//
+// [valkey.io]: https://valkey.io/commands/json.strappend/
+func JsonStrAppendWithPath(
+	client standaloneClient, ctx context.Context, key, path, value string,
+) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonStrAppendCommand, key, path, value}))
+}
+
+// ClusterJsonStrAppend is the cluster variant of [JsonStrAppend].
+func ClusterJsonStrAppend(client clusterClient, ctx context.Context, key, value string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonStrAppendCommand, key, value}))
+}
+
+// ClusterJsonStrAppendWithPath is the cluster variant of [JsonStrAppendWithPath].
+func ClusterJsonStrAppendWithPath(
+	client clusterClient, ctx context.Context, key, path, value string,
+) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonStrAppendCommand, key, path, value}))
+}
+
+// --- JSON.STRLEN ---
+
+// JsonStrLen returns the length of the string at the root of the JSON document.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.strlen/
+func JsonStrLen(client standaloneClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonStrLenCommand, key}))
+}
+
+// JsonStrLenWithPath returns the length of the string at the specified path.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the JSON document.
+//	path   - The path within the JSON document.
+//
+// Return value:
+//
+//	For JSONPath: An array of integers (string lengths), or nil for non-strings.
+//	For legacy path: The string length, or nil if key doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/json.strlen/
+func JsonStrLenWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonStrLenCommand, key, path}))
+}
+
+// ClusterJsonStrLen is the cluster variant of [JsonStrLen].
+func ClusterJsonStrLen(client clusterClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonStrLenCommand, key}))
+}
+
+// ClusterJsonStrLenWithPath is the cluster variant of [JsonStrLenWithPath].
+func ClusterJsonStrLenWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonStrLenCommand, key, path}))
+}
+
+// --- JSON.OBJLEN ---
+
+// JsonObjLen returns the number of keys in the object at the root of the JSON document.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.objlen/
+func JsonObjLen(client standaloneClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonObjLenCommand, key}))
+}
+
+// JsonObjLenWithPath returns the number of keys in the object at the specified path.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the JSON document.
+//	path   - The path within the JSON document.
+//
+// Return value:
+//
+//	For JSONPath: An array of integers (object sizes), or nil for non-objects.
+//	For legacy path: The number of keys in the object.
+//
+// [valkey.io]: https://valkey.io/commands/json.objlen/
+func JsonObjLenWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonObjLenCommand, key, path}))
+}
+
+// ClusterJsonObjLen is the cluster variant of [JsonObjLen].
+func ClusterJsonObjLen(client clusterClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonObjLenCommand, key}))
+}
+
+// ClusterJsonObjLenWithPath is the cluster variant of [JsonObjLenWithPath].
+func ClusterJsonObjLenWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonObjLenCommand, key, path}))
+}
+
+// --- JSON.OBJKEYS ---
+
+// JsonObjKeys returns the key names in the object at the root of the JSON document.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.objkeys/
+func JsonObjKeys(client standaloneClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonObjKeysCommand, key}))
+}
+
+// JsonObjKeysWithPath returns the key names in the object at the specified path.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	client - The Valkey GLIDE client to execute the command.
+//	ctx    - The context for controlling the command execution.
+//	key    - The key of the JSON document.
+//	path   - The path within the JSON document.
+//
+// Return value:
+//
+//	For JSONPath: A nested array of key names for each matched object, or nil for non-objects.
+//	For legacy path: An array of key names.
+//
+// [valkey.io]: https://valkey.io/commands/json.objkeys/
+func JsonObjKeysWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonObjKeysCommand, key, path}))
+}
+
+// ClusterJsonObjKeys is the cluster variant of [JsonObjKeys].
+func ClusterJsonObjKeys(client clusterClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonObjKeysCommand, key}))
+}
+
+// ClusterJsonObjKeysWithPath is the cluster variant of [JsonObjKeysWithPath].
+func ClusterJsonObjKeysWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonObjKeysCommand, key, path}))
+}
+
+// --- JSON.RESP ---
+
+// JsonResp returns the JSON document in RESP format.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.resp/
+func JsonResp(client standaloneClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonRespCommand, key}))
+}
+
+// JsonRespWithPath returns the JSON value at the specified path in RESP format.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.resp/
+func JsonRespWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonRespCommand, key, path}))
+}
+
+// ClusterJsonResp is the cluster variant of [JsonResp].
+func ClusterJsonResp(client clusterClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonRespCommand, key}))
+}
+
+// ClusterJsonRespWithPath is the cluster variant of [JsonRespWithPath].
+func ClusterJsonRespWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonRespCommand, key, path}))
+}
+
+// --- JSON.DEBUG MEMORY ---
+
+// JsonDebugMemory reports total memory usage in bytes of the JSON document.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.debug-memory/
+func JsonDebugMemory(client standaloneClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key}))
+}
+
+// JsonDebugMemoryWithPath reports memory usage at the specified path.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.debug-memory/
+func JsonDebugMemoryWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key, path}))
+}
+
+// ClusterJsonDebugMemory is the cluster variant of [JsonDebugMemory].
+func ClusterJsonDebugMemory(client clusterClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key}))
+}
+
+// ClusterJsonDebugMemoryWithPath is the cluster variant of [JsonDebugMemoryWithPath].
+func ClusterJsonDebugMemoryWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key, path}))
+}
+
+// --- JSON.DEBUG FIELDS ---
+
+// JsonDebugFields reports the total number of fields in the JSON document.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.debug-fields/
+func JsonDebugFields(client standaloneClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key}))
+}
+
+// JsonDebugFieldsWithPath reports the number of fields at the specified path.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/json.debug-fields/
+func JsonDebugFieldsWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key, path}))
+}
+
+// ClusterJsonDebugFields is the cluster variant of [JsonDebugFields].
+func ClusterJsonDebugFields(client clusterClient, ctx context.Context, key string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key}))
+}
+
+// ClusterJsonDebugFieldsWithPath is the cluster variant of [JsonDebugFieldsWithPath].
+func ClusterJsonDebugFieldsWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key, path}))
 }
