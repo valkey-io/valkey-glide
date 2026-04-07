@@ -676,10 +676,7 @@ where
         }
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
-    panic!(
-        "Timed out: retry exceeded {:?}",
-        timeout
-    );
+    panic!("Timed out: retry exceeded {:?}", timeout);
 }
 
 pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {
