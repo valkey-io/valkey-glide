@@ -677,7 +677,7 @@ where
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     panic!(
-        "Timeout out: retrying method has timed out in {:?}",
+        "Timed out: retry exceeded {:?}",
         timeout
     );
 }
