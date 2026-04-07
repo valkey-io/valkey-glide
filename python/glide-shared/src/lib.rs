@@ -119,7 +119,15 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             set
         },
         8 => unsafe {
-            ffi::PyUnicode_FromStringAndSize(b"OK\0".as_ptr() as *const c_char, 2)
+            let s = ffi::PyUnicode_FromStringAndSize(b"OK\0".as_ptr() as *const c_char, 2);
+            if !s.is_null() {
+                // Intern so that `result is OK` identity checks pass
+                let mut interned = s;
+                ffi::PyUnicode_InternInPlace(&mut interned);
+                interned
+            } else {
+                s
+            }
         },
         9 => unsafe {
             // Error response: create a RequestError(message) instance
