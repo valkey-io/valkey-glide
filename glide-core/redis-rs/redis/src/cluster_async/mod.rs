@@ -2645,16 +2645,34 @@ where
     pub(crate) fn resolve_address(inner: &Arc<InnerCore<C>>, address: &str) -> String {
         let conn_lock = inner.conn_lock.read();
 
-        // Step 1: Reverse IP lookup via slot map.
-        if let Some((host, _port)) = address.rsplit_once(':') {
+        // Step 1: Reverse IP lookup via slot map. This returns the exact hostname:port
+        // from nodes_map, which is correct even when all nodes share one hostname
+        // and are distinguished only by port (e.g., NLB setups).
+        if let Some((host, _port_str)) = address.rsplit_once(':') {
             if let Ok(ip) = host.parse::<IpAddr>() {
-                if let Some(node_addr) = conn_lock.slot_map.node_address_for_ip(ip) {
-                    return (*node_addr).clone();
+                if let Some(node_address) = conn_lock.slot_map.node_address_for_ip(ip) {
+                    return node_address.as_ref().clone();
                 }
             }
         }
 
-        // Step 2: Return raw address as fallback.
+        // Step 2: Try address resolver. Handles cases where MOVED returns a hostname
+        // (pod name or other non-routable address) that needs translation.
+        // The address resolver can remap both hostname and port if needed.
+        let address_resolver = inner.get_cluster_param(|params| params.address_resolver.clone());
+        if let Some(resolver) = address_resolver {
+            if let Some((host, port_str)) = address.rsplit_once(':') {
+                if let Ok(port) = port_str.parse::<u16>() {
+                    let (resolved_host, resolved_port) = resolver.resolve(host, port);
+                    let resolved = format!("{}:{}", resolved_host, resolved_port);
+                    if conn_lock.connection_for_address(&resolved).is_some() {
+                        return resolved;
+                    }
+                }
+            }
+        }
+
+        // Step 3: No connection found — return raw address as fallback.
         address.to_string()
     }
 
@@ -4058,6 +4076,7 @@ where
     let tls_mode = inner.get_cluster_param(|params| params.tls);
 
     let read_from_replicas = inner.get_cluster_param(|params| params.read_from_replicas.clone());
+    let address_resolver = inner.get_cluster_param(|params| params.address_resolver.clone());
     TopologyQueryResult {
         topology_result: calculate_topology(
             topology_values,
@@ -4065,6 +4084,7 @@ where
             tls_mode,
             num_of_nodes_to_query,
             read_from_replicas,
+            address_resolver.as_ref().map(Arc::as_ref),
         ),
         failed_connections: Some(failed_addresses),
     }

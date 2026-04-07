@@ -216,6 +216,7 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: false,
             database_id: 0,
             tcp_nodelay: false,
+            address_resolver: None,
         }
     }
 }

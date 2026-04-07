@@ -383,7 +383,7 @@ where
                 ErrorKind::ClientError,
                 "can't parse node address",
             )))?;
-            match parse_and_count_slots(&value, self.cluster_params.tls, addr).map(
+            match parse_and_count_slots(&value, self.cluster_params.tls, addr, self.cluster_params.address_resolver.as_deref()).map(
                 |ParsedSlotsResult {
                      slots,
                      address_to_ip_map,

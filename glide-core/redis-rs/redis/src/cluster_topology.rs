@@ -116,6 +116,7 @@ pub(crate) fn parse_and_count_slots(
     raw_slot_resp: &Value,
     tls: Option<TlsMode>,
     addr_of_answering_node: &str,
+    address_resolver: Option<&dyn crate::types::AddressResolver>,
 ) -> RedisResult<ParsedSlotsResult> {
     // Parse response.
     let mut slots = Vec::with_capacity(2);
@@ -260,6 +261,15 @@ pub(crate) fn parse_and_count_slots(
                                 (primary_identifier.into_owned(), metadata_ip)
                             };
 
+                        // Apply address resolver if configured, to translate non-routable
+                        // hostnames (e.g., pod names) to routable addresses.
+                        let (canonical_hostname, port) =
+                            if let Some(resolver) = address_resolver {
+                                resolver.resolve(&canonical_hostname, port)
+                            } else {
+                                (canonical_hostname, port)
+                            };
+
                         let connection_addr =
                             get_connection_addr(canonical_hostname, port, tls, None).to_string();
 
@@ -314,6 +324,7 @@ pub(crate) fn calculate_topology<'a>(
     tls_mode: Option<TlsMode>,
     num_of_queried_nodes: usize,
     read_from_replica: ReadFromReplicaStrategy,
+    address_resolver: Option<&dyn crate::types::AddressResolver>,
 ) -> RedisResult<(SlotMap, TopologyHash)> {
     let mut hash_view_map = HashMap::new();
     for (host, view) in topology_views {
@@ -321,7 +332,7 @@ pub(crate) fn calculate_topology<'a>(
             slots_count,
             slots,
             address_to_ip_map,
-        }) = parse_and_count_slots(view, tls_mode, host)
+        }) = parse_and_count_slots(view, tls_mode, host, address_resolver)
         {
             let hash_value = calculate_hash(&(slots_count, &slots));
             let topology_entry = hash_view_map.entry(hash_value).or_insert(TopologyView {
@@ -576,8 +587,8 @@ mod tests {
             ),
         ]);
 
-        let res1 = parse_and_count_slots(&view1, None, "foo").unwrap();
-        let res2 = parse_and_count_slots(&view2, None, "foo").unwrap();
+        let res1 = parse_and_count_slots(&view1, None, "foo", None).unwrap();
+        let res2 = parse_and_count_slots(&view2, None, "foo", None).unwrap();
         assert_eq!(
             calculate_hash(&(res1.slots_count, &res1.slots)),
             calculate_hash(&(res2.slots_count, &res2.slots))
@@ -598,7 +609,7 @@ mod tests {
 
         let ParsedSlotsResult {
             slots_count, slots, ..
-        } = parse_and_count_slots(&view, None, "node").unwrap();
+        } = parse_and_count_slots(&view, None, "node", None).unwrap();
         assert_eq!(slots_count, 4001);
         assert_eq!(slots[0].master(), "node:6379");
     }
@@ -635,8 +646,8 @@ mod tests {
             ),
         ]);
 
-        let res1 = parse_and_count_slots(&view1, None, "node1").unwrap();
-        let res2 = parse_and_count_slots(&view2, None, "node3").unwrap();
+        let res1 = parse_and_count_slots(&view1, None, "node1", None).unwrap();
+        let res2 = parse_and_count_slots(&view2, None, "node3", None).unwrap();
 
         assert_eq!(
             calculate_hash(&(res1.slots_count, &res1.slots)),
@@ -683,7 +694,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 1);
@@ -730,7 +741,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 1);
@@ -769,7 +780,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 1);
@@ -801,7 +812,7 @@ mod tests {
             slots,
             address_to_ip_map,
             ..
-        } = parse_and_count_slots(&view, None, "fallback").unwrap();
+        } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
         assert_eq!(slots[0].master(), "node1:6379");
         assert!(address_to_ip_map.is_empty());
@@ -822,7 +833,7 @@ mod tests {
 
             let ParsedSlotsResult {
                 address_to_ip_map, ..
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(address_to_ip_map.len(), 1);
             assert_eq!(
@@ -847,7 +858,7 @@ mod tests {
                 slots,
                 address_to_ip_map,
                 ..
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots[0].master(), "node1.example.com:6379");
             assert!(address_to_ip_map.is_empty());
@@ -901,7 +912,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 3);
@@ -938,7 +949,7 @@ mod tests {
 
             let ParsedSlotsResult {
                 address_to_ip_map, ..
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(address_to_ip_map.len(), 1);
             assert_eq!(
@@ -968,7 +979,7 @@ mod tests {
                 slots_count,
                 slots,
                 address_to_ip_map,
-            } = parse_and_count_slots(&view, None, "fallback").unwrap();
+            } = parse_and_count_slots(&view, None, "fallback", None).unwrap();
 
             assert_eq!(slots_count, 16384);
             assert_eq!(slots.len(), 1);
@@ -1054,6 +1065,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1077,6 +1089,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         );
         assert!(topology_view.is_err());
     }
@@ -1096,6 +1109,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1119,6 +1133,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1143,6 +1158,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
@@ -1167,6 +1183,7 @@ mod tests {
             None,
             queried_nodes,
             ReadFromReplicaStrategy::AlwaysFromPrimary,
+            None,
         )
         .unwrap();
         let res = collect_shard_addrs(&topology_view);
