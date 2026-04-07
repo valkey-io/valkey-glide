@@ -376,6 +376,7 @@ func ClusterJsonType(client clusterClient, ctx context.Context, key string) (any
 func ClusterJsonTypeWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
 	return toAnyResult(execCluster(client, ctx, []string{jsonTypeCommand, key, path}))
 }
+
 // --- JSON.NUMINCRBY ---
 
 // JsonNumIncrBy increments the numeric value at the specified path by the given number.
