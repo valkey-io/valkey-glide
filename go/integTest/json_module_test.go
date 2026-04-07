@@ -676,6 +676,7 @@ func (suite *GlideTestSuite) verifyJsonToggle(ops jsonOps) {
 	ctx := context.Background()
 	key := jsonTestKeyPrefix + t.Name()
 
+	// Toggle with path
 	_, err := ops.set(ctx, key, "$", `{"bool": true, "nested": {"bool": false}}`)
 	assert.NoError(t, err)
 
@@ -683,11 +684,18 @@ func (suite *GlideTestSuite) verifyJsonToggle(ops jsonOps) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Verify values toggled
 	getResult, err := ops.get(ctx, key)
 	assert.NoError(t, err)
 	assert.Contains(t, getResult, "false")
 	assert.Contains(t, getResult, "true")
+
+	// Toggle without path (root boolean)
+	_, err = ops.set(ctx, key, "$", `true`)
+	assert.NoError(t, err)
+
+	result, err = ops.toggle(ctx, key)
+	assert.NoError(t, err)
+	assert.Equal(t, false, result)
 }
 
 func (suite *GlideTestSuite) verifyJsonStrAppend(ops jsonOps) {
@@ -695,6 +703,7 @@ func (suite *GlideTestSuite) verifyJsonStrAppend(ops jsonOps) {
 	ctx := context.Background()
 	key := jsonTestKeyPrefix + t.Name()
 
+	// StrAppend with path
 	_, err := ops.set(ctx, key, "$", `{"a": "foo", "b": "bar"}`)
 	assert.NoError(t, err)
 
@@ -705,6 +714,14 @@ func (suite *GlideTestSuite) verifyJsonStrAppend(ops jsonOps) {
 	getResult, err := ops.get(ctx, key)
 	assert.NoError(t, err)
 	assert.Contains(t, getResult, "foobaz")
+
+	// StrAppend without path (root string)
+	_, err = ops.set(ctx, key, "$", `"hello"`)
+	assert.NoError(t, err)
+
+	result, err = ops.strAppend(ctx, key, `" world"`)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 }
 
 func (suite *GlideTestSuite) verifyJsonStrLen(ops jsonOps) {
@@ -822,6 +839,11 @@ func (suite *GlideTestSuite) verifyJsonDebugFields(ops jsonOps) {
 	result, err = ops.debugFieldsWithPath(ctx, key, "$.b")
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
+
+	// Non-existing key
+	result, err = ops.debugFields(ctx, "non_existing_key")
+	assert.NoError(t, err)
+	assert.Nil(t, result)
 }
 
 // --- Standalone tests for remaining commands ---

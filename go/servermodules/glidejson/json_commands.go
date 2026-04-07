@@ -27,7 +27,7 @@ const (
 	jsonObjLenCommand     = "JSON.OBJLEN"
 	jsonObjKeysCommand    = "JSON.OBJKEYS"
 	jsonRespCommand       = "JSON.RESP"
-	jsonDebugCmd          = "JSON.DEBUG"
+	jsonDebugCommand          = "JSON.DEBUG"
 	jsonDebugMemorySubCmd = "MEMORY"
 	jsonDebugFieldsSubCmd = "FIELDS"
 )
@@ -704,7 +704,7 @@ func ClusterJsonRespWithPath(client clusterClient, ctx context.Context, key, pat
 //
 // [valkey.io]: https://valkey.io/commands/json.debug-memory/
 func JsonDebugMemory(client standaloneClient, ctx context.Context, key string) (any, error) {
-	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCmd, jsonDebugMemorySubCmd, key}))
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key}))
 }
 
 // JsonDebugMemoryWithPath reports memory usage at the specified path.
@@ -713,17 +713,17 @@ func JsonDebugMemory(client standaloneClient, ctx context.Context, key string) (
 //
 // [valkey.io]: https://valkey.io/commands/json.debug-memory/
 func JsonDebugMemoryWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
-	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCmd, jsonDebugMemorySubCmd, key, path}))
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key, path}))
 }
 
 // ClusterJsonDebugMemory is the cluster variant of [JsonDebugMemory].
 func ClusterJsonDebugMemory(client clusterClient, ctx context.Context, key string) (any, error) {
-	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCmd, jsonDebugMemorySubCmd, key}))
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key}))
 }
 
 // ClusterJsonDebugMemoryWithPath is the cluster variant of [JsonDebugMemoryWithPath].
 func ClusterJsonDebugMemoryWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
-	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCmd, jsonDebugMemorySubCmd, key, path}))
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugMemorySubCmd, key, path}))
 }
 
 // --- JSON.DEBUG FIELDS ---
@@ -734,7 +734,7 @@ func ClusterJsonDebugMemoryWithPath(client clusterClient, ctx context.Context, k
 //
 // [valkey.io]: https://valkey.io/commands/json.debug-fields/
 func JsonDebugFields(client standaloneClient, ctx context.Context, key string) (any, error) {
-	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCmd, jsonDebugFieldsSubCmd, key}))
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key}))
 }
 
 // JsonDebugFieldsWithPath reports the number of fields at the specified path.
@@ -743,15 +743,15 @@ func JsonDebugFields(client standaloneClient, ctx context.Context, key string) (
 //
 // [valkey.io]: https://valkey.io/commands/json.debug-fields/
 func JsonDebugFieldsWithPath(client standaloneClient, ctx context.Context, key, path string) (any, error) {
-	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCmd, jsonDebugFieldsSubCmd, key, path}))
+	return toAnyResult(execStandalone(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key, path}))
 }
 
 // ClusterJsonDebugFields is the cluster variant of [JsonDebugFields].
 func ClusterJsonDebugFields(client clusterClient, ctx context.Context, key string) (any, error) {
-	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCmd, jsonDebugFieldsSubCmd, key}))
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key}))
 }
 
 // ClusterJsonDebugFieldsWithPath is the cluster variant of [JsonDebugFieldsWithPath].
 func ClusterJsonDebugFieldsWithPath(client clusterClient, ctx context.Context, key, path string) (any, error) {
-	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCmd, jsonDebugFieldsSubCmd, key, path}))
+	return toAnyResult(execCluster(client, ctx, []string{jsonDebugCommand, jsonDebugFieldsSubCmd, key, path}))
 }
