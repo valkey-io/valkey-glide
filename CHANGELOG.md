@@ -6,6 +6,7 @@
 * Go: Add JSON module commands - DEL, FORGET, CLEAR, MGET, TYPE, and array operations ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
 * CORE: Fix Tokio runtime blocking in cluster async code by replacing std::sync locks with async-safe alternatives ([#5450](https://github.com/valkey-io/valkey-glide/issues/5450))
 * Core: Maintain throughput during cluster failover by making reconnection non-blocking ([#4990](https://github.com/valkey-io/valkey-glide/issues/4990))
+* FFI: Add OpenTelemetry DB semantic convention attributes to FFI path ([#5596](https://github.com/valkey-io/valkey-glide/issues/5596))
 
 #### Fixes
 * CORE: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
@@ -49,7 +50,6 @@
 * JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 * CORE: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
 * CORE: Add OpenTelemetry DB semantic convention attributes to command spans ([#5416](https://github.com/valkey-io/valkey-glide/issues/5416))
-* FFI: Add OpenTelemetry DB semantic convention attributes to FFI path ([#5596](https://github.com/valkey-io/valkey-glide/issues/5596))
 * Python Sync: Accept `bytearray` and `memoryview` as command argument types to improve performance by reducing copies ([#5492](https://github.com/valkey-io/valkey-glide/pull/5492))
 * Python Sync: Add response buffer support to get() to improve performance by reducing copies ([#5493](https://github.com/valkey-io/valkey-glide/pull/5493))
 
