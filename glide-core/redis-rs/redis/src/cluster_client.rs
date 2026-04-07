@@ -48,6 +48,7 @@ struct BuilderParams {
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
     tcp_nodelay: bool,
+    address_resolver: Option<Arc<dyn crate::types::AddressResolver>>,
 }
 
 #[derive(Clone)]
@@ -143,6 +144,7 @@ pub struct ClusterParams {
     pub(crate) connections_validation_interval: Option<Duration>,
     pub(crate) tls_params: Option<TlsConnParams>,
     pub(crate) client_name: Option<String>,
+    pub(crate) address_resolver: Option<Arc<dyn crate::types::AddressResolver>>,
     pub(crate) lib_name: Option<String>,
     pub(crate) connection_timeout: Duration,
     pub(crate) response_timeout: Duration,
@@ -183,6 +185,7 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
             tcp_nodelay: value.tcp_nodelay,
+            address_resolver: value.address_resolver,
         })
     }
 }
@@ -421,6 +424,16 @@ impl ClusterClientBuilder {
     /// primary nodes. If there are no replica nodes, then all queries will go to the primary nodes.
     pub fn read_from_replicas(mut self) -> ClusterClientBuilder {
         self.builder_params.read_from_replicas = ReadFromReplicaStrategy::RoundRobin;
+        self
+    }
+
+    /// Sets an address resolver for translating cluster node addresses.
+    ///
+    /// When `CLUSTER SLOTS` returns non-routable addresses (e.g., internal pod names
+    /// or hostnames behind a load balancer), provide a custom resolver to translate
+    /// them to addresses the client can connect to.
+    pub fn address_resolver(mut self, resolver: Arc<dyn crate::types::AddressResolver>) -> ClusterClientBuilder {
+        self.builder_params.address_resolver = Some(resolver);
         self
     }
 

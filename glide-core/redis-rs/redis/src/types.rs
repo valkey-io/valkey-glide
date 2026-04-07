@@ -709,6 +709,32 @@ impl fmt::Debug for Value {
 /// Represents a redis error.  For the most part you should be using
 /// the Error trait to interact with this rather than the actual
 /// struct.
+/// A trait for resolving cluster node addresses.
+///
+/// When a cluster's `CLUSTER SLOTS` response returns non-routable addresses
+/// (e.g., internal pod names or hostnames behind a load balancer), implement
+/// this trait to translate them to addresses the client can actually connect to.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use redis::types::AddressResolver;
+///
+/// #[derive(Debug)]
+/// struct MyResolver;
+///
+/// impl AddressResolver for MyResolver {
+///     fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+///         // Translate internal hostname to external address
+///         (format!("{}.external.example.com", host), port)
+///     }
+/// }
+/// ```
+pub trait AddressResolver: Send + Sync + std::fmt::Debug {
+    /// Resolve the given host and port to the actual connection address.
+    fn resolve(&self, host: &str, port: u16) -> (String, u16);
+}
+
 pub struct RedisError {
     repr: ErrorRepr,
 }
