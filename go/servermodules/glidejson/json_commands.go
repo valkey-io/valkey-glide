@@ -27,7 +27,7 @@ const (
 	jsonObjLenCommand     = "JSON.OBJLEN"
 	jsonObjKeysCommand    = "JSON.OBJKEYS"
 	jsonRespCommand       = "JSON.RESP"
-	jsonDebugCommand          = "JSON.DEBUG"
+	jsonDebugCommand      = "JSON.DEBUG"
 	jsonDebugMemorySubCmd = "MEMORY"
 	jsonDebugFieldsSubCmd = "FIELDS"
 )
