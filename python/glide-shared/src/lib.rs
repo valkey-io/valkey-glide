@@ -2,7 +2,9 @@ use pyo3::ffi;
 use pyo3::prelude::*;
 use std::os::raw::c_char;
 
-/// CommandResponse layout — must match ffi/src/lib.rs exactly.
+/// CommandResponse layout — must match ffi/src/lib.rs `CommandResponse` exactly.
+/// If you change this struct, you must also update the corresponding struct in ffi/src/lib.rs
+/// and the CFFI declarations in python/glide-shared/glide_shared/_glide_ffi.py.
 #[repr(C)]
 struct CommandResponse {
     response_type: i32,
@@ -65,6 +67,9 @@ unsafe fn get_request_error_class() -> *mut ffi::PyObject {
     }
 }
 
+/// Response type values — must match ffi/src/lib.rs `ResponseType` enum exactly.
+/// If you add or change variants, you must also update the ResponseType enum in ffi/src/lib.rs
+/// and the CFFI declarations in python/glide-shared/glide_shared/_glide_ffi.py.
 unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
     if resp.is_null() {
         return unsafe { { let n = ffi::Py_None(); ffi::Py_INCREF(n); n } };

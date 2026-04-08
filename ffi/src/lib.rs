@@ -144,6 +144,10 @@ pub unsafe extern "C" fn free_drop_script_error(error: *mut c_char) {
 ///
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
 /// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
+///
+/// IMPORTANT: This struct is mirrored in python/glide-shared/src/lib.rs (fast response parser)
+/// and declared in the CFFI definitions in python/glide-shared/glide_shared/_glide_ffi.py.
+/// Any changes here must be reflected in both of those files.
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct CommandResponse {
@@ -205,6 +209,9 @@ impl Default for CommandResponse {
 }
 
 #[repr(C)]
+/// IMPORTANT: This enum is mirrored in python/glide-shared/src/lib.rs (fast response parser,
+/// `convert` function) and declared in the CFFI definitions in
+/// python/glide-shared/glide_shared/_glide_ffi.py. Any changes here must be reflected in both.
 #[derive(Debug, Default, Clone)]
 pub enum ResponseType {
     #[default]
