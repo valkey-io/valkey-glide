@@ -1630,8 +1630,7 @@ mod tests {
 
     #[test]
     fn get_connection_for_all_nodes_strategy_round_robins_across_primary_and_replicas() {
-        let container =
-            create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
+        let container = create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
 
         // Slot 2001 has primary3 (id=3) and replica3-1 (id=31), replica3-2 (id=32)
         // AllNodes should round-robin across all three nodes
@@ -1669,8 +1668,7 @@ mod tests {
 
     #[test]
     fn get_connection_for_all_nodes_strategy_falls_back_to_primary_when_no_replicas() {
-        let container =
-            create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
+        let container = create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
 
         // Slot 500 has only primary1 (id=1), no replicas
         // AllNodes should return primary when no replicas exist
@@ -1685,8 +1683,7 @@ mod tests {
 
     #[test]
     fn get_connection_for_all_nodes_strategy_with_single_replica() {
-        let container =
-            create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
+        let container = create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
 
         // Slot 1002 has primary2 (id=2) and replica2-1 (id=21)
         // AllNodes should round-robin between primary and replica

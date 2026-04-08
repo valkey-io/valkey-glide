@@ -474,19 +474,14 @@ public class ConnectionTests {
                     Long.parseLong(
                             Stream.of(((String) clusterInfo.getSingleValue()).split("\\R"))
                                     .map(line -> line.split(":", 2))
-                                    .filter(
-                                            parts ->
-                                                    parts.length == 2
-                                                            && parts[0].trim().equals("connected_slaves"))
+                                    .filter(parts -> parts.length == 2 && parts[0].trim().equals("connected_slaves"))
                                     .map(parts -> parts[1].trim())
                                     .findFirst()
                                     .get());
 
             // Count nodes that received GET calls
             long nodesWithCalls =
-                    infoData.values().stream()
-                            .filter(value -> value.contains("cmdstat_get:calls="))
-                            .count();
+                    infoData.values().stream().filter(value -> value.contains("cmdstat_get:calls=")).count();
 
             // Verify that primary + replicas for this slot received calls (slot-based routing)
             assertEquals(
@@ -501,16 +496,11 @@ public class ConnectionTests {
             long primaryCalls =
                     infoData.values().stream()
                             .filter(
-                                    value ->
-                                            value.contains("cmdstat_get:calls=")
-                                                    && value.contains("role:master"))
+                                    value -> value.contains("cmdstat_get:calls=") && value.contains("role:master"))
                             .count();
             long replicaCalls =
                     infoData.values().stream()
-                            .filter(
-                                    value ->
-                                            value.contains("cmdstat_get:calls=")
-                                                    && value.contains("role:slave"))
+                            .filter(value -> value.contains("cmdstat_get:calls=") && value.contains("role:slave"))
                             .count();
 
             assertTrue(primaryCalls > 0, "Primary should receive calls with ALL_NODES strategy");
@@ -523,8 +513,7 @@ public class ConnectionTests {
                             .mapToInt(
                                     value -> {
                                         int startIndex =
-                                                value.indexOf("cmdstat_get:calls=")
-                                                        + "cmdstat_get:calls=".length();
+                                                value.indexOf("cmdstat_get:calls=") + "cmdstat_get:calls=".length();
                                         int endIndex = value.indexOf(",", startIndex);
                                         return Integer.parseInt(value.substring(startIndex, endIndex));
                                     })
