@@ -17,18 +17,6 @@ from tests.utils.utils import get_first_result
 @pytest.mark.anyio
 # @pytest.mark.usefixtures("multiple_replicas_cluster")
 class TestReadFromStrategy:
-    async def _get_num_replicas(self, client: GlideClusterClient) -> int:
-        info_replicas = get_first_result(
-            await client.info([InfoSection.REPLICATION])
-        ).decode()
-        match = re.search(r"connected_slaves:(\d+)", info_replicas)
-        if match:
-            return int(match.group(1))
-        else:
-            raise ValueError(
-                "Could not find the number of replicas in the INFO REPLICATION response"
-            )
-
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_all_nodes_routes_to_primary_and_replicas(

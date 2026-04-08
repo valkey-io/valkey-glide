@@ -76,7 +76,7 @@ fn get_address_from_slot(
             // Round-robin across all nodes: primary + all replicas
             let total_nodes = addrs.replicas().len() + 1;
             let index = slot
-                .last_used_replica
+                .last_used_replica // named for replica-based strategy, but index 0 refers to primary
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 % total_nodes;
             if index == 0 {

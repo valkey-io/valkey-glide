@@ -442,8 +442,6 @@ public class ConnectionTests {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
 
         int nGetCalls = 4;
-        String getCmdstat = String.format("cmdstat_get:calls=%d", nGetCalls);
-        int slot = 12182; // slot for key "foo"
 
         try (GlideClusterClient client =
                 GlideClusterClient.createClient(
