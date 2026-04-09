@@ -441,7 +441,8 @@ public class ConnectionTests {
     public void test_all_nodes_routes_to_primary_and_replicas() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
 
-        int nGetCalls = 4;
+        // Use more calls to ensure statistical significance for round-robin distribution
+        int nGetCalls = 60;
 
         try (GlideClusterClient client =
                 GlideClusterClient.createClient(
