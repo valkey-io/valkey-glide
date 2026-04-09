@@ -20,7 +20,6 @@ on:
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
-            - .github/workflows/start-valkey-docker/action.yml
 
     pull_request:
         paths:
@@ -37,7 +36,6 @@ on:
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
-            - .github/workflows/start-valkey-docker/action.yml
 
     workflow_dispatch:
         inputs:

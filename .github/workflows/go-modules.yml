@@ -14,6 +14,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - ffi/src/**
             - go/integTest/vss_module_test.go
+            - go/integTest/json_module_test.go
+            - go/servermodules/**
             - go/options/json_options.go
             - .github/workflows/go-modules.yml
             - .github/workflows/install-shared-dependencies/action.yml
@@ -25,6 +27,8 @@ on:
             - glide-core/redis-rs/redis/src/**
             - ffi/src/**
             - go/integTest/vss_module_test.go
+            - go/integTest/json_module_test.go
+            - go/servermodules/**
             - go/options/json_options.go
             - .github/workflows/go-modules.yml
             - .github/workflows/install-shared-dependencies/action.yml

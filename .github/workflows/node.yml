@@ -21,7 +21,6 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
-            - .github/workflows/start-valkey-docker/action.yml
     pull_request:
         paths:
             - glide-core/src/**
@@ -35,7 +34,6 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
-            - .github/workflows/start-valkey-docker/action.yml
     workflow_dispatch:
         inputs:
             full-matrix:
