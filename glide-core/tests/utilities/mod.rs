@@ -842,7 +842,7 @@ async fn create_client(server: &BackingServer, configuration: TestConfiguration)
 
             // TODO - this is a patch, handling the situation where the new server
             // still isn't available to connection. This should be fixed in [RedisServer].
-            repeat_try_create(|| async {
+            retry(|| async {
                 Client::new(
                     create_connection_request(
                         std::slice::from_ref(&connection_addr),
