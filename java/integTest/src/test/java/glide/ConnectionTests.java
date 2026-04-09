@@ -440,6 +440,11 @@ public class ConnectionTests {
     @Test
     public void test_all_nodes_routes_to_primary_and_replicas() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+        // Windows integration tests has replicas set to zero due to resource limitations
+        // on Github Action using Windows runner with WSL
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
 
         // Use more calls to ensure statistical significance for round-robin distribution
         int nGetCalls = 60;
