@@ -919,6 +919,17 @@ def dir_path(path: str):
 
 def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
     logging.debug(f"Stopping server {server}")
+    try:
+        ping = subprocess.run(
+            [get_cli_command(), "-h", server.host, "-p", str(server.port),
+             *get_cli_option_args(cluster_folder, use_tls, auth), "PING"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if ping.returncode != 0:
+            logging.info(f"Server {server} is already down, skipping shutdown")
+            return
+    except subprocess.TimeoutExpired:
+        logging.debug(f"Ping to {server} timed out, attempting shutdown anyway")
     cmd_args = [
         get_cli_command(),
         "-h",
@@ -941,6 +952,9 @@ def stop_server(server: Server, cluster_folder: str, use_tls: bool, auth: str):
                 text=True,
             )
             output, err = p.communicate(timeout=5)
+            if err and "Connection refused" in err:
+                logging.info(f"Server {server} is already down")
+                return
             if err and "Warning: Using a password with '-a'" not in err:
                 err_msg = (
                     f"Failed to shutdown host {server.host}:{server.port}:\n {err}"
