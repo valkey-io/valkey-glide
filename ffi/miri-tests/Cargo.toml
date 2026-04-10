@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 protobuf = { version = "3", features = [] }
+serde_json = "1.0"
+url = "2"
 # Mock crates that can be used as drop-in replacements for the real crates
 redis = { path = "./mock-redis", package = "mock-redis" }
 glide-core = { path = "./mock-glide-core",  package = "mock-glide-core" }

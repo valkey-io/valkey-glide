@@ -28,6 +28,7 @@ use redis::cluster_routing::{
 };
 use redis::{ClusterScanArgs, RedisError};
 use redis::{Cmd, Pipeline, PipelineRetryStrategy, RedisResult, Value};
+use std::borrow::Cow;
 use std::ffi::CStr;
 use std::future::Future;
 use std::mem::ManuallyDrop;
@@ -873,6 +874,743 @@ pub unsafe extern "C-unwind" fn create_client(
         },
     };
     Box::into_raw(Box::new(response))
+}
+
+/// Creates a new client from a URI string and optional JSON configuration.
+///
+/// This is an alternative to [`create_client`] that accepts a connection URI instead of protobuf bytes.
+/// The URI parsing and configuration building happens in Rust, making it easier to add new connection
+/// options without changing FFI signatures across all language bindings.
+///
+/// # Parameters
+///
+/// * `uri_str`: A null-terminated C string containing the connection URI.
+///   Preferred format: `valkey://` (or `valkey+unix://` for Unix sockets) and `valkeys://` for TLS. `redis://`, `redis+unix://`, and `rediss://` are accepted for compatibility.
+///   Examples:
+///   - `valkey://localhost:6379`
+///   - `valkeys://:password@example.com:6380/0`
+///   - `valkey://user:pass@localhost:6379/1`
+///   - `redis://localhost:6379` (Redis-compatible alias)
+///
+/// * `extra_options_json`: Optional null-terminated C string containing additional connection options as JSON.
+///   Can be null if no extra options are needed. Supported options include:
+///   - `request_timeout`: Request timeout in milliseconds (u32)
+///   - `connection_timeout`: Connection timeout in milliseconds (u32)
+///   - `client_name`: Client name string (string)
+///   - `cluster_mode_enabled`: Boolean for cluster mode (bool)
+///   - `refresh_topology_from_initial_nodes`: When cluster mode is enabled, refresh topology using only the initial seed nodes (bool)
+///   - `protocol`: Protocol version - "RESP2" or "RESP3" (string)
+///   - `read_from`: Read routing - "Primary", "PreferReplica", "LowestLatency", "AZAffinity", or "AZAffinityReplicasAndPrimary" (string)
+///   - `connection_retry_strategy`: Retry configuration with `number_of_retries`, `factor`, `exponent_base`, and optional `jitter_percent` (object)
+///   - `root_certs`: Array of PEM-encoded CA certificates for TLS (array of strings)
+///   - `client_az`: Client availability zone for AZ affinity routing (string)
+///   - `database_id`: Database number to select (u32, overrides URI database)
+///   - `inflight_requests_limit`: Maximum concurrent requests (u32)
+///   - `tls_mode`: TLS mode - "NoTls", "SecureTls", or "InsecureTls" (string, overrides URI scheme)
+///   - `client_cert`: PEM-encoded client certificate for mutual TLS (string)
+///   - `client_key`: PEM-encoded client private key for mutual TLS (string)
+///   - `lib_name`: Library name identifier (string)
+///   - `tcp_nodelay`: Enable TCP_NODELAY option (bool)
+///   - `lazy_connect`: Delay connection until first command (bool)
+///   - `read_only`: Standalone read-only client mode (bool)
+///   - `pubsub_reconciliation_interval_ms`: Interval for pub/sub reconnection checks in milliseconds (u32)
+///   - `compression_config`: Compression settings with `enabled` (bool), `backend` ("ZSTD" or "LZ4"), optional `compression_level` (i32), and `min_compression_size` (u32) (object)
+///   - `periodic_checks`: Health check configuration with either `manual_interval` (object with `duration_in_sec`) or `disabled` (bool) (object)
+///   - `iam_credentials`: AWS IAM authentication with `cluster_name`, `region`, `service_type` ("ELASTICACHE" or "MEMORYDB"), and optional `refresh_interval_seconds` (object)
+///   - `pubsub_subscriptions`: Pre-subscribe to channels on connection - map of channel type (0=Exact, 1=Pattern, 2=Sharded) to array of channel names (object)
+///
+/// * `client_type`: Type of client to create (sync/async).
+///
+/// * `pubsub_callback`: Optional callback function for pub/sub messages (0 for none).
+///
+/// # Returns
+///
+/// A pointer to a `ConnectionResponse`. The caller must call [`free_connection_response`] when done.
+///
+/// # Examples
+///
+/// ```c
+/// // Simple URI
+/// create_client_from_uri("valkey://localhost:6379", NULL, &client_type, 0);
+///
+/// // URI with basic options
+/// const char* basic_opts = "{\"request_timeout\": 5000, \"client_name\": \"myapp\"}";
+/// create_client_from_uri("valkey://localhost:6379", basic_opts, &client_type, 0);
+///
+/// // URI with advanced options
+/// const char* advanced_opts = "{"
+///     "\"request_timeout\": 5000,"
+///     "\"client_name\": \"myapp\","
+///     "\"read_from\": \"PreferReplica\","
+///     "\"connection_retry_strategy\": {"
+///         "\"number_of_retries\": 5,"
+///         "\"factor\": 2,"
+///         "\"exponent_base\": 2"
+///     "},"
+///     "\"client_az\": \"us-west-2a\""
+/// "}";
+/// create_client_from_uri("valkey://localhost:6379", advanced_opts, &client_type, 0);
+///
+/// // TLS with custom CA certificates
+/// const char* tls_opts = "{"
+///     "\"root_certs\": [\"-----BEGIN CERTIFICATE-----\\n...\"],"
+///     "\"client_cert\": \"-----BEGIN CERTIFICATE-----\\n...\","
+///     "\"client_key\": \"-----BEGIN PRIVATE KEY-----\\n...\""
+/// "}";
+/// create_client_from_uri("valkeys://secure.example.com:6380", tls_opts, &client_type, 0);
+///
+/// // Compression and periodic checks
+/// const char* compression_opts = "{"
+///     "\"compression_config\": {"
+///         "\"enabled\": true,"
+///         "\"backend\": \"ZSTD\","
+///         "\"compression_level\": 3,"
+///         "\"min_compression_size\": 1024"
+///     "},"
+///     "\"periodic_checks\": {"
+///         "\"manual_interval\": {\"duration_in_sec\": 30}"
+///     "}"
+/// "}";
+/// create_client_from_uri("valkey://localhost:6379", compression_opts, &client_type, 0);
+///
+/// // AWS IAM authentication
+/// const char* iam_opts = "{"
+///     "\"iam_credentials\": {"
+///         "\"cluster_name\": \"my-cluster\","
+///         "\"region\": \"us-east-1\","
+///         "\"service_type\": \"ELASTICACHE\","
+///         "\"refresh_interval_seconds\": 900"
+///     "}"
+/// "}";
+/// create_client_from_uri("valkey://my-cluster.aws.com:6379", iam_opts, &client_type, 0);
+///
+/// // Pre-subscribe to pub/sub channels
+/// const char* pubsub_opts = "{"
+///     "\"pubsub_subscriptions\": {"
+///         "\"0\": [\"news\", \"updates\"],"  // Exact channels
+///         "\"1\": [\"events:*\"],"          // Pattern
+///         "\"2\": [\"shard-channel\"]"      // Sharded
+///     "}"
+/// "}";
+/// create_client_from_uri("valkey://localhost:6379", pubsub_opts, &client_type, 0);
+/// ```
+///
+/// # Safety
+///
+/// * `uri_str` must be a valid null-terminated C string pointer.
+/// * If `extra_options_json` is non-null, it must be a valid null-terminated C string containing valid JSON.
+/// * `client_type` must be a valid pointer to a `ClientType`.
+/// * If `pubsub_callback` is non-zero, it must be a valid function pointer that lives while the client is open/active.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn create_client_from_uri(
+    uri_str: *const c_char,
+    extra_options_json: *const c_char,
+    client_type: *const ClientType,
+    pubsub_callback: PubSubCallback,
+) -> *const ConnectionResponse {
+    assert!(!uri_str.is_null());
+    let client_type = unsafe { &*client_type };
+
+    // Convert callback pointer to Option - 0 means no callback
+    let callback_opt = if pubsub_callback as usize == 0 {
+        None
+    } else {
+        Some(pubsub_callback)
+    };
+
+    let response = match create_client_from_uri_internal(uri_str, extra_options_json) {
+        Err(err) => ConnectionResponse {
+            conn_ptr: std::ptr::null(),
+            connection_error_message: CString::into_raw(
+                CString::new(err).expect("Couldn't convert error message to CString"),
+            ),
+        },
+        Ok(connection_request) => {
+            // Convert ConnectionRequest to protobuf bytes to reuse existing logic
+            let request_bytes = connection_request
+                .write_to_bytes()
+                .map_err(|err| format!("Failed to serialize connection request: {}", err));
+
+            match request_bytes {
+                Err(err) => ConnectionResponse {
+                    conn_ptr: std::ptr::null(),
+                    connection_error_message: CString::into_raw(
+                        CString::new(err).expect("Couldn't convert error message to CString"),
+                    ),
+                },
+                Ok(bytes) => {
+                    match create_client_internal(&bytes, client_type.clone(), callback_opt) {
+                        Err(err) => ConnectionResponse {
+                            conn_ptr: std::ptr::null(),
+                            connection_error_message: CString::into_raw(
+                                CString::new(err)
+                                    .expect("Couldn't convert error message to CString"),
+                            ),
+                        },
+                        Ok(client) => ConnectionResponse {
+                            conn_ptr: client as *const c_void,
+                            connection_error_message: std::ptr::null(),
+                        },
+                    }
+                }
+            }
+        }
+    };
+    Box::into_raw(Box::new(response))
+}
+
+/// Normalizes Valkey URI schemes to their Redis equivalents understood by `parse_redis_url`.
+/// `valkey://` → `redis://`, `valkeys://` → `rediss://`, `valkey+unix://` → `redis+unix://`
+fn normalize_uri_scheme(input: &str) -> Cow<'_, str> {
+    let lower = input.to_ascii_lowercase();
+    if lower.starts_with("valkeys://") {
+        Cow::Owned(format!("rediss://{}", &input["valkeys://".len()..]))
+    } else if lower.starts_with("valkey+unix://") {
+        Cow::Owned(format!("redis+unix://{}", &input["valkey+unix://".len()..]))
+    } else if lower.starts_with("valkey://") {
+        Cow::Owned(format!("redis://{}", &input["valkey://".len()..]))
+    } else {
+        Cow::Borrowed(input)
+    }
+}
+
+/// Parses a Valkey- or Redis-style connection URI for use with GLIDE.
+fn parse_connection_url(input: &str) -> Option<url::Url> {
+    redis::parse_redis_url(normalize_uri_scheme(input).as_ref())
+}
+
+/// Internal function to parse URI and JSON options into a ConnectionRequest protobuf message.
+fn create_client_from_uri_internal(
+    uri_str: *const c_char,
+    extra_options_json: *const c_char,
+) -> Result<connection_request::ConnectionRequest, String> {
+    // Parse URI string
+    let uri_string = unsafe {
+        CStr::from_ptr(uri_str)
+            .to_str()
+            .map_err(|e| format!("Invalid UTF-8 in URI: {}", e))?
+    };
+
+    let url = parse_connection_url(uri_string)
+        .ok_or_else(|| format!("Invalid connection URI: {}", uri_string))?;
+
+    // Build base ConnectionRequest from URI
+    let mut request = connection_request::ConnectionRequest::new();
+
+    // Extract host and port
+    let host = url
+        .host_str()
+        .ok_or_else(|| "URI missing host".to_string())?
+        .to_string();
+    let port = url.port().unwrap_or(6379) as u32;
+
+    let mut node_address = connection_request::NodeAddress::new();
+    node_address.host = host.into();
+    node_address.port = port;
+    request.addresses.push(node_address);
+
+    // Extract authentication
+    if let Some(password) = url.password() {
+        let mut auth_info = connection_request::AuthenticationInfo::new();
+        auth_info.password = password.to_string().into();
+
+        // Handle username if present
+        if !url.username().is_empty() {
+            auth_info.username = url.username().to_string().into();
+        }
+
+        request.authentication_info = ::protobuf::MessageField::some(auth_info);
+    }
+
+    // Extract database ID from path
+    if let Some(segments) = url.path_segments()
+        && let Some(db_str) = segments.into_iter().next()
+        && !db_str.is_empty()
+    {
+        let db_id = db_str
+            .parse::<u32>()
+            .map_err(|e| format!("Invalid database ID '{}': {}", db_str, e))?;
+        request.database_id = db_id;
+    }
+
+    // Set TLS mode based on scheme (valkeys:// is normalized to rediss:// before parsing)
+    let tls_mode = if url.scheme() == "rediss" {
+        connection_request::TlsMode::SecureTls
+    } else {
+        connection_request::TlsMode::NoTls
+    };
+    request.tls_mode = ::protobuf::EnumOrUnknown::new(tls_mode);
+
+    // Parse extra options from JSON if provided
+    if !extra_options_json.is_null() {
+        let json_string = unsafe {
+            CStr::from_ptr(extra_options_json)
+                .to_str()
+                .map_err(|e| format!("Invalid UTF-8 in JSON: {}", e))?
+        };
+
+        if !json_string.is_empty() {
+            apply_json_options(&mut request, json_string)?;
+        }
+    }
+
+    Ok(request)
+}
+
+fn is_known_connection_options_json_key(key: &str) -> bool {
+    matches!(
+        key,
+        "request_timeout"
+            | "connection_timeout"
+            | "client_name"
+            | "cluster_mode_enabled"
+            | "refresh_topology_from_initial_nodes"
+            | "protocol"
+            | "read_from"
+            | "connection_retry_strategy"
+            | "root_certs"
+            | "client_az"
+            | "database_id"
+            | "inflight_requests_limit"
+            | "tls_mode"
+            | "client_cert"
+            | "client_key"
+            | "lib_name"
+            | "tcp_nodelay"
+            | "lazy_connect"
+            | "read_only"
+            | "pubsub_reconciliation_interval_ms"
+            | "compression_config"
+            | "periodic_checks"
+            | "iam_credentials"
+            | "pubsub_subscriptions"
+    )
+}
+
+fn validate_connection_options_json_keys(
+    obj: &serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    let mut unknown: Vec<&str> = obj
+        .keys()
+        .map(String::as_str)
+        .filter(|k| !is_known_connection_options_json_key(k))
+        .collect();
+    if unknown.is_empty() {
+        return Ok(());
+    }
+    unknown.sort_unstable();
+    Err(format!(
+        "Unknown key(s) in connection options JSON: {}",
+        unknown.join(", ")
+    ))
+}
+
+/// Apply additional connection options from JSON to the ConnectionRequest
+fn apply_json_options(
+    request: &mut connection_request::ConnectionRequest,
+    json_str: &str,
+) -> Result<(), String> {
+    let json_value: serde_json::Value =
+        serde_json::from_str(json_str).map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    if !json_value.is_object() {
+        return Err("JSON options must be an object".to_string());
+    }
+
+    let obj = json_value.as_object().unwrap();
+    validate_connection_options_json_keys(obj)?;
+
+    // Handle request_timeout
+    if let Some(timeout) = obj.get("request_timeout") {
+        let timeout_ms = timeout
+            .as_u64()
+            .ok_or_else(|| "request_timeout must be a positive integer".to_string())?
+            as u32;
+        request.request_timeout = timeout_ms;
+    }
+
+    // Handle connection_timeout
+    if let Some(timeout) = obj.get("connection_timeout") {
+        let timeout_ms = timeout
+            .as_u64()
+            .ok_or_else(|| "connection_timeout must be a positive integer".to_string())?
+            as u32;
+        request.connection_timeout = timeout_ms;
+    }
+
+    // Handle client_name
+    if let Some(name) = obj.get("client_name") {
+        let name_str = name
+            .as_str()
+            .ok_or_else(|| "client_name must be a string".to_string())?;
+        request.client_name = name_str.to_string().into();
+    }
+
+    // Handle cluster_mode_enabled
+    if let Some(cluster_mode) = obj.get("cluster_mode_enabled") {
+        let enabled = cluster_mode
+            .as_bool()
+            .ok_or_else(|| "cluster_mode_enabled must be a boolean".to_string())?;
+        request.cluster_mode_enabled = enabled;
+    }
+
+    // Handle refresh_topology_from_initial_nodes
+    if let Some(refresh) = obj.get("refresh_topology_from_initial_nodes") {
+        let enabled = refresh
+            .as_bool()
+            .ok_or_else(|| "refresh_topology_from_initial_nodes must be a boolean".to_string())?;
+        request.refresh_topology_from_initial_nodes = enabled;
+    }
+
+    // Handle protocol version
+    if let Some(protocol) = obj.get("protocol") {
+        let protocol_str = protocol
+            .as_str()
+            .ok_or_else(|| "protocol must be a string".to_string())?;
+        let protocol_version = match protocol_str.to_uppercase().as_str() {
+            "RESP2" => connection_request::ProtocolVersion::RESP2,
+            "RESP3" => connection_request::ProtocolVersion::RESP3,
+            _ => return Err(format!("Unknown protocol version: {}", protocol_str)),
+        };
+        request.protocol = ::protobuf::EnumOrUnknown::new(protocol_version);
+    }
+
+    // Handle read_from
+    if let Some(read_from) = obj.get("read_from") {
+        let read_from_str = read_from
+            .as_str()
+            .ok_or_else(|| "read_from must be a string".to_string())?;
+        let read_from_enum = match read_from_str {
+            "Primary" => connection_request::ReadFrom::Primary,
+            "PreferReplica" => connection_request::ReadFrom::PreferReplica,
+            "LowestLatency" => connection_request::ReadFrom::LowestLatency,
+            "AZAffinity" => connection_request::ReadFrom::AZAffinity,
+            "AZAffinityReplicasAndPrimary" => {
+                connection_request::ReadFrom::AZAffinityReplicasAndPrimary
+            }
+            _ => return Err(format!("Unknown read_from value: {}", read_from_str)),
+        };
+        request.read_from = ::protobuf::EnumOrUnknown::new(read_from_enum);
+    }
+
+    // Handle connection_retry_strategy
+    if let Some(retry) = obj.get("connection_retry_strategy") {
+        let retry_obj = retry
+            .as_object()
+            .ok_or_else(|| "connection_retry_strategy must be an object".to_string())?;
+
+        let mut strategy = connection_request::ConnectionRetryStrategy::new();
+
+        if let Some(retries) = retry_obj.get("number_of_retries") {
+            strategy.number_of_retries = retries
+                .as_u64()
+                .ok_or_else(|| "number_of_retries must be a positive integer".to_string())?
+                as u32;
+        }
+
+        if let Some(factor) = retry_obj.get("factor") {
+            strategy.factor = factor
+                .as_u64()
+                .ok_or_else(|| "factor must be a positive integer".to_string())?
+                as u32;
+        }
+
+        if let Some(base) = retry_obj.get("exponent_base") {
+            strategy.exponent_base = base
+                .as_u64()
+                .ok_or_else(|| "exponent_base must be a positive integer".to_string())?
+                as u32;
+        }
+
+        if let Some(jitter) = retry_obj.get("jitter_percent") {
+            strategy.jitter_percent = Some(
+                jitter
+                    .as_u64()
+                    .ok_or_else(|| "jitter_percent must be a positive integer".to_string())?
+                    as u32,
+            );
+        }
+
+        request.connection_retry_strategy = ::protobuf::MessageField::some(strategy);
+    }
+
+    // Handle root_certs (array of certificate strings)
+    if let Some(certs) = obj.get("root_certs") {
+        let certs_array = certs
+            .as_array()
+            .ok_or_else(|| "root_certs must be an array".to_string())?;
+
+        for cert in certs_array {
+            let cert_str = cert
+                .as_str()
+                .ok_or_else(|| "Each root_cert must be a string".to_string())?;
+            request.root_certs.push(cert_str.as_bytes().to_vec().into());
+        }
+    }
+
+    // Handle client_az (availability zone)
+    if let Some(az) = obj.get("client_az") {
+        let az_str = az
+            .as_str()
+            .ok_or_else(|| "client_az must be a string".to_string())?;
+        request.client_az = az_str.to_string().into();
+    }
+
+    // Handle database_id (override URI database if specified)
+    if let Some(db_id) = obj.get("database_id") {
+        let db = db_id
+            .as_u64()
+            .ok_or_else(|| "database_id must be a positive integer".to_string())?
+            as u32;
+        request.database_id = db;
+    }
+
+    // Handle inflight_requests_limit
+    if let Some(limit) = obj.get("inflight_requests_limit") {
+        let limit_val = limit
+            .as_u64()
+            .ok_or_else(|| "inflight_requests_limit must be a positive integer".to_string())?
+            as u32;
+        request.inflight_requests_limit = limit_val;
+    }
+
+    // Handle TLS mode (override URI scheme if specified)
+    if let Some(tls) = obj.get("tls_mode") {
+        let tls_str = tls
+            .as_str()
+            .ok_or_else(|| "tls_mode must be a string".to_string())?;
+        let tls_mode = match tls_str {
+            "NoTls" => connection_request::TlsMode::NoTls,
+            "SecureTls" => connection_request::TlsMode::SecureTls,
+            "InsecureTls" => connection_request::TlsMode::InsecureTls,
+            _ => return Err(format!("Unknown tls_mode value: {}", tls_str)),
+        };
+        request.tls_mode = ::protobuf::EnumOrUnknown::new(tls_mode);
+    }
+
+    // Handle client_cert (for mutual TLS)
+    if let Some(cert) = obj.get("client_cert") {
+        let cert_str = cert
+            .as_str()
+            .ok_or_else(|| "client_cert must be a string".to_string())?;
+        request.client_cert = cert_str.as_bytes().to_vec().into();
+    }
+
+    // Handle client_key (for mutual TLS)
+    if let Some(key) = obj.get("client_key") {
+        let key_str = key
+            .as_str()
+            .ok_or_else(|| "client_key must be a string".to_string())?;
+        request.client_key = key_str.as_bytes().to_vec().into();
+    }
+
+    // Handle lib_name
+    if let Some(lib_name) = obj.get("lib_name") {
+        let name_str = lib_name
+            .as_str()
+            .ok_or_else(|| "lib_name must be a string".to_string())?;
+        request.lib_name = name_str.to_string().into();
+    }
+
+    // Handle tcp_nodelay
+    if let Some(nodelay) = obj.get("tcp_nodelay") {
+        let enabled = nodelay
+            .as_bool()
+            .ok_or_else(|| "tcp_nodelay must be a boolean".to_string())?;
+        request.tcp_nodelay = Some(enabled);
+    }
+
+    // Handle lazy_connect
+    if let Some(lazy) = obj.get("lazy_connect") {
+        let enabled = lazy
+            .as_bool()
+            .ok_or_else(|| "lazy_connect must be a boolean".to_string())?;
+        request.lazy_connect = enabled;
+    }
+
+    // Handle read_only
+    if let Some(read_only) = obj.get("read_only") {
+        let enabled = read_only
+            .as_bool()
+            .ok_or_else(|| "read_only must be a boolean".to_string())?;
+        request.read_only = Some(enabled);
+    }
+
+    // Handle pubsub_reconciliation_interval_ms
+    if let Some(interval) = obj.get("pubsub_reconciliation_interval_ms") {
+        let interval_ms = interval.as_u64().ok_or_else(|| {
+            "pubsub_reconciliation_interval_ms must be a positive integer".to_string()
+        })? as u32;
+        request.pubsub_reconciliation_interval_ms = Some(interval_ms);
+    }
+
+    // Handle compression_config
+    if let Some(compression) = obj.get("compression_config") {
+        let compression_obj = compression
+            .as_object()
+            .ok_or_else(|| "compression_config must be an object".to_string())?;
+
+        let mut config = connection_request::CompressionConfig::new();
+
+        if let Some(enabled) = compression_obj.get("enabled") {
+            config.enabled = enabled
+                .as_bool()
+                .ok_or_else(|| "compression_config.enabled must be a boolean".to_string())?;
+        }
+
+        if let Some(backend) = compression_obj.get("backend") {
+            let backend_str = backend
+                .as_str()
+                .ok_or_else(|| "compression_config.backend must be a string".to_string())?;
+            let backend_enum = match backend_str.to_uppercase().as_str() {
+                "ZSTD" => connection_request::CompressionBackend::ZSTD,
+                "LZ4" => connection_request::CompressionBackend::LZ4,
+                _ => return Err(format!("Unknown compression backend: {}", backend_str)),
+            };
+            config.backend = ::protobuf::EnumOrUnknown::new(backend_enum);
+        }
+
+        if let Some(level) = compression_obj.get("compression_level") {
+            let level_val = level.as_i64().ok_or_else(|| {
+                "compression_config.compression_level must be an integer".to_string()
+            })? as i32;
+            config.compression_level = Some(level_val);
+        }
+
+        if let Some(min_size) = compression_obj.get("min_compression_size") {
+            config.min_compression_size = min_size.as_u64().ok_or_else(|| {
+                "compression_config.min_compression_size must be a positive integer".to_string()
+            })? as u32;
+        }
+
+        request.compression_config = ::protobuf::MessageField::some(config);
+    }
+
+    // Handle periodic_checks (oneof: manual_interval or disabled)
+    if let Some(periodic) = obj.get("periodic_checks") {
+        let periodic_obj = periodic
+            .as_object()
+            .ok_or_else(|| "periodic_checks must be an object".to_string())?;
+
+        if let Some(manual) = periodic_obj.get("manual_interval") {
+            let manual_obj = manual
+                .as_object()
+                .ok_or_else(|| "periodic_checks.manual_interval must be an object".to_string())?;
+
+            let duration = manual_obj.get("duration_in_sec").ok_or_else(|| {
+                "periodic_checks.manual_interval.duration_in_sec is required".to_string()
+            })?;
+            let duration_val = duration.as_u64().ok_or_else(|| {
+                "periodic_checks.manual_interval.duration_in_sec must be a positive integer"
+                    .to_string()
+            })? as u32;
+
+            let mut manual_interval = connection_request::PeriodicChecksManualInterval::new();
+            manual_interval.duration_in_sec = duration_val;
+            request.set_periodic_checks_manual_interval(manual_interval);
+        } else if let Some(disabled) = periodic_obj.get("disabled") {
+            let is_disabled = disabled
+                .as_bool()
+                .ok_or_else(|| "periodic_checks.disabled must be a boolean".to_string())?;
+
+            if is_disabled {
+                request.set_periodic_checks_disabled(connection_request::PeriodicChecksDisabled::new());
+            }
+        } else {
+            return Err(
+                "periodic_checks must have either 'manual_interval' or 'disabled'".to_string(),
+            );
+        }
+    }
+
+    // Handle IAM credentials (nested in authentication_info)
+    if let Some(iam) = obj.get("iam_credentials") {
+        let iam_obj = iam
+            .as_object()
+            .ok_or_else(|| "iam_credentials must be an object".to_string())?;
+
+        let mut iam_creds = connection_request::IamCredentials::new();
+
+        if let Some(cluster_name) = iam_obj.get("cluster_name") {
+            let name = cluster_name
+                .as_str()
+                .ok_or_else(|| "iam_credentials.cluster_name must be a string".to_string())?;
+            iam_creds.cluster_name = name.to_string().into();
+        }
+
+        if let Some(region) = iam_obj.get("region") {
+            let region_str = region
+                .as_str()
+                .ok_or_else(|| "iam_credentials.region must be a string".to_string())?;
+            iam_creds.region = region_str.to_string().into();
+        }
+
+        if let Some(service_type) = iam_obj.get("service_type") {
+            let service_str = service_type
+                .as_str()
+                .ok_or_else(|| "iam_credentials.service_type must be a string".to_string())?;
+            let service_enum = match service_str.to_uppercase().as_str() {
+                "ELASTICACHE" => connection_request::ServiceType::ELASTICACHE,
+                "MEMORYDB" => connection_request::ServiceType::MEMORYDB,
+                _ => return Err(format!("Unknown service type: {}", service_str)),
+            };
+            iam_creds.service_type = ::protobuf::EnumOrUnknown::new(service_enum);
+        }
+
+        if let Some(refresh_interval) = iam_obj.get("refresh_interval_seconds") {
+            let interval_val = refresh_interval.as_u64().ok_or_else(|| {
+                "iam_credentials.refresh_interval_seconds must be a positive integer".to_string()
+            })? as u32;
+            iam_creds.refresh_interval_seconds = Some(interval_val);
+        }
+
+        // Get or create authentication_info and set IAM credentials
+        let mut auth_info = request.authentication_info.take().unwrap_or_default();
+        auth_info.iam_credentials = ::protobuf::MessageField::some(iam_creds);
+        request.authentication_info = ::protobuf::MessageField::some(auth_info);
+    }
+
+    // Handle pubsub_subscriptions
+    if let Some(pubsub) = obj.get("pubsub_subscriptions") {
+        let pubsub_obj = pubsub
+            .as_object()
+            .ok_or_else(|| "pubsub_subscriptions must be an object".to_string())?;
+
+        let mut subscriptions = connection_request::PubSubSubscriptions::new();
+
+        for (channel_type_str, channels_value) in pubsub_obj {
+            // Parse channel type (0=Exact, 1=Pattern, 2=Sharded)
+            let channel_type_num = channel_type_str.parse::<u32>().map_err(|_| {
+                format!(
+                    "pubsub_subscriptions key '{}' must be a number (0=Exact, 1=Pattern, 2=Sharded)",
+                    channel_type_str
+                )
+            })?;
+
+            let channels_array = channels_value.as_array().ok_or_else(|| {
+                format!("pubsub_subscriptions.{} must be an array", channel_type_str)
+            })?;
+
+            let mut channels_or_patterns = connection_request::PubSubChannelsOrPatterns::new();
+
+            for channel in channels_array {
+                let channel_str = channel
+                    .as_str()
+                    .ok_or_else(|| "Each channel/pattern must be a string".to_string())?;
+                channels_or_patterns
+                    .channels_or_patterns
+                    .push(channel_str.as_bytes().to_vec().into());
+            }
+
+            subscriptions
+                .channels_or_patterns_by_type
+                .insert(channel_type_num, channels_or_patterns);
+        }
+
+        request.pubsub_subscriptions = ::protobuf::MessageField::some(subscriptions);
+    }
+
+    Ok(())
 }
 
 /// Closes the given `GlideClient`, freeing it from the heap.
