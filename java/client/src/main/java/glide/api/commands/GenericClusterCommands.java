@@ -148,7 +148,7 @@ public interface GenericClusterCommands {
      * Returns a random key.<br>
      * The command will be routed to all primary nodes, and will return the first successful result.
      *
-     * @see <a href="https://valkey.io/docs/commands/randomkey/">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @return A random <code>key</code> from the database.
      * @example
      *     <pre>{@code
