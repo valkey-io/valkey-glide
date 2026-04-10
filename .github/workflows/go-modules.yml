@@ -36,6 +36,10 @@ on:
             - .github/workflows/start-valkey-docker/action.yml
     workflow_dispatch:
         inputs:
+            rc-version:
+                required: false
+                type: string
+                description: "RC Version number (Format: vX.Y.Z or vX.Y.Z-rcN)"
             name:
                 required: false
                 type: string
@@ -137,10 +141,24 @@ jobs:
             - name: Install zig
               uses: ./.github/workflows/install-zig
 
+            - name: Run patch to test with RC
+              working-directory: go
+              if: ${{ github.event.inputs.rc-version }}
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
+              run: |
+                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
+
             - name: Build and test
               working-directory: ./go
+              env:
+                  RC_VERSION: ${{ github.event.inputs.rc-version }}
               run: |
-                  make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  if [[ -n "$RC_VERSION" ]]; then
+                      make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  else
+                      make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
+                  fi
 
             - name: Upload test reports
               if: always()
