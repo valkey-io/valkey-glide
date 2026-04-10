@@ -71,7 +71,7 @@ func (suite *GlideTestSuite) SetupSuite() {
 	runClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
 	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster"}, true)
 
-	// Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+	// Delete dirs to ensure clean state before starting new clusters
 	err := os.RemoveAll("../../utils/clusters")
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatal(err)
