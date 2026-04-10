@@ -48,6 +48,7 @@ on:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
+    workflow_call:
 
 concurrency:
     group: python-modules-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
