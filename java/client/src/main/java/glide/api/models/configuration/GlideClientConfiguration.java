@@ -66,4 +66,10 @@ public class GlideClientConfiguration extends BaseClientConfiguration {
      * <p>Defaults to false.
      */
     @Builder.Default private final boolean readOnly = false;
+
+    /**
+     * Controls how the client discovers node roles and topology in standalone mode. Defaults to
+     * {@link NodeDiscoveryMode#STANDARD}.
+     */
+    @Builder.Default private final NodeDiscoveryMode nodeDiscoveryMode = NodeDiscoveryMode.STANDARD;
 }

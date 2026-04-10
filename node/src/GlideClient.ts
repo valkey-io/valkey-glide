@@ -15,6 +15,7 @@ import {
     GlideReturnType,
     GlideString,
     PubSubMsg,
+    NodeDiscoveryMode,
 } from "./BaseClient";
 import { Batch } from "./Batch";
 import {
@@ -193,6 +194,12 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Defaults to false.
      */
     readOnly?: boolean;
+    /**
+     * Controls how the client discovers node roles and topology in standalone mode.
+     *
+     * @see {@link NodeDiscoveryMode} for available modes.
+     */
+    nodeDiscoveryMode?: NodeDiscoveryMode;
 };
 
 /**
@@ -239,6 +246,11 @@ export class GlideClient extends BaseClient {
         // Set read-only mode if specified
         if (options.readOnly !== undefined) {
             configuration.readOnly = options.readOnly;
+        }
+
+        if (options.nodeDiscoveryMode !== undefined) {
+            configuration.nodeDiscoveryMode =
+                options.nodeDiscoveryMode as number;
         }
 
         return configuration;

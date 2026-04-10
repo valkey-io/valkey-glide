@@ -1981,8 +1981,14 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         request.inflight_requests_limit,
     );
 
+    let node_discovery_mode = match request.node_discovery_mode {
+        NodeDiscoveryMode::Standard => "\nNode discovery mode: Standard",
+        NodeDiscoveryMode::Static => "\nNode discovery mode: Static",
+        NodeDiscoveryMode::DiscoverAll => "\nNode discovery mode: DiscoverAll",
+    };
+
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{node_discovery_mode}",
     )
 }
 
