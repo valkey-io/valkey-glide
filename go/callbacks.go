@@ -44,6 +44,25 @@ func getClientByPtr(ptrValue uintptr) *baseClient {
 func successCallback(channelPtr unsafe.Pointer, cResponse *C.struct_CommandResponse) {
 	response := cResponse
 	resultChannel := *(*chan payload)(getPinnedPtr(channelPtr))
+
+	// For FlatBuffer responses, the data is malloc'd by Rust and ownership
+	// transfers to Go. Use unsafe.Slice for zero-copy access.
+	if response != nil && response.response_type == 10 { // FlatBuffer
+		dataLen := int(response.string_value_len)
+		if dataLen > 0 && response.string_value != nil {
+			// Zero-copy: create a Go slice backed by the malloc'd memory.
+			// Go owns this memory and must free it with C.free.
+			goSlice := unsafe.Slice((*byte)(unsafe.Pointer(response.string_value)), dataLen)
+			resultChannel <- payload{
+				value:      nil,
+				error:      nil,
+				flatBuf:    goSlice,
+				flatBufPtr: unsafe.Pointer(response.string_value),
+			}
+			return
+		}
+	}
+
 	resultChannel <- payload{value: response, error: nil}
 }
 

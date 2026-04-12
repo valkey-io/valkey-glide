@@ -45,8 +45,18 @@ import (
 const OK = "OK"
 
 type payload struct {
-	value *C.struct_CommandResponse
-	error error
+	value      *C.struct_CommandResponse
+	error      error
+	flatBuf    []byte         // Direct flat buffer from Rust (bypasses CommandResponse)
+	flatBufPtr unsafe.Pointer // Original malloc'd pointer for C.free
+}
+
+// commandResult wraps the result of executeCommandWithRoute, carrying either
+// a CommandResponse pointer or a flat buffer (or both nil on error).
+type commandResult struct {
+	response   *C.struct_CommandResponse
+	flatBuf    []byte
+	flatBufPtr unsafe.Pointer // must call C.free on this when done
 }
 
 type clientConfiguration interface {
@@ -208,6 +218,90 @@ func (client *baseClient) executeCommand(
 	args []string,
 ) (*C.struct_CommandResponse, error) {
 	return client.executeCommandWithRoute(ctx, requestType, args, nil)
+}
+
+// executeCommandDirect executes a command and returns a commandResult
+// that may contain a flat buffer (direct Value serialization) or a
+// CommandResponse pointer (legacy path).
+func (client *baseClient) executeCommandDirect(
+	ctx context.Context,
+	requestType C.RequestType,
+	args []string,
+) (commandResult, error) {
+	// Inline the command execution to access payload.flatBuf directly
+	select {
+	case <-ctx.Done():
+		return commandResult{}, ctx.Err()
+	default:
+	}
+	var spanPtr uint64
+	otelInstance := GetOtelInstance()
+	if otelInstance != nil && otelInstance.shouldSample() {
+		if parentSpanPtr := otelInstance.extractSpanPointer(ctx); parentSpanPtr != 0 {
+			spanPtr = otelInstance.createSpanWithParent(requestType, parentSpanPtr)
+		} else {
+			spanPtr = otelInstance.createSpan(requestType)
+		}
+		defer otelInstance.dropSpan(spanPtr)
+	}
+	var cArgsPtr *C.uintptr_t = nil
+	var argLengthsPtr *C.ulong = nil
+	if len(args) > 0 {
+		cArgs, argLengths := toCStrings(args)
+		cArgsPtr = &cArgs[0]
+		argLengthsPtr = &argLengths[0]
+	}
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return commandResult{}, NewClosingError("executeCommand failed: the client is closed")
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+	C.command(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		uint32(requestType),
+		C.size_t(len(args)),
+		cArgsPtr,
+		argLengthsPtr,
+		nil, 0, // no route
+		C.uint64_t(spanPtr),
+	)
+	client.mu.Unlock()
+
+	var p payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		go func() {
+			if p := <-resultChannel; p.value != nil {
+				C.free_command_response(p.value)
+			}
+		}()
+		return commandResult{}, ctx.Err()
+	case p = <-resultChannel:
+	}
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if p.error != nil {
+		return commandResult{}, p.error
+	}
+	return commandResult{response: p.value, flatBuf: p.flatBuf, flatBufPtr: p.flatBufPtr}, nil
 }
 
 func slotTypeToProtobuf(slotType config.SlotType) (protobuf.SlotTypes, error) {
@@ -872,12 +966,11 @@ func (client *baseClient) RefreshIamToken(ctx context.Context) (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/set/
 func (client *baseClient) Set(ctx context.Context, key string, value string) (string, error) {
-	result, err := client.executeCommand(ctx, C.Set, []string{key, value})
+	result, err := client.executeCommandDirect(ctx, C.Set, []string{key, value})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-
-	return handleOkResponse(result)
+	return handleFlatOkResponseDirect(result)
 }
 
 // SetWithOptions sets the given key with the given value using the given options. The return value is dependent on the
@@ -937,12 +1030,11 @@ func (client *baseClient) SetWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/get/
 func (client *baseClient) Get(ctx context.Context, key string) (models.Result[string], error) {
-	result, err := client.executeCommand(ctx, C.Get, []string{key})
+	result, err := client.executeCommandDirect(ctx, C.Get, []string{key})
 	if err != nil {
 		return models.CreateNilStringResult(), err
 	}
-
-	return handleStringOrNilResponse(result)
+	return handleFlatStringOrNilResponseDirect(result)
 }
 
 // Get string value associated with the given key, or an empty string is returned [models.CreateNilStringResult()] if no such
@@ -2459,12 +2551,11 @@ func (client *baseClient) HPExpireTime(ctx context.Context, key string, fields [
 //
 // [valkey.io]: https://valkey.io/commands/lpush/
 func (client *baseClient) LPush(ctx context.Context, key string, elements []string) (int64, error) {
-	result, err := client.executeCommand(ctx, C.LPush, append([]string{key}, elements...))
+	result, err := client.executeCommandDirect(ctx, C.LPush, append([]string{key}, elements...))
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
-
-	return handleIntResponse(result)
+	return handleFlatIntResponseDirect(result)
 }
 
 // Removes and returns the first elements of the list stored at key. The command pops a single element from the beginning
@@ -3269,12 +3360,11 @@ func (client *baseClient) SMove(ctx context.Context, source string, destination 
 //
 // [valkey.io]: https://valkey.io/commands/lrange/
 func (client *baseClient) LRange(ctx context.Context, key string, start int64, end int64) ([]string, error) {
-	result, err := client.executeCommand(ctx, C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
+	result, err := client.executeCommandDirect(ctx, C.LRange, []string{key, utils.IntToString(start), utils.IntToString(end)})
 	if err != nil {
 		return nil, err
 	}
-
-	return handleStringArrayResponse(result)
+	return handleFlatStringArrayResponseDirect(result)
 }
 
 // Returns the element at index from the list stored at key.

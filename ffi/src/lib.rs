@@ -214,6 +214,9 @@ pub enum ResponseType {
     Sets = 7,
     Ok = 8,
     Error = 9,
+    /// Special type: the response is a serialized flat buffer in string_value/string_value_len.
+    /// Used to bypass CommandResponse struct tree for direct Value serialization.
+    FlatBuffer = 10,
 }
 
 /// A Send-safe wrapper around a raw buffer pointer and length.
@@ -472,6 +475,7 @@ impl ClientAdapter {
                         Some(failure_callback),
                         request_id,
                         response_buf,
+                        true, // async clients use stack fast-path + flat buffer
                     );
                 });
                 std::ptr::null_mut()
@@ -479,7 +483,7 @@ impl ClientAdapter {
             ClientType::SyncClient => {
                 // Block on the request for sync client
                 let result = self.runtime.block_on(request_future);
-                Self::handle_result(result, None, None, request_id, response_buf)
+                Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
     }
@@ -496,32 +500,80 @@ impl ClientAdapter {
         failure_callback: Option<FailureCallback>,
         request_id: usize,
         response_buf: Option<ResponseBuffer>,
+        allow_stack_response: bool,
     ) -> *mut CommandResult {
         match result {
             Ok(value) => {
                 let buf = response_buf.map(|rb| (rb.0, rb.1));
-                match valkey_value_to_command_response(value, buf) {
-                    Ok(command_response) => {
-                        if let Some(success_callback) = success_callback {
-                            unsafe {
-                                (success_callback)(
-                                    request_id,
-                                    Box::into_raw(Box::new(command_response)),
-                                );
+                if let Some(success_callback) = success_callback {
+                    // Stack fast-path for simple types: avoids heap allocation.
+                    // Only used when the caller opts in (allow_stack_response=true),
+                    // meaning the callback copies all data and never frees the pointer.
+                    if allow_stack_response {
+                        match &value {
+                            Value::Okay
+                            | Value::Nil
+                            | Value::Int(_)
+                            | Value::Double(_)
+                            | Value::Boolean(_)
+                            | Value::BulkString(_)
+                            | Value::SimpleString(_) => {
+                                let mut resp = CommandResponse::default();
+                                match &value {
+                                    Value::Okay => resp.response_type = ResponseType::Ok,
+                                    Value::Nil => {}
+                                    Value::Int(n) => {
+                                        resp.response_type = ResponseType::Int;
+                                        resp.int_value = *n;
+                                    }
+                                    Value::Double(n) => {
+                                        resp.response_type = ResponseType::Float;
+                                        resp.float_value = *n;
+                                    }
+                                    Value::Boolean(b) => {
+                                        resp.response_type = ResponseType::Bool;
+                                        resp.bool_value = *b;
+                                    }
+                                    Value::BulkString(data) => {
+                                        resp.response_type = ResponseType::String;
+                                        resp.string_value = data.as_ptr() as *mut c_char;
+                                        resp.string_value_len = data.len() as c_long;
+                                    }
+                                    Value::SimpleString(text) => {
+                                        resp.response_type = ResponseType::String;
+                                        resp.string_value = text.as_ptr() as *mut c_char;
+                                        resp.string_value_len = text.len() as c_long;
+                                    }
+                                    _ => unreachable!(),
+                                }
+                                unsafe { (success_callback)(request_id, &resp as *const _) };
+                                return std::ptr::null_mut();
                             }
-                        } else {
+                            _ => {}
+                        }
+                    }
+                    // Direct flat buffer path: serialize Value directly, bypassing
+                    // CommandResponse struct tree allocation entirely.
+                    let fb = serialize_value_to_flat_buffer(&value);
+                    let resp = CommandResponse {
+                        response_type: ResponseType::FlatBuffer,
+                        string_value: fb.data as *mut c_char,
+                        string_value_len: fb.len as c_long,
+                        ..Default::default()
+                    };
+                    // Go takes ownership of the malloc'd flat buffer.
+                    // Go must call C.free on fb.data when done.
+                    unsafe { (success_callback)(request_id, &resp as *const _) };
+                } else {
+                    // Sync path: use standard CommandResponse tree
+                    match valkey_value_to_command_response(value, buf) {
+                        Ok(command_response) => {
                             return Box::into_raw(Box::new(CommandResult {
                                 response: Box::into_raw(Box::new(command_response)),
                                 command_error: std::ptr::null_mut(),
                             }));
                         }
-                    }
-                    Err(err) => {
-                        if let Some(failure_callback) = failure_callback {
-                            unsafe {
-                                Self::send_async_redis_error(failure_callback, err, request_id)
-                            };
-                        } else {
+                        Err(err) => {
                             eprintln!("Error converting value to CommandResponse: {err:?}");
                             return create_error_result_with_redis_error(err);
                         }
@@ -1678,6 +1730,7 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
         ResponseType::Sets => c"Sets",
         ResponseType::Ok => c"Ok",
         ResponseType::Error => c"Error",
+        ResponseType::FlatBuffer => c"FlatBuffer",
     };
     c_str.as_ptr()
 }
@@ -1744,6 +1797,338 @@ unsafe fn free_command_response_elements(command_response: CommandResponse) {
         let vec = unsafe { Vec::from_raw_parts(sets_value, len, len) };
         for element in vec.into_iter() {
             unsafe { free_command_response_elements(element) };
+        }
+    }
+}
+
+// ==================== Flat Buffer Serialization ====================
+// Serializes redis::Value directly into a malloc'd byte buffer for zero-copy
+// transfer to Go. Go frees the buffer with C.free.
+
+/// Represents a serialized flat buffer response.
+#[repr(C)]
+pub struct FlatBufferResponse {
+    /// Pointer to the serialized data.
+    pub data: *mut u8,
+    /// Length of the serialized data in bytes.
+    pub len: usize,
+}
+
+/// Serialize a CommandResponse tree into a flat byte buffer.
+///
+/// Returns a FlatBufferResponse with the serialized data. The caller must free
+/// the data by calling `free_flat_buffer_response`.
+///
+/// # Safety
+/// * `response` must be a valid pointer to a CommandResponse, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn serialize_response_to_flat_buffer(
+    response: *const CommandResponse,
+) -> FlatBufferResponse {
+    if response.is_null() {
+        let mut buf = Vec::with_capacity(1);
+        buf.push(0); // Null
+        let ptr = buf.as_mut_ptr();
+        let len = buf.len();
+        std::mem::forget(buf);
+        return FlatBufferResponse { data: ptr, len };
+    }
+
+    let resp = unsafe { &*response };
+    let mut buf = Vec::with_capacity(256);
+    serialize_command_response(resp, &mut buf);
+
+    let ptr = buf.as_mut_ptr();
+    let len = buf.len();
+    std::mem::forget(buf);
+    FlatBufferResponse { data: ptr, len }
+}
+
+/// Free a FlatBufferResponse returned by `serialize_response_to_flat_buffer`.
+///
+/// # Safety
+/// * `response` must have been returned by `serialize_response_to_flat_buffer`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_flat_buffer_response(response: FlatBufferResponse) {
+    if !response.data.is_null() && response.len > 0 {
+        unsafe {
+            drop(Vec::from_raw_parts(
+                response.data,
+                response.len,
+                response.len,
+            ));
+        }
+    }
+}
+
+/// Serialize a CommandResponse struct tree into a flat byte buffer (Vec-based).
+/// Used by the legacy `serialize_response_to_flat_buffer` fallback path.
+fn serialize_command_response(resp: &CommandResponse, buf: &mut Vec<u8>) {
+    match resp.response_type {
+        ResponseType::Null => buf.push(0),
+        ResponseType::Int => {
+            buf.push(1);
+            buf.extend_from_slice(&resp.int_value.to_le_bytes());
+        }
+        ResponseType::Float => {
+            buf.push(2);
+            buf.extend_from_slice(&resp.float_value.to_le_bytes());
+        }
+        ResponseType::Bool => {
+            buf.push(3);
+            buf.push(if resp.bool_value { 1 } else { 0 });
+        }
+        ResponseType::String => {
+            buf.push(4);
+            let len = resp.string_value_len as u32;
+            buf.extend_from_slice(&len.to_le_bytes());
+            if !resp.string_value.is_null() && len > 0 {
+                let slice = unsafe {
+                    std::slice::from_raw_parts(resp.string_value as *const u8, len as usize)
+                };
+                buf.extend_from_slice(slice);
+            }
+        }
+        ResponseType::Array => {
+            buf.push(5);
+            let count = resp.array_value_len as u32;
+            buf.extend_from_slice(&count.to_le_bytes());
+            if !resp.array_value.is_null() {
+                let elements =
+                    unsafe { std::slice::from_raw_parts(resp.array_value, count as usize) };
+                for elem in elements {
+                    serialize_command_response(elem, buf);
+                }
+            }
+        }
+        ResponseType::Map => {
+            buf.push(6);
+            let count = resp.array_value_len as u32;
+            buf.extend_from_slice(&count.to_le_bytes());
+            if !resp.array_value.is_null() {
+                let elements =
+                    unsafe { std::slice::from_raw_parts(resp.array_value, count as usize) };
+                for elem in elements {
+                    if !elem.map_key.is_null() {
+                        serialize_command_response(unsafe { &*elem.map_key }, buf);
+                    } else {
+                        buf.push(0);
+                    }
+                    if !elem.map_value.is_null() {
+                        serialize_command_response(unsafe { &*elem.map_value }, buf);
+                    } else {
+                        buf.push(0);
+                    }
+                }
+            }
+        }
+        ResponseType::Sets => {
+            buf.push(7);
+            let count = resp.sets_value_len as u32;
+            buf.extend_from_slice(&count.to_le_bytes());
+            if !resp.sets_value.is_null() {
+                let elements =
+                    unsafe { std::slice::from_raw_parts(resp.sets_value, count as usize) };
+                for elem in elements {
+                    serialize_command_response(elem, buf);
+                }
+            }
+        }
+        ResponseType::Ok => buf.push(8),
+        ResponseType::Error => {
+            buf.push(9);
+            let len = resp.string_value_len as u32;
+            buf.extend_from_slice(&len.to_le_bytes());
+            if !resp.string_value.is_null() && len > 0 {
+                let slice = unsafe {
+                    std::slice::from_raw_parts(resp.string_value as *const u8, len as usize)
+                };
+                buf.extend_from_slice(slice);
+            }
+        }
+        ResponseType::FlatBuffer => {
+            // FlatBuffer responses already contain serialized data; just copy it
+            if !resp.string_value.is_null() && resp.string_value_len > 0 {
+                let slice = unsafe {
+                    std::slice::from_raw_parts(
+                        resp.string_value as *const u8,
+                        resp.string_value_len as usize,
+                    )
+                };
+                buf.extend_from_slice(slice);
+            } else {
+                buf.push(0); // Null
+            }
+        }
+    }
+}
+
+/// A growable buffer backed by libc malloc/realloc so the caller (Go) can free
+/// it with C.free. Serializes directly into the final buffer — no intermediate
+/// Vec allocation or copy.
+struct MallocBuf {
+    ptr: *mut u8,
+    len: usize,
+    cap: usize,
+}
+
+// Private extern declarations — not exported by cbindgen since they're
+// standard C library functions, not our API.
+/// cbindgen:ignore
+mod libc_ffi {
+    unsafe extern "C" {
+        pub fn malloc(size: usize) -> *mut u8;
+        pub fn realloc(ptr: *mut u8, size: usize) -> *mut u8;
+        pub fn free(ptr: *mut u8);
+    }
+}
+
+impl MallocBuf {
+    fn with_capacity(cap: usize) -> Self {
+        let cap = cap.max(64);
+        let ptr = unsafe { libc_ffi::malloc(cap) };
+        if ptr.is_null() {
+            std::alloc::handle_alloc_error(std::alloc::Layout::from_size_align(cap, 1).unwrap());
+        }
+        Self { ptr, len: 0, cap }
+    }
+
+    #[inline]
+    fn ensure(&mut self, additional: usize) {
+        let required = self.len + additional;
+        if required > self.cap {
+            let new_cap = required.next_power_of_two();
+            let ptr = unsafe { libc_ffi::realloc(self.ptr, new_cap) };
+            if ptr.is_null() {
+                std::alloc::handle_alloc_error(
+                    std::alloc::Layout::from_size_align(new_cap, 1).unwrap(),
+                );
+            }
+            self.ptr = ptr;
+            self.cap = new_cap;
+        }
+    }
+
+    #[inline]
+    fn push(&mut self, byte: u8) {
+        self.ensure(1);
+        unsafe { *self.ptr.add(self.len) = byte };
+        self.len += 1;
+    }
+
+    #[inline]
+    fn extend(&mut self, data: &[u8]) {
+        self.ensure(data.len());
+        unsafe {
+            std::ptr::copy_nonoverlapping(data.as_ptr(), self.ptr.add(self.len), data.len());
+        }
+        self.len += data.len();
+    }
+
+    fn into_response(self) -> FlatBufferResponse {
+        let resp = FlatBufferResponse {
+            data: self.ptr,
+            len: self.len,
+        };
+        std::mem::forget(self); // prevent Drop from freeing
+        resp
+    }
+}
+
+impl Drop for MallocBuf {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe { libc_ffi::free(self.ptr) };
+        }
+    }
+}
+
+/// Serialize a redis::Value directly into a malloc'd flat byte buffer.
+/// Go takes ownership and frees with C.free.
+fn serialize_value_to_flat_buffer(value: &Value) -> FlatBufferResponse {
+    let mut buf = MallocBuf::with_capacity(256);
+    serialize_value(value, &mut buf);
+    if buf.len == 0 {
+        return FlatBufferResponse {
+            data: std::ptr::null_mut(),
+            len: 0,
+        };
+    }
+    buf.into_response()
+}
+
+fn serialize_value(value: &Value, buf: &mut MallocBuf) {
+    match value {
+        Value::Nil => buf.push(0),
+        Value::Int(n) => {
+            buf.push(1);
+            buf.extend(&n.to_le_bytes());
+        }
+        Value::Double(n) => {
+            buf.push(2);
+            buf.extend(&n.to_le_bytes());
+        }
+        Value::Boolean(b) => {
+            buf.push(3);
+            buf.push(if *b { 1 } else { 0 });
+        }
+        Value::BulkString(data) => {
+            buf.push(4);
+            buf.extend(&(data.len() as u32).to_le_bytes());
+            buf.extend(data);
+        }
+        Value::SimpleString(s) => {
+            buf.push(4);
+            buf.extend(&(s.len() as u32).to_le_bytes());
+            buf.extend(s.as_bytes());
+        }
+        Value::VerbatimString { text, .. } => {
+            buf.push(4);
+            buf.extend(&(text.len() as u32).to_le_bytes());
+            buf.extend(text.as_bytes());
+        }
+        Value::Array(arr) => {
+            buf.push(5);
+            buf.extend(&(arr.len() as u32).to_le_bytes());
+            for elem in arr {
+                serialize_value(elem, buf);
+            }
+        }
+        Value::Map(pairs) => {
+            buf.push(6);
+            buf.extend(&(pairs.len() as u32).to_le_bytes());
+            for (k, v) in pairs {
+                serialize_value(k, buf);
+                serialize_value(v, buf);
+            }
+        }
+        Value::Set(elems) => {
+            buf.push(7);
+            buf.extend(&(elems.len() as u32).to_le_bytes());
+            for elem in elems {
+                serialize_value(elem, buf);
+            }
+        }
+        Value::Okay => buf.push(8),
+        Value::ServerError(err) => {
+            buf.push(9);
+            let msg = err.to_string();
+            buf.extend(&(msg.len() as u32).to_le_bytes());
+            buf.extend(msg.as_bytes());
+        }
+        Value::BigNumber(n) => {
+            let s = n.to_string();
+            buf.push(4);
+            buf.extend(&(s.len() as u32).to_le_bytes());
+            buf.extend(s.as_bytes());
+        }
+        Value::Attribute { data, .. } => serialize_value(data, buf),
+        Value::Push { data, .. } => {
+            buf.push(5);
+            buf.extend(&(data.len() as u32).to_le_bytes());
+            for elem in data {
+                serialize_value(elem, buf);
+            }
         }
     }
 }
