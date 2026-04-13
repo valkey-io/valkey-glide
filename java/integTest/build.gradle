@@ -53,8 +53,8 @@ dependencies {
     implementation group: 'org.semver4j', name: 'semver4j', version: '5.6.0'
 
     //lombok
-    testCompileOnly 'org.projectlombok:lombok:1.18.42'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
+    testCompileOnly 'org.projectlombok:lombok:1.18.44'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.44'
 }
 
 def standaloneHosts = ''
