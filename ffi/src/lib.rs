@@ -149,9 +149,17 @@ pub unsafe extern "C" fn free_drop_script_error(error: *mut c_char) {
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
 /// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
 ///
-/// IMPORTANT: This struct is mirrored in python/glide-shared/src/lib.rs (fast response parser)
-/// and declared in the CFFI definitions in python/glide-shared/glide_shared/_glide_ffi.py.
-/// Any changes here must be reflected in both of those files.
+/// # Changing this struct
+///
+/// This struct's layout is relied upon by multiple consumers across languages.
+/// When adding, removing, or reordering fields you MUST update all of the following:
+///
+/// 1. **CFFI declarations** — `python/glide-shared/glide_shared/_glide_ffi.py`
+///    (the `typedef struct CommandResponse { ... }` block)
+/// 2. **Fast response parser** — `python/glide-shared/src/lib.rs`
+///    (field offset reads via raw pointer arithmetic)
+/// 3. **Layout test** — `ffi/tests/test_command_response_layout.rs`
+///    (update expected size and field offsets to match the new layout)
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct CommandResponse {
