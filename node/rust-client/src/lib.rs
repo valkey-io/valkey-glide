@@ -678,9 +678,17 @@ impl Script {
 /// let isFinished = cursor.isFinished(); // true if the scan is finished
 /// ```
 #[napi]
-#[derive(Default)]
 pub struct ClusterScanCursor {
     cursor: String,
+    released: bool,
+}
+
+/// Internal cleanup logic, separated from the napi-exported methods to avoid
+/// CodeQL CWE-825 alerts about raw pointer dereferences through the napi boundary.
+fn release_cluster_scan_cursor(cursor: &str) {
+    if !cursor.is_empty() && cursor != FINISHED_SCAN_CURSOR {
+        glide_core::cluster_scan_container::remove_scan_state_cursor(cursor.to_string());
+    }
 }
 
 #[napi]
@@ -688,30 +696,46 @@ impl ClusterScanCursor {
     #[napi(constructor)]
     #[allow(dead_code)]
     pub fn new(new_cursor: Option<String>) -> Self {
-        match new_cursor {
-            Some(cursor) => ClusterScanCursor { cursor },
-            None => ClusterScanCursor::default(),
+        ClusterScanCursor {
+            cursor: new_cursor.unwrap_or_default(),
+            released: false,
         }
     }
 
     /// Returns the cursor id.
     #[napi]
     #[allow(dead_code)]
-    pub fn get_cursor(&self) -> String {
-        self.cursor.clone()
+    pub fn get_cursor(&self) -> Result<String> {
+        if self.released {
+            return Err(napi::Error::from_reason("Cursor has already been released"));
+        }
+        Ok(self.cursor.clone())
     }
 
     #[napi]
     #[allow(dead_code)]
     /// Returns true if the scan is finished.
     pub fn is_finished(&self) -> bool {
-        self.cursor.eq(FINISHED_SCAN_CURSOR)
+        self.released || self.cursor == FINISHED_SCAN_CURSOR
+    }
+
+    /// Releases the cursor's scan state from the container.
+    /// After calling this, the cursor is no longer usable.
+    #[napi]
+    #[allow(dead_code)]
+    pub fn release(&mut self) {
+        if !self.released {
+            self.released = true;
+            release_cluster_scan_cursor(&self.cursor);
+        }
     }
 }
 
 impl Drop for ClusterScanCursor {
     fn drop(&mut self) {
-        glide_core::cluster_scan_container::remove_scan_state_cursor(self.cursor.clone());
+        if !self.released {
+            release_cluster_scan_cursor(&self.cursor);
+        }
     }
 }
 
