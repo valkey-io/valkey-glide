@@ -31,6 +31,7 @@ use redis::{AsyncCommands, Value, aio::MultiplexedConnection};
 use std::collections::HashMap;
 use std::ptr::from_mut;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::runtime::{Builder, Runtime};
 #[napi]
@@ -60,8 +61,8 @@ pub const DEFAULT_INFLIGHT_REQUESTS_LIMIT: u32 = glide_core::client::DEFAULT_MAX
 #[napi]
 struct AsyncClient {
     #[allow(dead_code)]
-    connection: MultiplexedConnection,
-    runtime: Runtime,
+    connection: Option<MultiplexedConnection>,
+    runtime: Option<Runtime>,
 }
 
 /// Configuration for OpenTelemetry integration in the Node.js client.
@@ -141,18 +142,33 @@ impl AsyncClient {
                 client.get_multiplexed_async_connection(GlideConnectionOptions::default()),
             ))?;
         Ok(AsyncClient {
-            connection,
-            runtime,
+            connection: Some(connection),
+            runtime: Some(runtime),
         })
+    }
+
+    fn active_runtime_and_connection(
+        &self,
+    ) -> Result<(&Runtime, MultiplexedConnection)> {
+        let runtime = self
+            .runtime
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("Client has been closed"))?;
+        let connection = self
+            .connection
+            .as_ref()
+            .ok_or_else(|| napi::Error::from_reason("Client has been closed"))?
+            .clone();
+        Ok((runtime, connection))
     }
 
     #[napi(ts_return_type = "Promise<string | Buffer | null>")]
     #[allow(dead_code)]
     pub fn get(&self, env: Env, key: String) -> Result<JsObject> {
         let (deferred, promise) = env.create_deferred()?;
+        let (runtime, mut connection) = self.active_runtime_and_connection()?;
 
-        let mut connection = self.connection.clone();
-        self.runtime.spawn(async move {
+        runtime.spawn(async move {
             let result: Result<Option<String>> = to_js_result(connection.get(key).await);
             match result {
                 Ok(value) => deferred.resolve(|_| Ok(value)),
@@ -167,9 +183,9 @@ impl AsyncClient {
     #[allow(dead_code)]
     pub fn set(&self, env: Env, key: String, value: String) -> Result<JsObject> {
         let (deferred, promise) = env.create_deferred()?;
+        let (runtime, mut connection) = self.active_runtime_and_connection()?;
 
-        let mut connection = self.connection.clone();
-        self.runtime.spawn(async move {
+        runtime.spawn(async move {
             let result: Result<()> = to_js_result(connection.set(key, value).await);
             match result {
                 Ok(_) => deferred.resolve(|_| Ok("OK")),
@@ -178,6 +194,15 @@ impl AsyncClient {
         });
 
         Ok(promise)
+    }
+}
+
+impl Drop for AsyncClient {
+    fn drop(&mut self) {
+        // Take ownership to ensure teardown happens exactly once.
+        // Runtime is dropped last so in-flight tasks can attempt to finish.
+        self.connection.take();
+        self.runtime.take();
     }
 }
 
@@ -618,6 +643,7 @@ pub fn drop_otel_span(span_ptr: BigInt) {
 /// on every Script object when you're done with it to prevent memory leaks. Failure to do so will result in memory leaks.
 struct Script {
     hash: String,
+    released: AtomicBool,
 }
 
 #[napi]
@@ -630,7 +656,10 @@ impl Script {
             Either::A(code_str) => glide_core::scripts_container::add_script(code_str.as_bytes()),
             Either::B(code_bytes) => glide_core::scripts_container::add_script(&code_bytes),
         };
-        Self { hash }
+        Self {
+            hash,
+            released: AtomicBool::new(false),
+        }
     }
 
     /// Returns the hash of the script.
@@ -640,9 +669,11 @@ impl Script {
         self.hash.clone()
     }
 
-    /// Internal release logic used both by Drop and napi-exposed `release()`.
+    /// Internal release logic — atomically ensures teardown happens at most once.
     fn release_internal(&self) {
-        glide_core::scripts_container::remove_script(&self.hash);
+        if !self.released.swap(true, Ordering::AcqRel) {
+            glide_core::scripts_container::remove_script(&self.hash);
+        }
     }
 
     /// Decrements the script's reference count in the local container.  
