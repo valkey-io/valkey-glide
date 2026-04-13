@@ -5,6 +5,7 @@ import sys
 import threading
 from typing import Any, List, Optional, Tuple, Union
 
+from glide_shared._fast_response import parse_response as _fast_parse_response
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -233,16 +234,10 @@ class BaseClient(CoreCommands):
     def _handle_response(self, message):
         if message == self._ffi.NULL:
             raise RequestError("Received NULL message.")
-
-        message_type = self._ffi.typeof(message).cname
-        if message_type == "CommandResponse *":
-            message = message[0]
-            message_type = self._ffi.typeof(message).cname
-
-        if message_type != "CommandResponse":
-            raise RequestError(f"Unexpected message type = {message_type}")
-
-        return self._handle_command_response(message)
+        addr = int(self._ffi.cast("uintptr_t", message))
+        result, _arena_ptr = _fast_parse_response(addr)
+        # Arena is freed by free_command_result in _handle_cmd_result's finally block
+        return result
 
     def _handle_command_response(self, msg):
         """Handle a CommandResponse message based on its response type."""

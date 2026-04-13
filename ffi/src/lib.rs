@@ -148,6 +148,18 @@ pub unsafe extern "C" fn free_drop_script_error(error: *mut c_char) {
 ///
 /// The struct is freed by the external caller by using `free_command_response` to avoid memory leaks.
 /// TODO: Add a type enum to validate what type of response is being sent in the CommandResponse.
+///
+/// # Changing this struct
+///
+/// This struct's layout is relied upon by multiple consumers across languages.
+/// When adding, removing, or reordering fields you MUST update all of the following:
+///
+/// 1. **CFFI declarations** — `python/glide-shared/glide_shared/_glide_ffi.py`
+///    (the `typedef struct CommandResponse { ... }` block)
+/// 2. **Fast response parser** — `python/glide-shared/src/lib.rs`
+///    (field offset reads via raw pointer arithmetic)
+/// 3. **Layout test** — `ffi/tests/test_command_response_layout.rs`
+///    (update expected size and field offsets to match the new layout)
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct CommandResponse {
@@ -179,6 +191,13 @@ pub struct CommandResponse {
     /// `sets_value_len` represents the length of the set.
     pub sets_value: *mut CommandResponse,
     pub sets_value_len: c_long,
+
+    /// Pointer to the `ResponseArena` that owns this response tree.
+    /// Non-null when this response was allocated via the arena allocator.
+    /// Callers must free the arena via `free_response_arena(arena_ptr)` after
+    /// processing the response, or use `free_command_response` which handles
+    /// both arena and box-allocated responses automatically.
+    pub arena_ptr: *mut c_void,
 }
 
 impl Default for CommandResponse {
@@ -196,11 +215,15 @@ impl Default for CommandResponse {
             map_value: std::ptr::null_mut(),
             sets_value: std::ptr::null_mut(),
             sets_value_len: 0,
+            arena_ptr: std::ptr::null_mut(),
         }
     }
 }
 
 #[repr(C)]
+/// IMPORTANT: This enum is mirrored in python/glide-shared/src/lib.rs (fast response parser,
+/// `convert` function) and declared in the CFFI definitions in
+/// python/glide-shared/glide_shared/_glide_ffi.py. Any changes here must be reflected in both.
 #[derive(Debug, Default, Clone)]
 pub enum ResponseType {
     #[default]
@@ -365,6 +388,9 @@ pub struct LogResult {
 pub struct CommandResult {
     pub response: *mut CommandResponse,
     pub command_error: *mut CommandError,
+    /// Opaque pointer to the ResponseArena that owns the response tree.
+    /// If non-null, freeing this frees all response nodes and strings at once.
+    pub arena: *mut ResponseArena,
 }
 
 // Deallocates a `CommandResult`.
@@ -391,7 +417,10 @@ pub unsafe extern "C" fn free_command_result(command_result_ptr: *mut CommandRes
     }
     unsafe {
         let command_result = Box::from_raw(command_result_ptr);
-        if !command_result.response.is_null() {
+        if !command_result.arena.is_null() {
+            // Arena owns all response nodes and strings — one free for everything
+            free_response_arena(command_result.arena);
+        } else if !command_result.response.is_null() {
             free_command_response(command_result.response);
         }
         if !command_result.command_error.is_null() {
@@ -420,6 +449,12 @@ pub enum ClientType {
     AsyncClient {
         success_callback: SuccessCallback,
         failure_callback: FailureCallback,
+        /// When true, the success callback may receive a pointer to a stack-allocated
+        /// CommandResponse for simple types (Nil, Int, Float, Bool, String, Ok).
+        /// The callback must copy all data before returning and must NOT free the pointer.
+        /// When false, all responses are heap-allocated via the arena and the caller
+        /// is responsible for freeing them (e.g. via free_command_response).
+        allow_stack_response: bool,
     },
     SyncClient,
 }
@@ -427,6 +462,11 @@ pub enum ClientType {
 /// A `GlideClient` adapter.
 pub struct ClientAdapter {
     runtime: Runtime,
+    /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
+    /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
+    /// client creation are directed here via _guard so they run independently of block_on.
+    /// For async/multi_thread clients this is None since the main runtime handles everything.
+    background_runtime: Option<Runtime>,
     core: Arc<CommandExecutionCore>,
     pubsub_callback: Arc<std::sync::RwLock<Option<PubSubCallback>>>,
 }
@@ -462,6 +502,7 @@ impl ClientAdapter {
             ClientType::AsyncClient {
                 success_callback,
                 failure_callback,
+                allow_stack_response,
             } => {
                 // Spawn the request for async client
                 self.runtime.spawn(async move {
@@ -472,14 +513,26 @@ impl ClientAdapter {
                         Some(failure_callback),
                         request_id,
                         response_buf,
+                        allow_stack_response,
                     );
                 });
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
-                // Block on the request for sync client
-                let result = self.runtime.block_on(request_future);
-                Self::handle_result(result, None, None, request_id, response_buf)
+                // Enter background runtime context inside the future so tokio::spawn
+                // calls within the command (e.g. reconnection, lazy subscribe) land
+                // on the background runtime where TCP I/O is registered.
+                // Note: block_on overrides any context entered before it, so the
+                // guard must be held inside the future being polled.
+                let bg = self
+                    .background_runtime
+                    .as_ref()
+                    .map(|rt| rt.handle().clone());
+                let result = self.runtime.block_on(async {
+                    let _guard = bg.as_ref().map(|h| h.enter());
+                    request_future.await
+                });
+                Self::handle_result(result, None, None, request_id, response_buf, false)
             }
         }
     }
@@ -496,32 +549,82 @@ impl ClientAdapter {
         failure_callback: Option<FailureCallback>,
         request_id: usize,
         response_buf: Option<ResponseBuffer>,
+        allow_stack_response: bool,
     ) -> *mut CommandResult {
         match result {
             Ok(value) => {
                 let buf = response_buf.map(|rb| (rb.0, rb.1));
-                match valkey_value_to_command_response(value, buf) {
-                    Ok(command_response) => {
-                        if let Some(success_callback) = success_callback {
-                            unsafe {
-                                (success_callback)(
-                                    request_id,
-                                    Box::into_raw(Box::new(command_response)),
-                                );
+                if let Some(success_callback) = success_callback {
+                    // Stack fast-path for simple types: avoids arena allocation.
+                    // Only used when the caller opts in (allow_stack_response=true),
+                    // meaning the callback copies all data and never frees the pointer.
+                    if allow_stack_response {
+                        match &value {
+                            Value::Okay
+                            | Value::Nil
+                            | Value::Int(_)
+                            | Value::Double(_)
+                            | Value::Boolean(_)
+                            | Value::BulkString(_)
+                            | Value::SimpleString(_) => {
+                                let mut resp = CommandResponse::default();
+                                match &value {
+                                    Value::Okay => resp.response_type = ResponseType::Ok,
+                                    Value::Nil => {}
+                                    Value::Int(n) => {
+                                        resp.response_type = ResponseType::Int;
+                                        resp.int_value = *n;
+                                    }
+                                    Value::Double(n) => {
+                                        resp.response_type = ResponseType::Float;
+                                        resp.float_value = *n;
+                                    }
+                                    Value::Boolean(b) => {
+                                        resp.response_type = ResponseType::Bool;
+                                        resp.bool_value = *b;
+                                    }
+                                    Value::BulkString(data) => {
+                                        resp.response_type = ResponseType::String;
+                                        resp.string_value = data.as_ptr() as *mut c_char;
+                                        resp.string_value_len = data.len() as c_long;
+                                    }
+                                    Value::SimpleString(text) => {
+                                        resp.response_type = ResponseType::String;
+                                        resp.string_value = text.as_ptr() as *mut c_char;
+                                        resp.string_value_len = text.len() as c_long;
+                                    }
+                                    _ => unreachable!(),
+                                }
+                                unsafe { (success_callback)(request_id, &resp as *const _) };
+                                return std::ptr::null_mut();
                             }
-                        } else {
-                            return Box::into_raw(Box::new(CommandResult {
-                                response: Box::into_raw(Box::new(command_response)),
-                                command_error: std::ptr::null_mut(),
-                            }));
+                            _ => {}
                         }
                     }
-                    Err(err) => {
-                        if let Some(failure_callback) = failure_callback {
-                            unsafe {
-                                Self::send_async_redis_error(failure_callback, err, request_id)
-                            };
-                        } else {
+                    // Heap path: arena-allocated response
+                    match valkey_value_to_arena_response(value, buf) {
+                        Ok((root_ptr, _arena_ptr)) => {
+                            unsafe { (success_callback)(request_id, root_ptr) };
+                        }
+                        Err(err) => {
+                            if let Some(failure_callback) = failure_callback {
+                                unsafe {
+                                    Self::send_async_redis_error(failure_callback, err, request_id)
+                                };
+                            }
+                        }
+                    }
+                } else {
+                    // Sync path: always use arena
+                    match valkey_value_to_arena_response(value, buf) {
+                        Ok((root_ptr, _arena_ptr)) => {
+                            return Box::into_raw(Box::new(CommandResult {
+                                response: root_ptr,
+                                command_error: std::ptr::null_mut(),
+                                arena: _arena_ptr,
+                            }));
+                        }
+                        Err(err) => {
                             eprintln!("Error converting value to CommandResponse: {err:?}");
                             return create_error_result_with_redis_error(err);
                         }
@@ -589,6 +692,7 @@ impl ClientAdapter {
             ClientType::AsyncClient {
                 success_callback: _,
                 failure_callback,
+                allow_stack_response: _,
             } => {
                 unsafe {
                     Self::send_async_custom_error(
@@ -769,26 +873,68 @@ fn create_client_internal(
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
-    // TODO: optimize this using multiple threads instead of a single worker thread (e.g. by pinning each go thread to a rust thread)
-    let runtime = Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(1)
-        .thread_name("Valkey-GLIDE thread")
-        .build()
-        .map_err(|err| {
-            let redis_error = err.into();
-            errors::error_message(&redis_error)
-        })?;
+    let runtime = match &client_type {
+        ClientType::SyncClient => {
+            // current_thread runtime: block_on drives the reactor directly on the
+            // calling thread, eliminating the condvar park/wake overhead that occurs
+            // with multi_thread when the calling thread waits for a worker.
+            Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|err| {
+                    let redis_error: redis::RedisError = err.into();
+                    errors::error_message(&redis_error)
+                })?
+        }
+        ClientType::AsyncClient { .. } => {
+            // Async clients need a background worker thread to drive the reactor
+            // since the calling thread is owned by the foreign language's event loop.
+            Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(1)
+                .thread_name("Valkey-GLIDE thread")
+                .build()
+                .map_err(|err| {
+                    let redis_error: redis::RedisError = err.into();
+                    errors::error_message(&redis_error)
+                })?
+        }
+    };
+
+    // For sync clients, create a background runtime for spawned tasks (connection
+    // drivers, reconnection, cluster manager). Enter its context during client
+    // creation so tokio::spawn calls land on the background runtime, not the
+    // current_thread runtime which only polls tasks inside block_on.
+    let background_runtime = match &client_type {
+        ClientType::SyncClient => Some(
+            Builder::new_multi_thread()
+                .enable_all()
+                .worker_threads(1)
+                .thread_name("Valkey-GLIDE background")
+                .build()
+                .map_err(|err| {
+                    let redis_error: redis::RedisError = err.into();
+                    errors::error_message(&redis_error)
+                })?,
+        ),
+        _ => None,
+    };
 
     // Always create push channels to support dynamic pubsub
     let (push_tx, mut push_rx) = tokio::sync::mpsc::unbounded_channel();
 
-    let client = runtime
-        .block_on(GlideClient::new(
-            ConnectionRequest::from(request),
-            Some(push_tx),
-        ))
-        .map_err(|err| err.to_string())?;
+    let client = {
+        // Create the client on the background runtime so all TCP I/O and spawned
+        // tasks (connection drivers, cluster manager) are registered there.
+        // The current_thread runtime is only used for block_on in the command path.
+        let create_rt = background_runtime.as_ref().unwrap_or(&runtime);
+        create_rt
+            .block_on(GlideClient::new(
+                ConnectionRequest::from(request),
+                Some(push_tx),
+            ))
+            .map_err(|err| err.to_string())?
+    };
 
     // Create the client adapter that will be returned and used as conn_ptr
     let core = Arc::new(CommandExecutionCore {
@@ -798,14 +944,20 @@ fn create_client_internal(
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
         runtime,
+        background_runtime,
         core,
         pubsub_callback: pubsub_callback_store.clone(),
     });
     let client_adapter_ptr = Arc::as_ptr(&client_adapter).addr();
 
-    // Always spawn push handler to support dynamic pubsub
+    // Spawn push handler on the background runtime (if any) so it runs
+    // independently of block_on, otherwise on the main runtime.
+    let spawn_runtime = client_adapter
+        .background_runtime
+        .as_ref()
+        .unwrap_or(&client_adapter.runtime);
     let callback_store = pubsub_callback_store.clone();
-    client_adapter.runtime.spawn(async move {
+    spawn_runtime.spawn(async move {
         while let Some(push_msg) = push_rx.recv().await {
             if (push_msg.kind == redis::PushKind::Message
                 || push_msg.kind == redis::PushKind::PMessage
@@ -1694,8 +1846,14 @@ pub extern "C" fn get_response_type_string(response_type: ResponseType) -> *cons
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_command_response(command_response_ptr: *mut CommandResponse) {
     if !command_response_ptr.is_null() {
-        let command_response = unsafe { Box::from_raw(command_response_ptr) };
-        unsafe { free_command_response_elements(*command_response) };
+        let resp = unsafe { &*command_response_ptr };
+        if !resp.arena_ptr.is_null() {
+            // Arena-allocated response: free the entire arena (which owns this pointer)
+            unsafe { free_response_arena(resp.arena_ptr as *mut ResponseArena) };
+        } else {
+            let command_response = unsafe { Box::from_raw(command_response_ptr) };
+            unsafe { free_command_response_elements(*command_response) };
+        }
     }
 }
 
@@ -1778,6 +1936,296 @@ fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*mut T, c_long) {
     (vec_ptr, len)
 }
 
+// ==================== Arena-based response builder ====================
+
+/// Arena that owns all CommandResponse nodes and string buffers for a single response tree.
+/// Freed in one shot via `free_response_arena`.
+pub struct ResponseArena {
+    /// All CommandResponse nodes. Index 0 is the root.
+    nodes: Vec<CommandResponse>,
+    /// Owned string buffers (kept alive until arena is freed).
+    strings: Vec<Vec<u8>>,
+}
+
+impl ResponseArena {
+    fn new(value: &Value) -> Self {
+        let node_count = Self::count_nodes(value);
+        ResponseArena {
+            nodes: Vec::with_capacity(node_count),
+            strings: Vec::new(),
+        }
+    }
+
+    /// Count total CommandResponse nodes needed for a Value tree.
+    /// Maps use wrapper nodes: 1 wrapper per entry + key nodes + value nodes.
+    fn count_nodes(value: &Value) -> usize {
+        match value {
+            Value::Array(arr) => 1 + arr.iter().map(Self::count_nodes).sum::<usize>(),
+            Value::Map(map) => {
+                1 + map
+                    .iter()
+                    .map(|(k, v)| 1 + Self::count_nodes(k) + Self::count_nodes(v))
+                    .sum::<usize>()
+            }
+            Value::Set(arr) => 1 + arr.iter().map(Self::count_nodes).sum::<usize>(),
+            Value::Push { data, .. } => {
+                // Encoded as Map with 2 entries: wrapper + "kind"->str, wrapper + "values"->array
+                7 + data.iter().map(Self::count_nodes).sum::<usize>()
+            }
+            _ => 1,
+        }
+    }
+
+    /// Allocate a node in the arena, returning its index.
+    fn alloc_node(&mut self) -> usize {
+        let idx = self.nodes.len();
+        self.nodes.push(CommandResponse::default());
+        idx
+    }
+
+    /// Store a string buffer, returning (ptr, len) for the CommandResponse fields.
+    fn store_string(&mut self, data: Vec<u8>) -> (*mut c_char, c_long) {
+        let ptr = data.as_ptr() as *mut c_char;
+        let len = data.len() as c_long;
+        self.strings.push(data);
+        (ptr, len)
+    }
+
+    /// Build the response tree into the arena. Returns index of the root node.
+    fn build(
+        &mut self,
+        value: Value,
+        response_buf: Option<(*mut u8, usize)>,
+    ) -> RedisResult<usize> {
+        let idx = self.alloc_node();
+        self.build_into(idx, value, response_buf)?;
+        Ok(idx)
+    }
+
+    /// Build a value into a pre-allocated node at the given index.
+    fn build_into(
+        &mut self,
+        idx: usize,
+        value: Value,
+        response_buf: Option<(*mut u8, usize)>,
+    ) -> RedisResult<()> {
+        match value {
+            Value::Nil => {}
+            Value::Okay => {
+                self.nodes[idx].response_type = ResponseType::Ok;
+            }
+            Value::Int(n) => {
+                self.nodes[idx].response_type = ResponseType::Int;
+                self.nodes[idx].int_value = n;
+            }
+            Value::Double(n) => {
+                self.nodes[idx].response_type = ResponseType::Float;
+                self.nodes[idx].float_value = n;
+            }
+            Value::Boolean(b) => {
+                self.nodes[idx].response_type = ResponseType::Bool;
+                self.nodes[idx].bool_value = b;
+            }
+            Value::SimpleString(text) => {
+                let (ptr, len) = self.store_string(text.into_bytes());
+                self.nodes[idx].response_type = ResponseType::String;
+                self.nodes[idx].string_value = ptr;
+                self.nodes[idx].string_value_len = len;
+            }
+            Value::BulkString(data) => {
+                let data = if let Some((buf, buf_len)) = response_buf {
+                    if data.len() > buf_len {
+                        return Err(RedisError::from((
+                            ErrorKind::ClientError,
+                            "Value size exceeds buffer capacity",
+                            format!(
+                                "value is {} bytes but buffer is {} bytes",
+                                data.len(),
+                                buf_len
+                            ),
+                        )));
+                    }
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
+                    }
+                    data.len().to_string().into_bytes()
+                } else {
+                    data
+                };
+                let (ptr, len) = self.store_string(data);
+                self.nodes[idx].response_type = ResponseType::String;
+                self.nodes[idx].string_value = ptr;
+                self.nodes[idx].string_value_len = len;
+            }
+            Value::VerbatimString { text, .. } => {
+                let (ptr, len) = self.store_string(text.into_bytes());
+                self.nodes[idx].response_type = ResponseType::String;
+                self.nodes[idx].string_value = ptr;
+                self.nodes[idx].string_value_len = len;
+            }
+            Value::Array(arr) => {
+                let child_count = arr.len();
+                // Pre-allocate direct child slots so they are contiguous
+                let child_start = self.nodes.len();
+                for _ in 0..child_count {
+                    self.alloc_node();
+                }
+                // Build each child; descendants go after all child slots
+                for (i, item) in arr.into_iter().enumerate() {
+                    let ci = child_start + i;
+                    self.build_into(ci, item, None)?;
+                }
+                self.nodes[idx].response_type = ResponseType::Array;
+                self.nodes[idx].array_value_len = child_count as c_long;
+                self.nodes[idx].array_value = child_start as *mut CommandResponse;
+            }
+            Value::Map(map) => {
+                let num_entries = map.len();
+                // Allocate wrapper nodes first (one per entry), then build keys/values.
+                // Each wrapper's map_key/map_value will point into the arena.
+                let wrapper_start = self.nodes.len();
+                for _ in 0..num_entries {
+                    self.alloc_node();
+                }
+                for (i, (k, v)) in map.into_iter().enumerate() {
+                    let ki = self.nodes.len();
+                    self.build(k, None)?;
+                    let vi = self.nodes.len();
+                    self.build(v, None)?;
+                    // Pointers fixed up in finalize() along with array_value
+                    self.nodes[wrapper_start + i].map_key = ki as *mut CommandResponse;
+                    self.nodes[wrapper_start + i].map_value = vi as *mut CommandResponse;
+                }
+                self.nodes[idx].response_type = ResponseType::Map;
+                self.nodes[idx].array_value_len = num_entries as c_long;
+                self.nodes[idx].array_value = wrapper_start as *mut CommandResponse;
+            }
+            Value::Set(arr) => {
+                let child_count = arr.len();
+                let child_start = self.nodes.len();
+                for _ in 0..child_count {
+                    self.alloc_node();
+                }
+                for (i, item) in arr.into_iter().enumerate() {
+                    let ci = child_start + i;
+                    self.build_into(ci, item, None)?;
+                }
+                self.nodes[idx].response_type = ResponseType::Sets;
+                self.nodes[idx].sets_value_len = child_count as c_long;
+                self.nodes[idx].sets_value = child_start as *mut CommandResponse;
+            }
+            Value::ServerError(server_error) => {
+                let msg = error_message(&server_error.into()).into_bytes();
+                let (ptr, len) = self.store_string(msg);
+                self.nodes[idx].response_type = ResponseType::Error;
+                self.nodes[idx].string_value = ptr;
+                self.nodes[idx].string_value_len = len;
+            }
+            Value::Push { kind, data } => {
+                // Encode as Map with 2 entries using wrapper nodes
+                let wrapper_start = self.nodes.len();
+                let w0 = self.alloc_node(); // wrapper for "kind" entry
+                let w1 = self.alloc_node(); // wrapper for "values" entry
+
+                // kind key
+                let ki = self.alloc_node();
+                let (ptr, len) = self.store_string(b"kind".to_vec());
+                self.nodes[ki].response_type = ResponseType::String;
+                self.nodes[ki].string_value = ptr;
+                self.nodes[ki].string_value_len = len;
+                // kind value
+                let kv = self.alloc_node();
+                let (ptr, len) = self.store_string(format!("{:?}", kind).into_bytes());
+                self.nodes[kv].response_type = ResponseType::String;
+                self.nodes[kv].string_value = ptr;
+                self.nodes[kv].string_value_len = len;
+                self.nodes[w0].map_key = ki as *mut CommandResponse;
+                self.nodes[w0].map_value = kv as *mut CommandResponse;
+
+                // values key
+                let vk = self.alloc_node();
+                let (ptr, len) = self.store_string(b"values".to_vec());
+                self.nodes[vk].response_type = ResponseType::String;
+                self.nodes[vk].string_value = ptr;
+                self.nodes[vk].string_value_len = len;
+                // values value (array)
+                let vv = self.nodes.len();
+                self.build(Value::Array(data), None)?;
+                self.nodes[w1].map_key = vk as *mut CommandResponse;
+                self.nodes[w1].map_value = vv as *mut CommandResponse;
+
+                self.nodes[idx].response_type = ResponseType::Map;
+                self.nodes[idx].array_value_len = 2; // 2 map entries
+                self.nodes[idx].array_value = wrapper_start as *mut CommandResponse;
+            }
+            _ => todo!(),
+        }
+        Ok(())
+    }
+
+    /// Finalize: convert index-based pointers to real pointers, then leak the arena.
+    /// Returns pointer to root CommandResponse and an opaque arena pointer for freeing.
+    fn finalize(mut self) -> (*mut CommandResponse, *mut ResponseArena) {
+        let base = self.nodes.as_ptr() as usize;
+        for node in &mut self.nodes {
+            match node.response_type {
+                ResponseType::Array | ResponseType::Map => {
+                    if node.array_value_len > 0 {
+                        let offset = node.array_value as usize;
+                        node.array_value = unsafe { (base as *mut CommandResponse).add(offset) };
+                    }
+                }
+                ResponseType::Sets => {
+                    if node.sets_value_len > 0 {
+                        let offset = node.sets_value as usize;
+                        node.sets_value = unsafe { (base as *mut CommandResponse).add(offset) };
+                    }
+                }
+                _ => {}
+            }
+            // Fix up map_key/map_value pointers (stored as indices during build)
+            if !node.map_key.is_null() {
+                let offset = node.map_key as usize;
+                node.map_key = unsafe { (base as *mut CommandResponse).add(offset) };
+            }
+            if !node.map_value.is_null() {
+                let offset = node.map_value as usize;
+                node.map_value = unsafe { (base as *mut CommandResponse).add(offset) };
+            }
+        }
+        let root = self.nodes.as_mut_ptr();
+        let arena_ptr = Box::into_raw(Box::new(self));
+        // Store arena pointer in root node so callers can free it
+        unsafe {
+            (*root).arena_ptr = arena_ptr as *mut c_void;
+        }
+        (root, arena_ptr)
+    }
+}
+
+/// Build a CommandResponse tree using arena allocation. Returns (root_ptr, arena_ptr).
+/// The arena_ptr must be freed with `free_response_arena`.
+fn valkey_value_to_arena_response(
+    value: Value,
+    response_buf: Option<(*mut u8, usize)>,
+) -> RedisResult<(*mut CommandResponse, *mut ResponseArena)> {
+    let mut arena = ResponseArena::new(&value);
+    arena.build(value, response_buf)?;
+    Ok(arena.finalize())
+}
+
+/// Free an arena-allocated response tree in one shot.
+///
+/// # Safety
+/// `arena_ptr` must have been returned by `valkey_value_to_arena_response`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_response_arena(arena_ptr: *mut ResponseArena) {
+    if !arena_ptr.is_null() {
+        unsafe { drop(Box::from_raw(arena_ptr)) };
+    }
+}
+
+#[allow(dead_code)]
 fn valkey_value_to_command_response(
     value: Value,
     response_buf: Option<(*mut u8, usize)>,
@@ -2158,6 +2606,7 @@ fn create_error_result_with_redis_error(err: RedisError) -> *mut CommandResult {
             command_error_message: c_err_str,
             command_error_type: error_type,
         })),
+        arena: std::ptr::null_mut(),
     }))
 }
 
@@ -2194,6 +2643,7 @@ fn create_error_result_with_custom_error(
             command_error_message: c_err_str,
             command_error_type: error_type,
         })),
+        arena: std::ptr::null_mut(),
     }))
 }
 
