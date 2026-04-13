@@ -2,6 +2,7 @@
 
 use crate::client::Client;
 use redis::{Arg, Cmd};
+use std::borrow::Borrow;
 use telemetrylib::GlideSpan;
 
 /// Defines how command arguments are masked in `db.query.text` to prevent
@@ -112,8 +113,8 @@ fn masking_pattern(cmd_name: &str) -> MaskingPattern {
 }
 
 /// Serialize command arguments for `db.query.text`, hiding sensitive values
-/// according to the command's [`MaskingPattern`].
-pub(crate) fn serialize_query_text(cmd: &Cmd) -> Option<String> {
+/// according to the command's `MaskingPattern`.
+pub fn serialize_query_text(cmd: &Cmd) -> Option<String> {
     let mut args = cmd.args_iter().filter_map(|arg| match arg {
         Arg::Simple(b) => Some(String::from_utf8_lossy(b).into_owned()),
         _ => None,
@@ -171,7 +172,7 @@ pub(crate) fn serialize_query_text(cmd: &Cmd) -> Option<String> {
 const DB_SYSTEM_NAME: &str = "redis";
 
 /// Sets connection-level OTel DB attributes on a span (no command-specific attributes).
-pub(crate) fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
+pub fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
     span.set_attribute("db.system.name", DB_SYSTEM_NAME);
     span.set_attribute("server.address", client.server_address().to_string());
     span.set_attribute_i64("server.port", client.server_port() as i64);
@@ -179,7 +180,7 @@ pub(crate) fn set_db_connection_attributes(span: &GlideSpan, client: &Client) {
 }
 
 /// Sets OTel DB semantic convention attributes on a single command span.
-pub(crate) fn set_db_attributes(span: &GlideSpan, cmd: &Cmd, client: &Client) {
+pub fn set_db_attributes(span: &GlideSpan, cmd: &Cmd, client: &Client) {
     set_db_connection_attributes(span, client);
 
     if let Some(Arg::Simple(name_bytes)) = cmd.args_iter().next() {
@@ -209,7 +210,7 @@ fn serialize_script_query_text(hash: &str, keys: &[&[u8]], args: &[&[u8]]) -> St
 }
 
 /// Sets OTel DB semantic convention attributes on an EVALSHA (script) span.
-pub(crate) fn set_db_script_attributes(
+pub fn set_db_script_attributes(
     span: &GlideSpan,
     hash: &str,
     keys: &[&[u8]],
@@ -227,13 +228,14 @@ pub(crate) fn set_db_script_attributes(
 /// Sets OTel DB semantic convention attributes on a batch (pipeline/transaction) span.
 /// `db.query.text` is a newline-joined serialization of all commands.
 /// `db.operation.name` is `PIPELINE <cmd>` if all commands are the same, otherwise `PIPELINE`.
-pub(crate) fn set_db_batch_attributes(span: &GlideSpan, cmds: &[Cmd], client: &Client) {
+pub fn set_db_batch_attributes<T: Borrow<Cmd>>(span: &GlideSpan, cmds: &[T], client: &Client) {
     set_db_connection_attributes(span, client);
 
     let mut query_texts: Vec<String> = Vec::with_capacity(cmds.len());
     let mut cmd_names: Vec<String> = Vec::with_capacity(cmds.len());
 
     for cmd in cmds {
+        let cmd: &Cmd = cmd.borrow();
         if let Some(text) = serialize_query_text(cmd) {
             query_texts.push(text);
         }

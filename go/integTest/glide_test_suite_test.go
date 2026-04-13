@@ -69,8 +69,9 @@ func (suite *GlideTestSuite) SetupSuite() {
 	// Stop cluster in case previous test run was interrupted or crashed and didn't stop.
 	// If an error occurs, we ignore it in case the servers actually were stopped before running this.
 	runClusterManager(suite, []string{"stop", "--prefix", "cluster"}, true)
+	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster"}, true)
 
-	// Delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+	// Delete dirs to ensure clean state before starting new clusters
 	err := os.RemoveAll("../../utils/clusters")
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatal(err)
@@ -303,6 +304,7 @@ func TestGlideTestSuite(t *testing.T) {
 
 func (suite *GlideTestSuite) TearDownSuite() {
 	runClusterManager(suite, []string{"stop", "--prefix", "cluster", "--keep-folder"}, true)
+	runClusterManager(suite, []string{"--tls", "stop", "--prefix", "cluster", "--keep-folder"}, true)
 }
 
 func (suite *GlideTestSuite) TearDownTest() {

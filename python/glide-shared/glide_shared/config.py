@@ -64,6 +64,10 @@ class ReadFrom(Enum):
     Spread the read requests among nodes within the client's Availability Zone (AZ) in a round robin manner,
     prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.
     """
+    ALL_NODES = ProtobufReadFrom.AllNodes
+    """
+    Spread the read requests between all nodes (primary and replicas) in a round robin manner.
+    """
 
 
 class ProtocolVersion(Enum):

@@ -182,12 +182,17 @@ export class ValkeyCluster {
     public async close(keepFolder = false): Promise<void> {
         if (this.clusterFolder) {
             await new Promise<void>((resolve, reject) => {
-                const commandArgs = [
-                    PY_SCRIPT_PATH,
+                const commandArgs = [PY_SCRIPT_PATH];
+
+                if (this.tls) {
+                    commandArgs.push(`--tls`);
+                }
+
+                commandArgs.push(
                     `stop`,
                     `--cluster-folder`,
                     `${this.clusterFolder}`,
-                ];
+                );
 
                 if (keepFolder) {
                     commandArgs.push(`--keep-folder`);

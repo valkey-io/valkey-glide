@@ -84,7 +84,7 @@ tasks.register('stopAllAfterTests') {
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster', '--keep-folder'])
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'cluster', '--keep-folder'])
             ignoreExitValue true
         }
     }
@@ -102,13 +102,13 @@ tasks.register('stopAllBeforeTests') {
         }
         exec {
             workingDir "${project.rootDir}/../utils"
-            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'tls-cluster'])
+            commandLine getClusterCommand(['python3', 'cluster_manager.py', '--tls', 'stop', '--prefix', 'cluster'])
             ignoreExitValue true
         }
     }
 }
 
-// delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+// delete dirs to ensure clean state before starting new clusters
 tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
 }

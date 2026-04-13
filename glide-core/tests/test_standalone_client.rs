@@ -498,7 +498,7 @@ mod standalone_client_tests {
                             || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
                         "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
-                    let client_info = repeat_try_create(|| async {
+                    let client_info = retry(|| async {
                         let mut client = client.clone();
                         String::from_owned_redis_value(
                             client.send_command(&client_info_cmd).await.unwrap(),

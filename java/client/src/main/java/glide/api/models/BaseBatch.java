@@ -391,7 +391,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @implNote {@link ArgType} is limited to {@link String} or {@link GlideString}, any other type
      *     will throw {@link IllegalArgumentException}.
-     * @see <a href="https://valkey.io/commands/echo">valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/echo/">valkey.io</a> for details.
      * @param message The message to be echoed back.
      * @return Command Response - The provided <code>message</code>.
      */
