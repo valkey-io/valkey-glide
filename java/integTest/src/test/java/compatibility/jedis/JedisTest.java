@@ -8,6 +8,7 @@ import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
+import glide.TestConfiguration;
 import glide.api.GlideClient;
 import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -244,7 +245,7 @@ public class JedisTest {
 
         String info = (String) jedis.sendCommand(Protocol.Command.CLIENT, "INFO");
         assertTrue(info.contains("lib-name=GlideJedisAdapter"));
-        assertTrue(info.contains("lib-ver=unknown"));
+        assertTrue(info.contains("lib-ver=" + TestConfiguration.EXPECTED_GLIDE_VERSION));
     }
 
     @Test
