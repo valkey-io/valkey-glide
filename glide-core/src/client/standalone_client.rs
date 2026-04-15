@@ -299,7 +299,9 @@ impl StandaloneClient {
             match result {
                 Ok((connection, replication_status)) => {
                     nodes.push(connection);
-                    // Parse replication info string and store for potential discovery
+                    // Parse replication info string and store for potential discovery.
+                    // None if STATIC mode or connection error; empty string is handled
+                    // gracefully by parsing functions (no matches → no discovery).
                     let info_str = replication_status
                         .and_then(|status| redis::from_owned_redis_value::<String>(status).ok());
                     let is_primary = info_str
@@ -329,7 +331,10 @@ impl StandaloneClient {
             }
         }
 
-        // Topology discovery: connect to nodes found in INFO REPLICATION responses
+        // Topology discovery: connect to nodes found in INFO REPLICATION responses.
+        // Each discovered connection uses the same connection_timeout as initial connections.
+        // Unreachable discovered nodes are logged and skipped (not fatal).
+        // Discovery is bounded: at most 2 levels deep (replica → primary → primary's replicas).
         if node_discovery_mode == NodeDiscoveryMode::DiscoverAll {
             let mut discovered: Vec<NodeAddress> = Vec::new();
             let existing: Vec<String> = connection_request
@@ -338,7 +343,9 @@ impl StandaloneClient {
                 .map(|a| format!("{}:{}", a.host, a.port))
                 .collect();
 
-            // Phase 1: Parse initial INFO REPLICATION responses
+            // Phase 1: Parse initial INFO REPLICATION responses.
+            // If replication_infos is empty (all connections failed), this loop is
+            // skipped and the "Validate we have required connections" block handles the error.
             for info_str in replication_infos.iter().flatten() {
                 if is_primary_role(info_str) {
                     let replicas = parse_replica_addresses(info_str);
@@ -365,80 +372,59 @@ impl StandaloneClient {
                 }
             }
 
-            // Phase 2: Connect to discovered nodes
+            // Phase 2: Connect to discovered nodes in parallel
             let tls = tls_mode.unwrap_or(TlsMode::NoTls);
-            for address in &discovered {
-                let proto_addr = NodeAddress {
-                    host: address.host.clone(),
-                    port: address.port,
-                };
-                match get_connection_and_replication_info(
-                    &proto_addr,
-                    &retry_strategy,
-                    &discovery_conn_info,
-                    tls,
-                    &discovery_push_sender,
-                    discover_az,
-                    connection_timeout,
-                    discovery_tls_params.clone(),
-                    tcp_nodelay,
-                    &discovery_pubsub_sync,
-                    false,
-                    discovery_iam_handle.clone(),
-                )
-                .await
-                {
+            let discovered_count = discovered.len();
+
+            let mut phase2_stream = stream::iter(discovered.clone().into_iter())
+                .map(|address| {
+                    let conn_info = discovery_conn_info.clone();
+                    let sender = discovery_push_sender.clone();
+                    let params = discovery_tls_params.clone();
+                    let sync = discovery_pubsub_sync.clone();
+                    let iam_handle = discovery_iam_handle.clone();
+                    async move {
+                        let result = get_connection_and_replication_info(
+                            &address,
+                            &retry_strategy,
+                            &conn_info,
+                            tls,
+                            &sender,
+                            discover_az,
+                            connection_timeout,
+                            params,
+                            tcp_nodelay,
+                            &sync,
+                            false,
+                            iam_handle,
+                        )
+                        .await;
+                        (address, result)
+                    }
+                })
+                .buffer_unordered(discovered_count);
+
+            let mut phase3_addresses: Vec<NodeAddress> = Vec::new();
+            while let Some((addr, result)) = phase2_stream.next().await {
+                match result {
                     Ok((connection, replication_status)) => {
                         let info_str = replication_status
                             .and_then(|s| redis::from_owned_redis_value::<String>(s).ok());
                         let is_primary =
                             info_str.as_ref().is_some_and(|v| v.contains("role:master"));
 
-                        // Push this connection first so primary_index is correct
                         if is_primary && primary_index.is_none() {
                             primary_index = Some(nodes.len());
                         }
                         nodes.push(connection);
 
-                        if is_primary {
-                            // Phase 3: If we discovered a primary from a replica,
-                            // also discover the primary's replicas
-                            if let Some(ref info) = info_str {
-                                let more_replicas = parse_replica_addresses(info);
-                                for r in more_replicas {
-                                    if !address_is_known(&r, &existing, &discovered) {
-                                        let proto_r = NodeAddress {
-                                            host: r.host.clone(),
-                                            port: r.port,
-                                        };
-                                        match get_connection_and_replication_info(
-                                            &proto_r,
-                                            &retry_strategy,
-                                            &discovery_conn_info,
-                                            tls,
-                                            &discovery_push_sender,
-                                            discover_az,
-                                            connection_timeout,
-                                            discovery_tls_params.clone(),
-                                            tcp_nodelay,
-                                            &discovery_pubsub_sync,
-                                            false,
-                                            discovery_iam_handle.clone(),
-                                        )
-                                        .await
-                                        {
-                                            Ok((conn, _)) => nodes.push(conn),
-                                            Err((_conn, err)) => {
-                                                log_warn(
-                                                    "topology discovery",
-                                                    format!(
-                                                        "Failed to connect to discovered replica {}:{}: {}",
-                                                        r.host, r.port, err
-                                                    ),
-                                                );
-                                            }
-                                        }
-                                    }
+                        // Collect Phase 3 addresses from the primary's replica list
+                        if let Some(info) = info_str.as_deref().filter(|_| is_primary) {
+                            for r in parse_replica_addresses(info) {
+                                if !address_is_known(&r, &existing, &discovered)
+                                    && !address_is_known(&r, &existing, &phase3_addresses)
+                                {
+                                    phase3_addresses.push(r);
                                 }
                             }
                         }
@@ -448,9 +434,56 @@ impl StandaloneClient {
                             "topology discovery",
                             format!(
                                 "Failed to connect to discovered node {}:{}: {}",
-                                address.host, address.port, err
+                                addr.host, addr.port, err
                             ),
                         );
+                    }
+                }
+            }
+
+            // Phase 3: Connect to replicas discovered from the primary, in parallel
+            if !phase3_addresses.is_empty() {
+                let phase3_count = phase3_addresses.len();
+                let mut phase3_stream = stream::iter(phase3_addresses.into_iter())
+                    .map(|address| {
+                        let conn_info = discovery_conn_info.clone();
+                        let sender = discovery_push_sender.clone();
+                        let params = discovery_tls_params.clone();
+                        let sync = discovery_pubsub_sync.clone();
+                        let iam_handle = discovery_iam_handle.clone();
+                        async move {
+                            let result = get_connection_and_replication_info(
+                                &address,
+                                &retry_strategy,
+                                &conn_info,
+                                tls,
+                                &sender,
+                                discover_az,
+                                connection_timeout,
+                                params,
+                                tcp_nodelay,
+                                &sync,
+                                false,
+                                iam_handle,
+                            )
+                            .await;
+                            (address, result)
+                        }
+                    })
+                    .buffer_unordered(phase3_count);
+
+                while let Some((addr, result)) = phase3_stream.next().await {
+                    match result {
+                        Ok((conn, _)) => nodes.push(conn),
+                        Err((_conn, err)) => {
+                            log_warn(
+                                "topology discovery",
+                                format!(
+                                    "Failed to connect to discovered replica {}:{}: {}",
+                                    addr.host, addr.port, err
+                                ),
+                            );
+                        }
                     }
                 }
             }

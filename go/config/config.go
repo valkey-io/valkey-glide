@@ -563,6 +563,8 @@ func (config *ClientConfiguration) WithClientSideCache(
 	return config
 }
 
+// WithNodeDiscoveryMode sets the node discovery mode for the standalone client.
+// See [NodeDiscoveryMode] for available modes.
 func (config *ClientConfiguration) WithNodeDiscoveryMode(mode NodeDiscoveryMode) *ClientConfiguration {
 	config.nodeDiscoveryMode = mode
 	return config

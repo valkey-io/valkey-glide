@@ -16,11 +16,13 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.NodeDiscoveryMode;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -29,6 +31,7 @@ import org.junit.jupiter.api.Timeout;
 public class NodeDiscoveryModeTests {
 
     private static ValkeyCluster discoveryCluster;
+    private final List<GlideClient> clients = new ArrayList<>();
 
     @BeforeAll
     public static void setupDiscoveryCluster() throws Exception {
@@ -40,39 +43,42 @@ public class NodeDiscoveryModeTests {
         if (discoveryCluster != null) discoveryCluster.close();
     }
 
+    @AfterEach
+    public void closeClients() {
+        for (GlideClient client : clients) {
+            try {
+                client.close();
+            } catch (Exception ignored) {
+            }
+        }
+        clients.clear();
+    }
+
+    private GlideClient createAndRegister(GlideClientConfiguration config) throws Exception {
+        GlideClient client = GlideClient.createClient(config).get();
+        clients.add(client);
+        return client;
+    }
+
     // T2: STATIC tests (shared server)
 
     @SneakyThrows
     @Test
     public void test_skip_info_replication_connects_and_reads() {
         GlideClient client =
-                GlideClient.createClient(
-                                commonClientConfig().nodeDiscoveryMode(NodeDiscoveryMode.STATIC).build())
-                        .get();
-
-        try {
-            assertNull(client.get("nonexistent").get());
-        } finally {
-            client.close();
-        }
+                createAndRegister(commonClientConfig().nodeDiscoveryMode(NodeDiscoveryMode.STATIC).build());
+        assertNull(client.get("nonexistent").get());
     }
 
     @SneakyThrows
     @Test
     public void test_skip_info_replication_allows_writes() {
         GlideClient client =
-                GlideClient.createClient(
-                                commonClientConfig().nodeDiscoveryMode(NodeDiscoveryMode.STATIC).build())
-                        .get();
-
-        try {
-            String key = "test_skip_info_write_" + System.currentTimeMillis();
-            client.set(key, "value").get();
-            assertEquals("value", client.get(key).get());
-            client.del(new String[] {key}).get();
-        } finally {
-            client.close();
-        }
+                createAndRegister(commonClientConfig().nodeDiscoveryMode(NodeDiscoveryMode.STATIC).build());
+        String key = "test_skip_info_write_" + System.currentTimeMillis();
+        client.set(key, "value").get();
+        assertEquals("value", client.get(key).get());
+        client.del(new String[] {key}).get();
     }
 
     // T3: read_only + DISCOVER_ALL rejection (shared server)
@@ -90,7 +96,6 @@ public class NodeDiscoveryModeTests {
                                                         .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
                                                         .build())
                                         .get());
-
         assertInstanceOf(ClosingException.class, exception.getCause());
     }
 
@@ -102,35 +107,26 @@ public class NodeDiscoveryModeTests {
         List<NodeAddress> nodes = discoveryCluster.getNodesAddr();
         NodeAddress primary = nodes.get(0);
         NodeAddress replica0 = nodes.get(1);
-
         String uniqueName = "discovery_t4_" + UUID.randomUUID();
 
-        GlideClient discoveryClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(primary)
-                                        .useTLS(TLS)
-                                        .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
-                                        .clientName(uniqueName)
-                                        .build())
-                        .get();
+        createAndRegister(
+                GlideClientConfiguration.builder()
+                        .address(primary)
+                        .useTLS(TLS)
+                        .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
+                        .clientName(uniqueName)
+                        .build());
 
-        GlideClient probeClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(replica0)
-                                        .useTLS(TLS)
-                                        .readOnly(true)
-                                        .build())
-                        .get();
+        GlideClient probe =
+                createAndRegister(
+                        GlideClientConfiguration.builder()
+                                .address(replica0)
+                                .useTLS(TLS)
+                                .readOnly(true)
+                                .build());
 
-        try {
-            String clientList = (String) probeClient.customCommand(new String[] {"CLIENT", "LIST"}).get();
-            assertTrue(clientList.contains(uniqueName));
-        } finally {
-            probeClient.close();
-            discoveryClient.close();
-        }
+        String clientList = (String) probe.customCommand(new String[] {"CLIENT", "LIST"}).get();
+        assertTrue(clientList.contains(uniqueName));
     }
 
     @SneakyThrows
@@ -138,42 +134,34 @@ public class NodeDiscoveryModeTests {
     public void test_discover_replicas_from_replica() {
         List<NodeAddress> nodes = discoveryCluster.getNodesAddr();
         NodeAddress replica0 = nodes.get(1);
-
         String uniqueName = "discovery_t5_" + UUID.randomUUID();
         String key = "test_discover_from_replica_" + System.currentTimeMillis();
 
         GlideClient discoveryClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(replica0)
-                                        .useTLS(TLS)
-                                        .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
-                                        .clientName(uniqueName)
-                                        .build())
-                        .get();
+                createAndRegister(
+                        GlideClientConfiguration.builder()
+                                .address(replica0)
+                                .useTLS(TLS)
+                                .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
+                                .clientName(uniqueName)
+                                .build());
 
-        GlideClient probeClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(replica0)
-                                        .useTLS(TLS)
-                                        .readOnly(true)
-                                        .build())
-                        .get();
+        assertNotNull(discoveryClient);
+        discoveryClient.set(key, "value").get();
+        assertEquals("value", discoveryClient.get(key).get());
 
-        try {
-            assertNotNull(discoveryClient);
-            discoveryClient.set(key, "value").get();
-            assertEquals("value", discoveryClient.get(key).get());
+        GlideClient probe =
+                createAndRegister(
+                        GlideClientConfiguration.builder()
+                                .address(replica0)
+                                .useTLS(TLS)
+                                .readOnly(true)
+                                .build());
 
-            String clientList = (String) probeClient.customCommand(new String[] {"CLIENT", "LIST"}).get();
-            assertTrue(clientList.contains(uniqueName));
+        String clientList = (String) probe.customCommand(new String[] {"CLIENT", "LIST"}).get();
+        assertTrue(clientList.contains(uniqueName));
 
-            discoveryClient.del(new String[] {key}).get();
-        } finally {
-            probeClient.close();
-            discoveryClient.close();
-        }
+        discoveryClient.del(new String[] {key}).get();
     }
 
     @SneakyThrows
@@ -184,48 +172,37 @@ public class NodeDiscoveryModeTests {
         NodeAddress replica0 = nodes.get(1);
         NodeAddress replica1 = nodes.get(2);
         NodeAddress replica2 = nodes.get(3);
-
         String uniqueName = "discovery_t6_" + UUID.randomUUID();
 
-        GlideClient discoveryClient =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(primary)
-                                        .address(replica0)
-                                        .useTLS(TLS)
-                                        .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
-                                        .clientName(uniqueName)
-                                        .build())
-                        .get();
+        createAndRegister(
+                GlideClientConfiguration.builder()
+                        .address(primary)
+                        .address(replica0)
+                        .useTLS(TLS)
+                        .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
+                        .clientName(uniqueName)
+                        .build());
 
         GlideClient probe1 =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(replica1)
-                                        .useTLS(TLS)
-                                        .readOnly(true)
-                                        .build())
-                        .get();
+                createAndRegister(
+                        GlideClientConfiguration.builder()
+                                .address(replica1)
+                                .useTLS(TLS)
+                                .readOnly(true)
+                                .build());
 
         GlideClient probe2 =
-                GlideClient.createClient(
-                                GlideClientConfiguration.builder()
-                                        .address(replica2)
-                                        .useTLS(TLS)
-                                        .readOnly(true)
-                                        .build())
-                        .get();
+                createAndRegister(
+                        GlideClientConfiguration.builder()
+                                .address(replica2)
+                                .useTLS(TLS)
+                                .readOnly(true)
+                                .build());
 
-        try {
-            String clientList1 = (String) probe1.customCommand(new String[] {"CLIENT", "LIST"}).get();
-            assertTrue(clientList1.contains(uniqueName));
+        String clientList1 = (String) probe1.customCommand(new String[] {"CLIENT", "LIST"}).get();
+        assertTrue(clientList1.contains(uniqueName));
 
-            String clientList2 = (String) probe2.customCommand(new String[] {"CLIENT", "LIST"}).get();
-            assertTrue(clientList2.contains(uniqueName));
-        } finally {
-            probe2.close();
-            probe1.close();
-            discoveryClient.close();
-        }
+        String clientList2 = (String) probe2.customCommand(new String[] {"CLIENT", "LIST"}).get();
+        assertTrue(clientList2.contains(uniqueName));
     }
 }
