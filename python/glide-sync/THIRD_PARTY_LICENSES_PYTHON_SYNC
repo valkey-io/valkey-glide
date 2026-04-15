@@ -6238,7 +6238,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: bitflags:2.11.0
+Package: bitflags:2.11.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16950,7 +16950,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hashbrown:0.16.1
+Package: hashbrown:0.17.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18882,7 +18882,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hyper-rustls:0.27.7
+Package: hyper-rustls:0.27.9
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -21019,7 +21019,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: indexmap:2.13.1
+Package: indexmap:2.14.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23080,7 +23080,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.94
+Package: js-sys:0.3.95
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -23767,7 +23767,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.184
+Package: libc:0.2.185
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -32816,7 +32816,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rand:0.9.2
+Package: rand:0.9.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -33045,7 +33045,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rand:0.10.0
+Package: rand:0.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -34190,7 +34190,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rand_core:0.10.0
+Package: rand_core:0.10.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -35155,7 +35155,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustls:0.23.37
+Package: rustls:0.23.38
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36328,7 +36328,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-webpki:0.103.10
+Package: rustls-webpki:0.103.12
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -43046,7 +43046,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: tokio:1.51.1
+Package: tokio:1.52.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -46648,7 +46648,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.117
+Package: wasm-bindgen:0.2.118
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -46877,7 +46877,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-futures:0.4.67
+Package: wasm-bindgen-futures:0.4.68
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47106,7 +47106,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.117
+Package: wasm-bindgen-macro:0.2.118
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47335,7 +47335,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.117
+Package: wasm-bindgen-macro-support:0.2.118
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -47564,7 +47564,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.117
+Package: wasm-bindgen-shared:0.2.118
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -49140,7 +49140,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: web-sys:0.3.94
+Package: web-sys:0.3.95
 
 The following copyrights and licenses were found in the source code of this package:
 
