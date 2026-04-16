@@ -20,6 +20,19 @@ import (
 func intPtr(v int) *int         { return &v }
 func f64Ptr(v float64) *float64 { return &v }
 
+var testBicycles = []string{
+	`{"brand":"Velorim","model":"Jigger","price":270,"condition":"new"}`,
+	`{"brand":"Bicyk","model":"Hillcraft","price":1200,"condition":"used"}`,
+	`{"brand":"Nord","model":"Chook air 5","price":815,"condition":"used"}`,
+	`{"brand":"Eva","model":"Eva 291","price":3400,"condition":"used"}`,
+	`{"brand":"Noka Bikes","model":"Kahuna","price":3200,"condition":"used"}`,
+	`{"brand":"Breakout","model":"XBN 2.1 Alloy","price":810,"condition":"new"}`,
+	`{"brand":"ScramBikes","model":"WattBike","price":2300,"condition":"new"}`,
+	`{"brand":"Peaknetic","model":"Secto","price":430,"condition":"new"}`,
+	`{"brand":"nHill","model":"Summit","price":1200,"condition":"new"}`,
+	`{"model":"ThrillCycle","brand":"BikeShind","price":815,"condition":"refurbished"}`,
+}
+
 // jsonSet calls JSON.SET via CustomCommand on a standalone client.
 // TODO: replace once https://github.com/valkey-io/valkey-glide/issues/5589 has been resolved.
 func (suite *GlideTestSuite) jsonSet(ctx context.Context, client *glide.Client, key, path, value string) {
@@ -330,19 +343,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeJSON, Prefixes: []string{prefixBicycles}})
 	assert.NoError(suite.T(), err)
 
-	bicycles := []string{
-		`{"brand":"Velorim","model":"Jigger","price":270,"condition":"new"}`,
-		`{"brand":"Bicyk","model":"Hillcraft","price":1200,"condition":"used"}`,
-		`{"brand":"Nord","model":"Chook air 5","price":815,"condition":"used"}`,
-		`{"brand":"Eva","model":"Eva 291","price":3400,"condition":"used"}`,
-		`{"brand":"Noka Bikes","model":"Kahuna","price":3200,"condition":"used"}`,
-		`{"brand":"Breakout","model":"XBN 2.1 Alloy","price":810,"condition":"new"}`,
-		`{"brand":"ScramBikes","model":"WattBike","price":2300,"condition":"new"}`,
-		`{"brand":"Peaknetic","model":"Secto","price":430,"condition":"new"}`,
-		`{"brand":"nHill","model":"Summit","price":1200,"condition":"new"}`,
-		`{"model":"ThrillCycle","brand":"BikeShind","price":815,"condition":"refurbished"}`,
-	}
-	for i, b := range bicycles {
+	for i, b := range testBicycles {
 		suite.jsonSetCluster(ctx, client, prefixBicycles+strconv.Itoa(i), ".", b)
 	}
 	time.Sleep(time.Second)
@@ -1451,19 +1452,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeJSON, Prefixes: []string{prefixBicycles}})
 	assert.NoError(suite.T(), err)
 
-	bicycles := []string{
-		`{"brand":"Velorim","model":"Jigger","price":270,"condition":"new"}`,
-		`{"brand":"Bicyk","model":"Hillcraft","price":1200,"condition":"used"}`,
-		`{"brand":"Nord","model":"Chook air 5","price":815,"condition":"used"}`,
-		`{"brand":"Eva","model":"Eva 291","price":3400,"condition":"used"}`,
-		`{"brand":"Noka Bikes","model":"Kahuna","price":3200,"condition":"used"}`,
-		`{"brand":"Breakout","model":"XBN 2.1 Alloy","price":810,"condition":"new"}`,
-		`{"brand":"ScramBikes","model":"WattBike","price":2300,"condition":"new"}`,
-		`{"brand":"Peaknetic","model":"Secto","price":430,"condition":"new"}`,
-		`{"brand":"nHill","model":"Summit","price":1200,"condition":"new"}`,
-		`{"model":"ThrillCycle","brand":"BikeShind","price":815,"condition":"refurbished"}`,
-	}
-	for i, b := range bicycles {
+	for i, b := range testBicycles {
 		suite.jsonSet(ctx, client, prefixBicycles+strconv.Itoa(i), ".", b)
 	}
 	time.Sleep(time.Second)

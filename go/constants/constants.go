@@ -311,38 +311,6 @@ const (
 	BYBOX    SearchShape = "BYBOX"
 )
 
-// FieldType represents the data type of a field in a vector search index schema.
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/ft.create/
-type FieldType string
-
-const (
-	// FieldTypeText indicates the field contains any blob of data.
-	FieldTypeText FieldType = "TEXT"
-	// FieldTypeTag indicates the field contains a tag field.
-	FieldTypeTag FieldType = "TAG"
-	// FieldTypeNumeric indicates the field contains a number.
-	FieldTypeNumeric FieldType = "NUMERIC"
-	// FieldTypeVector indicates the field is a vector field that supports vector search.
-	FieldTypeVector FieldType = "VECTOR"
-)
-
-// VectorAlgorithm is the algorithm used for vector similarity search.
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/ft.create/
-type VectorAlgorithm string
-
-const (
-	// VectorAlgorithmHNSW is the Hierarchical Navigable Small World algorithm.
-	VectorAlgorithmHNSW VectorAlgorithm = "HNSW"
-	// VectorAlgorithmFlat is the brute force (flat) algorithm.
-	VectorAlgorithmFlat VectorAlgorithm = "FLAT"
-)
-
 // DistanceMetric is the distance metric used to measure similarity between vectors.
 //
 // See [valkey.io] for details.

@@ -9,6 +9,24 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
 
+// fieldType is the internal wire type for a field in the index schema.
+type fieldType string
+
+const (
+	fieldTypeText    fieldType = "TEXT"
+	fieldTypeTag     fieldType = "TAG"
+	fieldTypeNumeric fieldType = "NUMERIC"
+	fieldTypeVector  fieldType = "VECTOR"
+)
+
+// vectorAlgorithm is the internal wire type for the vector indexing algorithm.
+type vectorAlgorithm string
+
+const (
+	vectorAlgorithmHNSW vectorAlgorithm = "HNSW"
+	vectorAlgorithmFlat vectorAlgorithm = "FLAT"
+)
+
 // Field is the interface implemented by all index schema field types.
 //
 // See [valkey.io] for details.
@@ -26,12 +44,12 @@ type baseField struct {
 	Sortable bool
 }
 
-func (f *baseField) baseArgs(fieldType constants.FieldType) []string {
+func (f *baseField) baseArgs(ft fieldType) []string {
 	args := []string{f.Name}
 	if f.Alias != "" {
 		args = append(args, "AS", f.Alias)
 	}
-	args = append(args, string(fieldType))
+	args = append(args, string(ft))
 	return args
 }
 
@@ -82,7 +100,7 @@ func (f *TextField) ToArgs() ([]string, error) {
 	if f.WithSuffixTrie && f.NoSuffixTrie {
 		return nil, errors.New("WithSuffixTrie and NoSuffixTrie are mutually exclusive")
 	}
-	args := f.baseArgs(constants.FieldTypeText)
+	args := f.baseArgs(fieldTypeText)
 	if f.NoStem {
 		args = append(args, "NOSTEM")
 	}
@@ -132,7 +150,7 @@ func (f *TagField) SetCaseSensitive(v bool) *TagField { f.CaseSensitive = v; ret
 
 // ToArgs returns the command arguments for this TagField.
 func (f *TagField) ToArgs() ([]string, error) {
-	args := f.baseArgs(constants.FieldTypeTag)
+	args := f.baseArgs(fieldTypeTag)
 	if f.Separator != "" {
 		args = append(args, "SEPARATOR", f.Separator)
 	}
@@ -167,7 +185,7 @@ func (f *NumericField) SetSortable(sortable bool) *NumericField { f.Sortable = s
 
 // ToArgs returns the command arguments for this NumericField.
 func (f *NumericField) ToArgs() ([]string, error) {
-	args := f.baseArgs(constants.FieldTypeNumeric)
+	args := f.baseArgs(fieldTypeNumeric)
 	if f.Sortable {
 		args = append(args, "SORTABLE")
 	}
@@ -215,8 +233,8 @@ func (f *VectorFieldFlat) SetInitialCap(cap int) *VectorFieldFlat { f.InitialCap
 
 // ToArgs returns the command arguments for this VectorFieldFlat.
 func (f *VectorFieldFlat) ToArgs() ([]string, error) {
-	args := f.baseArgs(constants.FieldTypeVector)
-	args = append(args, string(constants.VectorAlgorithmFlat))
+	args := f.baseArgs(fieldTypeVector)
+	args = append(args, string(vectorAlgorithmFlat))
 	attrs := f.buildAttrs()
 	args = append(args, strconv.Itoa(len(attrs)))
 	args = append(args, attrs...)
@@ -303,8 +321,8 @@ func (f *VectorFieldHNSW) SetVectorsExaminedOnRuntime(ef int) *VectorFieldHNSW {
 
 // ToArgs returns the command arguments for this VectorFieldHNSW.
 func (f *VectorFieldHNSW) ToArgs() ([]string, error) {
-	args := f.baseArgs(constants.FieldTypeVector)
-	args = append(args, string(constants.VectorAlgorithmHNSW))
+	args := f.baseArgs(fieldTypeVector)
+	args = append(args, string(vectorAlgorithmHNSW))
 	attrs := f.buildAttrs()
 	args = append(args, strconv.Itoa(len(attrs)))
 	args = append(args, attrs...)

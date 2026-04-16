@@ -1,6 +1,7 @@
 ## Pending 2.4
 
 #### Changes
+* Go: Add Valkey Search (FT) command support — FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.DROPINDEX, FT.LIST, FT.INFO, FT.EXPLAIN, FT.EXPLAINCLI, FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE, FT.ALIASLIST with full Valkey Search 1.2 options for both standalone and cluster clients ([#5590](https://github.com/valkey-io/valkey-glide/pull/5590))
 * FFI: Add URI-based client creation API with full ConnectionRequest support ([#5620](https://github.com/valkey-io/valkey-glide/pull/5620))
     * New `create_client_from_uri` FFI function accepts Redis/Valkey URI strings and optional JSON configuration
     * Supports all ConnectionRequest options including compression, periodic checks, IAM credentials, and pub/sub subscriptions
@@ -35,8 +36,6 @@
 ## 2.3
 
 #### Changes
-* Go: Add Valkey Search (FT) command support — FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.DROPINDEX, FT.LIST, FT.INFO, FT.EXPLAIN, FT.EXPLAINCLI, FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE, FT.ALIASLIST with full Valkey Search 1.2 options for both standalone and cluster clients ([#5590](https://github.com/valkey-io/valkey-glide/pull/5590))
-* Python, Java, Node, CORE: Add valkey-search 1.2 support — FT.CREATE index options (SCORE, LANGUAGE, SKIPINITIALSCAN, MINSTEMSIZE, WITHOFFSETS/NOOFFSETS, NOSTOPWORDS/STOPWORDS, PUNCTUATION) and field options (NOSTEM, WEIGHT, WITHSUFFIXTRIE/NOSUFFIXTRIE, SORTABLE); FT.SEARCH options (VERBATIM, INORDER, SLOP, SORTBY, WITHSORTKEYS, NOCONTENT, DIALECT, shard scope, consistency mode); FT.AGGREGATE options (VERBATIM, INORDER, SLOP, DIALECT); FT.INFO scope options (LOCAL, PRIMARY, CLUSTER, shard scope, consistency mode); WITHSORTKEYS and NOCONTENT response conversion in glide-core. Python `options` parameter for `ft.search()` and `ft.aggregate()` is now optional. ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
 * Node: add dynamic PubSub support ([#5295](https://github.com/valkey-io/valkey-glide/pull/5295))
 * Java: Add uber JAR support for multi-platform builds ([5484](https://github.com/valkey-io/valkey-glide/issues/5484))
 * JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
