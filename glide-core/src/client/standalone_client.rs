@@ -376,7 +376,7 @@ impl StandaloneClient {
             let tls = tls_mode.unwrap_or(TlsMode::NoTls);
             let discovered_count = discovered.len();
 
-            let mut phase2_stream = stream::iter(discovered.clone().into_iter())
+            let mut phase2_stream = stream::iter(discovered.clone())
                 .map(|address| {
                     let conn_info = discovery_conn_info.clone();
                     let sender = discovery_push_sender.clone();
@@ -444,7 +444,7 @@ impl StandaloneClient {
             // Phase 3: Connect to replicas discovered from the primary, in parallel
             if !phase3_addresses.is_empty() {
                 let phase3_count = phase3_addresses.len();
-                let mut phase3_stream = stream::iter(phase3_addresses.into_iter())
+                let mut phase3_stream = stream::iter(phase3_addresses)
                     .map(|address| {
                         let conn_info = discovery_conn_info.clone();
                         let sender = discovery_push_sender.clone();
