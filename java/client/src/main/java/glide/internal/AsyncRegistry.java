@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
+import glide.api.logging.Logger;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,6 +37,10 @@ public final class AsyncRegistry {
 
     /** Thread-safe ID generator */
     private static final AtomicLong nextId = new AtomicLong(1);
+
+    /** Registration timestamps for measuring elapsed time on errors. */
+    private static final ConcurrentHashMap<Long, Long> registrationTimestamps =
+            new ConcurrentHashMap<>();
 
     /**
      * Shutdown flag to prevent race conditions between register() and shutdown()/failAllWithError().
@@ -114,10 +119,12 @@ public final class AsyncRegistry {
 
         // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
+        registrationTimestamps.put(correlationId, System.nanoTime());
 
         // Double-check shutdown flag after insertion to handle race with shutdown()
         if (isShutdown.get()) {
             activeFutures.remove(correlationId);
+            registrationTimestamps.remove(correlationId);
             if (maxInflightRequests > 0) {
                 clientInflightCounts.computeIfPresent(
                         clientHandle,
@@ -138,6 +145,7 @@ public final class AsyncRegistry {
                 (result, throwable) -> {
                     // Atomic cleanup - no race conditions
                     activeFutures.remove(correlationId);
+                    registrationTimestamps.remove(correlationId);
 
                     // Decrement per-client counter if applicable
                     if (maxInflightRequests > 0) {
@@ -198,6 +206,19 @@ public final class AsyncRegistry {
                         ? "Unknown error from native code"
                         : errorMessage;
 
+        // Log elapsed time for timeout and disconnect errors
+        if (errorTypeCode == 2 || errorTypeCode == 3) {
+            Long registeredAt = registrationTimestamps.get(correlationId);
+            if (registeredAt != null) {
+                long elapsedMs = (System.nanoTime() - registeredAt) / 1_000_000;
+                String errorTypeName = errorTypeCode == 2 ? "Timeout" : "Disconnect";
+                Logger.log(
+                        Logger.Level.WARN,
+                        "AsyncRegistry",
+                        errorTypeName + " after " + elapsedMs + "ms: " + msg);
+            }
+        }
+
         // Map error codes directly to exception types
         RuntimeException ex;
         switch (errorTypeCode) {
@@ -240,6 +261,7 @@ public final class AsyncRegistry {
 
         // Clear the map
         activeFutures.clear();
+        registrationTimestamps.clear();
         clientInflightCounts.clear();
     }
 
@@ -263,6 +285,7 @@ public final class AsyncRegistry {
                 (id, future) ->
                         future.completeExceptionally(new glide.api.models.exceptions.ClosingException(msg)));
         activeFutures.clear();
+        registrationTimestamps.clear();
         clientInflightCounts.clear();
     }
 
@@ -275,6 +298,7 @@ public final class AsyncRegistry {
     public static void reset() {
         isShutdown.set(false);
         activeFutures.clear();
+        registrationTimestamps.clear();
         clientInflightCounts.clear();
         nextId.set(1);
     }

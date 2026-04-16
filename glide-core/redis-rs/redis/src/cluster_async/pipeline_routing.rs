@@ -394,10 +394,10 @@ where
     core.pending_requests
         .lock()
         .unwrap()
-        .extend(pending_requests.into_iter());
+        .extend(pending_requests);
 
     // Wait for all receivers to complete and collect the responses
-    let responses: Vec<_> = futures::future::join_all(receivers.into_iter())
+    let responses: Vec<_> = futures::future::join_all(receivers)
         .await
         .into_iter()
         .collect();
