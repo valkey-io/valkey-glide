@@ -10,7 +10,7 @@ use logger_core::log_info;
 use logger_core::log_warn;
 use redis::aio::ConnectionLike;
 use redis::cluster_routing::{self, ResponsePolicy, Routable, RoutingInfo, is_readonly_cmd};
-use redis::{PushInfo, RedisError, RedisResult, RetryStrategy, Value};
+use redis::{AddressResolver, PushInfo, RedisError, RedisResult, RetryStrategy, Value};
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -250,6 +250,7 @@ impl StandaloneClient {
         let discovery_tls_params = tls_params.clone();
         let discovery_pubsub_sync = pubsub_synchronizer.clone();
         let discovery_iam_handle = iam_token_handle.clone();
+        let discovery_resolver = connection_request.address_resolver.clone();
 
         let mut stream = stream::iter(addresses)
             .map(move |address| {
@@ -264,6 +265,7 @@ impl StandaloneClient {
                 let sync = pubsub_synchronizer.clone();
                 let skip_replication =
                     read_only || node_discovery_mode == NodeDiscoveryMode::Static;
+                let resolver = connection_request.address_resolver.clone();
                 let iam_handle = iam_token_handle.clone();
                 async move {
                     get_connection_and_replication_info(
@@ -278,6 +280,7 @@ impl StandaloneClient {
                         nodelay,
                         &sync,
                         skip_replication,
+                        resolver.as_ref(),
                         iam_handle,
                     )
                     .await
@@ -383,6 +386,7 @@ impl StandaloneClient {
                     let params = discovery_tls_params.clone();
                     let sync = discovery_pubsub_sync.clone();
                     let iam_handle = discovery_iam_handle.clone();
+                    let resolver = discovery_resolver.clone();
                     async move {
                         let result = get_connection_and_replication_info(
                             &address,
@@ -396,6 +400,7 @@ impl StandaloneClient {
                             tcp_nodelay,
                             &sync,
                             false,
+                            resolver.as_ref(),
                             iam_handle,
                         )
                         .await;
@@ -451,6 +456,7 @@ impl StandaloneClient {
                         let params = discovery_tls_params.clone();
                         let sync = discovery_pubsub_sync.clone();
                         let iam_handle = discovery_iam_handle.clone();
+                        let resolver = discovery_resolver.clone();
                         async move {
                             let result = get_connection_and_replication_info(
                                 &address,
@@ -464,6 +470,7 @@ impl StandaloneClient {
                                 tcp_nodelay,
                                 &sync,
                                 false,
+                                resolver.as_ref(),
                                 iam_handle,
                             )
                             .await;
@@ -1063,6 +1070,7 @@ async fn get_connection_and_replication_info(
     tcp_nodelay: bool,
     pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     skip_replication_check: bool,
+    address_resolver: Option<&Arc<dyn AddressResolver>>,
     iam_token_handle: Option<super::IAMTokenHandle>,
 ) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
@@ -1076,6 +1084,7 @@ async fn get_connection_and_replication_info(
         tls_params,
         tcp_nodelay,
         pubsub_synchronizer.clone(),
+        address_resolver,
         iam_token_handle,
     )
     .await?;
