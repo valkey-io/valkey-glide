@@ -1,0 +1,14509 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
+package redis.clients.jedis;
+
+import static glide.utils.Java8Utils.createMap;
+
+import glide.api.GlideClient;
+import glide.api.models.GlideString;
+import glide.api.models.Script;
+import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.RangeOptions;
+import glide.api.models.commands.RangeOptions.InfLexBound;
+import glide.api.models.commands.RangeOptions.LexBoundary;
+import glide.api.models.commands.RangeOptions.LexRange;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.RangeOptions.RangeByLex;
+import glide.api.models.commands.RangeOptions.RangeByScore;
+import glide.api.models.commands.RangeOptions.RangeQuery;
+import glide.api.models.commands.RangeOptions.ScoreBoundary;
+import glide.api.models.commands.ScoreFilter;
+import glide.api.models.commands.ScriptDebugMode;
+import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.WeightAggregateOptions;
+import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
+import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
+import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
+import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
+import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
+import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.HScanOptionsBinary;
+import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.SScanOptionsBinary;
+import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.ZScanOptionsBinary;
+import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
+import glide.api.models.commands.stream.StreamReadOptions;
+import glide.api.models.commands.stream.StreamTrimOptions;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.exceptions.ClosingException;
+import glide.api.models.exceptions.ConnectionException;
+import java.io.Closeable;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocketFactory;
+import org.apache.commons.lang3.tuple.Pair;
+import redis.clients.jedis.args.BitCountOption;
+import redis.clients.jedis.args.BitOP;
+import redis.clients.jedis.args.ExpiryOption;
+import redis.clients.jedis.args.FlushMode;
+import redis.clients.jedis.args.FunctionRestorePolicy;
+import redis.clients.jedis.args.ListDirection;
+import redis.clients.jedis.args.ListPosition;
+import redis.clients.jedis.args.SortedSetOption;
+import redis.clients.jedis.commands.ProtocolCommand;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.params.BitPosParams;
+import redis.clients.jedis.params.GeoSearchParam;
+import redis.clients.jedis.params.GetExParams;
+import redis.clients.jedis.params.HGetExParams;
+import redis.clients.jedis.params.HSetExParams;
+import redis.clients.jedis.params.LCSParams;
+import redis.clients.jedis.params.LPosParams;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.params.SetParams;
+import redis.clients.jedis.params.SortingParams;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.params.XTrimParams;
+import redis.clients.jedis.params.ZAddParams;
+import redis.clients.jedis.params.ZIncrByParams;
+import redis.clients.jedis.params.ZParams;
+import redis.clients.jedis.params.ZRangeParams;
+import redis.clients.jedis.resps.AccessControlLogEntry;
+import redis.clients.jedis.resps.AccessControlUser;
+import redis.clients.jedis.resps.FunctionStats;
+import redis.clients.jedis.resps.GeoRadiusResponse;
+import redis.clients.jedis.resps.LCSMatchResult;
+import redis.clients.jedis.resps.LCSMatchResult.MatchedPosition;
+import redis.clients.jedis.resps.LCSMatchResult.Position;
+import redis.clients.jedis.resps.LibraryInfo;
+import redis.clients.jedis.resps.ScanResult;
+import redis.clients.jedis.resps.StreamConsumerInfo;
+import redis.clients.jedis.resps.StreamEntry;
+import redis.clients.jedis.resps.StreamGroupInfo;
+import redis.clients.jedis.resps.StreamInfo;
+import redis.clients.jedis.resps.StreamPendingEntry;
+import redis.clients.jedis.resps.StreamPendingSummary;
+import redis.clients.jedis.resps.Tuple;
+import redis.clients.jedis.util.GlideStringSetWrapper;
+import redis.clients.jedis.util.KeyValue;
+import redis.clients.jedis.util.Pool;
+
+/**
+ * Jedis compatibility wrapper for Valkey GLIDE client. This class provides a Jedis-like API while
+ * using Valkey GLIDE underneath for improved performance, reliability, and feature support.
+ *
+ * <p>This compatibility layer allows existing Jedis applications to migrate to Valkey GLIDE with
+ * minimal code changes while benefiting from GLIDE's advanced features such as:
+ *
+ * <ul>
+ *   <li>Improved connection management and pooling
+ *   <li>Better error handling and retry mechanisms
+ *   <li>Enhanced performance optimizations
+ *   <li>Support for the latest Valkey features
+ * </ul>
+ *
+ * <p>The class implements the same method signatures as the original Jedis client, ensuring drop-in
+ * compatibility for most use cases. Some advanced features may require migration to native GLIDE
+ * APIs for optimal performance.
+ *
+ * <p>Example usage:
+ *
+ * <pre>{@code
+ * try (Jedis jedis = new Jedis("localhost", 6379)) {
+ *     jedis.set("key", "value");
+ *     String value = jedis.get("key");
+ * }
+ * }</pre>
+ *
+ * @author Valkey GLIDE Project Contributors
+ * @since 1.0.0
+ * @see GlideClient
+ * @see JedisClientConfig
+ */
+public final class Jedis implements Closeable {
+
+    private static final Logger logger = Logger.getLogger(Jedis.class.getName());
+
+    /** Character encoding used for string-to-byte conversions in Valkey operations. */
+    private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
+
+    /** Keyword used in hash field expiration commands to specify the number of fields. */
+    private static final String FIELDS_KEYWORD = "FIELDS";
+
+    private volatile GlideClient glideClient; // Changed from final to volatile for lazy init
+    private volatile boolean broken;
+    private final boolean isPooled;
+    private volatile String resourceId; // Changed from final to volatile for lazy init
+    private final JedisClientConfig config;
+    private Pool<Jedis> dataSource; // Following original Jedis pattern
+    private volatile boolean closed = false;
+    private volatile boolean lazyInitialized = false; // New field to track initialization
+
+    // Transaction support (Transaction owns its Batch; we only track multi() state)
+    private volatile boolean inTransaction = false;
+
+    // Store connection parameters for lazy initialization (nullable for pooled connections)
+    private final String host;
+    private final int port;
+
+    /** Create a new Jedis instance with default localhost:6379 connection. */
+    public Jedis() {
+        this("localhost", 6379);
+    }
+
+    /**
+     * Create a new Jedis instance with specified host and port.
+     *
+     * @param host the Valkey server host
+     * @param port the Valkey server port
+     */
+    public Jedis(String host, int port) {
+        this(host, port, DefaultJedisClientConfig.builder().build());
+    }
+
+    /**
+     * Create a new Jedis instance with specified host, port and SSL configuration.
+     *
+     * @param host the Valkey server host
+     * @param port the Valkey server port
+     * @param useSsl whether to use SSL/TLS
+     */
+    public Jedis(String host, int port, boolean useSsl) {
+        this(host, port, DefaultJedisClientConfig.builder().ssl(useSsl).build());
+    }
+
+    /**
+     * Create a new Jedis instance with full configuration.
+     *
+     * @param host the Valkey server host
+     * @param port the Valkey server port
+     * @param config the jedis client configuration
+     */
+    public Jedis(String host, int port, JedisClientConfig config) {
+        this.host = host;
+        this.port = port;
+        this.isPooled = false;
+        this.dataSource = null;
+        this.config = config;
+
+        // Defer GlideClient creation until first Valkey operation (lazy initialization)
+        // Configuration validation happens during mapping when GlideClient is created
+        this.glideClient = null;
+        this.resourceId = null;
+        this.lazyInitialized = false;
+    }
+
+    /**
+     * Lazy initialization of GlideClient. This defers native library loading until actually needed
+     * for Valkey operations. Solves DataGrip compatibility issues where JDBC driver loading fails due
+     * to native library restrictions in IDE environments.
+     */
+    private synchronized void ensureInitialized() {
+        if (lazyInitialized) {
+            return;
+        }
+
+        // Skip initialization for pooled connections (already initialized)
+        if (isPooled) {
+            lazyInitialized = true;
+            return;
+        }
+        int i = 0;
+        try {
+            // Map Jedis config to GLIDE config
+
+            GlideClientConfiguration glideConfig =
+                    ConfigurationMapper.mapToGlideConfig(host, port, config);
+            i++;
+            this.glideClient = GlideClient.createClient(glideConfig).get();
+            i++;
+            this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
+            i++;
+            this.lazyInitialized = true;
+        } catch (ConfigurationMapper.JedisConfigurationException e) {
+            // Enhanced error handling for configuration conversion issues
+            throw new JedisConnectionException(
+                    "Failed to convert Jedis configuration to GLIDE: "
+                            + e.getMessage()
+                            + ". Please check your SSL/TLS certificate configuration or consider using PEM format"
+                            + " certificates.",
+                    e);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisConnectionException("Failed to create GLIDE client", e);
+        } catch (RuntimeException e) {
+            // Handle native library loading issues (like in DataGrip)
+            if (e.getMessage() != null && e.getMessage().contains("native")) {
+                throw new JedisConnectionException(
+                        "Native library loading failed - this may be due to environment restrictions (e.g.,"
+                                + " DataGrip). "
+                                + i
+                                + "Error: "
+                                + e.getMessage(),
+                        e);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Create a new Jedis instance with comprehensive SSL/TLS configuration. This constructor provides
+     * full control over SSL settings including custom socket factories and hostname verification.
+     *
+     * @param host the Valkey server host (must not be null)
+     * @param port the Valkey server port (must be positive)
+     * @param ssl whether to use SSL/TLS encryption for the connection
+     * @param sslSocketFactory custom SSL socket factory for advanced SSL configuration (can be null
+     *     for default)
+     * @param sslParameters SSL parameters for fine-tuning SSL behavior (can be null for default)
+     * @param hostnameVerifier hostname verifier for SSL certificate validation (can be null for
+     *     default)
+     * @throws JedisException if the connection cannot be established
+     */
+    public Jedis(
+            String host,
+            int port,
+            boolean ssl,
+            SSLSocketFactory sslSocketFactory,
+            SSLParameters sslParameters,
+            HostnameVerifier hostnameVerifier) {
+        this(
+                host,
+                port,
+                DefaultJedisClientConfig.builder()
+                        .ssl(ssl)
+                        .sslSocketFactory(sslSocketFactory)
+                        .sslParameters(sslParameters)
+                        .hostnameVerifier(hostnameVerifier)
+                        .build());
+    }
+
+    /**
+     * Create Jedis with timeout configuration.
+     *
+     * @param host the server host
+     * @param port the server port
+     * @param timeout the timeout in milliseconds
+     */
+    public Jedis(String host, int port, int timeout) {
+        this(
+                host,
+                port,
+                DefaultJedisClientConfig.builder()
+                        .socketTimeoutMillis(timeout)
+                        .connectionTimeoutMillis(timeout)
+                        .build());
+    }
+
+    /**
+     * Create a new Jedis instance with host and port from HostAndPort and configuration.
+     *
+     * @param hostAndPort the host and port
+     * @param config the jedis client configuration
+     */
+    public Jedis(HostAndPort hostAndPort, JedisClientConfig config) {
+        this(hostAndPort.getHost(), hostAndPort.getPort(), config);
+    }
+
+    /**
+     * Internal constructor for pooled connections. This follows the original Jedis pattern where the
+     * pool reference is set separately.
+     *
+     * @param glideClient the underlying GLIDE client
+     * @param config the client configuration
+     */
+    protected Jedis(GlideClient glideClient, JedisClientConfig config) {
+        this.host = null; // Not needed for pooled connections
+        this.port = 0; // Not needed for pooled connections
+        this.glideClient = glideClient;
+        this.isPooled = true;
+        this.dataSource = null; // Will be set by setDataSource()
+        this.config = config;
+        this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
+        this.lazyInitialized = true; // Already initialized for pooled connections
+    }
+
+    /**
+     * Set the string value of a key. If the key already exists, its value will be overwritten. This
+     * is the most basic Valkey SET operation.
+     *
+     * @param key the key to set (must not be null)
+     * @param value the value to set (must not be null)
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
+    public String set(String key, String value) {
+        return executeCommandWithGlide("SET", () -> glideClient.set(key, value).get());
+    }
+
+    /**
+     * Set the binary value of a key.
+     *
+     * @param key the key
+     * @param value the value
+     * @return "OK" if successful
+     */
+    public String set(final byte[] key, final byte[] value) {
+        return executeCommandWithGlide(
+                "SET", () -> glideClient.set(GlideString.of(key), GlideString.of(value)).get());
+    }
+
+    /**
+     * Set the string value of a key.
+     *
+     * @param key the key
+     * @param value the value
+     * @param params set parameters
+     * @return "OK" if successful, null if not set due to conditions
+     */
+    public String set(final String key, final String value, final SetParams params) {
+        return executeCommandWithGlide(
+                "SET",
+                () -> {
+                    SetOptions options = convertSetParamsToSetOptions(params);
+                    return glideClient.set(key, value, options).get();
+                });
+    }
+
+    /**
+     * Set the string value of a key.
+     *
+     * @param key the key
+     * @param value the value
+     * @param params set parameters
+     * @return "OK" if successful, null if not set due to conditions
+     */
+    public String set(final byte[] key, final byte[] value, final SetParams params) {
+        return executeCommandWithGlide(
+                "SET",
+                () -> {
+                    SetOptions options = convertSetParamsToSetOptions(params);
+                    return glideClient.set(GlideString.of(key), GlideString.of(value), options).get();
+                });
+    }
+
+    /** Convert Jedis BitCountOption to GLIDE BitmapIndexType. */
+    private static BitmapIndexType convertBitCountOptionToBitmapIndexType(BitCountOption option) {
+        switch (option) {
+            case BYTE:
+                return BitmapIndexType.BYTE;
+            case BIT:
+                return BitmapIndexType.BIT;
+            default:
+                throw new IllegalArgumentException("Unknown BitCountOption: " + option);
+        }
+    }
+
+    /** Convert Jedis ExpiryOption to GLIDE ExpireOptions. */
+    private static ExpireOptions convertExpiryOptionToExpireOptions(ExpiryOption expiryOption) {
+        switch (expiryOption) {
+            case NX:
+                return ExpireOptions.HAS_NO_EXPIRY;
+            case XX:
+                return ExpireOptions.HAS_EXISTING_EXPIRY;
+            case GT:
+                return ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT;
+            case LT:
+                return ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
+            default:
+                throw new IllegalArgumentException("Unknown ExpiryOption: " + expiryOption);
+        }
+    }
+
+    /** Convert Jedis SetParams to GLIDE SetOptions. */
+    private static SetOptions convertSetParamsToSetOptions(SetParams params) {
+        SetOptions.SetOptionsBuilder builder = SetOptions.builder();
+
+        // Handle existence conditions
+        if (params.getExistenceCondition() != null) {
+            switch (params.getExistenceCondition()) {
+                case NX:
+                    builder.conditionalSet(SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST);
+                    break;
+                case XX:
+                    builder.conditionalSet(SetOptions.ConditionalSet.ONLY_IF_EXISTS);
+                    break;
+            }
+        }
+
+        // Handle expiration
+        if (params.getExpirationType() != null) {
+            switch (params.getExpirationType()) {
+                case EX:
+                    builder.expiry(SetOptions.Expiry.Seconds(params.getExpirationValue()));
+                    break;
+                case PX:
+                    builder.expiry(SetOptions.Expiry.Milliseconds(params.getExpirationValue()));
+                    break;
+                case EXAT:
+                    builder.expiry(SetOptions.Expiry.UnixSeconds(params.getExpirationValue()));
+                    break;
+                case PXAT:
+                    builder.expiry(SetOptions.Expiry.UnixMilliseconds(params.getExpirationValue()));
+                    break;
+                case KEEPTTL:
+                    builder.expiry(SetOptions.Expiry.KeepExisting());
+                    break;
+            }
+        }
+
+        // Handle GET option
+        if (params.isGet()) {
+            builder.returnOldValue(true);
+        }
+
+        return builder.build();
+    }
+
+    /** Add SetParams options to String command arguments. */
+    private static void addSetParamsToArgs(List<String> args, SetParams params) {
+        // Handle existence conditions
+        if (params.getExistenceCondition() != null) {
+            switch (params.getExistenceCondition()) {
+                case NX:
+                    args.add("NX");
+                    break;
+                case XX:
+                    args.add("XX");
+                    break;
+            }
+        }
+
+        // Handle expiration
+        if (params.getExpirationType() != null) {
+            switch (params.getExpirationType()) {
+                case EX:
+                    args.add("EX");
+                    args.add(String.valueOf(params.getExpirationValue()));
+                    break;
+                case PX:
+                    args.add("PX");
+                    args.add(String.valueOf(params.getExpirationValue()));
+                    break;
+                case EXAT:
+                    args.add("EXAT");
+                    args.add(String.valueOf(params.getExpirationValue()));
+                    break;
+                case PXAT:
+                    args.add("PXAT");
+                    args.add(String.valueOf(params.getExpirationValue()));
+                    break;
+                case KEEPTTL:
+                    args.add("KEEPTTL");
+                    break;
+            }
+        }
+    }
+
+    /** Add SetParams options to GlideString command arguments. */
+    private static void addSetParamsToGlideStringArgs(List<GlideString> args, SetParams params) {
+        // Handle existence conditions
+        if (params.getExistenceCondition() != null) {
+            switch (params.getExistenceCondition()) {
+                case NX:
+                    args.add(GlideString.of("NX"));
+                    break;
+                case XX:
+                    args.add(GlideString.of("XX"));
+                    break;
+            }
+        }
+
+        // Handle expiration
+        if (params.getExpirationType() != null) {
+            switch (params.getExpirationType()) {
+                case EX:
+                    args.add(GlideString.of("EX"));
+                    args.add(GlideString.of(String.valueOf(params.getExpirationValue())));
+                    break;
+                case PX:
+                    args.add(GlideString.of("PX"));
+                    args.add(GlideString.of(String.valueOf(params.getExpirationValue())));
+                    break;
+                case EXAT:
+                    args.add(GlideString.of("EXAT"));
+                    args.add(GlideString.of(String.valueOf(params.getExpirationValue())));
+                    break;
+                case PXAT:
+                    args.add(GlideString.of("PXAT"));
+                    args.add(GlideString.of(String.valueOf(params.getExpirationValue())));
+                    break;
+                case KEEPTTL:
+                    args.add(GlideString.of("KEEPTTL"));
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Convert Jedis GetExParams to GLIDE GetExOptions. This helper method translates between the
+     * Jedis parameter format and the GLIDE native options format for GETEX operations.
+     *
+     * <p>Supported conversions:
+     *
+     * <ul>
+     *   <li>EX → GetExOptions.Seconds()
+     *   <li>PX → GetExOptions.Milliseconds()
+     *   <li>EXAT → GetExOptions.UnixSeconds()
+     *   <li>PXAT → GetExOptions.UnixMilliseconds()
+     *   <li>PERSIST → GetExOptions.Persist()
+     * </ul>
+     *
+     * @param params the Jedis GetExParams to convert (must not be null and must have expiration type
+     *     set)
+     * @return the equivalent GLIDE GetExOptions
+     * @throws IllegalArgumentException if params is invalid or no expiration type is specified
+     */
+    private static GetExOptions convertGetExParamsToGetExOptions(GetExParams params) {
+        if (params.getExpirationType() != null) {
+            switch (params.getExpirationType()) {
+                case EX:
+                    return GetExOptions.Seconds(params.getExpirationValue());
+                case PX:
+                    return GetExOptions.Milliseconds(params.getExpirationValue());
+                case EXAT:
+                    return GetExOptions.UnixSeconds(params.getExpirationValue());
+                case PXAT:
+                    return GetExOptions.UnixMilliseconds(params.getExpirationValue());
+                case PERSIST:
+                    return GetExOptions.Persist();
+            }
+        }
+
+        // Default case - should not happen with proper GetExParams usage
+        throw new IllegalArgumentException("Invalid GetExParams: no expiration type specified");
+    }
+
+    /**
+     * Get the string value of a key. This is the most basic Valkey GET operation.
+     *
+     * @param key the key to retrieve the value from (must not be null)
+     * @return the value stored at the key, or null if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
+    public String get(final String key) {
+        return executeCommandWithGlide("GET", () -> glideClient.get(key).get());
+    }
+
+    /**
+     * Get the value of a key.
+     *
+     * @param key the key
+     * @return the value of the key, or null if the key does not exist
+     */
+    public byte[] get(final byte[] key) {
+        return executeCommandWithGlide(
+                "GET",
+                () -> {
+                    GlideString result = glideClient.get(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Test if the server is alive and responding. This command is often used for health checks and
+     * connection testing. The server will respond with "PONG" if it's functioning correctly.
+     *
+     * @return "PONG" if the server is responding
+     * @throws JedisException if the operation fails or connection is lost
+     * @since Valkey 1.0.0
+     */
+    public String ping() {
+        return executeCommandWithGlide("PING", () -> glideClient.ping().get());
+    }
+
+    /**
+     * Test if the server is alive and echo back a custom message. This variant of PING allows you to
+     * send a custom message that will be echoed back by the server, useful for testing message
+     * integrity and round-trip functionality.
+     *
+     * @param message the message to echo back (must not be null)
+     * @return the echoed message exactly as sent
+     * @throws JedisException if the operation fails or connection is lost
+     * @since Valkey 2.8.0
+     */
+    public String ping(String message) {
+        return executeCommandWithGlide("PING", () -> glideClient.ping(message).get());
+    }
+
+    /**
+     * Test if the server is alive with a custom message.
+     *
+     * @param message the message to echo back
+     * @return the echoed message
+     */
+    public byte[] ping(final byte[] message) {
+        return executeCommandWithGlide(
+                "PING",
+                () -> {
+                    GlideString result = glideClient.ping(GlideString.of(message)).get();
+                    return result.getBytes();
+                });
+    }
+
+    /**
+     * Echoes the provided message back.
+     *
+     * @param message the message to echo
+     * @return the echoed message
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/echo/">valkey.io</a>
+     * @since Valkey 1.0.0
+     */
+    public String echo(String message) {
+        return executeCommandWithGlide("ECHO", () -> glideClient.echo(message).get());
+    }
+
+    /**
+     * Echoes the provided message back (binary version).
+     *
+     * @param message the message to echo
+     * @return the echoed message
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/echo/">valkey.io</a>
+     * @since Valkey 1.0.0
+     */
+    public byte[] echo(final byte[] message) {
+        return executeCommandWithGlide(
+                "ECHO",
+                () -> {
+                    GlideString result = glideClient.echo(GlideString.of(message)).get();
+                    return result.getBytes();
+                });
+    }
+
+    /**
+     * Returns the current connection ID.
+     *
+     * @return the connection ID
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/client-id/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public long clientId() {
+        return executeCommandWithGlide("CLIENT ID", () -> glideClient.clientId().get());
+    }
+
+    /**
+     * Gets the name of the current connection.
+     *
+     * @return the connection name, or null if no name is set
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/client-getname/">valkey.io</a>
+     * @since Valkey 2.6.9
+     */
+    public String clientGetName() {
+        return executeCommandWithGlide("CLIENT GETNAME", () -> glideClient.clientGetName().get());
+    }
+
+    /**
+     * Get the name of the current connection. This is an alias for {@link #clientGetName()}.
+     *
+     * <p>This method name matches Jedis 5.1.5 naming convention (lowercase 'name').
+     *
+     * @return the connection name, or null if no name is set
+     * @see #clientGetName()
+     */
+    public String clientGetname() {
+        return clientGetName();
+    }
+
+    /**
+     * Select a database.
+     *
+     * @param index the database index
+     * @return "OK" if successful
+     */
+    public String select(int index) {
+        checkNotClosed();
+        if (config.getDatabase() != index) {
+            logger.warning("Database selection may behave differently in GLIDE compatibility mode");
+        }
+        // TODO (#5457): GLIDE handles database selection differently. This is a placeholder
+        // implementation
+        // In case of Glide, the databaseId is set in GlideClientConfiguration. Will need to re call
+        // the constructor for this to work.
+
+        return "OK";
+    }
+
+    /**
+     * Executes a custom command without checking inputs. Every part of the command, including the
+     * command name and subcommands, should be added as a separate value in the args array.
+     *
+     * @param args the command and its arguments
+     * @return the result of the command execution
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/">valkey.io</a>
+     * @since Valkey 1.0.0
+     */
+    public Object customCommand(String... args) {
+        return executeCommandWithGlide("CUSTOM", () -> glideClient.customCommand(args).get());
+    }
+
+    /**
+     * Authenticate with the server.
+     *
+     * @param password the password
+     * @return "OK" if successful
+     */
+    public String auth(String password) {
+        checkNotClosed();
+        // TO DO: GLIDE handles auth differently. This is a placeholder for runtime authentication.
+        // In case of Glide, the auth is set in  ServerCredentials.
+        // Will need to call the constructor again for this to work.
+
+        return "OK";
+    }
+
+    /**
+     * Authenticate with username and password.
+     *
+     * @param user the username
+     * @param password the password
+     * @return "OK" if successful
+     */
+    public String auth(String user, String password) {
+        checkNotClosed();
+        // TO DO: GLIDE handles auth differently. This is a placeholder for runtime authentication.
+        // In case of Glide, the auth is set in  ServerCredentials.
+        // Will need to call the constructor again for this to work.
+        return "OK";
+    }
+
+    /**
+     * Return the list of ACL rules in ACL configuration file format.
+     *
+     * @return list of user rule definitions
+     */
+    public List<String> aclList() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclList().get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Return the ACL rules defined for the given user.
+     *
+     * @param name the username
+     * @return the user's ACL rules, or null if the user does not exist
+     */
+    public AccessControlUser aclGetUser(String name) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    Object result = glideClient.aclGetUser(name).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    return parseAclGetUserResponse(result);
+                });
+    }
+
+    /**
+     * Create or modify an ACL user with default (no) rules.
+     *
+     * @param name the username
+     * @return "OK" if successful
+     */
+    public String aclSetUser(String name) {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclSetUser(name, new String[0]).get());
+    }
+
+    /**
+     * Create or modify an ACL user with the given rules.
+     *
+     * @param name the username
+     * @param rules the ACL rule strings (e.g. "on", "+@all", "~*")
+     * @return "OK" if successful
+     */
+    public String aclSetUser(String name, String... rules) {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclSetUser(name, rules).get());
+    }
+
+    /**
+     * Delete the specified ACL users and terminate their connections.
+     *
+     * @param usernames the usernames to delete
+     * @return the number of users deleted
+     */
+    public long aclDelUser(String... usernames) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    Long result = glideClient.aclDelUser(usernames).get();
+                    return result != null ? result : 0L;
+                });
+    }
+
+    /**
+     * Return the list of ACL categories.
+     *
+     * @return list of category names
+     */
+    public List<String> aclCat() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclCat().get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Return the list of commands in the given ACL category.
+     *
+     * @param category the category name (e.g. "string", "list")
+     * @return list of command names in the category
+     */
+    public List<String> aclCat(String category) {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclCat(category).get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Generate a random password for ACL users (default bit length).
+     *
+     * @return the generated password string
+     */
+    public String aclGenPass() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclGenPass().get());
+    }
+
+    /**
+     * Generate a random password with the specified number of bits for ACL users.
+     *
+     * @param bits the number of bits (e.g. 256 for default)
+     * @return the generated password string
+     */
+    public String aclGenPass(int bits) {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclGenPass(bits).get());
+    }
+
+    /**
+     * Return recent ACL security events (failed auth, violated rules).
+     *
+     * @return list of ACL log entries
+     */
+    public List<AccessControlLogEntry> aclLog() {
+        return executeCommandWithGlide("ACL", () -> parseAclLogResponse(glideClient.aclLog().get()));
+    }
+
+    /**
+     * Return the specified number of recent ACL security events.
+     *
+     * @param count the maximum number of entries to return
+     * @return list of ACL log entries
+     */
+    public List<AccessControlLogEntry> aclLog(int count) {
+        return executeCommandWithGlide(
+                "ACL", () -> parseAclLogResponse(glideClient.aclLog(count).get()));
+    }
+
+    /**
+     * Clear the ACL security events log.
+     *
+     * @return "OK" if successful
+     */
+    public String aclLogReset() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"ACL", "LOG", "RESET"}).get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Return the username the current connection is authenticated as.
+     *
+     * @return the username (e.g. "default")
+     */
+    public String aclWhoAmI() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclWhoami().get());
+    }
+
+    /**
+     * Return the list of ACL usernames.
+     *
+     * @return list of usernames
+     */
+    public List<String> aclUsers() {
+        return executeCommandWithGlide(
+                "ACL",
+                () -> {
+                    String[] result = glideClient.aclUsers().get();
+                    return result == null ? Collections.emptyList() : Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Save the current ACL rules to the configured ACL file.
+     *
+     * @return "OK" if successful
+     */
+    public String aclSave() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclSave().get());
+    }
+
+    /**
+     * Reload ACL rules from the configured ACL file.
+     *
+     * @return "OK" if successful
+     */
+    public String aclLoad() {
+        return executeCommandWithGlide("ACL", () -> glideClient.aclLoad().get());
+    }
+
+    /**
+     * Simulate execution of a command by a user without executing it.
+     *
+     * @param username the username to simulate
+     * @param command the command name
+     * @param args the command arguments
+     * @return "OK" if the user could execute the command, otherwise an error string
+     */
+    public String aclDryRun(String username, String command, String... args) {
+        return executeCommandWithGlide(
+                "ACL", () -> glideClient.aclDryRun(username, command, args).get());
+    }
+
+    private static AccessControlUser parseAclGetUserResponse(Object result) {
+        Object[] arr = (Object[]) result;
+        AccessControlUser user = new AccessControlUser();
+        for (int i = 0; i + 1 < arr.length; i += 2) {
+            String field = arr[i] != null ? arr[i].toString() : null;
+            Object value = arr[i + 1];
+            if (field == null) {
+                continue;
+            }
+            switch (field) {
+                case "flags":
+                    if (value instanceof Object[]) {
+                        for (Object f : (Object[]) value) {
+                            if (f != null) user.addFlag(f.toString());
+                        }
+                    } else if (value != null) {
+                        user.addFlag(value.toString());
+                    }
+                    break;
+                case "passwords":
+                    if (value instanceof Object[]) {
+                        for (Object p : (Object[]) value) {
+                            if (p != null) user.addPassword(p.toString());
+                        }
+                    } else if (value != null) {
+                        user.addPassword(value.toString());
+                    }
+                    break;
+                case "commands":
+                    if (value != null) user.setCommands(value.toString());
+                    break;
+                case "keys":
+                    if (value instanceof Object[]) {
+                        for (Object k : (Object[]) value) {
+                            if (k != null) user.addKey(k.toString());
+                        }
+                    } else if (value != null) {
+                        user.addKey(value.toString());
+                    }
+                    break;
+                case "channels":
+                    if (value instanceof Object[]) {
+                        for (Object c : (Object[]) value) {
+                            if (c != null) user.addChannel(c.toString());
+                        }
+                    } else if (value != null) {
+                        user.addChannel(value.toString());
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        return user;
+    }
+
+    private static List<AccessControlLogEntry> parseAclLogResponse(Object result) {
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        Object[] entries = (Object[]) result;
+        List<AccessControlLogEntry> list = new ArrayList<>(entries.length);
+        for (Object entryObj : entries) {
+            Map<String, Object> map = flatArrayToMap(entryObj);
+            map.putIfAbsent(AccessControlLogEntry.ENTRY_ID, 0L);
+            map.putIfAbsent(AccessControlLogEntry.TIMESTAMP_CREATED, 0L);
+            map.putIfAbsent(AccessControlLogEntry.TIMESTAMP_LAST_UPDATED, 0L);
+            Object clientInfo = map.get(AccessControlLogEntry.CLIENT_INFO);
+            if (clientInfo == null) {
+                map.put(AccessControlLogEntry.CLIENT_INFO, "");
+            }
+            list.add(new AccessControlLogEntry(map));
+        }
+        return list;
+    }
+
+    private static Map<String, Object> flatArrayToMap(Object entryObj) {
+        Map<String, Object> map = new HashMap<>();
+        if (!(entryObj instanceof Object[])) {
+            return map;
+        }
+        Object[] pairs = (Object[]) entryObj;
+        for (int i = 0; i + 1 < pairs.length; i += 2) {
+            String key = pairs[i] != null ? pairs[i].toString() : null;
+            Object value = pairs[i + 1];
+            if (key == null) {
+                continue;
+            }
+            if (value instanceof Number) {
+                map.put(key, ((Number) value).longValue());
+            } else {
+                map.put(key, value != null ? value.toString() : null);
+            }
+        }
+        return map;
+    }
+
+    /**
+     * Check if the connection is closed.
+     *
+     * @return true if closed
+     */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    /**
+     * Connect to the Valkey server.
+     *
+     * <p><strong>Note:</strong> This method is provided for Jedis API compatibility only. In the
+     * Valkey GLIDE compatibility layer, connections are established automatically during object
+     * construction. This method performs no operation since the underlying GLIDE client is already
+     * connected when the Jedis object is created successfully.
+     *
+     * <p>Unlike the original Jedis client which uses lazy connection initialization, this
+     * compatibility layer uses eager connection establishment for better error handling and
+     * simplified resource management.
+     *
+     * @throws JedisException if the connection is already closed
+     * @see #isClosed()
+     * @see #close()
+     */
+    public void connect() {
+        checkNotClosed();
+        this.ensureInitialized();
+        // No implementation required - connection is established in constructor.
+        // This method exists solely for Jedis API compatibility.
+    }
+
+    /**
+     * Get the client configuration.
+     *
+     * @return the configuration
+     */
+    public JedisClientConfig getConfig() {
+        return config;
+    }
+
+    /**
+     * Set the data source (pool) for this Jedis instance. This follows the original Jedis pattern for
+     * pool management.
+     *
+     * @param jedisPool the pool that manages this instance
+     */
+    protected void setDataSource(Pool<Jedis> jedisPool) {
+        this.dataSource = jedisPool;
+    }
+
+    /**
+     * Close the connection. If this is a pooled connection, return it to the pool. Otherwise, close
+     * the underlying GLIDE client.
+     */
+    @Override
+    public void close() {
+        if (closed) {
+            return;
+        }
+
+        closed = true;
+
+        // Only unregister if we were actually initialized
+        if (resourceId != null) {
+            ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
+        }
+
+        // Follow original Jedis pattern for pool management
+        if (dataSource != null) {
+            Pool<Jedis> pool = this.dataSource;
+            this.dataSource = null;
+            if (broken) {
+                pool.returnBrokenResource(this);
+            } else {
+                pool.returnResource(this);
+            }
+        } else if (glideClient != null) { // Only close if initialized
+            try {
+                glideClient.close();
+            } catch (Exception e) {
+                throw new JedisException("Failed to close GLIDE client", e);
+            }
+        }
+
+        // Cleanup temporary certificate files created during configuration conversion
+        try {
+            ConfigurationMapper.cleanupTempFiles();
+        } catch (Exception e) {
+            // Log warning but don't fail the close operation
+            System.err.println("Warning: Failed to cleanup temporary certificate files:");
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Get the underlying GLIDE client. This method is for internal use by the pool.
+     *
+     * @return the GLIDE client
+     */
+    protected GlideClient getGlideClient() {
+        ensureInitialized(); // Lazy initialization
+        return glideClient;
+    }
+
+    /**
+     * Check if this connection is from a pool.
+     *
+     * @return true if pooled, false otherwise
+     */
+    protected boolean isPooled() {
+        return isPooled;
+    }
+
+    /**
+     * Whether this connection is considered broken (must not be returned to the pool as healthy).
+     * Matches core Jedis {@code Jedis#isBroken()} semantics for pooled usage.
+     */
+    public boolean isBroken() {
+        return broken;
+    }
+
+    /**
+     * Marks this connection as broken so the next {@link #close()} returns it to the pool via {@link
+     * Pool#returnBrokenResource} instead of {@link Pool#returnResource}.
+     */
+    public void setBroken(boolean broken) {
+        this.broken = broken;
+    }
+
+    /**
+     * Clears pool association before {@link GlideJedisFactory} destroys the object, so {@link
+     * #close()} does not attempt to return this instance to the pool again.
+     */
+    void detachFromPoolForDestroy() {
+        this.dataSource = null;
+    }
+
+    /**
+     * If this Jedis is pooled and the failure indicates the underlying client is unusable, mark
+     * {@link #isBroken()} for correct pool invalidation on {@link #close()}.
+     */
+    void markBrokenIfPooledConnectionFailure(Throwable throwable) {
+        if (!isPooled || throwable == null) {
+            return;
+        }
+        Throwable t = throwable;
+        if (t instanceof ExecutionException && t.getCause() != null) {
+            t = t.getCause();
+        }
+        if (t instanceof ConnectionException || t instanceof ClosingException) {
+            broken = true;
+        }
+    }
+
+    /** Reset the closed state for pooled connections. */
+    protected void resetForReuse() {
+        if (isPooled) {
+            broken = false;
+            closed = false;
+            resetState();
+        }
+    }
+
+    /**
+     * Reset the transaction state. Called by Transaction after exec() or discard(). This is
+     * package-private for use by Transaction class.
+     */
+    void resetState() {
+        inTransaction = false;
+    }
+
+    /** Check if the connection is not closed and throw exception if it is. */
+    private void checkNotClosed() {
+        if (closed) {
+            throw new JedisException("Connection is closed");
+        }
+    }
+
+    /**
+     * Functional interface for operations that can throw InterruptedException and ExecutionException.
+     */
+    @FunctionalInterface
+    private interface GlideOperation<T> {
+        T execute() throws InterruptedException, ExecutionException;
+    }
+
+    /**
+     * Helper method that encapsulates the common try/catch pattern with connection checks. This
+     * method handles the standard flow: checkNotClosed() -> ensureInitialized() -> execute operation
+     * -> handle exceptions.
+     *
+     * @param operationName the name of the operation for error messages
+     * @param operation the lambda containing the GLIDE client operation
+     * @param <T> the return type of the operation
+     * @return the result of the operation
+     * @throws JedisException if the operation fails or connection is closed
+     */
+    private <T> T executeCommandWithGlide(String operationName, GlideOperation<T> operation) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            return operation.execute();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new JedisException(operationName + " operation interrupted", e);
+        } catch (ExecutionException e) {
+            markBrokenIfPooledConnectionFailure(e);
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            throw new JedisException(operationName + " operation failed", cause);
+        }
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction. Transactions
+     * will only execute commands if the watched keys are not modified before execution of the
+     * transaction.
+     *
+     * @param keys the keys to watch
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a>
+     * @since Valkey 2.2.0
+     */
+    public String watch(String... keys) {
+        return executeCommandWithGlide("WATCH", () -> glideClient.watch(keys).get());
+    }
+
+    /**
+     * Marks the given keys to be watched for conditional execution of a transaction (binary version).
+     *
+     * @param keys the keys to watch
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/watch/">valkey.io</a>
+     * @since Valkey 2.2.0
+     */
+    public String watch(byte[]... keys) {
+        return executeCommandWithGlide(
+                "WATCH",
+                () -> {
+                    GlideString[] glideKeys = new GlideString[keys.length];
+                    for (int i = 0; i < keys.length; i++) {
+                        glideKeys[i] = GlideString.of(keys[i]);
+                    }
+                    return glideClient.watch(glideKeys).get();
+                });
+    }
+
+    /**
+     * Flushes all the previously watched keys for a transaction.
+     *
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a>
+     * @since Valkey 2.2.0
+     */
+    public String unwatch() {
+        return executeCommandWithGlide("UNWATCH", () -> glideClient.unwatch().get());
+    }
+
+    /**
+     * Marks the start of a transaction block. Subsequent commands will be queued for atomic execution
+     * using {@link Transaction#exec()}.
+     *
+     * <p>Commands are queued in a transaction and executed atomically when {@link Transaction#exec()}
+     * is called. Use {@link Response#get()} to retrieve command results after execution.
+     *
+     * <p>Example usage:
+     *
+     * <pre>{@code
+     * Transaction t = jedis.multi();
+     * Response<String> r1 = t.set("key", "value");
+     * Response<String> r2 = t.get("key");
+     * t.exec();
+     * String value = r2.get(); // Retrieve the actual value after exec()
+     * }</pre>
+     *
+     * @return a Transaction object for queuing commands
+     * @throws JedisException if already in a transaction or operation fails
+     * @see <a href="https://valkey.io/commands/multi/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public synchronized Transaction multi() {
+        checkNotClosed();
+        ensureInitialized();
+
+        if (inTransaction) {
+            throw new JedisException("Already in transaction mode");
+        }
+
+        // Transaction owns its own Batch; we only track inTransaction to prevent nested multi()
+        inTransaction = true;
+
+        return new Transaction(this);
+    }
+
+    /**
+     * Delete one or more keys.
+     *
+     * @param key the key to delete
+     * @return the number of keys that were removed
+     */
+    public long del(String key) {
+        return executeCommandWithGlide("DEL", () -> glideClient.del(new String[] {key}).get());
+    }
+
+    /**
+     * Delete one or more keys.
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     */
+    public long del(String... keys) {
+        return executeCommandWithGlide("DEL", () -> glideClient.del(keys).get());
+    }
+
+    /**
+     * Delete one or more keys.
+     *
+     * @param key the key to delete
+     * @return the number of keys that were removed
+     */
+    public long del(final byte[] key) {
+        return executeCommandWithGlide(
+                "DEL", () -> glideClient.del(new GlideString[] {GlideString.of(key)}).get());
+    }
+
+    /**
+     * Delete one or more keys.
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     */
+    public long del(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "DEL",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.del(glideKeys).get();
+                });
+    }
+
+    /**
+     * Find all keys matching the given pattern.
+     *
+     * @param pattern the pattern to match (e.g., "prefix:*")
+     * @return a set of keys matching the pattern
+     */
+    public Set<String> keys(String pattern) {
+        checkNotClosed();
+        try {
+            Object result = glideClient.customCommand(new String[] {"KEYS", pattern}).get();
+
+            // Handle different possible return types
+            if (result instanceof String[]) {
+                return new HashSet<>(Arrays.asList((String[]) result));
+            } else if (result instanceof Object[]) {
+                // Convert Object[] to String[]
+                Object[] objArray = (Object[]) result;
+                Set<String> keySet = new HashSet<>();
+                for (Object obj : objArray) {
+                    if (obj != null) {
+                        keySet.add(obj.toString());
+                    }
+                }
+                return keySet;
+            } else if (result == null) {
+                return new HashSet<>();
+            } else {
+                // Fallback: try to convert to string and split if needed
+                logger.warning("Unexpected KEYS result type: " + result.getClass().getName());
+                return new HashSet<>();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("KEYS operation failed", e);
+        }
+    }
+
+    /**
+     * Find all keys matching the given pattern.
+     *
+     * @param pattern the pattern to match (e.g., "prefix:*")
+     * @return a set of keys matching the pattern
+     */
+    public Set<byte[]> keys(final byte[] pattern) {
+        checkNotClosed();
+        try {
+            Object result =
+                    glideClient
+                            .customCommand(new GlideString[] {GlideString.of("KEYS"), GlideString.of(pattern)})
+                            .get();
+
+            // Handle different possible return types
+            if (result instanceof GlideString[]) {
+                GlideString[] glideArray = (GlideString[]) result;
+                Set<GlideString> glideSet = new HashSet<>();
+                for (GlideString gs : glideArray) {
+                    if (gs != null) {
+                        glideSet.add(gs);
+                    }
+                }
+                return new GlideStringSetWrapper(glideSet);
+            } else if (result instanceof Object[]) {
+                // Convert Object[] to Set<GlideString>
+                Object[] objArray = (Object[]) result;
+                Set<GlideString> glideSet = new HashSet<>();
+                for (Object obj : objArray) {
+                    if (obj instanceof GlideString) {
+                        glideSet.add((GlideString) obj);
+                    } else if (obj != null) {
+                        glideSet.add(GlideString.of(obj.toString().getBytes(VALKEY_CHARSET)));
+                    }
+                }
+                return new GlideStringSetWrapper(glideSet);
+            } else {
+                return new GlideStringSetWrapper(new HashSet<>());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("KEYS operation failed", e);
+        }
+    }
+
+    // ===== STRING COMMANDS =====
+
+    /**
+     * Set multiple key-value pairs.
+     *
+     * @param keysvalues alternating keys and values
+     * @return "OK"
+     */
+    public String mset(String... keysvalues) {
+        return executeCommandWithGlide(
+                "MSET",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keyvalues must be of even length");
+                    }
+                    Map<String, String> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(keysvalues[i], keysvalues[i + 1]);
+                        }
+                    }
+                    return glideClient.mset(keyValueMap).get();
+                });
+    }
+
+    /**
+     * Set multiple key-value pairs.
+     *
+     * @param keyValueMap map of keys to values
+     * @return "OK"
+     */
+    public String mset(Map<String, String> keyValueMap) {
+        return executeCommandWithGlide("MSET", () -> glideClient.mset(keyValueMap).get());
+    }
+
+    /**
+     * Set multiple key-value pairs.
+     *
+     * @param keysvalues alternating keys and values
+     * @return "OK"
+     */
+    public String mset(final byte[]... keysvalues) {
+        return executeCommandWithGlide(
+                "MSET",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keyvalues must be of even length");
+                    }
+                    Map<GlideString, GlideString> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
+                        }
+                    }
+                    return glideClient.msetBinary(keyValueMap).get();
+                });
+    }
+
+    /**
+     * Set multiple key-value pairs, only if none of the keys exist.
+     *
+     * @param keysvalues alternating keys and values
+     * @return true if all keys were set, false if no key was set (at least one key already existed)
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @since Valkey 1.0.1
+     */
+    public long msetnx(String... keysvalues) {
+        return executeCommandWithGlide(
+                "MSETNX",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keysvalues must be of even length");
+                    }
+                    Map<String, String> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(keysvalues[i], keysvalues[i + 1]);
+                        }
+                    }
+                    return glideClient.msetnx(keyValueMap).get() ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set multiple key-value pairs, only if none of the keys exist (binary version).
+     *
+     * @param keysvalues alternating keys and values
+     * @return true if all keys were set, false if no key was set (at least one key already existed)
+     * @see <a href="https://valkey.io/commands/msetnx/">valkey.io</a> for details.
+     * @since Valkey 1.0.1
+     */
+    public long msetnx(final byte[]... keysvalues) {
+        return executeCommandWithGlide(
+                "MSETNX",
+                () -> {
+                    if (keysvalues.length % 2 == 1) {
+                        throw new IllegalArgumentException("keysvalues must be of even length");
+                    }
+                    Map<GlideString, GlideString> keyValueMap = new HashMap<>();
+                    for (int i = 0; i < keysvalues.length; i += 2) {
+                        if (i + 1 < keysvalues.length) {
+                            keyValueMap.put(GlideString.of(keysvalues[i]), GlideString.of(keysvalues[i + 1]));
+                        }
+                    }
+                    return glideClient.msetnxBinary(keyValueMap).get() ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Get multiple values.
+     *
+     * @param keys the keys to get
+     * @return list of values corresponding to the keys
+     */
+    public List<String> mget(String... keys) {
+        return executeCommandWithGlide(
+                "MGET",
+                () -> {
+                    String[] result = glideClient.mget(keys).get();
+                    return Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Get multiple values.
+     *
+     * @param keys the keys to get
+     * @return list of values corresponding to the keys
+     */
+    public List<byte[]> mget(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "MGET",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    GlideString[] result = glideClient.mget(glideKeys).get();
+                    List<byte[]> byteList = new ArrayList<>();
+                    for (GlideString gs : result) {
+                        byteList.add(gs != null ? gs.getBytes() : null);
+                    }
+                    return byteList;
+                });
+    }
+
+    /**
+     * Set key to value if key does not exist.
+     *
+     * @param key the key
+     * @param value the value
+     * @return 1 if the key was set, 0 if the key already exists
+     */
+    public long setnx(String key, String value) {
+        return executeCommandWithGlide(
+                "SETNX",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"SETNX", key, value}).get();
+                    if (result instanceof Long) {
+                        return (Long) result;
+                    } else if (result instanceof Boolean) {
+                        return ((Boolean) result) ? 1L : 0L;
+                    } else {
+                        return Long.parseLong(result.toString());
+                    }
+                });
+    }
+
+    /**
+     * Set key to value only if key does not exist.
+     *
+     * @param key the key
+     * @param value the value
+     * @return 1 if the key was set, 0 if the key already exists
+     */
+    public long setnx(final byte[] key, final byte[] value) {
+        return executeCommandWithGlide(
+                "SETNX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("SETNX"), GlideString.of(key), GlideString.of(value)
+                                            })
+                                    .get();
+                    if (result instanceof Long) {
+                        return (Long) result;
+                    } else if (result instanceof Boolean) {
+                        return ((Boolean) result) ? 1L : 0L;
+                    } else {
+                        return Long.parseLong(result.toString());
+                    }
+                });
+    }
+
+    /**
+     * Set key to value with expiration in seconds.
+     *
+     * @param key the key
+     * @param seconds expiration time in seconds
+     * @param value the value
+     * @return "OK"
+     */
+    public String setex(String key, long seconds, String value) {
+        return executeCommandWithGlide(
+                "SETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(new String[] {"SETEX", key, String.valueOf(seconds), value})
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Set key to value with expiration in seconds.
+     *
+     * @param key the key
+     * @param seconds expiration time in seconds
+     * @param value the value
+     * @return "OK"
+     */
+    public String setex(final byte[] key, final long seconds, final byte[] value) {
+        return executeCommandWithGlide(
+                "SETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("SETEX"),
+                                                GlideString.of(key),
+                                                GlideString.of(String.valueOf(seconds)),
+                                                GlideString.of(value)
+                                            })
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Set key to value with expiration in milliseconds.
+     *
+     * @param key the key
+     * @param milliseconds expiration time in milliseconds
+     * @param value the value
+     * @return "OK"
+     */
+    public String psetex(String key, long milliseconds, String value) {
+        return executeCommandWithGlide(
+                "PSETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(new String[] {"PSETEX", key, String.valueOf(milliseconds), value})
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Set key to value with expiration in milliseconds.
+     *
+     * @param key the key
+     * @param milliseconds expiration time in milliseconds
+     * @param value the value
+     * @return "OK"
+     */
+    public String psetex(final byte[] key, final long milliseconds, final byte[] value) {
+        return executeCommandWithGlide(
+                "PSETEX",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("PSETEX"),
+                                                GlideString.of(key),
+                                                GlideString.of(String.valueOf(milliseconds)),
+                                                GlideString.of(value)
+                                            })
+                                    .get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Get old value and set new value (deprecated, use setGet instead).
+     *
+     * @param key the key
+     * @param value the new value
+     * @return the old value, or null if key did not exist
+     * @deprecated Use {@link #setGet(String, String)} instead
+     */
+    @Deprecated
+    public String getSet(final String key, final String value) {
+        return executeCommandWithGlide(
+                "GETSET",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"GETSET", key, value}).get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Set new value and return old value.
+     *
+     * @deprecated Use {@link #setGet(byte[], byte[])} instead.
+     * @param key the key
+     * @param value the new value
+     * @return the old value, or null if key did not exist
+     */
+    @Deprecated
+    public byte[] getSet(final byte[] key, final byte[] value) {
+        return executeCommandWithGlide(
+                "GETSET",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {
+                                                GlideString.of("GETSET"), GlideString.of(key), GlideString.of(value)
+                                            })
+                                    .get();
+                    return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+                });
+    }
+
+    /**
+     * Set the string value of a key and return its old value. This is an atomic operation that
+     * combines SET and GET operations. If the key does not exist, it will be created with the new
+     * value and null will be returned.
+     *
+     * @param key the key to set
+     * @param value the new value to set
+     * @return the old value stored at the key, or null if the key did not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     */
+    public String setGet(String key, String value) {
+        checkNotClosed();
+        try {
+            // Use modern SET command with GET option for consistency
+            Object result = glideClient.customCommand(new String[] {"SET", key, value, "GET"}).get();
+            return result != null ? result.toString() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SETGET operation failed", e);
+        }
+    }
+
+    /**
+     * Set the binary value of a key and return its old value. This is an atomic operation that
+     * combines SET and GET operations. If the key does not exist, it will be created with the new
+     * value and null will be returned.
+     *
+     * @param key the key to set
+     * @param value the new binary value to set
+     * @return the old binary value stored at the key, or null if the key did not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     */
+    public byte[] setGet(final byte[] key, final byte[] value) {
+        checkNotClosed();
+        try {
+            // Use modern SET command with GET option for consistency
+            Object result =
+                    glideClient
+                            .customCommand(
+                                    new GlideString[] {
+                                        GlideString.of("SET"),
+                                        GlideString.of(key),
+                                        GlideString.of(value),
+                                        GlideString.of("GET")
+                                    })
+                            .get();
+            return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SETGET operation failed", e);
+        }
+    }
+
+    /**
+     * Get old value and set new value with additional parameters.
+     *
+     * @param key the key
+     * @param value the new value
+     * @param params additional SET parameters
+     * @return the old value, or null if key did not exist
+     */
+    public String setGet(final String key, final String value, final SetParams params) {
+        return executeCommandWithGlide(
+                "SETGET",
+                () -> { // Build SET command with correct parameter order: SET key value [params] GET
+                    List<String> args = new ArrayList<>();
+                    args.add("SET");
+                    args.add(key);
+                    args.add(value);
+                    addSetParamsToArgs(args, params);
+                    // Add GET option AFTER SetParams
+                    args.add("GET");
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return result != null ? result.toString() : null;
+                });
+    }
+
+    /**
+     * Get old value and set new value with additional parameters.
+     *
+     * @param key the key
+     * @param value the new value
+     * @param params additional SET parameters
+     * @return the old value, or null if key did not exist
+     */
+    public byte[] setGet(final byte[] key, final byte[] value, final SetParams params) {
+        return executeCommandWithGlide(
+                "SETGET",
+                () -> { // Build SET command with correct parameter order: SET key value [params] GET
+                    List<GlideString> args = new ArrayList<>();
+                    args.add(GlideString.of("SET"));
+                    args.add(GlideString.of(key));
+                    args.add(GlideString.of(value));
+                    addSetParamsToGlideStringArgs(args, params);
+                    // Add GET option AFTER SetParams
+                    args.add(GlideString.of("GET"));
+
+                    Object result = glideClient.customCommand(args.toArray(new GlideString[0])).get();
+                    return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+                });
+    }
+
+    /**
+     * Get value and delete key.
+     *
+     * @param key the key
+     * @return the value, or null if key did not exist
+     */
+    public String getDel(final String key) {
+        return executeCommandWithGlide("GETDEL", () -> glideClient.getdel(key).get());
+    }
+
+    /**
+     * Get value and delete key.
+     *
+     * @param key the key
+     * @return the value, or null if key did not exist
+     */
+    public byte[] getDel(final byte[] key) {
+        return executeCommandWithGlide(
+                "GETDEL",
+                () -> {
+                    GlideString result = glideClient.getdel(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Get the value of a key and optionally set its expiration. This command is similar to GET but
+     * allows setting expiration parameters atomically with the retrieval operation.
+     *
+     * <p>The expiration can be set using various time units and formats:
+     *
+     * <ul>
+     *   <li>EX seconds - Set expiration in seconds
+     *   <li>PX milliseconds - Set expiration in milliseconds
+     *   <li>EXAT timestamp - Set expiration as Unix timestamp in seconds
+     *   <li>PXAT timestamp - Set expiration as Unix timestamp in milliseconds
+     *   <li>PERSIST - Remove existing expiration
+     * </ul>
+     *
+     * @param key the key to retrieve the value from (must not be null)
+     * @param params expiration parameters specifying how to set the key's expiration
+     * @return the value of the key, or null if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     * @see GetExParams
+     */
+    public String getEx(final String key, final GetExParams params) {
+        return executeCommandWithGlide(
+                "GETEX",
+                () -> {
+                    GetExOptions getExOptions = convertGetExParamsToGetExOptions(params);
+                    return glideClient.getex(key, getExOptions).get();
+                });
+    }
+
+    /**
+     * Get the binary value of a key and optionally set its expiration. This command is similar to GET
+     * but allows setting expiration parameters atomically with the retrieval operation.
+     *
+     * <p>The expiration can be set using various time units and formats:
+     *
+     * <ul>
+     *   <li>EX seconds - Set expiration in seconds
+     *   <li>PX milliseconds - Set expiration in milliseconds
+     *   <li>EXAT timestamp - Set expiration as Unix timestamp in seconds
+     *   <li>PXAT timestamp - Set expiration as Unix timestamp in milliseconds
+     *   <li>PERSIST - Remove existing expiration
+     * </ul>
+     *
+     * @param key the key to retrieve the value from (must not be null)
+     * @param params expiration parameters specifying how to set the key's expiration
+     * @return the binary value of the key, or null if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 6.2.0
+     * @see GetExParams
+     */
+    public byte[] getEx(final byte[] key, final GetExParams params) {
+        return executeCommandWithGlide(
+                "GETEX",
+                () -> {
+                    GetExOptions getExOptions = convertGetExParamsToGetExOptions(params);
+                    GlideString result = glideClient.getex(GlideString.of(key), getExOptions).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Overwrites part of the string stored at key, starting at the specified offset, for the entire
+     * length of value. If the offset is larger than the current length of the string at key, the
+     * string is padded with zero-bytes to make offset fit. Non-existing keys are considered as empty
+     * strings, so this command will make sure it holds a string large enough to be able to set value
+     * at offset.
+     *
+     * @param key the key
+     * @param offset the offset at which to start overwriting
+     * @param value the value to set
+     * @return the length of the string after it was modified
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long setrange(String key, long offset, String value) {
+        return executeCommandWithGlide(
+                "SETRANGE", () -> glideClient.setrange(key, (int) offset, value).get());
+    }
+
+    /**
+     * Overwrites part of the string stored at key, starting at the specified offset (binary version).
+     *
+     * @param key the key
+     * @param offset the offset at which to start overwriting
+     * @param value the value to set
+     * @return the length of the string after it was modified
+     * @see <a href="https://valkey.io/commands/setrange/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long setrange(final byte[] key, long offset, final byte[] value) {
+        return executeCommandWithGlide(
+                "SETRANGE",
+                () -> glideClient.setrange(GlideString.of(key), (int) offset, GlideString.of(value)).get());
+    }
+
+    /**
+     * Returns the substring of the string value stored at key, determined by the offsets start and
+     * end (both are inclusive). Negative offsets can be used in order to provide an offset starting
+     * from the end of the string. So -1 means the last character, -2 the penultimate and so forth.
+     *
+     * @param key the key
+     * @param startOffset the start offset (inclusive)
+     * @param endOffset the end offset (inclusive)
+     * @return the substring
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @since Valkey 2.4.0
+     */
+    public String getrange(String key, long startOffset, long endOffset) {
+        return executeCommandWithGlide(
+                "GETRANGE", () -> glideClient.getrange(key, (int) startOffset, (int) endOffset).get());
+    }
+
+    /**
+     * Returns the substring of the string value stored at key (binary version).
+     *
+     * @param key the key
+     * @param startOffset the start offset (inclusive)
+     * @param endOffset the end offset (inclusive)
+     * @return the substring
+     * @see <a href="https://valkey.io/commands/getrange/">valkey.io</a> for details.
+     * @since Valkey 2.4.0
+     */
+    public byte[] getrange(final byte[] key, long startOffset, long endOffset) {
+        return executeCommandWithGlide(
+                "GETRANGE",
+                () -> {
+                    GlideString result =
+                            glideClient.getrange(GlideString.of(key), (int) startOffset, (int) endOffset).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Append a value to the end of the string stored at the specified key. If the key does not exist,
+     * it is created and set as an empty string before performing the append operation. This operation
+     * is atomic and efficient for building strings incrementally.
+     *
+     * <p>This command is useful for:
+     *
+     * <ul>
+     *   <li>Building log entries or messages incrementally
+     *   <li>Concatenating strings without retrieving the current value
+     *   <li>Implementing counters or accumulators in string format
+     * </ul>
+     *
+     * @param key the key where the string is stored (must not be null)
+     * @param value the value to append to the existing string (must not be null)
+     * @return the length of the string after the append operation (includes both original and
+     *     appended content)
+     * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
+     * @since Valkey 2.0.0
+     */
+    public long append(final String key, final String value) {
+        return executeCommandWithGlide("APPEND", () -> glideClient.append(key, value).get());
+    }
+
+    /**
+     * Append a binary value to the end of the string stored at the specified key. If the key does not
+     * exist, it is created and set as an empty string before performing the append operation. This
+     * operation is atomic and efficient for building binary strings incrementally.
+     *
+     * <p>This command is useful for:
+     *
+     * <ul>
+     *   <li>Building binary log entries or data incrementally
+     *   <li>Concatenating binary data without retrieving the current value
+     *   <li>Implementing binary accumulators or buffers
+     * </ul>
+     *
+     * @param key the key where the binary string is stored (must not be null)
+     * @param value the binary value to append to the existing string (must not be null)
+     * @return the length of the string after the append operation (includes both original and
+     *     appended content)
+     * @throws JedisException if the operation fails or if the key contains a non-string value
+     * @see <a href="https://valkey.io/commands/append/">valkey.io</a> for details.
+     * @since Valkey 2.0.0
+     */
+    public long append(final byte[] key, final byte[] value) {
+        return executeCommandWithGlide(
+                "APPEND", () -> glideClient.append(GlideString.of(key), GlideString.of(value)).get());
+    }
+
+    /**
+     * Get the length of the string value stored at key.
+     *
+     * @param key the key
+     * @return the length of the string, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long strlen(String key) {
+        return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(key).get());
+    }
+
+    /**
+     * Get the length of the string value stored at key.
+     *
+     * @param key the key
+     * @return the length of the string, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/strlen/">valkey.io</a> for details.
+     * @since Valkey 2.2.0
+     */
+    public long strlen(final byte[] key) {
+        return executeCommandWithGlide("STRLEN", () -> glideClient.strlen(GlideString.of(key)).get());
+    }
+
+    /**
+     * Calculate the longest common subsequence of keyA and keyB.
+     *
+     * @param keyA the first key
+     * @param keyB the second key
+     * @param params LCS parameters
+     * @return LCSMatchResult containing the result based on params
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public LCSMatchResult lcs(String keyA, String keyB, LCSParams params) {
+        return executeCommandWithGlide(
+                "LCS",
+                () -> {
+                    if (params.isLen()) {
+                        // LEN option: return only length
+                        Long len = glideClient.lcsLen(keyA, keyB).get();
+                        return new LCSMatchResult(null, null, len);
+                    } else if (params.isIdx()) {
+                        // IDX option: return match indices with positions
+                        Map<String, Object> result;
+                        try {
+                            result = callLcsIdxWithParams(keyA, keyB, params);
+                        } catch (Exception e) {
+                            throw new JedisException("LCS IDX execution failed", e);
+                        }
+                        return convertLcsIdxResultToMatchResult(result);
+                    } else {
+                        // Default: return the LCS string
+                        String matchString = glideClient.lcs(keyA, keyB).get();
+                        return new LCSMatchResult(
+                                matchString, null, matchString != null ? matchString.length() : 0);
+                    }
+                });
+    }
+
+    /**
+     * Calculate the longest common subsequence of keyA and keyB (binary version).
+     *
+     * @param keyA the first key
+     * @param keyB the second key
+     * @param params LCS parameters
+     * @return LCSMatchResult containing the result based on params
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public LCSMatchResult lcs(byte[] keyA, byte[] keyB, LCSParams params) {
+        return executeCommandWithGlide(
+                "LCS",
+                () -> {
+                    GlideString keyAGs = GlideString.of(keyA);
+                    GlideString keyBGs = GlideString.of(keyB);
+
+                    if (params.isLen()) {
+                        // LEN option: return only length
+                        Long len = glideClient.lcsLen(keyAGs, keyBGs).get();
+                        return new LCSMatchResult(null, null, len);
+                    } else if (params.isIdx()) {
+                        // IDX option: return match indices with positions
+                        Map<String, Object> result;
+                        try {
+                            result = callLcsIdxWithParams(keyAGs, keyBGs, params);
+                        } catch (Exception e) {
+                            throw new JedisException("LCS IDX execution failed", e);
+                        }
+                        return convertLcsIdxResultToMatchResult(result);
+                    } else {
+                        // Default: return the LCS string
+                        GlideString matchString = glideClient.lcs(keyAGs, keyBGs).get();
+                        String matchStr = matchString != null ? matchString.toString() : null;
+                        return new LCSMatchResult(matchStr, null, matchStr != null ? matchStr.length() : 0);
+                    }
+                });
+    }
+
+    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options. */
+    private Map<String, Object> callLcsIdxWithParams(String keyA, String keyB, LCSParams params)
+            throws Exception {
+        Long minMatchLen = params.getMinMatchLen();
+        if (params.isWithMatchLen()) {
+            return minMatchLen != null
+                    ? glideClient.lcsIdxWithMatchLen(keyA, keyB, minMatchLen).get()
+                    : glideClient.lcsIdxWithMatchLen(keyA, keyB).get();
+        }
+        return minMatchLen != null
+                ? glideClient.lcsIdx(keyA, keyB, minMatchLen).get()
+                : glideClient.lcsIdx(keyA, keyB).get();
+    }
+
+    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options (binary version). */
+    private Map<String, Object> callLcsIdxWithParams(
+            GlideString keyA, GlideString keyB, LCSParams params) throws Exception {
+        Long minMatchLen = params.getMinMatchLen();
+        if (params.isWithMatchLen()) {
+            return minMatchLen != null
+                    ? glideClient.lcsIdxWithMatchLen(keyA, keyB, minMatchLen).get()
+                    : glideClient.lcsIdxWithMatchLen(keyA, keyB).get();
+        }
+        return minMatchLen != null
+                ? glideClient.lcsIdx(keyA, keyB, minMatchLen).get()
+                : glideClient.lcsIdx(keyA, keyB).get();
+    }
+
+    /**
+     * Converts GLIDE lcsIdx map result to LCSMatchResult with matches populated.
+     *
+     * <p>GLIDE returns matches as Long[][][] where each match is {{startA, endA}, {startB, endB}}.
+     * With WITHMATCHLEN, each match may be {{startA, endA}, {startB, endB}, matchLen}.
+     */
+    private LCSMatchResult convertLcsIdxResultToMatchResult(Map<String, Object> result) {
+        long len = result.containsKey("len") ? ((Number) result.get("len")).longValue() : 0L;
+        Object matchesObj = result.get("matches");
+        List<MatchedPosition> matches = new ArrayList<>();
+
+        if (matchesObj instanceof Object[]) {
+            Object[] matchesArr = (Object[]) matchesObj;
+            for (Object matchObj : matchesArr) {
+                if (matchObj instanceof Object[]) {
+                    Object[] match = (Object[]) matchObj;
+                    if (match.length >= 2 && match[0] instanceof Object[] && match[1] instanceof Object[]) {
+                        Object[] posA = (Object[]) match[0];
+                        Object[] posB = (Object[]) match[1];
+                        if (posA.length >= 2 && posB.length >= 2) {
+                            long startA = ((Number) posA[0]).longValue();
+                            long endA = ((Number) posA[1]).longValue();
+                            long startB = ((Number) posB[0]).longValue();
+                            long endB = ((Number) posB[1]).longValue();
+                            long matchLen =
+                                    match.length >= 3 && match[2] instanceof Number
+                                            ? ((Number) match[2]).longValue()
+                                            : (endA - startA + 1);
+                            Position a = new Position(startA, endA);
+                            Position b = new Position(startB, endB);
+                            matches.add(new MatchedPosition(a, b, matchLen));
+                        }
+                    }
+                }
+            }
+        }
+
+        return new LCSMatchResult(null, matches, len);
+    }
+
+    /**
+     * Increment the integer value of key by 1.
+     *
+     * @param key the key
+     * @return the value after increment
+     */
+    public long incr(String key) {
+        return executeCommandWithGlide("INCR", () -> glideClient.incr(key).get());
+    }
+
+    /**
+     * Increment the integer value of key by 1.
+     *
+     * @param key the key
+     * @return the value after increment
+     */
+    public long incr(final byte[] key) {
+        return executeCommandWithGlide("INCR", () -> glideClient.incr(GlideString.of(key)).get());
+    }
+
+    /**
+     * Increment the integer value of key by amount.
+     *
+     * @param key the key
+     * @param increment the amount to increment by
+     * @return the value after increment
+     */
+    public long incrBy(String key, long increment) {
+        return executeCommandWithGlide("INCRBY", () -> glideClient.incrBy(key, increment).get());
+    }
+
+    /**
+     * Increment the float value of key by amount.
+     *
+     * @param key the key
+     * @param increment the amount to increment by
+     * @return the value after increment
+     */
+    public double incrByFloat(String key, double increment) {
+        return executeCommandWithGlide(
+                "INCRBYFLOAT", () -> glideClient.incrByFloat(key, increment).get());
+    }
+
+    /**
+     * Increment the integer value of a key by the given amount (alternative method name).
+     *
+     * @param key the key
+     * @param increment the increment value
+     * @return the value after increment
+     */
+    public long incrBy(final byte[] key, final long increment) {
+        return executeCommandWithGlide(
+                "INCRBY", () -> glideClient.incrBy(GlideString.of(key), increment).get());
+    }
+
+    /**
+     * Increment the float value of a key by the given amount.
+     *
+     * @param key the key
+     * @param increment the increment value
+     * @return the value after increment
+     */
+    public double incrByFloat(final byte[] key, final double increment) {
+        return executeCommandWithGlide(
+                "INCRBYFLOAT", () -> glideClient.incrByFloat(GlideString.of(key), increment).get());
+    }
+
+    /**
+     * Decrement the integer value of key by 1.
+     *
+     * @param key the key
+     * @return the value after decrement
+     */
+    public long decr(String key) {
+        return executeCommandWithGlide("DECR", () -> glideClient.decr(key).get());
+    }
+
+    /**
+     * Decrement the integer value of key by 1.
+     *
+     * @param key the key
+     * @return the value after decrement
+     */
+    public long decr(final byte[] key) {
+        return executeCommandWithGlide("DECR", () -> glideClient.decr(GlideString.of(key)).get());
+    }
+
+    /**
+     * Decrement the integer value of key by amount.
+     *
+     * @param key the key
+     * @param decrement the amount to decrement by
+     * @return the value after decrement
+     */
+    public long decrBy(String key, long decrement) {
+        return executeCommandWithGlide("DECRBY", () -> glideClient.decrBy(key, decrement).get());
+    }
+
+    /**
+     * Decrement the integer value of a key by the given amount (alternative method name).
+     *
+     * @param key the key
+     * @param decrement the decrement value
+     * @return the value after decrement
+     */
+    public long decrBy(final byte[] key, final long decrement) {
+        return executeCommandWithGlide(
+                "DECRBY", () -> glideClient.decrBy(GlideString.of(key), decrement).get());
+    }
+
+    // ===== KEY MANAGEMENT COMMANDS =====
+
+    /**
+     * Delete one or more keys (already implemented above, but adding alias for completeness).
+     *
+     * @param key the key to delete
+     * @return the number of keys that were removed
+     */
+    // del method already exists above
+
+    /**
+     * Asynchronously delete one or more keys.
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     */
+    public long unlink(String... keys) {
+        return executeCommandWithGlide("UNLINK", () -> glideClient.unlink(keys).get());
+    }
+
+    /**
+     * Asynchronously delete a key.
+     *
+     * @param key the key to delete
+     * @return the number of keys that were removed
+     */
+    public long unlink(final byte[] key) {
+        return executeCommandWithGlide(
+                "UNLINK", () -> glideClient.unlink(new GlideString[] {GlideString.of(key)}).get());
+    }
+
+    /**
+     * Asynchronously delete one or more keys.
+     *
+     * @param keys the keys to delete
+     * @return the number of keys that were removed
+     */
+    public long unlink(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "UNLINK",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.unlink(glideKeys).get();
+                });
+    }
+
+    /**
+     * Check if one or more keys exist.
+     *
+     * @param keys the keys to check
+     * @return the number of keys that exist
+     */
+    public long exists(String... keys) {
+        return executeCommandWithGlide("EXISTS", () -> glideClient.exists(keys).get());
+    }
+
+    /**
+     * Check if a key exists.
+     *
+     * @param key the key to check
+     * @return true if the key exists, false otherwise
+     */
+    public boolean exists(final byte[] key) {
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new GlideString[] {GlideString.of(key)}).get() > 0);
+    }
+
+    /**
+     * Check if a key exists.
+     *
+     * @param key the key to check
+     * @return true if the key exists, false otherwise
+     */
+    public boolean exists(final String key) {
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new String[] {key}).get() > 0);
+    }
+
+    /**
+     * Check if a key exists (boolean version for Jedis compatibility).
+     *
+     * @param key the key to check
+     * @return true if the key exists, false otherwise
+     */
+    public boolean keyExists(final String key) {
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new String[] {key}).get() > 0);
+    }
+
+    /**
+     * Check if a key exists (boolean version for Jedis compatibility).
+     *
+     * @param key the key to check
+     * @return true if the key exists, false otherwise
+     */
+    public boolean keyExists(final byte[] key) {
+        return executeCommandWithGlide(
+                "EXISTS", () -> glideClient.exists(new GlideString[] {GlideString.of(key)}).get() > 0);
+    }
+
+    /**
+     * Check if one or more keys exist.
+     *
+     * @param keys the keys to check
+     * @return the number of keys that exist
+     */
+    public long exists(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "EXISTS",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.exists(glideKeys).get();
+                });
+    }
+
+    /**
+     * Get the type of a key.
+     *
+     * @param key the key
+     * @return the type of the key
+     */
+    public String type(String key) {
+        return executeCommandWithGlide("TYPE", () -> glideClient.type(key).get());
+    }
+
+    /**
+     * Get the type of a key.
+     *
+     * @param key the key
+     * @return the type of the key
+     */
+    public String type(final byte[] key) {
+        return executeCommandWithGlide("TYPE", () -> glideClient.type(GlideString.of(key)).get());
+    }
+
+    /**
+     * Find all keys matching the given pattern (already implemented above).
+     *
+     * @param pattern the pattern to match
+     * @return a set of keys matching the pattern
+     */
+    // keys method already exists above
+
+    /**
+     * Get a random key from the currently selected database. This command is useful for sampling keys
+     * from the database. The key is selected uniformly at random.
+     *
+     * @return a random key from the database, or null if the database is empty
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.0.0
+     */
+    public String randomKey() {
+        return executeCommandWithGlide("RANDOMKEY", () -> glideClient.randomKey().get());
+    }
+
+    /**
+     * Rename a key.
+     *
+     * @param oldkey the old key name
+     * @param newkey the new key name
+     * @return "OK"
+     */
+    public String rename(String oldkey, String newkey) {
+        return executeCommandWithGlide("RENAME", () -> glideClient.rename(oldkey, newkey).get());
+    }
+
+    /**
+     * Rename a key.
+     *
+     * @param oldkey the old key name
+     * @param newkey the new key name
+     * @return "OK"
+     */
+    public String rename(final byte[] oldkey, final byte[] newkey) {
+        return executeCommandWithGlide(
+                "RENAME", () -> glideClient.rename(GlideString.of(oldkey), GlideString.of(newkey)).get());
+    }
+
+    /**
+     * Rename a key if the new key does not exist.
+     *
+     * @param oldkey the old key name
+     * @param newkey the new key name
+     * @return 1 if the key was renamed, 0 if the new key already exists
+     */
+    public long renamenx(String oldkey, String newkey) {
+        return executeCommandWithGlide(
+                "RENAMENX",
+                () -> {
+                    Boolean result = glideClient.renamenx(oldkey, newkey).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Rename a key if the new key does not exist.
+     *
+     * @param oldkey the old key name
+     * @param newkey the new key name
+     * @return 1 if the key was renamed, 0 if the new key already exists
+     */
+    public long renamenx(final byte[] oldkey, final byte[] newkey) {
+        return executeCommandWithGlide(
+                "RENAMENX",
+                () -> {
+                    Boolean result =
+                            glideClient.renamenx(GlideString.of(oldkey), GlideString.of(newkey)).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in seconds.
+     *
+     * @param key the key
+     * @param seconds expiration time in seconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long expire(String key, long seconds) {
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    Boolean result = glideClient.expire(key, seconds).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in seconds.
+     *
+     * @param key the key
+     * @param seconds expiration time in seconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long expire(final byte[] key, final long seconds) {
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    Boolean result = glideClient.expire(GlideString.of(key), seconds).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in seconds with expiry option.
+     *
+     * @param key the key
+     * @param seconds expiration time in seconds
+     * @param expiryOption the expiry option
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long expire(final byte[] key, final long seconds, final ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expire(GlideString.of(key), seconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in seconds with expiry option.
+     *
+     * @param key the key
+     * @param seconds expiration time in seconds
+     * @param expiryOption the expiry option
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long expire(final String key, final long seconds, final ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "EXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expire(key, seconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set the expiration time of a key as a Unix timestamp (seconds since January 1, 1970). The key
+     * will be automatically deleted when the specified time is reached.
+     *
+     * @param key the key to set expiration for (must not be null)
+     * @param unixTime expiration timestamp in seconds since Unix epoch
+     * @return 1 if the expiration was set successfully, 0 if the key does not exist
+     * @throws JedisException if the operation fails
+     * @since Valkey 1.2.0
+     */
+    public long expireAt(String key, long unixTime) {
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    Boolean result = glideClient.expireAt(key, unixTime).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time at a specific timestamp.
+     *
+     * @param key the key
+     * @param unixTime expiration timestamp in seconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long expireAt(final byte[] key, final long unixTime) {
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    Boolean result = glideClient.expireAt(GlideString.of(key), unixTime).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time at a specific timestamp with expiry option.
+     *
+     * @param key the key
+     * @param unixTime expiration timestamp in seconds
+     * @param expiryOption expiry option (NX, XX, GT, LT)
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long expireAt(String key, long unixTime, ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expireAt(key, unixTime, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time at a specific timestamp with expiry option.
+     *
+     * @param key the key
+     * @param unixTime expiration timestamp in seconds
+     * @param expiryOption expiry option (NX, XX, GT, LT)
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long expireAt(byte[] key, long unixTime, ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "EXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.expireAt(GlideString.of(key), unixTime, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in milliseconds.
+     *
+     * @param key the key
+     * @param milliseconds expiration time in milliseconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long pexpire(String key, long milliseconds) {
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    Boolean result = glideClient.pexpire(key, milliseconds).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in milliseconds.
+     *
+     * @param key the key
+     * @param milliseconds expiration time in milliseconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long pexpire(final byte[] key, final long milliseconds) {
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    Boolean result = glideClient.pexpire(GlideString.of(key), milliseconds).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in milliseconds with expiry option.
+     *
+     * @param key the key
+     * @param milliseconds expiration time in milliseconds
+     * @param expiryOption the expiry option
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long pexpire(final byte[] key, final long milliseconds, final ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result =
+                            glideClient.pexpire(GlideString.of(key), milliseconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time in milliseconds with expiry option.
+     *
+     * @param key the key
+     * @param milliseconds expiration time in milliseconds
+     * @param expiryOption the expiry option
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long pexpire(final String key, final long milliseconds, final ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "PEXPIRE",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.pexpire(key, milliseconds, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time at a specific millisecond timestamp.
+     *
+     * @param key the key
+     * @param millisecondsTimestamp expiration timestamp in milliseconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long pexpireAt(String key, long millisecondsTimestamp) {
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    Boolean result = glideClient.pexpireAt(key, millisecondsTimestamp).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time at a specific millisecond timestamp.
+     *
+     * @param key the key
+     * @param millisecondsTimestamp expiration timestamp in milliseconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long pexpireAt(final byte[] key, final long millisecondsTimestamp) {
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    Boolean result = glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time at a specific millisecond timestamp with expiry option.
+     *
+     * @param key the key
+     * @param millisecondsTimestamp expiration timestamp in milliseconds
+     * @param expiryOption expiry option (NX, XX, GT, LT)
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long pexpireAt(String key, long millisecondsTimestamp, ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result = glideClient.pexpireAt(key, millisecondsTimestamp, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Set expiration time at a specific millisecond timestamp with expiry option.
+     *
+     * @param key the key
+     * @param millisecondsTimestamp expiration timestamp in milliseconds
+     * @param expiryOption expiry option (NX, XX, GT, LT)
+     * @return 1 if expiration was set, 0 if key does not exist or condition not met
+     */
+    public long pexpireAt(byte[] key, long millisecondsTimestamp, ExpiryOption expiryOption) {
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    ExpireOptions glideOption = convertExpiryOptionToExpireOptions(expiryOption);
+                    Boolean result =
+                            glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp, glideOption).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Get the expiration timestamp of a key in seconds.
+     *
+     * @param key the key
+     * @return expiration timestamp in seconds, or -1 if key has no expiration, -2 if key does not
+     *     exist
+     */
+    public long expireTime(String key) {
+        return executeCommandWithGlide("EXPIRETIME", () -> glideClient.expiretime(key).get());
+    }
+
+    /**
+     * Get the expiration timestamp of a key in milliseconds.
+     *
+     * @param key the key
+     * @return expiration timestamp in milliseconds, or -1 if key has no expiration, -2 if key does
+     *     not exist
+     */
+    public long pexpireTime(String key) {
+        return executeCommandWithGlide("PEXPIRETIME", () -> glideClient.pexpiretime(key).get());
+    }
+
+    /**
+     * Set expiration time at a specific timestamp in milliseconds.
+     *
+     * @param key the key
+     * @param millisecondsTimestamp expiration timestamp in milliseconds
+     * @return 1 if expiration was set, 0 if key does not exist
+     */
+    public long pexpireat(final byte[] key, final long millisecondsTimestamp) {
+        return executeCommandWithGlide(
+                "PEXPIREAT",
+                () -> {
+                    Boolean result = glideClient.pexpireAt(GlideString.of(key), millisecondsTimestamp).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Get the expiration timestamp of a key in seconds.
+     *
+     * @param key the key
+     * @return expiration timestamp in seconds, or -1 if key has no expiration, -2 if key does not
+     *     exist
+     */
+    public long expireTime(final byte[] key) {
+        return executeCommandWithGlide(
+                "EXPIRETIME", () -> glideClient.expiretime(GlideString.of(key)).get());
+    }
+
+    /**
+     * Get the expiration timestamp of a key in milliseconds.
+     *
+     * @param key the key
+     * @return expiration timestamp in milliseconds, or -1 if key has no expiration, -2 if key does
+     *     not exist
+     */
+    public long pexpireTime(final byte[] key) {
+        return executeCommandWithGlide(
+                "PEXPIRETIME", () -> glideClient.pexpiretime(GlideString.of(key)).get());
+    }
+
+    /**
+     * Get the time to live of a key in seconds.
+     *
+     * @param key the key
+     * @return time to live in seconds, or -1 if key has no expiration, -2 if key does not exist
+     */
+    public long ttl(String key) {
+        return executeCommandWithGlide("TTL", () -> glideClient.ttl(key).get());
+    }
+
+    /**
+     * Get the time to live of a key in seconds.
+     *
+     * @param key the key
+     * @return time to live in seconds, or -1 if key has no expiration, -2 if key does not exist
+     */
+    public long ttl(final byte[] key) {
+        return executeCommandWithGlide("TTL", () -> glideClient.ttl(GlideString.of(key)).get());
+    }
+
+    /**
+     * Get the time to live of a key in milliseconds.
+     *
+     * @param key the key
+     * @return time to live in milliseconds, or -1 if key has no expiration, -2 if key does not exist
+     */
+    public long pttl(String key) {
+        return executeCommandWithGlide("PTTL", () -> glideClient.pttl(key).get());
+    }
+
+    /**
+     * Get the time to live of a key in milliseconds.
+     *
+     * @param key the key
+     * @return time to live in milliseconds, or -1 if key has no expiration, -2 if key does not exist
+     */
+    public long pttl(final byte[] key) {
+        return executeCommandWithGlide("PTTL", () -> glideClient.pttl(GlideString.of(key)).get());
+    }
+
+    /**
+     * Remove the expiration from a key.
+     *
+     * @param key the key
+     * @return 1 if expiration was removed, 0 if key does not exist or has no expiration
+     */
+    public long persist(String key) {
+        return executeCommandWithGlide(
+                "PERSIST",
+                () -> {
+                    Boolean result = glideClient.persist(key).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Remove the expiration from a key.
+     *
+     * @param key the key
+     * @return 1 if expiration was removed, 0 if key does not exist or has no expiration
+     */
+    public long persist(final byte[] key) {
+        return executeCommandWithGlide(
+                "PERSIST",
+                () -> {
+                    Boolean result = glideClient.persist(GlideString.of(key)).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Sort the elements in a list, set, or sorted set.
+     *
+     * @param key the key
+     * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public List<String> sort(String key) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    String[] result = glideClient.sort(key).get();
+                    return Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Sort the elements in a list, set, or sorted set (binary version).
+     *
+     * @param key the key
+     * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public List<byte[]> sort(final byte[] key) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    GlideString[] result = glideClient.sort(GlideString.of(key)).get();
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Sort the elements in a list, set, or sorted set with options.
+     *
+     * @param key the key
+     * @param sortingParameters sorting parameters (BY, LIMIT, GET, ASC/DESC, ALPHA)
+     * @return the sorted elements
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public List<String> sort(String key, String... sortingParameters) {
+        checkNotClosed();
+        try {
+            if (sortingParameters.length == 0) {
+                // Simple sort without options
+                String[] result = glideClient.sort(key).get();
+                return Arrays.asList(result);
+            } else {
+                // Parse Jedis-style parameters into SortOptions
+                SortOptions sortOptions = parseSortParameters(sortingParameters);
+                String[] result = glideClient.sort(key, sortOptions).get();
+                return Arrays.asList(result);
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SORT operation failed", e);
+        }
+    }
+
+    /**
+     * Parse Jedis-style sort parameters into GLIDE SortOptions.
+     *
+     * @param params the Jedis-style parameters (BY, LIMIT, GET, ASC/DESC, ALPHA)
+     * @return SortOptions object
+     */
+    private static SortOptions parseSortParameters(String[] params) {
+        SortOptions.SortOptionsBuilder builder = SortOptions.builder();
+
+        for (int i = 0; i < params.length; i++) {
+            String param = params[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < params.length) {
+                        builder.byPattern(params[++i]);
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < params.length) {
+                        try {
+                            long offset = Long.parseLong(params[++i]);
+                            long count = Long.parseLong(params[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < params.length) {
+                        builder.getPattern(params[++i]);
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Unknown parameter, skip it
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Serialize a key's value.
+     *
+     * @param key the key
+     * @return the serialized value, or null if key does not exist
+     */
+    public byte[] dump(String key) {
+        return executeCommandWithGlide("DUMP", () -> glideClient.dump(GlideString.of(key)).get());
+    }
+
+    /**
+     * Serialize a key's value.
+     *
+     * @param key the key
+     * @return the serialized value, or null if key does not exist
+     */
+    public byte[] dump(final byte[] key) {
+        return executeCommandWithGlide("DUMP", () -> glideClient.dump(GlideString.of(key)).get());
+    }
+
+    /**
+     * Deserialize a value and store it at a key.
+     *
+     * @param key the key
+     * @param ttl time to live in milliseconds (0 for no expiration)
+     * @param serializedValue the serialized value
+     * @return "OK"
+     */
+    public String restore(String key, long ttl, byte[] serializedValue) {
+        return executeCommandWithGlide(
+                "RESTORE", () -> glideClient.restore(GlideString.of(key), ttl, serializedValue).get());
+    }
+
+    /**
+     * Move a key to another Valkey instance.
+     *
+     * @param host destination host
+     * @param port destination port
+     * @param key the key to migrate
+     * @param destinationDb destination database
+     * @param timeout timeout in milliseconds
+     * @return "OK" or "NOKEY"
+     */
+    public String migrate(String host, int port, String key, int destinationDb, int timeout) {
+        checkNotClosed();
+        try {
+            Object result =
+                    glideClient
+                            .customCommand(
+                                    new String[] {
+                                        "MIGRATE",
+                                        host,
+                                        String.valueOf(port),
+                                        key,
+                                        String.valueOf(destinationDb),
+                                        String.valueOf(timeout)
+                                    })
+                            .get();
+            return result != null ? result.toString() : "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("MIGRATE operation failed", e);
+        }
+    }
+
+    /**
+     * Move a key to another database.
+     *
+     * @param key the key
+     * @param dbIndex destination database index
+     * @return 1 if key was moved, 0 if key does not exist or already exists in target database
+     */
+    public long move(String key, int dbIndex) {
+        return executeCommandWithGlide(
+                "MOVE",
+                () -> {
+                    Boolean result = glideClient.move(key, dbIndex).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Move a key to another database.
+     *
+     * @param key the key
+     * @param dbIndex destination database index
+     * @return 1 if key was moved, 0 if key does not exist or already exists in target database
+     */
+    public long move(final byte[] key, final int dbIndex) {
+        return executeCommandWithGlide(
+                "MOVE",
+                () -> {
+                    Boolean result = glideClient.move(GlideString.of(key), dbIndex).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Helper method to convert GLIDE scan result to ScanResult format.
+     *
+     * @param result the GLIDE scan result
+     * @return ScanResult with cursor and keys
+     */
+    /** Helper method to convert Jedis LPosParams to GLIDE LPosOptions. */
+    private static LPosOptions convertLPosParamsToLPosOptions(LPosParams params) {
+        LPosOptions.LPosOptionsBuilder builder = LPosOptions.builder();
+        if (params.getRank() != null) {
+            builder.rank((long) params.getRank());
+        }
+        if (params.getMaxlen() != null) {
+            builder.maxLength((long) params.getMaxlen());
+        }
+        return builder.build();
+    }
+
+    /** Helper method to convert Jedis ListDirection to GLIDE ListDirection. */
+    private static glide.api.models.commands.ListDirection convertToGlideListDirection(
+            ListDirection jedisDirection) {
+        return jedisDirection == ListDirection.LEFT
+                ? glide.api.models.commands.ListDirection.LEFT
+                : glide.api.models.commands.ListDirection.RIGHT;
+    }
+
+    /** Helper method to convert byte array to GlideString array. */
+    private static GlideString[] convertToGlideStringArray(byte[][] bytes) {
+        GlideString[] glideStrings = new GlideString[bytes.length];
+        for (int i = 0; i < bytes.length; i++) {
+            glideStrings[i] = GlideString.of(bytes[i]);
+        }
+        return glideStrings;
+    }
+
+    /**
+     * Helper method to convert Set of GlideString to Set of byte arrays.
+     *
+     * <p>Returns a wrapper that avoids the HashSet<byte[]> performance issue where byte[] identity
+     * hashCode causes all entries to hash to the same bucket. The wrapper keeps data as GlideString
+     * internally (which has proper hashCode/equals) and converts to byte[] lazily.
+     */
+    private static Set<byte[]> convertGlideStringsToByteArraySet(Set<GlideString> glideStrings) {
+        return new GlideStringSetWrapper(glideStrings);
+    }
+
+    private static ScanResult<String> convertToScanResult(Object[] result) {
+        if (result != null && result.length >= 2) {
+            String newCursor = result[0].toString();
+            Object keysObj = result[1];
+
+            if (keysObj instanceof Object[]) {
+                Object[] keysArray = (Object[]) keysObj;
+                List<String> keys = new ArrayList<>();
+                for (Object key : keysArray) {
+                    keys.add(key != null ? key.toString() : null);
+                }
+                return new ScanResult<>(newCursor, keys);
+            }
+        }
+        return new ScanResult<>("0", Collections.emptyList());
+    }
+
+    /** Convert ScanParams to GLIDE ScanOptions. */
+    private static ScanOptions convertScanParamsToScanOptions(ScanParams params) {
+        ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(params.getMatchPattern());
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        if (params.getType() != null) {
+            // Convert string type to ObjectType enum
+            try {
+                ScanOptions.ObjectType objectType =
+                        ScanOptions.ObjectType.valueOf(params.getType().toUpperCase());
+                builder.type(objectType);
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid type, let GLIDE handle it
+            }
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Iterate over keys in the database with scan parameters.
+     *
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with new cursor and keys
+     */
+    public ScanResult<String> scan(final String cursor, final ScanParams params) {
+        return executeCommandWithGlide(
+                "SCAN",
+                () -> {
+                    ScanOptions options = convertScanParamsToScanOptions(params);
+                    Object[] result = glideClient.scan(cursor, options).get();
+                    return convertToScanResult(result);
+                });
+    }
+
+    /**
+     * Iterate over keys in the database with scan parameters.
+     *
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with new cursor and keys
+     */
+    public ScanResult<byte[]> scan(final byte[] cursor, final ScanParams params) {
+        checkNotClosed();
+        try {
+            ScanOptions options = convertScanParamsToScanOptions(params);
+            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET), options).get();
+
+            // Convert to binary ScanResult
+            if (result != null && result.length >= 2) {
+                String newCursor = result[0].toString();
+                Object keysObj = result[1];
+
+                if (keysObj instanceof Object[]) {
+                    Object[] keysArray = (Object[]) keysObj;
+                    List<byte[]> keys = new ArrayList<>();
+                    for (Object key : keysArray) {
+                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
+                    }
+                    return new ScanResult<>(newCursor, keys);
+                }
+            }
+            return new ScanResult<>("0", Collections.emptyList());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterate over keys in the database.
+     *
+     * @param cursor the cursor
+     * @return scan result with new cursor and keys
+     */
+    public ScanResult<byte[]> scan(final byte[] cursor) {
+        checkNotClosed();
+        try {
+            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET)).get();
+
+            // Convert to binary ScanResult
+            if (result != null && result.length >= 2) {
+                String newCursor = result[0].toString();
+                Object keysObj = result[1];
+
+                if (keysObj instanceof Object[]) {
+                    Object[] keysArray = (Object[]) keysObj;
+                    List<byte[]> keys = new ArrayList<>();
+                    for (Object key : keysArray) {
+                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
+                    }
+                    return new ScanResult<>(newCursor, keys);
+                }
+            }
+            return new ScanResult<>("0", Collections.emptyList());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterate over keys in the database.
+     *
+     * @param cursor the cursor
+     * @return scan result with new cursor and keys
+     */
+    public ScanResult<String> scan(final String cursor) {
+        return executeCommandWithGlide(
+                "SCAN",
+                () -> {
+                    Object[] result = glideClient.scan(cursor).get();
+                    return convertToScanResult(result);
+                });
+    }
+
+    /**
+     * Iterate over keys in the database with scan parameters and type filter.
+     *
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @param type the type filter
+     * @return scan result with new cursor and keys
+     */
+    public ScanResult<String> scan(final String cursor, final ScanParams params, final String type) {
+        checkNotClosed();
+        try {
+            ScanOptions options = convertScanParamsToScanOptions(params);
+            if (type != null) {
+                // Override type from params with explicit type parameter
+                try {
+                    ScanOptions.ObjectType objectType = ScanOptions.ObjectType.valueOf(type.toUpperCase());
+                    options =
+                            ScanOptions.builder()
+                                    .matchPattern(params.getMatchPattern())
+                                    .count(params.getCount())
+                                    .type(objectType)
+                                    .build();
+                } catch (IllegalArgumentException e) {
+                    // Invalid type, use params as-is
+                }
+            }
+            Object[] result = glideClient.scan(cursor, options).get();
+            return convertToScanResult(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterate over keys in the database with scan parameters and type filter.
+     *
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @param type the type filter
+     * @return scan result with new cursor and keys
+     */
+    public ScanResult<byte[]> scan(final byte[] cursor, final ScanParams params, final byte[] type) {
+        checkNotClosed();
+        try {
+            ScanOptions options = convertScanParamsToScanOptions(params);
+            if (type != null) {
+                // Override type from params with explicit type parameter
+                try {
+                    String typeStr = new String(type, VALKEY_CHARSET);
+                    ScanOptions.ObjectType objectType = ScanOptions.ObjectType.valueOf(typeStr.toUpperCase());
+                    options =
+                            ScanOptions.builder()
+                                    .matchPattern(params.getMatchPattern())
+                                    .count(params.getCount())
+                                    .type(objectType)
+                                    .build();
+                } catch (IllegalArgumentException e) {
+                    // Invalid type, use params as-is
+                }
+            }
+            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET), options).get();
+
+            // Convert to binary ScanResult
+            if (result != null && result.length >= 2) {
+                String newCursor = result[0].toString();
+                Object keysObj = result[1];
+
+                if (keysObj instanceof Object[]) {
+                    Object[] keysArray = (Object[]) keysObj;
+                    List<byte[]> keys = new ArrayList<>();
+                    for (Object key : keysArray) {
+                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
+                    }
+                    return new ScanResult<>(newCursor, keys);
+                }
+            }
+            return new ScanResult<>("0", Collections.emptyList());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Update the last access time of keys.
+     *
+     * @param keys the keys to touch
+     * @return the number of keys that were touched
+     */
+    public long touch(String... keys) {
+        return executeCommandWithGlide("TOUCH", () -> glideClient.touch(keys).get());
+    }
+
+    /**
+     * Update the last access time of a key.
+     *
+     * @param key the key to touch
+     * @return the number of keys that were touched
+     */
+    public long touch(final byte[] key) {
+        return executeCommandWithGlide(
+                "TOUCH", () -> glideClient.touch(new GlideString[] {GlideString.of(key)}).get());
+    }
+
+    /**
+     * Update the last access time of keys.
+     *
+     * @param keys the keys to touch
+     * @return the number of keys that were touched
+     */
+    public long touch(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "TOUCH",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.touch(glideKeys).get();
+                });
+    }
+
+    /**
+     * Copy a key to another key.
+     *
+     * @param srcKey source key
+     * @param dstKey destination key
+     * @param replace whether to replace the destination key if it exists
+     * @return true if key was copied, false if source key does not exist or destination exists and
+     *     replace is false
+     */
+    public boolean copy(String srcKey, String dstKey, boolean replace) {
+        return executeCommandWithGlide("COPY", () -> glideClient.copy(srcKey, dstKey, replace).get());
+    }
+
+    /**
+     * Copy a key to another key.
+     *
+     * @param srcKey source key
+     * @param dstKey destination key
+     * @param replace whether to replace the destination key if it exists
+     * @return true if key was copied, false if source key does not exist or destination exists and
+     *     replace is false
+     */
+    public boolean copy(final byte[] srcKey, final byte[] dstKey, final boolean replace) {
+        return executeCommandWithGlide(
+                "COPY",
+                () -> glideClient.copy(GlideString.of(srcKey), GlideString.of(dstKey), replace).get());
+    }
+
+    /**
+     * Copy a key to another key in a different database.
+     *
+     * @param srcKey source key
+     * @param dstKey destination key
+     * @param db destination database index
+     * @param replace whether to replace the destination key if it exists
+     * @return true if key was copied, false if source key does not exist or destination exists and
+     *     replace is false
+     */
+    public boolean copy(
+            final String srcKey, final String dstKey, final int db, final boolean replace) {
+        checkNotClosed();
+        try {
+            // Use customCommand since GLIDE doesn't support database parameter
+            String[] args =
+                    replace
+                            ? new String[] {"COPY", srcKey, dstKey, "DB", String.valueOf(db), "REPLACE"}
+                            : new String[] {"COPY", srcKey, dstKey, "DB", String.valueOf(db)};
+
+            Object result = glideClient.customCommand(args).get();
+            if (result instanceof Long) {
+                return ((Long) result).equals(1L);
+            } else if (result instanceof Boolean) {
+                return (Boolean) result;
+            } else {
+                return "1".equals(result.toString());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("COPY operation failed", e);
+        }
+    }
+
+    /**
+     * Copy a key to another key in a different database.
+     *
+     * @param srcKey source key
+     * @param dstKey destination key
+     * @param db destination database index
+     * @param replace whether to replace the destination key if it exists
+     * @return true if key was copied, false if source key does not exist or destination exists and
+     *     replace is false
+     */
+    public boolean copy(
+            final byte[] srcKey, final byte[] dstKey, final int db, final boolean replace) {
+        checkNotClosed();
+        try {
+            // Use customCommand since GLIDE doesn't support database parameter
+            GlideString[] args =
+                    replace
+                            ? new GlideString[] {
+                                GlideString.of("COPY"),
+                                GlideString.of(srcKey),
+                                GlideString.of(dstKey),
+                                GlideString.of("DB"),
+                                GlideString.of(String.valueOf(db)),
+                                GlideString.of("REPLACE")
+                            }
+                            : new GlideString[] {
+                                GlideString.of("COPY"),
+                                GlideString.of(srcKey),
+                                GlideString.of(dstKey),
+                                GlideString.of("DB"),
+                                GlideString.of(String.valueOf(db))
+                            };
+
+            Object result = glideClient.customCommand(args).get();
+            if (result instanceof Long) {
+                return ((Long) result).equals(1L);
+            } else if (result instanceof Boolean) {
+                return (Boolean) result;
+            } else {
+                return "1".equals(result.toString());
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("COPY operation failed", e);
+        }
+    }
+
+    // ===== BITMAP COMMANDS =====
+
+    /**
+     * Sets or clears the bit at offset in the string value stored at key.
+     *
+     * @param key the key
+     * @param offset the bit offset
+     * @param value the bit value (true for 1, false for 0)
+     * @return the original bit value stored at offset
+     */
+    public boolean setbit(String key, long offset, boolean value) {
+        return executeCommandWithGlide(
+                "SETBIT",
+                () -> {
+                    Long result = glideClient.setbit(key, offset, value ? 1L : 0L).get();
+                    return result.equals(1L);
+                });
+    }
+
+    /**
+     * Sets or clears the bit at offset in the string value stored at key.
+     *
+     * @param key the key
+     * @param offset the bit offset
+     * @param value the bit value (true for 1, false for 0)
+     * @return the original bit value stored at offset
+     */
+    public boolean setbit(final byte[] key, final long offset, final boolean value) {
+        return executeCommandWithGlide(
+                "SETBIT",
+                () -> {
+                    Long result = glideClient.setbit(GlideString.of(key), offset, value ? 1L : 0L).get();
+                    return result.equals(1L);
+                });
+    }
+
+    /**
+     * Returns the bit value at offset in the string value stored at key.
+     *
+     * @param key the key
+     * @param offset the bit offset
+     * @return the bit value stored at offset
+     */
+    public boolean getbit(final String key, final long offset) {
+        return executeCommandWithGlide(
+                "GETBIT",
+                () -> {
+                    Long result = glideClient.getbit(key, offset).get();
+                    return result.equals(1L);
+                });
+    }
+
+    /**
+     * Returns the bit value at offset in the string value stored at key.
+     *
+     * @param key the key
+     * @param offset the bit offset
+     * @return the bit value stored at offset
+     */
+    public boolean getbit(final byte[] key, final long offset) {
+        return executeCommandWithGlide(
+                "GETBIT",
+                () -> {
+                    Long result = glideClient.getbit(GlideString.of(key), offset).get();
+                    return result.equals(1L);
+                });
+    }
+
+    /**
+     * Count the number of set bits (population counting) in a string. This operation counts all bits
+     * set to 1 in the entire string value stored at the specified key.
+     *
+     * @param key the key containing the string value to analyze
+     * @return the number of bits set to 1 (0 if key doesn't exist)
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
+    public long bitcount(final String key) {
+        return executeCommandWithGlide("BITCOUNT", () -> glideClient.bitcount(key).get());
+    }
+
+    /**
+     * Count the number of set bits (population counting) in a string within a specified byte range.
+     * The range is specified by start and end byte offsets (inclusive).
+     *
+     * @param key the key containing the string value to analyze
+     * @param start the start offset (byte index, can be negative for end-relative indexing)
+     * @param end the end offset (byte index, can be negative for end-relative indexing)
+     * @return the number of bits set to 1 within the specified range
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
+    public long bitcount(final String key, final long start, final long end) {
+        return executeCommandWithGlide("BITCOUNT", () -> glideClient.bitcount(key, start, end).get());
+    }
+
+    /**
+     * Count the number of set bits in a string.
+     *
+     * @param key the key
+     * @return the number of bits set to 1
+     */
+    public long bitcount(final byte[] key) {
+        return executeCommandWithGlide(
+                "BITCOUNT", () -> glideClient.bitcount(GlideString.of(key)).get());
+    }
+
+    /**
+     * Count the number of set bits in a string at a range.
+     *
+     * @param key the key
+     * @param start the start offset (byte index)
+     * @param end the end offset (byte index)
+     * @return the number of bits set to 1
+     */
+    public long bitcount(final byte[] key, final long start, final long end) {
+        return executeCommandWithGlide(
+                "BITCOUNT", () -> glideClient.bitcount(GlideString.of(key), start, end).get());
+    }
+
+    /**
+     * Count the number of set bits in a string at a range with bit count option.
+     *
+     * @param key the key
+     * @param start the start offset
+     * @param end the end offset
+     * @param option the bit count option (BYTE or BIT)
+     * @return the number of bits set to 1
+     */
+    public long bitcount(
+            final byte[] key, final long start, final long end, final BitCountOption option) {
+        return executeCommandWithGlide(
+                "BITCOUNT",
+                () -> {
+                    BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(option);
+                    return glideClient.bitcount(GlideString.of(key), start, end, indexType).get();
+                });
+    }
+
+    /**
+     * Count the number of set bits in a string at a range with bit count option.
+     *
+     * @param key the key
+     * @param start the start offset
+     * @param end the end offset
+     * @param option the bit count option (BYTE or BIT)
+     * @return the number of bits set to 1
+     */
+    public long bitcount(
+            final String key, final long start, final long end, final BitCountOption option) {
+        return executeCommandWithGlide(
+                "BITCOUNT",
+                () -> {
+                    BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(option);
+                    return glideClient.bitcount(key, start, end, indexType).get();
+                });
+    }
+
+    /**
+     * Return the position of the first bit set to 1 or 0 in a string.
+     *
+     * @param key the key
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @return the position of the first bit set to the specified value, or -1 if not found
+     */
+    public long bitpos(final String key, final boolean value) {
+        return executeCommandWithGlide("BITPOS", () -> glideClient.bitpos(key, value ? 1L : 0L).get());
+    }
+
+    /**
+     * Return the position of the first bit set to 1 or 0 in a string within a range.
+     *
+     * @param key the key
+     * @param value the bit value to search for (true for 1, false for 0) /** Return the position of
+     *     the first bit set to 1 or 0 in a string.
+     * @param key the key
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @return the position of the first bit set to the specified value, or -1 if not found
+     */
+    public long bitpos(final byte[] key, final boolean value) {
+        return executeCommandWithGlide(
+                "BITPOS", () -> glideClient.bitpos(GlideString.of(key), value ? 1L : 0L).get());
+    }
+
+    /**
+     * /** Return the position of the first bit set to 1 or 0 in a string with parameters.
+     *
+     * @param key the key
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @param params the bitpos parameters
+     * @return the position of the first bit set to the specified value, or -1 if not found
+     */
+    public long bitpos(final String key, final boolean value, final BitPosParams params) {
+        checkNotClosed();
+        try {
+            long bitValue = value ? 1L : 0L;
+
+            if (params.getStart() != null && params.getEnd() != null) {
+                if (params.getModifier() != null) {
+                    BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(params.getModifier());
+                    return glideClient
+                            .bitpos(key, bitValue, params.getStart(), params.getEnd(), indexType)
+                            .get();
+                } else {
+                    return glideClient.bitpos(key, bitValue, params.getStart(), params.getEnd()).get();
+                }
+            } else if (params.getStart() != null) {
+                return glideClient.bitpos(key, bitValue, params.getStart()).get();
+            } else {
+                return glideClient.bitpos(key, bitValue).get();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Return the position of the first bit set to 1 or 0 in a string with parameters.
+     *
+     * @param key the key
+     * @param value the bit value to search for (true for 1, false for 0)
+     * @param params the bitpos parameters
+     * @return the position of the first bit set to the specified value, or -1 if not found
+     */
+    public long bitpos(final byte[] key, final boolean value, final BitPosParams params) {
+        checkNotClosed();
+        try {
+            long bitValue = value ? 1L : 0L;
+            GlideString glideKey = GlideString.of(key);
+
+            if (params.getStart() != null && params.getEnd() != null) {
+                if (params.getModifier() != null) {
+                    BitmapIndexType indexType = convertBitCountOptionToBitmapIndexType(params.getModifier());
+                    return glideClient
+                            .bitpos(glideKey, bitValue, params.getStart(), params.getEnd(), indexType)
+                            .get();
+                } else {
+                    return glideClient.bitpos(glideKey, bitValue, params.getStart(), params.getEnd()).get();
+                }
+            } else if (params.getStart() != null) {
+                return glideClient.bitpos(glideKey, bitValue, params.getStart()).get();
+            } else {
+                return glideClient.bitpos(glideKey, bitValue).get();
+            }
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITPOS operation failed", e);
+        }
+    }
+
+    /**
+     * Perform bitwise operations between strings.
+     *
+     * @param op the bitwise operation (AND, OR, XOR, NOT)
+     * @param destKey the destination key where the result will be stored
+     * @param srcKeys the source keys for the bitwise operation
+     * @return the size of the string stored in the destination key
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
+    public long bitop(final BitOP op, final String destKey, final String... srcKeys) {
+        checkNotClosed();
+        try {
+            BitwiseOperation operation;
+            switch (op) {
+                case AND:
+                    operation = BitwiseOperation.AND;
+                    break;
+                case OR:
+                    operation = BitwiseOperation.OR;
+                    break;
+                case XOR:
+                    operation = BitwiseOperation.XOR;
+                    break;
+                case NOT:
+                    operation = BitwiseOperation.NOT;
+                    break;
+                case DIFF:
+                case DIFF1:
+                case ANDOR:
+                case ONE:
+                    // These operations are not supported by GLIDE's BitwiseOperation enum
+                    throw new UnsupportedOperationException(
+                            "BITOP operation " + op + " is not supported by GLIDE");
+                default:
+                    throw new IllegalArgumentException("Unsupported bitwise operation: " + op);
+            }
+            return glideClient.bitop(operation, destKey, srcKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITOP operation failed", e);
+        }
+    }
+
+    /**
+     * Perform bitwise operations between strings.
+     *
+     * @param op the bitwise operation (AND, OR, XOR, NOT)
+     * @param destKey the destination key where the result will be stored
+     * @param srcKeys the source keys for the bitwise operation
+     * @return the size of the string stored in the destination key
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.6.0
+     */
+    public long bitop(final BitOP op, final byte[] destKey, final byte[]... srcKeys) {
+        checkNotClosed();
+        try {
+            BitwiseOperation operation;
+            switch (op) {
+                case AND:
+                    operation = BitwiseOperation.AND;
+                    break;
+                case OR:
+                    operation = BitwiseOperation.OR;
+                    break;
+                case XOR:
+                    operation = BitwiseOperation.XOR;
+                    break;
+                case NOT:
+                    operation = BitwiseOperation.NOT;
+                    break;
+                case DIFF:
+                case DIFF1:
+                case ANDOR:
+                case ONE:
+                    // These operations are not supported by GLIDE's BitwiseOperation enum
+                    throw new UnsupportedOperationException(
+                            "BITOP operation " + op + " is not supported by GLIDE");
+                default:
+                    throw new IllegalArgumentException("Unsupported bitwise operation: " + op);
+            }
+            String[] stringSrcKeys = new String[srcKeys.length];
+            for (int i = 0; i < srcKeys.length; i++) {
+                stringSrcKeys[i] = new String(srcKeys[i], VALKEY_CHARSET);
+            }
+            return glideClient.bitop(operation, new String(destKey, VALKEY_CHARSET), stringSrcKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITOP operation failed", e);
+        }
+    }
+
+    /**
+     * Perform multiple bitfield operations on a string.
+     *
+     * @param key the key
+     * @param arguments the bitfield arguments
+     * @return list of results from the bitfield operations
+     */
+    public List<Long> bitfield(final String key, final String... arguments) {
+        checkNotClosed();
+        try {
+            if (arguments.length == 0) {
+                // Empty arguments return empty array
+                return Arrays.asList();
+            }
+
+            // Parse Jedis-style arguments into GLIDE BitFieldSubCommands
+            BitFieldSubCommands[] subCommands = parseBitFieldArguments(arguments);
+            Long[] result = glideClient.bitfield(key, subCommands).get();
+            return Arrays.asList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Perform multiple bitfield operations on a string.
+     *
+     * @param key the key
+     * @param arguments the bitfield arguments
+     * @return list of results from the bitfield operations
+     */
+    public List<Long> bitfield(final byte[] key, final byte[]... arguments) {
+        checkNotClosed();
+        try {
+            if (arguments.length == 0) {
+                // Empty arguments return empty array
+                return Arrays.asList();
+            }
+
+            // Convert byte[] arguments to String arguments
+            String[] stringArguments = new String[arguments.length];
+            for (int i = 0; i < arguments.length; i++) {
+                stringArguments[i] = new String(arguments[i], VALKEY_CHARSET);
+            }
+
+            // Parse Jedis-style arguments into GLIDE BitFieldSubCommands
+            BitFieldSubCommands[] subCommands = parseBitFieldArguments(stringArguments);
+            Long[] result = glideClient.bitfield(GlideString.of(key), subCommands).get();
+            return Arrays.asList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Perform read-only bitfield operations on a string.
+     *
+     * @param key the key
+     * @param arguments the bitfield arguments
+     * @return list of results from the bitfield operations
+     */
+    public List<Long> bitfieldReadonly(final String key, final String... arguments) {
+        checkNotClosed();
+        try {
+            if (arguments.length == 0) {
+                // Empty arguments return empty array
+                return Arrays.asList();
+            }
+
+            // Parse Jedis-style arguments into GLIDE BitFieldReadOnlySubCommands (only GET operations)
+            BitFieldReadOnlySubCommands[] subCommands = parseBitFieldReadOnlyArguments(arguments);
+            Long[] result = glideClient.bitfieldReadOnly(key, subCommands).get();
+            return Arrays.asList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD_RO operation failed", e);
+        }
+    }
+
+    /**
+     * Perform read-only bitfield operations on a string.
+     *
+     * @param key the key
+     * @param arguments the bitfield arguments
+     * @return list of results from the bitfield operations
+     */
+    public List<Long> bitfieldReadonly(final byte[] key, final byte[]... arguments) {
+        checkNotClosed();
+        try {
+            if (arguments.length == 0) {
+                // Empty arguments return empty array
+                return Arrays.asList();
+            }
+
+            // Convert byte[] arguments to String arguments
+            String[] stringArguments = new String[arguments.length];
+            for (int i = 0; i < arguments.length; i++) {
+                stringArguments[i] = new String(arguments[i], VALKEY_CHARSET);
+            }
+
+            // Parse Jedis-style arguments into GLIDE BitFieldReadOnlySubCommands (only GET operations)
+            BitFieldReadOnlySubCommands[] subCommands = parseBitFieldReadOnlyArguments(stringArguments);
+            Long[] result = glideClient.bitfieldReadOnly(GlideString.of(key), subCommands).get();
+            return Arrays.asList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BITFIELD_RO operation failed", e);
+        }
+    }
+
+    /**
+     * Parse Jedis-style bitfield arguments into GLIDE BitFieldSubCommands.
+     *
+     * @param args the Jedis-style arguments (GET/SET/INCRBY/OVERFLOW followed by parameters)
+     * @return array of BitFieldSubCommands
+     */
+    private static BitFieldSubCommands[] parseBitFieldArguments(String[] args) {
+        List<BitFieldSubCommands> commands = new ArrayList<>();
+
+        for (int i = 0; i < args.length; ) {
+            String command = args[i].toUpperCase();
+
+            switch (command) {
+                case "GET":
+                    if (i + 2 < args.length) {
+                        commands.add(createBitFieldGet(args[i + 1], args[i + 2]));
+                        i += 3;
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GET command requires encoding and offset parameters");
+                    }
+                    break;
+
+                case "SET":
+                    if (i + 3 < args.length) {
+                        long value = Long.parseLong(args[i + 3]);
+                        commands.add(createBitFieldSet(args[i + 1], args[i + 2], value));
+                        i += 4;
+                    } else {
+                        throw new IllegalArgumentException(
+                                "SET command requires encoding, offset, and value parameters");
+                    }
+                    break;
+
+                case "INCRBY":
+                    if (i + 3 < args.length) {
+                        long increment = Long.parseLong(args[i + 3]);
+                        commands.add(createBitFieldIncrby(args[i + 1], args[i + 2], increment));
+                        i += 4;
+                    } else {
+                        throw new IllegalArgumentException(
+                                "INCRBY command requires encoding, offset, and increment parameters");
+                    }
+                    break;
+
+                case "OVERFLOW":
+                    if (i + 1 < args.length) {
+                        BitOverflowControl control = parseOverflowControl(args[i + 1]);
+                        commands.add(new BitFieldOverflow(control));
+                        i += 2;
+                    } else {
+                        throw new IllegalArgumentException("OVERFLOW command requires control parameter");
+                    }
+                    break;
+
+                default:
+                    throw new IllegalArgumentException("Unknown bitfield command: " + command);
+            }
+        }
+
+        return commands.toArray(new BitFieldSubCommands[0]);
+    }
+
+    /**
+     * Parse Jedis-style bitfield arguments into GLIDE BitFieldReadOnlySubCommands (only GET
+     * operations).
+     *
+     * @param args the Jedis-style arguments (only GET operations allowed)
+     * @return array of BitFieldReadOnlySubCommands
+     */
+    private static BitFieldReadOnlySubCommands[] parseBitFieldReadOnlyArguments(String[] args) {
+        List<BitFieldReadOnlySubCommands> commands = new ArrayList<>();
+
+        for (int i = 0; i < args.length; ) {
+            String command = args[i].toUpperCase();
+
+            if ("GET".equals(command)) {
+                if (i + 2 < args.length) {
+                    commands.add(createBitFieldGet(args[i + 1], args[i + 2]));
+                    i += 3;
+                } else {
+                    throw new IllegalArgumentException("GET command requires encoding and offset parameters");
+                }
+            } else {
+                throw new IllegalArgumentException(
+                        "BITFIELD_RO only supports GET operations, found: " + command);
+            }
+        }
+
+        return commands.toArray(new BitFieldReadOnlySubCommands[0]);
+    }
+
+    /**
+     * Parse encoding string into BitEncoding object.
+     *
+     * @param encodingStr encoding string (e.g., "u4", "i8")
+     * @return BitEncoding object (UnsignedEncoding or SignedEncoding)
+     */
+    private static Object parseEncoding(String encodingStr) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            return new UnsignedEncoding(bits);
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            return new SignedEncoding(bits);
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /**
+     * Parse offset string into BitOffset object.
+     *
+     * @param offsetStr offset string (e.g., "0", "#1")
+     * @return BitOffset object (Offset or OffsetMultiplier)
+     */
+    private static Object parseOffset(String offsetStr) {
+        if (offsetStr.startsWith("#")) {
+            long offset = Long.parseLong(offsetStr.substring(1));
+            return new OffsetMultiplier(offset);
+        } else {
+            long offset = Long.parseLong(offsetStr);
+            return new Offset(offset);
+        }
+    }
+
+    /** Create BitFieldGet with proper interface types. */
+    private static BitFieldGet createBitFieldGet(String encodingStr, String offsetStr) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            UnsignedEncoding encoding = new UnsignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldGet(encoding, new OffsetMultiplier(offset));
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldGet(encoding, new Offset(offset));
+            }
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            SignedEncoding encoding = new SignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldGet(encoding, new OffsetMultiplier(offset));
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldGet(encoding, new Offset(offset));
+            }
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /** Create BitFieldSet with proper interface types. */
+    private static BitFieldSet createBitFieldSet(String encodingStr, String offsetStr, long value) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            UnsignedEncoding encoding = new UnsignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldSet(encoding, new OffsetMultiplier(offset), value);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldSet(encoding, new Offset(offset), value);
+            }
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            SignedEncoding encoding = new SignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldSet(encoding, new OffsetMultiplier(offset), value);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldSet(encoding, new Offset(offset), value);
+            }
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /** Create BitFieldIncrby with proper interface types. */
+    private static BitFieldIncrby createBitFieldIncrby(
+            String encodingStr, String offsetStr, long increment) {
+        if (encodingStr.startsWith("u")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            UnsignedEncoding encoding = new UnsignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldIncrby(encoding, new OffsetMultiplier(offset), increment);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldIncrby(encoding, new Offset(offset), increment);
+            }
+        } else if (encodingStr.startsWith("i")) {
+            long bits = Long.parseLong(encodingStr.substring(1));
+            SignedEncoding encoding = new SignedEncoding(bits);
+
+            if (offsetStr.startsWith("#")) {
+                long offset = Long.parseLong(offsetStr.substring(1));
+                return new BitFieldIncrby(encoding, new OffsetMultiplier(offset), increment);
+            } else {
+                long offset = Long.parseLong(offsetStr);
+                return new BitFieldIncrby(encoding, new Offset(offset), increment);
+            }
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid encoding format: " + encodingStr + ". Must start with 'u' or 'i'");
+        }
+    }
+
+    /**
+     * Parse overflow control string into BitOverflowControl enum.
+     *
+     * @param controlStr control string (e.g., "WRAP", "SAT", "FAIL")
+     * @return BitOverflowControl enum
+     */
+    private static BitOverflowControl parseOverflowControl(String controlStr) {
+        switch (controlStr.toUpperCase()) {
+            case "WRAP":
+                return BitOverflowControl.WRAP;
+            case "SAT":
+                return BitOverflowControl.SAT;
+            case "FAIL":
+                return BitOverflowControl.FAIL;
+            default:
+                throw new IllegalArgumentException(
+                        "Invalid overflow control: " + controlStr + ". Must be WRAP, SAT, or FAIL");
+        }
+    }
+
+    /** Helper method to concatenate string arrays. */
+    private static String[] concatenateArrays(String[] array1, String[] array2) {
+        String[] result = new String[array1.length + array2.length];
+        System.arraycopy(array1, 0, result, 0, array1.length);
+        System.arraycopy(array2, 0, result, array1.length, array2.length);
+        return result;
+    }
+
+    // ===== HYPERLOGLOG COMMANDS =====
+
+    /**
+     * Adds all elements to the HyperLogLog data structure stored at the specified key. Creates a new
+     * structure if the key does not exist. HyperLogLog is a probabilistic data structure used for
+     * estimating the cardinality of large datasets.
+     *
+     * @param key the key of the HyperLogLog data structure
+     * @param elements the elements to add to the HyperLogLog (must not be null)
+     * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
+    public long pfadd(String key, String... elements) {
+        return executeCommandWithGlide(
+                "PFADD",
+                () -> {
+                    Boolean result = glideClient.pfadd(key, elements).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Adds all elements to the HyperLogLog data structure stored at the specified key. Creates a new
+     * structure if the key does not exist. HyperLogLog is a probabilistic data structure used for
+     * estimating the cardinality of large datasets.
+     *
+     * @param key the key of the HyperLogLog data structure
+     * @param elements the elements to add to the HyperLogLog (must not be null)
+     * @return 1 if the HyperLogLog is newly created or modified, 0 otherwise
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
+    public long pfadd(final byte[] key, final byte[]... elements) {
+        return executeCommandWithGlide(
+                "PFADD",
+                () -> {
+                    String[] stringElements = new String[elements.length];
+                    for (int i = 0; i < elements.length; i++) {
+                        stringElements[i] = new String(elements[i], VALKEY_CHARSET);
+                    }
+                    Boolean result = glideClient.pfadd(new String(key, VALKEY_CHARSET), stringElements).get();
+                    return result ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key. The
+     * cardinality is the approximate number of unique elements that have been added to the set.
+     *
+     * @param key the key of the HyperLogLog data structure
+     * @return the approximated cardinality of the HyperLogLog data structure (0 if key doesn't exist)
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
+    public long pfcount(String key) {
+        return executeCommandWithGlide("PFCOUNT", () -> glideClient.pfcount(new String[] {key}).get());
+    }
+
+    /**
+     * Estimates the cardinality of the data stored in multiple HyperLogLog structures by calculating
+     * the combined cardinality of multiple keys. This operation is equivalent to performing a union
+     * of the HyperLogLog structures and then counting the cardinality.
+     *
+     * @param keys the keys of the HyperLogLog data structures to be analyzed (must not be empty)
+     * @return the approximated cardinality of the combined HyperLogLog data structures
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
+    public long pfcount(String... keys) {
+        return executeCommandWithGlide("PFCOUNT", () -> glideClient.pfcount(keys).get());
+    }
+
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it
+     * is treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * @param destKey the key of the destination HyperLogLog where the merged data sets will be stored
+     * @param sourceKeys the keys of the HyperLogLog structures to be merged
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
+    public String pfmerge(String destKey, String... sourceKeys) {
+        return executeCommandWithGlide("PFMERGE", () -> glideClient.pfmerge(destKey, sourceKeys).get());
+    }
+
+    /**
+     * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key.
+     *
+     * @param key the key of the HyperLogLog data structure
+     * @return the approximated cardinality of the HyperLogLog data structure
+     */
+    public long pfcount(final byte[] key) {
+        return executeCommandWithGlide(
+                "PFCOUNT", () -> glideClient.pfcount(new String[] {new String(key, VALKEY_CHARSET)}).get());
+    }
+
+    /**
+     * Estimates the cardinality of the union of multiple HyperLogLog data structures.
+     *
+     * @param keys the keys of the HyperLogLog data structures
+     * @return the approximated cardinality of the union of the HyperLogLog data structures
+     */
+    public long pfcount(final byte[]... keys) {
+        checkNotClosed();
+        try {
+            String[] stringKeys = new String[keys.length];
+            for (int i = 0; i < keys.length; i++) {
+                stringKeys[i] = new String(keys[i], VALKEY_CHARSET);
+            }
+            return glideClient.pfcount(stringKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFCOUNT operation failed", e);
+        }
+    }
+
+    /**
+     * Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it
+     * is treated as one of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+     *
+     * @param destKey the key of the destination HyperLogLog where the merged data sets will be stored
+     * @param sourceKeys the keys of the HyperLogLog structures to be merged
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails
+     * @since Valkey 2.8.9
+     */
+    public String pfmerge(final byte[] destKey, final byte[]... sourceKeys) {
+        checkNotClosed();
+        try {
+            String[] stringSourceKeys = new String[sourceKeys.length];
+            for (int i = 0; i < sourceKeys.length; i++) {
+                stringSourceKeys[i] = new String(sourceKeys[i], VALKEY_CHARSET);
+            }
+            return glideClient.pfmerge(new String(destKey, VALKEY_CHARSET), stringSourceKeys).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("PFMERGE operation failed", e);
+        }
+    }
+
+    // ========== sendCommand Methods ==========
+
+    /**
+     * Sends a Valkey command using the GLIDE client with full compatibility to original Jedis.
+     *
+     * <p>This method provides complete compatibility with the original Jedis sendCommand
+     * functionality by using GLIDE's customCommand directly.
+     *
+     * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
+     * sendCommand behavior. All Valkey commands and their optional arguments are supported through
+     * GLIDE's customCommand.
+     *
+     * @param cmd the Valkey command to execute
+     * @param args the command arguments as byte arrays
+     * @return the command response from GLIDE customCommand
+     * @throws JedisException if the command fails or is not supported
+     * @throws UnsupportedOperationException if the command is not supported in the compatibility
+     *     layer
+     */
+    public Object sendCommand(ProtocolCommand cmd, byte[]... args) {
+        checkNotClosed();
+        // Check if it's a Protocol.Command (standard Valkey commands)
+        if (cmd instanceof Protocol.Command) {
+            Protocol.Command command = (Protocol.Command) cmd;
+            try {
+                return executeProtocolCommandWithByteArgs(command.name(), args);
+            } catch (Exception e) {
+                throw new JedisException("Command execution failed: " + command.name(), e);
+            }
+        }
+
+        // Future expansion: Add support for other ProtocolCommand implementations
+        throw new UnsupportedOperationException(
+                "ProtocolCommand type "
+                        + cmd.getClass().getSimpleName()
+                        + " is not supported in GLIDE compatibility layer. "
+                        + "Supported types: Protocol.Command. Use specific typed methods instead.");
+    }
+
+    /**
+     * Sends a command to the Valkey server with string arguments.
+     *
+     * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
+     * sendCommand functionality. All Valkey commands and their optional arguments are supported.
+     *
+     * @param cmd the Valkey command to execute
+     * @param args the command arguments as strings
+     * @return the command response from GLIDE customCommand
+     * @throws JedisException if the command fails or is not supported
+     * @throws UnsupportedOperationException if the command is not supported in the compatibility
+     *     layer
+     */
+    public Object sendCommand(ProtocolCommand cmd, String... args) {
+        checkNotClosed();
+        // Check if it's a Protocol.Command (standard Valkey commands)
+        if (cmd instanceof Protocol.Command) {
+            Protocol.Command command = (Protocol.Command) cmd;
+            try {
+                return executeProtocolCommandWithStringArgs(command.name(), args);
+            } catch (Exception e) {
+                throw new JedisException("Command execution failed: " + command.name(), e);
+            }
+        }
+
+        // Future expansion: Add support for other ProtocolCommand implementations
+        throw new UnsupportedOperationException(
+                "ProtocolCommand type "
+                        + cmd.getClass().getSimpleName()
+                        + " is not supported in GLIDE compatibility layer. "
+                        + "Supported types: Protocol.Command. Use specific typed methods instead.");
+    }
+
+    /**
+     * Sends a command to the Valkey server without arguments.
+     *
+     * <p><b>Compatibility Note:</b> This method provides full compatibility with original Jedis
+     * sendCommand functionality. All Valkey commands are supported.
+     *
+     * @param cmd the Valkey command to execute
+     * @return the command response from GLIDE customCommand
+     * @throws JedisException if the command fails or is not supported
+     * @throws UnsupportedOperationException if the command is not supported in the compatibility
+     *     layer
+     */
+    public Object sendCommand(ProtocolCommand cmd) {
+        return sendCommand(cmd, new byte[0][]);
+    }
+
+    /**
+     * Executes a Valkey command using GLIDE's string customCommand for optimal performance. This
+     * avoids unnecessary string→byte[]→GlideString conversions.
+     *
+     * @param commandName the Valkey command name
+     * @param args the command arguments as strings
+     * @return the command response from GLIDE customCommand
+     * @throws Exception if the command execution fails
+     */
+    private Object executeProtocolCommandWithStringArgs(String commandName, String... args)
+            throws Exception {
+        // Convert command and args to String array for GLIDE's customCommand(String[])
+        String[] stringArgs = new String[args.length + 1];
+        stringArgs[0] = commandName;
+        System.arraycopy(args, 0, stringArgs, 1, args.length);
+
+        try {
+            return glideClient.customCommand(stringArgs).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("Command " + commandName + " execution failed", e);
+        }
+    }
+
+    /**
+     * Executes a Valkey command using GLIDE's binary customCommand for byte array arguments. This
+     * preserves binary data integrity for commands that need exact byte representation.
+     *
+     * @param commandName the Valkey command name
+     * @param args the command arguments as byte arrays
+     * @return the command response from GLIDE customCommand
+     * @throws Exception if the command execution fails
+     */
+    private Object executeProtocolCommandWithByteArgs(String commandName, byte[]... args)
+            throws Exception {
+        // Convert command and args to GlideString array for GLIDE's customCommand(GlideString[])
+        GlideString[] glideArgs = new GlideString[args.length + 1];
+        glideArgs[0] = GlideString.of(commandName);
+        for (int i = 0; i < args.length; i++) {
+            glideArgs[i + 1] = GlideString.of(args[i]);
+        }
+
+        try {
+            Object result = glideClient.customCommand(glideArgs).get();
+            // Convert GlideString to String for Jedis compatibility
+            if (result instanceof GlideString) {
+                return ((GlideString) result).toString();
+            }
+            return result;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("Command " + commandName + " execution failed", e);
+        }
+    }
+
+    // ===== HASH COMMANDS =====
+
+    /**
+     * Sets the specified field in the hash stored at key to value.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
+     */
+    public long hset(String key, String field, String value) {
+        return executeCommandWithGlide(
+                "HSET",
+                () -> {
+                    Map<String, String> fieldValueMap = new HashMap<>();
+                    fieldValueMap.put(field, value);
+                    return glideClient.hset(key, fieldValueMap).get();
+                });
+    }
+
+    /**
+     * Sets the specified field in the hash stored at key to value (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
+     */
+    public long hset(final byte[] key, final byte[] field, final byte[] value) {
+        return executeCommandWithGlide(
+                "HSET",
+                () -> {
+                    Map<GlideString, GlideString> fieldValueMap = new HashMap<>();
+                    fieldValueMap.put(GlideString.of(field), GlideString.of(value));
+                    return glideClient.hset(GlideString.of(key), fieldValueMap).get();
+                });
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hset(String key, Map<String, String> hash) {
+        return executeCommandWithGlide("HSET", () -> glideClient.hset(key, hash).get());
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hset(final byte[] key, final Map<byte[], byte[]> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            Map<GlideString, GlideString> glideHash = new HashMap<>();
+            for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                glideHash.put(GlideString.of(entry.getKey()), GlideString.of(entry.getValue()));
+            }
+            return glideClient.hset(GlideString.of(key), glideHash).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the value associated with field in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the value associated with field, or null when field is not present in the hash or key
+     *     does not exist
+     */
+    public String hget(String key, String field) {
+        return executeCommandWithGlide("HGET", () -> glideClient.hget(key, field).get());
+    }
+
+    /**
+     * Returns the value associated with field in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the value associated with field, or null when field is not present in the hash or key
+     *     does not exist
+     */
+    public byte[] hget(final byte[] key, final byte[] field) {
+        return executeCommandWithGlide(
+                "HGET",
+                () -> {
+                    GlideString result = glideClient.hget(GlideString.of(key), GlideString.of(field)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key. This command
+     * overwrites any specified fields already existing in the hash.
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return "OK"
+     */
+    public String hmset(String key, Map<String, String> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            // Use customCommand to execute HMSET and get the actual server response
+            List<String> args = new ArrayList<>();
+            args.add("HMSET");
+            args.add(key);
+            for (Map.Entry<String, String> entry : hash.entrySet()) {
+                args.add(entry.getKey());
+                args.add(entry.getValue());
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result != null ? result.toString() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HMSET operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param hash a map of field-value pairs to set in the hash
+     * @return "OK"
+     */
+    public String hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            // Use customCommand to execute HMSET and get the actual server response
+            List<String> args = new ArrayList<>();
+            args.add("HMSET");
+            args.add(new String(key));
+            for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                args.add(new String(entry.getKey()));
+                args.add(new String(entry.getValue()));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result != null ? result.toString() : null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HMSET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param fields the fields in the hash
+     * @return a list of values associated with the given fields, in the same order as they are
+     *     requested
+     */
+    public List<String> hmget(String key, String... fields) {
+        return executeCommandWithGlide(
+                "HMGET",
+                () -> {
+                    String[] result = glideClient.hmget(key, fields).get();
+                    return Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param fields the fields in the hash
+     * @return a list of values associated with the given fields, in the same order as they are
+     *     requested
+     */
+    public List<byte[]> hmget(final byte[] key, final byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideFields = convertToGlideStringArray(fields);
+            GlideString[] result = glideClient.hmget(GlideString.of(key), glideFields).get();
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs != null ? gs.getBytes() : null);
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HMGET operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return a map of fields and their values stored in the hash, or an empty map when key does not
+     *     exist
+     */
+    public Map<String, String> hgetAll(String key) {
+        return executeCommandWithGlide("HGETALL", () -> glideClient.hgetall(key).get());
+    }
+
+    /**
+     * Returns all fields and values of the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a map of fields and their values stored in the hash, or an empty map when key does not
+     *     exist
+     */
+    public Map<byte[], byte[]> hgetAll(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            Map<GlideString, GlideString> result = glideClient.hgetall(GlideString.of(key)).get();
+            Map<byte[], byte[]> byteResult = new HashMap<>();
+            for (Map.Entry<GlideString, GlideString> entry : result.entrySet()) {
+                byteResult.put(entry.getKey().getBytes(), entry.getValue().getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETALL operation failed", e);
+        }
+    }
+
+    /**
+     * Removes the specified fields from the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param fields the fields to remove from the hash
+     * @return the number of fields that were removed from the hash, not including specified but non
+     *     existing fields
+     */
+    public long hdel(String key, String... fields) {
+        return executeCommandWithGlide("HDEL", () -> glideClient.hdel(key, fields).get());
+    }
+
+    /**
+     * Removes the specified fields from the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param fields the fields to remove from the hash
+     * @return the number of fields that were removed from the hash, not including specified but non
+     *     existing fields
+     */
+    public long hdel(final byte[] key, final byte[]... fields) {
+        return executeCommandWithGlide(
+                "HDEL",
+                () -> {
+                    GlideString[] glideFields = convertToGlideStringArray(fields);
+                    return glideClient.hdel(GlideString.of(key), glideFields).get();
+                });
+    }
+
+    /**
+     * Returns if field is an existing field in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return true if the hash contains field, false if the hash does not contain field, or key does
+     *     not exist
+     */
+    public boolean hexists(String key, String field) {
+        return executeCommandWithGlide("HEXISTS", () -> glideClient.hexists(key, field).get());
+    }
+
+    /**
+     * Returns if field is an existing field in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return true if the hash contains field, false if the hash does not contain field, or key does
+     *     not exist
+     */
+    public boolean hexists(final byte[] key, final byte[] field) {
+        return executeCommandWithGlide(
+                "HEXISTS", () -> glideClient.hexists(GlideString.of(key), GlideString.of(field)).get());
+    }
+
+    /**
+     * Returns the number of fields contained in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return the number of fields in the hash, or 0 when key does not exist
+     */
+    public long hlen(String key) {
+        return executeCommandWithGlide("HLEN", () -> glideClient.hlen(key).get());
+    }
+
+    /**
+     * Returns the number of fields contained in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return the number of fields in the hash, or 0 when key does not exist
+     */
+    public long hlen(final byte[] key) {
+        return executeCommandWithGlide("HLEN", () -> glideClient.hlen(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns all field names in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return a set of field names in the hash, or an empty set when key does not exist
+     */
+    public Set<String> hkeys(String key) {
+        return executeCommandWithGlide(
+                "HKEYS",
+                () -> {
+                    String[] keys = glideClient.hkeys(key).get();
+                    return new HashSet<>(Arrays.asList(keys));
+                });
+    }
+
+    /**
+     * Returns all field names in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a set of field names in the hash, or an empty set when key does not exist
+     */
+    public Set<byte[]> hkeys(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] keys = glideClient.hkeys(GlideString.of(key)).get();
+            Set<GlideString> glideSet = new HashSet<>();
+            for (GlideString gs : keys) {
+                glideSet.add(gs);
+            }
+            return new GlideStringSetWrapper(glideSet);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HKEYS operation failed", e);
+        }
+    }
+
+    /**
+     * Returns all values in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @return a list of values in the hash, or an empty list when key does not exist
+     */
+    public List<String> hvals(String key) {
+        return executeCommandWithGlide(
+                "HVALS",
+                () -> {
+                    String[] values = glideClient.hvals(key).get();
+                    return Arrays.asList(values);
+                });
+    }
+
+    /**
+     * Returns all values in the hash stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a list of values in the hash, or an empty list when key does not exist
+     */
+    public List<byte[]> hvals(final byte[] key) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] values = glideClient.hvals(GlideString.of(key)).get();
+            List<byte[]> byteValues = new ArrayList<>();
+            for (GlideString gs : values) {
+                byteValues.add(gs.getBytes());
+            }
+            return byteValues;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HVALS operation failed", e);
+        }
+    }
+
+    /**
+     * Increments the number stored at field in the hash stored at key by increment.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public long hincrBy(String key, String field, long value) {
+        return executeCommandWithGlide("HINCRBY", () -> glideClient.hincrBy(key, field, value).get());
+    }
+
+    /**
+     * Increments the number stored at field in the hash stored at key by increment (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public long hincrBy(final byte[] key, final byte[] field, final long value) {
+        return executeCommandWithGlide(
+                "HINCRBY",
+                () -> glideClient.hincrBy(GlideString.of(key), GlideString.of(field), value).get());
+    }
+
+    /**
+     * Increment the specified field of a hash stored at key, and representing a floating point
+     * number, by the specified increment.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public double hincrByFloat(String key, String field, double value) {
+        return executeCommandWithGlide(
+                "HINCRBYFLOAT", () -> glideClient.hincrByFloat(key, field, value).get());
+    }
+
+    /**
+     * Increment the specified field of a hash stored at key, and representing a floating point
+     * number, by the specified increment (binary version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the increment value
+     * @return the value at field after the increment operation
+     */
+    public double hincrByFloat(final byte[] key, final byte[] field, final double value) {
+        return executeCommandWithGlide(
+                "HINCRBYFLOAT",
+                () -> glideClient.hincrByFloat(GlideString.of(key), GlideString.of(field), value).get());
+    }
+
+    /**
+     * Sets field in the hash stored at key to value, only if field does not yet exist.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and no operation was performed
+     */
+    public long hsetnx(String key, String field, String value) {
+        return executeCommandWithGlide(
+                "HSETNX",
+                () -> {
+                    return glideClient.hsetnx(key, field, value).get() ? 1L : 0L;
+                });
+    }
+
+    /**
+     * Sets field in the hash stored at key to value, only if field does not yet exist (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and no operation was performed
+     */
+    public long hsetnx(final byte[] key, final byte[] field, final byte[] value) {
+        return executeCommandWithGlide(
+                "HSETNX",
+                () -> {
+                    return glideClient
+                                    .hsetnx(GlideString.of(key), GlideString.of(field), GlideString.of(value))
+                                    .get()
+                            ? 1L
+                            : 0L;
+                });
+    }
+
+    /**
+     * Returns the string length of the value associated with field in the hash stored at key.
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the string length of the value associated with field, or 0 when field is not present in
+     *     the hash or key does not exist
+     */
+    public long hstrlen(String key, String field) {
+        return executeCommandWithGlide("HSTRLEN", () -> glideClient.hstrlen(key, field).get());
+    }
+
+    /**
+     * Returns the string length of the value associated with field in the hash stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param field the field in the hash
+     * @return the string length of the value associated with field, or 0 when field is not present in
+     *     the hash or key does not exist
+     */
+    public long hstrlen(final byte[] key, final byte[] field) {
+        return executeCommandWithGlide(
+                "HSTRLEN", () -> glideClient.hstrlen(GlideString.of(key), GlideString.of(field)).get());
+    }
+
+    /**
+     * Returns a random field from the hash value stored at key.
+     *
+     * @param key the key of the hash
+     * @return a random field from the hash, or null when key does not exist
+     */
+    public String hrandfield(String key) {
+        return executeCommandWithGlide("HRANDFIELD", () -> glideClient.hrandfield(key).get());
+    }
+
+    /**
+     * Returns a random field from the hash value stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @return a random field from the hash, or null when key does not exist
+     */
+    public byte[] hrandfield(final byte[] key) {
+        return executeCommandWithGlide(
+                "HRANDFIELD",
+                () -> {
+                    GlideString result = glideClient.hrandfield(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<String> hrandfield(String key, long count) {
+        return executeCommandWithGlide(
+                "HRANDFIELD",
+                () -> {
+                    String[] fields = glideClient.hrandfieldWithCount(key, count).get();
+                    return Arrays.asList(fields);
+                });
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key. Alias for {@link
+     * #hrandfield(String, long)}.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<String> hrandfieldWithCount(String key, long count) {
+        return hrandfield(key, count);
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key (binary version).
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<byte[]> hrandfield(final byte[] key, final long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] fields = glideClient.hrandfieldWithCount(GlideString.of(key), count).get();
+            List<byte[]> byteFields = new ArrayList<>();
+            for (GlideString gs : fields) {
+                byteFields.add(gs.getBytes());
+            }
+            return byteFields;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Returns an array of random fields from the hash value stored at key (binary version). Alias for
+     * {@link #hrandfield(byte[], long)}.
+     *
+     * @param key the key of the hash
+     * @param count the number of fields to return
+     * @return an array of random fields from the hash
+     */
+    public List<byte[]> hrandfieldWithCount(final byte[] key, final long count) {
+        return hrandfield(key, count);
+    }
+
+    /**
+     * Returns an array of random field-value pairs from the hash value stored at key.
+     *
+     * @param key the key of the hash
+     * @param count the number of field-value pairs to return
+     * @return a list of field-value pairs from the hash
+     */
+    public List<Map.Entry<String, String>> hrandfieldWithValues(String key, long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[][] result = glideClient.hrandfieldWithCountWithValues(key, count).get();
+            List<Map.Entry<String, String>> entries = new ArrayList<>();
+            for (String[] pair : result) {
+                if (pair.length == 2) {
+                    entries.add(new AbstractMap.SimpleEntry<>(pair[0], pair[1]));
+                }
+            }
+            return entries;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Returns an array of random field-value pairs from the hash value stored at key (binary
+     * version).
+     *
+     * @param key the key of the hash
+     * @param count the number of field-value pairs to return
+     * @return a list of field-value pairs from the hash
+     */
+    public List<Map.Entry<byte[], byte[]>> hrandfieldWithValues(final byte[] key, final long count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[][] result =
+                    glideClient.hrandfieldWithCountWithValues(GlideString.of(key), count).get();
+            List<Map.Entry<byte[], byte[]>> entries = new ArrayList<>();
+            for (GlideString[] pair : result) {
+                if (pair.length == 2) {
+                    entries.add(new AbstractMap.SimpleEntry<>(pair[0].getBytes(), pair[1].getBytes()));
+                }
+            }
+            return entries;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HRANDFIELD operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified field in the hash stored at key to value with expiration and existence
+     * conditions. Note: This command requires Valkey 7.9+ and may not be available in all Valkey
+     * versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
+     */
+    public long hsetex(String key, HSetExParams params, String field, String value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(key);
+
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
+            args.add(field);
+            args.add(value);
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key with expiration
+     * and existence conditions. Note: This command requires Valkey 7.9+ and may not be available in
+     * all Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hsetex(String key, HSetExParams params, Map<String, String> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(key);
+
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
+            // Add field-value pairs
+            for (Map.Entry<String, String> entry : hash.entrySet()) {
+                args.add(entry.getKey());
+                args.add(entry.getValue());
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in a hash stored at the given key and
+     * optionally sets their expiration. Note: This command requires Valkey 7.9+ and may not be
+     * available in all Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params additional parameters for the HGETEX command
+     * @param fields the fields whose values are to be retrieved
+     * @return a list of the value associated with each field or nil if the field doesn't exist
+     */
+    public List<String> hgetex(String key, HGetExParams params, String... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETEX");
+            args.add(key);
+
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            // Add fields
+            args.addAll(Arrays.asList(fields));
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<String> stringResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    stringResult.add(obj != null ? obj.toString() : null);
+                }
+                return stringResult;
+            }
+            return Arrays.asList(result != null ? result.toString() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in the hash stored at the given key
+     * and then deletes those fields from the hash. Note: This command requires Valkey 7.9+ and may
+     * not be available in all Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param fields the fields whose values are to be retrieved and then deleted
+     * @return a list of values associated with the specified fields before they were deleted
+     */
+    public List<String> hgetdel(String key, String... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETDEL");
+            args.add(key);
+            args.addAll(Arrays.asList(fields));
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<String> stringResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    stringResult.add(obj != null ? obj.toString() : null);
+                }
+                return stringResult;
+            }
+            return Arrays.asList(result != null ? result.toString() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETDEL operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified field in the hash stored at key to value with expiration and existence
+     * conditions (binary version). Note: This command requires Valkey 7.9+ and may not be available
+     * in all Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param field the field in the hash
+     * @param value the value to set
+     * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
+     *     the hash and the value was updated
+     */
+    public long hsetex(byte[] key, HSetExParams params, byte[] field, byte[] value) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(new String(key));
+
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add("1"); // Single field
+
+            args.add(new String(field));
+            args.add(new String(value));
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at key with expiration
+     * and existence conditions (binary version). Note: This command requires Valkey 7.9+ and may not
+     * be available in all Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params the expiration and existence parameters
+     * @param hash a map of field-value pairs to set in the hash
+     * @return the number of fields that were added
+     */
+    public long hsetex(byte[] key, HSetExParams params, Map<byte[], byte[]> hash) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HSETEX");
+            args.add(new String(key));
+
+            // Add existence condition
+            if (params.getExistenceCondition() != null) {
+                args.add(params.getExistenceCondition().name());
+            }
+
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(hash.size()));
+
+            // Add field-value pairs
+            for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                args.add(new String(entry.getKey()));
+                args.add(new String(entry.getValue()));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return result instanceof Long ? (Long) result : Long.parseLong(result.toString());
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in a hash stored at the given key and
+     * optionally sets their expiration (binary version). Note: This command requires Valkey 7.9+ and
+     * may not be available in all Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param params additional parameters for the HGETEX command
+     * @param fields the fields whose values are to be retrieved
+     * @return a list of the value associated with each field or nil if the field doesn't exist
+     */
+    public List<byte[]> hgetex(byte[] key, HGetExParams params, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETEX");
+            args.add(new String(key));
+
+            // Add expiration parameters
+            if (params.getExpirationType() != null) {
+                args.add(params.getExpirationType().name());
+                if (params.getExpirationValue() != null) {
+                    args.add(params.getExpirationValue().toString());
+                }
+            }
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            // Add fields
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<byte[]> byteResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    byteResult.add(obj != null ? obj.toString().getBytes() : null);
+                }
+                return byteResult;
+            }
+            return Arrays.asList(result != null ? result.toString().getBytes() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETEX operation failed", e);
+        }
+    }
+
+    /**
+     * Retrieves the values associated with the specified fields in the hash stored at the given key
+     * and then deletes those fields from the hash (binary version). Note: This command requires
+     * Valkey 7.9+ and may not be available in all Valkey versions.
+     *
+     * @param key the key of the hash
+     * @param fields the fields whose values are to be retrieved and then deleted
+     * @return a list of values associated with the specified fields before they were deleted
+     */
+    public List<byte[]> hgetdel(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HGETDEL");
+            args.add(new String(key));
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            if (result instanceof Object[]) {
+                Object[] resultArray = (Object[]) result;
+                List<byte[]> byteResult = new ArrayList<>();
+                for (Object obj : resultArray) {
+                    byteResult.add(obj != null ? obj.toString().getBytes() : null);
+                }
+                return byteResult;
+            }
+            return Arrays.asList(result != null ? result.toString().getBytes() : null);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HGETDEL operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<String, String>> hscan(String key, String cursor) {
+        return hscan(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<byte[], byte[]>> hscan(final byte[] key, final byte[] cursor) {
+        return hscan(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<String, String>> hscan(String key, String cursor, ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptions options = convertScanParamsToHScanOptions(params);
+            Object[] result = glideClient.hscan(key, cursor, options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<Map.Entry<String, String>> entries = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                String field = (String) fieldsAndValues[i];
+                String value = (String) fieldsAndValues[i + 1];
+                entries.add(new AbstractMap.SimpleEntry<>(field, value));
+            }
+
+            return new ScanResult<>(nextCursor, entries);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the fields
+     */
+    public ScanResult<Map.Entry<byte[], byte[]>> hscan(
+            final byte[] key, final byte[] cursor, final ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptionsBinary options = convertScanParamsToHScanOptionsBinary(params);
+            Object[] result =
+                    glideClient.hscan(GlideString.of(key), GlideString.of(cursor), options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<Map.Entry<byte[], byte[]>> entries = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                GlideString field = (GlideString) fieldsAndValues[i];
+                GlideString value = (GlideString) fieldsAndValues[i + 1];
+                entries.add(new AbstractMap.SimpleEntry<>(field.getBytes(), value.getBytes()));
+            }
+
+            return new ScanResult<>(nextCursor.getBytes(), entries);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types without their values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<String> hscanNoValues(String key, String cursor) {
+        return hscanNoValues(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types without their values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<byte[]> hscanNoValues(final byte[] key, final byte[] cursor) {
+        return hscanNoValues(key, cursor, new ScanParams());
+    }
+
+    /**
+     * Iterates fields of Hash types without their values.
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<String> hscanNoValues(String key, String cursor, ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptions options = convertScanParamsToHScanOptions(params);
+            Object[] result = glideClient.hscan(key, cursor, options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<String> fields = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                fields.add((String) fieldsAndValues[i]);
+            }
+
+            return new ScanResult<>(nextCursor, fields);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    /**
+     * Iterates fields of Hash types without their values (binary version).
+     *
+     * @param key the key of the hash
+     * @param cursor the cursor
+     * @param params the scan parameters
+     * @return scan result with the cursor and the field names
+     */
+    public ScanResult<byte[]> hscanNoValues(
+            final byte[] key, final byte[] cursor, final ScanParams params) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            HScanOptionsBinary options = convertScanParamsToHScanOptionsBinary(params);
+            Object[] result =
+                    glideClient.hscan(GlideString.of(key), GlideString.of(cursor), options).get();
+
+            String nextCursor = (String) result[0];
+            Object[] fieldsAndValues = (Object[]) result[1];
+
+            List<byte[]> fields = new ArrayList<>();
+            for (int i = 0; i < fieldsAndValues.length; i += 2) {
+                GlideString field = (GlideString) fieldsAndValues[i];
+                fields.add(field.getBytes());
+            }
+
+            return new ScanResult<>(nextCursor.getBytes(), fields);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HSCAN operation failed", e);
+        }
+    }
+
+    // Hash expiration commands (these may not be available in all Valkey versions)
+    // For now, implementing them as unsupported operations
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds). Note: This command may not
+     * be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(String key, long seconds, String... fields) {
+        return executeCommandWithGlide(
+                "HEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(seconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds) with condition. Note: This
+     * command may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(String key, long seconds, ExpiryOption condition, String... fields) {
+        return executeCommandWithGlide(
+                "HEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(seconds));
+                    args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds). Note: This command may
+     * not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(String key, long milliseconds, String... fields) {
+        return executeCommandWithGlide(
+                "HPEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(milliseconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds) with condition. Note:
+     * This command may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(
+            String key, long milliseconds, ExpiryOption condition, String... fields) {
+        return executeCommandWithGlide(
+                "HPEXPIRE",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIRE");
+                    args.add(key);
+                    args.add(String.valueOf(milliseconds));
+                    args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds). Note: This command may
+     * not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(String key, long unixTimeSeconds, String... fields) {
+        return executeCommandWithGlide(
+                "HEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeSeconds));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition. Note: This
+     * command may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(
+            String key, long unixTimeSeconds, ExpiryOption condition, String... fields) {
+        return executeCommandWithGlide(
+                "HEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeSeconds));
+                    args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds). Note: This command
+     * may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(String key, long unixTimeMillis, String... fields) {
+        return executeCommandWithGlide(
+                "HPEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeMillis));
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition. Note:
+     * This command may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(
+            String key, long unixTimeMillis, ExpiryOption condition, String... fields) {
+        return executeCommandWithGlide(
+                "HPEXPIREAT",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIREAT");
+                    args.add(key);
+                    args.add(String.valueOf(unixTimeMillis));
+                    args.add(condition.name());
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in seconds. Note: This command
+     * may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hexpireTime(String key, String... fields) {
+        return executeCommandWithGlide(
+                "HEXPIRETIME",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HEXPIRETIME");
+                    args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds. Note: This
+     * command may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hpexpireTime(String key, String... fields) {
+        return executeCommandWithGlide(
+                "HPEXPIRETIME",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPEXPIRETIME");
+                    args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Returns the TTL in seconds of a hash field. Note: This command may not be available in all
+     * Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> httl(String key, String... fields) {
+        return executeCommandWithGlide(
+                "HTTL",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HTTL");
+                    args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Returns the TTL in milliseconds of a hash field. Note: This command may not be available in all
+     * Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> hpttl(String key, String... fields) {
+        return executeCommandWithGlide(
+                "HPTTL",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPTTL");
+                    args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    /**
+     * Removes the expiration time for each specified field. Note: This command may not be available
+     * in all Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to remove expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpersist(String key, String... fields) {
+        return executeCommandWithGlide(
+                "HPERSIST",
+                () -> {
+                    List<String> args = new ArrayList<>();
+                    args.add("HPERSIST");
+                    args.add(key);
+
+                    // Add FIELDS keyword and numfields count
+                    args.add(FIELDS_KEYWORD);
+                    args.add(String.valueOf(fields.length));
+
+                    args.addAll(Arrays.asList(fields));
+
+                    Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+                    return convertToLongList(result);
+                });
+    }
+
+    // Binary variants for hash expiration commands
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds) - binary version. Note: This
+     * command requires Valkey 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(byte[] key, long seconds, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(seconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (seconds) with condition - binary
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
+     * versions.
+     *
+     * @param key hash
+     * @param seconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpire(byte[] key, long seconds, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(seconds));
+            args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds) - binary version. Note:
+     * This command requires Valkey 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(byte[] key, long milliseconds, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(milliseconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using relative time to expire (milliseconds) with condition - binary
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
+     * versions.
+     *
+     * @param key hash
+     * @param milliseconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpire(
+            byte[] key, long milliseconds, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRE");
+            args.add(new String(key));
+            args.add(String.valueOf(milliseconds));
+            args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRE operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) - binary version. Note:
+     * This command requires Valkey 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(byte[] key, long unixTimeSeconds, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeSeconds));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (seconds) with condition - binary
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
+     * versions.
+     *
+     * @param key hash
+     * @param unixTimeSeconds time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hexpireAt(
+            byte[] key, long unixTimeSeconds, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeSeconds));
+            args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) - binary version.
+     * Note: This command requires Valkey 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(byte[] key, long unixTimeMillis, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeMillis));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Set expiry for hash field using an absolute Unix timestamp (milliseconds) with condition -
+     * binary version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
+     * versions.
+     *
+     * @param key hash
+     * @param unixTimeMillis time to expire
+     * @param condition expiry condition
+     * @param fields the fields to set expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpexpireAt(
+            byte[] key, long unixTimeMillis, ExpiryOption condition, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIREAT");
+            args.add(new String(key));
+            args.add(String.valueOf(unixTimeMillis));
+            args.add(condition.name());
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIREAT operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in seconds - binary version.
+     * Note: This command requires Valkey 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hexpireTime(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HEXPIRETIME");
+            args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HEXPIRETIME operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the expiration time of a hash field as a Unix timestamp, in milliseconds - binary
+     * version. Note: This command requires Valkey 7.4+ and may not be available in all Valkey
+     * versions.
+     *
+     * @param key hash
+     * @param fields the fields to get expiration time for
+     * @return list of expiration times for each field
+     */
+    public List<Long> hpexpireTime(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPEXPIRETIME");
+            args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPEXPIRETIME operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the TTL in seconds of a hash field - binary version. Note: This command requires Valkey
+     * 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> httl(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HTTL");
+            args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HTTL operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the TTL in milliseconds of a hash field - binary version. Note: This command requires
+     * Valkey 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to get TTL for
+     * @return list of TTL values for each field
+     */
+    public List<Long> hpttl(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPTTL");
+            args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPTTL operation failed", e);
+        }
+    }
+
+    /**
+     * Removes the expiration time for each specified field - binary version. Note: This command
+     * requires Valkey 7.4+ and may not be available in all Valkey versions.
+     *
+     * @param key hash
+     * @param fields the fields to remove expiration for
+     * @return list of results for each field
+     */
+    public List<Long> hpersist(byte[] key, byte[]... fields) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            List<String> args = new ArrayList<>();
+            args.add("HPERSIST");
+            args.add(new String(key));
+
+            // Add FIELDS keyword and numfields count
+            args.add(FIELDS_KEYWORD);
+            args.add(String.valueOf(fields.length));
+
+            for (byte[] field : fields) {
+                args.add(new String(field));
+            }
+
+            Object result = glideClient.customCommand(args.toArray(new String[0])).get();
+            return convertToLongList(result);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("HPERSIST operation failed", e);
+        }
+    }
+
+    /** Helper method to convert result to List<Long>. */
+    private static List<Long> convertToLongList(Object result) {
+        if (result instanceof Object[]) {
+            Object[] resultArray = (Object[]) result;
+            List<Long> longResult = new ArrayList<>();
+            for (Object obj : resultArray) {
+                if (obj instanceof Long) {
+                    longResult.add((Long) obj);
+                } else if (obj != null) {
+                    longResult.add(Long.parseLong(obj.toString()));
+                } else {
+                    longResult.add(null);
+                }
+            }
+            return longResult;
+        } else if (result instanceof Long) {
+            return Arrays.asList((Long) result);
+        } else if (result != null) {
+            return Arrays.asList(Long.parseLong(result.toString()));
+        }
+        return Arrays.asList((Long) null);
+    }
+
+    /** Helper method to convert Jedis ScanParams to GLIDE HScanOptions. */
+    private static HScanOptions convertScanParamsToHScanOptions(ScanParams params) {
+        HScanOptions.HScanOptionsBuilder builder = HScanOptions.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(params.getMatchPattern());
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        return builder.build();
+    }
+
+    /** Helper method to convert Jedis ScanParams to GLIDE HScanOptionsBinary. */
+    private static HScanOptionsBinary convertScanParamsToHScanOptionsBinary(ScanParams params) {
+        HScanOptionsBinary.HScanOptionsBinaryBuilder builder = HScanOptionsBinary.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(GlideString.of(params.getMatchPattern()));
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        return builder.build();
+    }
+
+    // ========== STREAM COMMANDS (GLIDE type-safe API) ==========
+
+    /** Convert GLIDE stream entry map (id -> field-value pairs) to List of StreamEntry. */
+    private static List<StreamEntry> toStreamEntryList(Map<String, String[][]> idToFields) {
+        if (idToFields == null) {
+            return Collections.emptyList();
+        }
+        List<StreamEntry> out = new ArrayList<>();
+        for (Map.Entry<String, String[][]> e : idToFields.entrySet()) {
+            Map<String, String> fields = new HashMap<>();
+            String[][] pairs = e.getValue();
+            if (pairs != null) {
+                for (String[] kv : pairs) {
+                    if (kv != null && kv.length >= 2) {
+                        fields.put(kv[0], kv[1]);
+                    }
+                }
+            }
+            out.add(new StreamEntry(new StreamEntryID(e.getKey()), fields));
+        }
+        return out;
+    }
+
+    /** Convert GLIDE xread response to Map of stream key to List of StreamEntry. */
+    private static Map<String, List<StreamEntry>> toStreamReadResponse(
+            Map<String, Map<String, String[][]>> response) {
+        if (response == null) {
+            return Collections.emptyMap();
+        }
+        Map<String, List<StreamEntry>> out = new HashMap<>();
+        for (Map.Entry<String, Map<String, String[][]>> e : response.entrySet()) {
+            out.put(e.getKey(), toStreamEntryList(e.getValue()));
+        }
+        return out;
+    }
+
+    /**
+     * Adds an entry to the stream at key. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param hash field-value map
+     * @return generated entry ID
+     */
+    public StreamEntryID xadd(String key, Map<String, String> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    String id = glideClient.xadd(key, hash).get();
+                    return id == null ? null : new StreamEntryID(id);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with optional entry id. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param id entry id (use "*" for auto-generate)
+     * @param hash field-value map
+     * @return generated or specified entry ID
+     */
+    public StreamEntryID xadd(String key, StreamEntryID id, Map<String, String> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    StreamAddOptions opts =
+                            StreamAddOptions.builder().id(id != null ? id.toString() : "*").build();
+                    String result = glideClient.xadd(key, hash, opts).get();
+                    return result == null ? null : new StreamEntryID(result);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with options. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param hash field-value map
+     * @param makeStream if false, NOMKSTREAM is sent
+     * @return generated entry ID, or null if stream did not exist and makeStream was false
+     */
+    public StreamEntryID xadd(String key, Map<String, String> hash, boolean makeStream) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    StreamAddOptions opts = StreamAddOptions.builder().makeStream(makeStream).build();
+                    String result = glideClient.xadd(key, hash, opts).get();
+                    return result == null ? null : new StreamEntryID(result);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with XAddParams. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param params add parameters
+     * @param hash field-value map
+     * @return generated entry ID, or null if stream did not exist and makeStream was false
+     */
+    public StreamEntryID xadd(String key, XAddParams params, Map<String, String> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    String result = glideClient.xadd(key, hash, params.toStreamAddOptions()).get();
+                    return result == null ? null : new StreamEntryID(result);
+                });
+    }
+
+    /**
+     * Adds an entry to the stream at key with XAddParams - binary version. Uses GLIDE type-safe xadd.
+     *
+     * @param key stream key
+     * @param params add parameters
+     * @param hash field-value map
+     * @return generated entry ID as byte[], or null if stream did not exist and makeStream was false
+     */
+    public byte[] xadd(byte[] key, XAddParams params, Map<byte[], byte[]> hash) {
+        return executeCommandWithGlide(
+                "XADD",
+                () -> {
+                    // Convert byte[] map to String map
+                    Map<String, String> stringHash = new HashMap<>();
+                    for (Map.Entry<byte[], byte[]> entry : hash.entrySet()) {
+                        stringHash.put(new String(entry.getKey()), new String(entry.getValue()));
+                    }
+
+                    String result =
+                            glideClient.xadd(new String(key), stringHash, params.toStreamAddOptions()).get();
+                    return result == null ? null : result.getBytes();
+                });
+    }
+
+    /** Returns the number of entries in the stream. Uses GLIDE xlen. */
+    public long xlen(String key) {
+        return executeCommandWithGlide("XLEN", () -> glideClient.xlen(key).get());
+    }
+
+    /**
+     * Returns the number of entries in the stream - binary version. Uses GLIDE xlen.
+     *
+     * @param key stream key
+     * @return number of entries in the stream
+     */
+    public long xlen(byte[] key) {
+        return executeCommandWithGlide("XLEN", () -> glideClient.xlen(new String(key)).get());
+    }
+
+    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    public long xdel(String key, String... ids) {
+        return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, ids).get());
+    }
+
+    /** Removes entries by id from the stream. Uses GLIDE xdel. */
+    public long xdel(String key, StreamEntryID... ids) {
+        String[] idStrs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            idStrs[i] = ids[i].toString();
+        }
+        return executeCommandWithGlide("XDEL", () -> glideClient.xdel(key, idStrs).get());
+    }
+
+    /**
+     * Removes entries by id from the stream - binary version. Uses GLIDE xdel.
+     *
+     * @param key stream key
+     * @param ids entry IDs to delete
+     * @return number of entries deleted
+     */
+    public long xdel(byte[] key, byte[]... ids) {
+        String[] idStrs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            idStrs[i] = new String(ids[i]);
+        }
+        return executeCommandWithGlide("XDEL", () -> glideClient.xdel(new String(key), idStrs).get());
+    }
+
+    /**
+     * Returns entries in the stream in range [start, end]. Uses GLIDE xrange.
+     *
+     * @param key stream key
+     * @param start start id ("-" for minimum)
+     * @param end end id ("+" for maximum)
+     */
+    public List<StreamEntry> xrange(String key, String start, String end) {
+        return executeCommandWithGlide(
+                "XRANGE",
+                () -> {
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    Map<String, String[][]> raw = glideClient.xrange(key, s, e).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /** Returns up to count entries in the stream in range [start, end]. Uses GLIDE xrange. */
+    public List<StreamEntry> xrange(String key, String start, String end, long count) {
+        return executeCommandWithGlide(
+                "XRANGE",
+                () -> {
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    Map<String, String[][]> raw = glideClient.xrange(key, s, e, count).get();
+                    return raw == null ? Collections.emptyList() : toStreamEntryList(raw);
+                });
+    }
+
+    /** Returns entries in the stream in reverse order [end, start]. Uses GLIDE xrevrange. */
+    public List<StreamEntry> xrevrange(String key, String end, String start) {
+        return executeCommandWithGlide(
+                "XREVRANGE",
+                () -> {
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    Map<String, String[][]> raw = glideClient.xrevrange(key, e, s).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /** Returns up to count entries in reverse order. Uses GLIDE xrevrange. */
+    public List<StreamEntry> xrevrange(String key, String end, String start, long count) {
+        return executeCommandWithGlide(
+                "XREVRANGE",
+                () -> {
+                    StreamRange e =
+                            "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+                    StreamRange s =
+                            "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+                    Map<String, String[][]> raw = glideClient.xrevrange(key, e, s, count).get();
+                    return raw == null ? Collections.emptyList() : toStreamEntryList(raw);
+                });
+    }
+
+    /**
+     * Returns entries in the stream in range [start, end] - binary version. Uses GLIDE xrange.
+     *
+     * @param key stream key
+     * @param start start id
+     * @param end end id
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrange(byte[] key, byte[] start, byte[] end) {
+        return xrange(new String(key), new String(start), new String(end));
+    }
+
+    /**
+     * Returns up to count entries in the stream in range [start, end] - binary version. Uses GLIDE
+     * xrange.
+     *
+     * @param key stream key
+     * @param start start id
+     * @param end end id
+     * @param count maximum number of entries
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrange(byte[] key, byte[] start, byte[] end, int count) {
+        return xrange(new String(key), new String(start), new String(end), count);
+    }
+
+    /**
+     * Returns entries in the stream in reverse order [end, start] - binary version. Uses GLIDE
+     * xrevrange.
+     *
+     * @param key stream key
+     * @param end end id
+     * @param start start id
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrevrange(byte[] key, byte[] end, byte[] start) {
+        return xrevrange(new String(key), new String(end), new String(start));
+    }
+
+    /**
+     * Returns up to count entries in reverse order - binary version. Uses GLIDE xrevrange.
+     *
+     * @param key stream key
+     * @param end end id
+     * @param start start id
+     * @param count maximum number of entries
+     * @return list of stream entries
+     */
+    public List<StreamEntry> xrevrange(byte[] key, byte[] end, byte[] start, int count) {
+        return xrevrange(new String(key), new String(end), new String(start), count);
+    }
+
+    /**
+     * Reads from multiple streams. Uses GLIDE xread.
+     *
+     * @param keysAndIds map of stream key to start id ("0" or "0-0" for beginning)
+     * @return map of stream key to list of entries read
+     */
+    public Map<String, List<StreamEntry>> xread(Map<String, String> keysAndIds) {
+        return executeCommandWithGlide(
+                "XREAD",
+                () -> {
+                    Map<String, Map<String, String[][]>> raw =
+                            glideClient.xread(keysAndIds, StreamReadOptions.builder().build()).get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /**
+     * Reads from multiple streams with count and/or block. Uses GLIDE xread.
+     *
+     * @param count max entries per stream (null to omit)
+     * @param block block milliseconds (null to omit)
+     * @param keysAndIds map of stream key to start id
+     */
+    public Map<String, List<StreamEntry>> xread(
+            Long count, Long block, Map<String, String> keysAndIds) {
+        return executeCommandWithGlide(
+                "XREAD",
+                () -> {
+                    StreamReadOptions.StreamReadOptionsBuilder b = StreamReadOptions.builder();
+                    if (count != null) b.count(count);
+                    if (block != null) b.block(block);
+                    Map<String, Map<String, String[][]>> raw = glideClient.xread(keysAndIds, b.build()).get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /** Trims the stream by max length. Uses GLIDE xtrim. */
+    public long xtrim(String key, long maxLen) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(maxLen)).get());
+    }
+
+    /** Trims the stream by max length (exact or approximate). Uses GLIDE xtrim. */
+    public long xtrim(String key, long maxLen, boolean exact) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MaxLen(exact, maxLen)).get());
+    }
+
+    /** Trims the stream by minimum id. Uses GLIDE xtrim. */
+    public long xtrim(String key, String minId) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, new StreamTrimOptions.MinId(minId)).get());
+    }
+
+    /**
+     * Trims the stream using XTrimParams. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param params trim parameters
+     * @return number of entries deleted
+     */
+    public long xtrim(String key, XTrimParams params) {
+        return executeCommandWithGlide(
+                "XTRIM", () -> glideClient.xtrim(key, params.toStreamTrimOptions()).get());
+    }
+
+    /**
+     * Trims the stream by max length - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, long maxLen) {
+        return executeCommandWithGlide(
+                "XTRIM",
+                () -> glideClient.xtrim(new String(key), new StreamTrimOptions.MaxLen(maxLen)).get());
+    }
+
+    /**
+     * Trims the stream by max length (exact or approximate) - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param maxLen maximum length
+     * @param exact if true, trim exactly; if false, trim approximately
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, long maxLen, boolean exact) {
+        return executeCommandWithGlide(
+                "XTRIM",
+                () ->
+                        glideClient.xtrim(new String(key), new StreamTrimOptions.MaxLen(exact, maxLen)).get());
+    }
+
+    /**
+     * Trims the stream using XTrimParams - binary version. Uses GLIDE xtrim.
+     *
+     * @param key stream key
+     * @param params trim parameters
+     * @return number of entries deleted
+     */
+    public long xtrim(byte[] key, XTrimParams params) {
+        return xtrim(new String(key), params);
+    }
+
+    /** Creates a consumer group. Uses GLIDE xgroupCreate. */
+    public String xgroupCreate(String key, String groupName, String id) {
+        return executeCommandWithGlide(
+                "XGROUP CREATE", () -> glideClient.xgroupCreate(key, groupName, id).get());
+    }
+
+    /** Creates a consumer group, optionally creating the stream. Uses GLIDE xgroupCreate. */
+    public String xgroupCreate(String key, String groupName, String id, boolean makeStream) {
+        return executeCommandWithGlide(
+                "XGROUP CREATE",
+                () ->
+                        glideClient
+                                .xgroupCreate(
+                                        key, groupName, id, StreamGroupOptions.builder().mkStream(makeStream).build())
+                                .get());
+    }
+
+    /** Destroys a consumer group. Uses GLIDE xgroupDestroy. */
+    public boolean xgroupDestroy(String key, String groupName) {
+        return executeCommandWithGlide(
+                "XGROUP DESTROY", () -> glideClient.xgroupDestroy(key, groupName).get());
+    }
+
+    /** Sets the last delivered id of a group. Uses GLIDE xgroupSetId. */
+    public String xgroupSetId(String key, String groupName, String id) {
+        return executeCommandWithGlide(
+                "XGROUP SETID", () -> glideClient.xgroupSetId(key, groupName, id).get());
+    }
+
+    /** Creates a consumer in the group. Uses GLIDE xgroupCreateConsumer. */
+    public boolean xgroupCreateConsumer(String key, String group, String consumer) {
+        return executeCommandWithGlide(
+                "XGROUP CREATECONSUMER",
+                () -> glideClient.xgroupCreateConsumer(key, group, consumer).get());
+    }
+
+    /** Deletes a consumer from the group. Uses GLIDE xgroupDelConsumer. */
+    public long xgroupDelConsumer(String key, String group, String consumer) {
+        return executeCommandWithGlide(
+                "XGROUP DELCONSUMER", () -> glideClient.xgroupDelConsumer(key, group, consumer).get());
+    }
+
+    /**
+     * Reads from streams as a consumer in a group. Uses GLIDE xreadgroup.
+     *
+     * @param keysAndIds map of stream key to id (typically "&gt;" for new entries)
+     */
+    public Map<String, List<StreamEntry>> xreadgroup(
+            String group, String consumer, Map<String, String> keysAndIds) {
+        return executeCommandWithGlide(
+                "XREADGROUP",
+                () -> {
+                    Map<String, Map<String, String[][]>> raw =
+                            glideClient
+                                    .xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build())
+                                    .get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /** Reads from streams as a consumer with options. Uses GLIDE xreadgroup. */
+    public Map<String, List<StreamEntry>> xreadgroup(
+            String group,
+            String consumer,
+            Map<String, String> keysAndIds,
+            Long count,
+            Long block,
+            boolean noack) {
+        return executeCommandWithGlide(
+                "XREADGROUP",
+                () -> {
+                    StreamReadGroupOptions.StreamReadGroupOptionsBuilder b = StreamReadGroupOptions.builder();
+                    if (count != null) b.count(count);
+                    if (block != null) b.block(block);
+                    if (noack) b.noack();
+                    Map<String, Map<String, String[][]>> raw =
+                            glideClient.xreadgroup(keysAndIds, group, consumer, b.build()).get();
+                    return toStreamReadResponse(raw);
+                });
+    }
+
+    /** Acknowledges messages. Uses GLIDE xack. */
+    public long xack(String key, String group, String... ids) {
+        return executeCommandWithGlide("XACK", () -> glideClient.xack(key, group, ids).get());
+    }
+
+    /** Acknowledges messages. Uses GLIDE xack. */
+    public long xack(String key, String group, StreamEntryID... ids) {
+        String[] idStrs = new String[ids.length];
+        for (int i = 0; i < ids.length; i++) {
+            idStrs[i] = ids[i].toString();
+        }
+        return executeCommandWithGlide("XACK", () -> glideClient.xack(key, group, idStrs).get());
+    }
+
+    /**
+     * Returns pending summary for the group. Uses GLIDE xpending. Converts response to
+     * StreamPendingSummary (total, minId, maxId, consumerMessageCount).
+     */
+    public StreamPendingSummary xpending(String key, String group) {
+        return executeCommandWithGlide(
+                "XPENDING",
+                () -> {
+                    Object[] arr = glideClient.xpending(key, group).get();
+                    if (arr == null || arr.length < 4) {
+                        return new StreamPendingSummary(0L, null, null, Collections.emptyMap());
+                    }
+                    long total =
+                            arr[0] instanceof Long ? (Long) arr[0] : Long.parseLong(String.valueOf(arr[0]));
+                    String minIdStr = String.valueOf(arr[1]);
+                    String maxIdStr = String.valueOf(arr[2]);
+                    StreamEntryID minId = null;
+                    StreamEntryID maxId = null;
+                    if (minIdStr != null && !minIdStr.isEmpty() && !"null".equals(minIdStr)) {
+                        minId = new StreamEntryID(minIdStr);
+                    }
+                    if (maxIdStr != null && !maxIdStr.isEmpty() && !"null".equals(maxIdStr)) {
+                        maxId = new StreamEntryID(maxIdStr);
+                    }
+                    Map<String, Long> consumerCounts = new HashMap<>();
+                    if (arr.length > 3 && arr[3] instanceof Object[]) {
+                        for (Object o : (Object[]) arr[3]) {
+                            if (o instanceof Object[] && ((Object[]) o).length >= 2) {
+                                Object[] pair = (Object[]) o;
+                                String name = String.valueOf(pair[0]);
+                                long count =
+                                        pair[1] instanceof Long
+                                                ? (Long) pair[1]
+                                                : Long.parseLong(String.valueOf(pair[1]));
+                                consumerCounts.put(name, count);
+                            }
+                        }
+                    }
+                    return new StreamPendingSummary(total, minId, maxId, consumerCounts);
+                });
+    }
+
+    /** Returns pending entries in range. Uses GLIDE xpending. */
+    public List<StreamPendingEntry> xpending(
+            String key, String group, StreamRange start, StreamRange end, long count) {
+        return executeCommandWithGlide(
+                "XPENDING",
+                () -> {
+                    Object[][] raw =
+                            glideClient
+                                    .xpending(key, group, start, end, count, StreamPendingOptions.builder().build())
+                                    .get();
+                    if (raw == null) return Collections.emptyList();
+                    List<StreamPendingEntry> list = new ArrayList<>();
+                    for (Object[] row : raw) {
+                        if (row != null && row.length >= 4) {
+                            StreamEntryID id = new StreamEntryID(String.valueOf(row[0]));
+                            String consumer = String.valueOf(row[1]);
+                            long idle =
+                                    row[2] instanceof Long ? (Long) row[2] : Long.parseLong(String.valueOf(row[2]));
+                            long delivered =
+                                    row[3] instanceof Long ? (Long) row[3] : Long.parseLong(String.valueOf(row[3]));
+                            list.add(new StreamPendingEntry(id, consumer, idle, delivered));
+                        }
+                    }
+                    return list;
+                });
+    }
+
+    /** Returns pending entries in id range. Uses GLIDE xpending. */
+    public List<StreamPendingEntry> xpending(
+            String key, String group, String start, String end, long count) {
+        StreamRange s =
+                "-".equals(start) ? StreamRange.InfRangeBound.MIN : StreamRange.IdBound.of(start);
+        StreamRange e = "+".equals(end) ? StreamRange.InfRangeBound.MAX : StreamRange.IdBound.of(end);
+        return xpending(key, group, s, e, count);
+    }
+
+    /** Claims pending messages. Uses GLIDE xclaim. */
+    public List<StreamEntry> xclaim(
+            String key, String group, String consumer, long minIdleTime, String... ids) {
+        return executeCommandWithGlide(
+                "XCLAIM",
+                () -> {
+                    Map<String, String[][]> raw =
+                            glideClient.xclaim(key, group, consumer, minIdleTime, ids).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /** Claims pending messages with options. Uses GLIDE xclaim. */
+    public List<StreamEntry> xclaim(
+            String key,
+            String group,
+            String consumer,
+            long minIdleTime,
+            StreamClaimOptions options,
+            String... ids) {
+        return executeCommandWithGlide(
+                "XCLAIM",
+                () -> {
+                    Map<String, String[][]> raw =
+                            glideClient.xclaim(key, group, consumer, minIdleTime, ids, options).get();
+                    return toStreamEntryList(raw);
+                });
+    }
+
+    /**
+     * Auto-claims pending messages. Uses GLIDE xautoclaim. Returns Object[]: [String nextStartId,
+     * List of StreamEntry claimed].
+     */
+    public Object[] xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start) {
+        return executeCommandWithGlide(
+                "XAUTOCLAIM", () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start).get());
+    }
+
+    /** Auto-claims pending messages with count. Uses GLIDE xautoclaim. */
+    public Object[] xautoclaim(
+            String key, String group, String consumer, long minIdleTime, String start, long count) {
+        return executeCommandWithGlide(
+                "XAUTOCLAIM",
+                () -> glideClient.xautoclaim(key, group, consumer, minIdleTime, start, count).get());
+    }
+
+    /**
+     * Returns stream info. Uses GLIDE xinfoStream. Returns raw Map; for StreamInfo use {@link
+     * #xinfoStreamAsInfo(String)}.
+     */
+    public Map<String, Object> xinfoStream(String key) {
+        return executeCommandWithGlide("XINFO STREAM", () -> glideClient.xinfoStream(key).get());
+    }
+
+    /** Returns stream info as StreamInfo. Uses GLIDE xinfoStream and converts response. */
+    public StreamInfo xinfoStreamAsInfo(String key) {
+        return executeCommandWithGlide(
+                "XINFO STREAM",
+                () -> {
+                    Map<String, Object> raw = glideClient.xinfoStream(key).get();
+                    if (raw == null) return null;
+                    Map<String, Object> converted = new HashMap<>(raw);
+                    Object lastId = raw.get(StreamInfo.LAST_GENERATED_ID);
+                    if (lastId instanceof String) {
+                        converted.put(StreamInfo.LAST_GENERATED_ID, new StreamEntryID((String) lastId));
+                    }
+                    Object firstEntry = raw.get(StreamInfo.FIRST_ENTRY);
+                    if (firstEntry != null) {
+                        converted.put(StreamInfo.FIRST_ENTRY, parseStreamEntryFromInfo(firstEntry));
+                    }
+                    Object lastEntry = raw.get(StreamInfo.LAST_ENTRY);
+                    if (lastEntry != null) {
+                        converted.put(StreamInfo.LAST_ENTRY, parseStreamEntryFromInfo(lastEntry));
+                    }
+                    return new StreamInfo(converted);
+                });
+    }
+
+    private static StreamEntry parseStreamEntryFromInfo(Object entry) {
+        if (entry == null) return null;
+        if (entry instanceof StreamEntry) return (StreamEntry) entry;
+        if (entry instanceof Object[]) {
+            Object[] arr = (Object[]) entry;
+            if (arr.length >= 2) {
+                String id = String.valueOf(arr[0]);
+                Map<String, String> fields = new HashMap<>();
+                Object second = arr[1];
+                if (second instanceof Object[]) {
+                    Object[] pairs = (Object[]) second;
+                    for (int i = 0; i + 1 < pairs.length; i += 2) {
+                        fields.put(String.valueOf(pairs[i]), String.valueOf(pairs[i + 1]));
+                    }
+                } else if (second instanceof String[]) {
+                    String[] pairs = (String[]) second;
+                    for (int i = 0; i + 1 < pairs.length; i += 2) {
+                        fields.put(pairs[i], pairs[i + 1]);
+                    }
+                }
+                return new StreamEntry(new StreamEntryID(id), fields);
+            }
+        }
+        return null;
+    }
+
+    /** Returns consumer groups info. Uses GLIDE xinfoGroups. */
+    public List<StreamGroupInfo> xinfoGroups(String key) {
+        return executeCommandWithGlide(
+                "XINFO GROUPS",
+                () -> {
+                    Map<String, Object>[] raw = glideClient.xinfoGroups(key).get();
+                    if (raw == null) return Collections.emptyList();
+                    List<StreamGroupInfo> list = new ArrayList<>();
+                    for (Map<String, Object> m : raw) {
+                        Map<String, Object> converted = new HashMap<>(m);
+                        Object lastDelivered = m.get(StreamGroupInfo.LAST_DELIVERED);
+                        if (lastDelivered instanceof String) {
+                            converted.put(
+                                    StreamGroupInfo.LAST_DELIVERED, new StreamEntryID((String) lastDelivered));
+                        }
+                        list.add(new StreamGroupInfo(converted));
+                    }
+                    return list;
+                });
+    }
+
+    /** Returns consumers info for a group. Uses GLIDE xinfoConsumers. */
+    public List<StreamConsumerInfo> xinfoConsumers(String key, String groupName) {
+        return executeCommandWithGlide(
+                "XINFO CONSUMERS",
+                () -> {
+                    Map<String, Object>[] raw = glideClient.xinfoConsumers(key, groupName).get();
+                    if (raw == null) return Collections.emptyList();
+                    List<StreamConsumerInfo> list = new ArrayList<>();
+                    for (Map<String, Object> m : raw) {
+                        list.add(new StreamConsumerInfo(m));
+                    }
+                    return list;
+                });
+    }
+
+    /** Helper method to convert Jedis ScanParams to GLIDE ZScanOptions. */
+    private static ZScanOptions convertScanParamsToZScanOptions(ScanParams params) {
+        ZScanOptions.ZScanOptionsBuilder builder = ZScanOptions.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(params.getMatchPattern());
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        return builder.build();
+    }
+
+    /** Helper method to convert Jedis ScanParams to GLIDE ZScanOptionsBinary. */
+    private static ZScanOptionsBinary convertScanParamsToZScanOptionsBinary(ScanParams params) {
+        ZScanOptionsBinary.ZScanOptionsBinaryBuilder builder = ZScanOptionsBinary.builder();
+
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(GlideString.of(params.getMatchPattern()));
+        }
+
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+
+        return builder.build();
+    }
+
+    // ===== MISSING METHODS FOR Valkey JDBC DRIVER COMPATIBILITY =====
+
+    /**
+     * Constructor with Connection (compatibility stub). NOTE: Connection is not used in GLIDE
+     * compatibility layer.
+     */
+    public Jedis(Connection connection) {
+        // Extract host/port from connection for GLIDE client creation
+        this(connection.getHost(), connection.getPort());
+    }
+
+    /**
+     * Send a blocking command to Valkey server. Uses the same implementation as sendCommand since
+     * GLIDE handles blocking internally.
+     */
+    public Object sendBlockingCommand(ProtocolCommand cmd, String... args) {
+        return sendCommand(cmd, args);
+    }
+
+    /**
+     * Send a blocking command to Valkey server with byte arrays. Uses the same implementation as
+     * sendCommand since GLIDE handles blocking internally.
+     */
+    public Object sendBlockingCommand(ProtocolCommand cmd, byte[]... args) {
+        return sendCommand(cmd, args);
+    }
+
+    /** Get the current database index. NOTE: GLIDE manages database selection internally. */
+    public int getDB() {
+        // TODO: Track database selection in compatibility layer
+        return 0; // Default database for now
+    }
+
+    // ========== LIST COMMANDS ==========
+
+    /**
+     * Inserts all the specified values at the head of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpush(String key, String... strings) {
+        return executeCommandWithGlide("LPUSH", () -> glideClient.lpush(key, strings).get());
+    }
+
+    /**
+     * Inserts all the specified values at the head of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpush(final byte[] key, final byte[]... strings) {
+        return executeCommandWithGlide(
+                "LPUSH",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.lpush(GlideString.of(key), glideStrings).get();
+                });
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpush(String key, String... strings) {
+        return executeCommandWithGlide("RPUSH", () -> glideClient.rpush(key, strings).get());
+    }
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpush(final byte[] key, final byte[]... strings) {
+        return executeCommandWithGlide(
+                "RPUSH",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.rpush(GlideString.of(key), glideStrings).get();
+                });
+    }
+
+    /**
+     * Removes and returns the first element of the list stored at key.
+     *
+     * @param key the key of the list
+     * @return the value of the first element, or null when key does not exist
+     */
+    public String lpop(String key) {
+        return executeCommandWithGlide("LPOP", () -> glideClient.lpop(key).get());
+    }
+
+    /**
+     * Removes and returns the first element of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @return the value of the first element, or null when key does not exist
+     */
+    public byte[] lpop(final byte[] key) {
+        return executeCommandWithGlide(
+                "LPOP",
+                () -> {
+                    GlideString result = glideClient.lpop(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the head of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<String> lpop(String key, int count) {
+        return executeCommandWithGlide(
+                "LPOP",
+                () -> {
+                    String[] result = glideClient.lpopCount(key, count).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the head of the list stored at key (binary
+     * version).
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<byte[]> lpop(final byte[] key, int count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] result = glideClient.lpopCount(GlideString.of(key), count).get();
+            if (result == null) {
+                return Collections.emptyList();
+            }
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs.getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Removes and returns the last element of the list stored at key.
+     *
+     * @param key the key of the list
+     * @return the value of the last element, or null when key does not exist
+     */
+    public String rpop(String key) {
+        return executeCommandWithGlide("RPOP", () -> glideClient.rpop(key).get());
+    }
+
+    /**
+     * Removes and returns the last element of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @return the value of the last element, or null when key does not exist
+     */
+    public byte[] rpop(final byte[] key) {
+        return executeCommandWithGlide(
+                "RPOP",
+                () -> {
+                    GlideString result = glideClient.rpop(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the tail of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<String> rpop(String key, int count) {
+        return executeCommandWithGlide(
+                "RPOP",
+                () -> {
+                    String[] result = glideClient.rpopCount(key, count).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Removes and returns up to count elements from the tail of the list stored at key (binary
+     * version).
+     *
+     * @param key the key of the list
+     * @param count the number of elements to pop
+     * @return list of popped elements, or empty list when key does not exist
+     */
+    public List<byte[]> rpop(final byte[] key, int count) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] result = glideClient.rpopCount(GlideString.of(key), count).get();
+            if (result == null) {
+                return Collections.emptyList();
+            }
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs.getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("RPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Returns the length of the list stored at key.
+     *
+     * @param key the key of the list
+     * @return the length of the list at key
+     */
+    public long llen(String key) {
+        return executeCommandWithGlide("LLEN", () -> glideClient.llen(key).get());
+    }
+
+    /**
+     * Returns the length of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @return the length of the list at key
+     */
+    public long llen(final byte[] key) {
+        return executeCommandWithGlide("LLEN", () -> glideClient.llen(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key.
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return list of elements in the specified range
+     */
+    public List<String> lrange(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "LRANGE",
+                () -> {
+                    String[] result = glideClient.lrange(key, start, stop).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns the specified elements of the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return list of elements in the specified range
+     */
+    public List<byte[]> lrange(final byte[] key, long start, long stop) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] result = glideClient.lrange(GlideString.of(key), start, stop).get();
+            if (result == null) {
+                return Collections.emptyList();
+            }
+            List<byte[]> byteResult = new ArrayList<>();
+            for (GlideString gs : result) {
+                byteResult.add(gs.getBytes());
+            }
+            return byteResult;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LRANGE operation failed", e);
+        }
+    }
+
+    /**
+     * Trim an existing list so that it will contain only the specified range of elements specified.
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return always "OK"
+     */
+    public String ltrim(String key, long start, long stop) {
+        return executeCommandWithGlide("LTRIM", () -> glideClient.ltrim(key, start, stop).get());
+    }
+
+    /**
+     * Trim an existing list so that it will contain only the specified range of elements specified
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param start the start index
+     * @param stop the stop index
+     * @return always "OK"
+     */
+    public String ltrim(final byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "LTRIM", () -> glideClient.ltrim(GlideString.of(key), start, stop).get());
+    }
+
+    /**
+     * Returns the element at index in the list stored at key.
+     *
+     * @param key the key of the list
+     * @param index the index of the element
+     * @return the requested element, or null when index is out of range
+     */
+    public String lindex(String key, long index) {
+        return executeCommandWithGlide("LINDEX", () -> glideClient.lindex(key, index).get());
+    }
+
+    /**
+     * Returns the element at index in the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param index the index of the element
+     * @return the requested element, or null when index is out of range
+     */
+    public byte[] lindex(final byte[] key, long index) {
+        return executeCommandWithGlide(
+                "LINDEX",
+                () -> {
+                    GlideString result = glideClient.lindex(GlideString.of(key), index).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Sets the list element at index to element.
+     *
+     * @param key the key of the list
+     * @param index the index of the element to set
+     * @param element the new element value
+     * @return "OK" on success
+     */
+    public String lset(String key, long index, String element) {
+        return executeCommandWithGlide("LSET", () -> glideClient.lset(key, index, element).get());
+    }
+
+    /**
+     * Sets the list element at index to element (binary version).
+     *
+     * @param key the key of the list
+     * @param index the index of the element to set
+     * @param element the new element value
+     * @return "OK" on success
+     */
+    public String lset(final byte[] key, long index, final byte[] element) {
+        return executeCommandWithGlide(
+                "LSET", () -> glideClient.lset(GlideString.of(key), index, GlideString.of(element)).get());
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list stored at key.
+     *
+     * @param key the key of the list
+     * @param count the number of elements to remove
+     * @param element the element to remove
+     * @return the number of removed elements
+     */
+    public long lrem(String key, long count, String element) {
+        return executeCommandWithGlide("LREM", () -> glideClient.lrem(key, count, element).get());
+    }
+
+    /**
+     * Removes the first count occurrences of elements equal to element from the list stored at key
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param count the number of elements to remove
+     * @param element the element to remove
+     * @return the number of removed elements
+     */
+    public long lrem(final byte[] key, long count, final byte[] element) {
+        return executeCommandWithGlide(
+                "LREM", () -> glideClient.lrem(GlideString.of(key), count, GlideString.of(element)).get());
+    }
+
+    /**
+     * Inserts element in the list stored at key either before or after the reference value pivot.
+     *
+     * @param key the key of the list
+     * @param where BEFORE or AFTER
+     * @param pivot the reference value
+     * @param element the element to insert
+     * @return the length of the list after the insert operation, or -1 when the value pivot was not
+     *     found
+     */
+    public long linsert(String key, ListPosition where, String pivot, String element) {
+        return executeCommandWithGlide(
+                "LINSERT",
+                () -> {
+                    InsertPosition position =
+                            where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
+                    return glideClient.linsert(key, position, pivot, element).get();
+                });
+    }
+
+    /**
+     * Inserts element in the list stored at key either before or after the reference value pivot
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param where BEFORE or AFTER
+     * @param pivot the reference value
+     * @param element the element to insert
+     * @return the length of the list after the insert operation, or -1 when the value pivot was not
+     *     found
+     */
+    public long linsert(
+            final byte[] key, ListPosition where, final byte[] pivot, final byte[] element) {
+        return executeCommandWithGlide(
+                "LINSERT",
+                () -> {
+                    InsertPosition position =
+                            where == ListPosition.BEFORE ? InsertPosition.BEFORE : InsertPosition.AFTER;
+                    return glideClient
+                            .linsert(
+                                    GlideString.of(key), position, GlideString.of(pivot), GlideString.of(element))
+                            .get();
+                });
+    }
+
+    /**
+     * Inserts specified values at the head of the list stored at key, only if key already exists and
+     * holds a list.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpushx(String key, String... strings) {
+        return executeCommandWithGlide("LPUSHX", () -> glideClient.lpushx(key, strings).get());
+    }
+
+    /**
+     * Inserts specified values at the head of the list stored at key, only if key already exists and
+     * holds a list (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long lpushx(final byte[] key, final byte[]... strings) {
+        return executeCommandWithGlide(
+                "LPUSHX",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.lpushx(GlideString.of(key), glideStrings).get();
+                });
+    }
+
+    /**
+     * Inserts specified values at the tail of the list stored at key, only if key already exists and
+     * holds a list.
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpushx(String key, String... strings) {
+        return executeCommandWithGlide("RPUSHX", () -> glideClient.rpushx(key, strings).get());
+    }
+
+    /**
+     * Inserts specified values at the tail of the list stored at key, only if key already exists and
+     * holds a list (binary version).
+     *
+     * @param key the key of the list
+     * @param strings the values to insert
+     * @return the length of the list after the push operation
+     */
+    public long rpushx(final byte[] key, final byte[]... strings) {
+        return executeCommandWithGlide(
+                "RPUSHX",
+                () -> {
+                    GlideString[] glideStrings = convertToGlideStringArray(strings);
+                    return glideClient.rpushx(GlideString.of(key), glideStrings).get();
+                });
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP.
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> blpop(int timeout, String... keys) {
+        return executeCommandWithGlide(
+                "BLPOP",
+                () -> {
+                    String[] result = glideClient.blpop(keys, timeout).get();
+                    return result != null ? Arrays.asList(result) : null;
+                });
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> blpop(double timeout, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.blpop(keys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0], result[1]);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP (binary version).
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<byte[]> blpop(int timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            GlideString[] result = glideClient.blpop(glideKeys, timeout).get();
+            if (result != null) {
+                List<byte[]> byteResult = new ArrayList<>();
+                for (GlideString gs : result) {
+                    byteResult.add(gs.getBytes());
+                }
+                return byteResult;
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive. It is the blocking version of LPOP (binary version).
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<byte[], byte[]> blpop(double timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            GlideString[] result = glideClient.blpop(glideKeys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0].getBytes(), result[1].getBytes());
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP.
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> brpop(int timeout, String... keys) {
+        return executeCommandWithGlide(
+                "BRPOP",
+                () -> {
+                    String[] result = glideClient.brpop(keys, timeout).get();
+                    return result != null ? Arrays.asList(result) : null;
+                });
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> brpop(double timeout, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            String[] result = glideClient.brpop(keys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0], result[1]);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BRPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP (binary version).
+     *
+     * @param timeout the timeout in seconds
+     * @param keys the keys to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<byte[]> brpop(int timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            GlideString[] result = glideClient.brpop(glideKeys, timeout).get();
+            if (result != null) {
+                List<byte[]> byteResult = new ArrayList<>();
+                for (GlideString gs : result) {
+                    byteResult.add(gs.getBytes());
+                }
+                return byteResult;
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BRPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive. It is the blocking version of RPOP (binary version).
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<byte[], byte[]> brpop(double timeout, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            GlideString[] result = glideClient.brpop(glideKeys, timeout).get();
+            if (result != null && result.length >= 2) {
+                return new KeyValue<>(result[0].getBytes(), result[1].getBytes());
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BRPOP operation failed", e);
+        }
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds
+     * @param key the key to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> blpop(int timeout, String key) {
+        return blpop(timeout, new String[] {key});
+    }
+
+    /**
+     * BLPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param key the key to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> blpop(double timeout, String key) {
+        return blpop(timeout, new String[] {key});
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds
+     * @param key the key to check
+     * @return list containing the key and the popped element, or null when no element could be popped
+     */
+    public List<String> brpop(int timeout, String key) {
+        return brpop(timeout, new String[] {key});
+    }
+
+    /**
+     * BRPOP is a blocking list pop primitive for a single key.
+     *
+     * @param timeout the timeout in seconds (double precision)
+     * @param key the key to check
+     * @return KeyValue containing the key and the popped element, or null when no element could be
+     *     popped
+     */
+    public KeyValue<String, String> brpop(double timeout, String key) {
+        return brpop(timeout, new String[] {key});
+    }
+
+    /**
+     * Returns the index of the first matching element in the list stored at key.
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @return the index of the first matching element, or null if not found
+     */
+    public Long lpos(String key, String element) {
+        return executeCommandWithGlide("LPOS", () -> glideClient.lpos(key, element).get());
+    }
+
+    /**
+     * Returns the index of the first matching element in the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @return the index of the first matching element, or null if not found
+     */
+    public Long lpos(final byte[] key, final byte[] element) {
+        return executeCommandWithGlide(
+                "LPOS", () -> glideClient.lpos(GlideString.of(key), GlideString.of(element)).get());
+    }
+
+    /**
+     * Returns the index of matching elements in the list stored at key with additional options.
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @return the index of the matching element, or null if not found
+     */
+    public Long lpos(String key, String element, LPosParams params) {
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    return glideClient.lpos(key, element, options).get();
+                });
+    }
+
+    /**
+     * Returns the index of matching elements in the list stored at key with additional options
+     * (binary version).
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @return the index of the matching element, or null if not found
+     */
+    public Long lpos(final byte[] key, final byte[] element, LPosParams params) {
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    return glideClient.lpos(GlideString.of(key), GlideString.of(element), options).get();
+                });
+    }
+
+    /**
+     * Returns the indices of matching elements in the list stored at key.
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @param count the maximum number of matches to return
+     * @return list of indices of matching elements
+     */
+    public List<Long> lpos(String key, String element, LPosParams params, long count) {
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    Long[] result = glideClient.lposCount(key, element, count, options).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns the indices of matching elements in the list stored at key (binary version).
+     *
+     * @param key the key of the list
+     * @param element the element to search for
+     * @param params additional parameters for the search
+     * @param count the maximum number of matches to return
+     * @return list of indices of matching elements
+     */
+    public List<Long> lpos(final byte[] key, final byte[] element, LPosParams params, long count) {
+        return executeCommandWithGlide(
+                "LPOS",
+                () -> {
+                    LPosOptions options = convertLPosParamsToLPosOptions(params);
+                    Long[] result =
+                            glideClient
+                                    .lposCount(GlideString.of(key), GlideString.of(element), count, options)
+                                    .get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Atomically moves an element from one list to another.
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @return the element being moved, or null when the source list is empty
+     */
+    public String lmove(String srcKey, String dstKey, ListDirection from, ListDirection to) {
+        return executeCommandWithGlide(
+                "LMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    return glideClient.lmove(srcKey, dstKey, glideFrom, glideTo).get();
+                });
+    }
+
+    /**
+     * Atomically moves an element from one list to another (binary version).
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @return the element being moved, or null when the source list is empty
+     */
+    public byte[] lmove(byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to) {
+        return executeCommandWithGlide(
+                "LMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    GlideString result =
+                            glideClient
+                                    .lmove(GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo)
+                                    .get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Atomically moves an element from one list to another (binary version).
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @param timeout the timeout in seconds
+     * @return the element being moved, or null when timeout is reached
+     */
+    public String blmove(
+            String srcKey, String dstKey, ListDirection from, ListDirection to, double timeout) {
+        return executeCommandWithGlide(
+                "BLMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    return glideClient.blmove(srcKey, dstKey, glideFrom, glideTo, timeout).get();
+                });
+    }
+
+    /**
+     * Blocking version of LMOVE. Atomically moves an element from one list to another (binary
+     * version).
+     *
+     * @param srcKey the source list key
+     * @param dstKey the destination list key
+     * @param from the direction to pop from the source list
+     * @param to the direction to push to the destination list
+     * @param timeout the timeout in seconds
+     * @return the element being moved, or null when timeout is reached
+     */
+    public byte[] blmove(
+            byte[] srcKey, byte[] dstKey, ListDirection from, ListDirection to, double timeout) {
+        return executeCommandWithGlide(
+                "BLMOVE",
+                () -> {
+                    glide.api.models.commands.ListDirection glideFrom = convertToGlideListDirection(from);
+                    glide.api.models.commands.ListDirection glideTo = convertToGlideListDirection(to);
+                    GlideString result =
+                            glideClient
+                                    .blmove(
+                                            GlideString.of(srcKey), GlideString.of(dstKey), glideFrom, glideTo, timeout)
+                                    .get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key
+     * names.
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<String, List<String>> lmpop(ListDirection direction, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.lmpop(keys, glideDirection).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key
+     * names.
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<String, List<String>> lmpop(ListDirection direction, int count, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.lmpop(keys, glideDirection, count).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key names
+     * (binary version).
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<byte[], List<byte[]>> lmpop(ListDirection direction, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            Map<GlideString, GlideString[]> result = glideClient.lmpop(glideKeys, glideDirection).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty list key from the list of provided key names
+     * (binary version).
+     *
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when no element could
+     *     be popped
+     */
+    public KeyValue<byte[], List<byte[]>> lmpop(ListDirection direction, int count, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            Map<GlideString, GlideString[]> result =
+                    glideClient.lmpop(glideKeys, glideDirection, count).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("LMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key.
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<String, List<String>> blmpop(
+            double timeout, ListDirection direction, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key.
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<String, List<String>> blmpop(
+            double timeout, ListDirection direction, int count, String... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            Map<String, String[]> result = glideClient.blmpop(keys, glideDirection, count, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<String, String[]> entry = result.entrySet().iterator().next();
+                return new KeyValue<>(entry.getKey(), Arrays.asList(entry.getValue()));
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key (binary
+     * version).
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<byte[], List<byte[]>> blmpop(
+            double timeout, ListDirection direction, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            Map<GlideString, GlideString[]> result =
+                    glideClient.blmpop(glideKeys, glideDirection, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Blocking version of LMPOP. Pops one or more elements from the first non-empty list key (binary
+     * version).
+     *
+     * @param timeout the timeout in seconds
+     * @param direction the direction to pop from (LEFT or RIGHT)
+     * @param count the maximum number of elements to pop
+     * @param keys the keys to check
+     * @return KeyValue containing the key and list of popped elements, or null when timeout is
+     *     reached
+     */
+    public KeyValue<byte[], List<byte[]>> blmpop(
+            double timeout, ListDirection direction, int count, byte[]... keys) {
+        checkNotClosed();
+        ensureInitialized();
+        try {
+            glide.api.models.commands.ListDirection glideDirection =
+                    convertToGlideListDirection(direction);
+            GlideString[] glideKeys = convertToGlideStringArray(keys);
+            Map<GlideString, GlideString[]> result =
+                    glideClient.blmpop(glideKeys, glideDirection, count, timeout).get();
+            if (result != null && !result.isEmpty()) {
+                Map.Entry<GlideString, GlideString[]> entry = result.entrySet().iterator().next();
+                List<byte[]> values = new ArrayList<>();
+                for (GlideString gs : entry.getValue()) {
+                    values.add(gs.getBytes());
+                }
+                return new KeyValue<>(entry.getKey().getBytes(), values);
+            }
+            return null;
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("BLMPOP operation failed", e);
+        }
+    }
+
+    /**
+     * Atomically returns and removes the last element of the list stored at source, and pushes the
+     * element at the first element of the list stored at destination.
+     *
+     * @deprecated Use LMOVE instead
+     * @param srckey the source key
+     * @param dstkey the destination key
+     * @return the element being popped and pushed
+     */
+    @Deprecated
+    public String rpoplpush(String srckey, String dstkey) {
+        return lmove(srckey, dstkey, ListDirection.RIGHT, ListDirection.LEFT);
+    }
+
+    /**
+     * Atomically returns and removes the last element of the list stored at source, and pushes the
+     * element at the first element of the list stored at destination (binary version).
+     *
+     * @deprecated Use LMOVE instead
+     * @param srckey the source key
+     * @param dstkey the destination key
+     * @return the element being popped and pushed
+     */
+    @Deprecated
+    public byte[] rpoplpush(final byte[] srckey, final byte[] dstkey) {
+        return lmove(srckey, dstkey, ListDirection.RIGHT, ListDirection.LEFT);
+    }
+
+    /**
+     * Blocking version of RPOPLPUSH.
+     *
+     * @deprecated Use BLMOVE instead
+     * @param source the source key
+     * @param destination the destination key
+     * @param timeout the timeout in seconds
+     * @return the element being popped and pushed, or null when timeout is reached
+     */
+    @Deprecated
+    public String brpoplpush(String source, String destination, int timeout) {
+        return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
+    }
+
+    /**
+     * Blocking version of RPOPLPUSH (binary version).
+     *
+     * @deprecated Use BLMOVE instead
+     * @param source the source key
+     * @param destination the destination key
+     * @param timeout the timeout in seconds
+     * @return the element being popped and pushed, or null when timeout is reached
+     */
+    @Deprecated
+    public byte[] brpoplpush(final byte[] source, final byte[] destination, int timeout) {
+        return blmove(source, destination, ListDirection.RIGHT, ListDirection.LEFT, timeout);
+    }
+
+    // ========== Server Management Commands ==========
+
+    /**
+     * Gets information and statistics about the server.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @return A String containing server information and statistics.
+     * @example
+     *     <pre>{@code
+     * String info = jedis.info();
+     * System.out.println(info);
+     * }</pre>
+     */
+    public String info() {
+        return executeCommandWithGlide("INFO", () -> glideClient.info().get());
+    }
+
+    /**
+     * Gets information and statistics about the server for a specific section.
+     *
+     * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
+     * @param section The section name (e.g., "server", "clients", "memory", "stats")
+     * @return A String containing server information for the specified section.
+     * @throws JedisException if the section name is invalid
+     * @example
+     *     <pre>{@code
+     * String memoryInfo = jedis.info("memory");
+     * System.out.println(memoryInfo);
+     * }</pre>
+     */
+    public String info(String section) {
+        return executeCommandWithGlide(
+                "INFO",
+                () -> {
+                    try {
+                        Section glideSection = Section.valueOf(section.toUpperCase());
+                        return glideClient.info(new Section[] {glideSection}).get();
+                    } catch (IllegalArgumentException e) {
+                        throw new JedisException(
+                                "Invalid INFO section: '"
+                                        + section
+                                        + "'. Valid sections are: "
+                                        + Arrays.toString(Section.values()),
+                                e);
+                    }
+                });
+    }
+
+    // ========================================
+    // Sorted Set Commands
+    // ========================================
+    // ==================== Scripting and Functions Commands ====================
+
+    /**
+     * Executes a Lua script on the server.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
+     */
+    public Object eval(String script) {
+        return eval(script, Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Executes a Lua script on the server with keys and arguments.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @param keyCount the number of keys (first keyCount params are keys, rest are arguments)
+     * @param params the keys and arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
+     */
+    public Object eval(String script, int keyCount, String... params) {
+        List<String> keys = new ArrayList<>();
+        List<String> args = new ArrayList<>();
+        for (int i = 0; i < params.length; i++) {
+            if (i < keyCount) {
+                keys.add(params[i]);
+            } else {
+                args.add(params[i]);
+            }
+        }
+        return eval(script, keys, args);
+    }
+
+    /**
+     * Executes a Lua script on the server with keys and arguments.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval/">EVAL</a>
+     */
+    public Object eval(String script, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVAL",
+                () -> {
+                    try (Script luaScript = new Script(script, false)) {
+                        ScriptOptions.ScriptOptionsBuilder builder = ScriptOptions.builder();
+                        if (keys != null && !keys.isEmpty()) {
+                            for (String key : keys) {
+                                builder.key(key);
+                            }
+                        }
+                        if (args != null && !args.isEmpty()) {
+                            for (String arg : args) {
+                                builder.arg(arg);
+                            }
+                        }
+                        ScriptOptions options = builder.build();
+                        return glideClient.invokeScript(luaScript, options).get();
+                    } catch (Exception e) {
+                        throw new RuntimeException("Failed to execute script", e);
+                    }
+                });
+    }
+
+    /**
+     * Gets the values of configuration parameters.
+     *
+     * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
+     * @param pattern The configuration parameter pattern (e.g., "timeout", "maxmemory",
+     *     "*max-*-entries*")
+     * @return A Map of configuration parameter names to their values.
+     * @example
+     *     <pre>{@code
+     * Map<String, String> config = jedis.configGet("timeout");
+     * System.out.println("Timeout: " + config.get("timeout"));
+     * }</pre>
+     */
+    public Map<String, String> configGet(String pattern) {
+        return executeCommandWithGlide(
+                "CONFIG GET", () -> glideClient.configGet(new String[] {pattern}).get());
+    }
+
+    /**
+     * Sets a configuration parameter to the specified value.
+     *
+     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
+     * @param parameter The configuration parameter name.
+     * @param value The value to set.
+     * @return "OK" if the configuration was set successfully.
+     * @example
+     *     <pre>{@code
+     * String result = jedis.configSet("timeout", "300");
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String configSet(String parameter, String value) {
+        Map<String, String> configMap = new HashMap<>();
+        configMap.put(parameter, value);
+        return executeCommandWithGlide("CONFIG SET", () -> glideClient.configSet(configMap).get());
+    }
+
+    /**
+     * Sets multiple configuration parameters to their specified values.
+     *
+     * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
+     * @param parameters A Map of configuration parameter names to their values.
+     * @return "OK" if all configurations were set successfully.
+     * @example
+     *     <pre>{@code
+     * Map<String, String> config = new HashMap<>();
+     * config.put("timeout", "300");
+     * config.put("maxmemory-policy", "allkeys-lru");
+     * String result = jedis.configSet(config);
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String configSet(Map<String, String> parameters) {
+        return executeCommandWithGlide("CONFIG SET", () -> glideClient.configSet(parameters).get());
+    }
+
+    /**
+     * Rewrites the configuration file with the current configuration.
+     *
+     * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
+     * @return "OK" when the configuration was rewritten properly.
+     * @example
+     *     <pre>{@code
+     * String result = jedis.configRewrite();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String configRewrite() {
+        return executeCommandWithGlide("CONFIG REWRITE", () -> glideClient.configRewrite().get());
+    }
+
+    /**
+     * Resets the statistics reported by the server.
+     *
+     * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
+     * @return "OK" to confirm that the statistics were successfully reset.
+     * @example
+     *     <pre>{@code
+     * String result = jedis.configResetStat();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String configResetStat() {
+        return executeCommandWithGlide("CONFIG RESETSTAT", () -> glideClient.configResetStat().get());
+    }
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return The number of keys in the currently selected database.
+     * @example
+     *     <pre>{@code
+     * long numKeys = jedis.dbsize();
+     * System.out.println("Number of keys: " + numKeys);
+     * }</pre>
+     */
+    public long dbsize() {
+        return executeCommandWithGlide("DBSIZE", () -> glideClient.dbsize().get());
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database.
+     *
+     * <p>This method uses the default synchronous flush mode.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @return "OK" when the operation completes successfully.
+     * @example
+     *     <pre>{@code
+     * String result = jedis.flushDB();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String flushDB() {
+        return executeCommandWithGlide("FLUSHDB", () -> glideClient.flushdb().get());
+    }
+
+    /**
+     * Deletes all the keys of the currently selected database with the specified flush mode.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC).
+     * @return "OK" when the operation completes successfully.
+     * @example
+     *     <pre>{@code
+     * // Flush asynchronously (non-blocking)
+     * String result = jedis.flushDB(FlushMode.ASYNC);
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String flushDB(FlushMode mode) {
+        return executeCommandWithGlide(
+                "FLUSHDB", () -> glideClient.flushdb(mode.toGlideFlushMode()).get());
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases.
+     *
+     * <p>This method uses the default synchronous flush mode.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @return "OK" when the operation completes successfully.
+     * @example
+     *     <pre>{@code
+     * String result = jedis.flushAll();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String flushAll() {
+        return executeCommandWithGlide("FLUSHALL", () -> glideClient.flushall().get());
+    }
+
+    /**
+     * Deletes all the keys of all the existing databases with the specified flush mode.
+     *
+     * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
+     * @param mode The flushing mode (SYNC or ASYNC).
+     * @return "OK" when the operation completes successfully.
+     * @example
+     *     <pre>{@code
+     * // Flush all databases asynchronously (non-blocking)
+     * String result = jedis.flushAll(FlushMode.ASYNC);
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    public String flushAll(FlushMode mode) {
+        return executeCommandWithGlide(
+                "FLUSHALL", () -> glideClient.flushall(mode.toGlideFlushMode()).get());
+    }
+
+    /**
+     * Returns the server time as a two-element array.
+     *
+     * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
+     * @return An array with two elements: [0] Unix timestamp in seconds, [1] microseconds.
+     * @example
+     *     <pre>{@code
+     * String[] time = jedis.time();
+     * System.out.println("Unix timestamp: " + time[0] + "." + time[1]);
+     * }</pre>
+     */
+    public String[] time() {
+        return executeCommandWithGlide("TIME", () -> glideClient.time().get());
+    }
+
+    /**
+     * Returns the Unix timestamp of the last successful save to disk.
+     *
+     * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
+     * @return Unix timestamp of the last DB save executed with success.
+     * @example
+     *     <pre>{@code
+     * long timestamp = jedis.lastsave();
+     * System.out.println("Last save: " + timestamp);
+     * }</pre>
+     */
+    public long lastsave() {
+        return executeCommandWithGlide("LASTSAVE", () -> glideClient.lastsave().get());
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version.
+     *
+     * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
+     * @return A piece of generative computer art along with the current server version.
+     * @example
+     *     <pre>{@code
+     * String art = jedis.lolwut();
+     * System.out.println(art);
+     * }</pre>
+     */
+    public String lolwut() {
+        return executeCommandWithGlide("LOLWUT", () -> glideClient.lolwut().get());
+    }
+
+    /**
+     * Displays a piece of generative computer art and the server version with custom parameters.
+     *
+     * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
+     * @param params Additional parameters to customize the output.
+     * @return A piece of generative computer art along with the current server version.
+     * @example
+     *     <pre>{@code
+     * String art = jedis.lolwut(5, 10);
+     * System.out.println(art);
+     * }</pre>
+     */
+    public String lolwut(int... params) {
+        return executeCommandWithGlide("LOLWUT", () -> glideClient.lolwut(params).get());
+    }
+
+    /**
+     * Executes a Lua script by its SHA1 digest.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
+     */
+    public Object evalsha(String sha1) {
+        return evalsha(sha1, Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Executes a Lua script by its SHA1 digest with keys and arguments.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @param keyCount the number of keys (first keyCount params are keys, rest are arguments)
+     * @param params the keys and arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
+     */
+    public Object evalsha(String sha1, int keyCount, String... params) {
+        List<String> keys = new ArrayList<>();
+        List<String> args = new ArrayList<>();
+        for (int i = 0; i < params.length; i++) {
+            if (i < keyCount) {
+                keys.add(params[i]);
+            } else {
+                args.add(params[i]);
+            }
+        }
+        return evalsha(sha1, keys, args);
+    }
+
+    /**
+     * Executes a Lua script by its SHA1 digest with keys and arguments.
+     *
+     * <p><b>Implementation Note:</b> This method uses {@code customCommand} because GLIDE Java does
+     * not currently expose a type-safe {@code evalsha} API for non-read-only operations. While GLIDE
+     * provides {@link #evalshaReadonly(String, List, List)} for read-only scripts, the standard
+     * {@code EVALSHA} command (which allows writes) must be sent using {@code customCommand}.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha/">EVALSHA</a>
+     */
+    public Object evalsha(String sha1, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVALSHA",
+                () -> {
+                    // Use customCommand since GLIDE Java only exposes evalshaReadOnly, not evalsha
+                    // Build the command: EVALSHA sha1 numkeys key [key ...] arg [arg ...]
+                    List<String> cmdArgs = new ArrayList<>();
+                    cmdArgs.add("EVALSHA");
+                    cmdArgs.add(sha1);
+                    cmdArgs.add(String.valueOf(keys != null ? keys.size() : 0));
+                    if (keys != null) {
+                        cmdArgs.addAll(keys);
+                    }
+                    if (args != null) {
+                        cmdArgs.addAll(args);
+                    }
+                    return glideClient.customCommand(cmdArgs.toArray(new String[0])).get();
+                });
+    }
+
+    /**
+     * Executes a read-only Lua script with keys and arguments.
+     *
+     * @param script the Lua 5.1 script to execute
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/eval-ro/">EVAL_RO</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object evalReadonly(String script, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVAL_RO",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.evalReadOnly(script, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Executes a read-only Lua script by its SHA1 digest with keys and arguments.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @param keys the keys accessed by the script
+     * @param args the arguments for the script
+     * @return the result of the script execution
+     * @see <a href="https://valkey.io/commands/evalsha-ro/">EVALSHA_RO</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object evalshaReadonly(String sha1, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "EVALSHA_RO",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.evalshaReadOnly(sha1, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Loads a Lua script into the server's script cache and returns its SHA1 digest.
+     *
+     * <p><b>Implementation Note:</b> This method uses {@code customCommand} because GLIDE Java does
+     * not currently expose a type-safe {@code scriptLoad} API. While GLIDE's {@link Script} object
+     * can store scripts in the Rust FFI layer and compute SHA1 hashes client-side, it does not
+     * explicitly send {@code SCRIPT LOAD} to the Valkey server, which is required for Jedis API
+     * compatibility where scripts must be loaded before {@code EVALSHA} can be used.
+     *
+     * @param script the Lua script to load
+     * @return the SHA1 digest of the script
+     * @see <a href="https://valkey.io/commands/script-load/">SCRIPT LOAD</a>
+     */
+    public String scriptLoad(String script) {
+        return executeCommandWithGlide(
+                "SCRIPT LOAD",
+                () -> {
+                    // Use customCommand since GLIDE Java doesn't expose a type-safe scriptLoad API
+                    return (String) glideClient.customCommand(new String[] {"SCRIPT", "LOAD", script}).get();
+                });
+    }
+
+    /**
+     * Checks if scripts exist in the script cache by their SHA1 digests.
+     *
+     * @param sha1 the SHA1 digests to check
+     * @return a list of booleans indicating the existence of each script
+     * @see <a href="https://valkey.io/commands/script-exists/">SCRIPT EXISTS</a>
+     */
+    public List<Boolean> scriptExists(String... sha1) {
+        return executeCommandWithGlide(
+                "SCRIPT EXISTS",
+                () -> {
+                    Boolean[] result = glideClient.scriptExists(sha1).get();
+                    return Arrays.asList(result);
+                });
+    }
+
+    /**
+     * Flushes the Lua scripts cache.
+     *
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
+     */
+    public String scriptFlush() {
+        return executeCommandWithGlide("SCRIPT FLUSH", () -> glideClient.scriptFlush().get());
+    }
+
+    /**
+     * Flushes the Lua scripts cache with the specified flush mode.
+     *
+     * @param flushMode the flush mode (SYNC or ASYNC)
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/script-flush/">SCRIPT FLUSH</a>
+     */
+    public String scriptFlush(FlushMode flushMode) {
+        return executeCommandWithGlide(
+                "SCRIPT FLUSH", () -> glideClient.scriptFlush(flushMode.toGlideFlushMode()).get());
+    }
+
+    /**
+     * Kills the currently executing Lua script, assuming no write operation was yet performed by the
+     * script.
+     *
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/script-kill/">SCRIPT KILL</a>
+     */
+    public String scriptKill() {
+        return executeCommandWithGlide("SCRIPT KILL", () -> glideClient.scriptKill().get());
+    }
+
+    /**
+     * Returns the original source code of a script in the script cache.
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @return the source code of the script, or null if the script is not found
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/script-show/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public String scriptShow(String sha1) {
+        return executeCommandWithGlide("SCRIPT SHOW", () -> glideClient.scriptShow(sha1).get());
+    }
+
+    /**
+     * Returns the original source code of a script in the script cache (binary version).
+     *
+     * @param sha1 the SHA1 digest of the script
+     * @return the source code of the script, or null if the script is not found
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/script-show/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public byte[] scriptShow(byte[] sha1) {
+        return executeCommandWithGlide(
+                "SCRIPT SHOW",
+                () -> {
+                    GlideString result = glideClient.scriptShow(GlideString.of(sha1)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Sets the debug mode for subsequent scripts executed with EVAL. Available modes: YES, NO, SYNC.
+     *
+     * @param mode the script debug mode
+     * @return "OK" if successful
+     * @throws JedisException if the operation fails or connection is lost
+     * @see <a href="https://valkey.io/commands/script-debug/">valkey.io</a>
+     * @since Valkey 3.2.0
+     */
+    public String scriptDebug(ScriptDebugMode mode) {
+        return executeCommandWithGlide("SCRIPT DEBUG", () -> glideClient.scriptDebug(mode).get());
+    }
+
+    /**
+     * Loads a library to Valkey.
+     *
+     * @param functionCode the source code that implements the library
+     * @return the library name that was loaded
+     * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionLoad(String functionCode) {
+        return executeCommandWithGlide(
+                "FUNCTION LOAD", () -> glideClient.functionLoad(functionCode, false).get());
+    }
+
+    /**
+     * Loads a library to Valkey, replacing any existing library with the same name.
+     *
+     * @param functionCode the source code that implements the library
+     * @return the library name that was loaded
+     * @see <a href="https://valkey.io/commands/function-load/">FUNCTION LOAD</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionLoadReplace(String functionCode) {
+        return executeCommandWithGlide(
+                "FUNCTION LOAD", () -> glideClient.functionLoad(functionCode, true).get());
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * @param libraryName the library name to delete
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-delete/">FUNCTION DELETE</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionDelete(String libraryName) {
+        return executeCommandWithGlide(
+                "FUNCTION DELETE", () -> glideClient.functionDelete(libraryName).get());
+    }
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @return the serialized payload of all loaded libraries
+     * @see <a href="https://valkey.io/commands/function-dump/">FUNCTION DUMP</a>
+     * @since Valkey 7.0 and above
+     */
+    public byte[] functionDump() {
+        return executeCommandWithGlide("FUNCTION DUMP", () -> glideClient.functionDump().get());
+    }
+
+    /**
+     * Restores libraries from the serialized payload.
+     *
+     * @param serializedValue the serialized data from functionDump
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionRestore(byte[] serializedValue) {
+        return executeCommandWithGlide(
+                "FUNCTION RESTORE", () -> glideClient.functionRestore(serializedValue).get());
+    }
+
+    /**
+     * Restores libraries from the serialized payload with a policy for handling existing libraries.
+     *
+     * @param serializedValue the serialized data from functionDump
+     * @param policy the policy for handling existing libraries
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-restore/">FUNCTION RESTORE</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionRestore(byte[] serializedValue, FunctionRestorePolicy policy) {
+        return executeCommandWithGlide(
+                "FUNCTION RESTORE",
+                () ->
+                        glideClient
+                                .functionRestore(serializedValue, policy.toGlideFunctionRestorePolicy())
+                                .get());
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionFlush() {
+        return executeCommandWithGlide("FUNCTION FLUSH", () -> glideClient.functionFlush().get());
+    }
+
+    /**
+     * Deletes all function libraries with the specified flush mode.
+     *
+     * @param mode the flushing mode (SYNC or ASYNC)
+     * @return "OK"
+     * @see <a href="https://valkey.io/commands/function-flush/">FUNCTION FLUSH</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionFlush(FlushMode mode) {
+        return executeCommandWithGlide(
+                "FUNCTION FLUSH", () -> glideClient.functionFlush(mode.toGlideFlushMode()).get());
+    }
+
+    /**
+     * Kills a function that is currently executing.
+     *
+     * @return "OK" if function is terminated
+     * @see <a href="https://valkey.io/commands/function-kill/">FUNCTION KILL</a>
+     * @since Valkey 7.0 and above
+     */
+    public String functionKill() {
+        return executeCommandWithGlide("FUNCTION KILL", () -> glideClient.functionKill().get());
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @param name the function name
+     * @param keys the keys accessed by the function
+     * @param args the function arguments
+     * @return the invoked function's return value
+     * @see <a href="https://valkey.io/commands/fcall/">FCALL</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object fcall(String name, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "FCALL",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.fcall(name, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @param name the function name
+     * @param keys the keys accessed by the function
+     * @param args the function arguments
+     * @return the invoked function's return value
+     * @see <a href="https://valkey.io/commands/fcall_ro/">FCALL_RO</a>
+     * @since Valkey 7.0 and above
+     */
+    public Object fcallReadonly(String name, List<String> keys, List<String> args) {
+        return executeCommandWithGlide(
+                "FCALL_RO",
+                () -> {
+                    String[] keyArray = keys != null ? keys.toArray(new String[0]) : new String[0];
+                    String[] argArray = args != null ? args.toArray(new String[0]) : new String[0];
+                    return glideClient.fcallReadOnly(name, keyArray, argArray).get();
+                });
+    }
+
+    /**
+     * Returns information about all loaded libraries.
+     *
+     * @return info about all libraries and their functions
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionList() {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(false).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about loaded libraries matching a pattern.
+     *
+     * @param libraryNamePattern a wildcard pattern for matching library names
+     * @return info about queried libraries and their functions
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionList(String libraryNamePattern) {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, false).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about all loaded libraries with their code.
+     *
+     * @return info about all libraries and their functions including code
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionListWithCode() {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(true).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about loaded libraries matching a pattern with their code.
+     *
+     * @param libraryNamePattern a wildcard pattern for matching library names
+     * @return info about queried libraries and their functions including code
+     * @see <a href="https://valkey.io/commands/function-list/">FUNCTION LIST</a>
+     * @since Valkey 7.0 and above
+     */
+    public List<LibraryInfo> functionListWithCode(String libraryNamePattern) {
+        return executeCommandWithGlide(
+                "FUNCTION LIST",
+                () -> {
+                    Map<String, Object>[] result = glideClient.functionList(libraryNamePattern, true).get();
+                    List<LibraryInfo> libraries = new ArrayList<>(result.length);
+                    for (Map<String, Object> lib : result) {
+                        libraries.add(new LibraryInfo(lib));
+                    }
+                    return libraries;
+                });
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * @return a map with information about running scripts and available engines
+     * @see <a href="https://valkey.io/commands/function-stats/">FUNCTION STATS</a>
+     * @since Valkey 7.0 and above
+     */
+    @SuppressWarnings("unchecked")
+    public FunctionStats functionStats() {
+        return executeCommandWithGlide(
+                "FUNCTION STATS",
+                () -> {
+                    Map<String, Map<String, Map<String, Object>>> result = glideClient.functionStats().get();
+                    // The result structure is: { "running_script": {...}, "engines": {...} }
+                    // But GLIDE returns it as Map<String, Map<String, Map<String, Object>>>
+                    // We need to extract and flatten appropriately
+                    Map<String, Object> runningScript = null;
+                    Map<String, Map<String, Object>> engines = null;
+
+                    if (result != null) {
+                        // Get running_script - it's actually a Map<String, Map<String, Object>>
+                        Object runningScriptObj = result.get("running_script");
+                        if (runningScriptObj instanceof Map) {
+                            runningScript = (Map<String, Object>) runningScriptObj;
+                        }
+
+                        // Get engines - it's a Map<String, Map<String, Object>>
+                        Object enginesObj = result.get("engines");
+                        if (enginesObj instanceof Map) {
+                            engines = (Map<String, Map<String, Object>>) enginesObj;
+                        }
+                    }
+
+                    return new FunctionStats(runningScript, engines);
+                });
+    }
+
+    /**
+     * Adds one or more members to a sorted set, or updates the score if it already exists.
+     *
+     * @param key the key of the sorted set
+     * @param score the score of the member
+     * @param member the member to add
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zadd(String key, double score, String member) {
+        return executeCommandWithGlide(
+                "ZADD", () -> glideClient.zadd(key, createMap(member, score)).get());
+    }
+
+    /**
+     * Adds a member to a sorted set with additional options.
+     *
+     * @param key the key of the sorted set
+     * @param score the score of the member
+     * @param member the member to add
+     * @param params additional options for the ZADD command
+     * @return the number of elements added or updated, depending on the CH option
+     * @since Valkey 3.0.2
+     */
+    public long zadd(String key, double score, String member, ZAddParams params) {
+        return zadd(key, createMap(member, score), params);
+    }
+
+    /**
+     * Adds one or more members to a sorted set, or updates the score if it already exists (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param score the score of the member
+     * @param member the member to add
+     * @return the number of elements added to the sorted set
+     */
+    public long zadd(final byte[] key, double score, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () ->
+                        glideClient.zadd(GlideString.of(key), createMap(GlideString.of(member), score)).get());
+    }
+
+    /**
+     * Adds a member to a sorted set with additional options (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param score the score of the member
+     * @param member the member to add
+     * @param params additional options for the ZADD command
+     * @return the number of elements added or updated, depending on the CH option
+     */
+    public long zadd(byte[] key, double score, byte[] member, ZAddParams params) {
+        return zadd(key, createMap(member, score), params);
+    }
+
+    /**
+     * Adds multiple members to a sorted set, or updates the score if they already exist.
+     *
+     * @param key the key of the sorted set
+     * @param scoreMembers a map of members to their scores
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zadd(String key, Map<String, Double> scoreMembers) {
+        return executeCommandWithGlide("ZADD", () -> glideClient.zadd(key, scoreMembers).get());
+    }
+
+    /**
+     * Adds multiple members to a sorted set, or updates the score if they already exist (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param scoreMembers a map of members to their scores
+     * @return the number of elements added to the sorted set
+     */
+    public long zadd(final byte[] key, Map<byte[], Double> scoreMembers) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () -> {
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    for (Map.Entry<byte[], Double> entry : scoreMembers.entrySet()) {
+                        glideMap.put(GlideString.of(entry.getKey()), entry.getValue());
+                    }
+                    return glideClient.zadd(GlideString.of(key), glideMap).get();
+                });
+    }
+
+    /**
+     * Adds multiple members to a sorted set with additional options, or updates the score if they
+     * already exist.
+     *
+     * @param key the key of the sorted set
+     * @param scoreMembers a map of members to their scores
+     * @param params additional options for the ZADD command
+     * @return the number of elements added or updated, depending on the CH option
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 3.0.2
+     */
+    public long zadd(String key, Map<String, Double> scoreMembers, ZAddParams params) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () -> {
+                    ZAddOptions options = convertZAddParams(params);
+                    boolean changed = params.getCh() != null && params.getCh();
+                    return glideClient.zadd(key, scoreMembers, options, changed).get();
+                });
+    }
+
+    /**
+     * Adds multiple members to a sorted set with additional options, or updates the score if they
+     * already exist (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param scoreMembers a map of members to their scores
+     * @param params additional options for the ZADD command
+     * @return the number of elements added or updated, depending on the CH option
+     */
+    public long zadd(final byte[] key, Map<byte[], Double> scoreMembers, ZAddParams params) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () -> {
+                    Map<GlideString, Double> glideMap = new HashMap<>();
+                    for (Map.Entry<byte[], Double> entry : scoreMembers.entrySet()) {
+                        glideMap.put(GlideString.of(entry.getKey()), entry.getValue());
+                    }
+                    ZAddOptions options = convertZAddParams(params);
+                    boolean changed = params.getCh() != null && params.getCh();
+                    return glideClient.zadd(GlideString.of(key), glideMap, options, changed).get();
+                });
+    }
+
+    /**
+     * Increments the score of a member in a sorted set. If the member does not exist, it is added
+     * with the increment as its score.
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public double zaddIncr(String key, double increment, String member) {
+        return executeCommandWithGlide(
+                "ZADD", () -> glideClient.zaddIncr(key, member, increment).get());
+    }
+
+    /**
+     * Increments the score of a member in a sorted set (binary version). If the member does not
+     * exist, it is added with the increment as its score.
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     */
+    public double zaddIncr(final byte[] key, double increment, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZADD",
+                () -> glideClient.zaddIncr(GlideString.of(key), GlideString.of(member), increment).get());
+    }
+
+    /**
+     * Removes one or more members from a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param members the members to remove
+     * @return the number of members removed from the sorted set
+     * @see <a href="https://valkey.io/commands/zrem/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zrem(String key, String... members) {
+        return executeCommandWithGlide("ZREM", () -> glideClient.zrem(key, members).get());
+    }
+
+    /**
+     * Removes one or more members from a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members to remove
+     * @return the number of members removed from the sorted set
+     */
+    public long zrem(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "ZREM",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.zrem(GlideString.of(key), glideMembers).get();
+                });
+    }
+
+    /**
+     * Adds the specified members to the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to add
+     * @return the number of elements that were added to the set
+     */
+    public long sadd(String key, String... members) {
+        return executeCommandWithGlide("SADD", () -> glideClient.sadd(key, members).get());
+    }
+
+    /**
+     * Adds the specified members to the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to add
+     * @return the number of elements that were added to the set
+     */
+    public long sadd(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SADD",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.sadd(GlideString.of(key), glideMembers).get();
+                });
+    }
+
+    /**
+     * Returns the number of members in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @return the cardinality (number of elements) of the sorted set, or 0 if key does not exist
+     * @see <a href="https://valkey.io/commands/zcard/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zcard(String key) {
+        return executeCommandWithGlide("ZCARD", () -> glideClient.zcard(key).get());
+    }
+
+    /**
+     * Returns the number of members in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @return the cardinality (number of elements) of the sorted set, or 0 if key does not exist
+     */
+    public long zcard(final byte[] key) {
+        return executeCommandWithGlide("ZCARD", () -> glideClient.zcard(GlideString.of(key)).get());
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty sorted set (String version).
+     *
+     * @param option the sorted set option (MIN or MAX)
+     * @param keys the keys of the sorted sets
+     * @return a KeyValue containing the key and list of Tuples, or null if all sets are empty
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public KeyValue<String, List<Tuple>> zmpop(SortedSetOption option, String... keys) {
+        return zmpop(option, 1, keys);
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty sorted set with count (String version).
+     *
+     * @param option the sorted set option (MIN or MAX)
+     * @param count the number of elements to pop
+     * @param keys the keys of the sorted sets
+     * @return a KeyValue containing the key and list of Tuples, or null if all sets are empty
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    @SuppressWarnings("unchecked")
+    public KeyValue<String, List<Tuple>> zmpop(SortedSetOption option, int count, String... keys) {
+        return executeCommandWithGlide(
+                "ZMPOP",
+                () -> {
+                    ScoreFilter filter = option == SortedSetOption.MIN ? ScoreFilter.MIN : ScoreFilter.MAX;
+                    Map<String, Object> result = glideClient.zmpop(keys, filter, (long) count).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // Result has single entry: key -> map of member -> score
+                    Map.Entry<String, Object> entry = result.entrySet().iterator().next();
+                    String key = entry.getKey();
+                    Map<String, Double> membersMap = (Map<String, Double>) entry.getValue();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey(), memberScore.getValue()));
+                    }
+                    return new KeyValue<>(key, tuples);
+                });
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty sorted set with timeout (String version).
+     *
+     * @param timeout the timeout in seconds
+     * @param option the sorted set option (MIN or MAX)
+     * @param keys the keys of the sorted sets
+     * @return a KeyValue containing the key and list of Tuples, or null if timeout expires
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public KeyValue<String, List<Tuple>> bzmpop(
+            double timeout, SortedSetOption option, String... keys) {
+        return bzmpop(timeout, option, 1, keys);
+    }
+
+    /**
+     * Pops one or more elements from the first non-empty sorted set with timeout and count (String
+     * version).
+     *
+     * @param timeout the timeout in seconds
+     * @param option the sorted set option (MIN or MAX)
+     * @param count the number of elements to pop
+     * @param keys the keys of the sorted sets
+     * @return a KeyValue containing the key and list of Tuples, or null if timeout expires
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    @SuppressWarnings("unchecked")
+    public KeyValue<String, List<Tuple>> bzmpop(
+            double timeout, SortedSetOption option, int count, String... keys) {
+        return executeCommandWithGlide(
+                "BZMPOP",
+                () -> {
+                    ScoreFilter filter = option == SortedSetOption.MIN ? ScoreFilter.MIN : ScoreFilter.MAX;
+                    Map<String, Object> result =
+                            glideClient.bzmpop(keys, filter, timeout, (long) count).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // Result has single entry: key -> map of member -> score
+                    Map.Entry<String, Object> entry = result.entrySet().iterator().next();
+                    String key = entry.getKey();
+                    Map<String, Double> membersMap = (Map<String, Double>) entry.getValue();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey(), memberScore.getValue()));
+                    }
+                    return new KeyValue<>(key, tuples);
+                });
+    }
+
+    /**
+     * Returns the score of a member in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose score to return
+     * @return the score of the member, or null if the member does not exist
+     * @see <a href="https://valkey.io/commands/zscore/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public Double zscore(String key, String member) {
+        return executeCommandWithGlide("ZSCORE", () -> glideClient.zscore(key, member).get());
+    }
+
+    /**
+     * Returns the score of a member in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose score to return
+     * @return the score of the member, or null if the member does not exist
+     */
+    public Double zscore(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZSCORE", () -> glideClient.zscore(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns the scores of multiple members in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param members the members whose scores to return
+     * @return an array of scores corresponding to the members, with null for non-existing members
+     * @see <a href="https://valkey.io/commands/zmscore/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<Double> zmscore(String key, String... members) {
+        return executeCommandWithGlide(
+                "ZMSCORE", () -> Arrays.asList(glideClient.zmscore(key, members).get()));
+    }
+
+    /**
+     * Returns the scores of multiple members in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members whose scores to return
+     * @return an array of scores corresponding to the members, with null for non-existing members
+     */
+    public List<Double> zmscore(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "ZMSCORE",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return Arrays.asList(glideClient.zmscore(GlideString.of(key), glideMembers).get());
+                });
+    }
+
+    /**
+     * Removes the specified members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to remove
+     * @return the number of elements that were removed from the set
+     */
+    public long srem(String key, String... members) {
+        return executeCommandWithGlide("SREM", () -> glideClient.srem(key, members).get());
+    }
+
+    /**
+     * Removes the specified members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to remove
+     * @return the number of elements that were removed from the set
+     */
+    public long srem(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SREM",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    return glideClient.srem(GlideString.of(key), glideMembers).get();
+                });
+    }
+
+    /**
+     * Returns the specified range of elements in a sorted set, by index.
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return an array of elements in the specified range
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public List<String> zrange(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    return Arrays.asList(glideClient.zrange(key, rangeQuery).get());
+                });
+    }
+
+    /**
+     * Returns all the members of the set value stored at key.
+     *
+     * @param key the key of the set
+     * @return all members of the set, or an empty set when key does not exist
+     */
+    public Set<String> smembers(String key) {
+        return executeCommandWithGlide("SMEMBERS", () -> glideClient.smembers(key).get());
+    }
+
+    /**
+     * Returns all the members of the set value stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return all members of the set, or an empty set when key does not exist
+     */
+    public Set<byte[]> smembers(final byte[] key) {
+        return executeCommandWithGlide(
+                "SMEMBERS",
+                () -> {
+                    Set<GlideString> result = glideClient.smembers(GlideString.of(key)).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Returns the specified range of elements in a sorted set, by index (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return an array of elements in the specified range
+     */
+    public List<byte[]> zrange(final byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    GlideString[] result = glideClient.zrange(GlideString.of(key), rangeQuery).get();
+                    return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns elements from a sorted set using ZRangeParams for advanced range queries.
+     *
+     * @param key the key of the sorted set
+     * @param zRangeParams the range parameters (by index, score, or lex)
+     * @return a list of elements in the specified range
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
+     */
+    public List<String> zrange(String key, ZRangeParams zRangeParams) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeQuery rangeQuery = convertZRangeParamsToRangeQuery(zRangeParams);
+                    return Arrays.asList(glideClient.zrange(key, rangeQuery, zRangeParams.isRev()).get());
+                });
+    }
+
+    /**
+     * Returns elements from a sorted set using ZRangeParams for advanced range queries (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param zRangeParams the range parameters (by index, score, or lex)
+     * @return a list of elements in the specified range
+     */
+    public List<byte[]> zrange(byte[] key, ZRangeParams zRangeParams) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeQuery rangeQuery = convertZRangeParamsToRangeQuery(zRangeParams);
+                    GlideString[] result =
+                            glideClient.zrange(GlideString.of(key), rangeQuery, zRangeParams.isRev()).get();
+                    return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns the set cardinality (number of elements) of the set stored at key.
+     *
+     * @param key the key of the set
+     * @return the cardinality of the set, or 0 if key does not exist
+     */
+    public long scard(String key) {
+        return executeCommandWithGlide("SCARD", () -> glideClient.scard(key).get());
+    }
+
+    /**
+     * Returns the set cardinality (number of elements) of the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return the cardinality of the set, or 0 if key does not exist
+     */
+    public long scard(final byte[] key) {
+        return executeCommandWithGlide("SCARD", () -> glideClient.scard(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns if member is a member of the set stored at key.
+     *
+     * @param key the key of the set
+     * @param member the member to check
+     * @return true if the element is a member of the set, false otherwise
+     */
+    public boolean sismember(String key, String member) {
+        return executeCommandWithGlide("SISMEMBER", () -> glideClient.sismember(key, member).get());
+    }
+
+    /**
+     * Returns if member is a member of the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param member the member to check
+     * @return true if the element is a member of the set, false otherwise
+     */
+    public boolean sismember(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "SISMEMBER",
+                () -> glideClient.sismember(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns whether each member is a member of the set stored at key.
+     *
+     * @param key the key of the set
+     * @param members the members to check
+     * @return list of Boolean values, one for each member
+     */
+    public List<Boolean> smismember(String key, String... members) {
+        return executeCommandWithGlide(
+                "SMISMEMBER",
+                () -> {
+                    Boolean[] result = glideClient.smismember(key, members).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns the specified range of elements with their scores in a sorted set, by index.
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return a list of Tuples (element-score pairs) in the specified range
+     * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public List<Tuple> zrangeWithScores(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    Map<String, Double> result = glideClient.zrangeWithScores(key, rangeQuery).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns whether each member is a member of the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param members the members to check
+     * @return list of Boolean values, one for each member
+     */
+    public List<Boolean> smismember(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "SMISMEMBER",
+                () -> {
+                    GlideString[] glideMembers = convertToGlideStringArray(members);
+                    Boolean[] result = glideClient.smismember(GlideString.of(key), glideMembers).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns the specified range of elements with their scores in a sorted set, by index (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param start the starting index (0-based, can be negative to indicate offset from end)
+     * @param stop the ending index (0-based, can be negative to indicate offset from end)
+     * @return a list of Tuples (element-score pairs) in the specified range
+     */
+    public List<Tuple> zrangeWithScores(final byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    Map<GlideString, Double> result =
+                            glideClient.zrangeWithScores(GlideString.of(key), rangeQuery).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey().getBytes(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns members in a sorted set in reverse order (highest to lowest score).
+     *
+     * @param key the key of the sorted set
+     * @param start the start index (inclusive)
+     * @param stop the stop index (inclusive)
+     * @return a list of members in the specified range
+     * @see <a href="https://valkey.io/commands/zrevrange/">valkey.io</a>
+     */
+    public List<String> zrevrange(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZREVRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    return Arrays.asList(glideClient.zrange(key, rangeQuery, true).get());
+                });
+    }
+
+    /**
+     * Returns members in a sorted set in reverse order (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param start the start index (inclusive)
+     * @param stop the stop index (inclusive)
+     * @return a list of members in the specified range
+     */
+    public List<byte[]> zrevrange(byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZREVRANGE",
+                () -> {
+                    RangeOptions.RangeByIndex rangeQuery = new RangeOptions.RangeByIndex(start, stop);
+                    GlideString[] results = glideClient.zrange(GlideString.of(key), rangeQuery, true).get();
+                    return Arrays.stream(results).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from low to high.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public Long zrank(String key, String member) {
+        return executeCommandWithGlide("ZRANK", () -> glideClient.zrank(key, member).get());
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from low to high (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     */
+    public Long zrank(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZRANK", () -> glideClient.zrank(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from high to low.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public Long zrevrank(String key, String member) {
+        return executeCommandWithGlide("ZREVRANK", () -> glideClient.zrevrank(key, member).get());
+    }
+
+    /**
+     * Returns the rank of a member in a sorted set, with scores ordered from high to low (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank to return
+     * @return the rank of the member (0-based), or null if the member does not exist
+     */
+    public Long zrevrank(final byte[] key, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZREVRANK", () -> glideClient.zrevrank(GlideString.of(key), GlideString.of(member)).get());
+    }
+
+    /**
+     * Returns the number of members in a sorted set with scores within the given range.
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of elements in the specified score range
+     * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zcount(String key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZCOUNT",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zcount(key, minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Returns the number of members in a sorted set with scores within the given range (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of elements in the specified score range
+     */
+    public long zcount(final byte[] key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZCOUNT",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zcount(GlideString.of(key), minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Returns the number of members in a sorted set with scores within the given range (String
+     * bounds).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score as a string (use "(" prefix for exclusive, e.g., "(1.5")
+     * @param max the maximum score as a string (use "(" prefix for exclusive, e.g., "(10.0")
+     * @return the number of elements in the specified score range
+     * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zcount(String key, String min, String max) {
+        return executeCommandWithGlide(
+                "ZCOUNT",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = parseScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = parseScoreBoundary(max);
+                    return glideClient.zcount(key, minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Returns the number of members in a sorted set with scores within the given range (binary
+     * version with String bounds).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score as bytes (use "(" prefix for exclusive)
+     * @param max the maximum score as bytes (use "(" prefix for exclusive)
+     * @return the number of elements in the specified score range
+     */
+    public long zcount(final byte[] key, byte[] min, byte[] max) {
+        return executeCommandWithGlide(
+                "ZCOUNT",
+                () -> {
+                    String minStr = new String(min, StandardCharsets.UTF_8);
+                    String maxStr = new String(max, StandardCharsets.UTF_8);
+                    RangeOptions.ScoreBoundary minBound = parseScoreBoundary(minStr);
+                    RangeOptions.ScoreBoundary maxBound = parseScoreBoundary(maxStr);
+                    return glideClient.zcount(GlideString.of(key), minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Increments the score of a member in a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     * @see <a href="https://valkey.io/commands/zincrby/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public double zincrby(String key, double increment, String member) {
+        return executeCommandWithGlide(
+                "ZINCRBY", () -> glideClient.zincrby(key, increment, member).get());
+    }
+
+    /**
+     * Increments the score of a member in a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @return the new score of the member
+     */
+    public double zincrby(final byte[] key, double increment, final byte[] member) {
+        return executeCommandWithGlide(
+                "ZINCRBY",
+                () -> glideClient.zincrby(GlideString.of(key), increment, GlideString.of(member)).get());
+    }
+
+    /**
+     * Increments the score of a member in a sorted set with additional options.
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @param params additional options for the ZINCRBY command
+     * @return the new score of the member, or null if the operation was not performed due to
+     *     conditions
+     * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
+     * @since Valkey 3.0.2
+     */
+    public Double zincrby(String key, double increment, String member, ZIncrByParams params) {
+        return executeCommandWithGlide(
+                "ZINCRBY",
+                () -> {
+                    ZAddOptions options = convertZIncrByParams(params);
+                    return glideClient.zaddIncr(key, member, increment, options).get();
+                });
+    }
+
+    /**
+     * Increments the score of a member in a sorted set with additional options (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param increment the amount to increment the score by
+     * @param member the member whose score to increment
+     * @param params additional options for the ZINCRBY command
+     * @return the new score of the member, or null if the operation was not performed due to
+     *     conditions
+     */
+    public Double zincrby(
+            final byte[] key, double increment, final byte[] member, ZIncrByParams params) {
+        return executeCommandWithGlide(
+                "ZINCRBY",
+                () -> {
+                    ZAddOptions options = convertZIncrByParams(params);
+                    return glideClient
+                            .zaddIncr(GlideString.of(key), GlideString.of(member), increment, options)
+                            .get();
+                });
+    }
+
+    /**
+     * Removes and returns the member with the lowest score from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @return the removed member with its score, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public Tuple zpopmin(String key) {
+        return executeCommandWithGlide(
+                "ZPOPMIN",
+                () -> {
+                    Map<String, Double> result = glideClient.zpopmin(key, 1L).get();
+                    if (result == null || result.isEmpty()) {
+                        return null;
+                    }
+                    Map.Entry<String, Double> entry = result.entrySet().iterator().next();
+                    return new Tuple(entry.getKey(), entry.getValue());
+                });
+    }
+
+    /**
+     * Removes and returns the member with the lowest score from the sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @return the removed member with its score, or null if the key does not exist
+     */
+    public Tuple zpopmin(final byte[] key) {
+        return executeCommandWithGlide(
+                "ZPOPMIN",
+                () -> {
+                    Map<GlideString, Double> result = glideClient.zpopmin(GlideString.of(key), 1L).get();
+                    if (result == null || result.isEmpty()) {
+                        return null;
+                    }
+                    Map.Entry<GlideString, Double> entry = result.entrySet().iterator().next();
+                    return new Tuple(entry.getKey().getBytes(), entry.getValue());
+                });
+    }
+
+    /**
+     * Removes and returns up to count members with the lowest scores from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a list of removed members with their scores, ordered from lowest to highest score
+     * @see <a href="https://valkey.io/commands/zpopmin/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public List<Tuple> zpopmin(String key, int count) {
+        return executeCommandWithGlide(
+                "ZPOPMIN",
+                () -> {
+                    Map<String, Double> result = glideClient.zpopmin(key, (long) count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Removes and returns up to count members with the lowest scores from the sorted set (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a list of removed members with their scores, ordered from lowest to highest score
+     */
+    public List<Tuple> zpopmin(final byte[] key, int count) {
+        return executeCommandWithGlide(
+                "ZPOPMIN",
+                () -> {
+                    Map<GlideString, Double> result =
+                            glideClient.zpopmin(GlideString.of(key), (long) count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey().getBytes(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Removes and returns the member with the highest score from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @return the removed member with its score, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public Tuple zpopmax(String key) {
+        return executeCommandWithGlide(
+                "ZPOPMAX",
+                () -> {
+                    Map<String, Double> result = glideClient.zpopmax(key, 1L).get();
+                    if (result == null || result.isEmpty()) {
+                        return null;
+                    }
+                    Map.Entry<String, Double> entry = result.entrySet().iterator().next();
+                    return new Tuple(entry.getKey(), entry.getValue());
+                });
+    }
+
+    /**
+     * Removes and returns the member with the highest score from the sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @return the removed member with its score, or null if the key does not exist
+     */
+    public Tuple zpopmax(final byte[] key) {
+        return executeCommandWithGlide(
+                "ZPOPMAX",
+                () -> {
+                    Map<GlideString, Double> result = glideClient.zpopmax(GlideString.of(key), 1L).get();
+                    if (result == null || result.isEmpty()) {
+                        return null;
+                    }
+                    Map.Entry<GlideString, Double> entry = result.entrySet().iterator().next();
+                    return new Tuple(entry.getKey().getBytes(), entry.getValue());
+                });
+    }
+
+    /**
+     * Removes and returns up to count members with the highest scores from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a list of removed members with their scores, ordered from highest to lowest score
+     * @see <a href="https://valkey.io/commands/zpopmax/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public List<Tuple> zpopmax(String key, int count) {
+        return executeCommandWithGlide(
+                "ZPOPMAX",
+                () -> {
+                    Map<String, Double> result = glideClient.zpopmax(key, (long) count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Removes and returns up to count members with the highest scores from the sorted set (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param count the maximum number of members to remove
+     * @return a list of removed members with their scores, ordered from highest to lowest score
+     */
+    public List<Tuple> zpopmax(final byte[] key, int count) {
+        return executeCommandWithGlide(
+                "ZPOPMAX",
+                () -> {
+                    Map<GlideString, Double> result =
+                            glideClient.zpopmax(GlideString.of(key), (long) count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey().getBytes(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Computes the union of sorted sets and stores the result in a destination key.
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zunionstore(String dstkey, String... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    WeightAggregateOptions.KeyArray keyArray = new WeightAggregateOptions.KeyArray(sets);
+                    return glideClient.zunionstore(dstkey, keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the union of sorted sets and stores the result in a destination key (binary version).
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zunionstore(final byte[] dstkey, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    GlideString[] glideSets = convertToGlideStringArray(sets);
+                    WeightAggregateOptions.KeyArrayBinary keyArray =
+                            new WeightAggregateOptions.KeyArrayBinary(glideSets);
+                    return glideClient.zunionstore(GlideString.of(dstkey), keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the union of sorted sets with weights and aggregation, storing the result in a
+     * destination key.
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zunionstore(String dstkey, ZParams params, String... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    KeysOrWeightedKeys keysOrWeighted = convertZParamsToKeysOrWeighted(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zunionstore(dstkey, keysOrWeighted, aggregate).get();
+                    } else {
+                        return glideClient.zunionstore(dstkey, keysOrWeighted).get();
+                    }
+                });
+    }
+
+    /**
+     * Computes the union of sorted sets with weights and aggregation, storing the result in a
+     * destination key (binary version).
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to union
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zunionstore(final byte[] dstkey, ZParams params, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZUNIONSTORE",
+                () -> {
+                    KeysOrWeightedKeysBinary keysOrWeighted =
+                            convertZParamsToKeysOrWeightedBinary(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zunionstore(GlideString.of(dstkey), keysOrWeighted, aggregate).get();
+                    } else {
+                        return glideClient.zunionstore(GlideString.of(dstkey), keysOrWeighted).get();
+                    }
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets and stores the result in a destination key.
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zinterstore(String dstkey, String... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    WeightAggregateOptions.KeyArray keyArray = new WeightAggregateOptions.KeyArray(sets);
+                    return glideClient.zinterstore(dstkey, keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets and stores the result in a destination key (binary
+     * version).
+     *
+     * @param dstkey the destination key
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zinterstore(final byte[] dstkey, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    GlideString[] glideSets = convertToGlideStringArray(sets);
+                    WeightAggregateOptions.KeyArrayBinary keyArray =
+                            new WeightAggregateOptions.KeyArrayBinary(glideSets);
+                    return glideClient.zinterstore(GlideString.of(dstkey), keyArray).get();
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets with weights and aggregation, storing the result in a
+     * destination key.
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zinterstore(String dstkey, ZParams params, String... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    KeysOrWeightedKeys keysOrWeighted = convertZParamsToKeysOrWeighted(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zinterstore(dstkey, keysOrWeighted, aggregate).get();
+                    } else {
+                        return glideClient.zinterstore(dstkey, keysOrWeighted).get();
+                    }
+                });
+    }
+
+    /**
+     * Computes the intersection of sorted sets with weights and aggregation, storing the result in a
+     * destination key (binary version).
+     *
+     * @param dstkey the destination key
+     * @param params the ZParams containing weights and aggregation options
+     * @param sets the keys of the sorted sets to intersect
+     * @return the number of elements in the resulting sorted set
+     */
+    public long zinterstore(final byte[] dstkey, ZParams params, final byte[]... sets) {
+        return executeCommandWithGlide(
+                "ZINTERSTORE",
+                () -> {
+                    KeysOrWeightedKeysBinary keysOrWeighted =
+                            convertZParamsToKeysOrWeightedBinary(sets, params);
+                    if (params.getAggregate() != null) {
+                        Aggregate aggregate = convertZParamsAggregate(params.getAggregate());
+                        return glideClient.zinterstore(GlideString.of(dstkey), keysOrWeighted, aggregate).get();
+                    } else {
+                        return glideClient.zinterstore(GlideString.of(dstkey), keysOrWeighted).get();
+                    }
+                });
+    }
+
+    /**
+     * Removes all members in a sorted set within the given rank range.
+     *
+     * @param key the key of the sorted set
+     * @param start the starting rank (0-based, can be negative to indicate offset from end)
+     * @param stop the ending rank (0-based, can be negative to indicate offset from end)
+     * @return the number of members removed
+     * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a>
+     * @since Valkey 2.0.0
+     */
+    public long zremrangebyrank(String key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYRANK", () -> glideClient.zremrangebyrank(key, start, stop).get());
+    }
+
+    /**
+     * Removes all members in a sorted set within the given rank range (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param start the starting rank (0-based, can be negative to indicate offset from end)
+     * @param stop the ending rank (0-based, can be negative to indicate offset from end)
+     * @return the number of members removed
+     */
+    public long zremrangebyrank(final byte[] key, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYRANK",
+                () -> glideClient.zremrangebyrank(GlideString.of(key), start, stop).get());
+    }
+
+    /**
+     * Removes all members in a sorted set within the given score range.
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of members removed
+     * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zremrangebyscore(String key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYSCORE",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zremrangebyscore(key, minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Removes all members in a sorted set within the given score range (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score (inclusive by default, use "(" prefix for exclusive)
+     * @param max the maximum score (inclusive by default, use "(" prefix for exclusive)
+     * @return the number of members removed
+     */
+    public long zremrangebyscore(final byte[] key, double min, double max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYSCORE",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = new RangeOptions.ScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = new RangeOptions.ScoreBoundary(max);
+                    return glideClient.zremrangebyscore(GlideString.of(key), minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Removes all members in a sorted set within the given score range (String bounds).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score as a string (use "(" prefix for exclusive, e.g., "(1.5")
+     * @param max the maximum score as a string (use "(" prefix for exclusive, e.g., "(10.0")
+     * @return the number of members removed
+     * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a>
+     * @since Valkey 1.2.0
+     */
+    public long zremrangebyscore(String key, String min, String max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYSCORE",
+                () -> {
+                    RangeOptions.ScoreBoundary minBound = parseScoreBoundary(min);
+                    RangeOptions.ScoreBoundary maxBound = parseScoreBoundary(max);
+                    return glideClient.zremrangebyscore(key, minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Removes all members in a sorted set within the given score range (binary version with String
+     * bounds).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum score as bytes (use "(" prefix for exclusive)
+     * @param max the maximum score as bytes (use "(" prefix for exclusive)
+     * @return the number of members removed
+     */
+    public long zremrangebyscore(final byte[] key, byte[] min, byte[] max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYSCORE",
+                () -> {
+                    String minStr = new String(min, StandardCharsets.UTF_8);
+                    String maxStr = new String(max, StandardCharsets.UTF_8);
+                    RangeOptions.ScoreBoundary minBound = parseScoreBoundary(minStr);
+                    RangeOptions.ScoreBoundary maxBound = parseScoreBoundary(maxStr);
+                    return glideClient.zremrangebyscore(GlideString.of(key), minBound, maxBound).get();
+                });
+    }
+
+    /**
+     * Iterates over members and scores of a sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param cursor the cursor position to start from (use "0" to start a new iteration)
+     * @return a ScanResult containing the next cursor position and a list of Tuples
+     * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
+     * @since Valkey 2.8.0
+     */
+    public ScanResult<Tuple> zscan(String key, String cursor) {
+        return executeCommandWithGlide(
+                "ZSCAN",
+                () -> {
+                    Object[] result = glideClient.zscan(key, cursor).get();
+                    String nextCursor = (String) result[0];
+                    Object[] membersAndScores = (Object[]) result[1];
+
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (int i = 0; i < membersAndScores.length; i += 2) {
+                        String member = (String) membersAndScores[i];
+                        // Score comes back as String when fraction is zero
+                        Object scoreObj = membersAndScores[i + 1];
+                        Double score =
+                                scoreObj instanceof String
+                                        ? Double.parseDouble((String) scoreObj)
+                                        : (Double) scoreObj;
+                        tuples.add(new Tuple(member, score));
+                    }
+
+                    return new ScanResult<>(nextCursor, tuples);
+                });
+    }
+
+    /**
+     * Iterates over members and scores of a sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param cursor the cursor position to start from (use "0" to start a new iteration)
+     * @return a ScanResult containing the next cursor position and a list of Tuples
+     */
+    public ScanResult<Tuple> zscan(final byte[] key, final byte[] cursor) {
+        return executeCommandWithGlide(
+                "ZSCAN",
+                () -> {
+                    Object[] result = glideClient.zscan(GlideString.of(key), GlideString.of(cursor)).get();
+                    GlideString nextCursor = (GlideString) result[0];
+                    Object[] membersAndScores = (Object[]) result[1];
+
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (int i = 0; i < membersAndScores.length; i += 2) {
+                        GlideString member = (GlideString) membersAndScores[i];
+                        // Score comes back as GlideString when fraction is zero
+                        Object scoreObj = membersAndScores[i + 1];
+                        Double score;
+                        if (scoreObj instanceof GlideString) {
+                            score = Double.parseDouble(((GlideString) scoreObj).getString());
+                        } else if (scoreObj instanceof String) {
+                            score = Double.parseDouble((String) scoreObj);
+                        } else {
+                            score = (Double) scoreObj;
+                        }
+                        tuples.add(new Tuple(member.getBytes(), score));
+                    }
+
+                    return new ScanResult<>(nextCursor.getBytes(), tuples);
+                });
+    }
+
+    /**
+     * Iterates over members and scores of a sorted set with scan options.
+     *
+     * @param key the key of the sorted set
+     * @param cursor the cursor position to start from (use "0" to start a new iteration)
+     * @param params scan parameters for pattern matching and count
+     * @return a ScanResult containing the next cursor position and a list of Tuples
+     * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
+     */
+    public ScanResult<Tuple> zscan(String key, String cursor, ScanParams params) {
+        return executeCommandWithGlide(
+                "ZSCAN",
+                () -> {
+                    ZScanOptions options = convertScanParamsToZScanOptions(params);
+                    Object[] result = glideClient.zscan(key, cursor, options).get();
+                    String nextCursor = (String) result[0];
+                    Object[] membersAndScores = (Object[]) result[1];
+
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (int i = 0; i < membersAndScores.length; i += 2) {
+                        String member = (String) membersAndScores[i];
+                        Object scoreObj = membersAndScores[i + 1];
+                        Double score =
+                                scoreObj instanceof String
+                                        ? Double.parseDouble((String) scoreObj)
+                                        : (Double) scoreObj;
+                        tuples.add(new Tuple(member, score));
+                    }
+
+                    return new ScanResult<>(nextCursor, tuples);
+                });
+    }
+
+    /**
+     * Iterates over members and scores of a sorted set with scan options (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param cursor the cursor position to start from
+     * @param params scan parameters for pattern matching and count
+     * @return a ScanResult containing the next cursor position and a list of Tuples
+     */
+    public ScanResult<Tuple> zscan(byte[] key, byte[] cursor, ScanParams params) {
+        return executeCommandWithGlide(
+                "ZSCAN",
+                () -> {
+                    ZScanOptionsBinary options = convertScanParamsToZScanOptionsBinary(params);
+                    Object[] result =
+                            glideClient.zscan(GlideString.of(key), GlideString.of(cursor), options).get();
+                    GlideString nextCursor = (GlideString) result[0];
+                    Object[] membersAndScores = (Object[]) result[1];
+
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (int i = 0; i < membersAndScores.length; i += 2) {
+                        GlideString member = (GlideString) membersAndScores[i];
+                        Object scoreObj = membersAndScores[i + 1];
+                        Double score;
+                        if (scoreObj instanceof GlideString) {
+                            score = Double.parseDouble(((GlideString) scoreObj).getString());
+                        } else if (scoreObj instanceof String) {
+                            score = Double.parseDouble((String) scoreObj);
+                        } else {
+                            score = (Double) scoreObj;
+                        }
+                        tuples.add(new Tuple(member.getBytes(), score));
+                    }
+
+                    return new ScanResult<>(nextCursor.getBytes(), tuples);
+                });
+    }
+
+    /**
+     * Stores a range of elements from the sorted set at source into a new sorted set at destination.
+     *
+     * @param destination the key of the destination sorted set
+     * @param source the key of the source sorted set
+     * @param start the start index (inclusive)
+     * @param stop the stop index (inclusive)
+     * @return the number of elements stored in the destination sorted set
+     * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public long zrangestore(String destination, String source, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGESTORE",
+                () -> {
+                    RangeQuery range = new RangeByIndex(start, stop);
+                    return glideClient.zrangestore(destination, source, range).get();
+                });
+    }
+
+    /**
+     * Stores a range of elements from the sorted set at source into a new sorted set at destination
+     * (binary version).
+     *
+     * @param destination the key of the destination sorted set
+     * @param source the key of the source sorted set
+     * @param start the start index (inclusive)
+     * @param stop the stop index (inclusive)
+     * @return the number of elements stored in the destination sorted set
+     */
+    public long zrangestore(byte[] destination, byte[] source, long start, long stop) {
+        return executeCommandWithGlide(
+                "ZRANGESTORE",
+                () -> {
+                    RangeQuery range = new RangeByIndex(start, stop);
+                    return glideClient
+                            .zrangestore(GlideString.of(destination), GlideString.of(source), range)
+                            .get();
+                });
+    }
+
+    /**
+     * Stores elements from a sorted set using ZRangeParams into a destination key.
+     *
+     * @param dest the destination key
+     * @param src the source key
+     * @param zRangeParams the range parameters (by index, score, or lex)
+     * @return the number of elements stored in the destination sorted set
+     * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public long zrangestore(String dest, String src, ZRangeParams zRangeParams) {
+        return executeCommandWithGlide(
+                "ZRANGESTORE",
+                () -> {
+                    RangeQuery rangeQuery = convertZRangeParamsToRangeQuery(zRangeParams);
+                    return glideClient.zrangestore(dest, src, rangeQuery, zRangeParams.isRev()).get();
+                });
+    }
+
+    /**
+     * Stores elements from a sorted set using ZRangeParams into a destination key (binary version).
+     *
+     * @param dest the destination key
+     * @param src the source key
+     * @param zRangeParams the range parameters (by index, score, or lex)
+     * @return the number of elements stored in the destination sorted set
+     */
+    public long zrangestore(byte[] dest, byte[] src, ZRangeParams zRangeParams) {
+        return executeCommandWithGlide(
+                "ZRANGESTORE",
+                () -> {
+                    RangeQuery rangeQuery = convertZRangeParamsToRangeQuery(zRangeParams);
+                    return glideClient
+                            .zrangestore(
+                                    GlideString.of(dest), GlideString.of(src), rangeQuery, zRangeParams.isRev())
+                            .get();
+                });
+    }
+
+    /**
+     * Returns the rank of member in the sorted set with its score.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank and score to get
+     * @return a KeyValue containing the rank (Long) and score (Double), or null if member doesn't
+     *     exist
+     * @see <a href="https://valkey.io/commands/zrank/">valkey.io</a>
+     * @since Valkey 7.2.0
+     */
+    public redis.clients.jedis.resps.KeyValue<Long, Double> zrankWithScore(
+            String key, String member) {
+        return executeCommandWithGlide(
+                "ZRANK",
+                () -> {
+                    Object[] result = glideClient.zrankWithScore(key, member).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    Long rank = (Long) result[0];
+                    Double score = (Double) result[1];
+                    return new redis.clients.jedis.resps.KeyValue<>(rank, score);
+                });
+    }
+
+    /**
+     * Returns the rank of member in the sorted set with its score (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose rank and score to get
+     * @return a KeyValue containing the rank (Long) and score (Double), or null if member doesn't
+     *     exist
+     */
+    public redis.clients.jedis.resps.KeyValue<Long, Double> zrankWithScore(
+            byte[] key, byte[] member) {
+        return executeCommandWithGlide(
+                "ZRANK",
+                () -> {
+                    Object[] result =
+                            glideClient.zrankWithScore(GlideString.of(key), GlideString.of(member)).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    Long rank = (Long) result[0];
+                    Double score = (Double) result[1];
+                    return new redis.clients.jedis.resps.KeyValue<>(rank, score);
+                });
+    }
+
+    /**
+     * Returns the rank of member in the sorted set with its score, with scores ordered from high to
+     * low.
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose reverse rank and score to get
+     * @return a KeyValue containing the rank (Long) and score (Double), or null if member doesn't
+     *     exist
+     * @see <a href="https://valkey.io/commands/zrevrank/">valkey.io</a>
+     * @since Valkey 7.2.0
+     */
+    public redis.clients.jedis.resps.KeyValue<Long, Double> zrevrankWithScore(
+            String key, String member) {
+        return executeCommandWithGlide(
+                "ZREVRANK",
+                () -> {
+                    Object[] result = glideClient.zrevrankWithScore(key, member).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    Long rank = (Long) result[0];
+                    Double score = (Double) result[1];
+                    return new redis.clients.jedis.resps.KeyValue<>(rank, score);
+                });
+    }
+
+    /**
+     * Returns the rank of member in the sorted set with its score, with scores ordered from high to
+     * low (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member whose reverse rank and score to get
+     * @return a KeyValue containing the rank (Long) and score (Double), or null if member doesn't
+     *     exist
+     */
+    public redis.clients.jedis.resps.KeyValue<Long, Double> zrevrankWithScore(
+            byte[] key, byte[] member) {
+        return executeCommandWithGlide(
+                "ZREVRANK",
+                () -> {
+                    Object[] result =
+                            glideClient.zrevrankWithScore(GlideString.of(key), GlideString.of(member)).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    Long rank = (Long) result[0];
+                    Double score = (Double) result[1];
+                    return new redis.clients.jedis.resps.KeyValue<>(rank, score);
+                });
+    }
+
+    /**
+     * Converts Jedis ZAddParams to GLIDE ZAddOptions.
+     *
+     * @param params the Jedis ZAddParams
+     * @return the corresponding GLIDE ZAddOptions
+     */
+    private static ZAddOptions convertZAddParams(ZAddParams params) {
+        ZAddOptions.ZAddOptionsBuilder builder = ZAddOptions.builder();
+
+        if (params.getNx() != null && params.getNx()) {
+            builder.conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST);
+        } else if (params.getXx() != null && params.getXx()) {
+            builder.conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS);
+        }
+
+        if (params.getGt() != null && params.getGt()) {
+            builder.updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT);
+        } else if (params.getLt() != null && params.getLt()) {
+            builder.updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT);
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Parses a Jedis-style score boundary string into a ScoreBoundary object.
+     *
+     * @param scoreStr the score string (e.g., "5.0", "(5.0" for exclusive)
+     * @return the corresponding ScoreBoundary object
+     */
+    private static RangeOptions.ScoreBoundary parseScoreBoundary(String scoreStr) {
+        if (scoreStr == null || scoreStr.isEmpty()) {
+            throw new JedisException("Score boundary cannot be null or empty");
+        }
+
+        if (scoreStr.startsWith("(")) {
+            // Exclusive boundary
+            double score = Double.parseDouble(scoreStr.substring(1));
+            return new RangeOptions.ScoreBoundary(score, false);
+        } else {
+            // Inclusive boundary
+            double score = Double.parseDouble(scoreStr);
+            return new RangeOptions.ScoreBoundary(score, true);
+        }
+    }
+
+    /**
+     * Converts Jedis ZIncrByParams to GLIDE ZAddOptions (ZINCRBY uses ZADD with INCR option).
+     *
+     * @param params the Jedis ZIncrByParams
+     * @return the corresponding GLIDE ZAddOptions
+     */
+    private static ZAddOptions convertZIncrByParams(ZIncrByParams params) {
+        ZAddOptions.ZAddOptionsBuilder builder = ZAddOptions.builder();
+
+        if (params.getNx() != null && params.getNx()) {
+            builder.conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST);
+        } else if (params.getXx() != null && params.getXx()) {
+            builder.conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS);
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Converts ZRangeParams to GLIDE RangeQuery.
+     *
+     * @param params the ZRangeParams to convert
+     * @return the corresponding GLIDE RangeQuery
+     */
+    private static RangeQuery convertZRangeParamsToRangeQuery(ZRangeParams params) {
+        switch (params.getBy()) {
+            case INDEX:
+                int minIdx = (int) params.getMin();
+                int maxIdx = (int) params.getMax();
+                return new RangeByIndex(minIdx, maxIdx);
+            case SCORE:
+                double minScore = (double) params.getMin();
+                double maxScore = (double) params.getMax();
+                ScoreBoundary minBoundary = new ScoreBoundary(minScore, true);
+                ScoreBoundary maxBoundary = new ScoreBoundary(maxScore, true);
+                if (params.hasLimit()) {
+                    return new RangeByScore(
+                            minBoundary,
+                            maxBoundary,
+                            new RangeOptions.Limit(params.getOffset(), params.getCount()));
+                } else {
+                    return new RangeByScore(minBoundary, maxBoundary);
+                }
+            case LEX:
+                LexRange minLex, maxLex;
+                if (params.getMin() instanceof String) {
+                    minLex = convertLexRange((String) params.getMin());
+                    maxLex = convertLexRange((String) params.getMax());
+                } else {
+                    minLex = convertLexRange((byte[]) params.getMin());
+                    maxLex = convertLexRange((byte[]) params.getMax());
+                }
+                if (params.hasLimit()) {
+                    return new RangeByLex(
+                            minLex, maxLex, new RangeOptions.Limit(params.getOffset(), params.getCount()));
+                } else {
+                    return new RangeByLex(minLex, maxLex);
+                }
+            default:
+                throw new IllegalArgumentException("Unsupported ZRangeParams type: " + params.getBy());
+        }
+    }
+
+    /**
+     * Converts a String lex range to GLIDE LexRange.
+     *
+     * @param lexStr the lex range string
+     * @return the corresponding LexRange
+     */
+    private static LexRange convertLexRange(String lexStr) {
+        if (lexStr == null || lexStr.isEmpty()) {
+            throw new IllegalArgumentException("Lex range string cannot be null or empty");
+        }
+
+        if (lexStr.equals("+")) {
+            return InfLexBound.POSITIVE_INFINITY;
+        } else if (lexStr.equals("-")) {
+            return InfLexBound.NEGATIVE_INFINITY;
+        } else if (lexStr.startsWith("[")) {
+            if (lexStr.length() < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid lex range format: '[' must be followed by a value");
+            }
+            return new LexBoundary(lexStr.substring(1), true);
+        } else if (lexStr.startsWith("(")) {
+            if (lexStr.length() < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid lex range format: '(' must be followed by a value");
+            }
+            return new LexBoundary(lexStr.substring(1), false);
+        } else {
+            throw new IllegalArgumentException(
+                    "Invalid lex range format: must start with '[', '(', '+', or '-'");
+        }
+    }
+
+    /**
+     * Converts a byte array lex range to GLIDE LexRange.
+     *
+     * @param lexBytes the lex range bytes
+     * @return the corresponding LexRange
+     */
+    private static LexRange convertLexRange(byte[] lexBytes) {
+        if (lexBytes == null || lexBytes.length == 0) {
+            throw new IllegalArgumentException("Lex range bytes cannot be null or empty");
+        }
+
+        String lexStr = new String(lexBytes, StandardCharsets.UTF_8);
+        return convertLexRange(lexStr);
+    }
+
+    /**
+     * Converts Jedis ZParams.Aggregate to GLIDE Aggregate.
+     *
+     * @param aggregate the Jedis aggregate type
+     * @return the corresponding GLIDE Aggregate
+     */
+    private static Aggregate convertZParamsAggregate(ZParams.Aggregate aggregate) {
+        switch (aggregate) {
+            case SUM:
+                return Aggregate.SUM;
+            case MIN:
+                return Aggregate.MIN;
+            case MAX:
+                return Aggregate.MAX;
+            default:
+                throw new IllegalArgumentException("Unknown aggregate type: " + aggregate);
+        }
+    }
+
+    /**
+     * Converts ZParams and key array to GLIDE KeysOrWeightedKeys.
+     *
+     * @param keys the sorted set keys
+     * @param params the ZParams containing weights
+     * @return KeysOrWeightedKeys for GLIDE API
+     */
+    private static KeysOrWeightedKeys convertZParamsToKeysOrWeighted(String[] keys, ZParams params) {
+        List<Double> weights = params.getWeights();
+        if (weights == null || weights.isEmpty()) {
+            return new KeyArray(keys);
+        } else {
+            List<Pair<String, Double>> weightedPairs = new ArrayList<>();
+            for (int i = 0; i < keys.length; i++) {
+                double weight = i < weights.size() ? weights.get(i) : 1.0;
+                weightedPairs.add(Pair.of(keys[i], weight));
+            }
+            return new WeightedKeys(weightedPairs);
+        }
+    }
+
+    /**
+     * Converts ZParams and binary key array to GLIDE KeysOrWeightedKeysBinary.
+     *
+     * @param keys the sorted set keys (binary)
+     * @param params the ZParams containing weights
+     * @return KeysOrWeightedKeysBinary for GLIDE API
+     */
+    private static KeysOrWeightedKeysBinary convertZParamsToKeysOrWeightedBinary(
+            byte[][] keys, ZParams params) {
+        List<Double> weights = params.getWeights();
+        if (weights == null || weights.isEmpty()) {
+            GlideString[] glideKeys =
+                    Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+            return new KeyArrayBinary(glideKeys);
+        } else {
+            List<Pair<GlideString, Double>> weightedPairs = new ArrayList<>();
+            for (int i = 0; i < keys.length; i++) {
+                double weight = i < weights.size() ? weights.get(i) : 1.0;
+                weightedPairs.add(Pair.of(GlideString.of(keys[i]), weight));
+            }
+            return new WeightedKeysBinary(weightedPairs);
+        }
+    }
+
+    /**
+     * Parses a Jedis-style lex range string into a LexRange object.
+     *
+     * @param lexStr the lex range string (e.g., "[a", "(b", "+", "-")
+     * @return the corresponding LexRange object
+     * @throws IllegalArgumentException if lexStr is null or empty, or has invalid format
+     */
+    private LexRange parseLexRange(String lexStr) {
+        if (lexStr == null || lexStr.isEmpty()) {
+            throw new IllegalArgumentException("Lex range string cannot be null or empty");
+        }
+
+        if (lexStr.equals("+")) {
+            return InfLexBound.POSITIVE_INFINITY;
+        } else if (lexStr.equals("-")) {
+            return InfLexBound.NEGATIVE_INFINITY;
+        } else if (lexStr.startsWith("[")) {
+            if (lexStr.length() < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid lex range format: '[' must be followed by a value");
+            }
+            return new LexBoundary(lexStr.substring(1), true);
+        } else if (lexStr.startsWith("(")) {
+            if (lexStr.length() < 2) {
+                throw new IllegalArgumentException(
+                        "Invalid lex range format: '(' must be followed by a value");
+            }
+            return new LexBoundary(lexStr.substring(1), false);
+        } else {
+            // Default to inclusive if no prefix
+            return new LexBoundary(lexStr, true);
+        }
+    }
+
+    /**
+     * Parses a Jedis-style lex range byte array into a LexRange object.
+     *
+     * <p>Note: This method assumes UTF-8 encoding when converting the byte array to a string. If the
+     * byte array contains non-UTF-8 data, the behavior is undefined and may result in incorrect lex
+     * range parsing.
+     *
+     * @param lexBytes the lex range byte array (assumed to be UTF-8 encoded)
+     * @return the corresponding LexRange object
+     * @throws IllegalArgumentException if lexBytes is null or empty, or has invalid format
+     */
+    private LexRange parseLexRange(byte[] lexBytes) {
+        if (lexBytes == null || lexBytes.length == 0) {
+            throw new IllegalArgumentException("Lex range byte array cannot be null or empty");
+        }
+        String lexStr = new String(lexBytes, StandardCharsets.UTF_8);
+        return parseLexRange(lexStr);
+    }
+
+    /**
+     * Returns the number of members in the sorted set with lexicographical values between min and
+     * max.
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum lexicographical value (inclusive with "[", exclusive with "(")
+     * @param max the maximum lexicographical value (inclusive with "[", exclusive with "(")
+     * @return the number of members in the specified range
+     * @see <a href="https://valkey.io/commands/zlexcount/">valkey.io</a>
+     * @since Valkey 2.8.9
+     */
+    public long zlexcount(String key, String min, String max) {
+        return executeCommandWithGlide(
+                "ZLEXCOUNT",
+                () -> {
+                    LexRange minLex = parseLexRange(min);
+                    LexRange maxLex = parseLexRange(max);
+                    return glideClient.zlexcount(key, minLex, maxLex).get();
+                });
+    }
+
+    /**
+     * Returns the number of members in the sorted set with lexicographical values between min and max
+     * (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum lexicographical value (inclusive with "[", exclusive with "(")
+     * @param max the maximum lexicographical value (inclusive with "[", exclusive with "(")
+     * @return the number of members in the specified range
+     */
+    public long zlexcount(byte[] key, byte[] min, byte[] max) {
+        return executeCommandWithGlide(
+                "ZLEXCOUNT",
+                () -> {
+                    LexRange minLex = parseLexRange(min);
+                    LexRange maxLex = parseLexRange(max);
+                    return glideClient.zlexcount(GlideString.of(key), minLex, maxLex).get();
+                });
+    }
+
+    /**
+     * Removes and returns a member with the lowest score from the first non-empty sorted set. Blocks
+     * until a member is available or timeout is reached.
+     *
+     * @param timeout the timeout in seconds (0 means block indefinitely)
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a Tuple (member-score pair), or null if timeout is
+     *     reached
+     * @see <a href="https://valkey.io/commands/bzpopmin/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public redis.clients.jedis.resps.KeyValue<String, Tuple> bzpopmin(
+            double timeout, String... keys) {
+        return executeCommandWithGlide(
+                "BZPOPMIN",
+                () -> {
+                    Object[] result = glideClient.bzpopmin(keys, timeout).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // result[0] = key, result[1] = member, result[2] = score
+                    String key = (String) result[0];
+                    String member = (String) result[1];
+                    Double score = (Double) result[2];
+                    return new redis.clients.jedis.resps.KeyValue<>(key, new Tuple(member, score));
+                });
+    }
+
+    /**
+     * Removes and returns a member with the lowest score from the first non-empty sorted set. Blocks
+     * until a member is available or timeout is reached (binary version).
+     *
+     * @param timeout the timeout in seconds (0 means block indefinitely)
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a Tuple (member-score pair), or null if timeout is
+     *     reached
+     */
+    public redis.clients.jedis.resps.KeyValue<byte[], Tuple> bzpopmin(
+            double timeout, byte[]... keys) {
+        return executeCommandWithGlide(
+                "BZPOPMIN",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Object[] result = glideClient.bzpopmin(glideKeys, timeout).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // result[0] = key, result[1] = member, result[2] = score
+                    GlideString key = (GlideString) result[0];
+                    GlideString member = (GlideString) result[1];
+                    Double score = (Double) result[2];
+                    return new redis.clients.jedis.resps.KeyValue<>(
+                            key.getBytes(), new Tuple(member.getBytes(), score));
+                });
+    }
+
+    /**
+     * Removes and returns a member with the highest score from the first non-empty sorted set. Blocks
+     * until a member is available or timeout is reached.
+     *
+     * @param timeout the timeout in seconds (0 means block indefinitely)
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a Tuple (member-score pair), or null if timeout is
+     *     reached
+     * @see <a href="https://valkey.io/commands/bzpopmax/">valkey.io</a>
+     * @since Valkey 5.0.0
+     */
+    public redis.clients.jedis.resps.KeyValue<String, Tuple> bzpopmax(
+            double timeout, String... keys) {
+        return executeCommandWithGlide(
+                "BZPOPMAX",
+                () -> {
+                    Object[] result = glideClient.bzpopmax(keys, timeout).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // result[0] = key, result[1] = member, result[2] = score
+                    String key = (String) result[0];
+                    String member = (String) result[1];
+                    Double score = (Double) result[2];
+                    return new redis.clients.jedis.resps.KeyValue<>(key, new Tuple(member, score));
+                });
+    }
+
+    /**
+     * Removes and returns a member with the highest score from the first non-empty sorted set. Blocks
+     * until a member is available or timeout is reached (binary version).
+     *
+     * @param timeout the timeout in seconds (0 means block indefinitely)
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a Tuple (member-score pair), or null if timeout is
+     *     reached
+     */
+    public redis.clients.jedis.resps.KeyValue<byte[], Tuple> bzpopmax(
+            double timeout, byte[]... keys) {
+        return executeCommandWithGlide(
+                "BZPOPMAX",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Object[] result = glideClient.bzpopmax(glideKeys, timeout).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // result[0] = key, result[1] = member, result[2] = score
+                    GlideString key = (GlideString) result[0];
+                    GlideString member = (GlideString) result[1];
+                    Double score = (Double) result[2];
+                    return new redis.clients.jedis.resps.KeyValue<>(
+                            key.getBytes(), new Tuple(member.getBytes(), score));
+                });
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all successive sorted sets.
+     *
+     * @param keys the keys of the sorted sets
+     * @return an array of members in the resulting set
+     * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<String> zdiff(String... keys) {
+        return executeCommandWithGlide("ZDIFF", () -> Arrays.asList(glideClient.zdiff(keys).get()));
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all successive sorted sets (binary
+     * version).
+     *
+     * @param keys the keys of the sorted sets
+     * @return an array of members in the resulting set
+     */
+    public List<byte[]> zdiff(byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZDIFF",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    GlideString[] result = glideClient.zdiff(glideKeys).get();
+                    return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all successive sorted sets, with
+     * scores.
+     *
+     * @param keys the keys of the sorted sets
+     * @return a list of Tuples (element-score pairs) in the resulting set
+     * @see <a href="https://valkey.io/commands/zdiff/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<Tuple> zdiffWithScores(String... keys) {
+        return executeCommandWithGlide(
+                "ZDIFF",
+                () -> {
+                    Map<String, Double> result = glideClient.zdiffWithScores(keys).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns the difference between the first sorted set and all successive sorted sets, with scores
+     * (binary version).
+     *
+     * @param keys the keys of the sorted sets
+     * @return a list of Tuples (element-score pairs) in the resulting set
+     */
+    public List<Tuple> zdiffWithScores(byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZDIFF",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Map<GlideString, Double> result = glideClient.zdiffWithScores(glideKeys).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey().getBytes(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Computes the difference between the first sorted set and all successive sorted sets and stores
+     * the result in destination.
+     *
+     * @param destination the key where the result will be stored
+     * @param keys the keys of the sorted sets
+     * @return the number of members in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/zdiffstore/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public long zdiffstore(String destination, String... keys) {
+        return executeCommandWithGlide(
+                "ZDIFFSTORE", () -> glideClient.zdiffstore(destination, keys).get());
+    }
+
+    /**
+     * Computes the difference between the first sorted set and all successive sorted sets and stores
+     * the result in destination (binary version).
+     *
+     * @param destination the key where the result will be stored
+     * @param keys the keys of the sorted sets
+     * @return the number of members in the resulting sorted set
+     */
+    public long zdiffstore(byte[] destination, byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZDIFFSTORE",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    return glideClient.zdiffstore(GlideString.of(destination), glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the union of multiple sorted sets.
+     *
+     * @param keys the keys of the sorted sets
+     * @return an array of members in the resulting set
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<String> zunion(String... keys) {
+        return executeCommandWithGlide(
+                "ZUNION", () -> Arrays.asList(glideClient.zunion(new KeyArray(keys)).get()));
+    }
+
+    /**
+     * Returns the union of multiple sorted sets (binary version).
+     *
+     * @param keys the keys of the sorted sets
+     * @return an array of members in the resulting set
+     */
+    public List<byte[]> zunion(byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZUNION",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    GlideString[] result = glideClient.zunion(new KeyArrayBinary(glideKeys)).get();
+                    return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns the union of multiple sorted sets with scores.
+     *
+     * @param keys the keys of the sorted sets
+     * @return a list of Tuples (element-score pairs) in the resulting set
+     * @see <a href="https://valkey.io/commands/zunion/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<Tuple> zunionWithScores(String... keys) {
+        return executeCommandWithGlide(
+                "ZUNION",
+                () -> {
+                    Map<String, Double> result = glideClient.zunionWithScores(new KeyArray(keys)).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns the union of multiple sorted sets with scores (binary version).
+     *
+     * @param keys the keys of the sorted sets
+     * @return a list of Tuples (element-score pairs) in the resulting set
+     */
+    public List<Tuple> zunionWithScores(byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZUNION",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Map<GlideString, Double> result =
+                            glideClient.zunionWithScores(new KeyArrayBinary(glideKeys)).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey().getBytes(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns the intersection of multiple sorted sets.
+     *
+     * @param keys the keys of the sorted sets
+     * @return an array of members in the resulting set
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<String> zinter(String... keys) {
+        return executeCommandWithGlide(
+                "ZINTER", () -> Arrays.asList(glideClient.zinter(new KeyArray(keys)).get()));
+    }
+
+    /**
+     * Returns the intersection of multiple sorted sets (binary version).
+     *
+     * @param keys the keys of the sorted sets
+     * @return an array of members in the resulting set
+     */
+    public List<byte[]> zinter(byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZINTER",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    GlideString[] result = glideClient.zinter(new KeyArrayBinary(glideKeys)).get();
+                    return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns the intersection of multiple sorted sets with scores.
+     *
+     * @param keys the keys of the sorted sets
+     * @return a list of Tuples (element-score pairs) in the resulting set
+     * @see <a href="https://valkey.io/commands/zinter/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<Tuple> zinterWithScores(String... keys) {
+        return executeCommandWithGlide(
+                "ZINTER",
+                () -> {
+                    Map<String, Double> result = glideClient.zinterWithScores(new KeyArray(keys)).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<String, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns the intersection of multiple sorted sets with scores (binary version).
+     *
+     * @param keys the keys of the sorted sets
+     * @return a list of Tuples (element-score pairs) in the resulting set
+     */
+    public List<Tuple> zinterWithScores(byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZINTER",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Map<GlideString, Double> result =
+                            glideClient.zinterWithScores(new KeyArrayBinary(glideKeys)).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> entry : result.entrySet()) {
+                        tuples.add(new Tuple(entry.getKey().getBytes(), entry.getValue()));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns the cardinality of the intersection of multiple sorted sets.
+     *
+     * @param keys the keys of the sorted sets
+     * @return the number of members in the resulting intersection
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public long zintercard(String... keys) {
+        return executeCommandWithGlide("ZINTERCARD", () -> glideClient.zintercard(keys).get());
+    }
+
+    /**
+     * Returns the cardinality of the intersection of multiple sorted sets (binary version).
+     *
+     * @param keys the keys of the sorted sets
+     * @return the number of members in the resulting intersection
+     */
+    public long zintercard(byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZINTERCARD",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    return glideClient.zintercard(glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the cardinality of the intersection of multiple sorted sets, stopping at the specified
+     * limit.
+     *
+     * @param limit if the intersection cardinality reaches limit, the algorithm will exit early
+     * @param keys the keys of the sorted sets
+     * @return the number of members in the resulting intersection (up to limit)
+     * @see <a href="https://valkey.io/commands/zintercard/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    public long zintercard(long limit, String... keys) {
+        return executeCommandWithGlide("ZINTERCARD", () -> glideClient.zintercard(keys, limit).get());
+    }
+
+    /**
+     * Returns the cardinality of the intersection of multiple sorted sets, stopping at the specified
+     * limit (binary version).
+     *
+     * @param limit if the intersection cardinality reaches limit, the algorithm will exit early
+     * @param keys the keys of the sorted sets
+     * @return the number of members in the resulting intersection (up to limit)
+     */
+    public long zintercard(long limit, byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZINTERCARD",
+                () -> {
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    return glideClient.zintercard(glideKeys, limit).get();
+                });
+    }
+
+    /**
+     * Pops member-score pairs from the first non-empty sorted set (binary version).
+     *
+     * @param option MIN to pop members with lowest scores, MAX for highest scores
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a list of Tuples, or null if all sets are empty
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    @SuppressWarnings("unchecked")
+    public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> zmpop(
+            SortedSetOption option, byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZMPOP",
+                () -> {
+                    ScoreFilter modifier =
+                            (option == SortedSetOption.MIN) ? ScoreFilter.MIN : ScoreFilter.MAX;
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Map<GlideString, Object> result = glideClient.zmpop(glideKeys, modifier).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // Result has single entry: key -> map of member -> score
+                    Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
+                    byte[] key = entry.getKey().getBytes();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
+                    }
+                    return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
+                });
+    }
+
+    /**
+     * Pops up to count member-score pairs from the first non-empty sorted set.
+     *
+     * @param option MIN to pop members with lowest scores, MAX for highest scores
+     * @param count the maximum number of members to pop
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a list of Tuples, or null if all sets are empty
+     * @see <a href="https://valkey.io/commands/zmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    @SuppressWarnings("unchecked")
+    public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> zmpop(
+            SortedSetOption option, int count, byte[]... keys) {
+        return executeCommandWithGlide(
+                "ZMPOP",
+                () -> {
+                    ScoreFilter modifier =
+                            (option == SortedSetOption.MIN) ? ScoreFilter.MIN : ScoreFilter.MAX;
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Map<GlideString, Object> result =
+                            glideClient.zmpop(glideKeys, modifier, (long) count).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // Result has single entry: key -> map of member -> score
+                    Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
+                    byte[] key = entry.getKey().getBytes();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
+                    }
+                    return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
+                });
+    }
+
+    /**
+     * Blocks until it pops member-score pairs from the first non-empty sorted set.
+     *
+     * @param timeout the timeout in seconds (0 means block indefinitely)
+     * @param option MIN to pop members with lowest scores, MAX for highest scores
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a list of Tuples, or null if timeout is reached
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    @SuppressWarnings("unchecked")
+    public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> bzmpop(
+            double timeout, SortedSetOption option, byte[]... keys) {
+        return executeCommandWithGlide(
+                "BZMPOP",
+                () -> {
+                    ScoreFilter modifier =
+                            (option == SortedSetOption.MIN) ? ScoreFilter.MIN : ScoreFilter.MAX;
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Map<GlideString, Object> result = glideClient.bzmpop(glideKeys, modifier, timeout).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // Result has single entry: key -> map of member -> score
+                    Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
+                    byte[] key = entry.getKey().getBytes();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
+                    }
+                    return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
+                });
+    }
+
+    /**
+     * Blocks until it pops up to count member-score pairs from the first non-empty sorted set.
+     *
+     * @param timeout the timeout in seconds (0 means block indefinitely)
+     * @param option MIN to pop members with lowest scores, MAX for highest scores
+     * @param count the maximum number of members to pop
+     * @param keys the keys of the sorted sets to check
+     * @return a KeyValue containing the key and a list of Tuples, or null if timeout is reached
+     * @see <a href="https://valkey.io/commands/bzmpop/">valkey.io</a>
+     * @since Valkey 7.0.0
+     */
+    @SuppressWarnings("unchecked")
+    public redis.clients.jedis.resps.KeyValue<byte[], List<Tuple>> bzmpop(
+            double timeout, SortedSetOption option, int count, byte[]... keys) {
+        return executeCommandWithGlide(
+                "BZMPOP",
+                () -> {
+                    ScoreFilter modifier =
+                            (option == SortedSetOption.MIN) ? ScoreFilter.MIN : ScoreFilter.MAX;
+                    GlideString[] glideKeys =
+                            Arrays.stream(keys).map(GlideString::of).toArray(GlideString[]::new);
+                    Map<GlideString, Object> result =
+                            glideClient.bzmpop(glideKeys, modifier, timeout, (long) count).get();
+                    if (result == null) {
+                        return null;
+                    }
+                    // Result has single entry: key -> map of member -> score
+                    Map.Entry<GlideString, Object> entry = result.entrySet().iterator().next();
+                    byte[] key = entry.getKey().getBytes();
+                    Map<GlideString, Double> membersMap = (Map<GlideString, Double>) entry.getValue();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Map.Entry<GlideString, Double> memberScore : membersMap.entrySet()) {
+                        tuples.add(new Tuple(memberScore.getKey().getBytes(), memberScore.getValue()));
+                    }
+                    return new redis.clients.jedis.resps.KeyValue<>(key, tuples);
+                });
+    }
+
+    /**
+     * Removes all members with lexicographical values between min and max from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum lexicographical value (inclusive with "[", exclusive with "(")
+     * @param max the maximum lexicographical value (inclusive with "[", exclusive with "(")
+     * @return the number of members removed
+     * @see <a href="https://valkey.io/commands/zremrangebylex/">valkey.io</a>
+     * @since Valkey 2.8.9
+     */
+    public long zremrangebylex(String key, String min, String max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYLEX",
+                () -> {
+                    LexRange minLex = parseLexRange(min);
+                    LexRange maxLex = parseLexRange(max);
+                    return glideClient.zremrangebylex(key, minLex, maxLex).get();
+                });
+    }
+
+    /**
+     * Removes all members with lexicographical values between min and max from the sorted set (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param min the minimum lexicographical value (inclusive with "[", exclusive with "(")
+     * @param max the maximum lexicographical value (inclusive with "[", exclusive with "(")
+     * @return the number of members removed
+     */
+    public long zremrangebylex(byte[] key, byte[] min, byte[] max) {
+        return executeCommandWithGlide(
+                "ZREMRANGEBYLEX",
+                () -> {
+                    LexRange minLex = parseLexRange(min);
+                    LexRange maxLex = parseLexRange(max);
+                    return glideClient.zremrangebylex(GlideString.of(key), minLex, maxLex).get();
+                });
+    }
+
+    /**
+     * Returns a random member from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @return a random member, or null if the set is empty
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public String zrandmember(String key) {
+        return executeCommandWithGlide("ZRANDMEMBER", () -> glideClient.zrandmember(key).get());
+    }
+
+    /**
+     * Returns a random member from the sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @return a random member, or null if the set is empty
+     */
+    public byte[] zrandmember(byte[] key) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER",
+                () -> {
+                    GlideString result = glideClient.zrandmember(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Returns multiple random members from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return
+     * @return a list of random members
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<String> zrandmember(String key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER", () -> Arrays.asList(glideClient.zrandmemberWithCount(key, count).get()));
+    }
+
+    /**
+     * Returns multiple random members from the sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return
+     * @return a list of random members
+     */
+    public List<byte[]> zrandmember(byte[] key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER",
+                () -> {
+                    GlideString[] results =
+                            glideClient.zrandmemberWithCount(GlideString.of(key), count).get();
+                    return Arrays.stream(results).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Returns multiple random members with their scores from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return
+     * @return a list of members with their scores
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<Tuple> zrandmemberWithScores(String key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER",
+                () -> {
+                    Object[][] results = glideClient.zrandmemberWithCountWithScores(key, count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Object[] pair : results) {
+                        String member = (String) pair[0];
+                        Double score = (Double) pair[1];
+                        tuples.add(new Tuple(member, score));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns multiple random members with their scores from the sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return
+     * @return a list of members with their scores
+     */
+    public List<Tuple> zrandmemberWithScores(byte[] key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER",
+                () -> {
+                    Object[][] results =
+                            glideClient.zrandmemberWithCountWithScores(GlideString.of(key), count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Object[] pair : results) {
+                        GlideString member = (GlideString) pair[0];
+                        Double score = (Double) pair[1];
+                        tuples.add(new Tuple(member.getBytes(), score));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Removes and returns one or more random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @return the popped member, or null when key does not exist
+     */
+    public String spop(String key) {
+        return executeCommandWithGlide("SPOP", () -> glideClient.spop(key).get());
+    }
+
+    /**
+     * Removes and returns one or more random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return the popped member, or null when key does not exist
+     */
+    public byte[] spop(final byte[] key) {
+        return executeCommandWithGlide(
+                "SPOP",
+                () -> {
+                    GlideString result = glideClient.spop(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Returns random members from the sorted set.
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return (negative values allow duplicates)
+     * @return an array of random members
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<String> zrandmemberWithCount(String key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER", () -> Arrays.asList(glideClient.zrandmemberWithCount(key, count).get()));
+    }
+
+    /**
+     * Returns random members from the sorted set (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return (negative values allow duplicates)
+     * @return an array of random members
+     */
+    public List<byte[]> zrandmemberWithCount(byte[] key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER",
+                () -> {
+                    GlideString[] result = glideClient.zrandmemberWithCount(GlideString.of(key), count).get();
+                    return Arrays.stream(result).map(GlideString::getBytes).collect(Collectors.toList());
+                });
+    }
+
+    /**
+     * Removes and returns up to count random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @param count the number of members to pop
+     * @return the popped members, or an empty set when key does not exist
+     */
+    public Set<String> spop(String key, long count) {
+        return executeCommandWithGlide("SPOP", () -> glideClient.spopCount(key, count).get());
+    }
+
+    /**
+     * Removes and returns up to count random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param count the number of members to pop
+     * @return the popped members, or an empty set when key does not exist
+     */
+    public Set<byte[]> spop(final byte[] key, final long count) {
+        return executeCommandWithGlide(
+                "SPOP",
+                () -> {
+                    Set<GlideString> result = glideClient.spopCount(GlideString.of(key), count).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Returns random members from the sorted set with their scores.
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return (negative values allow duplicates)
+     * @return a list of Tuples (element-score pairs)
+     * @see <a href="https://valkey.io/commands/zrandmember/">valkey.io</a>
+     * @since Valkey 6.2.0
+     */
+    public List<Tuple> zrandmemberWithCountWithScores(String key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER",
+                () -> {
+                    Object[][] result = glideClient.zrandmemberWithCountWithScores(key, count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Object[] pair : result) {
+                        String member = (String) pair[0];
+                        Double score = (Double) pair[1];
+                        tuples.add(new Tuple(member, score));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Returns one or more random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @return the random member, or null when key does not exist or set is empty
+     */
+    public String srandmember(String key) {
+        return executeCommandWithGlide("SRANDMEMBER", () -> glideClient.srandmember(key).get());
+    }
+
+    /**
+     * Returns one or more random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @return the random member, or null when key does not exist or set is empty
+     */
+    public byte[] srandmember(final byte[] key) {
+        return executeCommandWithGlide(
+                "SRANDMEMBER",
+                () -> {
+                    GlideString result = glideClient.srandmember(GlideString.of(key)).get();
+                    return result != null ? result.getBytes() : null;
+                });
+    }
+
+    /**
+     * Returns one or more random members from the set stored at key.
+     *
+     * @param key the key of the set
+     * @param count the number of members to return (positive: unique, negative: may repeat)
+     * @return list of random members
+     */
+    public List<String> srandmember(String key, int count) {
+        return executeCommandWithGlide(
+                "SRANDMEMBER",
+                () -> {
+                    String[] result = glideClient.srandmember(key, count).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns one or more random members from the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param count the number of members to return (positive: unique, negative: may repeat)
+     * @return list of random members
+     */
+    public List<byte[]> srandmember(final byte[] key, final int count) {
+        return executeCommandWithGlide(
+                "SRANDMEMBER",
+                () -> {
+                    GlideString[] result = glideClient.srandmember(GlideString.of(key), count).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Returns random members from the sorted set with their scores (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param count the number of members to return (negative values allow duplicates)
+     * @return a list of Tuples (element-score pairs)
+     */
+    public List<Tuple> zrandmemberWithCountWithScores(byte[] key, long count) {
+        return executeCommandWithGlide(
+                "ZRANDMEMBER",
+                () -> {
+                    Object[][] result =
+                            glideClient.zrandmemberWithCountWithScores(GlideString.of(key), count).get();
+                    List<Tuple> tuples = new ArrayList<>();
+                    for (Object[] pair : result) {
+                        GlideString member = (GlideString) pair[0];
+                        Double score = (Double) pair[1];
+                        tuples.add(new Tuple(member.getBytes(), score));
+                    }
+                    return tuples;
+                });
+    }
+
+    /**
+     * Moves member from the set at source to the set at destination.
+     *
+     * @param srckey the key of the source set
+     * @param dstkey the key of the destination set
+     * @param member the member to move
+     * @return 1 if the element was moved, 0 if the element is not a member of source
+     */
+    public long smove(String srckey, String dstkey, String member) {
+        return executeCommandWithGlide(
+                "SMOVE", () -> glideClient.smove(srckey, dstkey, member).get() ? 1L : 0L);
+    }
+
+    /**
+     * Moves member from the set at source to the set at destination (binary version).
+     *
+     * @param srckey the key of the source set
+     * @param dstkey the key of the destination set
+     * @param member the member to move
+     * @return 1 if the element was moved, 0 if the element is not a member of source
+     */
+    public long smove(final byte[] srckey, final byte[] dstkey, final byte[] member) {
+        return executeCommandWithGlide(
+                "SMOVE",
+                () ->
+                        glideClient
+                                        .smove(GlideString.of(srckey), GlideString.of(dstkey), GlideString.of(member))
+                                        .get()
+                                ? 1L
+                                : 0L);
+    }
+
+    /**
+     * Returns the members of the set resulting from the intersection of all the given sets.
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the intersection
+     */
+    public Set<String> sinter(String... keys) {
+        return executeCommandWithGlide("SINTER", () -> glideClient.sinter(keys).get());
+    }
+
+    /**
+     * Returns the members of the set resulting from the intersection of all the given sets (binary
+     * version).
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the intersection
+     */
+    public Set<byte[]> sinter(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTER",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    Set<GlideString> result = glideClient.sinter(glideKeys).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets.
+     *
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection
+     */
+    public long sintercard(String... keys) {
+        return executeCommandWithGlide("SINTERCARD", () -> glideClient.sintercard(keys).get());
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets, with
+     * limit.
+     *
+     * @param limit the maximum cardinality to compute
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection (capped at limit)
+     */
+    public long sintercard(long limit, String... keys) {
+        return executeCommandWithGlide("SINTERCARD", () -> glideClient.sintercard(keys, limit).get());
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets
+     * (binary version).
+     *
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection
+     */
+    public long sintercard(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTERCARD",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sintercard(glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the cardinality of the set resulting from the intersection of all the given sets, with
+     * limit (binary version).
+     *
+     * @param limit the maximum cardinality to compute
+     * @param keys the keys of the sets
+     * @return the cardinality of the intersection (capped at limit)
+     */
+    public long sintercard(long limit, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTERCARD",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sintercard(glideKeys, limit).get();
+                });
+    }
+
+    /**
+     * Stores the members of the set resulting from the intersection of all the given sets into
+     * destination.
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sinterstore(String destination, String... keys) {
+        return executeCommandWithGlide(
+                "SINTERSTORE", () -> glideClient.sinterstore(destination, keys).get());
+    }
+
+    /**
+     * Stores the members of the set resulting from the intersection of all the given sets into
+     * destination (binary version).
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sinterstore(final byte[] destination, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SINTERSTORE",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sinterstore(GlideString.of(destination), glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the members of the set resulting from the union of all the given sets.
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the union
+     */
+    public Set<String> sunion(String... keys) {
+        return executeCommandWithGlide("SUNION", () -> glideClient.sunion(keys).get());
+    }
+
+    /**
+     * Returns the members of the set resulting from the union of all the given sets (binary version).
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the union
+     */
+    public Set<byte[]> sunion(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SUNION",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    Set<GlideString> result = glideClient.sunion(glideKeys).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Stores the members of the set resulting from the union of all the given sets into destination.
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sunionstore(String destination, String... keys) {
+        return executeCommandWithGlide(
+                "SUNIONSTORE", () -> glideClient.sunionstore(destination, keys).get());
+    }
+
+    /**
+     * Stores the members of the set resulting from the union of all the given sets into destination
+     * (binary version).
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sunionstore(final byte[] destination, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SUNIONSTORE",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sunionstore(GlideString.of(destination), glideKeys).get();
+                });
+    }
+
+    /**
+     * Returns the members of the set resulting from the difference between the first set and all the
+     * successive sets.
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the difference
+     */
+    public Set<String> sdiff(String... keys) {
+        return executeCommandWithGlide("SDIFF", () -> glideClient.sdiff(keys).get());
+    }
+
+    /**
+     * Returns the members of the set resulting from the difference between the first set and all the
+     * successive sets (binary version).
+     *
+     * @param keys the keys of the sets
+     * @return set with members of the difference
+     */
+    public Set<byte[]> sdiff(final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SDIFF",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    Set<GlideString> result = glideClient.sdiff(glideKeys).get();
+                    return convertGlideStringsToByteArraySet(result);
+                });
+    }
+
+    /**
+     * Stores the members of the set resulting from the difference between the first set and all the
+     * successive sets into destination.
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sdiffstore(String destination, String... keys) {
+        return executeCommandWithGlide(
+                "SDIFFSTORE", () -> glideClient.sdiffstore(destination, keys).get());
+    }
+
+    /**
+     * Stores the members of the set resulting from the difference between the first set and all the
+     * successive sets into destination (binary version).
+     *
+     * @param destination the key of the destination set
+     * @param keys the keys of the sets
+     * @return the number of elements in the resulting set
+     */
+    public long sdiffstore(final byte[] destination, final byte[]... keys) {
+        return executeCommandWithGlide(
+                "SDIFFSTORE",
+                () -> {
+                    GlideString[] glideKeys = convertToGlideStringArray(keys);
+                    return glideClient.sdiffstore(GlideString.of(destination), glideKeys).get();
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key.
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<String> sscan(String key, String cursor) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    Object[] result = glideClient.sscan(key, cursor).get();
+                    return convertToScanResult(result);
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key with scan parameters.
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @param params the scan parameters
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<String> sscan(String key, String cursor, ScanParams params) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    SScanOptions options = convertScanParamsToSScanOptions(params);
+                    Object[] result = glideClient.sscan(key, cursor, options).get();
+                    return convertToScanResult(result);
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key (binary version).
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    Object[] result = glideClient.sscan(GlideString.of(key), GlideString.of(cursor)).get();
+                    return convertToSscanResultBinary(result);
+                });
+    }
+
+    /**
+     * Incrementally iterates over the set stored at key with scan parameters (binary version).
+     *
+     * @param key the key of the set
+     * @param cursor the cursor (use "0" to start)
+     * @param params the scan parameters
+     * @return scan result with next cursor and set of members
+     */
+    public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor, final ScanParams params) {
+        return executeCommandWithGlide(
+                "SSCAN",
+                () -> {
+                    Object[] result =
+                            glideClient
+                                    .sscan(
+                                            GlideString.of(key),
+                                            GlideString.of(cursor),
+                                            SScanOptionsBinary.builder()
+                                                    .matchPattern(
+                                                            params.getMatchPattern() != null
+                                                                    ? GlideString.of(params.getMatchPattern())
+                                                                    : null)
+                                                    .count(params.getCount())
+                                                    .build())
+                                    .get();
+                    return convertToSscanResultBinary(result);
+                });
+    }
+
+    /** Convert GLIDE SSCAN result to ScanResult with byte[] members. */
+    private static ScanResult<byte[]> convertToSscanResultBinary(Object[] result) {
+        if (result != null && result.length >= 2) {
+            String newCursor = result[0].toString();
+            Object membersObj = result[1];
+            if (membersObj instanceof Object[]) {
+                Object[] membersArray = (Object[]) membersObj;
+                List<byte[]> members = new ArrayList<>();
+                for (Object m : membersArray) {
+                    if (m == null) {
+                        members.add(null);
+                    } else if (m instanceof GlideString) {
+                        members.add(((GlideString) m).getBytes());
+                    } else {
+                        members.add(m.toString().getBytes(VALKEY_CHARSET));
+                    }
+                }
+                return new ScanResult<>(newCursor, members);
+            }
+        }
+        return new ScanResult<>("0", Collections.emptyList());
+    }
+
+    /** Convert ScanParams to GLIDE SScanOptions. */
+    private static SScanOptions convertScanParamsToSScanOptions(ScanParams params) {
+        SScanOptions.SScanOptionsBuilder builder = SScanOptions.builder();
+        if (params.getMatchPattern() != null) {
+            builder.matchPattern(params.getMatchPattern());
+        }
+        if (params.getCount() != null) {
+            builder.count(params.getCount());
+        }
+        return builder.build();
+    }
+
+    // ==================== SORT COMMANDS ====================
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and returns the result. The
+     * sortReadonly command is a read-only variant of SORT that does not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<String> sortReadonly(String key) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    String[] result = glideClient.sortReadOnly(key).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and returns the result (binary
+     * version). The sortReadonly command is a read-only variant of SORT that does not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<byte[]> sortReadonly(final byte[] key) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    GlideString[] result = glideClient.sortReadOnly(GlideString.of(key)).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
+     * the result. The sortReadonly command is a read-only variant of SORT that does not modify the
+     * key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParams the sorting parameters
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<String> sortReadonly(String key, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    SortOptions options = convertSortingParamsToSortOptions(sortingParams);
+                    String[] result = glideClient.sortReadOnly(key, options).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and returns
+     * the result (binary version). The sortReadonly command is a read-only variant of SORT that does
+     * not modify the key.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParams the sorting parameters
+     * @return the sorted elements as a list
+     * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
+     * @since Valkey 7.0.0
+     */
+    public List<byte[]> sortReadonly(final byte[] key, SortingParams sortingParams) {
+        return executeCommandWithGlide(
+                "SORT_RO",
+                () -> {
+                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParams);
+                    GlideString[] result = glideClient.sortReadOnly(GlideString.of(key), options).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs.getBytes());
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and stores the result in destination.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(String key, String dstkey) {
+        return executeCommandWithGlide("SORT", () -> glideClient.sortStore(key, dstkey).get());
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key and stores the result in destination
+     * (binary version).
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(final byte[] key, final byte[] dstkey) {
+        return executeCommandWithGlide(
+                "SORT", () -> glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey)).get());
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and stores
+     * the result in destination.
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParameters the sorting parameters
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(String key, SortingParams sortingParameters, String dstkey) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    SortOptions options = convertSortingParamsToSortOptions(sortingParameters);
+                    return glideClient.sortStore(key, dstkey, options).get();
+                });
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at key with sorting parameters and stores
+     * the result in destination (binary version).
+     *
+     * @param key the key of the list, set, or sorted set to be sorted
+     * @param sortingParameters the sorting parameters
+     * @param dstkey the destination key to store the sorted result
+     * @return the number of elements in the sorted result
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
+     * @since Valkey 1.0.0
+     */
+    public long sort(final byte[] key, SortingParams sortingParameters, final byte[] dstkey) {
+        return executeCommandWithGlide(
+                "SORT",
+                () -> {
+                    SortOptionsBinary options = convertSortingParamsToSortOptionsBinary(sortingParameters);
+                    return glideClient.sortStore(GlideString.of(key), GlideString.of(dstkey), options).get();
+                });
+    }
+
+    /** Convert SortingParams to GLIDE SortOptions. */
+    private static SortOptions convertSortingParamsToSortOptions(SortingParams params) {
+        if (params == null) {
+            return SortOptions.builder().build();
+        }
+
+        SortOptions.SortOptionsBuilder builder = SortOptions.builder();
+        String[] paramArray = params.getParams();
+
+        for (int i = 0; i < paramArray.length; i++) {
+            String param = paramArray[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < paramArray.length) {
+                        builder.byPattern(paramArray[++i]);
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < paramArray.length) {
+                        try {
+                            long offset = Long.parseLong(paramArray[++i]);
+                            long count = Long.parseLong(paramArray[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < paramArray.length) {
+                        builder.getPattern(paramArray[++i]);
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Ignore unknown parameters
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
+    /** Convert SortingParams to GLIDE SortOptionsBinary. */
+    private static SortOptionsBinary convertSortingParamsToSortOptionsBinary(SortingParams params) {
+        if (params == null) {
+            return SortOptionsBinary.builder().build();
+        }
+
+        SortOptionsBinary.SortOptionsBinaryBuilder builder = SortOptionsBinary.builder();
+        String[] paramArray = params.getParams();
+
+        for (int i = 0; i < paramArray.length; i++) {
+            String param = paramArray[i].toUpperCase();
+
+            switch (param) {
+                case "BY":
+                    if (i + 1 < paramArray.length) {
+                        builder.byPattern(GlideString.of(paramArray[++i]));
+                    }
+                    break;
+
+                case "LIMIT":
+                    if (i + 2 < paramArray.length) {
+                        try {
+                            long offset = Long.parseLong(paramArray[++i]);
+                            long count = Long.parseLong(paramArray[++i]);
+                            builder.limit(new SortBaseOptions.Limit(offset, count));
+                        } catch (NumberFormatException e) {
+                            // Skip invalid limit parameters
+                        }
+                    }
+                    break;
+
+                case "GET":
+                    if (i + 1 < paramArray.length) {
+                        builder.getPattern(GlideString.of(paramArray[++i]));
+                    }
+                    break;
+
+                case "ASC":
+                    builder.orderBy(SortBaseOptions.OrderBy.ASC);
+                    break;
+
+                case "DESC":
+                    builder.orderBy(SortBaseOptions.OrderBy.DESC);
+                    break;
+
+                case "ALPHA":
+                    builder.alpha();
+                    break;
+
+                default:
+                    // Ignore unknown parameters
+                    break;
+            }
+        }
+
+        return builder.build();
+    }
+
+    // ==================== WAIT COMMANDS ====================
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numreplicas of replicas.
+     *
+     * @param replicas the number of replicas to wait for
+     * @param timeout the timeout in milliseconds
+     * @return the number of replicas that acknowledged the write commands
+     * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
+     * @since Valkey 3.0.0
+     */
+    public long wait(long replicas, long timeout) {
+        return executeCommandWithGlide("WAIT", () -> glideClient.wait(replicas, timeout).get());
+    }
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numreplicas of replicas.
+     *
+     * @param replicas the number of replicas to wait for
+     * @param timeout the timeout in milliseconds
+     * @return the number of replicas that acknowledged the write commands
+     * @see <a href="https://valkey.io/commands/wait/">valkey.io</a> for details.
+     * @since Valkey 3.0.0
+     */
+    public long waitReplicas(int replicas, long timeout) {
+        return executeCommandWithGlide("WAIT", () -> glideClient.wait((long) replicas, timeout).get());
+    }
+
+    /**
+     * Blocks the current client until all previous write commands are successfully transferred and
+     * acknowledged by at least numLocal and numReplicas of replicas and local persistence.
+     *
+     * @param numLocal the number of local acknowledgments required
+     * @param numReplicas the number of replica acknowledgments required
+     * @param timeout the timeout in milliseconds
+     * @return a KeyValue containing the number of local and replica acknowledgments
+     * @see <a href="https://valkey.io/commands/waitaof/">valkey.io</a> for details.
+     * @since Valkey 7.2.0
+     */
+    public KeyValue<Long, Long> waitAOF(long numLocal, long numReplicas, long timeout) {
+        return executeCommandWithGlide(
+                "WAITAOF",
+                () -> {
+                    Long[] result = glideClient.waitaof(numLocal, numReplicas, timeout).get();
+                    if (result != null && result.length >= 2) {
+                        return new KeyValue<>(result[0], result[1]);
+                    }
+                    return new KeyValue<>(0L, 0L);
+                });
+    }
+
+    // ==================== OBJECT COMMANDS ====================
+
+    /**
+     * Returns the internal encoding for the Valkey object stored at key.
+     *
+     * @param key the key of the object
+     * @return the encoding of the object, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public String objectEncoding(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectEncoding(key).get());
+    }
+
+    /**
+     * Returns the internal encoding for the Valkey object stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the encoding of the object, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-encoding/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public byte[] objectEncoding(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    String result = glideClient.objectEncoding(GlideString.of(key)).get();
+                    return result != null ? result.getBytes(VALKEY_CHARSET) : null;
+                });
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at key.
+     *
+     * @param key the key of the object
+     * @return the frequency counter, or null if the key does not exist or LFU is not enabled
+     * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
+     * @since Valkey 4.0.0
+     */
+    public Long objectFreq(String key) {
+        try {
+            return executeCommandWithGlide("OBJECT", () -> glideClient.objectFreq(key).get());
+        } catch (JedisException e) {
+            // Return null if LFU maxmemory policy is not enabled
+            if (e.getCause() != null
+                    && e.getCause().getMessage() != null
+                    && e.getCause().getMessage().contains("LFU maxmemory policy is not selected")) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Returns the logarithmic access frequency counter of a Valkey object stored at key (binary
+     * version).
+     *
+     * @param key the key of the object
+     * @return the frequency counter, or null if the key does not exist or LFU is not enabled
+     * @see <a href="https://valkey.io/commands/object-freq/">valkey.io</a> for details.
+     * @since Valkey 4.0.0
+     */
+    public Long objectFreq(final byte[] key) {
+        try {
+            return executeCommandWithGlide(
+                    "OBJECT", () -> glideClient.objectFreq(GlideString.of(key)).get());
+        } catch (JedisException e) {
+            // Return null if LFU maxmemory policy is not enabled
+            if (e.getCause() != null
+                    && e.getCause().getMessage() != null
+                    && e.getCause().getMessage().contains("LFU maxmemory policy is not selected")) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at key.
+     *
+     * @param key the key of the object
+     * @return the idle time in seconds, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectIdletime(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectIdletime(key).get());
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the idle time in seconds, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-idletime/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectIdletime(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT", () -> glideClient.objectIdletime(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns the reference count of the object stored at key.
+     *
+     * @param key the key of the object
+     * @return the reference count, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectRefcount(String key) {
+        return executeCommandWithGlide("OBJECT", () -> glideClient.objectRefcount(key).get());
+    }
+
+    /**
+     * Returns the reference count of the object stored at key (binary version).
+     *
+     * @param key the key of the object
+     * @return the reference count, or null if the key does not exist
+     * @see <a href="https://valkey.io/commands/object-refcount/">valkey.io</a> for details.
+     * @since Valkey 2.2.3
+     */
+    public Long objectRefcount(final byte[] key) {
+        return executeCommandWithGlide(
+                "OBJECT", () -> glideClient.objectRefcount(GlideString.of(key)).get());
+    }
+
+    /**
+     * Returns help information about the OBJECT command.
+     *
+     * @return a list of help messages describing OBJECT subcommands
+     * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<String> objectHelp() {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    Object result = glideClient.customCommand(new String[] {"OBJECT", "HELP"}).get();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        List<String> helpMessages = new ArrayList<>(array.length);
+                        for (Object obj : array) {
+                            helpMessages.add(obj != null ? obj.toString() : null);
+                        }
+                        return helpMessages;
+                    }
+                    return Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns help information about the OBJECT command (binary version).
+     *
+     * @return a list of help messages describing OBJECT subcommands
+     * @see <a href="https://valkey.io/commands/object-help/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<byte[]> objectHelpBinary() {
+        return executeCommandWithGlide(
+                "OBJECT",
+                () -> {
+                    Object result =
+                            glideClient
+                                    .customCommand(
+                                            new GlideString[] {GlideString.of("OBJECT"), GlideString.of("HELP")})
+                                    .get();
+                    if (result instanceof Object[]) {
+                        Object[] array = (Object[]) result;
+                        List<byte[]> helpMessages = new ArrayList<>(array.length);
+                        for (Object obj : array) {
+                            if (obj instanceof GlideString) {
+                                helpMessages.add(((GlideString) obj).getBytes());
+                            } else if (obj instanceof String) {
+                                helpMessages.add(((String) obj).getBytes(VALKEY_CHARSET));
+                            } else if (obj != null) {
+                                helpMessages.add(obj.toString().getBytes(VALKEY_CHARSET));
+                            } else {
+                                helpMessages.add(null);
+                            }
+                        }
+                        return helpMessages;
+                    }
+                    return Collections.emptyList();
+                });
+    }
+
+    // ==================== GEO COMMANDS ====================
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at key.
+     *
+     * @param key the key of the sorted set
+     * @param longitude the longitude of the member
+     * @param latitude the latitude of the member
+     * @param member the member name
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(String key, double longitude, double latitude, String member) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<String, GeospatialData> data = new HashMap<>();
+                    data.put(member, new GeospatialData(longitude, latitude));
+                    return glideClient.geoadd(key, data).get();
+                });
+    }
+
+    /**
+     * Adds geospatial members with their positions to the specified sorted set stored at key (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param longitude the longitude of the member
+     * @param latitude the latitude of the member
+     * @param member the member name
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(final byte[] key, double longitude, double latitude, final byte[] member) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<GlideString, GeospatialData> data = new HashMap<>();
+                    data.put(GlideString.of(member), new GeospatialData(longitude, latitude));
+                    return glideClient.geoadd(GlideString.of(key), data).get();
+                });
+    }
+
+    /**
+     * Adds multiple geospatial members with their positions to the specified sorted set stored at
+     * key.
+     *
+     * @param key the key of the sorted set
+     * @param memberCoordinateMap a map of member names to their coordinates
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(String key, Map<String, GeoCoordinate> memberCoordinateMap) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<String, GeospatialData> data = new HashMap<>();
+                    for (Map.Entry<String, GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
+                        data.put(
+                                entry.getKey(),
+                                new GeospatialData(
+                                        entry.getValue().getLongitude(), entry.getValue().getLatitude()));
+                    }
+                    return glideClient.geoadd(key, data).get();
+                });
+    }
+
+    /**
+     * Adds multiple geospatial members with their positions to the specified sorted set stored at key
+     * (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param memberCoordinateMap a map of member names to their coordinates
+     * @return the number of elements added to the sorted set
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public long geoadd(final byte[] key, Map<byte[], GeoCoordinate> memberCoordinateMap) {
+        return executeCommandWithGlide(
+                "GEOADD",
+                () -> {
+                    Map<GlideString, GeospatialData> data = new HashMap<>();
+                    for (Map.Entry<byte[], GeoCoordinate> entry : memberCoordinateMap.entrySet()) {
+                        data.put(
+                                GlideString.of(entry.getKey()),
+                                new GeospatialData(
+                                        entry.getValue().getLongitude(), entry.getValue().getLatitude()));
+                    }
+                    return glideClient.geoadd(GlideString.of(key), data).get();
+                });
+    }
+
+    /**
+     * Returns the positions (longitude,latitude) of all the specified members of the geospatial index
+     * represented by the sorted set at key.
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the positions
+     * @return a list of coordinates corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<GeoCoordinate> geopos(String key, String... members) {
+        return executeCommandWithGlide(
+                "GEOPOS",
+                () -> {
+                    Double[][] result = glideClient.geopos(key, members).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoCoordinate> coordinates = new ArrayList<>();
+                    for (Double[] coord : result) {
+                        if (coord != null && coord.length >= 2 && coord[0] != null && coord[1] != null) {
+                            coordinates.add(new GeoCoordinate(coord[0], coord[1]));
+                        } else {
+                            coordinates.add(null);
+                        }
+                    }
+                    return coordinates;
+                });
+    }
+
+    /**
+     * Returns the positions (longitude,latitude) of all the specified members of the geospatial index
+     * represented by the sorted set at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the positions
+     * @return a list of coordinates corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geopos/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<GeoCoordinate> geopos(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "GEOPOS",
+                () -> {
+                    GlideString[] glideMembers = new GlideString[members.length];
+                    for (int i = 0; i < members.length; i++) {
+                        glideMembers[i] = GlideString.of(members[i]);
+                    }
+                    Double[][] result = glideClient.geopos(GlideString.of(key), glideMembers).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoCoordinate> coordinates = new ArrayList<>();
+                    for (Double[] coord : result) {
+                        if (coord != null && coord.length >= 2 && coord[0] != null && coord[1] != null) {
+                            coordinates.add(new GeoCoordinate(coord[0], coord[1]));
+                        } else {
+                            coordinates.add(null);
+                        }
+                    }
+                    return coordinates;
+                });
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index represented by the sorted set
+     * at key.
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @return the distance in meters, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(String key, String member1, String member2) {
+        return executeCommandWithGlide(
+                "GEODIST", () -> glideClient.geodist(key, member1, member2).get());
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index represented by the sorted set
+     * at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @return the distance in meters, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(final byte[] key, final byte[] member1, final byte[] member2) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () ->
+                        glideClient
+                                .geodist(GlideString.of(key), GlideString.of(member1), GlideString.of(member2))
+                                .get());
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index with specified unit.
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @param unit the unit of distance (m, km, mi, ft)
+     * @return the distance in the specified unit, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(
+            String key, String member1, String member2, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    return glideClient.geodist(key, member1, member2, glideUnit).get();
+                });
+    }
+
+    /**
+     * Returns the distance between two members in the geospatial index with specified unit (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member1 the first member
+     * @param member2 the second member
+     * @param unit the unit of distance (m, km, mi, ft)
+     * @return the distance in the specified unit, or null if one or both members do not exist
+     * @see <a href="https://valkey.io/commands/geodist/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public Double geodist(
+            final byte[] key,
+            final byte[] member1,
+            final byte[] member2,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEODIST",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    return glideClient
+                            .geodist(
+                                    GlideString.of(key), GlideString.of(member1), GlideString.of(member2), glideUnit)
+                            .get();
+                });
+    }
+
+    /**
+     * Returns the GeoHash strings representing the positions of all the specified members in the
+     * geospatial index represented by the sorted set at key.
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the geohash
+     * @return a list of geohash strings corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<String> geohash(String key, String... members) {
+        return executeCommandWithGlide(
+                "GEOHASH",
+                () -> {
+                    String[] result = glideClient.geohash(key, members).get();
+                    return result != null ? Arrays.asList(result) : Collections.emptyList();
+                });
+    }
+
+    /**
+     * Returns the GeoHash strings representing the positions of all the specified members in the
+     * geospatial index represented by the sorted set at key (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param members the members for which to get the geohash
+     * @return a list of geohash strings corresponding to the given members
+     * @see <a href="https://valkey.io/commands/geohash/">valkey.io</a> for details.
+     * @since Valkey 3.2.0
+     */
+    public List<byte[]> geohash(final byte[] key, final byte[]... members) {
+        return executeCommandWithGlide(
+                "GEOHASH",
+                () -> {
+                    GlideString[] glideMembers = new GlideString[members.length];
+                    for (int i = 0; i < members.length; i++) {
+                        glideMembers[i] = GlideString.of(members[i]);
+                    }
+                    GlideString[] result = glideClient.geohash(GlideString.of(key), glideMembers).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<byte[]> out = new ArrayList<>(result.length);
+                    for (GlideString gs : result) {
+                        out.add(gs != null ? gs.getBytes() : null);
+                    }
+                    return out;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and radius.
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key, String member, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and radius (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key, final byte[] member, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and radius.
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and radius (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key, GeoCoordinate coord, double radius, redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and box (width x height).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key,
+            String member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a given member and box (width x height) (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key,
+            final byte[] member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and box (width x height).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            String key,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by a coordinate and box (width x height) (binary
+     * version).
+     *
+     * @param key the key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(
+            final byte[] key,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by the GeoSearchParam.
+     *
+     * @param key the key of the sorted set
+     * @param params the search parameters
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(String key, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // For simple search without options, use basic geosearch
+                    // Note: GLIDE's geosearch doesn't support all Jedis options like WITHCOORD, WITHDIST,
+                    // etc.
+                    // in the same way, so this is a simplified implementation
+                    String[] result = glideClient.geosearch(key, origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (String m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Returns the members of a sorted set populated with geospatial information using GEOADD, which
+     * are within the borders of the area specified by the GeoSearchParam (binary version).
+     *
+     * @param key the key of the sorted set
+     * @param params the search parameters
+     * @return a list of members within the specified area
+     * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public List<GeoRadiusResponse> geosearch(final byte[] key, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCH",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
+                    if (result == null) {
+                        return Collections.emptyList();
+                    }
+                    List<GeoRadiusResponse> responses = new ArrayList<>();
+                    for (GlideString m : result) {
+                        responses.add(new GeoRadiusResponse(m.getBytes()));
+                    }
+                    return responses;
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchstore(
+            String dest,
+            String src,
+            String member,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchstore(
+            final byte[] dest,
+            final byte[] src,
+            final byte[] member,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            GeoCoordinate coord,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param radius the radius of the search
+     * @param unit the unit of the radius
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            GeoCoordinate coord,
+            double radius,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(radius, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            String member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOrigin origin = new GeoSearchOrigin.MemberOrigin(member);
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param member the member to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            final byte[] member,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.MemberOriginBinary origin =
+                            new GeoSearchOrigin.MemberOriginBinary(GlideString.of(member));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            String dest,
+            String src,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data and stores the result in a
+     * destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param coord the coordinate to use as the center of the search
+     * @param width the width of the search box
+     * @param height the height of the search box
+     * @param unit the unit of width and height
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(
+            final byte[] dest,
+            final byte[] src,
+            GeoCoordinate coord,
+            double width,
+            double height,
+            redis.clients.jedis.args.GeoUnit unit) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(unit);
+                    GeoSearchOrigin.CoordOrigin origin =
+                            new GeoSearchOrigin.CoordOrigin(
+                                    new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    GeoSearchShape shape = new GeoSearchShape(width, height, glideUnit);
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result in a destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(String dest, String src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    return glideClient.geosearchstore(dest, src, origin, shape).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result in a destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStore(final byte[] dest, final byte[] src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape)
+                            .get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result with distances in a destination key.
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStoreStoreDist(String dest, String src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin = new GeoSearchOrigin.MemberOrigin(params.getFromMember());
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // Use geosearchstore with STOREDIST option
+                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
+                    return glideClient.geosearchstore(dest, src, origin, shape, options).get();
+                });
+    }
+
+    /**
+     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
+     * stores the result with distances in a destination key (binary version).
+     *
+     * @param dest the destination key to store the result
+     * @param src the source key of the sorted set
+     * @param params the search parameters
+     * @return the number of elements in the resulting sorted set
+     * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
+     * @since Valkey 6.2.0
+     */
+    public long geosearchStoreStoreDist(final byte[] dest, final byte[] src, GeoSearchParam params) {
+        return executeCommandWithGlide(
+                "GEOSEARCHSTORE",
+                () -> {
+                    GeoUnit glideUnit = convertToGlideGeoUnit(params.getUnit());
+
+                    // Determine origin
+                    GeoSearchOrigin.SearchOrigin origin;
+                    if (params.getFromMember() != null) {
+                        origin =
+                                new GeoSearchOrigin.MemberOriginBinary(
+                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                    } else if (params.getFromCoordinate() != null) {
+                        GeoCoordinate coord = params.getFromCoordinate();
+                        origin =
+                                new GeoSearchOrigin.CoordOrigin(
+                                        new GeospatialData(coord.getLongitude(), coord.getLatitude()));
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                    }
+
+                    // Determine shape
+                    GeoSearchShape shape;
+                    if (params.getRadius() != null) {
+                        shape = new GeoSearchShape(params.getRadius(), glideUnit);
+                    } else if (params.getWidth() != null && params.getHeight() != null) {
+                        shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
+                    } else {
+                        throw new IllegalArgumentException(
+                                "GeoSearchParam must specify either radius or width/height");
+                    }
+
+                    // Use geosearchstore with STOREDIST option
+                    GeoSearchStoreOptions options = GeoSearchStoreOptions.builder().storeDist(true).build();
+                    return glideClient
+                            .geosearchstore(GlideString.of(dest), GlideString.of(src), origin, shape, options)
+                            .get();
+                });
+    }
+
+    // ==================== DEPRECATED GEO COMMANDS ====================
+    //
+    // The following georadius and georadiusByMember methods are DEPRECATED in Redis/Valkey 6.2.0+
+    // and are NOT supported in this Jedis compatibility layer.
+    //
+    // Use the GEOSEARCH and GEOSEARCHSTORE commands instead, which provide equivalent functionality
+    // with better performance and cleaner semantics.
+    //
+    // DEPRECATED METHODS NOT IMPLEMENTED:
+    //
+    // georadius methods (10 variants):
+    // - georadius(String key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadius(byte[] key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit)
+    // - georadius(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadius(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusStore(String key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param, GeoRadiusStoreParam storeParam)
+    // - georadiusStore(byte[] key, double longitude, double latitude, double radius, GeoUnit unit,
+    // GeoRadiusParam param, GeoRadiusStoreParam storeParam)
+    //
+    // georadiusByMember methods (10 variants):
+    // - georadiusByMember(String key, String member, double radius, GeoUnit unit)
+    // - georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit)
+    // - georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit)
+    // - georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit)
+    // - georadiusByMember(String key, String member, double radius, GeoUnit unit, GeoRadiusParam
+    // param)
+    // - georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam
+    // param)
+    // - georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit,
+    // GeoRadiusParam param)
+    // - georadiusByMemberStore(String key, String member, double radius, GeoUnit unit, GeoRadiusParam
+    // param, GeoRadiusStoreParam storeParam)
+    // - georadiusByMemberStore(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam
+    // param, GeoRadiusStoreParam storeParam)
+    //
+    // Migration guide:
+    // - Replace georadius(..., longitude, latitude, radius, unit) with geosearch(...,
+    // GeoCoordinate(longitude, latitude), radius, unit)
+    // - Replace georadiusByMember(..., member, radius, unit) with geosearch(..., member, radius,
+    // unit)
+    // - Replace georadiusStore with geosearchStore using equivalent parameters
+    // - Replace georadiusByMemberStore with geosearchStore using member as origin
+    //
+    // ==================== END DEPRECATED GEO COMMANDS ====================
+
+    /** Convert Jedis GeoUnit to GLIDE GeoUnit. */
+    private static GeoUnit convertToGlideGeoUnit(redis.clients.jedis.args.GeoUnit unit) {
+        if (unit == null) {
+            return GeoUnit.METERS;
+        }
+        switch (unit) {
+            case M:
+                return GeoUnit.METERS;
+            case KM:
+                return GeoUnit.KILOMETERS;
+            case MI:
+                return GeoUnit.MILES;
+            case FT:
+                return GeoUnit.FEET;
+            default:
+                return GeoUnit.METERS;
+        }
+    }
+
+    // Static initialization block for cleanup hooks
+    static {
+        // Add shutdown hook to cleanup temporary certificate files
+        Runtime.getRuntime()
+                .addShutdownHook(
+                        new Thread(
+                                () -> {
+                                    try {
+                                        ConfigurationMapper.cleanupTempFiles();
+                                    } catch (Exception e) {
+                                        // Ignore exceptions during shutdown
+                                        System.err.println(
+                                                "Warning: Failed to cleanup temporary certificate files during shutdown:");
+                                        e.printStackTrace();
+                                    }
+                                },
+                                "Jedis-Certificate-Cleanup"));
+    }
+}

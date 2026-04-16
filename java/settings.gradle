@@ -7,5 +7,6 @@ rootProject.name = 'glide'
 
 include 'client'
 include 'jedis-compatibility'
+include 'jedis-4-compatibility'
 include 'integTest'
 include 'benchmarks'
