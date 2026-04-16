@@ -58,6 +58,7 @@
 * Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
 * JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 * CORE: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
+* JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) and cluster slot commands (CLUSTER KEYSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER GETKEYSINSLOT, CLUSTER ADDSLOTS, CLUSTER ADDSLOTSRANGE, CLUSTER DELSLOTS, CLUSTER DELSLOTSRANGE) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
 * CORE: Add OpenTelemetry DB semantic convention attributes to command spans ([#5416](https://github.com/valkey-io/valkey-glide/issues/5416))
 * Python Sync: Accept `bytearray` and `memoryview` as command argument types to improve performance by reducing copies ([#5492](https://github.com/valkey-io/valkey-glide/pull/5492))
 * Python Sync: Add response buffer support to get() to improve performance by reducing copies ([#5493](https://github.com/valkey-io/valkey-glide/pull/5493))
