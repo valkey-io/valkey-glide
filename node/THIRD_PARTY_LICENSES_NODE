@@ -2117,7 +2117,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: aws-lc-rs:1.16.2
+Package: aws-lc-rs:1.16.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2339,7 +2339,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: aws-lc-sys:0.39.1
+Package: aws-lc-sys:0.40.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -63752,7 +63752,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: protobufjs:7.5.4
+Package: protobufjs:7.5.5
 
 The following copyrights and licenses were found in the source code of this package:
 
