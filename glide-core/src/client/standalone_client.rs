@@ -373,6 +373,8 @@ impl StandaloneClient {
         self.inner.nodes.get(self.inner.primary_index).unwrap()
     }
 
+    /// Round-robins through replicas (skipping the primary) and returns the first connected one.
+    /// Falls back to the primary if no replica is connected.
     fn round_robin_read_from_replica(
         &self,
         latest_read_replica_index: &Arc<AtomicUsize>,
@@ -434,11 +436,13 @@ impl StandaloneClient {
         }
     }
 
-    async fn round_robin_read_from_replica_az_awareness(
+    /// Round-robins through replicas (skipping the primary) and returns the first one
+    /// whose availability zone matches `client_az`. Returns `None` if no match is found.
+    async fn get_next_local_replica(
         &self,
         latest_read_replica_index: &Arc<AtomicUsize>,
-        client_az: String,
-    ) -> &ReconnectingConnection {
+        client_az: &str,
+    ) -> Option<&ReconnectingConnection> {
         let initial_index = latest_read_replica_index.load(Ordering::Relaxed);
         let mut retries = 0usize;
 
@@ -446,12 +450,14 @@ impl StandaloneClient {
             retries = retries.saturating_add(1);
             // Looped through all replicas; no connected replica found in the same AZ.
             if retries > self.inner.nodes.len() {
-                // Attempt a fallback to any available replica in other AZs or primary.
-                return self.round_robin_read_from_replica(latest_read_replica_index);
+                return None;
             }
 
             // Calculate index based on initial index and check count.
             let index = (initial_index + retries) % self.inner.nodes.len();
+            if index == self.inner.primary_index {
+                continue;
+            }
             let replica = &self.inner.nodes[index];
 
             // Attempt to get a connection and retrieve the replica's AZ.
@@ -466,45 +472,37 @@ impl StandaloneClient {
                     Ordering::Relaxed,
                     Ordering::Relaxed,
                 );
-                return replica;
+                return Some(replica);
             }
         }
     }
 
+    /// AZAffinity strategy: same-AZ replica → any replica (round-robin) → primary (last resort).
+    async fn round_robin_read_from_replica_az_awareness(
+        &self,
+        latest_read_replica_index: &Arc<AtomicUsize>,
+        client_az: &str,
+    ) -> &ReconnectingConnection {
+        if let Some(replica) = self
+            .get_next_local_replica(latest_read_replica_index, client_az)
+            .await
+        {
+            return replica;
+        }
+        self.round_robin_read_from_replica(latest_read_replica_index)
+    }
+
+    /// AZAffinityReplicasAndPrimary strategy: same-AZ replica → same-AZ primary → any node (round-robin).
     async fn round_robin_read_from_replica_az_awareness_replicas_and_primary(
         &self,
         latest_read_replica_index: &Arc<AtomicUsize>,
-        client_az: String,
+        client_az: &str,
     ) -> &ReconnectingConnection {
-        let initial_index = latest_read_replica_index.load(Ordering::Relaxed);
-        let mut retries = 0usize;
-
-        // Step 1: Try to find a replica in the same AZ
-        loop {
-            retries = retries.saturating_add(1);
-            // Looped through all replicas; no connected replica found in the same AZ.
-            if retries >= self.inner.nodes.len() {
-                break;
-            }
-
-            // Calculate index based on initial index and check count.
-            let index = (initial_index + retries) % self.inner.nodes.len();
-            let replica = &self.inner.nodes[index];
-
-            // Attempt to get a connection and retrieve the replica's AZ.
-            if let Ok(connection) = replica.get_connection().await
-                && let Some(replica_az) = connection.get_az().as_deref()
-                && replica_az == client_az
-            {
-                // Update `latest_used_replica` with the index of this replica.
-                let _ = latest_read_replica_index.compare_exchange_weak(
-                    initial_index,
-                    index,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                );
-                return replica;
-            }
+        if let Some(replica) = self
+            .get_next_local_replica(latest_read_replica_index, client_az)
+            .await
+        {
+            return replica;
         }
 
         // Step 2: Check if primary is in the same AZ
@@ -516,8 +514,8 @@ impl StandaloneClient {
             return primary;
         }
 
-        // Step 3: Fall back to any available replica using round-robin
-        self.round_robin_read_from_replica(latest_read_replica_index)
+        // Step 3: Fall back to any available node using round-robin
+        self.round_robin_read_from_all_nodes(latest_read_replica_index)
     }
 
     async fn get_connection(&self, readonly: bool) -> &ReconnectingConnection {
@@ -537,11 +535,8 @@ impl StandaloneClient {
                 client_az,
                 last_read_replica_index,
             } => {
-                self.round_robin_read_from_replica_az_awareness(
-                    last_read_replica_index,
-                    client_az.to_string(),
-                )
-                .await
+                self.round_robin_read_from_replica_az_awareness(last_read_replica_index, client_az)
+                    .await
             }
             ReadFrom::AZAffinityReplicasAndPrimary {
                 client_az,
@@ -549,7 +544,7 @@ impl StandaloneClient {
             } => {
                 self.round_robin_read_from_replica_az_awareness_replicas_and_primary(
                     last_read_replica_index,
-                    client_az.to_string(),
+                    client_az,
                 )
                 .await
             }

@@ -186,19 +186,46 @@ mod standalone_client_tests {
         vec![primary_1, primary_2, replica]
     }
 
+    fn create_response_with_az(base: HashMap<String, Value>, az: &str) -> HashMap<String, Value> {
+        let mut responses = base;
+        responses.insert(
+            "*1\r\n$4\r\nINFO\r\n".to_string(),
+            Value::BulkString(format!("availability_zone:{az}\r\n").into_bytes()),
+        );
+        responses
+    }
+
     fn create_primary_mock_with_replicas(replica_count: usize) -> Vec<ServerMock> {
+        create_primary_mock_with_replicas_az(replica_count, None, &[])
+    }
+
+    /// Creates a primary and `replica_count` replica mock servers.
+    /// Returns `[primary, replica_0, replica_1, ...]`.
+    /// When `primary_az` is set, the primary's INFO response includes that AZ.
+    /// `replica_azs` maps each replica index to an AZ; replicas without an entry get no AZ.
+    fn create_primary_mock_with_replicas_az(
+        replica_count: usize,
+        primary_az: Option<&str>,
+        replica_azs: &[&str],
+    ) -> Vec<ServerMock> {
         let mut listeners: Vec<std::net::TcpListener> = (0..replica_count + 1)
             .map(|_| get_listener_on_available_port())
             .collect();
-        let primary =
-            ServerMock::new_with_listener(create_primary_responses(), listeners.pop().unwrap());
+
+        let primary_responses = match primary_az {
+            Some(az) => create_response_with_az(create_primary_responses(), az),
+            None => create_primary_responses(),
+        };
+        let primary = ServerMock::new_with_listener(primary_responses, listeners.pop().unwrap());
         let mut mocks = vec![primary];
 
-        mocks.extend(
-            listeners
-                .into_iter()
-                .map(|listener| ServerMock::new_with_listener(create_replica_response(), listener)),
-        );
+        for (i, listener) in listeners.into_iter().enumerate() {
+            let responses = match replica_azs.get(i) {
+                Some(az) => create_response_with_az(create_replica_response(), az),
+                None => create_replica_response(),
+            };
+            mocks.push(ServerMock::new_with_listener(responses, listener));
+        }
         mocks
     }
 
@@ -210,6 +237,9 @@ mod standalone_client_tests {
         number_of_missing_replicas: usize,
         number_of_replicas_dropped_after_connection: usize,
         number_of_requests_sent: usize,
+        client_az: Option<String>,
+        primary_az: Option<String>,
+        replica_azs: Vec<String>,
     }
 
     impl Default for ReadFromReplicaTestConfig {
@@ -222,19 +252,25 @@ mod standalone_client_tests {
                 number_of_missing_replicas: 0,
                 number_of_replicas_dropped_after_connection: 0,
                 number_of_requests_sent: 3,
+                client_az: None,
+                primary_az: None,
+                replica_azs: vec![],
             }
         }
     }
 
     fn test_read_from_replica(config: ReadFromReplicaTestConfig) {
-        let mut servers = create_primary_mock_with_replicas(
+        let replica_az_refs: Vec<&str> = config.replica_azs.iter().map(|s| s.as_str()).collect();
+        let mut servers = create_primary_mock_with_replicas_az(
             config.number_of_initial_replicas - config.number_of_missing_replicas,
+            config.primary_az.as_deref(),
+            &replica_az_refs,
         );
         let mut cmd = redis::cmd("GET");
         cmd.arg("foo");
 
         for server in servers.iter() {
-            for _ in 0..3 {
+            for _ in 0..config.number_of_requests_sent {
                 server.add_response(&cmd, "$-1\r\n".to_string());
             }
         }
@@ -249,6 +285,9 @@ mod standalone_client_tests {
         let mut connection_request =
             create_connection_request(addresses.as_slice(), &Default::default());
         connection_request.read_from = config.read_from.into();
+        if let Some(ref az) = config.client_az {
+            connection_request.client_az = az.clone().into();
+        }
 
         block_on_all(async {
             let mut client =
@@ -276,17 +315,27 @@ mod standalone_client_tests {
             }
         });
 
+        let primary_reads = servers[0].get_number_of_received_commands();
         assert_eq!(
-            servers[0].get_number_of_received_commands(),
-            config.expected_primary_reads
+            primary_reads, config.expected_primary_reads,
+            "Primary reads: expected {}, got {}",
+            config.expected_primary_reads, primary_reads
         );
+
         let mut replica_reads: Vec<_> = servers
             .iter()
             .skip(1)
             .map(|mock| mock.get_number_of_received_commands())
             .collect();
+
         replica_reads.sort();
-        assert!(config.expected_replica_reads <= replica_reads);
+
+        assert!(
+            config.expected_replica_reads <= replica_reads,
+            "Replica reads: expected {:?}, got {:?}",
+            config.expected_replica_reads,
+            replica_reads
+        );
     }
 
     #[rstest]
@@ -308,7 +357,7 @@ mod standalone_client_tests {
         });
     }
 
-    // TODO - Current test falls back to PreferReplica when run, need to integrate the az here also
+    // At least one replica matches client AZ.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
@@ -316,19 +365,156 @@ mod standalone_client_tests {
         test_read_from_replica(ReadFromReplicaTestConfig {
             read_from: ReadFrom::AZAffinity,
             expected_primary_reads: 0,
-            expected_replica_reads: vec![1, 1, 1],
+            expected_replica_reads: vec![0, 0, 3],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1b".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1b".to_string(),
+                "us-east-1b".to_string(),
+            ],
             ..Default::default()
         });
     }
-    // TODO - Needs changes in the struct and the create_primary_mock
+
+    // AZAffinity: no replica matches client AZ, falls back to round-robin across replicas
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_read_from_replica_az_affinity_replicas_and_primary() {
+    fn test_read_from_replica_az_affinity_primary_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinity,
+            expected_primary_reads: 0,
+            expected_replica_reads: vec![1, 1, 1],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_no_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinity,
+            expected_primary_reads: 0,
+            expected_replica_reads: vec![1, 1, 1],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1c".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinity: client reads from local replicas first. Fallback to other replicas or primary.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_all_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinity,
+            number_of_requests_sent: 4,
+            expected_primary_reads: 0,
+            expected_replica_reads: vec![1, 1, 2],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityReplicasAndPrimary: same-AZ replica preferred over primary
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_replicas_and_primary_az_match_replica() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityReplicasAndPrimary,
+            number_of_requests_sent: 4,
+            expected_primary_reads: 0,
+            expected_replica_reads: vec![1, 1, 2],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1b".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityReplicasAndPrimary: same-AZ replica preferred over primary
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_replicas_and_primary_az_match_primary() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityReplicasAndPrimary,
+            expected_primary_reads: 3,
+            expected_replica_reads: vec![0, 0, 0],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityReplicasAndPrimary: When there are no local nodes, distribute read evenly starting with replicas.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_replicas_and_primary_no_az_match() {
+        test_read_from_replica(ReadFromReplicaTestConfig {
+            read_from: ReadFrom::AZAffinityReplicasAndPrimary,
+            number_of_requests_sent: 4,
+            expected_primary_reads: 1,
+            expected_replica_reads: vec![1, 1, 1],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1c".to_string()),
+            replica_azs: vec![
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+                "us-east-1c".to_string(),
+            ],
+            ..Default::default()
+        });
+    }
+
+    // AZAffinityReplicasAndPrimary: When all nodes local, distribute read to all replicas first then primary.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_read_from_replica_az_affinity_replicas_and_primary_all_az_match_prioritize_replicas() {
         test_read_from_replica(ReadFromReplicaTestConfig {
             read_from: ReadFrom::AZAffinityReplicasAndPrimary,
             expected_primary_reads: 0,
             expected_replica_reads: vec![1, 1, 1],
+            client_az: Some("us-east-1a".to_string()),
+            primary_az: Some("us-east-1a".to_string()),
+            replica_azs: vec![
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+                "us-east-1a".to_string(),
+            ],
             ..Default::default()
         });
     }
