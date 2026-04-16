@@ -7155,6 +7155,10 @@ public final class Jedis implements Closeable {
     /**
      * Returns pending summary for the group. Uses GLIDE xpending. Converts response to
      * StreamPendingSummary (total, minId, maxId, consumerMessageCount).
+     *
+     * @param key stream key
+     * @param group consumer group name
+     * @return pending summary for the group
      */
     public StreamPendingSummary xpending(String key, String group) {
         return executeCommandWithGlide(
@@ -7194,7 +7198,16 @@ public final class Jedis implements Closeable {
                 });
     }
 
-    /** Returns pending entries in range. Uses GLIDE xpending. */
+    /**
+     * Returns pending entries in the given ID range. Uses GLIDE xpending.
+     *
+     * @param key stream key
+     * @param group consumer group name
+     * @param start inclusive start of the ID range
+     * @param end inclusive end of the ID range
+     * @param count maximum number of entries to return
+     * @return pending entries in range
+     */
     public List<StreamPendingEntry> xpending(
             String key, String group, StreamRange start, StreamRange end, long count) {
         return executeCommandWithGlide(
@@ -7221,7 +7234,16 @@ public final class Jedis implements Closeable {
                 });
     }
 
-    /** Returns pending entries in id range. Uses GLIDE xpending. */
+    /**
+     * Returns pending entries in the given ID range (string bounds). Uses GLIDE xpending.
+     *
+     * @param key stream key
+     * @param group consumer group name
+     * @param start inclusive start ID, or {@code "-"} for minimum
+     * @param end inclusive end ID, or {@code "+"} for maximum
+     * @param count maximum number of entries to return
+     * @return pending entries in range
+     */
     public List<StreamPendingEntry> xpending(
             String key, String group, String start, String end, long count) {
         StreamRange s =
