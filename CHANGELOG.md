@@ -1,6 +1,7 @@
 ## Pending 2.4
 
 #### Changes
+* Go: Add Valkey Search (FT) command support — FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.DROPINDEX, FT.LIST, FT.INFO, FT.EXPLAIN, FT.EXPLAINCLI, FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE, FT.ALIASLIST with full Valkey Search 1.2 options for both standalone and cluster clients ([#5590](https://github.com/valkey-io/valkey-glide/pull/5590))
 * FFI: Add URI-based client creation API with full ConnectionRequest support ([#5620](https://github.com/valkey-io/valkey-glide/pull/5620))
     * New `create_client_from_uri` FFI function accepts Redis/Valkey URI strings and optional JSON configuration
     * Supports all ConnectionRequest options including compression, periodic checks, IAM credentials, and pub/sub subscriptions
