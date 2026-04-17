@@ -1,0 +1,135 @@
+name: Start Valkey Servers via Docker
+description: >
+    Start standalone and cluster Valkey servers with modules (Search, JSON,
+    Bloom, LDAP) using Docker containers on dedicated ports. These run
+    alongside the source-built servers (on default ports) used by regular
+    tests. Module-specific tests read the env vars written here to connect.
+    Assumes valkey-cli is already on the host (installed by install-engine).
+
+inputs:
+    engine-version:
+        description: >
+            Valkey engine version (e.g. 9.0, 8.1). The Docker image is
+            pinned to 9.1-rc1 regardless - see the TODO in the image step.
+        required: true
+
+runs:
+    using: composite
+    steps:
+        - name: Determine Docker image
+          id: docker-image
+          shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              # TEMPORARY: Pin to 9.1-rc1 until stable per-version valkey-bundle tags exist.
+              # TODO: switch to valkey/valkey-bundle:${ENGINE_VERSION} once stable tags are published.
+              IMAGE="valkey/valkey-bundle:9.1-rc1"
+              echo "image=$IMAGE" >> $GITHUB_OUTPUT
+              echo "Using Docker image: $IMAGE"
+
+        - name: Pull Docker image
+          shell: bash
+          env:
+              IMAGE: ${{ steps.docker-image.outputs.image }}
+          run: |
+              echo "Pulling $IMAGE..."
+              docker pull "$IMAGE"
+
+        - name: Start standalone Valkey server with modules (Docker)
+          shell: bash
+          env:
+              IMAGE: ${{ steps.docker-image.outputs.image }}
+          run: |
+              echo "=== Starting standalone Valkey server with modules on port 6389 ==="
+
+              docker run -d --name valkey-modules-standalone --network host \
+                "$IMAGE" valkey-server \
+                --port 6389 \
+                --enable-debug-command yes \
+                --protected-mode no \
+                --save ""
+
+              # Wait for ready
+              READY=false
+              for i in $(seq 1 30); do
+                if valkey-cli -p 6389 PING 2>/dev/null | grep -q PONG; then
+                  echo "Standalone server with modules ready on port 6389"
+                  READY=true
+                  break
+                fi
+                sleep 0.5
+              done
+
+              if [ "$READY" != "true" ]; then
+                echo "ERROR: Standalone module server on port 6389 failed to start"
+                docker logs valkey-modules-standalone 2>&1 || true
+                exit 1
+              fi
+
+              echo "MODULES_STANDALONE_ENDPOINT=127.0.0.1:6389" >> $GITHUB_ENV
+
+        - name: Start Valkey cluster with modules (Docker)
+          shell: bash
+          env:
+              IMAGE: ${{ steps.docker-image.outputs.image }}
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              echo "=== Starting Valkey cluster with modules on ports 8001-8006 ==="
+
+              MAJOR=$(echo "$ENGINE_VERSION" | cut -d. -f1)
+              EXTRA_ARGS=""
+              if [ "$MAJOR" -ge 9 ]; then
+                EXTRA_ARGS="--cluster-databases 16"
+              fi
+
+              for port in 8001 8002 8003 8004 8005 8006; do
+                docker run -d --name "valkey-modules-cluster-${port}" --network host \
+                  "$IMAGE" valkey-server \
+                  --port "$port" \
+                  --cluster-enabled yes \
+                  --cluster-config-file "nodes-${port}.conf" \
+                  --cluster-node-timeout 5000 \
+                  --appendonly no \
+                  --protected-mode no \
+                  --enable-debug-command yes \
+                  --save "" \
+                  $EXTRA_ARGS
+              done
+
+              # Wait for all nodes
+              for port in 8001 8002 8003 8004 8005 8006; do
+                READY=false
+                for i in $(seq 1 30); do
+                  if valkey-cli -p $port PING 2>/dev/null | grep -q PONG; then
+                    echo "  Cluster node $port: ready"
+                    READY=true
+                    break
+                  fi
+                  sleep 0.5
+                done
+                if [ "$READY" != "true" ]; then
+                  echo "ERROR: Cluster module node on port $port failed to start"
+                  docker logs "valkey-modules-cluster-${port}" 2>&1 || true
+                  exit 1
+                fi
+              done
+
+              # Form the cluster (3 primaries, 3 replicas)
+              valkey-cli --cluster create \
+                127.0.0.1:8001 127.0.0.1:8002 127.0.0.1:8003 \
+                127.0.0.1:8004 127.0.0.1:8005 127.0.0.1:8006 \
+                --cluster-replicas 1 \
+                --cluster-yes
+
+              echo "MODULES_CLUSTER_ENDPOINTS=127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003,127.0.0.1:8004,127.0.0.1:8005,127.0.0.1:8006" >> $GITHUB_ENV
+              echo "Cluster with modules ready on ports 8001-8006"
+
+        - name: Verify module servers
+          shell: bash
+          run: |
+              echo "=== Module server verification ==="
+              echo "Standalone with modules (6389): $(valkey-cli -p 6389 PING)"
+              for port in 8001 8002 8003 8004 8005 8006; do
+                echo "Cluster with modules node $port: $(valkey-cli -p $port PING)"
+              done

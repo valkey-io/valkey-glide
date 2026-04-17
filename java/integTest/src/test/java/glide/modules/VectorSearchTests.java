@@ -2,11 +2,10 @@
 package glide.modules;
 
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,7 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Named.named;
 
+import glide.TestConfiguration;
+import glide.api.BaseClient;
+import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.commands.servermodules.FT;
 import glide.api.commands.servermodules.Json;
@@ -40,7 +43,10 @@ import glide.api.models.commands.FT.FTProfileOptions;
 import glide.api.models.commands.FT.FTSearchOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute;
 import glide.api.models.exceptions.RequestException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -49,15 +55,20 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Named;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class VectorSearchTests {
 
-    private static GlideClusterClient client;
+    private static final List<Arguments> clients = new ArrayList<>();
 
     /** Waiting interval to let server process the data before querying */
     private static final int DATA_PROCESSING_TIMEOUT = 1000; // ms
@@ -65,29 +76,89 @@ public class VectorSearchTests {
     @BeforeAll
     @SneakyThrows
     public static void init() {
-        client =
+        GlideClusterClient clusterClient =
                 GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(5000).build())
                         .get();
-        client.flushall(FlushMode.SYNC, ALL_PRIMARIES).get();
+        clusterClient.flushall(FlushMode.SYNC, SimpleMultiNodeRoute.ALL_PRIMARIES).get();
+        clients.add(Arguments.of(named("cluster", clusterClient)));
+
+        if (!TestConfiguration.STANDALONE_HOSTS[0].isEmpty()) {
+            GlideClient standaloneClient =
+                    GlideClient.createClient(commonClientConfig().requestTimeout(5000).build()).get();
+            standaloneClient.flushall(FlushMode.SYNC).get();
+            clients.add(Arguments.of(named("standalone", standaloneClient)));
+        }
     }
 
     @AfterAll
     @SneakyThrows
+    @SuppressWarnings("unchecked")
     public static void teardown() {
-        client.flushall(FlushMode.SYNC, ALL_PRIMARIES).get();
-        client.close();
+        for (Arguments args : clients) {
+            BaseClient client = ((Named<BaseClient>) args.get()[0]).getPayload();
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client)
+                        .flushall(FlushMode.SYNC, SimpleMultiNodeRoute.ALL_PRIMARIES)
+                        .get();
+            } else {
+                ((GlideClient) client).flushall(FlushMode.SYNC).get();
+            }
+            client.close();
+        }
     }
 
-    @Test
+    @AfterEach
     @SneakyThrows
-    public void check_module_loaded() {
-        String info = client.info(new Section[] {Section.MODULES}, RANDOM).get().getSingleValue();
+    @SuppressWarnings("unchecked")
+    public void cleanup() {
+        for (Arguments args : clients) {
+            BaseClient client = ((Named<BaseClient>) args.get()[0]).getPayload();
+            if (client instanceof GlideClusterClient) {
+                ((GlideClusterClient) client)
+                        .flushall(FlushMode.SYNC, SimpleMultiNodeRoute.ALL_PRIMARIES)
+                        .get();
+            } else {
+                ((GlideClient) client).flushall(FlushMode.SYNC).get();
+            }
+        }
+    }
+
+    static Stream<Arguments> getClients() {
+        return clients.stream();
+    }
+
+    /** Returns only cluster clients for tests that require cluster-specific features. */
+    static Stream<Arguments> getClusterClients() {
+        return clients.stream()
+                .filter(
+                        args -> {
+                            @SuppressWarnings("unchecked")
+                            Named<BaseClient> named = (Named<BaseClient>) args.get()[0];
+                            return named.getPayload() instanceof GlideClusterClient;
+                        });
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void check_module_loaded(BaseClient client) {
+        String info;
+        if (client instanceof GlideClusterClient) {
+            info =
+                    ((GlideClusterClient) client)
+                            .info(new Section[] {Section.MODULES}, SimpleSingleNodeRoute.RANDOM)
+                            .get()
+                            .getSingleValue();
+        } else {
+            info = ((GlideClient) client).info(new Section[] {Section.MODULES}).get();
+        }
         assertTrue(info.contains("# search_index_stats"));
     }
 
     @SneakyThrows
-    @Test
-    public void ft_create() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_create(BaseClient client) {
         // create few simple indices
         assertEquals(
                 OK,
@@ -233,8 +304,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_search() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -346,8 +418,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_search_nocontent() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_nocontent(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
         String key = prefix + "doc";
@@ -374,8 +447,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_search_dialect() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_dialect(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
         String key = prefix + "doc";
@@ -403,8 +477,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_search_dialect_invalid() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_dialect_invalid(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -432,8 +507,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_drop_and_ft_list() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_drop_and_ft_list(BaseClient client) {
         GlideString index = gs(UUID.randomUUID().toString());
         assertEquals(
                 OK,
@@ -468,9 +544,10 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     @Disabled("AGGREGATE is currently not fully supported")
-    public void ft_aggregate() {
+    public void ft_aggregate(BaseClient client) {
         String prefixBicycles = "{bicycles}:";
         String indexBicycles = prefixBicycles + UUID.randomUUID();
         String prefixMovies = "{movies}:";
@@ -739,9 +816,10 @@ public class VectorSearchTests {
     }
 
     @SuppressWarnings("unchecked")
-    @Test
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     @SneakyThrows
-    public void ft_info() {
+    public void ft_info(BaseClient client) {
         String index = UUID.randomUUID().toString();
         assertEquals(
                 OK,
@@ -783,9 +861,10 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     @Disabled("ALIAS is currently unsupported")
-    public void ft_aliasadd_aliasdel_aliasupdate_aliaslist() {
+    public void ft_aliasadd_aliasdel_aliasupdate_aliaslist(BaseClient client) {
 
         String alias1 = "alias1";
         String alias2 = "a2";
@@ -838,12 +917,13 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     @Disabled("EXPLAIN is not supported yet")
-    public void ft_explain() {
+    public void ft_explain(BaseClient client) {
 
         String indexName = UUID.randomUUID().toString();
-        createIndexHelper(indexName);
+        createIndexHelper(client, indexName);
 
         // search query containing numeric field.
         String query = "@price:[0 10]";
@@ -873,12 +953,13 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     @Disabled("EXPLAIN is currently unsupported")
-    public void ft_explaincli() {
+    public void ft_explaincli(BaseClient client) {
 
         String indexName = UUID.randomUUID().toString();
-        createIndexHelper(indexName);
+        createIndexHelper(client, indexName);
 
         // search query containing numeric field.
         String query = "@price:[0 10]";
@@ -921,8 +1002,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_search_1_2_sortby() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_1_2_sortby(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -968,8 +1050,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_search_1_2_withsortkeys() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_1_2_withsortkeys(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -1026,8 +1109,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_search_1_2_text_query_flags() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_search_1_2_text_query_flags(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -1067,9 +1151,11 @@ public class VectorSearchTests {
         assertEquals(1L, (Long) inorderResult[0]); // hello world
     }
 
+    /** Shard/consistency options are cluster-only concepts. */
     @SneakyThrows
-    @Test
-    public void ft_search_1_2_shard_consistency() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClusterClients")
+    public void ft_search_1_2_shard_consistency(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -1116,8 +1202,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_aggregate_1_2_query_flags() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_aggregate_1_2_query_flags(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -1172,8 +1259,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_create_1_2_index_options() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_create_1_2_index_options(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -1279,8 +1367,9 @@ public class VectorSearchTests {
     }
 
     @SneakyThrows
-    @Test
-    public void ft_create_1_2_field_options() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void ft_create_1_2_field_options(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -1384,9 +1473,11 @@ public class VectorSearchTests {
         assertEquals(OK, FT.dropindex(client, index).get());
     }
 
+    /** FT.INFO with scope options is a cluster-only feature. */
     @SneakyThrows
-    @Test
-    public void ft_info_1_2_options() {
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClusterClients")
+    public void ft_info_1_2_options(BaseClient client) {
         String prefix = "{" + UUID.randomUUID() + "}:";
         String index = prefix + "index";
 
@@ -1461,7 +1552,8 @@ public class VectorSearchTests {
         assertEquals(OK, FT.dropindex(client, index).get());
     }
 
-    private void createIndexHelper(String indexName) throws ExecutionException, InterruptedException {
+    private void createIndexHelper(BaseClient client, String indexName)
+            throws ExecutionException, InterruptedException {
         FieldInfo numericField = new FieldInfo("price", new NumericField());
         FieldInfo textField = new FieldInfo("title", new TextField());
 

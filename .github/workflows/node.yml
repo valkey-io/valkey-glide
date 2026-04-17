@@ -52,11 +52,6 @@ on:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
-            run-modules-tests:
-                description: "Run modules tests"
-                type: boolean
-                default: false
-
     workflow_call:
         inputs:
             run-with-macos:
@@ -412,50 +407,3 @@ jobs:
                       node/test-report*.html
                       utils/clusters/**
                       benchmarks/results/**
-
-    test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
-        environment: AWS_ACTIONS
-        name: Running Module Tests
-        runs-on: [self-hosted, linux, ARM64, persistent]
-        timeout-minutes: 15
-
-        steps:
-            - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            - uses: actions/checkout@v4
-
-            - name: Install Node.js
-              uses: actions/setup-node@v5
-              with:
-                  node-version: latest
-
-            - uses: actions/cache@v4
-              with:
-                  path: |
-                      node/rust-client/target
-                      glide-core/src/generated
-                  key: aarch64-unknown-linux-gnu-node
-                  restore-keys: |
-                      aarch64-unknown-linux-gnu-glide-core
-                      aarch64-unknown-linux-gnu
-
-            - name: Install and build
-              working-directory: ./node
-              run: |
-                  npm install
-                  npm run build
-
-            - name: test
-              run: npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
-              working-directory: ./node
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-report-node-modules-ubuntu
-                  path: |
-                      node/test-report*.html

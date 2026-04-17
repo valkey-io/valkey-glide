@@ -54,11 +54,6 @@ on:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
-            run-modules-tests:
-                description: "Run modules tests"
-                type: boolean
-                default: false
-
     workflow_call:
         inputs:
             run-with-macos:
@@ -571,53 +566,3 @@ jobs:
                   cargo-toml-folder: java
                   github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint java rust
-
-    test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
-        environment: AWS_ACTIONS
-        name: Modules Tests
-        runs-on: [self-hosted, linux, ARM64, persistent]
-        timeout-minutes: 15
-        steps:
-            - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            - uses: actions/checkout@v4
-
-            - name: Set up JDK
-              uses: actions/setup-java@v4
-              with:
-                  distribution: "temurin"
-                  java-version: 17
-
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                  version: "29.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - uses: actions/cache@v4
-              with:
-                  path: |
-                      java/target
-                      glide-core/src/generated
-                  key: aarch64-unknown-linux-gnu-java
-                  restore-keys: |
-                      aarch64-unknown-linux-gnu-glide-core
-                      aarch64-unknown-linux-gnu
-
-            - name: Install zig
-              uses: ./.github/workflows/install-zig
-
-            - name: Test java wrapper
-              working-directory: java
-              run: ./gradlew :integTest:modulesTest -Dcluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -Dtls=true
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-modules
-                  path: |
-                      java/integTest/build/reports/**
