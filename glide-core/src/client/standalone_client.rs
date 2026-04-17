@@ -229,7 +229,7 @@ impl StandaloneClient {
 
         let iam_token_handle = iam_token_manager.map(|m| m.get_token_handle());
 
-        let mut stream = stream::iter(addresses.into_iter())
+        let mut stream = stream::iter(addresses)
             .map(move |address| {
                 let info = valkey_connection_info.clone();
                 let retry = retry_strategy;

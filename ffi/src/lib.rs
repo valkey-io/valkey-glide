@@ -2169,17 +2169,13 @@ impl ResponseArena {
         let base = self.nodes.as_ptr() as usize;
         for node in &mut self.nodes {
             match node.response_type {
-                ResponseType::Array | ResponseType::Map => {
-                    if node.array_value_len > 0 {
-                        let offset = node.array_value as usize;
-                        node.array_value = unsafe { (base as *mut CommandResponse).add(offset) };
-                    }
+                ResponseType::Array | ResponseType::Map if node.array_value_len > 0 => {
+                    let offset = node.array_value as usize;
+                    node.array_value = unsafe { (base as *mut CommandResponse).add(offset) };
                 }
-                ResponseType::Sets => {
-                    if node.sets_value_len > 0 {
-                        let offset = node.sets_value as usize;
-                        node.sets_value = unsafe { (base as *mut CommandResponse).add(offset) };
-                    }
+                ResponseType::Sets if node.sets_value_len > 0 => {
+                    let offset = node.sets_value as usize;
+                    node.sets_value = unsafe { (base as *mut CommandResponse).add(offset) };
                 }
                 _ => {}
             }
