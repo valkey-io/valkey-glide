@@ -108,7 +108,7 @@ tasks.register('stopAllBeforeTests') {
     }
 }
 
-// delete dirs if stop failed due to https://github.com/valkey-io/valkey-glide/issues/849
+// delete dirs to ensure clean state before starting new clusters
 tasks.register('clearDirs', Delete) {
     delete "${project.rootDir}/../utils/clusters"
 }

@@ -623,7 +623,9 @@ export type ReadFrom =
     | "AZAffinity"
     /** Spread the read requests among all nodes within the client's Availability Zone (AZ) in a round robin manner,
          prioritizing local replicas, then the local primary, and falling back to any replica or the primary if needed.*/
-    | "AZAffinityReplicasAndPrimary";
+    | "AZAffinityReplicasAndPrimary"
+    /** Spread the read requests between all nodes (primary and replicas) in a round robin manner.*/
+    | "allNodes";
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
@@ -4406,7 +4408,7 @@ export class BaseClient {
 
     /** Gets the intersection of all the given sets.
      *
-     * @see {@link https://valkey.io/docs/latest/commands/sinter/|valkey.io} for more details.
+     * @see {@link https://valkey.io/commands/sinter/|valkey.io} for more details.
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      *
      * @param keys - The `keys` of the sets to get the intersection.
@@ -7539,6 +7541,7 @@ export class BaseClient {
         AZAffinity: connection_request.ReadFrom.AZAffinity,
         AZAffinityReplicasAndPrimary:
             connection_request.ReadFrom.AZAffinityReplicasAndPrimary,
+        allNodes: connection_request.ReadFrom.AllNodes,
     };
 
     /**
