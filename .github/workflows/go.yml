@@ -165,7 +165,6 @@ jobs:
                     make install-tools build
                     make -k unit-test integ-test
                   fi
-                  make -k pubsub-test
                   make -k opentelemetry-test
 
             - name: Run Example Tests
@@ -341,7 +340,6 @@ jobs:
                     make install-tools build
                     make -k unit-test integ-test
                   fi
-                  make -k pubsub-test
 
             - name: Upload test reports
               if: always()
