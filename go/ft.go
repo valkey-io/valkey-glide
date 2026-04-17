@@ -415,7 +415,11 @@ func handleFtAggregateResponse(response *C.struct_CommandResponse) ([]map[string
 	}
 
 	arr, ok := data.([]any)
-	if !ok || len(arr) == 0 {
+	if !ok {
+		return nil, errors.New("unexpected response type")
+	}
+
+	if len(arr) == 0 {
 		return nil, nil
 	}
 
@@ -448,7 +452,7 @@ func handleFtInfoResponse(response *C.struct_CommandResponse) (map[string]any, e
 	// Otherwise fall back to flat array parsing.
 	arr, ok := data.([]any)
 	if !ok {
-		return nil, nil
+		return nil, errors.New("unexpected response type")
 	}
 	return models.FlatArrayToMap(arr), nil
 }
