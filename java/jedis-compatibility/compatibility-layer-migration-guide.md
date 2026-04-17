@@ -75,6 +75,7 @@ blockingSocketTimeoutMillis
 - ✅ Wait operations (WAIT, WAITAOF)
 - ✅ Object introspection (OBJECT ENCODING, OBJECT FREQ, OBJECT IDLETIME, OBJECT REFCOUNT)
 - ✅ Geospatial operations (GEOADD, GEOPOS, GEODIST, GEOHASH, GEOSEARCH, GEOSEARCHSTORE)
+- ✅ Pub/Sub (PUBLISH, PUBSUB CHANNELS, PUBSUB NUMSUB, PUBSUB NUMPAT). `publish()` returns `0` instead of the actual subscriber count due to GLIDE API limitations (see [issue #5354](https://github.com/valkey-io/valkey-glide/issues/5354)). For subscriptions and message delivery, use the GLIDE Java client directly (`GlideClient` / `GlideClusterClient`): `subscribe`, `psubscribe`, `ssubscribe`, and the matching `unsubscribe` / `punsubscribe` / `sunsubscribe` methods declared on `glide.api.commands.PubSubBaseCommands` and `glide.api.commands.PubSubClusterCommands`.
 - ✅ Connection commands (PING, ECHO, SELECT, CLIENT ID, CLIENT GETNAME)
 - ✅ Server management commands (INFO, CONFIG GET/SET/REWRITE/RESETSTAT, DBSIZE, FLUSHDB, FLUSHALL, TIME, LASTSAVE, LOLWUT)
 - ✅ ACL commands (ACL LIST, ACL GETUSER, ACL SETUSER, ACL DELUSER, ACL CAT, ACL GENPASS, ACL LOG, ACL LOG RESET, ACL WHOAMI, ACL USERS, ACL SAVE, ACL LOAD, ACL DRYRUN)
@@ -106,6 +107,7 @@ blockingSocketTimeoutMillis
 - **Failover configurations**: Jedis-specific failover logic not supported
 
 ### Advanced Features
+- **Pub/Sub with JedisPubSub callbacks**: Jedis-style `JedisPubSub` callback listeners are not supported (see [issue #5469](https://github.com/valkey-io/valkey-glide/issues/5469) for planned support). For message handling, use `GlideClient` / `GlideClusterClient` with the Pub/Sub command APIs in `PubSubBaseCommands` / `PubSubClusterCommands` and the client's documented subscription and message-delivery options (callbacks or queued messages). The compatibility layer provides `publish()` and `pubsub*()` introspection commands only.
 - ⚠️ **Transactions**: Basic MULTI/EXEC/DISCARD/WATCH/UNWATCH supported, but with limitations:
   - After `multi()`, you must use the returned **Transaction** object to queue commands (e.g. `t.set()`, `t.get()`). Calling `jedis.set()` or other Jedis methods directly does **not** queue to the transaction.
   - For commands not yet exposed on `Transaction`, or for pipeline (non-atomic) batching, use the native GLIDE Batch API with the same connection.
