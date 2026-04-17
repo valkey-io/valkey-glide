@@ -181,7 +181,7 @@ impl StandaloneClient {
             None
         };
 
-        let mut stream = stream::iter(connection_request.addresses.into_iter())
+        let mut stream = stream::iter(connection_request.addresses)
             .map(move |address| {
                 let info = if address.host != pubsub_addr.host || address.port != pubsub_addr.port {
                     valkey_connection_info.clone()
