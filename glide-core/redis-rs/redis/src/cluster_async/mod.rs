@@ -2552,6 +2552,28 @@ where
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write().expect(MUTEX_WRITE_ERR);
         let old_topology_hash = write_guard.get_current_topology_hash();
+
+        // Skip overwrite when topology hash is unchanged during runtime refresh.
+        // This prevents the destructive cycle where stale seed nodes overwrite corrections
+        // made by update_upon_moved_error or error-driven routing fixes.
+        if old_topology_hash == topology_hash
+            && old_topology_hash != 0
+            && matches!(trigger, SlotRefreshTrigger::RuntimeRefresh)
+        {
+            log_info_lazy!(
+                "slot_refresh",
+                format!(
+                    "Topology unchanged (hash={}), skipping ConnectionsContainer replacement to preserve routing corrections. trigger={:?}",
+                    topology_hash, trigger
+                )
+            );
+            drop(write_guard);
+            return Err(RedisError::from((
+                ErrorKind::ResponseError,
+                "Topology unchanged from seed nodes — retrying to detect updates",
+            )));
+        }
+
         // Clear the refresh tasks of the prev instance
         // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
         write_guard.refresh_conn_state.clear_refresh_state();

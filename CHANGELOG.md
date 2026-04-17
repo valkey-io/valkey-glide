@@ -1,5 +1,8 @@
 ## Pending 2.2
 
+#### Fixes
+* CORE: Fix 3+ minute MOVED error delay during cross-region failover with `refreshTopologyFromInitialNodes` by skipping topology overwrite when seed nodes return unchanged topology hash ([#5769](https://github.com/valkey-io/valkey-glide/pull/5769))
+
 #### Operational Enhancements
 * CORE, Java: Add diagnostic logging for failover, topology refresh, and pipeline issues — lazy and rate-limited logging macros in logger_core, MOVED error scenario identification, topology refresh throttle/overwrite tracking, pipeline send/response timing, inflight slot exhaustion, recovery state transitions, adaptive health snapshots, and Java-side timeout elapsed time. Fix Java Logger Supplier overloads to check level before evaluating. ([#5756](https://github.com/valkey-io/valkey-glide/pull/5756))
 
