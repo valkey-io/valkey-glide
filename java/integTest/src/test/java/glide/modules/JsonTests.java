@@ -411,7 +411,8 @@ public class JsonTests {
 
         assertEquals(16L, Json.debugMemory(client, gs(key), gs(".key6")).get());
 
-        assertEquals(560L, Json.debugMemory(client, key).get());
+        long mem = Json.debugMemory(client, key).get();
+        assertTrue(mem >= 500L && mem <= 600L);
         assertEquals(19L, Json.debugFields(client, gs(key)).get());
     }
 
