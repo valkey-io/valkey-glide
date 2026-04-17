@@ -83,6 +83,12 @@ public class JedisWrapperTest {
         assertNotNull(jedisClass.getMethod("del", String.class));
         assertNotNull(jedisClass.getMethod("del", String[].class));
         assertNotNull(jedisClass.getMethod("keys", String.class));
+        assertNotNull(jedisClass.getMethod("publish", String.class, String.class));
+        assertNotNull(jedisClass.getMethod("publish", byte[].class, byte[].class));
+        assertNotNull(jedisClass.getMethod("pubsubChannels"));
+        assertNotNull(jedisClass.getMethod("pubsubChannels", String.class));
+        assertNotNull(jedisClass.getMethod("pubsubNumPat"));
+        assertNotNull(jedisClass.getMethod("pubsubNumSub", String[].class));
 
         // Set command methods
         assertNotNull(jedisClass.getMethod("sadd", String.class, String[].class));

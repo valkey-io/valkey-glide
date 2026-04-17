@@ -8,7 +8,26 @@ use crate::task::JoinHandle;
 
 pub struct Runtime;
 
+pub struct EnterGuard;
+
+#[derive(Clone)]
+pub struct Handle;
+
+impl Handle {
+    pub fn enter(&self) -> EnterGuard {
+        EnterGuard
+    }
+}
+
 impl Runtime {
+    pub fn enter(&self) -> EnterGuard {
+        EnterGuard
+    }
+
+    pub fn handle(&self) -> Handle {
+        Handle
+    }
+
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         let waker = std::task::Waker::noop();
         let context = &mut Context::from_waker(&waker);
@@ -35,6 +54,10 @@ pub struct Builder;
 
 impl Builder {
     pub fn new_multi_thread() -> Builder {
+        Builder
+    }
+
+    pub fn new_current_thread() -> Builder {
         Builder
     }
 

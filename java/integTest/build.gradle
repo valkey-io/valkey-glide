@@ -53,8 +53,8 @@ dependencies {
     implementation group: 'org.semver4j', name: 'semver4j', version: '5.6.0'
 
     //lombok
-    testCompileOnly 'org.projectlombok:lombok:1.18.42'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.42'
+    testCompileOnly 'org.projectlombok:lombok:1.18.44'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.44'
 }
 
 def standaloneHosts = ''
@@ -224,6 +224,12 @@ clearDirs.finalizedBy 'startClusterTls'
 clearDirs.finalizedBy 'startClusterForAz'
 // Run comprehensive cleanup after entire build finishes
 gradle.buildFinished {
+    // Skip pkill when servers are managed by Docker (e.g. test-modules-linux CI job)
+    if (System.getenv('GLIDE_DOCKER_SERVERS') == 'true') {
+        println "Docker-managed servers detected, skipping pkill cleanup."
+        return
+    }
+
     println "Finding and stopping all running Valkey processes..."
     
     // OS detection
@@ -363,6 +369,9 @@ tasks.register('pubsubTest', Test) {
 tasks.register('modulesTest', Test) {
     doFirst {
         clusterHosts = System.getProperty("cluster-endpoints")
+        if (System.getProperty("standalone-endpoints") != null) {
+            standaloneHosts = System.getProperty("standalone-endpoints")
+        }
     }
 
     filter {

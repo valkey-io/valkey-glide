@@ -89,6 +89,7 @@ class _GlideFFI:
                 struct CommandResponse* map_value;
                 struct CommandResponse* sets_value;
                 long sets_value_len;
+                void* user_data;
             } CommandResponse;
 
             typedef struct {
@@ -99,10 +100,12 @@ class _GlideFFI:
             typedef struct {
                 CommandResponse* response;
                 CommandError* command_error;
+                void* arena;
             } CommandResult;
 
             const char* get_response_type_string(int response_type);
             void free_command_response(CommandResponse* command_response_ptr);
+            void free_response_arena(void* arena_ptr);
             void free_command_result(CommandResult* command_result_ptr);
 
             CommandResult* command(
@@ -153,6 +156,11 @@ class _GlideFFI:
                 bool immediate_authentication
             );
 
+            CommandResult* refresh_iam_token(
+                const void* client_adapter_ptr,
+                uintptr_t request_id
+            );
+
             // ============== CLIENT MANAGEMENT ==============
             typedef enum {
                 Async = 0,
@@ -179,6 +187,7 @@ class _GlideFFI:
                     struct {
                         SuccessCallback success_callback;
                         FailureCallback failure_callback;
+                        bool allow_stack_response;
                     } async_client;
                 };
             } ClientType;

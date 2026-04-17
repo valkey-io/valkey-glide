@@ -57,11 +57,6 @@ on:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
-            run-modules-tests:
-                description: "Run modules tests"
-                type: boolean
-                default: false
-
     workflow_call:
         inputs:
             run-with-macos:
@@ -170,7 +165,6 @@ jobs:
                     make install-tools build
                     make -k unit-test integ-test
                   fi
-                  make -k pubsub-test
                   make -k opentelemetry-test
 
             - name: Run Example Tests
@@ -346,7 +340,6 @@ jobs:
                     make install-tools build
                     make -k unit-test integ-test
                   fi
-                  make -k pubsub-test
 
             - name: Upload test reports
               if: always()
@@ -357,66 +350,6 @@ jobs:
                   path: |
                       utils/clusters/**
                       benchmarks/results/**
-                      go/reports/**
-
-    test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
-        environment: AWS_ACTIONS
-        name: Modules Tests
-        runs-on: [self-hosted, linux, ARM64, persistent]
-        timeout-minutes: 15
-        steps:
-            - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            - uses: actions/checkout@v4
-
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: ${{ env.BASE_GO_VERSION }}
-                  cache-dependency-path: go/go.sum
-
-            - uses: actions/cache@v4
-              with:
-                  path: |
-                      ffi/target
-                      glide-core/src/generated
-                  key: aarch64-unknown-linux-gnu-go
-                  restore-keys: |
-                      aarch64-unknown-linux-gnu-glide-core
-                      aarch64-unknown-linux-gnu
-
-            - name: Install zig
-              uses: ./.github/workflows/install-zig
-
-            - name: Run patch to test with RC
-              working-directory: go
-              if: ${{ github.event.inputs.rc-version }}
-              env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
-              run: |
-                  ./scripts/rc-testing/rc-test.sh "$RC_VERSION"
-
-            - name: Build and test
-              working-directory: ./go
-              env:
-                  RC_VERSION: ${{ github.event.inputs.rc-version }}
-              run: |
-                  if [[ -n "$RC_VERSION" ]]; then
-                    make install-tools modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
-                  else
-                    make install-tools build modules-test cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} tls=true
-                  fi
-                  make -k pubsub-test
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-modules
-                  path: |
                       go/reports/**
 
     test-long-timeout:

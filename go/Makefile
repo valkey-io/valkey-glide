@@ -177,7 +177,7 @@ integ-test: export TEST_FILTER = -skip "TestGlideTestSuite/TestModule" $(if $(te
 integ-test: __it
 
 # modules tests - run substask with default filter
-modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestGlideTestSuite/TestModule)
+modules-test: export TEST_FILTER = $(if $(test-filter), -run $(test-filter), -testify.m TestModule)
 modules-test: __it
 
 # pubsub tests - run pubsub tests using testify filter
