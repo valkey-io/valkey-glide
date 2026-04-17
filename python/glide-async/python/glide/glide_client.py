@@ -289,6 +289,9 @@ class BaseClient(CoreCommands):
             raise ClosingError("Failed to create UDS connection") from e
 
     async def close(self, err_message: Optional[str] = None) -> None:
+        """
+        Forwards to `aclose`, the more common method for async resources.
+        """
         await self.aclose(err_message)
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
@@ -317,7 +320,7 @@ class BaseClient(CoreCommands):
 
             await self._stream.aclose()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(
