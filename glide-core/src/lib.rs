@@ -3,6 +3,7 @@
 #[cfg(feature = "proto")]
 include!("generated/mod.rs");
 pub mod client;
+pub mod otel_db_semantics;
 #[cfg(feature = "socket-layer")]
 pub mod rotating_buffer;
 #[cfg(feature = "socket-layer")]

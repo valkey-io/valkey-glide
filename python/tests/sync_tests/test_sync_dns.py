@@ -10,8 +10,8 @@ import os
 import pytest
 from glide_shared.config import NodeAddress
 
+from tests.constants import HOSTNAME_NO_TLS, HOSTNAME_TLS
 from tests.sync_tests.conftest import create_sync_client
-from tests.test_constants import HOSTNAME_NO_TLS, HOSTNAME_TLS
 from tests.utils.utils import assert_connected_sync, get_ca_certificate
 
 

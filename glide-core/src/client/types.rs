@@ -113,6 +113,13 @@ impl ::std::fmt::Display for NodeAddress {
     }
 }
 
+/// Initial connection metadata used as default OTel span attributes.
+#[derive(Clone, Debug)]
+pub struct OTelMetadata {
+    pub address: NodeAddress,
+    pub db_namespace: String,
+}
+
 #[derive(PartialEq, Eq, Clone, Default, Debug)]
 pub enum ReadFrom {
     #[default]
@@ -120,6 +127,7 @@ pub enum ReadFrom {
     PreferReplica,
     AZAffinity(String),
     AZAffinityReplicasAndPrimary(String),
+    AllNodes,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
@@ -161,6 +169,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             protobuf::ReadFrom::Primary => ReadFrom::Primary,
             protobuf::ReadFrom::PreferReplica => ReadFrom::PreferReplica,
             protobuf::ReadFrom::LowestLatency => todo!(),
+            protobuf::ReadFrom::AllNodes => ReadFrom::AllNodes,
             protobuf::ReadFrom::AZAffinity => {
                 if let Some(client_az) = chars_to_string_option(&value.client_az) {
                     ReadFrom::AZAffinity(client_az)

@@ -3,17 +3,20 @@ package compatibility.jedis;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.TestConfiguration.TLS;
 import static glide.utils.Java8Utils.createList;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.*;
 
 import glide.api.GlideClient;
+import glide.api.models.commands.ScriptDebugMode;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,6 +30,7 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisClientConfig;
 import redis.clients.jedis.Protocol;
 import redis.clients.jedis.StreamEntryID;
+import redis.clients.jedis.Transaction;
 import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.args.FlushMode;
@@ -1784,6 +1788,147 @@ public class JedisTest {
         assertTrue(resultSet.contains(member1), "SMEMBERS result should contain member1");
         assertTrue(resultSet.contains(member2), "SMEMBERS result should contain member2");
         assertTrue(resultSet.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    void publish_string_returns_zero_subscriber_count() {
+        String channel = "ch:" + UUID.randomUUID();
+        Long received = jedis.publish(channel, "msg");
+        assertNotNull(received, "PUBLISH should return a non-null Long");
+        assertEquals(
+                0L,
+                received.longValue(),
+                "PUBLISH should return 0 (GLIDE API limitation - see issue #5354)");
+    }
+
+    @Test
+    void publish_binary_returns_zero_subscriber_count() {
+        String channel = "ch:" + UUID.randomUUID();
+        byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
+        byte[] messageBytes = "msg".getBytes(StandardCharsets.UTF_8);
+        Long received = jedis.publish(channelBytes, messageBytes);
+        assertNotNull(received, "PUBLISH binary should return a non-null Long");
+        assertEquals(
+                0L,
+                received.longValue(),
+                "PUBLISH binary should return 0 (GLIDE API limitation - see issue #5354)");
+    }
+
+    @Test
+    void pubsub_channels_without_active_subscription_excludes_ephemeral_channel_name() {
+        String channel = "ch:" + UUID.randomUUID();
+        List<String> channels = jedis.pubsubChannels();
+        assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
+        assertFalse(
+                channels.contains(channel),
+                "PUBSUB CHANNELS should not list a channel with no active subscription");
+    }
+
+    @Test
+    void pubsub_channels_with_pattern_without_active_subscription_excludes_ephemeral_channel() {
+        String channel = "ch:" + UUID.randomUUID();
+        // Glob-style pattern (not the exact channel name) so the server exercises pattern matching.
+        String pattern = "ch:*";
+        List<String> channelsWithPattern = jedis.pubsubChannels(pattern);
+        assertNotNull(
+                channelsWithPattern, "PUBSUB CHANNELS with pattern should return a non-null list");
+        assertFalse(
+                channelsWithPattern.contains(channel),
+                "PUBSUB CHANNELS with glob pattern should not list channel without subscribers");
+    }
+
+    @Test
+    void pubsub_num_sub_without_subscribers_reports_zero_for_requested_channel() {
+        String channel = "ch:" + UUID.randomUUID();
+        Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+        assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
+        assertTrue(numSub.containsKey(channel), "PUBSUB NUMSUB should contain the requested channel");
+        assertEquals(
+                0L, numSub.get(channel), "PUBSUB NUMSUB should report 0 subscribers when none are active");
+    }
+
+    @Test
+    void pubsub_num_pat_returns_non_negative_count() {
+        Long numPat = jedis.pubsubNumPat();
+        assertNotNull(numPat, "PUBSUB NUMPAT should return a non-null value");
+        assertTrue(numPat >= 0, "PUBSUB NUMPAT should return a non-negative value");
+    }
+
+    @Test
+    void pubsub_channels_with_active_subscription_contains_channel() throws Exception {
+        String channel = "ch:introspection:" + UUID.randomUUID();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.subscribe(Collections.singleton(channel), 5000).get();
+            List<String> channels = jedis.pubsubChannels();
+            assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
+            assertTrue(
+                    channels.contains(channel),
+                    "PUBSUB CHANNELS should contain channel with active subscription: " + channels);
+        }
+    }
+
+    @Test
+    void pubsub_channels_with_pattern_returns_matching_active_channel() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String channel = "ch:patgrp:" + suffix + ":tail";
+        String pattern = "ch:patgrp:" + suffix + ":*";
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.subscribe(Collections.singleton(channel), 5000).get();
+            List<String> withPattern = jedis.pubsubChannels(pattern);
+            assertNotNull(withPattern, "PUBSUB CHANNELS with pattern should return a non-null list");
+            assertTrue(
+                    withPattern.contains(channel),
+                    "PUBSUB CHANNELS with pattern should include active channel: " + withPattern);
+        }
+    }
+
+    @Test
+    void pubsub_num_sub_with_active_subscription_reports_one() throws Exception {
+        String channel = "ch:introspection:numsub:" + UUID.randomUUID();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.subscribe(Collections.singleton(channel), 5000).get();
+            Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+            assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
+            assertEquals(
+                    1L,
+                    numSub.getOrDefault(channel, 0L),
+                    "PUBSUB NUMSUB should return 1 for the subscribed channel");
+        }
+    }
+
+    @Test
+    void pubsub_num_pat_increases_after_pattern_subscription() throws Exception {
+        Long before = jedis.pubsubNumPat();
+        assertNotNull(before);
+        String pattern = "ch:numpat:" + UUID.randomUUID() + "*";
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.psubscribe(Collections.singleton(pattern), 5000).get();
+            Long after = jedis.pubsubNumPat();
+            assertNotNull(after);
+            assertTrue(
+                    after >= before + 1,
+                    "PUBSUB NUMPAT should increase after PSUBSCRIBE; before=" + before + " after=" + after);
+        }
     }
 
     @Test
@@ -4358,6 +4503,69 @@ public class JedisTest {
         return sb.toString();
     }
 
+    @Test
+    void echo_string() {
+        String message = "Hello, Valkey!";
+        String response = jedis.echo(message);
+        assertEquals(message, response);
+    }
+
+    @Test
+    void echo_binary() {
+        byte[] message = "Binary Message".getBytes(StandardCharsets.UTF_8);
+        byte[] response = jedis.echo(message);
+        assertArrayEquals(message, response);
+    }
+
+    @Test
+    void clientId() {
+        long id = jedis.clientId();
+        assertTrue(id > 0, "Client ID should be a positive number");
+    }
+
+    @Test
+    void clientGetName() {
+        String name = jedis.clientGetName();
+        // Name can be null if not set, so we just verify it doesn't throw
+        assertDoesNotThrow(() -> jedis.clientGetName());
+    }
+
+    @Test
+    void customCommand_ping() {
+        Object result = jedis.customCommand("PING");
+        assertEquals("PONG", result);
+    }
+
+    @Test
+    void customCommand_echo() {
+        Object result = jedis.customCommand("ECHO", "test");
+        assertEquals("test", result);
+    }
+
+    @Test
+    void sendCommand_with_protocol_command() {
+        // Test sendCommand with Protocol.Command.PING
+        Object result = jedis.sendCommand(redis.clients.jedis.Protocol.Command.PING);
+        assertEquals("PONG", result);
+    }
+
+    @Test
+    void watch_and_unwatch() {
+        String key = "watch_key_" + UUID.randomUUID();
+
+        try {
+            // Watch a key
+            String watchResult = jedis.watch(key);
+            assertEquals("OK", watchResult);
+
+            // Unwatch
+            String unwatchResult = jedis.unwatch();
+            assertEquals("OK", unwatchResult);
+        } finally {
+            jedis.del(key);
+        }
+    }
+
     // ==================== SORT COMMANDS TESTS ====================
 
     @Test
@@ -4506,6 +4714,20 @@ public class JedisTest {
     }
 
     @Test
+    void watch_binary() {
+        byte[] key = ("watch_key_binary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
+
+        try {
+            String result = jedis.watch(key);
+            assertEquals("OK", result);
+
+            jedis.unwatch();
+        } finally {
+            jedis.del(new String(key, StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
     void objectFreq_binary() {
         byte[] key = ("objectFreqKeyBinary_" + UUID.randomUUID()).getBytes(StandardCharsets.UTF_8);
         jedis.set(key, "value".getBytes());
@@ -4516,6 +4738,108 @@ public class JedisTest {
         if (freq != null) {
             assertTrue(freq >= 0);
         }
+    }
+
+    @Test
+    void multi_exec_discard() {
+        String key1 = "multi_key1_" + UUID.randomUUID();
+        String key2 = "multi_key2_" + UUID.randomUUID();
+
+        try {
+            // Start transaction - returns Transaction object in Jedis 5.1.5+
+            Transaction transaction = jedis.multi();
+            assertNotNull(transaction);
+
+            // Discard transaction
+            String discardResult = transaction.discard();
+            assertEquals("OK", discardResult);
+        } finally {
+            jedis.del(key1, key2);
+        }
+    }
+
+    @Test
+    void multi_exec_transaction() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"),
+                "Skipping test: Transaction support requires Valkey 6.2.0+");
+
+        String key = "tx_key_" + UUID.randomUUID();
+
+        try {
+            // Start transaction and queue commands
+            Transaction transaction = jedis.multi();
+
+            // Note: In Jedis 5.1.5+, commands are queued on the Transaction object
+            // and return Response objects that are populated after exec()
+            // For now, we test that the API exists and works.
+
+            // Discard the transaction for safety
+            transaction.discard();
+        } finally {
+            try {
+                jedis.del(key);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    // NOTE: scriptShow tests are disabled because SCRIPT SHOW is not a standard Redis/Valkey command.
+    // The command returns "unknown subcommand 'SHOW'" on all current server versions.
+    // The implementation exists for future compatibility but cannot be tested until servers support
+    // it.
+
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
+    @Test
+    void scriptShow() {
+        String script = "return 'Hello from script'";
+        String sha1 = jedis.scriptLoad(script);
+        assertNotNull(sha1);
+
+        String source = jedis.scriptShow(sha1);
+        assertEquals(script, source);
+    }
+
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
+    @Test
+    void scriptShow_nonexistent() {
+        String fakeSha1 = "0000000000000000000000000000000000000000";
+        String result = jedis.scriptShow(fakeSha1);
+        assertNull(result, "scriptShow should return null for non-existent scripts");
+    }
+
+    @Disabled("SCRIPT SHOW command not supported by current Valkey/Redis versions")
+    @Test
+    void scriptShow_binary() {
+        String script = "return 'Binary script'";
+        String sha1 = jedis.scriptLoad(script);
+        assertNotNull(sha1);
+
+        byte[] source = jedis.scriptShow(sha1.getBytes(StandardCharsets.UTF_8));
+        assertArrayEquals(script.getBytes(StandardCharsets.UTF_8), source);
+    }
+
+    @Test
+    void scriptDebug() {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("3.2.0"),
+                "Skipping test: SCRIPT DEBUG requires Valkey 3.2.0+");
+
+        // Set debug mode to NO
+        String result = jedis.scriptDebug(ScriptDebugMode.NO);
+        assertEquals("OK", result);
+    }
+
+    @Test
+    void functionFlush_already_tested() {
+        // functionFlush is already tested in existing tests
+        // Verify it exists and works
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0"),
+                "Skipping test: FUNCTION FLUSH requires Valkey 7.0.0+");
+
+        String result = jedis.functionFlush();
+        assertEquals("OK", result);
     }
 
     @Test

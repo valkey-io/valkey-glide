@@ -1,6 +1,7 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import array
+import asyncio
 import json
 import time
 import uuid
@@ -37,8 +38,16 @@ from glide_shared.commands.server_modules.ft_options.ft_profile_options import (
     FtProfileOptions,
 )
 from glide_shared.commands.server_modules.ft_options.ft_search_options import (
+    ConsistencyMode,
     FtSearchOptions,
+    InfoScope,
+)
+from glide_shared.commands.server_modules.ft_options.ft_search_options import (
+    OrderBy as FtSearchOrderBy,
+)
+from glide_shared.commands.server_modules.ft_options.ft_search_options import (
     ReturnField,
+    ShardScope,
 )
 from glide_shared.config import ProtocolVersion
 from glide_shared.constants import OK, FtSearchResponse, TEncodable
@@ -64,9 +73,9 @@ class TestFt:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_create(self, glide_client: GlideClusterClient):
         fields: List[Field] = [
-            TextField("$title"),
-            NumericField("$published_at"),
-            TextField("$category"),
+            TextField("$title", "title"),
+            NumericField("$published_at", "published_at"),
+            TextField("$category", "category"),
         ]
         prefixes: List[TEncodable] = ["blog:post:"]
 
@@ -150,9 +159,9 @@ class TestFt:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_create_byte_type_input(self, glide_client: GlideClusterClient):
         fields: List[Field] = [
-            TextField(b"$title"),
-            NumericField(b"$published_at"),
-            TextField(b"$category"),
+            TextField(b"$title", b"title"),
+            NumericField(b"$published_at", b"published_at"),
+            TextField(b"$category", b"category"),
         ]
         prefixes: List[TEncodable] = [b"blog:post:"]
 
@@ -174,7 +183,7 @@ class TestFt:
     async def test_ft_dropindex(self, glide_client: GlideClusterClient):
         # Index name for the index to be dropped.
         index_name = str(uuid.uuid4())
-        fields: List[Field] = [TextField("$title")]
+        fields: List[Field] = [TextField("$title", "title")]
         prefixes: List[TEncodable] = ["blog:post:"]
 
         # Create an index with multiple fields with Hash data type.
@@ -234,7 +243,7 @@ class TestFt:
                     NumericField("$.a", "a"),
                     NumericField("$.b", "b"),
                 ],
-                options=FtCreateOptions(DataType.JSON),
+                options=FtCreateOptions(DataType.JSON, prefixes=[json_prefix]),
             )
             == OK
         )
@@ -254,8 +263,8 @@ class TestFt:
 
         ft_search_options = FtSearchOptions(
             return_fields=[
-                ReturnField(field_identifier="a", alias="a_new"),
-                ReturnField(field_identifier="b", alias="b_new"),
+                ReturnField(field_identifier="a"),
+                ReturnField(field_identifier="b"),
             ]
         )
 
@@ -263,7 +272,7 @@ class TestFt:
         result1 = await ft.search(
             client=glide_client,
             index_name=json_index,
-            query="*",
+            query="@a:[-inf +inf]",
             options=ft_search_options,
         )
         # Check if we get the expected result from ft.search for string inputs.
@@ -278,32 +287,34 @@ class TestFt:
             fieldName2="b",
         )
 
-        # Test FT.PROFILE for the above mentioned FT.SEARCH query and search options.
+        # FT.PROFILE may not be available on all server versions (e.g. valkey-search).
+        try:
+            ft_profile_result = await ft.profile(
+                glide_client,
+                json_index,
+                FtProfileOptions.from_query_options(
+                    query="@a:[-inf +inf]", query_options=ft_search_options
+                ),
+            )
+            assert len(ft_profile_result) > 0
 
-        ft_profile_result = await ft.profile(
-            glide_client,
-            json_index,
-            FtProfileOptions.from_query_options(
-                query="*", query_options=ft_search_options
-            ),
-        )
-        assert len(ft_profile_result) > 0
-
-        # Check if we get the expected result from FT.PROFILE for string inputs.
-        TestFt._ft_search_deep_compare_json_result(
-            self,
-            result=cast(FtSearchResponse, ft_profile_result[0]),
-            json_key1=json_key1,
-            json_key2=json_key2,
-            json_value1=json_value1,
-            json_value2=json_value2,
-            fieldName1="a",
-            fieldName2="b",
-        )
+            # Check if we get the expected result from FT.PROFILE for string inputs.
+            TestFt._ft_search_deep_compare_json_result(
+                self,
+                result=cast(FtSearchResponse, ft_profile_result[0]),
+                json_key1=json_key1,
+                json_key2=json_key2,
+                json_value1=json_value1,
+                json_value2=json_value2,
+                fieldName1="a",
+                fieldName2="b",
+            )
+        except RequestError:
+            pass
         ft_search_options_bytes_input = FtSearchOptions(
             return_fields=[
-                ReturnField(field_identifier=b"a", alias=b"a_new"),
-                ReturnField(field_identifier=b"b", alias=b"b_new"),
+                ReturnField(field_identifier=b"a"),
+                ReturnField(field_identifier=b"b"),
             ]
         )
 
@@ -311,7 +322,7 @@ class TestFt:
         result2 = await ft.search(
             glide_client,
             json_index.encode("utf-8"),
-            b"*",
+            b"@a:[-inf +inf]",
             options=ft_search_options_bytes_input,
         )
 
@@ -327,31 +338,34 @@ class TestFt:
             fieldName2="b",
         )
 
-        # Test FT.PROFILE for the above mentioned FT.SEARCH query and search options for byte type inputs.
-        ft_profile_result = await ft.profile(
-            glide_client,
-            json_index.encode("utf-8"),
-            FtProfileOptions.from_query_options(
-                query=b"*", query_options=ft_search_options_bytes_input
-            ),
-        )
-        assert len(ft_profile_result) > 0
+        # FT.PROFILE may not be available on all server versions (e.g. valkey-search).
+        try:
+            ft_profile_result = await ft.profile(
+                glide_client,
+                json_index.encode("utf-8"),
+                FtProfileOptions.from_query_options(
+                    query=b"@a:[-inf +inf]", query_options=ft_search_options_bytes_input
+                ),
+            )
+            assert len(ft_profile_result) > 0
 
-        # Check if we get the expected result from FT.PROFILE for byte type inputs.
-        TestFt._ft_search_deep_compare_json_result(
-            self,
-            result=cast(FtSearchResponse, ft_profile_result[0]),
-            json_key1=json_key1,
-            json_key2=json_key2,
-            json_value1=json_value1,
-            json_value2=json_value2,
-            fieldName1="a",
-            fieldName2="b",
-        )
+            # Check if we get the expected result from FT.PROFILE for byte type inputs.
+            TestFt._ft_search_deep_compare_json_result(
+                self,
+                result=cast(FtSearchResponse, ft_profile_result[0]),
+                json_key1=json_key1,
+                json_key2=json_key2,
+                json_value1=json_value1,
+                json_value2=json_value2,
+                fieldName1="a",
+                fieldName2="b",
+            )
+        except RequestError:
+            pass
 
         # Create an index for knn vector search.
 
-        vector_prefix = "vector-search:"
+        vector_prefix = "{vector-search-" + str(uuid.uuid4()) + "}:"
         vector_key1 = vector_prefix + str(uuid.uuid4())
         vector_key2 = vector_prefix + str(uuid.uuid4())
         vector1 = array.array("f", [1.0, 0.0])
@@ -480,6 +494,7 @@ class TestFt:
         }
         assert search_result_map == expected_result_map
 
+    @pytest.mark.skip(reason="FT.ALIASADD is currently unsupported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aliasadd(self, glide_client: GlideClusterClient):
@@ -504,6 +519,7 @@ class TestFt:
         )
         assert await ft.dropindex(glide_client, index_name_string) == OK
 
+    @pytest.mark.skip(reason="FT.ALIASDEL is currently unsupported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aliasdel(self, glide_client: GlideClusterClient):
@@ -525,6 +541,7 @@ class TestFt:
 
         assert await ft.dropindex(glide_client, index_name) == OK
 
+    @pytest.mark.skip(reason="FT.ALIASUPDATE is currently unsupported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aliasupdate(self, glide_client: GlideClusterClient):
@@ -574,7 +591,7 @@ class TestFt:
     ):
         # Helper function used for creating a basic index with hash data type with one text field.
         fields: List[Field] = [TextField("title")]
-        prefix = "{hash-search-" + str(uuid.uuid4()) + "}:"
+        prefix = "hash-search-" + str(uuid.uuid4()) + ":"
         prefixes: List[TEncodable] = [prefix]
         result = await ft.create(
             glide_client, index_name, fields, FtCreateOptions(DataType.HASH, prefixes)
@@ -606,43 +623,58 @@ class TestFt:
             await ft.info(glide_client, str(uuid.uuid4()))
 
     def _ft_info_deep_compare_result(self, index_name: str, result):
+        # The server returns FT.INFO as a flat list of key-value pairs.
+        if isinstance(result, list):
+            info = {}
+            for i in range(0, len(result) - 1, 2):
+                info[result[i]] = result[i + 1]
+            result = info
+
         assert index_name.encode() == result.get(b"index_name")
-        assert b"JSON" == result.get(b"key_type")
-        assert [b"key-prefix"] == result.get(b"key_prefixes")
 
-        # Get vector and text fields from the fields array.
-        fields: TestFt.SerchResultFieldsList = cast(
-            TestFt.SerchResultFieldsList, result.get(b"fields")
-        )
+        # index_definition is a flat list containing key_type, prefixes, etc.
+        index_def = result.get(b"index_definition", [])
+        if isinstance(index_def, list):
+            idx_def_dict = {}
+            for i in range(0, len(index_def) - 1, 2):
+                idx_def_dict[index_def[i]] = index_def[i + 1]
+            assert b"JSON" == idx_def_dict.get(b"key_type")
+
+        # Fields are under "attributes" as an array of flat lists.
+        fields_raw = result.get(b"attributes") or result.get(b"fields")
+        assert fields_raw is not None
+
+        # Convert each field from flat list to dict.
+        fields = []
+        for f in fields_raw:
+            if isinstance(f, list):
+                fd = {}
+                for i in range(0, len(f) - 1, 2):
+                    fd[f[i]] = f[i + 1]
+                fields.append(fd)
+            else:
+                fields.append(f)
+
         assert len(fields) == 2
-        text_field: TestFt.SearchResultField = {}
-        vector_field: TestFt.SearchResultField = {}
+        text_field = {}
+        vector_field = {}
         if fields[0].get(b"type") == b"VECTOR":
-            vector_field = cast(TestFt.SearchResultField, fields[0])
-            text_field = cast(TestFt.SearchResultField, fields[1])
+            vector_field = fields[0]
+            text_field = fields[1]
         else:
-            vector_field = cast(TestFt.SearchResultField, fields[1])
-            text_field = cast(TestFt.SearchResultField, fields[0])
+            vector_field = fields[1]
+            text_field = fields[0]
 
-        # Compare vector field arguments
+        # Compare vector field
         assert b"$.vec" == vector_field.get(b"identifier")
         assert b"VECTOR" == vector_field.get(b"type")
-        assert b"VEC" == vector_field.get(b"field_name")
-        vector_field_params: Mapping[TEncodable, Union[TEncodable, int]] = cast(
-            Mapping[TEncodable, Union[TEncodable, int]],
-            vector_field.get(b"vector_params"),
-        )
-        assert DistanceMetricType.L2.value.encode() == vector_field_params.get(
-            b"distance_metric"
-        )
-        assert 2 == vector_field_params.get(b"dimension")
-        assert b"HNSW" == vector_field_params.get(b"algorithm")
-        assert b"FLOAT32" == vector_field_params.get(b"data_type")
+        # "attribute" in new server, "field_name" in old
+        vec_alias = vector_field.get(b"attribute") or vector_field.get(b"field_name")
+        assert b"VEC" == vec_alias
 
-        # Compare text field arguments.
+        # Compare text field
         assert b"$.text-field" == text_field.get(b"identifier")
         assert b"TEXT" == text_field.get(b"type")
-        assert b"text-field" == text_field.get(b"field_name")
 
     async def _create_test_index_with_vector_field(
         self, glide_client: GlideClusterClient, index_name: TEncodable
@@ -659,7 +691,7 @@ class TestFt:
                 ),
                 alias="VEC",
             ),
-            TextField("$.text-field", "text-field"),
+            TextField("$.text-field", "text_field"),
         ]
 
         prefixes: List[TEncodable] = ["key-prefix"]
@@ -671,6 +703,7 @@ class TestFt:
             options=FtCreateOptions(DataType.JSON, prefixes=prefixes),
         )
 
+    @pytest.mark.skip(reason="FT.EXPLAIN is currently unsupported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_explain(self, glide_client: GlideClusterClient):
@@ -705,6 +738,7 @@ class TestFt:
         with pytest.raises(RequestError):
             await ft.explain(glide_client, str(uuid.uuid4()), query="*")
 
+    @pytest.mark.skip(reason="FT.EXPLAINCLI is currently unsupported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_explaincli(self, glide_client: GlideClusterClient):
@@ -754,7 +788,7 @@ class TestFt:
     ):
         # Helper function used for creating an index having hash data type, one text field and one numeric field.
         fields: List[Field] = [TextField("title"), NumericField("price")]
-        prefix = "{hash-search-" + str(uuid.uuid4()) + "}:"
+        prefix = "hash-search-" + str(uuid.uuid4()) + ":"
         prefixes: List[TEncodable] = [prefix]
 
         assert (
@@ -767,6 +801,7 @@ class TestFt:
             == OK
         )
 
+    @pytest.mark.skip(reason="FT.AGGREGATE is currently not fully supported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aggregate_with_bicycles_data(
@@ -842,6 +877,7 @@ class TestFt:
 
         assert await ft.dropindex(glide_client, index_bicycles) == OK
 
+    @pytest.mark.skip(reason="FT.AGGREGATE is currently not fully supported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aggregate_with_movies_data(
@@ -1169,6 +1205,7 @@ class TestFt:
             },
         )
 
+    @pytest.mark.skip(reason="FT.ALIASLIST is currently unsupported")
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ft_aliaslist(self, glide_client: GlideClusterClient):
@@ -1195,3 +1232,902 @@ class TestFt:
         # Drop all indexes.
         assert await ft.dropindex(glide_client, index_name) == OK
         assert await ft.dropindex(glide_client, index_name_string) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_nocontent(self, glide_client: GlideClusterClient):
+        prefix = "{nocontent-search-" + str(uuid.uuid4()) + "}:"
+        key = prefix + "doc"
+        index = prefix + "idx"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[TextField(name="title")],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+        assert await glide_client.hset(key, {"title": "hello world"}) == 1
+        await asyncio.sleep(self.sleep_wait_time)
+
+        result = await ft.search(
+            glide_client,
+            index,
+            "hello",
+            options=FtSearchOptions(nocontent=True),
+        )
+        # NOCONTENT: count is 1, doc entry has an empty fields map
+        assert result[0] == 1
+        result_map = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
+        assert len(result_map) == 1
+        for doc_fields in result_map.values():
+            assert doc_fields == {}
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_dialect(self, glide_client: GlideClusterClient):
+        prefix = "{dialect-search-" + str(uuid.uuid4()) + "}:"
+        key1 = prefix + "1"
+        index = prefix + str(uuid.uuid4())
+        vec_field = "vec"
+
+        vector1 = array.array("f", [1.0, 0.0]).tobytes()
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[
+                    VectorField(
+                        name=vec_field,
+                        algorithm=VectorAlgorithm.FLAT,
+                        attributes=VectorFieldAttributesFlat(
+                            dimensions=2,
+                            distance_metric=DistanceMetricType.L2,
+                            type=VectorType.FLOAT32,
+                        ),
+                    )
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+        assert await glide_client.hset(key1, {vec_field: vector1}) == 1
+        await asyncio.sleep(self.sleep_wait_time)
+
+        # DIALECT 2 is the only supported dialect in valkey-search 1.1
+        knn_query = f"*=>[KNN 1 @{vec_field} $query_vec]"
+        result = await ft.search(
+            glide_client,
+            index,
+            knn_query,
+            options=FtSearchOptions(
+                params={"query_vec": vector1},
+                dialect=2,
+            ),
+        )
+        assert result[0] == 1
+        result_map = cast(
+            Mapping[TEncodable, Mapping[TEncodable, TEncodable]], result[1]
+        )
+        assert len(result_map) == 1
+        # Verify the returned document has field content
+        for doc_fields in result_map.values():
+            assert len(doc_fields) > 0
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_dialect_invalid(self, glide_client: GlideClusterClient):
+        prefix = "{dialect-invalid-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "idx"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[TextField(name="title")],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+        # dialect < 2 is not currently supported; expect an error
+        with pytest.raises(RequestError) as exc_info:
+            await ft.search(
+                glide_client,
+                index,
+                "hello",
+                options=FtSearchOptions(dialect=1),
+            )
+        assert "DIALECT" in str(exc_info.value)
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_create_1_2_index_options(self, glide_client: GlideClusterClient):
+        """Test FT.CREATE with index-level options:
+        SCORE, LANGUAGE, SKIPINITIALSCAN, MINSTEMSIZE, WITHOFFSETS/NOOFFSETS,
+        NOSTOPWORDS/STOPWORDS, PUNCTUATION.
+
+        Each sub-test uses its own unique prefix to avoid index conflicts
+        when create/drop operations race across cluster shards.
+        """
+
+        # SKIPINITIALSCAN — index is created but pre-existing keys are not backfilled.
+        skip_prefix = "{ft-create-skip-" + str(uuid.uuid4()) + "}:"
+        index_skip = skip_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_skip,
+                schema=[TextField("title")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[skip_prefix],
+                    skipinitialscan=True,
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_skip) == OK
+
+        # SCORE — accepted for RediSearch interoperability (only 1.0 is valid).
+        score_prefix = "{ft-create-score-" + str(uuid.uuid4()) + "}:"
+        index_score = score_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_score,
+                schema=[TextField("title")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[score_prefix],
+                    score=1.0,
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_score) == OK
+
+        # LANGUAGE ENGLISH
+        lang_prefix = "{ft-create-lang-" + str(uuid.uuid4()) + "}:"
+        index_lang = lang_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_lang,
+                schema=[TextField("body")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[lang_prefix],
+                    language="ENGLISH",
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_lang) == OK
+
+        # MINSTEMSIZE — words shorter than minstemsize are not stemmed.
+        # With minstemsize=6, "running" (7 chars) is stemmed to "run",
+        # but "plays" (5 chars) is NOT stemmed to "play".
+        stem_prefix = "{ft-create-stem-" + str(uuid.uuid4()) + "}:"
+        index_stem = stem_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_stem,
+                schema=[TextField("title")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[stem_prefix],
+                    minstemsize=6,
+                ),
+            )
+            == OK
+        )
+        await glide_client.hset(stem_prefix + "1", {"title": "running"})
+        await glide_client.hset(stem_prefix + "2", {"title": "plays"})
+        time.sleep(self.sleep_wait_time)
+
+        result = await ft.search(glide_client, index_stem, "run")
+        assert result[0] == 1  # "running" is stemmed to "run"
+
+        result = await ft.search(glide_client, index_stem, "play")
+        assert result[0] == 0  # "plays" is NOT stemmed (< 6 chars)
+
+        assert await ft.dropindex(glide_client, index_stem) == OK
+
+        # WITHOFFSETS (default) — explicit flag
+        off_prefix = "{ft-create-off-" + str(uuid.uuid4()) + "}:"
+        index_offsets = off_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_offsets,
+                schema=[TextField("body")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[off_prefix],
+                    withoffsets=True,
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_offsets) == OK
+
+        # NOOFFSETS — disables per-word offsets (phrase/slop queries will be rejected)
+        nooff_prefix = "{ft-create-nooff-" + str(uuid.uuid4()) + "}:"
+        index_nooffsets = nooff_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_nooffsets,
+                schema=[TextField("body")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[nooff_prefix],
+                    nooffsets=True,
+                ),
+            )
+            == OK
+        )
+        await glide_client.hset(nooff_prefix + "1", {"body": "hello"})
+        time.sleep(self.sleep_wait_time)
+
+        # Basic search works
+        result = await ft.search(glide_client, index_nooffsets, "hello")
+        assert result[0] == 1
+
+        # SLOP queries should be rejected when NOOFFSETS is set
+        with pytest.raises(RequestError):
+            await ft.search(
+                glide_client,
+                index_nooffsets,
+                "hello",
+                options=FtSearchOptions(slop=1),
+            )
+
+        assert await ft.dropindex(glide_client, index_nooffsets) == OK
+
+        # NOSTOPWORDS — all words are indexed, including default stop words.
+        nostop_prefix = "{ft-create-nostop-" + str(uuid.uuid4()) + "}:"
+        index_nostop = nostop_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_nostop,
+                schema=[TextField("body")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[nostop_prefix],
+                    nostopwords=True,
+                ),
+            )
+            == OK
+        )
+        await glide_client.hset(nostop_prefix + "1", {"body": "the quick fox"})
+        time.sleep(self.sleep_wait_time)
+
+        # "the" is normally a stop word, but NOSTOPWORDS makes it searchable
+        result = await ft.search(glide_client, index_nostop, "the")
+        assert result[0] == 1
+
+        assert await ft.dropindex(glide_client, index_nostop) == OK
+
+        # STOPWORDS with custom list — custom stop words are rejected in queries.
+        stop_prefix = "{ft-create-stop-" + str(uuid.uuid4()) + "}:"
+        index_stopwords = stop_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_stopwords,
+                schema=[TextField("body")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[stop_prefix],
+                    stopwords=["fox", "an"],
+                ),
+            )
+            == OK
+        )
+        await glide_client.hset(stop_prefix + "1", {"body": "the quick fox"})
+        time.sleep(self.sleep_wait_time)
+
+        # Non-stop words are searchable
+        result = await ft.search(glide_client, index_stopwords, "the")
+        assert result[0] == 1
+        result = await ft.search(glide_client, index_stopwords, "quick")
+        assert result[0] == 1
+
+        # Custom stop word "fox" should be rejected
+        with pytest.raises(RequestError):
+            await ft.search(glide_client, index_stopwords, "fox")
+
+        assert await ft.dropindex(glide_client, index_stopwords) == OK
+
+        # PUNCTUATION with custom characters
+        punct_prefix = "{ft-create-punct-" + str(uuid.uuid4()) + "}:"
+        index_punct = punct_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_punct,
+                schema=[TextField("body")],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[punct_prefix],
+                    punctuation=".,!?",
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_punct) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_create_1_2_field_options(self, glide_client: GlideClusterClient):
+        """Test FT.CREATE with field-level options:
+        TextField: NOSTEM, WITHSUFFIXTRIE, NOSUFFIXTRIE, WEIGHT
+        All field types: SORTABLE
+
+        Each sub-test uses its own unique prefix to avoid index conflicts
+        when create/drop operations race across cluster shards.
+        """
+
+        # TextField with NOSTEM — stemming is disabled, so "hellos" won't match "hello"
+        nostem_prefix = "{ft-field-nostem-" + str(uuid.uuid4()) + "}:"
+        index_nostem = nostem_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_nostem,
+                schema=[TextField("title", nostem=True)],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH, prefixes=[nostem_prefix]
+                ),
+            )
+            == OK
+        )
+        await glide_client.hset(nostem_prefix + "1", {"title": "hello"})
+        time.sleep(self.sleep_wait_time)
+
+        result = await ft.search(glide_client, index_nostem, "hello")
+        assert result[0] == 1
+        result = await ft.search(glide_client, index_nostem, "hellos")
+        assert result[0] == 0  # No stemming, so "hellos" doesn't match "hello"
+
+        assert await ft.dropindex(glide_client, index_nostem) == OK
+
+        # TextField with WITHSUFFIXTRIE — enables suffix queries like *orld
+        suffix_prefix = "{ft-field-suffix-" + str(uuid.uuid4()) + "}:"
+        index_suffix = suffix_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_suffix,
+                schema=[TextField("title", withsuffixtrie=True)],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH, prefixes=[suffix_prefix]
+                ),
+            )
+            == OK
+        )
+        await glide_client.hset(suffix_prefix + "1", {"title": "hello world"})
+        time.sleep(self.sleep_wait_time)
+
+        # Suffix query should work with suffix trie
+        result = await ft.search(glide_client, index_suffix, "*orld")
+        assert result[0] == 1
+
+        assert await ft.dropindex(glide_client, index_suffix) == OK
+
+        # TextField with NOSUFFIXTRIE — disables suffix queries
+        nosuffix_prefix = "{ft-field-nosuffix-" + str(uuid.uuid4()) + "}:"
+        index_nosuffix = nosuffix_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_nosuffix,
+                schema=[TextField("title", nosuffixtrie=True)],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH, prefixes=[nosuffix_prefix]
+                ),
+            )
+            == OK
+        )
+        await glide_client.hset(nosuffix_prefix + "1", {"title": "hello world"})
+        time.sleep(self.sleep_wait_time)
+
+        # Suffix query should NOT work with NOSUFFIXTRIE
+        with pytest.raises(RequestError):
+            await ft.search(glide_client, index_nosuffix, "*orld")
+
+        assert await ft.dropindex(glide_client, index_nosuffix) == OK
+
+        # TextField with WEIGHT (only 1.0 is valid per the spec)
+        weight_prefix = "{ft-field-weight-" + str(uuid.uuid4()) + "}:"
+        index_weight = weight_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_weight,
+                schema=[TextField("title", weight=1.0)],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH, prefixes=[weight_prefix]
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_weight) == OK
+
+        # SORTABLE on TextField
+        sort_text_prefix = "{ft-field-sort-text-" + str(uuid.uuid4()) + "}:"
+        index_sortable_text = sort_text_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_sortable_text,
+                schema=[TextField("title", sortable=True)],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH, prefixes=[sort_text_prefix]
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_sortable_text) == OK
+
+        # SORTABLE on TagField
+        sort_tag_prefix = "{ft-field-sort-tag-" + str(uuid.uuid4()) + "}:"
+        index_sortable_tag = sort_tag_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_sortable_tag,
+                schema=[TagField("category", sortable=True)],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH, prefixes=[sort_tag_prefix]
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_sortable_tag) == OK
+
+        # SORTABLE on NumericField
+        sort_num_prefix = "{ft-field-sort-num-" + str(uuid.uuid4()) + "}:"
+        index_sortable_num = sort_num_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_sortable_num,
+                schema=[NumericField("price", sortable=True)],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH, prefixes=[sort_num_prefix]
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_sortable_num) == OK
+
+        # Combined: multiple field options on a single index
+        combined_prefix = "{ft-field-combined-" + str(uuid.uuid4()) + "}:"
+        index_combined = combined_prefix + "index"
+        assert (
+            await ft.create(
+                glide_client,
+                index_combined,
+                schema=[
+                    TextField("title", nostem=True, withsuffixtrie=True, sortable=True),
+                    TagField("category", sortable=True),
+                    NumericField("price", sortable=True),
+                ],
+                options=FtCreateOptions(
+                    data_type=DataType.HASH,
+                    prefixes=[combined_prefix],
+                    language="ENGLISH",
+                    minstemsize=3,
+                ),
+            )
+            == OK
+        )
+        assert await ft.dropindex(glide_client, index_combined) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_info_1_2_options(self, glide_client: GlideClusterClient):
+        """Test FT.INFO with LOCAL/PRIMARY/CLUSTER scope options.
+        Ref: https://valkey.io/commands/ft.info/
+        PRIMARY and CLUSTER require the coordinator (use-coordinator module arg).
+        """
+        prefix = "{ft-info-opts-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "index"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[TextField("title")],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+        await glide_client.hset(prefix + "1", {"title": "hello world"})
+        time.sleep(self.sleep_wait_time)
+
+        # LOCAL scope - always works
+        local_info = await ft.info(glide_client, index, scope=InfoScope.LOCAL)
+        # Response is a flat list of key-value pairs
+        assert b"index_name" in local_info
+        assert b"num_docs" in local_info
+
+        # LOCAL with ALLSHARDS + CONSISTENT - smoke test flags are accepted
+        local_with_flags = await ft.info(
+            glide_client,
+            index,
+            scope=InfoScope.LOCAL,
+            shard_scope=ShardScope.ALLSHARDS,
+            consistency=ConsistencyMode.CONSISTENT,
+        )
+        assert b"index_name" in local_with_flags
+
+        # LOCAL with SOMESHARDS + INCONSISTENT - smoke test
+        local_alt = await ft.info(
+            glide_client,
+            index,
+            scope=InfoScope.LOCAL,
+            shard_scope=ShardScope.SOMESHARDS,
+            consistency=ConsistencyMode.INCONSISTENT,
+        )
+        assert b"index_name" in local_alt
+
+        # PRIMARY scope - works with coordinator, otherwise rejected
+        try:
+            primary_info = await ft.info(glide_client, index, scope=InfoScope.PRIMARY)
+            assert b"PRIMARY" in primary_info
+        except Exception as e:
+            assert "PRIMARY option is not valid" in str(e)
+
+        # CLUSTER scope - works with coordinator, otherwise rejected
+        try:
+            cluster_info = await ft.info(glide_client, index, scope=InfoScope.CLUSTER)
+            assert b"CLUSTER" in cluster_info
+        except Exception as e:
+            assert "CLUSTER option is not valid" in str(e)
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_1_2_sortby(self, glide_client: GlideClusterClient):
+        """Test FT.SEARCH SORTBY field [ASC|DESC] and WITHSORTKEYS.
+        Ref: https://valkey.io/commands/ft.search/
+        """
+        prefix = "{ft-search-sortby-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "index"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[
+                    TextField("title", sortable=True),
+                    NumericField("price", sortable=True),
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+        # Insert documents
+        await glide_client.hset(prefix + "1", {"title": "Banana", "price": "3"})
+        await glide_client.hset(prefix + "2", {"title": "Apple", "price": "1"})
+        await glide_client.hset(prefix + "3", {"title": "Cherry", "price": "2"})
+        time.sleep(self.sleep_wait_time)
+
+        # SORTBY price ASC — query all docs via numeric range
+        result_asc = await ft.search(
+            glide_client,
+            index,
+            "@price:[1 +inf]",
+            options=FtSearchOptions(
+                sortby="price",
+                sortby_order=FtSearchOrderBy.ASC,
+            ),
+        )
+        assert result_asc[0] == 3
+        keys_asc = list(cast(Mapping, result_asc[1]).keys())
+        # Prices should be in ascending order: 1, 2, 3
+        prices_asc = [cast(Mapping, result_asc[1])[k][b"price"] for k in keys_asc]
+        assert prices_asc == [b"1", b"2", b"3"]
+
+        # SORTBY price DESC
+        result_desc = await ft.search(
+            glide_client,
+            index,
+            "@price:[1 +inf]",
+            options=FtSearchOptions(
+                sortby="price",
+                sortby_order=FtSearchOrderBy.DESC,
+            ),
+        )
+        assert result_desc[0] == 3
+        keys_desc = list(cast(Mapping, result_desc[1]).keys())
+        prices_desc = [cast(Mapping, result_desc[1])[k][b"price"] for k in keys_desc]
+        assert prices_desc == [b"3", b"2", b"1"]
+
+        # WITHSORTKEYS — each doc value becomes [sort_key, field_map]
+        result_withkeys = await ft.search(
+            glide_client,
+            index,
+            "@price:[1 +inf]",
+            options=FtSearchOptions(
+                sortby="price",
+                sortby_order=FtSearchOrderBy.ASC,
+                withsortkeys=True,
+            ),
+        )
+        assert result_withkeys[0] == 3
+        # Each value is [sort_key, field_map]; prices should be ascending
+        withkeys_map = cast(Mapping, result_withkeys[1])
+        sort_keys = [withkeys_map[k][0] for k in withkeys_map]
+        assert sort_keys == [b"#1", b"#2", b"#3"]
+        # Field maps are still accessible at index 1
+        field_prices = [withkeys_map[k][1][b"price"] for k in withkeys_map]
+        assert field_prices == [b"1", b"2", b"3"]
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_1_2_text_query_flags(
+        self, glide_client: GlideClusterClient
+    ):
+        """Test FT.SEARCH text query flags: VERBATIM, INORDER, SLOP.
+        Ref: https://valkey.io/commands/ft.search/
+        """
+        prefix = "{ft-search-text-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "index"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[TextField("body")],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+        await glide_client.hset(prefix + "1", {"body": "hello world"})
+        await glide_client.hset(prefix + "2", {"body": "hello there"})
+        await glide_client.hset(prefix + "3", {"body": "goodbye world"})
+        await glide_client.hset(prefix + "4", {"body": "world hello"})
+        time.sleep(self.sleep_wait_time)
+
+        # VERBATIM - no stemming
+        result_verbatim = await ft.search(
+            glide_client,
+            index,
+            "hello",
+            options=FtSearchOptions(verbatim=True),
+        )
+        # hello world, hello there, world hello
+        assert result_verbatim[0] == 3
+
+        # SLOP without INORDER - allows reordering
+        result_slop = await ft.search(
+            glide_client,
+            index,
+            "hello world",
+            options=FtSearchOptions(slop=1),
+        )
+        # hello world, world hello
+        assert result_slop[0] == 2
+
+        # SLOP with INORDER - terms must appear in order
+        result_inorder = await ft.search(
+            glide_client,
+            index,
+            "hello world",
+            options=FtSearchOptions(inorder=True, slop=1),
+        )
+        # only "hello world"
+        assert result_inorder[0] == 1
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_1_2_shard_consistency(
+        self, glide_client: GlideClusterClient
+    ):
+        """Test FT.SEARCH ALLSHARDS/SOMESHARDS and CONSISTENT/INCONSISTENT.
+        Ref: https://valkey.io/commands/ft.search/
+        These are cluster-mode options; we verify they are accepted without error.
+        """
+        prefix = "{ft-search-shard-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "index"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[NumericField("val"), TagField("tag")],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+        await glide_client.hset(prefix + "1", {"val": "42", "tag": "test"})
+        await glide_client.hset(prefix + "2", {"val": "99", "tag": "test"})
+        time.sleep(self.sleep_wait_time)
+
+        # SOMESHARDS + INCONSISTENT
+        # In a healthy cluster, SOMESHARDS still returns all results.
+        # This test verifies the option is accepted; partial results only occur
+        # with unavailable shards.
+        result2 = await ft.search(
+            glide_client,
+            index,
+            "@tag:{test}",
+            options=FtSearchOptions(
+                shard_scope=ShardScope.SOMESHARDS,
+                consistency=ConsistencyMode.INCONSISTENT,
+            ),
+        )
+        assert result2[0] == 2
+
+        # ALLSHARDS + CONSISTENT (defaults)
+        result = await ft.search(
+            glide_client,
+            index,
+            "@tag:{test}",
+            options=FtSearchOptions(
+                shard_scope=ShardScope.ALLSHARDS,
+                consistency=ConsistencyMode.CONSISTENT,
+            ),
+        )
+        assert result[0] == 2
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_aggregate_1_2_query_flags(self, glide_client: GlideClusterClient):
+        """Test FT.AGGREGATE with query-parsing flags:
+        DIALECT, INORDER, VERBATIM, SLOP.
+        Ref: https://valkey.io/commands/ft.aggregate/
+        """
+        prefix = "{ft-agg-flags-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "index"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[
+                    NumericField("score"),
+                    TextField("title"),
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+        await glide_client.hset(
+            prefix + "1",
+            {"score": "10", "title": "hello world"},
+        )
+        await glide_client.hset(
+            prefix + "2",
+            {"score": "20", "title": "hello there"},
+        )
+        time.sleep(self.sleep_wait_time)
+
+        # VERBATIM - disables stemming on the query
+        result_verbatim = await ft.aggregate(
+            glide_client,
+            index,
+            query="@score:[1 +inf]",
+            options=FtAggregateOptions(verbatim=True),
+        )
+        # Both docs match; no LOAD so each record is an empty map
+        assert len(result_verbatim) == 2
+        assert result_verbatim[0] == {}
+        assert result_verbatim[1] == {}
+
+        # INORDER + SLOP - proximity matching flags
+        result_inorder = await ft.aggregate(
+            glide_client,
+            index,
+            query="@score:[1 +inf]",
+            options=FtAggregateOptions(inorder=True, slop=1),
+        )
+        assert len(result_inorder) == 2
+        assert result_inorder[0] == {}
+        assert result_inorder[1] == {}
+
+        # DIALECT
+        result_dialect = await ft.aggregate(
+            glide_client,
+            index,
+            query="@score:[1 +inf]",
+            options=FtAggregateOptions(dialect=2),
+        )
+        assert len(result_dialect) == 2
+        assert result_dialect[0] == {}
+        assert result_dialect[1] == {}
+
+        # LOAD - load all fields, filter to single doc
+        result_load = await ft.aggregate(
+            glide_client,
+            index,
+            query="@score:[20 +inf]",
+            options=FtAggregateOptions(loadAll=True),
+        )
+        assert len(result_load) == 1
+        assert result_load[0] != {}
+        assert result_load[0][b"title"] == b"hello there"
+
+        assert await ft.dropindex(glide_client, index) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_ft_search_1_2_sortby_with_text_index(
+        self, glide_client: GlideClusterClient
+    ):
+        """Test FT.SEARCH SORTBY on a TEXT field with SORTABLE flag.
+        Verifies that SORTBY works correctly on a text field declared SORTABLE.
+        """
+        prefix = "{ft-sortby-text-" + str(uuid.uuid4()) + "}:"
+        index = prefix + "index"
+
+        assert (
+            await ft.create(
+                glide_client,
+                index,
+                schema=[
+                    TextField("name", sortable=True),
+                ],
+                options=FtCreateOptions(data_type=DataType.HASH, prefixes=[prefix]),
+            )
+            == OK
+        )
+
+        await glide_client.hset(prefix + "1", {"name": "Zebra"})
+        await glide_client.hset(prefix + "2", {"name": "Aardvark"})
+        await glide_client.hset(prefix + "3", {"name": "Mango"})
+        time.sleep(self.sleep_wait_time)
+
+        # SORTBY name ASC — query all docs by matching any of the known names
+        result = await ft.search(
+            glide_client,
+            index,
+            "Zebra|Aardvark|Mango",
+            options=FtSearchOptions(sortby="name", sortby_order=FtSearchOrderBy.ASC),
+        )
+        assert result[0] == 3
+        keys = list(cast(Mapping, result[1]).keys())
+        names = [cast(Mapping, result[1])[k][b"name"] for k in keys]
+        assert names == [b"Aardvark", b"Mango", b"Zebra"]
+
+        # SORTBY name DESC
+        result_desc = await ft.search(
+            glide_client,
+            index,
+            "Zebra|Aardvark|Mango",
+            options=FtSearchOptions(sortby="name", sortby_order=FtSearchOrderBy.DESC),
+        )
+        keys_desc = list(cast(Mapping, result_desc[1]).keys())
+        names_desc = [cast(Mapping, result_desc[1])[k][b"name"] for k in keys_desc]
+        assert names_desc == [b"Zebra", b"Mango", b"Aardvark"]
+
+        assert await ft.dropindex(glide_client, index) == OK

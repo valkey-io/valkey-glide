@@ -173,6 +173,24 @@ Simplified test suite skips few time consuming tests and runs faster:
 npm test-minimum
 ```
 
+#### IAM Authentication Tests
+
+To run [IAM authentication tests](tests/AuthTest.test.ts) locally with mock credentials:
+
+```bash
+# Run from the `node/` directory
+AWS_ACCESS_KEY_ID=test_access_key \
+AWS_SECRET_ACCESS_KEY=test_secret_key \
+AWS_SESSION_TOKEN=test_session_token \
+npm test -- --testNamePattern="iam"
+```
+
+If any of these environment variables are not set, IAM authentication tests will be skipped.
+
+**Note:** The credential values shown above (`test_access_key`, etc.) are arbitrary placeholder strings. The AWS SDK uses them to generate an authentication token, but the local test server doesn't validate the token. These tests verify that the IAM authentication flow works correctly (token generation, connection establishment, and token refresh), not that the credentials are valid.
+
+#### Running Specific Tests
+
 To execute a specific test, use the [`testNamePattern`](https://jestjs.io/docs/cli#--testnamepatternregex) option with `test-dbg` script. For example:
 
 ```bash
@@ -199,6 +217,29 @@ npm run test-modules -- --cluster-endpoints=<address>:<port>
 ```
 
 Note: these tests don't run with standalone server as of now.
+
+### DNS Tests
+
+To run [DNS tests](tests/Dns.test.ts) locally:
+
+1. Add the following entries to your hosts file:
+    - Linux/macOS: `/etc/hosts`
+    - Windows: `C:\Windows\System32\drivers\etc\hosts`
+
+    ```text
+    127.0.0.1 valkey.glide.test.tls.com
+    127.0.0.1 valkey.glide.test.no_tls.com
+    ::1 valkey.glide.test.tls.com
+    ::1 valkey.glide.test.no_tls.com
+    ```
+
+2. Set the environment variable:
+
+    ```bash
+    export VALKEY_GLIDE_DNS_TESTS_ENABLED=1
+    ```
+
+If the environment variable is not set, DNS tests will be skipped.
 
 ### Package Manager and TypeScript Types Testing
 

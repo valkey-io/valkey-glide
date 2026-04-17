@@ -87,6 +87,11 @@ impl Pipeline {
         self
     }
 
+    /// Returns a slice of the pipeline's commands.
+    pub fn commands(&self) -> &[Arc<Cmd>] {
+        &self.commands
+    }
+
     /// Returns the encoded pipeline commands.
     pub fn get_packed_pipeline(&self) -> Vec<u8> {
         encode_pipeline(&self.commands, self.transaction_mode)

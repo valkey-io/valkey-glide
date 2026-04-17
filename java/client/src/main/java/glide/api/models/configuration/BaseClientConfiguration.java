@@ -134,6 +134,18 @@ public abstract class BaseClientConfiguration {
      */
     @Builder.Default private final boolean lazyConnect = false;
 
+    /**
+     * Configuration for automatic transparent compression of values.
+     *
+     * <p>When set, values sent to the server will be compressed using the specified backend if they
+     * meet the minimum size threshold. Compressed values are automatically decompressed on retrieval.
+     *
+     * <p><b>Note:</b> This feature is experimental. Currently only applies to GET and SET commands.
+     *
+     * @see CompressionConfiguration
+     */
+    private final CompressionConfiguration compressionConfiguration;
+
     public List<NodeAddress> getAddresses() {
         return Collections.unmodifiableList(new ArrayList<>(addresses));
     }

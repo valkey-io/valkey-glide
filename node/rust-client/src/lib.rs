@@ -345,7 +345,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             // because `Record` does not support `GlideString` as a key.
             // The result is in format `GlideRecord<T>`.
             let mut js_array = js_env.create_array_with_length(map.len())?;
-            for (idx, (key, value)) in (0_u32..).zip(map.into_iter()) {
+            for (idx, (key, value)) in (0_u32..).zip(map) {
                 let mut obj = js_env.create_object()?;
                 obj.set_named_property("key", resp_value_to_js(key, js_env, string_decoder)?)?;
                 obj.set_named_property("value", resp_value_to_js(value, js_env, string_decoder)?)?;
@@ -725,6 +725,9 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
     let total_bytes_compressed = Telemetry::total_bytes_compressed().to_string();
     let total_bytes_decompressed = Telemetry::total_bytes_decompressed().to_string();
     let compression_skipped_count = Telemetry::compression_skipped_count().to_string();
+    let subscription_out_of_sync_count = Telemetry::subscription_out_of_sync_count().to_string();
+    let subscription_last_sync_timestamp =
+        Telemetry::subscription_last_sync_timestamp().to_string();
 
     let mut stats: JsObject = env.create_object()?;
     stats.set_named_property("total_connections", total_connections)?;
@@ -735,6 +738,14 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
     stats.set_named_property("total_bytes_compressed", total_bytes_compressed)?;
     stats.set_named_property("total_bytes_decompressed", total_bytes_decompressed)?;
     stats.set_named_property("compression_skipped_count", compression_skipped_count)?;
+    stats.set_named_property(
+        "subscription_out_of_sync_count",
+        subscription_out_of_sync_count,
+    )?;
+    stats.set_named_property(
+        "subscription_last_sync_timestamp",
+        subscription_last_sync_timestamp,
+    )?;
 
     Ok(stats)
 }

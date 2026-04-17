@@ -379,6 +379,43 @@ where
         self.connection_for_address(address).is_some() && self.slot_map.is_primary(address)
     }
 
+    /// Round-robin across all nodes (primary + replicas) for the AllNodes strategy.
+    fn round_robin_read_from_all_nodes(
+        &self,
+        slot_map_value: &SlotMapValue,
+    ) -> Option<ConnectionAndAddress<Connection>> {
+        let addrs = &slot_map_value.addrs;
+        let total_nodes = addrs.replicas().len() + 1; // primary + replicas
+        let initial_index = slot_map_value.last_used_replica.load(Ordering::Relaxed);
+        let mut check_count = 0;
+
+        loop {
+            check_count += 1;
+
+            // Looped through all nodes, no connected node was found.
+            if check_count > total_nodes {
+                return None;
+            }
+
+            let index = (initial_index + check_count) % total_nodes;
+            let address = if index == 0 {
+                addrs.primary()
+            } else {
+                addrs.replicas()[index - 1].clone()
+            };
+
+            if let Some(connection) = self.connection_for_address(address.as_str()) {
+                let _ = slot_map_value.last_used_replica.compare_exchange_weak(
+                    initial_index,
+                    index,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                );
+                return Some(connection);
+            }
+        }
+    }
+
     fn round_robin_read_from_replica(
         &self,
         slot_map_value: &SlotMapValue,
@@ -498,6 +535,9 @@ where
                 }
                 ReadFromReplicaStrategy::RoundRobin => {
                     self.round_robin_read_from_replica(slot_map_value)
+                }
+                ReadFromReplicaStrategy::AllNodes => {
+                    self.round_robin_read_from_all_nodes(slot_map_value)
                 }
                 ReadFromReplicaStrategy::AZAffinity(az) => self
                     .round_robin_read_from_replica_with_az_awareness(
@@ -1586,5 +1626,92 @@ mod tests {
         current_addresses.sort();
         new_addresses.sort();
         assert_eq!(current_addresses, new_addresses);
+    }
+
+    #[test]
+    fn get_connection_for_all_nodes_strategy_round_robins_across_primary_and_replicas() {
+        let container = create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
+
+        // Slot 2001 has primary3 (id=3) and replica3-1 (id=31), replica3-2 (id=32)
+        // AllNodes should round-robin across all three nodes
+        let mut addresses = Vec::new();
+        for _ in 0..6 {
+            addresses.push(
+                container
+                    .connection_for_route(&Route::new(2001, SlotAddr::ReplicaOptional))
+                    .unwrap()
+                    .1,
+            );
+        }
+
+        // Should see primary (3) and both replicas (31, 32) in the results
+        let unique_addresses: HashSet<_> = addresses.iter().collect();
+        assert_eq!(
+            unique_addresses.len(),
+            3,
+            "AllNodes should route to primary and all replicas. Got: {:?}",
+            addresses
+        );
+        assert!(
+            unique_addresses.contains(&3),
+            "AllNodes should include primary"
+        );
+        assert!(
+            unique_addresses.contains(&31),
+            "AllNodes should include replica3-1"
+        );
+        assert!(
+            unique_addresses.contains(&32),
+            "AllNodes should include replica3-2"
+        );
+    }
+
+    #[test]
+    fn get_connection_for_all_nodes_strategy_falls_back_to_primary_when_no_replicas() {
+        let container = create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
+
+        // Slot 500 has only primary1 (id=1), no replicas
+        // AllNodes should return primary when no replicas exist
+        assert_eq!(
+            1,
+            container
+                .connection_for_route(&Route::new(500, SlotAddr::ReplicaOptional))
+                .unwrap()
+                .1
+        );
+    }
+
+    #[test]
+    fn get_connection_for_all_nodes_strategy_with_single_replica() {
+        let container = create_container_with_strategy(ReadFromReplicaStrategy::AllNodes, false);
+
+        // Slot 1002 has primary2 (id=2) and replica2-1 (id=21)
+        // AllNodes should round-robin between primary and replica
+        let mut addresses = Vec::new();
+        for _ in 0..4 {
+            addresses.push(
+                container
+                    .connection_for_route(&Route::new(1002, SlotAddr::ReplicaOptional))
+                    .unwrap()
+                    .1,
+            );
+        }
+
+        // Should see both primary (2) and replica (21)
+        let unique_addresses: HashSet<_> = addresses.iter().collect();
+        assert_eq!(
+            unique_addresses.len(),
+            2,
+            "AllNodes should route to primary and replica. Got: {:?}",
+            addresses
+        );
+        assert!(
+            unique_addresses.contains(&2),
+            "AllNodes should include primary"
+        );
+        assert!(
+            unique_addresses.contains(&21),
+            "AllNodes should include replica"
+        );
     }
 }

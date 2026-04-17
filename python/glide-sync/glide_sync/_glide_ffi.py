@@ -89,6 +89,7 @@ class _GlideFFI:
                 struct CommandResponse* map_value;
                 struct CommandResponse* sets_value;
                 long sets_value_len;
+                void* user_data;
             } CommandResponse;
 
             typedef struct {
@@ -99,10 +100,12 @@ class _GlideFFI:
             typedef struct {
                 CommandResponse* response;
                 CommandError* command_error;
+                void* arena;
             } CommandResult;
 
             const char* get_response_type_string(int response_type);
             void free_command_response(CommandResponse* command_response_ptr);
+            void free_response_arena(void* arena_ptr);
             void free_command_result(CommandResult* command_result_ptr);
 
             CommandResult* command(
@@ -117,6 +120,20 @@ class _GlideFFI:
                 uint64_t span_ptr
             );
 
+            CommandResult* command_with_buffer(
+                const void* client_adapter_ptr,
+                uintptr_t request_id,
+                int command_type,
+                unsigned long arg_count,
+                const size_t *args,
+                const unsigned long* args_len,
+                const unsigned char* route_bytes,
+                size_t route_bytes_len,
+                uint8_t* target_buf,
+                size_t target_len,
+                uint64_t span_ptr
+            );
+
             CommandResult* invoke_script(
                 const void* client_adapter_ptr,
                 uintptr_t request_id,
@@ -128,7 +145,8 @@ class _GlideFFI:
                 const size_t* args,
                 const unsigned long* args_len,
                 const unsigned char* route_bytes,
-                size_t route_bytes_len
+                size_t route_bytes_len,
+                uint64_t span_ptr
             );
 
             CommandResult* update_connection_password(
@@ -136,6 +154,11 @@ class _GlideFFI:
                 uintptr_t request_id,
                 const char* password,
                 bool immediate_authentication
+            );
+
+            CommandResult* refresh_iam_token(
+                const void* client_adapter_ptr,
+                uintptr_t request_id
             );
 
             // ============== CLIENT MANAGEMENT ==============
@@ -164,6 +187,7 @@ class _GlideFFI:
                     struct {
                         SuccessCallback success_callback;
                         FailureCallback failure_callback;
+                        bool allow_stack_response;
                     } async_client;
                 };
             } ClientType;

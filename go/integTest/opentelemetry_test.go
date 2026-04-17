@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -548,7 +549,6 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientBatchSpan() {
 
 		// Verify batch span names
 		assert.Contains(suite.T(), spans.SpanNames, "Batch", "Should find Batch span in exported spans")
-		assert.Contains(suite.T(), spans.SpanNames, "send_batch", "Should find send_batch span in exported spans")
 
 		// Force garbage collection again
 		runtime.GC()
@@ -598,16 +598,16 @@ func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientSendCommandSpan() {
 		spans, err := readAndParseSpanFile(validEndpointTraces)
 		require.NoError(suite.T(), err)
 
-		// Count send_command spans
-		sendCommandSpanCount := 0
+		// Count SET spans
+		setSpanCount := 0
 		for _, name := range spans.SpanNames {
-			if name == "send_command" {
-				sendCommandSpanCount++
+			if name == "SET" {
+				setSpanCount++
 			}
 		}
 
-		// Verify we have exactly 10 send_command spans
-		assert.Equal(suite.T(), 10, sendCommandSpanCount, "Should have exactly 10 send_command spans")
+		// Verify we have exactly 10 SET spans
+		assert.Equal(suite.T(), 10, setSpanCount, "Should have exactly 10 SET spans")
 
 		// Force garbage collection again
 		runtime.GC()
@@ -810,7 +810,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment() {
 		require.NoError(suite.T(), err)
 
 		// Verify we have the expected span names
-		expectedSpans := []string{"SET", "GET", "send_batch"}
+		expectedSpans := []string{"SET", "GET"}
 		for _, expectedSpan := range expectedSpans {
 			assert.Contains(suite.T(), spans.SpanNames, expectedSpan,
 				"Should find %s span in exported spans", expectedSpan)
@@ -902,7 +902,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_BatchOperat
 		require.NoError(suite.T(), err)
 
 		// Verify we have the expected span names
-		expectedSpans := []string{"Batch", "GET", "send_batch", "send_command"}
+		expectedSpans := []string{"Batch", "GET"}
 		for _, expectedSpan := range expectedSpans {
 			assert.Contains(suite.T(), spans.SpanNames, expectedSpan,
 				"Should find %s span in exported spans", expectedSpan)
@@ -1018,7 +1018,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_MixedScenar
 		require.NoError(suite.T(), err)
 
 		// Verify we have the expected command spans (child spans created under parents)
-		expectedSpans := []string{"SET", "GET", "Batch", "send_command", "send_batch"}
+		expectedSpans := []string{"SET", "GET", "Batch"}
 		for _, expectedSpan := range expectedSpans {
 			assert.Contains(suite.T(), spans.SpanNames, expectedSpan,
 				"Should find %s span in exported spans", expectedSpan)
@@ -1044,7 +1044,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_MixedScenar
 		assert.GreaterOrEqual(suite.T(), batchSpanCount, 1, "Should have at least 1 batch span")
 
 		// Verify span hierarchy for both parent operations
-		// Note: Only verify direct children, not grandchildren like send_batch
+		// Note: Only verify direct children
 		suite.verifySpanHierarchy(spans.Spans, "operation-1", []string{"SET", "GET"})
 		suite.verifySpanHierarchy(spans.Spans, "operation-2", []string{"SET", "GET"})
 
@@ -1113,7 +1113,7 @@ func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_SpanHierarc
 		require.NoError(suite.T(), err)
 
 		// Verify we have the expected command span names (child spans created under parents)
-		expectedSpans := []string{"SET", "GET", "send_command", "send_batch"}
+		expectedSpans := []string{"SET", "GET"}
 		for _, expectedSpan := range expectedSpans {
 			assert.Contains(suite.T(), spans.SpanNames, expectedSpan,
 				"Should find %s span in exported spans", expectedSpan)
@@ -1278,5 +1278,37 @@ func (suite *GlideTestSuite) TestOpenTelemetry_SpanContextAttachment_ErrorHandli
 
 		// End parent span after operations complete
 		otelInstance.EndSpan(parentSpan)
+	})
+}
+
+func (suite *GlideTestSuite) TestOpenTelemetry_ClusterClientScriptInvocationSpan() {
+	if !*otelTest {
+		suite.T().Skip("OpenTelemetry tests are disabled")
+	}
+	suite.runWithSpecificClients(ClientTypeFlag(ClusterFlag), func(client interfaces.BaseClientCommands) {
+		// Wait for any existing spans to be flushed
+		time.Sleep(500 * time.Millisecond)
+
+		// Remove any existing span file
+		if _, err := os.Stat(validEndpointTraces); err == nil {
+			err = os.Remove(validEndpointTraces)
+			require.NoError(suite.T(), err)
+		}
+
+		script := options.NewScript("return 'Hello'")
+		defer script.Close()
+		result, err := client.InvokeScript(context.Background(), *script)
+		require.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "Hello", result)
+
+		// Wait for spans to be flushed
+		time.Sleep(5 * time.Second)
+
+		// Read and verify spans
+		spans, err := readAndParseSpanFile(validEndpointTraces)
+		require.NoError(suite.T(), err)
+
+		// Check for expected EVALSHA span
+		assert.Contains(suite.T(), spans.SpanNames, "EVALSHA", "Should find EVALSHA span in exported spans")
 	})
 }

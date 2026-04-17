@@ -3,12 +3,12 @@
 //! DNS resolution tests.
 //! See [DNS Tests](../README.md#dns-tests) for setup instructions.
 
-mod test_constants;
+mod constants;
 mod utilities;
 
 #[cfg(test)]
 mod dns_tests {
-    use crate::test_constants::{HOSTNAME_NO_TLS, HOSTNAME_TLS};
+    use crate::constants::{HOSTNAME_NO_TLS, HOSTNAME_TLS};
     use crate::utilities::{
         cluster::{RedisCluster, SHORT_CLUSTER_TEST_TIMEOUT},
         *,

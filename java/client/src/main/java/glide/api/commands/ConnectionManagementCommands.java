@@ -82,7 +82,7 @@ public interface ConnectionManagementCommands {
     /**
      * Echoes the provided <code>message</code> back.
      *
-     * @see <a href="https://valkey.io/commands/echo/>valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/echo/">valkey.io</a> for details.
      * @param message The message to be echoed back.
      * @return The provided <code>message</code>.
      * @example
@@ -96,7 +96,7 @@ public interface ConnectionManagementCommands {
     /**
      * Echoes the provided <code>message</code> back.
      *
-     * @see <a href="https://valkey.io/commands/echo/>valkey.io</a> for details.
+     * @see <a href="https://valkey.io/commands/echo/">valkey.io</a> for details.
      * @param message The message to be echoed back.
      * @return The provided <code>message</code>.
      * @example

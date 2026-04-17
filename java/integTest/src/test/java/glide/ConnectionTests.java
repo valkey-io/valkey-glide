@@ -22,12 +22,16 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.*;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -430,6 +434,98 @@ public class ConnectionTests {
         assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
 
         azTestClient.close();
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_all_nodes_routes_to_primary_and_replicas() {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+        // Windows integration tests has replicas set to zero due to resource limitations
+        // on Github Action using Windows runner with WSL
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
+
+        // Use more calls to ensure statistical significance for round-robin distribution
+        int nGetCalls = 60;
+
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .readFrom(ReadFrom.ALL_NODES)
+                                        .requestTimeout(2000)
+                                        .build())
+                        .get()) {
+            assertEquals(client.configResetStat(ALL_NODES).get(), OK);
+
+            // Execute GET commands for key "foo" asynchronously
+            List<CompletableFuture<String>> futures = new ArrayList<>();
+            for (int i = 0; i < nGetCalls; i++) {
+                futures.add(client.get("foo"));
+            }
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
+
+            ClusterValue<String> infoResult =
+                    client.info(new InfoOptions.Section[] {InfoOptions.Section.ALL}, ALL_NODES).get();
+            Map<String, String> infoData = infoResult.getMultiValue();
+
+            // Get replica count for the slot that handles key "foo"
+            ClusterValue<Object> clusterInfo =
+                    client
+                            .customCommand(
+                                    new String[] {"INFO", "REPLICATION"},
+                                    new RequestRoutingConfiguration.SlotKeyRoute("foo", PRIMARY))
+                            .get();
+            long nReplicas =
+                    Long.parseLong(
+                            Stream.of(((String) clusterInfo.getSingleValue()).split("\\R"))
+                                    .map(line -> line.split(":", 2))
+                                    .filter(parts -> parts.length == 2 && parts[0].trim().equals("connected_slaves"))
+                                    .map(parts -> parts[1].trim())
+                                    .findFirst()
+                                    .get());
+
+            // Count nodes that received GET calls
+            long nodesWithCalls =
+                    infoData.values().stream().filter(value -> value.contains("cmdstat_get:calls=")).count();
+
+            // Verify that primary + replicas for this slot received calls (slot-based routing)
+            assertEquals(
+                    nReplicas + 1,
+                    nodesWithCalls,
+                    "ALL_NODES should route to primary and all replicas for the slot. Expected "
+                            + (nReplicas + 1)
+                            + " nodes, got "
+                            + nodesWithCalls);
+
+            // Verify both primary and replicas received calls
+            long primaryCalls =
+                    infoData.values().stream()
+                            .filter(
+                                    value -> value.contains("cmdstat_get:calls=") && value.contains("role:master"))
+                            .count();
+            long replicaCalls =
+                    infoData.values().stream()
+                            .filter(value -> value.contains("cmdstat_get:calls=") && value.contains("role:slave"))
+                            .count();
+
+            assertTrue(primaryCalls > 0, "Primary should receive calls with ALL_NODES strategy");
+            assertTrue(replicaCalls > 0, "Replicas should receive calls with ALL_NODES strategy");
+
+            // Verify total GET calls
+            long totalGetCalls =
+                    infoData.values().stream()
+                            .filter(value -> value.contains("cmdstat_get:calls="))
+                            .mapToInt(
+                                    value -> {
+                                        int startIndex =
+                                                value.indexOf("cmdstat_get:calls=") + "cmdstat_get:calls=".length();
+                                        int endIndex = value.indexOf(",", startIndex);
+                                        return Integer.parseInt(value.substring(startIndex, endIndex));
+                                    })
+                            .sum();
+            assertEquals(nGetCalls, totalGetCalls, "Total GET calls mismatch");
+        }
     }
 
     @SneakyThrows

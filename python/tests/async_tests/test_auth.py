@@ -4,20 +4,58 @@
 import anyio
 import pytest
 from glide.glide_client import TGlideClient
-from glide_shared.config import ProtocolVersion
+from glide_shared.config import (
+    IamAuthConfig,
+    ProtocolVersion,
+    ServerCredentials,
+    ServiceType,
+)
 from glide_shared.constants import OK
 from glide_shared.exceptions import RequestError
 
+from tests.async_tests.conftest import create_client
+from tests.constants import (
+    IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
+    IAM_TEST_CLUSTER_NAME,
+    IAM_TEST_REGION_US_EAST_1,
+    IAM_USERNAME,
+)
 from tests.utils.utils import (
     NEW_PASSWORD,
     USERNAME,
     WRONG_PASSWORD,
+    assert_connected,
     auth_client,
     config_set_new_password,
     delete_acl_username_and_password,
     kill_connections,
     set_new_acl_username_with_password,
 )
+
+
+async def create_iam_client(
+    request,
+    cluster_mode: bool,
+    protocol: ProtocolVersion,
+    refresh_interval_seconds: int = IAM_DEFAULT_REFRESH_INTERVAL_SECONDS,
+):
+    """Helper to create a client with IAM authentication."""
+    iam_config = IamAuthConfig(
+        cluster_name=IAM_TEST_CLUSTER_NAME,
+        service=ServiceType.ELASTICACHE,
+        region=IAM_TEST_REGION_US_EAST_1,
+        refresh_interval_seconds=refresh_interval_seconds,
+    )
+
+    credentials = ServerCredentials(username=IAM_USERNAME, iam_config=iam_config)
+
+    # Note: use_tls is set from request which respects the --tls flag
+    return await create_client(
+        request=request,
+        cluster_mode=cluster_mode,
+        protocol=protocol,
+        credentials=credentials,
+    )
 
 
 @pytest.mark.anyio
@@ -258,13 +296,31 @@ class TestAuthCommands:
         # This command right after disconnection requires the acl_glide_client to have a request timeout of 2000 ms
         # for full matrix tests to pass (otherwise failing on linux-aarch64 architecture).
         # TODO: We do not fully understand why such a long timeout is required.
-        result = await acl_glide_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=True
-        )
-        assert result == OK
+        # Retry during reconnection - non-blocking reconnect may still be in progress
+        max_retries = 20
+        for i in range(max_retries):
+            try:
+                result = await acl_glide_client.update_connection_password(
+                    NEW_PASSWORD, immediate_auth=True
+                )
+                assert result == OK
+                break
+            except Exception as e:
+                if "AllConnectionsUnavailable" in str(e) and i < max_retries - 1:
+                    await anyio.sleep(0.5)
+                    continue
+                raise
 
-        # Verify client is authenticated
-        assert await acl_glide_client.set("test_key", "test_value") == OK
+        # Verify client is authenticated - retry during reconnection
+        for i in range(max_retries):
+            try:
+                assert await acl_glide_client.set("test_key", "test_value") == OK
+                break
+            except Exception as e:
+                if "AllConnectionsUnavailable" in str(e) and i < max_retries - 1:
+                    await anyio.sleep(0.5)
+                    continue
+                raise
         value = await acl_glide_client.get("test_key")
         assert value == b"test_value"
 
@@ -330,3 +386,60 @@ class TestAuthCommands:
             await acl_glide_client.update_connection_password(None, immediate_auth=True)
         with pytest.raises(RequestError):
             await acl_glide_client.update_connection_password("", immediate_auth=True)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_iam_authentication_with_mock_credentials(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """
+        Test IAM authentication using mock AWS credentials.
+
+        This test verifies:
+        1. Client can connect using IAM authentication with mock credentials
+        2. Basic operations work after IAM authentication
+        3. Operations continue to work after token refresh
+        """
+        client = await create_iam_client(request, cluster_mode, protocol)
+
+        # Verify connection works
+        await assert_connected(client)
+
+        # Test basic operations
+        await client.set("iam_test_key", "iam_test_value")
+        value = await client.get("iam_test_key")
+        assert value == b"iam_test_value"
+
+        # Test manual token refresh
+        await client.refresh_iam_token()
+
+        # Verify operations still work after token refresh
+        await client.set("iam_test_key2", "iam_test_value2")
+        value2 = await client.get("iam_test_key2")
+        assert value2 == b"iam_test_value2"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_iam_authentication_automatic_token_refresh(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """
+        Test automatic IAM token refresh.
+
+        This test verifies that the client automatically refreshes the IAM token
+        at the configured interval and continues to work correctly.
+        """
+        client = await create_iam_client(
+            request, cluster_mode, protocol, refresh_interval_seconds=2
+        )
+
+        # Verify initial connection
+        await assert_connected(client)
+
+        # Wait for automatic token refresh to occur
+        await anyio.sleep(3)
+
+        # Verify client still works after automatic refresh
+        await client.set("iam_auto_refresh_key", "iam_auto_refresh_value")
+        value = await client.get("iam_auto_refresh_key")
+        assert value == b"iam_auto_refresh_value"

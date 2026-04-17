@@ -24,6 +24,9 @@ enum ReadFrom {
     PreferReplica {
         latest_read_replica_index: Arc<AtomicUsize>,
     },
+    AllNodes {
+        latest_read_node_index: Arc<AtomicUsize>,
+    },
     AZAffinity {
         client_az: String,
         last_read_replica_index: Arc<AtomicUsize>,
@@ -224,7 +227,9 @@ impl StandaloneClient {
         let addresses = connection_request.addresses.clone();
         let read_from_option = connection_request.read_from.clone();
 
-        let mut stream = stream::iter(addresses.into_iter())
+        let iam_token_handle = iam_token_manager.map(|m| m.get_token_handle());
+
+        let mut stream = stream::iter(addresses)
             .map(move |address| {
                 let info = valkey_connection_info.clone();
                 let retry = retry_strategy;
@@ -236,6 +241,7 @@ impl StandaloneClient {
                 let nodelay = tcp_nodelay;
                 let sync = pubsub_synchronizer.clone();
                 let skip_replication = read_only;
+                let iam_handle = iam_token_handle.clone();
                 async move {
                     get_connection_and_replication_info(
                         &address,
@@ -249,6 +255,7 @@ impl StandaloneClient {
                         nodelay,
                         &sync,
                         skip_replication,
+                        iam_handle,
                     )
                     .await
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
@@ -398,6 +405,35 @@ impl StandaloneClient {
         }
     }
 
+    fn round_robin_read_from_all_nodes(
+        &self,
+        latest_read_node_index: &Arc<AtomicUsize>,
+    ) -> &ReconnectingConnection {
+        let initial_index = latest_read_node_index.load(Ordering::Relaxed);
+        let mut check_count = 0;
+        loop {
+            check_count += 1;
+
+            // Looped through all nodes, no connected node was found.
+            if check_count > self.inner.nodes.len() {
+                return self.get_primary_connection();
+            }
+            let index = (initial_index + check_count) % self.inner.nodes.len();
+            let Some(connection) = self.inner.nodes.get(index) else {
+                continue;
+            };
+            if connection.is_connected() {
+                let _ = latest_read_node_index.compare_exchange_weak(
+                    initial_index,
+                    index,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                );
+                return connection;
+            }
+        }
+    }
+
     async fn round_robin_read_from_replica_az_awareness(
         &self,
         latest_read_replica_index: &Arc<AtomicUsize>,
@@ -494,6 +530,9 @@ impl StandaloneClient {
             ReadFrom::PreferReplica {
                 latest_read_replica_index,
             } => self.round_robin_read_from_replica(latest_read_replica_index),
+            ReadFrom::AllNodes {
+                latest_read_node_index,
+            } => self.round_robin_read_from_all_nodes(latest_read_node_index),
             ReadFrom::AZAffinity {
                 client_az,
                 last_read_replica_index,
@@ -831,6 +870,7 @@ async fn get_connection_and_replication_info(
     tcp_nodelay: bool,
     pubsub_synchronizer: &Option<Arc<dyn crate::pubsub::PubSubSynchronizer>>,
     skip_replication_check: bool,
+    iam_token_handle: Option<super::IAMTokenHandle>,
 ) -> Result<(ReconnectingConnection, Option<Value>), (ReconnectingConnection, RedisError)> {
     let reconnecting_connection = ReconnectingConnection::new(
         address,
@@ -843,6 +883,7 @@ async fn get_connection_and_replication_info(
         tls_params,
         tcp_nodelay,
         pubsub_synchronizer.clone(),
+        iam_token_handle,
     )
     .await?;
 
@@ -873,6 +914,9 @@ fn get_read_from(read_from: Option<super::ReadFrom>) -> ReadFrom {
         Some(super::ReadFrom::Primary) => ReadFrom::Primary,
         Some(super::ReadFrom::PreferReplica) => ReadFrom::PreferReplica {
             latest_read_replica_index: Default::default(),
+        },
+        Some(super::ReadFrom::AllNodes) => ReadFrom::AllNodes {
+            latest_read_node_index: Default::default(),
         },
         Some(super::ReadFrom::AZAffinity(az)) => ReadFrom::AZAffinity {
             client_az: az,

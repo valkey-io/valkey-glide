@@ -4,10 +4,12 @@ package integTest
 
 import (
 	"context"
+	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/valkey-io/valkey-glide/go/v2"
+	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
@@ -35,7 +37,7 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 	assert.True(suite.T(), exists, "Initial subscription should exist")
 
 	// Kill all connections
-	_, _ = client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	_, _ = client.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 	// Error expected since we killed our own connection
 
 	// Wait for reconnection and resubscription
@@ -59,8 +61,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 	_, exists = state.ActualSubscriptions[models.Exact][channel]
 	assert.True(suite.T(), exists)
 
-	// Kill connections on cluster
-	_, _ = clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections on cluster
+	_, _ = clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 
@@ -73,43 +75,71 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillExactChannels() {
 // TestResubscribeAfterConnectionKillManyChannels tests that multiple exact channel
 // subscriptions are restored after connection kill
 func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillManyChannels() {
-	ctx := context.Background()
+	clientTypes := []ClientType{StandaloneClient, ClusterClient}
 
-	// Create 10 channels
-	var channels []ChannelDefn
-	expectedChannels := make(map[string]bool)
-	for i := 0; i < 10; i++ {
-		channelName := suite.T().Name() + "_channel_" + string(rune('0'+i))
-		channels = append(channels, ChannelDefn{Channel: channelName, Mode: ExactMode})
-		expectedChannels[channelName] = true
-	}
+	for _, clientType := range clientTypes {
+		suite.T().Run(clientType.String(), func(t *testing.T) {
+			ctx := context.Background()
 
-	// Test standalone
-	receiver := suite.CreatePubSubReceiver(StandaloneClient, channels, 10, false, ConfigMethod, suite.T())
-	defer receiver.Close()
+			// Create 10 channels
+			var channels []ChannelDefn
+			expectedChannels := make(map[string]bool)
+			for i := 0; i < 10; i++ {
+				channelName := t.Name() + "_channel_" + string(rune('0'+i))
+				channels = append(channels, ChannelDefn{Channel: channelName, Mode: ExactMode})
+				expectedChannels[channelName] = true
+			}
 
-	time.Sleep(300 * time.Millisecond)
+			receiver := suite.CreatePubSubReceiver(clientType, channels, 10, false, ConfigMethod, t)
+			defer receiver.Close()
 
-	// Verify all initial subscriptions
-	client := receiver.(*glide.Client)
-	state, err := client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	for channelName := range expectedChannels {
-		_, exists := state.ActualSubscriptions[models.Exact][channelName]
-		assert.True(suite.T(), exists, "Channel %s should be subscribed", channelName)
-	}
+			time.Sleep(300 * time.Millisecond)
 
-	// Kill connections
-	client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+			// Verify all initial subscriptions and kill connections based on client type
+			var state *models.PubSubState
+			var err error
 
-	time.Sleep(2 * time.Second)
+			if clientType == StandaloneClient {
+				client := receiver.(*glide.Client)
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				for channelName := range expectedChannels {
+					_, exists := state.ActualSubscriptions[models.Exact][channelName]
+					assert.True(t, exists, "Channel %s should be subscribed", channelName)
+				}
 
-	// Verify all subscriptions restored
-	state, err = client.GetSubscriptions(ctx)
-	assert.NoError(suite.T(), err)
-	for channelName := range expectedChannels {
-		_, exists := state.ActualSubscriptions[models.Exact][channelName]
-		assert.True(suite.T(), exists, "Channel %s should be restored", channelName)
+				// Kill all connections
+				client.CustomCommand(ctx, []string{"CLIENT", "KILL"})
+
+				time.Sleep(2 * time.Second)
+
+				// Verify all subscriptions restored
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			} else {
+				client := receiver.(*glide.ClusterClient)
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+				for channelName := range expectedChannels {
+					_, exists := state.ActualSubscriptions[models.Exact][channelName]
+					assert.True(t, exists, "Channel %s should be subscribed", channelName)
+				}
+
+				// Kill all connections using CustomCommandWithRoute
+				client.CustomCommandWithRoute(ctx, []string{"CLIENT", "KILL"}, config.AllNodes)
+
+				time.Sleep(2 * time.Second)
+
+				// Verify all subscriptions restored
+				state, err = client.GetSubscriptions(ctx)
+				assert.NoError(t, err)
+			}
+
+			for channelName := range expectedChannels {
+				_, exists := state.ActualSubscriptions[models.Exact][channelName]
+				assert.True(t, exists, "Channel %s should be restored", channelName)
+			}
+		})
 	}
 }
 
@@ -135,8 +165,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillPatterns() {
 	_, exists := state.ActualSubscriptions[models.Pattern][pattern]
 	assert.True(suite.T(), exists, "Initial pattern subscription should exist")
 
-	// Kill connections
-	client.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections
+	client.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 
@@ -158,7 +188,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillPatterns() {
 	_, exists = state.ActualSubscriptions[models.Pattern][pattern]
 	assert.True(suite.T(), exists)
 
-	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections
+	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 
@@ -191,8 +222,8 @@ func (suite *GlideTestSuite) TestResubscribeAfterConnectionKillSharded() {
 	_, exists := state.ActualSubscriptions[models.Sharded][channel]
 	assert.True(suite.T(), exists, "Initial sharded subscription should exist")
 
-	// Kill connections
-	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL", "TYPE", "NORMAL"})
+	// Kill all connections
+	clusterClient.CustomCommand(ctx, []string{"CLIENT", "KILL"})
 
 	time.Sleep(2 * time.Second)
 

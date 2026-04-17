@@ -44,7 +44,7 @@ on:
                 type: boolean
                 default: false
             run-with-macos:
-                description: "Run with macos included (only when necessary)"
+                description: Include macOS runs (avoid GitHub runners unless specifically required)
                 type: choice
                 options:
                     - false
@@ -55,10 +55,6 @@ on:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
-            run-modules-tests:
-                description: "Run modules tests"
-                type: boolean
-                default: false
             run_async_tests:
                 description: "Run only async tests"
                 required: false
@@ -71,6 +67,10 @@ on:
                 default: false
             run-dynamic-pubsub-with-mock:
                 description: "Build with mock pubsub and run dynamic pubsub tests"
+                type: boolean
+                default: false
+            containers-only:
+                description: "Run only container tests (skip regular test-python job)"
                 type: boolean
                 default: false
 
@@ -121,6 +121,7 @@ jobs:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -176,24 +177,39 @@ jobs:
               working-directory: ./python
               env:
                   TEST_NAME_ARG: ${{ inputs.name && format('-k {0}', inputs.name) || '' }}
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --html=pytest_report.html --self-contained-html "$TEST_NAME_ARG"
 
             - name: Test with pytest (full matrix, all async backends)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (async only)
               if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (sync only)
               if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args tests/sync_tests --html=pytest_report.html --self-contained-html
 
@@ -218,6 +234,7 @@ jobs:
         name: Python PubSubTests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -319,6 +336,7 @@ jobs:
 
     lint:
         runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v4
@@ -343,6 +361,7 @@ jobs:
 
     docs-test:
         runs-on: ubuntu-latest
+        if: ${{ github.event.inputs.containers-only != 'true' }}
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v4
@@ -364,7 +383,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event.inputs.containers-only == 'true' || github.event_name == 'schedule' }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -431,12 +450,20 @@ jobs:
             - name: Test with pytest (asyncio only)
               if: ${{ env.RUN_FULL_MATRIX != 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --html=pytest_report.html --self-contained-html
 
             - name: Test with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
               working-directory: ./python
+              env:
+                  AWS_ACCESS_KEY_ID: test_access_key
+                  AWS_SECRET_ACCESS_KEY: test_secret_key
+                  AWS_SESSION_TOKEN: test_session_token
               run: |
                   python3 dev.py test --args --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
 
@@ -450,68 +477,3 @@ jobs:
                       python/tests/pytest_report.html
                       utils/clusters/**
                       benchmarks/results/**
-
-    test-modules:
-        if: ((github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch' && github.event.inputs.run-modules-tests == 'true') || github.event.pull_request.head.repo.owner.login == 'valkey-io')
-        environment: AWS_ACTIONS
-        name: Running Module Tests
-        runs-on: [self-hosted, linux, ARM64, persistent]
-        timeout-minutes: 15
-
-        steps:
-            - name: Setup self-hosted runner access
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
-
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - uses: actions/cache@v4
-              with:
-                  path: |
-                      python/target
-                      glide-core/src/generated
-                  key: aarch64-unknown-linux-gnu-python
-                  restore-keys: |
-                      aarch64-unknown-linux-gnu-glide-core
-                      aarch64-unknown-linux-gnu
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: ubuntu
-                  target: aarch64-unknown-linux-gnu
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Test with pytest
-              if: ${{ env.RUN_FULL_MATRIX != 'true' }}
-              working-directory: ./python
-              run: |
-                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
-
-            - name: Test with pytest (full matrix)
-              if: ${{ env.RUN_FULL_MATRIX == 'true' }}
-              working-directory: ./python
-              run: |
-                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
-
-            - name: Test with pytest (async only)
-              if: ${{ env.RUN_ASYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
-              working-directory: ./python
-              run: |
-                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/async_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
-
-            - name: Test with pytest (sync only)
-              if: ${{ env.RUN_SYNC_ONLY == 'true' && env.RUN_FULL_MATRIX != 'true'}}
-              working-directory: ./python
-              run: |
-                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules tests/sync_tests --async-backend=asyncio --async-backend=trio --html=pytest_report.html --self-contained-html
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: modules-test-report
-                  path: |
-                      python/tests/pytest_report.html

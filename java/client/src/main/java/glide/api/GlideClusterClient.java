@@ -3,7 +3,14 @@ package glide.api;
 
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterCountKeysInSlot;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlots;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterDelSlotsRange;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterGetKeysInSlot;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterInfo;
+import static command_request.CommandRequestOuterClass.RequestType.ClusterKeySlot;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterLinks;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyId;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterMyShardId;
@@ -100,6 +107,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.NonNull;
@@ -1426,7 +1434,7 @@ public class GlideClusterClient extends BaseClient
 
         private final String cursorHandle;
         private final boolean isFinished;
-        private boolean isClosed = false;
+        private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
         // This is for internal use only.
         public NativeClusterScanCursor(@NonNull String cursorHandle) {
@@ -1465,7 +1473,7 @@ public class GlideClusterClient extends BaseClient
         }
 
         private void internalClose() {
-            if (!isClosed) {
+            if (isClosed.compareAndSet(false, true)) {
                 try {
                     ClusterScanCursorResolver.releaseNativeCursor(cursorHandle);
                 } catch (Exception ex) {
@@ -1474,9 +1482,6 @@ public class GlideClusterClient extends BaseClient
                             "ClusterScanCursor",
                             () -> "Error releasing cursor " + cursorHandle,
                             ex);
-                } finally {
-                    // Mark the cursor as closed to avoid double-free (if close() gets called more than once).
-                    isClosed = true;
                 }
             }
         }
@@ -1532,31 +1537,43 @@ public class GlideClusterClient extends BaseClient
     /**
      * Unsubscribes the client from all currently subscribed sharded channels.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.sunsubscribe().get();
+     * client.sunsubscribeLazy().get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
-    public CompletableFuture<Void> sunsubscribe() {
+    public CompletableFuture<Void> sunsubscribeLazy() {
         return commandManager.submitNewCommand(SUnsubscribe, EMPTY_STRING_ARRAY, response -> null);
     }
 
     /**
      * Unsubscribes the client from the specified sharded channels.
      *
+     * <p>This command updates the client's internal desired subscription state without waiting for
+     * server confirmation. It returns immediately after updating the local state. The client will
+     * attempt to unsubscribe asynchronously in the background.
+     *
+     * <p>Note: Use {@code getSubscriptions()} to verify the actual server-side subscription state.
+     *
      * @param channels A set of sharded channel names to unsubscribe from
      * @return A {@link CompletableFuture} that completes when the unsubscription request is processed
      * @example
      *     <pre>{@code
-     * client.sunsubscribe(Set.of("shard-news", "shard-updates")).get();
+     * client.sunsubscribeLazy(Set.of("shard-news", "shard-updates")).get();
      * }</pre>
      *
      * @see <a href="https://valkey.io/commands/sunsubscribe/">valkey.io</a> for details
      */
-    public CompletableFuture<Void> sunsubscribe(Set<String> channels) {
+    public CompletableFuture<Void> sunsubscribeLazy(Set<String> channels) {
         return commandManager.submitNewCommand(
                 SUnsubscribe, channels.toArray(EMPTY_STRING_ARRAY), response -> null);
     }
@@ -1812,5 +1829,69 @@ public class GlideClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleStringResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterKeySlot(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ClusterKeySlot, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterKeySlot(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ClusterKeySlot, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> clusterCountKeysInSlot(long slot) {
+        return commandManager.submitNewCommand(
+                ClusterCountKeysInSlot, new String[] {Long.toString(slot)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> clusterGetKeysInSlot(long slot, long count) {
+        return commandManager.submitNewCommand(
+                ClusterGetKeysInSlot,
+                new String[] {Long.toString(slot), Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> clusterGetKeysInSlotBinary(long slot, long count) {
+        return commandManager.submitNewCommand(
+                ClusterGetKeysInSlot,
+                new GlideString[] {gs(Long.toString(slot)), gs(Long.toString(count))},
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
+    public CompletableFuture<String> clusterAddSlots(long @NonNull [] slots) {
+        String[] args = Arrays.stream(slots).mapToObj(Long::toString).toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterAddSlots, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterAddSlotsRange(long @NonNull [][] slotRanges) {
+        String[] args =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(Long::toString))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterAddSlotsRange, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterDelSlots(long @NonNull [] slots) {
+        String[] args = Arrays.stream(slots).mapToObj(Long::toString).toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterDelSlots, args, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clusterDelSlotsRange(long @NonNull [][] slotRanges) {
+        String[] args =
+                Arrays.stream(slotRanges)
+                        .flatMap(range -> Arrays.stream(range).mapToObj(Long::toString))
+                        .toArray(String[]::new);
+        return commandManager.submitNewCommand(ClusterDelSlotsRange, args, this::handleStringResponse);
     }
 }

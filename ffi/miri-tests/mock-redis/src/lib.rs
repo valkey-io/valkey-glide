@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 pub use redis::{ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value};
+use std::sync::Arc;
 use telemetrylib::GlideSpan;
 
 pub mod cluster_routing;
@@ -67,6 +68,10 @@ impl Pipeline {
     pub fn span(&self) -> Option<GlideSpan> {
         Some(GlideSpan)
     }
+
+    pub fn commands(&self) -> &[Arc<Cmd>] {
+        &[]
+    }
 }
 
 pub struct ScanStateRC;
@@ -126,5 +131,15 @@ pub struct PipelineRetryStrategy;
 impl PipelineRetryStrategy {
     pub fn new(_retry_server_error: bool, _retry_connection_error: bool) -> Self {
         PipelineRetryStrategy
+    }
+}
+
+pub fn parse_redis_url(input: &str) -> Option<url::Url> {
+    match url::Url::parse(input) {
+        Ok(result) => match result.scheme() {
+            "redis" | "rediss" | "redis+unix" | "unix" => Some(result),
+            _ => None,
+        },
+        Err(_) => None,
     }
 }

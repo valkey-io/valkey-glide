@@ -1,0 +1,151 @@
+name: Node Modules
+
+permissions:
+    contents: read
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - glide-core/src/**
+            - glide-core/redis-rs/redis/src/**
+            - node/src/server-modules/**
+            - node/tests/ServerModules.test.ts
+            - .github/workflows/node-modules.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/start-valkey-docker/action.yml
+    pull_request:
+        paths:
+            - glide-core/src/**
+            - glide-core/redis-rs/redis/src/**
+            - node/src/server-modules/**
+            - node/tests/ServerModules.test.ts
+            - .github/workflows/node-modules.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/start-valkey-docker/action.yml
+    workflow_dispatch:
+        inputs:
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
+    workflow_call:
+
+concurrency:
+    group: node-modules-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+run-name: ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+
+jobs:
+    test-modules-linux:
+        name: Modules Tests (Linux)
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install shared dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "9.0"
+
+            - name: Setup Node
+              uses: actions/setup-node@v5
+              with:
+                  node-version: latest
+
+            - name: Start module servers via Docker
+              uses: ./.github/workflows/start-valkey-docker
+              with:
+                  engine-version: "9.0"
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-node
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
+
+            - name: Install and build
+              working-directory: ./node
+              run: |
+                  npm install
+                  npm run build:benchmark
+
+            - name: Run modules tests
+              working-directory: ./node
+              run: |
+                  npm run test:modules -- \
+                    --standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
+                    --cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }}
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules-node-docker
+                  path: |
+                      node/test-report*.html
+
+    test-modules:
+        if: github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch'
+        environment: AWS_ACTIONS
+        name: Running Module Tests
+        runs-on: [self-hosted, linux, ARM64, persistent]
+        timeout-minutes: 15
+
+        steps:
+            - name: Setup self-hosted runner access
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - uses: actions/checkout@v4
+
+            - name: Install Node.js
+              uses: actions/setup-node@v5
+              with:
+                  node-version: latest
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      node/rust-client/target
+                      glide-core/src/generated
+                  key: aarch64-unknown-linux-gnu-node
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
+
+            - name: Install and build
+              working-directory: ./node
+              run: |
+                  npm install
+                  npm run build
+
+            - name: test
+              run: npm run test:modules -- --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} --tls=true
+              working-directory: ./node
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-report-node-modules-ubuntu
+                  path: |
+                      node/test-report*.html

@@ -71,14 +71,9 @@ func (client *baseClient) getMessageHandler() *MessageHandler {
 }
 
 // GetQueue returns the pub/sub queue for the client.
-// This method is only available for clients that have a subscription,
-// and returns an error if the client does not have a subscription.
+// GetQueue returns the pub/sub queue for the client.
+// Returns an error if the client is configured with a callback.
 func (client *baseClient) GetQueue() (*PubSubMessageQueue, error) {
-	// Create MessageHandler lazily if not already created (for dynamic subscriptions)
-	if client.getMessageHandler() == nil {
-		client.setMessageHandler(NewMessageHandler(nil, nil))
-	}
-	// If a callback is configured, the queue should not be used
 	if client.getMessageHandler().callback != nil {
 		return nil, errors.New("cannot get queue for callback-only client")
 	}
@@ -9533,6 +9528,16 @@ func (client *baseClient) executeScriptWithRoute(
 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
 
+	// Create span if OpenTelemetry is enabled and sampling is configured
+	var spanPtr uint64
+	otelInstance := GetOtelInstance()
+	if otelInstance != nil && otelInstance.shouldSample() {
+		spanPtr, _ = otelInstance.CreateSpan("EVALSHA")
+		if spanPtr != 0 {
+			defer otelInstance.dropSpan(spanPtr)
+		}
+	}
+
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
@@ -9553,6 +9558,7 @@ func (client *baseClient) executeScriptWithRoute(
 		argsLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
 

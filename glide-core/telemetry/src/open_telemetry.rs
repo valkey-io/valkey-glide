@@ -327,6 +327,22 @@ impl GlideSpanInner {
         }
     }
 
+    /// Set a string attribute on this span.
+    pub fn set_attribute(&self, key: &str, value: impl Into<opentelemetry::Value>) {
+        self.span
+            .write()
+            .expect(SPAN_WRITE_LOCK_ERR)
+            .set_attribute(opentelemetry::KeyValue::new(key.to_string(), value.into()));
+    }
+
+    /// Set an integer attribute on this span.
+    pub fn set_attribute_i64(&self, key: &str, value: i64) {
+        self.span
+            .write()
+            .expect(SPAN_WRITE_LOCK_ERR)
+            .set_attribute(opentelemetry::KeyValue::new(key.to_string(), value));
+    }
+
     /// Create new span, add it as a child to this span and return it.
     /// Returns an error if the child span creation fails.
     pub fn add_span(&self, name: &str) -> Result<GlideSpanInner, TraceError> {
@@ -431,6 +447,16 @@ impl GlideSpan {
 
     pub fn set_status(&self, status: GlideSpanStatus) {
         self.inner.set_status(status)
+    }
+
+    /// Set a string attribute on this span.
+    pub fn set_attribute(&self, key: &str, value: impl Into<opentelemetry::Value>) {
+        self.inner.set_attribute(key, value)
+    }
+
+    /// Set an integer attribute on this span.
+    pub fn set_attribute_i64(&self, key: &str, value: i64) {
+        self.inner.set_attribute_i64(key, value)
     }
 
     /// Add child span to this span and return it
@@ -610,10 +636,10 @@ impl GlideOpenTelemetry {
 
         // Check for obviously invalid pointer values
         // Pointers should be aligned to at least 8 bytes on 64-bit systems
-        if span_ptr % 8 != 0 {
+        if !span_ptr.is_multiple_of(8) {
             logger_core::log_warn(
                 "OpenTelemetry",
-                &format!(
+                format!(
                     "Invalid span pointer - misaligned pointer: 0x{:x}",
                     span_ptr
                 ),
@@ -627,7 +653,7 @@ impl GlideOpenTelemetry {
         if span_ptr < MIN_VALID_ADDRESS {
             logger_core::log_warn(
                 "OpenTelemetry",
-                &format!("Invalid span pointer - address too low: 0x{:x}", span_ptr),
+                format!("Invalid span pointer - address too low: 0x{:x}", span_ptr),
             );
             return false;
         }
@@ -639,7 +665,7 @@ impl GlideOpenTelemetry {
         if span_ptr > MAX_VALID_ADDRESS {
             logger_core::log_warn(
                 "OpenTelemetry",
-                &format!("Invalid span pointer - address too high: 0x{:x}", span_ptr),
+                format!("Invalid span pointer - address too high: 0x{:x}", span_ptr),
             );
             return false;
         }
@@ -725,12 +751,12 @@ impl GlideOpenTelemetry {
         }
 
         // Validate trace_sample_percentage
-        if let Some(traces_config) = config.traces.as_ref() {
-            if traces_config.trace_sample_percentage > 100 {
-                return Err(GlideOTELError::Other(
-                    "Trace sample percentage must be between 0 and 100".into(),
-                ));
-            }
+        if let Some(traces_config) = config.traces.as_ref()
+            && traces_config.trace_sample_percentage > 100
+        {
+            return Err(GlideOTELError::Other(
+                "Trace sample percentage must be between 0 and 100".into(),
+            ));
         }
         Ok(())
     }

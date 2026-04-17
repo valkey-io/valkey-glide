@@ -1,12 +1,12 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-mod test_constants;
+mod constants;
 mod utilities;
 
 #[cfg(test)]
 mod standalone_client_tests {
     use super::*;
-    use crate::test_constants::{HOST_IPV4, HOST_IPV6};
+    use crate::constants::{IP_ADDRESS_V4, IP_ADDRESS_V6};
     use crate::utilities::mocks::{Mock, ServerMock};
     use glide_core::{
         client::{Client as GlideClient, ConnectionError, StandaloneClient},
@@ -493,10 +493,12 @@ mod standalone_client_tests {
                 Err(err) => {
                     // Connection was dropped as expected
                     assert!(
-                        err.is_connection_dropped() || err.is_timeout(),
-                        "Expected connection dropped or timeout error, got: {err:?}",
+                        err.is_connection_dropped()
+                            || err.is_timeout()
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
+                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
                     );
-                    let client_info = repeat_try_create(|| async {
+                    let client_info = retry(|| async {
                         let mut client = client.clone();
                         String::from_owned_redis_value(
                             client.send_command(&client_info_cmd).await.unwrap(),
@@ -721,7 +723,7 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_invalid_cert_bytes() {
         block_on_all(async move {
             let server_addr = redis::ConnectionAddr::TcpTls {
-                host: HOST_IPV4.to_string(),
+                host: IP_ADDRESS_V4.to_string(),
                 port: get_available_port(),
                 insecure: false,
                 tls_params: None,
@@ -760,7 +762,7 @@ mod standalone_client_tests {
     fn test_tls_connection_fails_with_custom_certs_and_no_tls() {
         block_on_all(async move {
             let server_addr =
-                redis::ConnectionAddr::Tcp(HOST_IPV4.to_string(), get_available_port());
+                redis::ConnectionAddr::Tcp(IP_ADDRESS_V4.to_string(), get_available_port());
 
             let mut connection_request = create_connection_request(
                 &[server_addr],
@@ -891,7 +893,9 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_tls_connection_with_ip_address_succeeds(#[values(HOST_IPV4, HOST_IPV6)] host: &str) {
+    fn test_tls_connection_with_ip_address_succeeds(
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
+    ) {
         block_on_all(async move {
             let tempdir = tempfile::tempdir().expect("Failed to create temp dir");
             let tls_paths = build_tls_file_paths(&tempdir);
@@ -938,7 +942,9 @@ mod standalone_client_tests {
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
-    fn test_connection_with_ip_address_succeeds(#[values(HOST_IPV4, HOST_IPV6)] host: &str) {
+    fn test_connection_with_ip_address_succeeds(
+        #[values(IP_ADDRESS_V4, IP_ADDRESS_V6)] host: &str,
+    ) {
         block_on_all(async move {
             let ip_addr = redis::ConnectionAddr::Tcp(host.to_string(), get_available_port());
 

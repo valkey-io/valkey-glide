@@ -1115,6 +1115,11 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"SCRIPT SHOW"
             | b"SDIFF"
             | b"SELECT"
+            | b"SENTINEL GET-MASTER-ADDR-BY-NAME"
+            | b"SENTINEL MASTER"
+            | b"SENTINEL MASTERS"
+            | b"SENTINEL REPLICAS"
+            | b"SENTINEL CKQUORUM"
             | b"SHUTDOWN"
             | b"SINTER"
             | b"SINTERCARD"
@@ -1180,7 +1185,7 @@ pub trait Routable {
         let mut primary_command = match primary_command.as_slice() {
             b"XGROUP" | b"OBJECT" | b"SLOWLOG" | b"FUNCTION" | b"MODULE" | b"COMMAND"
             | b"PUBSUB" | b"CONFIG" | b"MEMORY" | b"XINFO" | b"CLIENT" | b"ACL" | b"SCRIPT"
-            | b"CLUSTER" | b"LATENCY" => primary_command,
+            | b"CLUSTER" | b"LATENCY" | b"SENTINEL" => primary_command,
             _ => {
                 return Some(primary_command);
             }
@@ -1494,7 +1499,7 @@ mod tests_routing {
         command_for_multi_slot_indices, AggregateOp, MultiSlotArgPattern, MultipleNodeRoutingInfo,
         ResponsePolicy, Route, RoutingInfo, ShardAddrs, SingleNodeRoutingInfo, SlotAddr,
     };
-    use crate::cluster_routing::ShardUpdateResult;
+    use crate::cluster_routing::{is_readonly, is_readonly_cmd, Routable, ShardUpdateResult};
     use crate::{cluster_topology::slot, cmd, parser::parse_redis_value, Value};
     use core::panic;
     use std::sync::{Arc, RwLock};
@@ -2099,5 +2104,37 @@ mod tests_routing {
             Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)),
             "CLIENT LIST should be routed to a random node"
         );
+    }
+
+    #[test]
+    fn test_is_read_only() {
+        assert!(is_readonly_cmd(b"SENTINEL MASTERS"));
+        assert!(is_readonly_cmd(b"SENTINEL MASTER"));
+        assert!(is_readonly_cmd(b"SENTINEL REPLICAS"));
+        assert!(is_readonly_cmd(b"SENTINEL GET-MASTER-ADDR-BY-NAME"));
+        assert!(is_readonly_cmd(b"SENTINEL CKQUORUM"));
+
+        assert!(!is_readonly_cmd(b"SENTINEL FAILOVER"));
+
+        let mut test_cmd = cmd("SENTINEL");
+        test_cmd.arg("MASTERS").arg("my_service");
+        assert!(is_readonly(&test_cmd));
+        assert!(is_readonly_cmd(
+            Routable::command(&test_cmd).unwrap().as_slice()
+        ));
+
+        let mut test_cmd = cmd("SENTINEL");
+        test_cmd.arg("GET-MASTER-ADDR-BY-NAME").arg("my_service");
+        assert!(is_readonly(&test_cmd));
+        assert!(is_readonly_cmd(
+            Routable::command(&test_cmd).unwrap().as_slice()
+        ));
+
+        test_cmd = cmd("SENTINEL");
+        test_cmd.arg("FAILOVER").arg("my_service");
+        assert!(!is_readonly(&test_cmd));
+        assert!(!is_readonly_cmd(
+            Routable::command(&test_cmd).unwrap().as_slice()
+        ));
     }
 }

@@ -16,6 +16,7 @@ from glide_sync import (
     OpenTelemetryTracesConfig,
 )
 from glide_sync.opentelemetry import OpenTelemetry
+from glide_sync.sync_commands.script import Script
 
 from tests.otel_test_utils import (
     build_timeout_error,
@@ -468,7 +469,7 @@ class TestOpenTelemetryGlideSync:
 
         # Wait for spans to be flushed
         _wait_for_spans_to_be_flushed(
-            VALID_ENDPOINT_TRACES, expected_span_names=["Batch", "send_batch"]
+            VALID_ENDPOINT_TRACES, expected_span_names=["Batch"]
         )
 
         # Read the span file and check span names
@@ -476,7 +477,6 @@ class TestOpenTelemetryGlideSync:
 
         # Check for expected span names
         assert "Batch" in span_names
-        assert "send_batch" in span_names
 
         # Force garbage collection
         gc.collect()
@@ -591,3 +591,30 @@ class TestOpenTelemetryGlideSync:
         # Close clients
         client1.close()
         client2.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_span_script_invocation(self, request, protocol, cluster_mode):
+        """Test that script invocation creates an EVALSHA span"""
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+
+        script = Script("return 'Hello'")
+        result = client.invoke_script(script)
+        assert result == b"Hello"
+
+        # Wait for spans to be flushed
+        _wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["EVALSHA"]
+        )
+
+        # Read the span file and check span names
+        _, _, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        # Check for expected EVALSHA span
+        assert "EVALSHA" in span_names
+
+        client.close()

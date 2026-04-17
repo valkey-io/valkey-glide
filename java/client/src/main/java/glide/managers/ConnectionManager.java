@@ -10,6 +10,8 @@ import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
+import glide.api.models.configuration.CompressionBackend;
+import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
@@ -281,6 +283,8 @@ public class ConnectionManager {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinity);
                         } else if ("AZ_AFFINITY_REPLICAS_AND_PRIMARY".equals(readFromName)) {
                             requestBuilder.setReadFrom(ReadFrom.AZAffinityReplicasAndPrimary);
+                        } else if ("ALL_NODES".equals(readFromName)) {
+                            requestBuilder.setReadFrom(ReadFrom.AllNodes);
                         }
 
                         // Set client metadata
@@ -387,6 +391,24 @@ public class ConnectionManager {
                             if (standaloneConfig.isReadOnly()) {
                                 requestBuilder.setReadOnly(true);
                             }
+                        }
+
+                        // Set compression configuration
+                        if (configuration.getCompressionConfiguration() != null) {
+                            CompressionConfiguration cc = configuration.getCompressionConfiguration();
+                            connection_request.ConnectionRequestOuterClass.CompressionConfig.Builder
+                                    compressionBuilder =
+                                            connection_request.ConnectionRequestOuterClass.CompressionConfig.newBuilder();
+                            compressionBuilder.setEnabled(cc.isEnabled());
+                            compressionBuilder.setBackend(
+                                    cc.getBackend() == CompressionBackend.LZ4
+                                            ? connection_request.ConnectionRequestOuterClass.CompressionBackend.LZ4
+                                            : connection_request.ConnectionRequestOuterClass.CompressionBackend.ZSTD);
+                            compressionBuilder.setMinCompressionSize(cc.getMinCompressionSize());
+                            if (cc.getCompressionLevel() != null) {
+                                compressionBuilder.setCompressionLevel(cc.getCompressionLevel());
+                            }
+                            requestBuilder.setCompressionConfig(compressionBuilder.build());
                         }
 
                         // Build and serialize to bytes

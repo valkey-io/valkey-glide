@@ -33,6 +33,7 @@ pub use types::*;
 
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
+pub use reconnecting_connection::IAMTokenHandle;
 mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
@@ -69,16 +70,20 @@ pub const DEFAULT_MAX_INFLIGHT_REQUESTS: u32 = 1000;
 pub const CONNECTION_CHECKS_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Extract RequestType from a Redis command for decompression processing
-/// SIMPLIFIED VERSION: Only supports basic GET commands for decompression.
 fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
     // Get the command name (first argument)
     let command_name = cmd.command()?;
     let command_str = String::from_utf8_lossy(&command_name).to_uppercase();
 
-    // Map command names to RequestType - only basic GET supported for decompression
+    // Map command names to RequestType for decompression
+    // Only read commands that return values needing decompression are included
     match command_str.as_str() {
         "GET" => Some(RequestType::Get),
-        _ => None, // Unknown command, no compression/decompression needed
+        "MGET" => Some(RequestType::MGet),
+        "GETEX" => Some(RequestType::GetEx),
+        "GETDEL" => Some(RequestType::GetDel),
+        "GETSET" => Some(RequestType::GetSet),
+        _ => None, // Unknown command or write command, no decompression needed
     }
 }
 
@@ -252,13 +257,15 @@ pub struct LazyClient {
 pub struct Client {
     internal_client: Arc<RwLock<ClientWrapper>>,
     request_timeout: Duration,
-    // Setting this counter to limit the inflight requests, in case of any queue is blocked, so we return error to the customer.
     inflight_requests_allowed: Arc<AtomicIsize>,
+    inflight_requests_limit: isize,
+    inflight_log_interval: isize,
     // IAM token manager for automatic credential refresh
     iam_token_manager: Option<Arc<crate::iam::IAMTokenManager>>,
     // Optional compression manager for automatic compression/decompression
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    otel_metadata: types::OTelMetadata,
 }
 
 async fn run_with_timeout<T>(
@@ -376,7 +383,14 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             .position(b"BLOCK")
             .map(|idx| get_timeout_from_cmd_arg(cmd, idx + 1, TimeUnit::Milliseconds))
             .unwrap_or(Ok(RequestTimeoutOption::ClientConfig)),
-        b"WAIT" => get_timeout_from_cmd_arg(cmd, 2, TimeUnit::Milliseconds),
+        b"WAIT" | b"WAITAOF" => {
+            let idx = if command.as_slice() == b"WAITAOF" {
+                3
+            } else {
+                2
+            };
+            get_timeout_from_cmd_arg(cmd, idx, TimeUnit::Milliseconds)
+        }
         _ => Ok(RequestTimeoutOption::ClientConfig),
     }?;
 
@@ -429,12 +443,17 @@ impl Client {
 
     /// Handles SELECT command processing after successful execution.
     /// Updates database state for standalone, cluster, and lazy clients.
+    ///
+    /// Note: `db_namespace` is updated on `&mut self`, but `Client` is cloned
+    /// into each request handler. If concurrent tasks issue SELECT, a cloned
+    /// Client may report a stale `db_namespace` in OTel spans. This is an
+    /// acceptable trade-off since concurrent SELECTs are rare in practice.
     async fn handle_select_command(&mut self, cmd: &Cmd) -> RedisResult<()> {
-        // Extract database ID from the SELECT command
         let database_id = self.extract_database_id_from_select(cmd)?;
 
-        // Update database state for all client types
         self.update_stored_database_id(database_id).await?;
+        // Keep OTel db.namespace in sync
+        self.otel_metadata.db_namespace = database_id.to_string();
         Ok(())
     }
 
@@ -797,116 +816,197 @@ impl Client {
         Ok(guard.clone()) // ✅ Return clone of the now-initialized wrapper
     }
 
-    /// Send a command to the server.
-    /// This function will route the command to the correct node, and retry if needed.
+    /// Internal command execution logic. Takes owned data so the returned future
+    /// is `Send + 'static`.
+    async fn execute_command_owned(
+        mut self_clone: Client,
+        cmd: Arc<Cmd>,
+        routing: Option<RoutingInfo>,
+        client: ClientWrapper,
+        compression_manager: Option<Arc<CompressionManager>>,
+    ) -> RedisResult<Value> {
+        let raw_value = match client {
+            ClientWrapper::Standalone(mut client) => client.send_command(&cmd).await,
+            ClientWrapper::Cluster { mut client } => {
+                let final_routing = if let Some(RoutingInfo::SingleNode(
+                    SingleNodeRoutingInfo::Random,
+                )) = routing
+                {
+                    let cmd_name = cmd.command().unwrap_or_default();
+                    let cmd_name = String::from_utf8_lossy(&cmd_name);
+                    if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
+                    } else {
+                        log_warn(
+                            "send_command",
+                            format!(
+                                "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
+                            ),
+                        );
+                        RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
+                    }
+                } else {
+                    routing
+                        .or_else(|| RoutingInfo::for_routable(cmd.as_ref()))
+                        .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                };
+                client.route_command(&cmd, final_routing).await
+            }
+            ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
+        }?;
+
+        // Post-process: decompress and convert to expected type.
+        // Done after the mutable borrow on cmd is released.
+        let processed_value = if let Some(ref compression_manager) = compression_manager {
+            if let Some(request_type) = extract_request_type_from_cmd(&cmd) {
+                match crate::compression::process_response_for_decompression(
+                    raw_value.clone(),
+                    request_type,
+                    Some(compression_manager.as_ref()),
+                ) {
+                    Ok(decompressed_value) => decompressed_value,
+                    Err(e) => {
+                        log_warn(
+                            "send_command_decompression",
+                            format!("Failed to decompress response: {}", e),
+                        );
+                        raw_value
+                    }
+                }
+            } else {
+                raw_value
+            }
+        } else {
+            raw_value
+        };
+
+        let expected_type = expected_type_for_cmd(&cmd);
+        let value = convert_to_expected_type(processed_value, expected_type)?;
+
+        if self_clone.is_client_set_name_command(&cmd) {
+            self_clone.handle_client_set_name_command(&cmd).await?;
+        }
+        if self_clone.is_select_command(&cmd) {
+            self_clone.handle_select_command(&cmd).await?;
+        }
+        if self_clone.is_auth_command(&cmd) {
+            self_clone.handle_auth_command(&cmd).await?;
+        }
+        if self_clone.is_hello_command(&cmd) {
+            self_clone.handle_hello_command(&cmd).await?;
+        }
+        Ok(value)
+    }
+
     pub fn send_command<'a>(
         &'a mut self,
         cmd: &'a mut Cmd,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisFuture<'a, Value> {
         Box::pin(async move {
+            // Check for IAM token changes and update the password without authentication if needed (pull model)
+            if let Some(iam_manager) = &self.iam_token_manager
+                && iam_manager.token_changed()
+            {
+                let current_token = iam_manager.get_token().await;
+                if current_token.is_empty() {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "IAM token not available",
+                    )));
+                }
+                iam_manager.clear_token_changed();
+                log_debug(
+                    "update_connection_password",
+                    "Updating connection password with IAM token",
+                );
+                self.update_connection_password(Some(current_token), false)
+                    .await?;
+            }
+
             let client = self.get_or_initialize_client().await?;
 
             if let Some(result) = self.pubsub_synchronizer.intercept_pubsub_command(cmd).await {
                 return result;
             }
 
-            // let expected_type = expected_type_for_cmd(cmd);
-            let request_timeout = match get_request_timeout(cmd, self.request_timeout) {
-                Ok(request_timeout) => request_timeout,
-                Err(err) => return Err(err),
+            let request_timeout = get_request_timeout(cmd, self.request_timeout)?;
+
+            // Reserve an inflight slot. The tracker holds the slot until the
+            // last clone of the Cmd is dropped (i.e. all sub-commands in the
+            // cluster event loop finish). This decouples user-facing timeout
+            // from internal pipeline cleanup.
+            let tracker = match self.reserve_inflight_request() {
+                Some(t) => t,
+                None => {
+                    return Err(RedisError::from((
+                        ErrorKind::ClientError,
+                        "Reached maximum inflight requests",
+                    )));
+                }
             };
 
-            // Clone compression_manager reference before moving into async block
-            let compression_manager = self.compression_manager.clone();
-
-            let result = run_with_timeout(request_timeout, async move {
-                let expected_type = expected_type_for_cmd(cmd);
-                let value  = match client {
-                    ClientWrapper::Standalone(mut client) => client.send_command(cmd).await,
-                    ClientWrapper::Cluster {mut client } => {
-                        let final_routing =
-                            if let Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)) =
-                                routing
-                            {
-                                let cmd_name = cmd.command().unwrap_or_default();
-                                let cmd_name = String::from_utf8_lossy(&cmd_name);
-                                if redis::cluster_routing::is_readonly_cmd(cmd_name.as_bytes()) {
-                                // A read-only command, go ahead and send it to a random node
-                                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)
-                                } else {
-                                // A "Random" node was selected, but the command is a "@write" command
-                                // change the routing to "RandomPrimary"
-                                    log_warn(
-                                        "send_command",
-                                        format!(
-                                            "User provided 'Random' routing which is not suitable for the writeable command '{cmd_name}'. Changing it to 'RandomPrimary'"
-                                        ),
-                                    );
-                                    RoutingInfo::SingleNode(SingleNodeRoutingInfo::RandomPrimary)
-                                }
-                            } else {
-                                routing
-                                    .or_else(|| RoutingInfo::for_routable(cmd))
-                                    .unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
-                            };
-                        client.route_command(cmd, final_routing).await
-                    },
-                    ClientWrapper::Lazy(_) => unreachable!("Lazy client should have been initialized"),
+            // Log at debug level when inflight usage crosses a 10% threshold.
+            // Only one log per threshold crossing — zero noise when stable.
+            {
+                static LAST_BUCKET: AtomicIsize = AtomicIsize::new(0);
+                let remaining = self.inflight_requests_allowed.load(Ordering::Relaxed);
+                let used = self.inflight_requests_limit - remaining;
+                let bucket = used / self.inflight_log_interval;
+                let prev = LAST_BUCKET.load(Ordering::Relaxed);
+                if bucket != prev {
+                    LAST_BUCKET.store(bucket, Ordering::Relaxed);
+                    log_debug(
+                        "inflight",
+                        format!(
+                            "Inflight: {used}/{} slots used",
+                            self.inflight_requests_limit
+                        ),
+                    );
                 }
-                .and_then(|value| {
-                    // Apply decompression if compression manager is available
-                    let processed_value = if let Some(ref compression_manager) = compression_manager {
-                        // Extract request type from command for decompression
-                        if let Some(request_type) = extract_request_type_from_cmd(cmd) {
-                            match crate::compression::process_response_for_decompression(
-                                value.clone(),
-                                request_type,
-                                Some(compression_manager.as_ref())
-                            ) {
-                                Ok(decompressed_value) => decompressed_value,
-                                Err(e) => {
-                                    log_warn(
-                                        "send_command_decompression",
-                                        format!("Failed to decompress response: {}", e),
-                                    );
-                                    value // Return original value on decompression failure
-                                }
+            }
+
+            cmd.set_inflight_tracker(tracker);
+
+            // Clone compression_manager reference only if compression is enabled
+            let compression_manager = if self.is_compression_enabled() {
+                self.compression_manager.clone()
+            } else {
+                None
+            };
+            let self_clone = self.clone();
+            let owned_cmd = Arc::new(cmd.clone());
+
+            let execute = Self::execute_command_owned(
+                self_clone,
+                owned_cmd,
+                routing,
+                client,
+                compression_manager,
+            );
+
+            match request_timeout {
+                Some(duration) => {
+                    tokio::pin!(execute);
+                    tokio::select! {
+                        result = &mut execute => result,
+                        _ = tokio::time::sleep(duration) => {
+                            // User timeout — execute future is dropped. The Cmd
+                            // was already moved into the event loop's PendingRequest,
+                            // so its tracker clone keeps the inflight slot held until
+                            // all sub-commands complete naturally.
+                            if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                                log_error(
+                                    "OpenTelemetry:timeout_error",
+                                    format!("Failed to record timeout error: {e}"),
+                                );
                             }
-                        } else {
-                            value // No request type found, return original value
+                            Err(io::Error::from(io::ErrorKind::TimedOut).into())
                         }
-                    } else {
-                        value // No compression manager, return original value
-                    };
-                    convert_to_expected_type(processed_value, expected_type)
-                })?;
-
-                // Intercept CLIENT SETNAME commands after regular processing
-                // Only handle CLIENT SETNAME commands if they executed successfully (no error)
-                if self.is_client_set_name_command(cmd) {
-                    self.handle_client_set_name_command(cmd).await?;
+                    }
                 }
-                // Intercept SELECT commands after regular processing
-                // Only handle SELECT commands if they executed successfully (no error)
-                if self.is_select_command(cmd) {
-                    self.handle_select_command(cmd).await?;
-                }
-                // Intercept AUTH commands after regular processing
-                // Only handle AUTH commands if they executed successfully (no error)
-                if self.is_auth_command(cmd) {
-                    self.handle_auth_command(cmd).await?;
-                }
-                // Intercept HELLO commands after regular processing
-                // Only handle HELLO commands if they executed successfully (no error)
-                if self.is_hello_command(cmd) {
-                    self.handle_hello_command(cmd).await?;
-                }
-                Ok(value)
-            })
-            .await?;
-
-            Ok(result)
+                None => execute.await,
+            }
         })
     }
 
@@ -1148,10 +1248,11 @@ impl Client {
                             }
                             _ => {
                                 client
-                                    .req_packed_commands(
+                                    .route_pipeline(
                                         pipeline,
                                         0,
                                         command_count,
+                                        None,
                                         Some(pipeline_retry_strategy),
                                     )
                                     .await
@@ -1200,33 +1301,19 @@ impl Client {
         }
     }
 
-    pub fn reserve_inflight_request(&self) -> bool {
-        // We use this approach of checking the `inflight_requests_allowed` value
-        // twice, before and after decrementing, to prevent it from reaching negative
-        // values. Allowing the `inflight_requests_allowed` value to go below zero
-        // could lead to a race condition where tasks might not be able to run even
-        // when there are available slots.
-        if self.inflight_requests_allowed.load(Ordering::SeqCst) <= 0 {
-            false
-        } else {
-            // The value is being checked again because it might have changed
-            // during the intervening period since the load by other tasks.
-            if self
-                .inflight_requests_allowed
-                .fetch_sub(1, Ordering::SeqCst)
-                <= 0
-            {
-                self.inflight_requests_allowed
-                    .fetch_add(1, Ordering::SeqCst);
-                return false;
-            }
-            true
-        }
+    /// Reserve an inflight slot, returning a tracker whose Drop releases it.
+    /// Returns `None` if no slots available.
+    pub fn reserve_inflight_request(&self) -> Option<redis::cluster_async::InflightRequestTracker> {
+        redis::cluster_async::InflightRequestTracker::try_new(
+            self.inflight_requests_allowed.clone(),
+        )
     }
 
-    pub fn release_inflight_request(&self) -> isize {
-        self.inflight_requests_allowed
-            .fetch_add(1, Ordering::SeqCst)
+    /// Returns the current number of available inflight slots.
+    /// For testing/observability — the inflight limit minus this value equals
+    /// the number of commands currently held by the internal pipeline.
+    pub fn available_inflight_count(&self) -> isize {
+        self.inflight_requests_allowed.load(Ordering::Relaxed)
     }
 
     /// Update the password used to authenticate with the servers.
@@ -1275,10 +1362,7 @@ impl Client {
     /// Send AUTH command using IAM token (preferred) or the provided password
     async fn send_immediate_auth(&mut self, password: Option<String>) -> RedisResult<Value> {
         // Determine the password to use for authentication
-        let pass = if let Some(iam_manager) = &self.iam_token_manager {
-            log_debug("send_immediate_auth", "Using IAM token for authentication");
-            iam_manager.get_token().await
-        } else if let Some(ref password) = password {
+        let pass = if let Some(ref password) = password {
             if password.is_empty() {
                 return Err(RedisError::from((
                     ErrorKind::UserOperationError,
@@ -1333,53 +1417,20 @@ impl Client {
         }
     }
 
-    /// IAM token refresh callback function
-    ///
-    /// On new token, spawns a task that write-locks the `Client` and calls
-    /// `update_connection_password(Some(new_token), true)`. Uses a strong `Arc<RwLock<Client>>`.
-    /// Note: this can form a retain cycle; call `stop_refresh_task()` and drop the manager to tear down.
-    fn iam_callback(
-        client_arc: Arc<tokio::sync::RwLock<Client>>,
-    ) -> impl Fn(String) + Send + 'static {
-        move |new_token: String| {
-            let client_arc = Arc::clone(&client_arc);
-            tokio::spawn(async move {
-                let mut client = client_arc.write().await;
-                let result = client
-                    .update_connection_password(Some(new_token.clone()), true)
-                    .await;
-
-                if let Err(e) = result {
-                    log_error(
-                        "IAM token refresh",
-                        format!("Failed to update connection password with immediate auth: {e}"),
-                    );
-                }
-            });
-        }
-    }
-
     /// Create an `IAMTokenManager` when IAM auth is configured.
     ///
-    /// Uses a **strong** `Arc<RwLock<Client>>` in the refresh callback so the callback
-    /// can always reach the client. (Note: this can create a retain cycle unless you
-    /// stop the refresh task and drop the manager explicitly.)
+    /// Client retrieves tokens on-demand during command execution.
     async fn create_iam_token_manager(
         auth_info: &crate::client::types::AuthenticationInfo,
-        client_arc: std::sync::Arc<tokio::sync::RwLock<Client>>,
     ) -> Option<std::sync::Arc<crate::iam::IAMTokenManager>> {
         if let Some(iam_config) = &auth_info.iam_config {
             if let Some(username) = &auth_info.username {
-                // Set up callback to update connection password when token refreshes
-                let iam_callback = Self::iam_callback(std::sync::Arc::clone(&client_arc));
-
                 match crate::iam::IAMTokenManager::new(
                     iam_config.cluster_name.clone(),
                     username.clone(),
                     iam_config.region.clone(),
                     iam_config.service_type,
                     iam_config.refresh_interval_seconds,
-                    Some(std::sync::Arc::new(iam_callback)),
                 )
                 .await
                 {
@@ -1492,7 +1543,7 @@ fn eval_cmd(hash: &str, keys: &Vec<&[u8]>, args: &Vec<&[u8]>) -> Cmd {
     cmd
 }
 
-fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Duration {
+pub(crate) fn to_duration(time_in_millis: Option<u32>, default: Duration) -> Duration {
     time_in_millis
         .map(|val| Duration::from_millis(val as u64))
         .unwrap_or(default)
@@ -1590,6 +1641,7 @@ async fn create_cluster_client(
             ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(az)
         }
         ReadFrom::PreferReplica => ReadFromReplicaStrategy::RoundRobin,
+        ReadFrom::AllNodes => ReadFromReplicaStrategy::AllNodes,
         ReadFrom::Primary => ReadFromReplicaStrategy::AlwaysFromPrimary,
     });
     if let Some(interval_duration) = periodic_topology_checks {
@@ -1635,8 +1687,11 @@ async fn create_cluster_client(
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
 
     let client = builder.build()?;
+    let iam_token_provider: Option<Arc<dyn redis::IAMTokenProvider>> = iam_token_manager
+        .map(|manager| Arc::new(manager.get_token_handle()) as Arc<dyn redis::IAMTokenProvider>);
+
     let mut con = client
-        .get_async_connection(push_sender, Some(pubsub_synchronizer))
+        .get_async_connection(push_sender, Some(pubsub_synchronizer), iam_token_provider)
         .await?;
 
     // This validation ensures that sharded subscriptions are not applied to Redis engines older than version 7.0,
@@ -1779,6 +1834,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
                     ReadFrom::AZAffinity(_) => "Prefer replica in user's availability zone",
                     ReadFrom::AZAffinityReplicasAndPrimary(_) =>
                         "Prefer replica and primary in user's availability zone",
+                    ReadFrom::AllNodes => "All nodes (primary and replicas)",
                 }
             )
         })
@@ -1901,21 +1957,43 @@ impl Client {
             )
             .await;
 
+            // Extract connection metadata for OTel span attributes.
+            // Port 0 is normalized to the default (6379) for OTel reporting.
+            let otel_metadata = types::OTelMetadata {
+                address: request
+                    .addresses
+                    .first()
+                    .map(|addr| types::NodeAddress {
+                        host: addr.host.clone(),
+                        port: get_port(addr),
+                    })
+                    .unwrap_or_else(|| types::NodeAddress {
+                        host: "unknown".to_string(),
+                        port: 6379,
+                    }),
+                db_namespace: request.database_id.to_string(),
+            };
+
             // Create the Client first without IAM token manager
+            let inflight_limit: isize = inflight_requests_limit.try_into().unwrap();
+            let inflight_log_interval = (inflight_limit / 10).max(1);
             let client = Self {
                 internal_client: internal_client_arc.clone(),
                 request_timeout,
                 inflight_requests_allowed,
+                inflight_requests_limit: inflight_limit,
+                inflight_log_interval,
                 compression_manager: compression_manager.clone(),
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
+                otel_metadata,
             };
 
             let client_arc = Arc::new(RwLock::new(client));
 
-            // Create IAM token manager if needed, passing a strong Arc to the callback
+            // Create IAM token manager if needed
             let iam_token_manager = if let Some(auth_info) = &request.authentication_info {
-                Self::create_iam_token_manager(auth_info, Arc::clone(&client_arc)).await
+                Self::create_iam_token_manager(auth_info).await
             } else {
                 None
             };
@@ -2006,6 +2084,22 @@ impl Client {
             .map(|manager| manager.is_enabled())
             .unwrap_or(false)
     }
+
+    /// Returns the initial connection address, used as the default
+    /// OTel `server.address` span attribute.
+    pub fn server_address(&self) -> &str {
+        &self.otel_metadata.address.host
+    }
+
+    /// Returns the initial connection port, used as the default
+    /// OTel `server.port` span attribute.
+    pub fn server_port(&self) -> u16 {
+        self.otel_metadata.address.port
+    }
+
+    pub fn db_namespace(&self) -> &str {
+        &self.otel_metadata.db_namespace
+    }
 }
 
 pub trait GlideClientForTests {
@@ -2056,7 +2150,7 @@ mod tests {
 
     use redis::Cmd;
 
-    use crate::client::types::{ConnectionRequest, NodeAddress};
+    use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
     };
@@ -2154,10 +2248,9 @@ mod tests {
     fn test_get_request_timeout_with_blocking_command_returns_cmd_arg_timeout() {
         let mut cmd = Cmd::new();
         cmd.arg("BLPOP").arg("key1").arg("key2").arg("500");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 500.0 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
@@ -2165,10 +2258,9 @@ mod tests {
 
         let mut cmd = Cmd::new();
         cmd.arg("XREADGROUP").arg("BLOCK").arg("500").arg("key");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 0.5 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
@@ -2176,10 +2268,9 @@ mod tests {
 
         let mut cmd = Cmd::new();
         cmd.arg("BLMPOP").arg("0.857").arg("key");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 0.857 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
@@ -2187,29 +2278,43 @@ mod tests {
 
         let mut cmd = Cmd::new();
         cmd.arg("WAIT").arg(1).arg("500");
-        let result = get_request_timeout(&cmd, Duration::from_millis(500));
-        assert!(result.is_ok());
+        let result = get_request_timeout(&cmd, Duration::from_millis(500)).unwrap();
         assert_eq!(
-            result.unwrap(),
+            result,
             Some(Duration::from_secs_f64(
                 0.5 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
         );
+
+        // WAITAOF
+        let mut cmd = Cmd::new();
+        cmd.arg("WAITAOF").arg(1).arg(1).arg("500");
+        let result = get_request_timeout(&cmd, Duration::from_millis(500)).unwrap();
+        assert_eq!(
+            result,
+            Some(Duration::from_secs_f64(
+                0.5 + BLOCKING_CMD_TIMEOUT_EXTENSION
+            ))
+        );
+
+        // Infinite block (0) — returns None (no client timeout)
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("0");
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+        assert_eq!(result, None);
     }
 
     #[test]
     fn test_get_request_timeout_non_blocking_command_returns_default_timeout() {
         let mut cmd = Cmd::new();
         cmd.arg("SET").arg("key").arg("value").arg("PX").arg("500");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+        assert_eq!(result, Some(Duration::from_millis(100)));
 
         let mut cmd = Cmd::new();
         cmd.arg("XREADGROUP").arg("key");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), Some(Duration::from_millis(100)));
+        let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+        assert_eq!(result, Some(Duration::from_millis(100)));
     }
 
     #[test]
@@ -2319,9 +2424,18 @@ mod tests {
             internal_client: Arc::new(RwLock::new(ClientWrapper::Lazy(Box::new(lazy_client)))),
             request_timeout: Duration::from_millis(250),
             inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
+            inflight_log_interval: 100,
             iam_token_manager: None,
             compression_manager: None,
             pubsub_synchronizer,
+            otel_metadata: OTelMetadata {
+                address: NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                },
+                db_namespace: "0".to_string(),
+            },
         }
     }
 
@@ -2512,5 +2626,133 @@ mod tests {
         assert_eq!(username, None);
         assert_eq!(password, None);
         assert_eq!(client_name, None);
+    }
+
+    // ===== Edge case tests for blocking command timeout detection =====
+
+    #[test]
+    fn test_blocking_command_infinite_block_returns_none() {
+        // BLPOP key 0 — infinite block → no client timeout
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("0");
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            None
+        );
+
+        // XREAD BLOCK 0 — infinite block
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("BLOCK")
+            .arg("0")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_blocking_timeout_extends_beyond_block_duration() {
+        // BLPOP key 5 — blocks 5s, timeout should be 5s + extension
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("5");
+        let result = get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap();
+        let expected = Duration::from_secs_f64(5.0 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(result, Some(expected));
+        assert!(expected > Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_non_blocking_command_uses_default_timeout() {
+        for cmd_name in &["SET", "GET", "DEL", "HGET", "LPUSH", "SADD", "PING"] {
+            let mut cmd = Cmd::new();
+            cmd.arg(*cmd_name).arg("key");
+            let result = get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap();
+            assert_eq!(
+                result,
+                Some(Duration::from_millis(1000)),
+                "{cmd_name} should use default timeout"
+            );
+        }
+    }
+
+    #[test]
+    fn test_waitaof_detected_as_blocking() {
+        let mut cmd = Cmd::new();
+        cmd.arg("WAITAOF").arg(1).arg(1).arg("3000");
+        let expected = Duration::from_secs_f64(3.0 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn test_wait_detected_as_blocking() {
+        let mut cmd = Cmd::new();
+        cmd.arg("WAIT").arg(1).arg("5000");
+        let expected = Duration::from_secs_f64(5.0 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn test_xread_without_block_is_not_blocking() {
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("COUNT")
+            .arg("10")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(1000)).unwrap(),
+            Some(Duration::from_millis(1000))
+        );
+    }
+
+    #[test]
+    fn test_blocking_fractional_seconds() {
+        let mut cmd = Cmd::new();
+        cmd.arg("BLMPOP").arg("0.857").arg("key");
+        let expected = Duration::from_secs_f64(0.857 + BLOCKING_CMD_TIMEOUT_EXTENSION);
+        assert_eq!(
+            get_request_timeout(&cmd, Duration::from_millis(100)).unwrap(),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn test_all_blocking_commands_detected() {
+        let blocking_cmds: Vec<(&str, Vec<&str>)> = vec![
+            ("BLPOP", vec!["key", "5"]),
+            ("BRPOP", vec!["key", "5"]),
+            ("BLMOVE", vec!["src", "dst", "LEFT", "RIGHT", "5"]),
+            ("BZPOPMAX", vec!["key", "5"]),
+            ("BZPOPMIN", vec!["key", "5"]),
+            ("BRPOPLPUSH", vec!["src", "dst", "5"]),
+            ("BLMPOP", vec!["5", "1", "key"]),
+            ("BZMPOP", vec!["5", "1", "key", "MIN"]),
+            ("WAIT", vec!["1", "5000"]),
+            ("WAITAOF", vec!["1", "1", "5000"]),
+        ];
+
+        for (cmd_name, args) in blocking_cmds {
+            let mut cmd = Cmd::new();
+            cmd.arg(cmd_name);
+            for a in &args {
+                cmd.arg(*a);
+            }
+            let result = get_request_timeout(&cmd, Duration::from_millis(100)).unwrap();
+            assert!(
+                result.is_some(),
+                "{cmd_name} should be detected as blocking"
+            );
+        }
     }
 }

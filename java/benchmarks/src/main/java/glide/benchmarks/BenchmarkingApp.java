@@ -4,6 +4,7 @@ package glide.benchmarks;
 import static glide.benchmarks.utils.Benchmarking.testClientSetGet;
 
 import glide.benchmarks.clients.glide.GlideAsyncClient;
+import glide.benchmarks.clients.glide.GlideAsyncCompressedClient;
 import glide.benchmarks.clients.jedis.JedisClient;
 import glide.benchmarks.clients.lettuce.LettuceAsyncClient;
 import java.util.Arrays;
@@ -58,6 +59,10 @@ public class BenchmarkingApp {
                     System.out.println("Valkey-GLIDE async client");
                     testClientSetGet(GlideAsyncClient::new, runConfiguration, true);
                     break;
+                case GLIDE_COMPRESSED:
+                    System.out.println("Valkey-GLIDE async compressed client");
+                    testClientSetGet(GlideAsyncCompressedClient::new, runConfiguration, true);
+                    break;
             }
         }
     }
@@ -95,7 +100,7 @@ public class BenchmarkingApp {
                 Option.builder()
                         .longOpt("clients")
                         .hasArg(true)
-                        .desc("one of: all|jedis|lettuce|glide")
+                        .desc("one of: all|jedis|lettuce|glide|glide_compressed")
                         .build());
         options.addOption(
                 Option.builder().longOpt("host").hasArg(true).desc("Hostname [localhost]").build());
@@ -164,7 +169,11 @@ public class BenchmarkingApp {
                                     e -> {
                                         switch (e) {
                                             case ALL:
-                                                return Stream.of(ClientName.JEDIS, ClientName.GLIDE, ClientName.LETTUCE);
+                                                return Stream.of(
+                                                        ClientName.JEDIS,
+                                                        ClientName.GLIDE,
+                                                        ClientName.LETTUCE,
+                                                        ClientName.GLIDE_COMPRESSED);
                                             default:
                                                 return Stream.of(e);
                                         }
@@ -219,6 +228,7 @@ public class BenchmarkingApp {
         JEDIS("Jedis"), // sync
         LETTUCE("Lettuce"), // async
         GLIDE("Glide"), // async
+        GLIDE_COMPRESSED("Glide-Compressed"), // async with compression
         ALL("All");
 
         private String name;
