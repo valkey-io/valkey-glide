@@ -46,6 +46,9 @@ subprojects {
                 authentication {
                     header(HttpHeaderAuthentication)
                 }
+                content {
+                    includeGroup "io.valkey"
+                }
             }
         }
         mavenCentral()
