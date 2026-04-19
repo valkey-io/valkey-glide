@@ -403,11 +403,18 @@ public class CompressionTests {
             String value = generateCompressibleText(1024);
 
             // Set value (should be compressed)
+            long compressBefore = getStat(client, "total_values_compressed");
             assertEquals(OK, client.set(key, value).get());
+            assertTrue(
+                    getStat(client, "total_values_compressed") > compressBefore, "SET should compress value");
 
             // GETEX should decompress value
+            long decompressBefore = getStat(client, "total_values_decompressed");
             String retrieved = client.getex(key, GetExOptions.Seconds(10L)).get();
             assertEquals(value, retrieved);
+            assertTrue(
+                    getStat(client, "total_values_decompressed") > decompressBefore,
+                    "GETEX should decompress value");
 
             // Verify TTL was set
             long ttl = client.ttl(key).get();
@@ -428,11 +435,18 @@ public class CompressionTests {
             String value = generateCompressibleText(1024);
 
             // Set value (should be compressed)
+            long compressBefore = getStat(client, "total_values_compressed");
             assertEquals(OK, client.set(key, value).get());
+            assertTrue(
+                    getStat(client, "total_values_compressed") > compressBefore, "SET should compress value");
 
             // GETDEL should decompress value and delete key
+            long decompressBefore = getStat(client, "total_values_decompressed");
             String retrieved = client.getdel(key).get();
             assertEquals(value, retrieved);
+            assertTrue(
+                    getStat(client, "total_values_decompressed") > decompressBefore,
+                    "GETDEL should decompress value");
 
             // Verify key was deleted
             assertEquals(null, client.get(key).get());

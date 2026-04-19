@@ -377,13 +377,23 @@ describe("Compression", () => {
             const key = uniqueKey("getex_test");
 
             // Set value (should be compressed)
+            const compressBefore =
+                getNumericStats(client).total_values_compressed;
             await client.set(key, TEXT_1K);
+            expect(
+                getNumericStats(client).total_values_compressed,
+            ).toBeGreaterThan(compressBefore);
 
             // GETEX should decompress value
+            const decompressBefore =
+                getNumericStats(client).total_values_decompressed;
             const retrieved = await client.getex(key, {
                 expiry: { type: TimeUnit.Seconds, duration: 10 },
             });
             expect(retrieved).toBe(TEXT_1K);
+            expect(
+                getNumericStats(client).total_values_decompressed,
+            ).toBeGreaterThan(decompressBefore);
 
             // Verify TTL was set
             const ttl = await client.ttl(key);
@@ -402,11 +412,21 @@ describe("Compression", () => {
             const key = uniqueKey("getdel_test");
 
             // Set value (should be compressed)
+            const compressBefore =
+                getNumericStats(client).total_values_compressed;
             await client.set(key, TEXT_1K);
+            expect(
+                getNumericStats(client).total_values_compressed,
+            ).toBeGreaterThan(compressBefore);
 
             // GETDEL should decompress value and delete key
+            const decompressBefore =
+                getNumericStats(client).total_values_decompressed;
             const retrieved = await client.getdel(key);
             expect(retrieved).toBe(TEXT_1K);
+            expect(
+                getNumericStats(client).total_values_decompressed,
+            ).toBeGreaterThan(decompressBefore);
 
             // Verify key was deleted
             expect(await client.get(key)).toBeNull();

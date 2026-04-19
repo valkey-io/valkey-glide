@@ -1050,14 +1050,20 @@ func (suite *GlideTestSuite) TestCompressionGetEx() {
 	value := generateCompressibleText(1024)
 
 	// Set value (should be compressed)
+	compressBefore := client.GetStatistics()["total_values_compressed"]
 	_, err := client.Set(context.Background(), key, value)
 	assert.NoError(t, err)
+	assert.Greater(t, client.GetStatistics()["total_values_compressed"], compressBefore,
+		"SET should compress value")
 
 	// GETEX should decompress value
+	decompressBefore := client.GetStatistics()["total_values_decompressed"]
 	opts := options.NewGetExOptions().SetExpiry(options.NewExpiryIn(10 * time.Second))
 	retrieved, err := client.GetExWithOptions(context.Background(), key, *opts)
 	assert.NoError(t, err)
 	assert.Equal(t, value, retrieved.Value())
+	assert.Greater(t, client.GetStatistics()["total_values_decompressed"], decompressBefore,
+		"GETEX should decompress value")
 
 	// Verify TTL was set
 	ttl, err := client.TTL(context.Background(), key)
@@ -1078,13 +1084,19 @@ func (suite *GlideTestSuite) TestCompressionGetDel() {
 	value := generateCompressibleText(1024)
 
 	// Set value (should be compressed)
+	compressBefore := client.GetStatistics()["total_values_compressed"]
 	_, err := client.Set(context.Background(), key, value)
 	assert.NoError(t, err)
+	assert.Greater(t, client.GetStatistics()["total_values_compressed"], compressBefore,
+		"SET should compress value")
 
 	// GETDEL should decompress value and delete key
+	decompressBefore := client.GetStatistics()["total_values_decompressed"]
 	retrieved, err := client.GetDel(context.Background(), key)
 	assert.NoError(t, err)
 	assert.Equal(t, value, retrieved.Value())
+	assert.Greater(t, client.GetStatistics()["total_values_decompressed"], decompressBefore,
+		"GETDEL should decompress value")
 
 	// Verify key was deleted
 	getResult, err := client.Get(context.Background(), key)
