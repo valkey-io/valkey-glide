@@ -1632,33 +1632,33 @@ class TestCompressionIncompatibleCommands:
 
         # STRLEN
         await no_compression_client.set(key, "hello")
-        result = await no_compression_client.strlen(key)
-        assert result == 5
+        strlen_result = await no_compression_client.strlen(key)
+        assert strlen_result == 5
 
         # APPEND
-        result = await no_compression_client.append(key, " world")
-        assert result == 11  # "hello world" = 11 chars
+        append_result = await no_compression_client.append(key, " world")
+        assert append_result == 11  # "hello world" = 11 chars
 
         # GETRANGE
-        result = await no_compression_client.getrange(key, 0, 4)
-        assert result == b"hello"
+        getrange_result = await no_compression_client.getrange(key, 0, 4)
+        assert getrange_result == b"hello"
 
         # SETRANGE
-        result = await no_compression_client.setrange(key, 6, "WORLD")
-        assert result == 11
+        setrange_result = await no_compression_client.setrange(key, 6, "WORLD")
+        assert setrange_result == 11
 
         # GETBIT
         await no_compression_client.set(key, "\x00")
-        result = await no_compression_client.getbit(key, 0)
-        assert result == 0
+        getbit_result = await no_compression_client.getbit(key, 0)
+        assert getbit_result == 0
 
         # SETBIT
-        result = await no_compression_client.setbit(key, 0, 1)
-        assert result == 0  # Previous value was 0
+        setbit_result = await no_compression_client.setbit(key, 0, 1)
+        assert setbit_result == 0  # Previous value was 0
 
         # BITCOUNT
-        result = await no_compression_client.bitcount(key)
-        assert result >= 0
+        bitcount_result = await no_compression_client.bitcount(key)
+        assert bitcount_result >= 0
 
         # Cleanup
         await no_compression_client.delete([key])
