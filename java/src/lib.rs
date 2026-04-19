@@ -270,6 +270,11 @@ async fn execute_command_request_and_complete(
 
                 // Apply compression to command arguments if compression is enabled
                 // This also validates that the command is compatible with compression
+                // Note: We intentionally keep these as separate if statements for clarity:
+                // - First check: is compression enabled?
+                // - Second check: did compression processing fail?
+                // - Third check: is it an incompatible command error?
+                #[allow(clippy::collapsible_if)]
                 if client.is_compression_enabled() {
                     if let Err(e) = process_command_for_compression(&mut cmd, &client) {
                         // Check if this is an incompatible command error - these should be returned as errors
@@ -284,7 +289,9 @@ async fn execute_command_request_and_complete(
                             )));
                         }
                         // For other compression errors, log and continue
-                        log::warn!("Compression processing failed: {e}, continuing with original command");
+                        log::warn!(
+                            "Compression processing failed: {e}, continuing with original command"
+                        );
                     }
                 }
 
@@ -345,6 +352,7 @@ async fn execute_command_request_and_complete(
                     })?;
                     // Apply compression to each command in the batch
                     // This also validates that the command is compatible with compression
+                    #[allow(clippy::collapsible_if)]
                     if client.is_compression_enabled() {
                         if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
                             // Check if this is an incompatible command error - these should be returned as errors
