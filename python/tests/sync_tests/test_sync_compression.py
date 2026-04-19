@@ -1436,9 +1436,7 @@ class TestCompressionIncompatibleCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_incr_incompatible_with_compression(
-        self, compression_client: TGlideClient
-    ):
+    def test_incr_incompatible_with_compression(self, compression_client: TGlideClient):
         """Test that INCR command errors out when compression is enabled."""
         key = f"incr_test_{get_random_string(8)}"
 
@@ -1505,9 +1503,7 @@ class TestCompressionIncompatibleCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_decr_incompatible_with_compression(
-        self, compression_client: TGlideClient
-    ):
+    def test_decr_incompatible_with_compression(self, compression_client: TGlideClient):
         """Test that DECR command errors out when compression is enabled."""
         key = f"decr_test_{get_random_string(8)}"
 
