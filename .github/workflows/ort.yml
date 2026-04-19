@@ -274,33 +274,29 @@ jobs:
               ### Create PR, Note a potential race on the source branch ###
             - name: Create pull request
               if: ${{ env.FOUND_DIFF  == 'true' && github.event_name != 'pull_request' }}
-              run: |
-                  export ORT_DIFF_BRANCH_NAME="ort-diff-for-$TARGET_BRANCH"
-                  echo "Creating pull request from branch $ORT_DIFF_BRANCH_NAME to branch $TARGET_BRANCH"
-                  git config --global user.email "valkey-glide@lists.valkey.io"
-                  git config --global user.name "ort-bot"
-                  git checkout -b ${ORT_DIFF_BRANCH_NAME}
-                  git add $PYTHON_ASYNC_ATTRIBUTIONS $PYTHON_SYNC_ATTRIBUTIONS $NODE_ATTRIBUTIONS $RUST_ATTRIBUTIONS $JAVA_ATTRIBUTIONS $GO_ATTRIBUTIONS
-                  git commit -m "Updated attribution files" -s
-                  git push --set-upstream origin ${ORT_DIFF_BRANCH_NAME} -f || { echo "Failed to push branch."; exit 1; }
+              id: create-pr
+              uses: peter-evans/create-pull-request@v7
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  sign-commits: true
+                  commit-message: "Updated attribution files\n\nSigned-off-by: ort-bot <valkey-glide@lists.valkey.io>"
+                  branch: "ort-diff-for-${{ env.TARGET_BRANCH }}"
+                  base: ${{ env.TARGET_BRANCH }}
+                  title: "Updated attribution files for commit ${{ env.TARGET_COMMIT }}"
+                  body: "Created by Github action. ${{ env.LICENSES_LIST }}"
+                  add-paths: |
+                      ${{ env.PYTHON_ASYNC_ATTRIBUTIONS }}
+                      ${{ env.PYTHON_SYNC_ATTRIBUTIONS }}
+                      ${{ env.NODE_ATTRIBUTIONS }}
+                      ${{ env.RUST_ATTRIBUTIONS }}
+                      ${{ env.JAVA_ATTRIBUTIONS }}
+                      ${{ env.GO_ATTRIBUTIONS }}
 
-                  # Check if PR already exists
-                  existing_pr=$(gh pr list --base ${TARGET_BRANCH} --head ${ORT_DIFF_BRANCH_NAME} --json number --jq '.[0].number')
-
-                  if [ -z "$existing_pr" ]; then
-                    # Create a new PR if none exists
-                    title="Updated attribution files for commit ${TARGET_COMMIT}"
-                    gh pr create -B ${TARGET_BRANCH} -H ${ORT_DIFF_BRANCH_NAME} --title "${title}" --body "Created by Github action. ${{ env.LICENSES_LIST }}" || { echo "Failed to create PR."; exit 1; }
-                    echo "Pull request created successfully."
-                  else
-                    # Update the existing PR
-                    echo "Pull request #$existing_pr already exists. Updating branch."
-                    gh pr edit $existing_pr --title "Updated attribution files for commit ${TARGET_COMMIT}" --body "Created by Github action. ${{ env.LICENSES_LIST }}" || { echo "Failed to update PR."; exit 1; }
-                    echo "Pull request updated successfully."
-                  fi
+            - name: Enable auto-merge
+              if: ${{ steps.create-pr.outputs.pull-request-number != '' }}
+              run: gh pr merge "${{ steps.create-pr.outputs.pull-request-number }}" --auto --squash
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  INPUT_VERSION: ${{ github.event.inputs.version }}
 
             ### Warn of outdated attributions for PR ###
             - name: Warn of outdated attributions due to the PR

@@ -198,6 +198,102 @@ func parseMap(response *C.struct_CommandResponse) (any, error) {
 	return value_map, nil
 }
 
+// parseFtSearchDocuments parses a C Map response into an ordered slice of FtSearchDocument.
+// Unlike parseMap, this preserves the iteration order of the map entries, which is critical
+// for FT.SEARCH results when SORTBY is used. The withSortKeys parameter controls whether
+// each map value is expected to be a [sortKey, fieldMap] pair (WITHSORTKEYS) or just a fieldMap.
+func parseFtSearchDocuments(response *C.struct_CommandResponse, withSortKeys bool) ([]models.FtSearchDocument, error) {
+	if response.array_value == nil {
+		return nil, nil
+	}
+
+	docs := make([]models.FtSearchDocument, 0, response.array_value_len)
+	for _, v := range unsafe.Slice(response.array_value, response.array_value_len) {
+		keyVal, err := parseString(v.map_key)
+		if err != nil {
+			return nil, err
+		}
+		key := keyVal.(string)
+
+		val, err := parseInterface(v.map_value)
+		if err != nil {
+			return nil, err
+		}
+
+		doc := models.FtSearchDocument{Key: key}
+
+		if withSortKeys {
+			// WITHSORTKEYS: value is []any{sortKey, fieldMap}
+			pair, ok := val.([]any)
+			if !ok || len(pair) < 2 {
+				return nil, fmt.Errorf("expected [sortKey, fieldMap] for WITHSORTKEYS doc %q, got %T", key, val)
+			}
+			if sk, ok := pair[0].(string); ok {
+				doc.SortKey = sk
+			}
+			if fm, ok := pair[1].(map[string]any); ok {
+				doc.Fields = fm
+			} else {
+				doc.Fields = map[string]any{}
+			}
+		} else {
+			// Default/NOCONTENT: value is map[string]any
+			if fm, ok := val.(map[string]any); ok {
+				doc.Fields = fm
+			} else {
+				doc.Fields = map[string]any{}
+			}
+		}
+
+		docs = append(docs, doc)
+	}
+	return docs, nil
+}
+
+// parseFtSearchRawResponse parses the raw C response from FT.SEARCH into an FtSearchResult.
+// It walks the outer array manually so that the inner documents map is parsed in order
+// via parseFtSearchDocuments rather than through parseMap (which loses ordering).
+func parseFtSearchRawResponse(response *C.struct_CommandResponse, withSortKeys bool) (models.FtSearchResult, error) {
+	if response == nil {
+		return models.FtSearchResult{}, nil
+	}
+	if response.response_type != C.Array {
+		return models.FtSearchResult{}, fmt.Errorf("unexpected FT.SEARCH response type: expected Array")
+	}
+	if response.array_value == nil || response.array_value_len == 0 {
+		return models.FtSearchResult{}, fmt.Errorf("unexpected FT.SEARCH response format: expected non-empty array")
+	}
+
+	elements := unsafe.Slice(response.array_value, response.array_value_len)
+
+	// Element [0]: total count
+	countVal, err := parseInterface(&elements[0])
+	if err != nil {
+		return models.FtSearchResult{}, err
+	}
+	count, ok := countVal.(int64)
+	if !ok {
+		return models.FtSearchResult{}, fmt.Errorf("unexpected FT.SEARCH response format: expected int64 count")
+	}
+
+	// LIMIT 0 0: single-element array [count]
+	if len(elements) == 1 {
+		return models.FtSearchResult{TotalResults: count}, nil
+	}
+
+	// Element [1]: documents map — parse in order
+	docsResponse := &elements[1]
+	if docsResponse.response_type != C.Map {
+		return models.FtSearchResult{}, fmt.Errorf("unexpected FT.SEARCH response format: expected Map for documents")
+	}
+	docs, err := parseFtSearchDocuments(docsResponse, withSortKeys)
+	if err != nil {
+		return models.FtSearchResult{}, err
+	}
+
+	return models.FtSearchResult{TotalResults: count, Documents: docs}, nil
+}
+
 func parseSet(response *C.struct_CommandResponse) (any, error) {
 	if response.sets_value == nil {
 		return nil, nil

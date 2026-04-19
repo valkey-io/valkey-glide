@@ -27,13 +27,13 @@ import org.junit.jupiter.api.Timeout;
 @Timeout(30) // seconds
 public class ClusterManagementCommandsTests {
 
+    private static GlideClusterClient client;
+
     /** Expected length of node IDs and shard IDs (40-character hex strings). */
     private static final int NODE_ID_LENGTH = 40;
 
     /** Total number of hash slots in a cluster. */
     private static final int TOTAL_CLUSTER_SLOTS = 16384;
-
-    private static GlideClusterClient client;
 
     /**
      * Count total slots from a shard's slots field. Supports both formats: flat list of integers
