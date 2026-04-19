@@ -2556,15 +2556,24 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
 
         // For CustomCommand, we need to determine the actual command type from the first argument
-        let effective_command_type = if matches!(command_type, RequestType::CustomCommand) {
+        // and process compression on args[1..] since args[0] is the command name
+        let is_custom_command = matches!(command_type, RequestType::CustomCommand);
+        let effective_command_type = if is_custom_command {
             resolve_custom_command_type(&owned_args)
         } else {
             command_type
         };
 
         // Apply compression to command arguments
+        // For CustomCommand, skip the first argument (command name) when processing compression
+        let args_to_compress = if is_custom_command && !owned_args.is_empty() {
+            &mut owned_args[1..]
+        } else {
+            &mut owned_args[..]
+        };
+
         if let Err(err) = glide_core::compression::process_command_args_for_compression(
-            &mut owned_args,
+            args_to_compress,
             effective_command_type,
             compression_manager.as_deref(),
         ) {
@@ -3427,15 +3436,24 @@ pub(crate) unsafe fn create_cmd(
         let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
 
         // For CustomCommand, we need to determine the actual command type from the first argument
-        let effective_command_type = if matches!(info.request_type, RequestType::CustomCommand) {
+        // and process compression on args[1..] since args[0] is the command name
+        let is_custom_command = matches!(info.request_type, RequestType::CustomCommand);
+        let effective_command_type = if is_custom_command {
             resolve_custom_command_type(&owned_args)
         } else {
             info.request_type
         };
 
         // Apply compression to command arguments
+        // For CustomCommand, skip the first argument (command name) when processing compression
+        let args_to_compress = if is_custom_command && !owned_args.is_empty() {
+            &mut owned_args[1..]
+        } else {
+            &mut owned_args[..]
+        };
+
         if let Err(err) = glide_core::compression::process_command_args_for_compression(
-            &mut owned_args,
+            args_to_compress,
             effective_command_type,
             compression_manager.map(|m| m.as_ref()),
         ) {
