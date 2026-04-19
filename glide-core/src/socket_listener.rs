@@ -338,6 +338,11 @@ async fn send_command(
 
     // Process command arguments for compression if compression is enabled
     // This also validates that the command is compatible with compression
+    // Note: We intentionally keep these as separate if statements for clarity:
+    // - First check: is compression enabled?
+    // - Second check: did compression processing fail?
+    // - Third check: is it an incompatible command error?
+    #[allow(clippy::collapsible_if)]
     if client.is_compression_enabled() {
         if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
             // Check if this is an incompatible command error - these should be returned as errors
