@@ -995,9 +995,9 @@ func (suite *GlideTestSuite) TestCompressionMSetMGet() {
 	retrieved, err := client.MGet(context.Background(), []string{key1, key2, key3})
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(retrieved))
-	assert.Equal(t, value, retrieved[key1].Value())
-	assert.Equal(t, value, retrieved[key2].Value())
-	assert.Equal(t, value, retrieved[key3].Value())
+	assert.Equal(t, value, retrieved[0].Value())
+	assert.Equal(t, value, retrieved[1].Value())
+	assert.Equal(t, value, retrieved[2].Value())
 
 	client.Del(context.Background(), []string{key1, key2, key3})
 }
