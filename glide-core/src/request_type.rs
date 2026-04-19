@@ -890,29 +890,29 @@ impl RequestType {
             ),
 
             // Numeric operations - expect numeric string values
-            RequestType::Incr => Some(
-                "INCR expects a numeric string value, but would receive compressed bytes",
-            ),
-            RequestType::IncrBy => Some(
-                "INCRBY expects a numeric string value, but would receive compressed bytes",
-            ),
+            RequestType::Incr => {
+                Some("INCR expects a numeric string value, but would receive compressed bytes")
+            }
+            RequestType::IncrBy => {
+                Some("INCRBY expects a numeric string value, but would receive compressed bytes")
+            }
             RequestType::IncrByFloat => Some(
                 "INCRBYFLOAT expects a numeric string value, but would receive compressed bytes",
             ),
-            RequestType::Decr => Some(
-                "DECR expects a numeric string value, but would receive compressed bytes",
-            ),
-            RequestType::DecrBy => Some(
-                "DECRBY expects a numeric string value, but would receive compressed bytes",
-            ),
+            RequestType::Decr => {
+                Some("DECR expects a numeric string value, but would receive compressed bytes")
+            }
+            RequestType::DecrBy => {
+                Some("DECRBY expects a numeric string value, but would receive compressed bytes")
+            }
 
             // Bit operations - operate on raw binary data
             RequestType::GetBit => Some(
                 "GETBIT reads bits from raw bytes, which would read from compressed data instead of original value",
             ),
-            RequestType::SetBit => Some(
-                "SETBIT modifies bits in raw bytes, which would corrupt compressed values",
-            ),
+            RequestType::SetBit => {
+                Some("SETBIT modifies bits in raw bytes, which would corrupt compressed values")
+            }
             RequestType::BitCount => Some(
                 "BITCOUNT counts bits in raw bytes, which would count bits in compressed data instead of original value",
             ),

@@ -768,10 +768,7 @@ mod compression_tests {
             "APPEND",
             "APPEND modifies string data on the server",
         );
-        assert!(matches!(
-            err,
-            CompressionError::IncompatibleCommand { .. }
-        ));
+        assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
         assert!(err.to_string().contains("APPEND"));
         assert!(err.to_string().contains("incompatible with compression"));
         assert!(err.to_string().contains("modifies string data"));
@@ -788,38 +785,142 @@ mod compression_tests {
     #[test]
     fn test_compression_incompatibility_reason() {
         // Test string manipulation commands
-        assert!(RequestType::Append.compression_incompatibility_reason().is_some());
-        assert!(RequestType::GetRange.compression_incompatibility_reason().is_some());
-        assert!(RequestType::SetRange.compression_incompatibility_reason().is_some());
-        assert!(RequestType::Strlen.compression_incompatibility_reason().is_some());
-        assert!(RequestType::LCS.compression_incompatibility_reason().is_some());
-        assert!(RequestType::Substr.compression_incompatibility_reason().is_some());
+        assert!(
+            RequestType::Append
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::GetRange
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::SetRange
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::Strlen
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::LCS
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::Substr
+                .compression_incompatibility_reason()
+                .is_some()
+        );
 
         // Test numeric operations
-        assert!(RequestType::Incr.compression_incompatibility_reason().is_some());
-        assert!(RequestType::IncrBy.compression_incompatibility_reason().is_some());
-        assert!(RequestType::IncrByFloat.compression_incompatibility_reason().is_some());
-        assert!(RequestType::Decr.compression_incompatibility_reason().is_some());
-        assert!(RequestType::DecrBy.compression_incompatibility_reason().is_some());
+        assert!(
+            RequestType::Incr
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::IncrBy
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::IncrByFloat
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::Decr
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::DecrBy
+                .compression_incompatibility_reason()
+                .is_some()
+        );
 
         // Test bit operations
-        assert!(RequestType::GetBit.compression_incompatibility_reason().is_some());
-        assert!(RequestType::SetBit.compression_incompatibility_reason().is_some());
-        assert!(RequestType::BitCount.compression_incompatibility_reason().is_some());
-        assert!(RequestType::BitPos.compression_incompatibility_reason().is_some());
-        assert!(RequestType::BitField.compression_incompatibility_reason().is_some());
-        assert!(RequestType::BitFieldReadOnly.compression_incompatibility_reason().is_some());
-        assert!(RequestType::BitOp.compression_incompatibility_reason().is_some());
+        assert!(
+            RequestType::GetBit
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::SetBit
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::BitCount
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::BitPos
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::BitField
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::BitFieldReadOnly
+                .compression_incompatibility_reason()
+                .is_some()
+        );
+        assert!(
+            RequestType::BitOp
+                .compression_incompatibility_reason()
+                .is_some()
+        );
 
         // Test compatible commands
-        assert!(RequestType::Set.compression_incompatibility_reason().is_none());
-        assert!(RequestType::Get.compression_incompatibility_reason().is_none());
-        assert!(RequestType::MSet.compression_incompatibility_reason().is_none());
-        assert!(RequestType::MGet.compression_incompatibility_reason().is_none());
-        assert!(RequestType::SetEx.compression_incompatibility_reason().is_none());
-        assert!(RequestType::GetEx.compression_incompatibility_reason().is_none());
-        assert!(RequestType::Del.compression_incompatibility_reason().is_none());
-        assert!(RequestType::Ping.compression_incompatibility_reason().is_none());
+        assert!(
+            RequestType::Set
+                .compression_incompatibility_reason()
+                .is_none()
+        );
+        assert!(
+            RequestType::Get
+                .compression_incompatibility_reason()
+                .is_none()
+        );
+        assert!(
+            RequestType::MSet
+                .compression_incompatibility_reason()
+                .is_none()
+        );
+        assert!(
+            RequestType::MGet
+                .compression_incompatibility_reason()
+                .is_none()
+        );
+        assert!(
+            RequestType::SetEx
+                .compression_incompatibility_reason()
+                .is_none()
+        );
+        assert!(
+            RequestType::GetEx
+                .compression_incompatibility_reason()
+                .is_none()
+        );
+        assert!(
+            RequestType::Del
+                .compression_incompatibility_reason()
+                .is_none()
+        );
+        assert!(
+            RequestType::Ping
+                .compression_incompatibility_reason()
+                .is_none()
+        );
     }
 
     #[test]
@@ -832,57 +933,38 @@ mod compression_tests {
         let manager = CompressionManager::new(backend, config).unwrap();
 
         // Test incompatible commands return errors
-        let result = validate_command_compression_compatibility(
-            RequestType::Append,
-            Some(&manager),
-        );
+        let result =
+            validate_command_compression_compatibility(RequestType::Append, Some(&manager));
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
         assert!(err.to_string().contains("APPEND"));
 
-        let result = validate_command_compression_compatibility(
-            RequestType::Incr,
-            Some(&manager),
-        );
+        let result = validate_command_compression_compatibility(RequestType::Incr, Some(&manager));
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
         assert!(err.to_string().contains("INCR"));
 
-        let result = validate_command_compression_compatibility(
-            RequestType::BitCount,
-            Some(&manager),
-        );
+        let result =
+            validate_command_compression_compatibility(RequestType::BitCount, Some(&manager));
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
         assert!(err.to_string().contains("BITCOUNT"));
 
         // Test compatible commands succeed
-        let result = validate_command_compression_compatibility(
-            RequestType::Set,
-            Some(&manager),
-        );
+        let result = validate_command_compression_compatibility(RequestType::Set, Some(&manager));
         assert!(result.is_ok());
 
-        let result = validate_command_compression_compatibility(
-            RequestType::Get,
-            Some(&manager),
-        );
+        let result = validate_command_compression_compatibility(RequestType::Get, Some(&manager));
         assert!(result.is_ok());
 
-        let result = validate_command_compression_compatibility(
-            RequestType::Del,
-            Some(&manager),
-        );
+        let result = validate_command_compression_compatibility(RequestType::Del, Some(&manager));
         assert!(result.is_ok());
 
         // Test with no compression manager (should always succeed)
-        let result = validate_command_compression_compatibility(
-            RequestType::Append,
-            None,
-        );
+        let result = validate_command_compression_compatibility(RequestType::Append, None);
         assert!(result.is_ok());
 
         // Test with disabled compression manager (should always succeed)
@@ -921,7 +1003,10 @@ mod compression_tests {
         assert_eq!(RequestType::BitCount.command_name(), Some("BITCOUNT"));
         assert_eq!(RequestType::BitPos.command_name(), Some("BITPOS"));
         assert_eq!(RequestType::BitField.command_name(), Some("BITFIELD"));
-        assert_eq!(RequestType::BitFieldReadOnly.command_name(), Some("BITFIELD_RO"));
+        assert_eq!(
+            RequestType::BitFieldReadOnly.command_name(),
+            Some("BITFIELD_RO")
+        );
         assert_eq!(RequestType::BitOp.command_name(), Some("BITOP"));
 
         // Test compatible commands have names
