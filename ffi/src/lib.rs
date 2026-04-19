@@ -1907,6 +1907,55 @@ unsafe fn free_command_response_elements(command_response: CommandResponse) {
 }
 
 /// Converts a double pointer to a vec.
+/// Resolves the actual RequestType for a CustomCommand by parsing the command name from the first argument.
+/// This is needed for compression validation since CustomCommand doesn't carry the actual command type.
+fn resolve_custom_command_type(args: &[Vec<u8>]) -> RequestType {
+    if args.is_empty() {
+        return RequestType::CustomCommand;
+    }
+
+    let command_name = &args[0];
+    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
+
+    match command_str.as_str() {
+        // Commands that support compression
+        "SET" => RequestType::Set,
+        "MSET" => RequestType::MSet,
+        "MSETNX" => RequestType::MSetNX,
+        "SETEX" => RequestType::SetEx,
+        "PSETEX" => RequestType::PSetEx,
+        "SETNX" => RequestType::SetNX,
+        "GET" => RequestType::Get,
+        "MGET" => RequestType::MGet,
+        "GETEX" => RequestType::GetEx,
+        "GETDEL" => RequestType::GetDel,
+        "GETSET" => RequestType::GetSet,
+        // Incompatible commands - string manipulation
+        "APPEND" => RequestType::Append,
+        "GETRANGE" => RequestType::GetRange,
+        "SETRANGE" => RequestType::SetRange,
+        "STRLEN" => RequestType::Strlen,
+        "LCS" => RequestType::LCS,
+        "SUBSTR" => RequestType::Substr,
+        // Incompatible commands - numeric operations
+        "INCR" => RequestType::Incr,
+        "INCRBY" => RequestType::IncrBy,
+        "INCRBYFLOAT" => RequestType::IncrByFloat,
+        "DECR" => RequestType::Decr,
+        "DECRBY" => RequestType::DecrBy,
+        // Incompatible commands - bit operations
+        "GETBIT" => RequestType::GetBit,
+        "SETBIT" => RequestType::SetBit,
+        "BITCOUNT" => RequestType::BitCount,
+        "BITPOS" => RequestType::BitPos,
+        "BITFIELD" => RequestType::BitField,
+        "BITFIELD_RO" => RequestType::BitFieldReadOnly,
+        "BITOP" => RequestType::BitOp,
+        // Unknown command - keep as CustomCommand (no compression processing)
+        _ => RequestType::CustomCommand,
+    }
+}
+
 ///
 /// # Safety
 ///
@@ -2506,10 +2555,17 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
         let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
 
+        // For CustomCommand, we need to determine the actual command type from the first argument
+        let effective_command_type = if matches!(command_type, RequestType::CustomCommand) {
+            resolve_custom_command_type(&owned_args)
+        } else {
+            command_type
+        };
+
         // Apply compression to command arguments
         if let Err(err) = glide_core::compression::process_command_args_for_compression(
             &mut owned_args,
-            command_type,
+            effective_command_type,
             compression_manager.as_deref(),
         ) {
             let err = RedisError::from((
@@ -3370,10 +3426,17 @@ pub(crate) unsafe fn create_cmd(
         // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
         let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
 
+        // For CustomCommand, we need to determine the actual command type from the first argument
+        let effective_command_type = if matches!(info.request_type, RequestType::CustomCommand) {
+            resolve_custom_command_type(&owned_args)
+        } else {
+            info.request_type
+        };
+
         // Apply compression to command arguments
         if let Err(err) = glide_core::compression::process_command_args_for_compression(
             &mut owned_args,
-            info.request_type,
+            effective_command_type,
             compression_manager.map(|m| m.as_ref()),
         ) {
             return Err(format!("Compression failed: {}", err));

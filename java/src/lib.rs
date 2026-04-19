@@ -45,6 +45,14 @@ fn process_command_for_compression(
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
 
+    // If compression is not enabled, skip all processing
+    if compression_manager_ref
+        .map(|m| !m.is_enabled())
+        .unwrap_or(true)
+    {
+        return Ok(());
+    }
+
     let all_args: Vec<Vec<u8>> = cmd
         .args_iter()
         .filter_map(|arg| match arg {
@@ -61,8 +69,40 @@ fn process_command_for_compression(
     let command_str = String::from_utf8_lossy(command_name).to_uppercase();
     let request_type = match command_str.as_str() {
         "SET" => glide_core::request_type::RequestType::Set,
+        "MSET" => glide_core::request_type::RequestType::MSet,
+        "MSETNX" => glide_core::request_type::RequestType::MSetNX,
+        "SETEX" => glide_core::request_type::RequestType::SetEx,
+        "PSETEX" => glide_core::request_type::RequestType::PSetEx,
+        "SETNX" => glide_core::request_type::RequestType::SetNX,
+        // Incompatible commands - string manipulation
+        "APPEND" => glide_core::request_type::RequestType::Append,
+        "GETRANGE" => glide_core::request_type::RequestType::GetRange,
+        "SETRANGE" => glide_core::request_type::RequestType::SetRange,
+        "STRLEN" => glide_core::request_type::RequestType::Strlen,
+        "LCS" => glide_core::request_type::RequestType::LCS,
+        "SUBSTR" => glide_core::request_type::RequestType::Substr,
+        // Incompatible commands - numeric operations
+        "INCR" => glide_core::request_type::RequestType::Incr,
+        "INCRBY" => glide_core::request_type::RequestType::IncrBy,
+        "INCRBYFLOAT" => glide_core::request_type::RequestType::IncrByFloat,
+        "DECR" => glide_core::request_type::RequestType::Decr,
+        "DECRBY" => glide_core::request_type::RequestType::DecrBy,
+        // Incompatible commands - bit operations
+        "GETBIT" => glide_core::request_type::RequestType::GetBit,
+        "SETBIT" => glide_core::request_type::RequestType::SetBit,
+        "BITCOUNT" => glide_core::request_type::RequestType::BitCount,
+        "BITPOS" => glide_core::request_type::RequestType::BitPos,
+        "BITFIELD" => glide_core::request_type::RequestType::BitField,
+        "BITFIELD_RO" => glide_core::request_type::RequestType::BitFieldReadOnly,
+        "BITOP" => glide_core::request_type::RequestType::BitOp,
         _ => return Ok(()),
     };
+
+    // Check if the command is incompatible with compression - this should error out
+    glide_core::compression::validate_command_compression_compatibility(
+        request_type,
+        compression_manager_ref,
+    )?;
 
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
     glide_core::compression::process_command_args_for_compression(
@@ -229,10 +269,23 @@ async fn execute_command_request_and_complete(
                 })?;
 
                 // Apply compression to command arguments if compression is enabled
-                if client.is_compression_enabled()
-                    && let Err(e) = process_command_for_compression(&mut cmd, &client)
-                {
-                    log::warn!("Compression processing failed: {e}, continuing with original command");
+                // This also validates that the command is compatible with compression
+                if client.is_compression_enabled() {
+                    if let Err(e) = process_command_for_compression(&mut cmd, &client) {
+                        // Check if this is an incompatible command error - these should be returned as errors
+                        if matches!(
+                            e,
+                            glide_core::compression::CompressionError::IncompatibleCommand { .. }
+                        ) {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Incompatible command with compression",
+                                e.to_string(),
+                            )));
+                        }
+                        // For other compression errors, log and continue
+                        log::warn!("Compression processing failed: {e}, continuing with original command");
+                    }
                 }
 
                 // Compute routing
@@ -291,10 +344,23 @@ async fn execute_command_request_and_complete(
                         ))
                     })?;
                     // Apply compression to each command in the batch
-                    if client.is_compression_enabled()
-                        && let Err(e) = process_command_for_compression(&mut valkey_cmd, &client)
-                    {
-                        log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                    // This also validates that the command is compatible with compression
+                    if client.is_compression_enabled() {
+                        if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
+                            // Check if this is an incompatible command error - these should be returned as errors
+                            if matches!(
+                                e,
+                                glide_core::compression::CompressionError::IncompatibleCommand { .. }
+                            ) {
+                                return Err(redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Incompatible command with compression",
+                                    e.to_string(),
+                                )));
+                            }
+                            // For other compression errors, log and continue
+                            log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                        }
                     }
                     pipeline.add_command(valkey_cmd);
                 }
