@@ -1642,8 +1642,9 @@ where
             }
 
             let handle = tokio::spawn(async move {
-                log_info_lazy!(
+                log_info_rate_limited!(
                     "cluster",
+                    10,
                     format!(
                         "refreshing connection task to {:?} started",
                         address_clone_for_task
@@ -1710,8 +1711,9 @@ where
 
                 match node_result {
                     Ok(node) => {
-                        log_info_lazy!(
+                        log_info_rate_limited!(
                             "cluster",
+                            10,
                             format!(
                                 "Succeeded to refresh connection for node {}.",
                                 address_clone_for_task
@@ -3272,8 +3274,9 @@ where
                 match handle.now_or_never() {
                     Some(Ok(Ok(()))) => {
                         // Task succeeded
-                        log_info_lazy!(
+                        log_info_rate_limited!(
                             "slot_refresh",
+                            10,
                             "poll_recover: slot refresh completed successfully, recovery complete"
                         );
                         self.state = ConnectionState::PollComplete;
@@ -3666,8 +3669,9 @@ where
                 }
                 PollFlushAction::RebuildSlots => {
                     let in_flight = self.in_flight_requests.len();
-                    log_info_lazy!(
+                    log_info_rate_limited!(
                         "cluster",
+                        10,
                         format!(
                             "poll_flush: transitioning to RebuildSlots, in_flight_requests={}",
                             in_flight
@@ -3685,7 +3689,7 @@ where
                 }
                 PollFlushAction::ReconnectFromInitialConnections => {
                     let in_flight = self.in_flight_requests.len();
-                    log_info_lazy!("cluster", format!(
+                    log_info_rate_limited!("cluster", 10, format!(
                         "poll_flush: transitioning to ReconnectFromInitialConnections, in_flight_requests={}",
                         in_flight));
                     self.state =
@@ -3695,7 +3699,7 @@ where
                 }
                 PollFlushAction::Reconnect(addresses) => {
                     let in_flight = self.in_flight_requests.len();
-                    log_info_lazy!("cluster", format!(
+                    log_info_rate_limited!("cluster", 10, format!(
                         "poll_flush: transitioning to Reconnect(addresses={:?}), in_flight_requests={}",
                         addresses, in_flight));
                     self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(

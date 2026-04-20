@@ -23,6 +23,21 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class AsyncRegistry {
 
+    /** Rate-limit interval for timeout/disconnect log messages (in nanoseconds) */
+    private static final long LOG_RATE_LIMIT_NS = 5_000_000_000L; // 5 seconds
+
+    /** Last log timestamp for timeout errors */
+    private static final AtomicLong lastTimeoutLogNs = new AtomicLong(0);
+
+    /** Last log timestamp for disconnect errors */
+    private static final AtomicLong lastDisconnectLogNs = new AtomicLong(0);
+
+    /** Suppressed timeout log count since last emitted log */
+    private static final AtomicLong suppressedTimeoutLogs = new AtomicLong(0);
+
+    /** Suppressed disconnect log count since last emitted log */
+    private static final AtomicLong suppressedDisconnectLogs = new AtomicLong(0);
+
     /** Thread-safe storage for active futures Using ConcurrentHashMap for lock-free operations */
     private static final ConcurrentHashMap<Long, CompletableFuture<Object>> activeFutures =
             // Size based on max inflight requests with a small margin
@@ -206,16 +221,29 @@ public final class AsyncRegistry {
                         ? "Unknown error from native code"
                         : errorMessage;
 
-        // Log elapsed time for timeout and disconnect errors
+        // Log elapsed time for timeout and disconnect errors (rate-limited to avoid log spam during
+        // failover)
         if (errorTypeCode == 2 || errorTypeCode == 3) {
             Long registeredAt = registrationTimestamps.get(correlationId);
             if (registeredAt != null) {
                 long elapsedMs = (System.nanoTime() - registeredAt) / 1_000_000;
-                String errorTypeName = errorTypeCode == 2 ? "Timeout" : "Disconnect";
-                Logger.log(
-                        Logger.Level.WARN,
-                        "AsyncRegistry",
-                        errorTypeName + " after " + elapsedMs + "ms: " + msg);
+                boolean isTimeout = errorTypeCode == 2;
+                AtomicLong lastLogRef = isTimeout ? lastTimeoutLogNs : lastDisconnectLogNs;
+                AtomicLong suppressedRef = isTimeout ? suppressedTimeoutLogs : suppressedDisconnectLogs;
+                String errorTypeName = isTimeout ? "Timeout" : "Disconnect";
+
+                long now = System.nanoTime();
+                long lastLog = lastLogRef.get();
+                if (now - lastLog >= LOG_RATE_LIMIT_NS && lastLogRef.compareAndSet(lastLog, now)) {
+                    long suppressed = suppressedRef.getAndSet(0);
+                    String suffix = suppressed > 0 ? " (suppressed " + suppressed + " similar)" : "";
+                    Logger.log(
+                            Logger.Level.WARN,
+                            "AsyncRegistry",
+                            errorTypeName + " after " + elapsedMs + "ms: " + msg + suffix);
+                } else {
+                    suppressedRef.incrementAndGet();
+                }
             }
         }
 
