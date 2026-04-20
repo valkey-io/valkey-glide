@@ -239,7 +239,7 @@ jobs:
                   java-version: ${{ env.JAVA_VERSION }}
 
             - name: Download all native library artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v8
               with:
                   pattern: native-lib-*
                   path: native-libs-downloaded
@@ -348,7 +348,7 @@ jobs:
             RELEASE_VERSION: ${{ needs.set-release-version.outputs.RELEASE_VERSION }}
         steps:
             - name: Download published artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v8
 
             - name: Move all required files to one directory
               shell: bash
