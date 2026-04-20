@@ -299,7 +299,7 @@ jobs:
 
             - name: Detect mock pubsub changes
               id: pubsub_mock_changes
-              uses: dorny/paths-filter@v3
+              uses: dorny/paths-filter@v4
               with:
                   filters: |
                       mock_pubsub:
