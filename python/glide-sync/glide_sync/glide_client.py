@@ -3,6 +3,7 @@
 import os
 import sys
 import threading
+from types import TracebackType
 from typing import Any, List, Optional, Tuple, Union
 
 from glide_shared._fast_response import parse_response as _fast_parse_response
@@ -911,7 +912,7 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
-    def close(self):
+    def close(self) -> None:
         if not self._is_closed:
             self._is_closed = True
             with self._pubsub_condition:
@@ -919,6 +920,17 @@ class BaseClient(CoreCommands):
             self._lib.close_client(self._core_client)
             self._core_client = self._ffi.NULL
             self._pubsub_callback_ref = None
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> None:
+        self.close()
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):
