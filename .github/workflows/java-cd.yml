@@ -284,7 +284,7 @@ jobs:
               run: |
                   for ((retries = 0; retries < 20; retries++)); do
                       sleep 5
-                      export DEPLOYMENT_STATUS=$(curl --fail --request POST \
+                      export DEPLOYMENT_STATUS=$(curl --request POST \
                       -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                       "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
                       | jq -r '.deploymentState')
@@ -384,7 +384,7 @@ jobs:
                   AUTH_HEADER="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/valkey-glide-${{ env.RELEASE_VERSION }}.pom"
                   for ((retries = 0; retries < 6; retries++)); do
-                      HTTP_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL" || true)
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL")
                       if [ "$HTTP_STATUS" = "200" ]; then
                           echo "Artifact available"
                           exit 0
