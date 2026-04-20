@@ -32,7 +32,7 @@ public class ClientSideCache {
     @NonNull @Builder.Default private final String cacheId = generateCacheId();
 
     /** Maximum memory limit for the cache in kilobytes. */
-    @NonNull private final Long maxCacheKb;
+    private final long maxCacheKb;
 
     /** Optional TTL (Time-To-Live) for cache entries in seconds. */
     private final Long entryTtlSeconds;
