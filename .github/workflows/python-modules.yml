@@ -1,0 +1,159 @@
+name: Python Modules
+
+permissions:
+    contents: read
+    # Allows the GITHUB_TOKEN to make an API call to generate an OIDC token.
+    id-token: write
+
+on:
+    push:
+        branches:
+            - main
+            - release-*
+            - v*
+        paths:
+            - glide-core/src/**
+            - glide-core/redis-rs/redis/src/**
+            - python/glide-async/python/glide/async_commands/ft.py
+            - python/glide-async/python/glide/async_commands/glide_json.py
+            - python/glide-sync/glide_sync/sync_commands/ft.py
+            - python/glide-sync/glide_sync/sync_commands/glide_json.py
+            - python/glide-shared/glide_shared/commands/server_modules/**
+            - python/tests/async_tests/tests_server_modules/**
+            - python/tests/sync_tests/tests_server_modules/**
+            - .github/workflows/python-modules.yml
+            - .github/workflows/build-python-wrapper/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/start-valkey-docker/action.yml
+    pull_request:
+        paths:
+            - glide-core/src/**
+            - glide-core/redis-rs/redis/src/**
+            - python/glide-async/python/glide/async_commands/ft.py
+            - python/glide-async/python/glide/async_commands/glide_json.py
+            - python/glide-sync/glide_sync/sync_commands/ft.py
+            - python/glide-sync/glide_sync/sync_commands/glide_json.py
+            - python/glide-shared/glide_shared/commands/server_modules/**
+            - python/tests/async_tests/tests_server_modules/**
+            - python/tests/sync_tests/tests_server_modules/**
+            - .github/workflows/python-modules.yml
+            - .github/workflows/build-python-wrapper/action.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/workflows/start-valkey-docker/action.yml
+    workflow_dispatch:
+        inputs:
+            name:
+                required: false
+                type: string
+                description: "(Optional) Test run name"
+    workflow_call:
+
+concurrency:
+    group: python-modules-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
+    cancel-in-progress: true
+
+run-name: ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+
+jobs:
+    test-modules-linux:
+        name: Modules Tests (Linux)
+        runs-on: ubuntu-latest
+        timeout-minutes: 35
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: x86_64-unknown-linux-gnu-python
+                  restore-keys: |
+                      x86_64-unknown-linux-gnu-glide-core
+                      x86_64-unknown-linux-gnu
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ubuntu
+                  target: x86_64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "9.0"
+
+            - name: Start module servers via Docker
+              uses: ./.github/workflows/start-valkey-docker
+              with:
+                  engine-version: "9.0"
+
+            - name: Run modules tests
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args \
+                    --standalone-endpoints=${{ env.MODULES_STANDALONE_ENDPOINT }} \
+                    --cluster-endpoints=${{ env.MODULES_CLUSTER_ENDPOINTS }} \
+                    -k server_modules \
+                    --async-backend=asyncio \
+                    --html=pytest_report.html \
+                    --self-contained-html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules-python-docker
+                  path: |
+                      python/tests/pytest_report.html
+
+    test-modules:
+        if: github.repository_owner == 'valkey-io' && github.event_name == 'workflow_dispatch'
+        environment: AWS_ACTIONS
+        name: Running Module Tests
+        runs-on: [self-hosted, linux, ARM64, persistent]
+        timeout-minutes: 15
+
+        steps:
+            - name: Setup self-hosted runner access
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
+
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      python/target
+                      glide-core/src/generated
+                  key: aarch64-unknown-linux-gnu-python
+                  restore-keys: |
+                      aarch64-unknown-linux-gnu-glide-core
+                      aarch64-unknown-linux-gnu
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                  os: ubuntu
+                  target: aarch64-unknown-linux-gnu
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Test with pytest
+              working-directory: ./python
+              run: |
+                  python3 dev.py test --args --tls --cluster-endpoints=${{ secrets.MEMDB_MODULES_ENDPOINT }} -k server_modules --html=pytest_report.html --self-contained-html
+
+            - name: Upload test reports
+              if: always()
+              continue-on-error: true
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-reports-modules-python
+                  path: |
+                      python/tests/pytest_report.html

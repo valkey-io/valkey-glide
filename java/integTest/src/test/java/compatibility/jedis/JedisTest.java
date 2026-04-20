@@ -3,6 +3,7 @@ package compatibility.jedis;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
+import static glide.TestConfiguration.TLS;
 import static glide.utils.Java8Utils.createList;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.*;
@@ -15,6 +16,7 @@ import glide.api.models.configuration.NodeAddress;
 import java.lang.reflect.Constructor;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -1786,6 +1788,147 @@ public class JedisTest {
         assertTrue(resultSet.contains(member1), "SMEMBERS result should contain member1");
         assertTrue(resultSet.contains(member2), "SMEMBERS result should contain member2");
         assertTrue(resultSet.contains(member3), "SMEMBERS result should contain member3");
+    }
+
+    @Test
+    void publish_string_returns_zero_subscriber_count() {
+        String channel = "ch:" + UUID.randomUUID();
+        Long received = jedis.publish(channel, "msg");
+        assertNotNull(received, "PUBLISH should return a non-null Long");
+        assertEquals(
+                0L,
+                received.longValue(),
+                "PUBLISH should return 0 (GLIDE API limitation - see issue #5354)");
+    }
+
+    @Test
+    void publish_binary_returns_zero_subscriber_count() {
+        String channel = "ch:" + UUID.randomUUID();
+        byte[] channelBytes = channel.getBytes(StandardCharsets.UTF_8);
+        byte[] messageBytes = "msg".getBytes(StandardCharsets.UTF_8);
+        Long received = jedis.publish(channelBytes, messageBytes);
+        assertNotNull(received, "PUBLISH binary should return a non-null Long");
+        assertEquals(
+                0L,
+                received.longValue(),
+                "PUBLISH binary should return 0 (GLIDE API limitation - see issue #5354)");
+    }
+
+    @Test
+    void pubsub_channels_without_active_subscription_excludes_ephemeral_channel_name() {
+        String channel = "ch:" + UUID.randomUUID();
+        List<String> channels = jedis.pubsubChannels();
+        assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
+        assertFalse(
+                channels.contains(channel),
+                "PUBSUB CHANNELS should not list a channel with no active subscription");
+    }
+
+    @Test
+    void pubsub_channels_with_pattern_without_active_subscription_excludes_ephemeral_channel() {
+        String channel = "ch:" + UUID.randomUUID();
+        // Glob-style pattern (not the exact channel name) so the server exercises pattern matching.
+        String pattern = "ch:*";
+        List<String> channelsWithPattern = jedis.pubsubChannels(pattern);
+        assertNotNull(
+                channelsWithPattern, "PUBSUB CHANNELS with pattern should return a non-null list");
+        assertFalse(
+                channelsWithPattern.contains(channel),
+                "PUBSUB CHANNELS with glob pattern should not list channel without subscribers");
+    }
+
+    @Test
+    void pubsub_num_sub_without_subscribers_reports_zero_for_requested_channel() {
+        String channel = "ch:" + UUID.randomUUID();
+        Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+        assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
+        assertTrue(numSub.containsKey(channel), "PUBSUB NUMSUB should contain the requested channel");
+        assertEquals(
+                0L, numSub.get(channel), "PUBSUB NUMSUB should report 0 subscribers when none are active");
+    }
+
+    @Test
+    void pubsub_num_pat_returns_non_negative_count() {
+        Long numPat = jedis.pubsubNumPat();
+        assertNotNull(numPat, "PUBSUB NUMPAT should return a non-null value");
+        assertTrue(numPat >= 0, "PUBSUB NUMPAT should return a non-negative value");
+    }
+
+    @Test
+    void pubsub_channels_with_active_subscription_contains_channel() throws Exception {
+        String channel = "ch:introspection:" + UUID.randomUUID();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.subscribe(Collections.singleton(channel), 5000).get();
+            List<String> channels = jedis.pubsubChannels();
+            assertNotNull(channels, "PUBSUB CHANNELS should return a non-null list");
+            assertTrue(
+                    channels.contains(channel),
+                    "PUBSUB CHANNELS should contain channel with active subscription: " + channels);
+        }
+    }
+
+    @Test
+    void pubsub_channels_with_pattern_returns_matching_active_channel() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String channel = "ch:patgrp:" + suffix + ":tail";
+        String pattern = "ch:patgrp:" + suffix + ":*";
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.subscribe(Collections.singleton(channel), 5000).get();
+            List<String> withPattern = jedis.pubsubChannels(pattern);
+            assertNotNull(withPattern, "PUBSUB CHANNELS with pattern should return a non-null list");
+            assertTrue(
+                    withPattern.contains(channel),
+                    "PUBSUB CHANNELS with pattern should include active channel: " + withPattern);
+        }
+    }
+
+    @Test
+    void pubsub_num_sub_with_active_subscription_reports_one() throws Exception {
+        String channel = "ch:introspection:numsub:" + UUID.randomUUID();
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.subscribe(Collections.singleton(channel), 5000).get();
+            Map<String, Long> numSub = jedis.pubsubNumSub(channel);
+            assertNotNull(numSub, "PUBSUB NUMSUB should return a non-null map");
+            assertEquals(
+                    1L,
+                    numSub.getOrDefault(channel, 0L),
+                    "PUBSUB NUMSUB should return 1 for the subscribed channel");
+        }
+    }
+
+    @Test
+    void pubsub_num_pat_increases_after_pattern_subscription() throws Exception {
+        Long before = jedis.pubsubNumPat();
+        assertNotNull(before);
+        String pattern = "ch:numpat:" + UUID.randomUUID() + "*";
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .address(NodeAddress.builder().host(valkeyHost).port(valkeyPort).build())
+                        .useTLS(TLS)
+                        .build();
+        try (GlideClient glideClient = GlideClient.createClient(config).get()) {
+            glideClient.psubscribe(Collections.singleton(pattern), 5000).get();
+            Long after = jedis.pubsubNumPat();
+            assertNotNull(after);
+            assertTrue(
+                    after >= before + 1,
+                    "PUBSUB NUMPAT should increase after PSUBSCRIBE; before=" + before + " after=" + after);
+        }
     }
 
     @Test

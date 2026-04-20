@@ -654,17 +654,18 @@ fn set_connection_info_to_connection_request(
     }
 }
 
-pub async fn repeat_try_create<T, Fut>(f: impl Fn() -> Fut) -> T
+/// Repeatedly calls `f` until it returns `Some`, using a default timeout of 3 seconds.
+/// Panics if the timeout is exceeded.
+pub async fn retry<T, Fut>(f: impl Fn() -> Fut) -> T
 where
     Fut: Future<Output = Option<T>>,
 {
-    repeat_try_create_with_timeout(f, std::time::Duration::from_millis(3000)).await
+    retry_until_timeout(f, std::time::Duration::from_millis(3000)).await
 }
 
-pub async fn repeat_try_create_with_timeout<T, Fut>(
-    f: impl Fn() -> Fut,
-    timeout: std::time::Duration,
-) -> T
+/// Repeatedly calls `f` every 5ms until it returns `Some` or the `timeout` is exceeded.
+/// Panics if the timeout is exceeded.
+pub async fn retry_until_timeout<T, Fut>(f: impl Fn() -> Fut, timeout: std::time::Duration) -> T
 where
     Fut: Future<Output = Option<T>>,
 {
@@ -675,7 +676,7 @@ where
         }
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
-    panic!("Couldn't create object within {:?}", timeout);
+    panic!("Timed out: retry exceeded {:?}", timeout);
 }
 
 pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionInfo) {
@@ -684,7 +685,7 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
         redis: RedisConnectionInfo::default(),
     })
     .unwrap();
-    let mut connection = repeat_try_create(|| async {
+    let mut connection = retry(|| async {
         client
             .get_multiplexed_async_connection(GlideConnectionOptions::default())
             .await

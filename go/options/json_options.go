@@ -2,6 +2,8 @@
 
 package options
 
+import "strconv"
+
 const (
 	jsonIndentKeyword  = "INDENT"
 	jsonNewlineKeyword = "NEWLINE"
@@ -49,6 +51,37 @@ func (o *JsonGetOptions) ToArgs() []string {
 	}
 	if o.space != nil {
 		args = append(args, jsonSpaceKeyword, *o.space)
+	}
+	return args
+}
+
+// JsonArrIndexOptions represents optional arguments for the JSON.ARRINDEX command.
+type JsonArrIndexOptions struct {
+	start *int64
+	end   *int64
+}
+
+// NewJsonArrIndexOptions creates options with a start index (inclusive).
+// Indices that exceed the array bounds are automatically adjusted.
+func NewJsonArrIndexOptions(start int64) *JsonArrIndexOptions {
+	return &JsonArrIndexOptions{start: &start}
+}
+
+// SetEnd sets the end index (exclusive).
+// If start > end, the command returns -1 (not found).
+func (o *JsonArrIndexOptions) SetEnd(end int64) *JsonArrIndexOptions {
+	o.end = &end
+	return o
+}
+
+// ToArgs converts the options to a string slice for command arguments.
+func (o *JsonArrIndexOptions) ToArgs() []string {
+	var args []string
+	if o.start != nil {
+		args = append(args, strconv.FormatInt(*o.start, 10))
+		if o.end != nil {
+			args = append(args, strconv.FormatInt(*o.end, 10))
+		}
 	}
 	return args
 }

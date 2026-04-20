@@ -345,7 +345,7 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
             // because `Record` does not support `GlideString` as a key.
             // The result is in format `GlideRecord<T>`.
             let mut js_array = js_env.create_array_with_length(map.len())?;
-            for (idx, (key, value)) in (0_u32..).zip(map.into_iter()) {
+            for (idx, (key, value)) in (0_u32..).zip(map) {
                 let mut obj = js_env.create_object()?;
                 obj.set_named_property("key", resp_value_to_js(key, js_env, string_decoder)?)?;
                 obj.set_named_property("value", resp_value_to_js(value, js_env, string_decoder)?)?;

@@ -9528,6 +9528,16 @@ func (client *baseClient) executeScriptWithRoute(
 	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
 	defer pinner.Unpin()
 
+	// Create span if OpenTelemetry is enabled and sampling is configured
+	var spanPtr uint64
+	otelInstance := GetOtelInstance()
+	if otelInstance != nil && otelInstance.shouldSample() {
+		spanPtr, _ = otelInstance.CreateSpan("EVALSHA")
+		if spanPtr != 0 {
+			defer otelInstance.dropSpan(spanPtr)
+		}
+	}
+
 	client.mu.Lock()
 	if client.coreClient == nil {
 		client.mu.Unlock()
@@ -9548,6 +9558,7 @@ func (client *baseClient) executeScriptWithRoute(
 		argsLengthsPtr,
 		routeBytesPtr,
 		routeBytesCount,
+		C.uint64_t(spanPtr),
 	)
 	client.mu.Unlock()
 

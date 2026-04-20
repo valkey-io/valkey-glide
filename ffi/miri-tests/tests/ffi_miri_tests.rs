@@ -6,7 +6,8 @@ use glide_core::{
     connection_request::{NodeAddress, TlsMode},
 };
 use miri_tests::{
-    ClientType, ConnectionResponse, PushKind, close_client, create_client, free_connection_response,
+    ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
+    free_connection_response,
 };
 use miri_tests::{Level, LogResult, free_log_result, glide_log, init};
 use miri_tests::{
@@ -67,6 +68,26 @@ fn create_client_test() {
         let connection_response_ptr = create_client(
             connection_request_ptr,
             connection_request_len,
+            client_type_ptr,
+            pubsub_callback,
+        );
+        let conn_ptr = (*connection_response_ptr).conn_ptr;
+        close_client(conn_ptr);
+        free_connection_response(connection_response_ptr as *mut ConnectionResponse);
+        let _ = Box::from_raw(client_type_ptr);
+    }
+}
+
+#[test]
+fn create_client_from_uri_test() {
+    let uri = CString::new("redis://localhost:6378").unwrap();
+    let client_type = Box::new(ClientType::SyncClient);
+    let client_type_ptr = Box::into_raw(client_type);
+
+    unsafe {
+        let connection_response_ptr = create_client_from_uri(
+            uri.as_ptr(),
+            ptr::null(),
             client_type_ptr,
             pubsub_callback,
         );

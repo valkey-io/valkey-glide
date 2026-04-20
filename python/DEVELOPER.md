@@ -30,9 +30,11 @@ The `python/` directory contains three separate components:
 
 #### 🔹 glide-shared/
 
-- Purpose: Shared Python logic used by both clients — includes command builders, exceptions, constants, protobuf message handling, and more.
+- Purpose: Shared Python logic and native extensions used by both clients — includes command builders, exceptions, constants, protobuf message handling, and the fast response parser (PyO3).
+- Rust bindings: via PyO3, defined in `valkey-glide/python/glide-shared/src/lib.rs`.
 - Import path: `import glide_shared`
-- Installation: Installed locally via `pip install valkey-glide/python/glide-shared` during each client’s build process. Not published separately to PyPI.
+- Installation: Built locally via `maturin develop` during each client’s build process. Not published separately to PyPI.
+- Build backend: Maturin (Rust-based, hybrid Python + native extension)
 
 ### 🧱 High-Level Folder Structure
 
@@ -46,9 +48,11 @@ python/
 ├── glide-sync/             # Sync client (CFFI + setuptools)
 │   ├── pyproject.toml
 │   └── glide_sync/         # Python code for sync client
-├── glide-shared/           # Shared logic used by both clients
+├── glide-shared/           # Shared logic + native extensions (Maturin hybrid)
+│   ├── Cargo.toml          # Rust crate config (fast response parser)
 │   ├── pyproject.toml
-│   └── glide_shared/       # Shared source code
+│   ├── src/                # Rust source (PyO3 fast response parser)
+│   └── glide_shared/       # Shared Python source code
 └── tests/                  # Shared test suite
 ffi/
 ├── src/                    # Rust code provides a C-compatible FFI (used in glide-sync)

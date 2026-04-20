@@ -26,6 +26,12 @@ ignore = [
     # via iai-callgrind for benchmarking. No security impact.
     # https://rustsec.org/advisories/RUSTSEC-2025-0141
     "RUSTSEC-2025-0141",
+    # rand is unsound with custom logger using rand::rng(), but only used as
+    # a transitive dependency (nanoid, opentelemetry_sdk, tower). Glide doesn't
+    # use a custom logger that calls rand::thread_rng(). No 0.8.x patch exists
+    # and direct dependency bumped to 0.9.4, which is patched.
+    # https://rustsec.org/advisories/RUSTSEC-2026-0097
+    "RUSTSEC-2026-0097",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

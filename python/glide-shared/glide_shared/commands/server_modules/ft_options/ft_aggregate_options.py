@@ -255,6 +255,10 @@ class FtAggregateOptions:
         timeout: Optional[int] = None,
         params: Optional[Mapping[TEncodable, TEncodable]] = {},
         clauses: Optional[List[FtAggregateClause]] = [],
+        verbatim: Optional[bool] = False,
+        inorder: Optional[bool] = False,
+        slop: Optional[int] = None,
+        dialect: Optional[int] = None,
     ):
         """
         Initialize a new FtAggregateOptions instance.
@@ -268,12 +272,20 @@ class FtAggregateOptions:
             clauses (Optional[List[FtAggregateClause]]): FILTER, LIMIT, GROUPBY, SORTBY and APPLY clauses, that can be
                 repeated multiple times in any order and be freely intermixed. They are applied in the order specified, with
                 the output of one clause feeding the input of the next clause.
+            verbatim (Optional[bool]): If set, stemming is not applied to term searches.
+            inorder (Optional[bool]): If set, proximity matching of terms must be in order.
+            slop (Optional[int]): Specifies a slop value for proximity matching of terms.
+            dialect (Optional[int]): The query dialect version to use. The only supported dialect is ``2``.
         """
         self.loadAll = loadAll
         self.loadFields = loadFields
         self.timeout = timeout
         self.params = params
         self.clauses = clauses
+        self.verbatim = verbatim
+        self.inorder = inorder
+        self.slop = slop
+        self.dialect = dialect
 
     def to_args(self) -> List[TEncodable]:
         """
@@ -283,6 +295,12 @@ class FtAggregateOptions:
             List[TEncodable]: A list of optional arguments for the FT.AGGREGATE command.
         """
         args: List[TEncodable] = []
+        if self.verbatim:
+            args.append(FtAggregateKeywords.VERBATIM)
+        if self.inorder:
+            args.append(FtAggregateKeywords.INORDER)
+        if self.slop is not None:
+            args.extend([FtAggregateKeywords.SLOP, str(self.slop)])
         if self.loadAll:
             args.extend([FtAggregateKeywords.LOAD, "*"])
         elif self.loadFields:
@@ -297,4 +315,6 @@ class FtAggregateOptions:
         if self.clauses:
             for clause in self.clauses:
                 args.extend(clause.to_args())
+        if self.dialect is not None:
+            args.extend([FtAggregateKeywords.DIALECT, str(self.dialect)])
         return args

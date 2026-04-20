@@ -527,7 +527,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns the serialized payload of all loaded libraries.
 
-        See [valkey.io](https://valkey.io/docs/latest/commands/function-dump/) for more details.
+        See [valkey.io](https://valkey.io/commands/function-dump/) for more details.
 
         Returns:
             bytes: The serialized payload of all loaded libraries.
@@ -549,7 +549,7 @@ class StandaloneCommands(CoreCommands):
         """
         Restores libraries from the serialized payload returned by the `function_dump` command.
 
-        See [valkey.io](https://valkey.io/docs/latest/commands/function-restore/) for more details.
+        See [valkey.io](https://valkey.io/commands/function-restore/) for more details.
 
         Args:
             payload (TEncodable): The serialized data from the `function_dump` command.

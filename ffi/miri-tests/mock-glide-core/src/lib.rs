@@ -6,6 +6,7 @@ pub mod command_request;
 pub mod compression;
 pub mod connection_request;
 pub mod errors;
+pub mod otel_db_semantics;
 pub mod request_type;
 pub mod scripts_container;
 
