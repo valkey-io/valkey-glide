@@ -9372,7 +9372,6 @@ export class BaseClient {
         }
 
         const request: connection_request.IConnectionRequest = {
-
             protocol,
             clientName: options.clientName,
             addresses: options.addresses,
@@ -9678,7 +9677,7 @@ export class BaseClient {
     public async getCacheHitRate(): Promise<number> {
         return await this.getCacheMetrics(
             command_request.CacheMetricsType.HitRate,
-            );
+        );
     }
     /**
      * Get the cache miss rate (misses / total requests).
@@ -9695,7 +9694,7 @@ export class BaseClient {
     public async getCacheMissRate(): Promise<number> {
         return await this.getCacheMetrics(
             command_request.CacheMetricsType.MissRate,
-                    );
+        );
     }
     /**
      * Get the current number of entries in the client-side cache.
@@ -9712,7 +9711,7 @@ export class BaseClient {
     public async getCacheEntryCount(): Promise<number> {
         return await this.getCacheMetrics(
             command_request.CacheMetricsType.EntryCount,
-                    );
+        );
     }
     /**
      * Get the total number of entries evicted from the client-side cache due to memory constraints.
@@ -9729,7 +9728,7 @@ export class BaseClient {
     public async getCacheEvictions(): Promise<number> {
         return await this.getCacheMetrics(
             command_request.CacheMetricsType.Evictions,
-            );
+        );
     }
 
     /**
@@ -9747,7 +9746,7 @@ export class BaseClient {
     public async getCacheExpirations(): Promise<number> {
         return await this.getCacheMetrics(
             command_request.CacheMetricsType.Expirations,
-                    );
+        );
     }
 
     /**
