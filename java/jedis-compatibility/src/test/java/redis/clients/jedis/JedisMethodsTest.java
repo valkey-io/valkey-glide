@@ -143,6 +143,29 @@ public class JedisMethodsTest {
     }
 
     @Test
+    public void testPubSubMethodSignatures() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+
+        Method publishString = jedisClass.getMethod("publish", String.class, String.class);
+        assertEquals(Long.class, publishString.getReturnType());
+
+        Method publishBinary = jedisClass.getMethod("publish", byte[].class, byte[].class);
+        assertEquals(Long.class, publishBinary.getReturnType());
+
+        Method pubsubChannels = jedisClass.getMethod("pubsubChannels");
+        assertEquals(List.class, pubsubChannels.getReturnType());
+
+        Method pubsubChannelsPattern = jedisClass.getMethod("pubsubChannels", String.class);
+        assertEquals(List.class, pubsubChannelsPattern.getReturnType());
+
+        Method pubsubNumPat = jedisClass.getMethod("pubsubNumPat");
+        assertEquals(Long.class, pubsubNumPat.getReturnType());
+
+        Method pubsubNumSub = jedisClass.getMethod("pubsubNumSub", String[].class);
+        assertEquals(Map.class, pubsubNumSub.getReturnType());
+    }
+
+    @Test
     public void testServerManagementMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 

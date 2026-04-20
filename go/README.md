@@ -287,6 +287,74 @@ for !cursor.IsFinished() {
 
 **Note**: The `AllowNonCoveredSlots` option is useful when the cluster is not fully configured or some nodes are down. It allows the scan to proceed even if some hash slots are not covered by any node.
 
+### Vector Search (FT commands)
+
+Valkey GLIDE supports vector search and full-text search via the `FT` command group, available on both standalone and cluster clients. You need a Valkey server with the search module enabled.
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+
+    glide "github.com/valkey-io/valkey-glide/go/v2"
+    "github.com/valkey-io/valkey-glide/go/v2/config"
+    "github.com/valkey-io/valkey-glide/go/v2/constants"
+    "github.com/valkey-io/valkey-glide/go/v2/options"
+)
+
+func main() {
+    cfg := config.NewClusterClientConfiguration().
+        WithAddress(&config.NodeAddress{Host: "localhost", Port: 7001})
+
+    client, err := glide.NewClusterClient(cfg)
+    if err != nil {
+        fmt.Println("Error:", err)
+        return
+    }
+    defer client.Close()
+
+    ft := client.FT()
+    ctx := context.Background()
+
+    // Create an index on hash keys with prefix "doc:"
+    _, err = ft.Create(ctx, "my_index",
+        []options.Field{
+            options.NewTextField("title"),
+            options.NewNumericField("score"),
+            options.NewVectorFieldFlat("embedding", constants.DistanceMetricL2, 128),
+        },
+        &options.FtCreateOptions{
+            DataType: constants.IndexDataTypeHash,
+            Prefixes: []string{"doc:"},
+        },
+    )
+    if err != nil {
+        fmt.Println("Error creating index:", err)
+        return
+    }
+
+    // Index some documents
+    client.HSet(ctx, "doc:1", map[string]string{"title": "hello world", "score": "10"})
+    client.HSet(ctx, "doc:2", map[string]string{"title": "hello there", "score": "20"})
+    time.Sleep(time.Second) // allow index to sync
+
+    // Search
+    result, err := ft.Search(ctx, "my_index", "@score:[10 10]", nil)
+    if err != nil {
+        fmt.Println("Error searching:", err)
+        return
+    }
+    fmt.Printf("Found %d result(s)\n", result.TotalResults)
+
+    ft.DropIndex(ctx, "my_index")
+}
+```
+
+For more FT command examples see [ft_commands_test.go](ft_commands_test.go).
+
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](DEVELOPER.md) file.
