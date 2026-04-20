@@ -378,6 +378,22 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
+            - name: Wait for deployment artifacts to be available
+              shell: bash
+              run: |
+                  AUTH_HEADER="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
+                  ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/valkey-glide-${{ env.RELEASE_VERSION }}.pom"
+                  for ((retries = 0; retries < 20; retries++)); do
+                      sleep 10
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL")
+                      if [ "$HTTP_STATUS" = "200" ]; then
+                          echo "Artifact available after $((retries * 10))s"
+                          exit 0
+                      fi
+                      echo "Attempt $retries: HTTP $HTTP_STATUS, waiting 10s..."
+                  done
+                  echo "Artifact not available after 200s, proceeding anyway"
+
             - name: Start standalone Valkey server
               working-directory: utils
               id: port
@@ -389,6 +405,7 @@ jobs:
               working-directory: java
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
+                  GRADLE_OPTS: "-Dorg.gradle.internal.http.connectionTimeout=120000 -Dorg.gradle.internal.http.socketTimeout=120000"
               run: |
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
