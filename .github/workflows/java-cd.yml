@@ -56,7 +56,7 @@ jobs:
               id: release-version
               shell: bash
               run: |
-                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                       R_VERSION=${GITHUB_REF:11}
@@ -169,7 +169,7 @@ jobs:
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
-                    -Ptarget=${{ matrix.host.TARGET }}
+                    -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
 
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
@@ -178,7 +178,7 @@ jobs:
                   else
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
-                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
 
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
@@ -392,10 +392,10 @@ jobs:
               id: maven-deployment
               shell: bash
               run: |
-                  export DEPLOYMENT_ID=`curl --request POST \
+                  export DEPLOYMENT_ID=$(curl --fail --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   --form bundle=@build.zip \
-                  https://central.sonatype.com/api/v1/publisher/upload | tail -n 1`
+                  https://central.sonatype.com/api/v1/publisher/upload | tail -n 1)
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_ENV
                   echo "DEPLOYMENT_ID=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
                   echo Uploaded to Maven deployment with deployment ID $DEPLOYMENT_ID. Will be released if smoke tests pass and approved for release.
@@ -405,12 +405,12 @@ jobs:
               run: |
                   for ((retries = 0; retries < 20; retries++)); do
                       sleep 5
-                      export DEPLOYMENT_STATUS=`curl --request POST \
+                      export DEPLOYMENT_STATUS=$(curl --request POST \
                       -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                       "https://central.sonatype.com/api/v1/publisher/status?id=${{ env.DEPLOYMENT_ID }}" \
-                      | jq '.deploymentState'`
+                      | jq -r '.deploymentState')
 
-                      if [[ $DEPLOYMENT_STATUS == ""\"VALIDATED"\"" ]]; then exit 0; fi
+                      if [[ $DEPLOYMENT_STATUS == "VALIDATED" ]]; then exit 0; fi
                   done
 
                   curl --request POST \
@@ -463,7 +463,7 @@ jobs:
               run: |
                   # Set environment variable to indicate container environment for Gradle
                   echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
-                  apk add openjdk11 git bash
+                  apk add openjdk11 git bash curl
                   export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                   # Create gradle user home and disable auto-download
                   mkdir -p ~/.gradle
@@ -498,12 +498,32 @@ jobs:
                       ${{ runner.os }}-gradle-cd-
                       ${{ runner.os }}-gradle-
 
+            - name: Wait for deployment artifacts to be available
+              shell: bash
+              run: |
+                  AUTH_HEADER="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
+                  ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/valkey-glide-${{ env.RELEASE_VERSION }}.pom"
+                  for ((retries = 0; retries < 6; retries++)); do
+                      HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL")
+                      if [ "$HTTP_STATUS" = "200" ]; then
+                          echo "Artifact available"
+                          exit 0
+                      fi
+                      echo "Attempt $((retries + 1))/6: HTTP $HTTP_STATUS, waiting 5s..."
+                      sleep 5
+                  done
+                  echo "::warning::Artifact not available after 30s, proceeding anyway (deployment already validated)"
+
             - name: Start standalone Valkey server
               working-directory: utils
               id: port
               shell: bash
               run: |
                   PORT=$(python3 ./cluster_manager.py start -r 0 2>&1 | grep CLUSTER_NODES | cut -d = -f 2 | cut -d , -f 1 | cut -d : -f 2)
+                  if [ -z "$PORT" ]; then
+                      echo "Failed to extract PORT from cluster_manager.py output"
+                      exit 1
+                  fi
                   echo "PORT=$PORT" >> $GITHUB_OUTPUT
 
             - name: Test deployment
@@ -511,9 +531,10 @@ jobs:
               shell: bash
               env:
                   PORT: ${{ steps.port.outputs.PORT }}
+                  GRADLE_OPTS: "-Dorg.gradle.internal.http.connectionTimeout=120000 -Dorg.gradle.internal.http.socketTimeout=120000"
               run: |
                   export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderName="Authorization"
-                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
+                  export ORG_GRADLE_PROJECT_centralManualTestingAuthHeaderValue="Bearer $(echo -n "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
                   export GLIDE_RELEASE_VERSION=${{ env.RELEASE_VERSION }}
                   ./gradlew --build-cache :benchmarks:run --args="--minimal --clients glide --port ${{ env.PORT }}"
 
@@ -531,7 +552,7 @@ jobs:
         steps:
             - name: Publish to Maven
               run: |
-                  curl --request POST \
+                  curl --fail --request POST \
                   -u "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" \
                   "https://central.sonatype.com/api/v1/publisher/deployment/${{ env.DEPLOYMENT_ID }}"
 
