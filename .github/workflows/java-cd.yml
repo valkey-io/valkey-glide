@@ -343,7 +343,7 @@ jobs:
               run: |
                   # Set environment variable to indicate container environment for Gradle
                   echo "GLIDE_CONTAINER_BUILD=true" >> $GITHUB_ENV
-                  apk add openjdk11 git bash
+                  apk add openjdk11 git bash curl
                   export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
                   # Create gradle user home and disable auto-download
                   mkdir -p ~/.gradle
@@ -382,7 +382,7 @@ jobs:
               shell: bash
               run: |
                   AUTH_HEADER="Bearer $(echo "${{ secrets.CENTRAL_TOKEN_USERNAME }}:${{ secrets.CENTRAL_TOKEN_PASSWORD }}" | base64)"
-                  ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/${{ needs.publish-to-maven-central-deployment.outputs.DEPLOYMENT_ID }}/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/valkey-glide-${{ env.RELEASE_VERSION }}.pom"
+                  ARTIFACT_URL="https://central.sonatype.com/api/v1/publisher/deployments/download/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/valkey-glide-${{ env.RELEASE_VERSION }}.pom"
                   for ((retries = 0; retries < 20; retries++)); do
                       sleep 10
                       HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: $AUTH_HEADER" "$ARTIFACT_URL")
