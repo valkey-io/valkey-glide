@@ -423,10 +423,8 @@ public class ConnectionManager {
                             cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
                             cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
 
-                            // Set optional TTL
-                            if (clientSideCache.getEntryTtlMs() != null) {
-                                cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
-                            }
+                            // Set TTL (0 = no expiration)
+                            cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
 
                             // Set optional eviction policy
                             if (clientSideCache.getEvictionPolicy() != null) {

@@ -13,7 +13,7 @@ import lombok.NonNull;
  * @example
  *     <pre>{@code
  * // Create cache with auto-generated ID
- * ClientSideCache cache = ClientSideCache.create(1024);
+ * ClientSideCache cache = ClientSideCache.create(1024, 60000);
  *
  * // Create cache with custom configuration
  * ClientSideCache cache = ClientSideCache.builder()
@@ -34,8 +34,11 @@ public class ClientSideCache {
     /** Maximum memory limit for the cache in kilobytes. */
     private final long maxCacheKb;
 
-    /** Optional TTL (Time-To-Live) for cache entries in milliseconds. */
-    private final Long entryTtlMs;
+    /**
+     * TTL (Time-To-Live) for cache entries in milliseconds. A value of 0 means no expiration. This
+     * field is required.
+     */
+    private final long entryTtlMs;
 
     /** Eviction policy to use when cache reaches memory limit. Defaults to LRU if not specified. */
     @Builder.Default private final EvictionPolicy evictionPolicy = EvictionPolicy.LRU;
@@ -47,10 +50,11 @@ public class ClientSideCache {
      * Creates a ClientSideCache with auto-generated cache ID and default settings.
      *
      * @param maxCacheKb Maximum memory limit for the cache in kilobytes.
+     * @param entryTtlMs TTL for cache entries in milliseconds. Use 0 for no expiration.
      * @return A new ClientSideCache instance with auto-generated ID.
      */
-    public static ClientSideCache create(long maxCacheKb) {
-        return ClientSideCache.builder().maxCacheKb(maxCacheKb).build();
+    public static ClientSideCache create(long maxCacheKb, long entryTtlMs) {
+        return ClientSideCache.builder().maxCacheKb(maxCacheKb).entryTtlMs(entryTtlMs).build();
     }
 
     /**

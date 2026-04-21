@@ -25,7 +25,7 @@ import lombok.experimental.SuperBuilder;
  *         .clientName("GLIDE")
  *         .subscriptionConfiguration(subscriptionConfiguration)
  *         .inflightRequestsLimit(1000)
- *         .clientSideCache(ClientSideCache.create(1024))
+ *         .clientSideCache(ClientSideCache.create(1024, 60000))
  *         .advancedConfiguration(AdvancedGlideClientConfiguration.builder().connectionTimeout(500).build())
  *         .readOnly(true)
  *         .build();

@@ -327,7 +327,7 @@ public class ClientSideCacheTests {
         ClientSideCache lruCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1L) // 1 KB to force eviction
-                        .entryTtlMs(null)
+                        .entryTtlMs(0L)
                         .evictionPolicy(EvictionPolicy.LRU)
                         .enableMetrics(true)
                         .build();
@@ -398,7 +398,7 @@ public class ClientSideCacheTests {
         ClientSideCache lfuCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1L) // 1 KB - small cache to trigger evictions
-                        .entryTtlMs(null)
+                        .entryTtlMs(0L)
                         .evictionPolicy(EvictionPolicy.LFU)
                         .enableMetrics(true)
                         .build();
@@ -485,7 +485,7 @@ public class ClientSideCacheTests {
         ClientSideCache memoryLimitCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1L) // 1 KB
-                        .entryTtlMs(null)
+                        .entryTtlMs(0L)
                         .enableMetrics(true)
                         .evictionPolicy(EvictionPolicy.LRU)
                         .build();
