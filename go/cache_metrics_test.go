@@ -49,7 +49,7 @@ func TestCacheMetrics_WithoutCaching(t *testing.T) {
 
 func TestCacheMetrics_WithCachingButMetricsDisabled(t *testing.T) {
 	// Test that hit/miss rate methods return appropriate errors when metrics are disabled
-	cache := config.NewClientSideCache(1024).WithMetrics(false)
+	cache := config.NewClientSideCache(1024, 0).WithMetrics(false)
 	clientConfig := config.NewClientConfiguration().WithClientSideCache(cache)
 	client, err := NewClient(clientConfig)
 	if err != nil {
@@ -87,7 +87,7 @@ func TestCacheMetrics_WithCachingButMetricsDisabled(t *testing.T) {
 
 func TestCacheMetrics_WithCachingAndMetricsEnabled(t *testing.T) {
 	// Test that cache metrics methods work when caching and metrics are enabled
-	cache := config.NewClientSideCache(1024).WithMetrics(true)
+	cache := config.NewClientSideCache(1024, 0).WithMetrics(true)
 	clientConfig := config.NewClientConfiguration().WithClientSideCache(cache)
 	client, err := NewClient(clientConfig)
 	if err != nil {

@@ -63,8 +63,8 @@ type ClientSideCache struct {
 
 	// EntryTtlMs is the Time-To-Live for cached entries in milliseconds.
 	// After this duration, entries automatically expire and are removed from the cache.
-	// If nil, no expiration is applied.
-	EntryTtlMs *uint64
+	// Set to 0 to disable TTL expiration (entries remain until evicted or invalidated).
+	EntryTtlMs uint64
 
 	// EvictionPolicy is the policy for evicting entries when the cache reaches its maximum size.
 	// If nil, the default policy of LRU will be used.
@@ -112,17 +112,17 @@ func init() {
 //
 // Parameters:
 //   - maxCacheKb: Maximum size of the cache in kilobytes (KB). Must be positive.
+//   - entryTtlMs: Time-To-Live for cached entries in milliseconds. Set to 0 to disable TTL expiration.
 //
 // Returns:
 //   - *ClientSideCache: A new ClientSideCache instance with auto-generated cache ID.
 //
 // Example:
 //
-//	cache := NewClientSideCache(1024) // 1 MB cache
-//	cache.EntryTtlMs = &[]uint64{60000}[0] // 1 minute TTL
+//	cache := NewClientSideCache(1024, 60000) // 1 MB cache, 1 minute TTL
 //	cache.EvictionPolicy = &[]EvictionPolicy{EvictionPolicyLRU}[0]
 //	cache.EnableMetrics = true
-func NewClientSideCache(maxCacheKb uint64) *ClientSideCache {
+func NewClientSideCache(maxCacheKb uint64, entryTtlMs uint64) *ClientSideCache {
 	if maxCacheKb == 0 {
 		panic("maxCacheKb must be positive")
 	}
@@ -135,20 +135,10 @@ func NewClientSideCache(maxCacheKb uint64) *ClientSideCache {
 	return &ClientSideCache{
 		CacheId:        cacheId,
 		MaxCacheKb:     maxCacheKb,
-		EntryTtlMs:     nil,
+		EntryTtlMs:     entryTtlMs,
 		EvictionPolicy: nil,
 		EnableMetrics:  false,
 	}
-}
-
-// WithEntryTtlMs sets the TTL for cache entries in milliseconds.
-// Returns the same ClientSideCache instance for method chaining.
-func (c *ClientSideCache) WithEntryTtlMs(ttlMs uint64) *ClientSideCache {
-	if ttlMs == 0 {
-		panic("ttlMs must be positive")
-	}
-	c.EntryTtlMs = &ttlMs
-	return c
 }
 
 // WithEvictionPolicy sets the eviction policy for the cache.
@@ -172,11 +162,8 @@ func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
 	protoCache := &protobuf.ClientSideCache{
 		CacheId:       c.CacheId,
 		MaxCacheKb:    c.MaxCacheKb,
+		EntryTtlMs:    c.EntryTtlMs,
 		EnableMetrics: c.EnableMetrics,
-	}
-
-	if c.EntryTtlMs != nil {
-		protoCache.EntryTtlMs = *c.EntryTtlMs
 	}
 
 	if c.EvictionPolicy != nil {

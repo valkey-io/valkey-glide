@@ -49,8 +49,7 @@ func (suite *GlideTestSuite) createClientWithCache(
 func (suite *GlideTestSuite) TestClientSideCache_BasicCacheHitWithMetrics() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
-		cache := config.NewClientSideCache(1).
-			WithEntryTtlMs(60000).
+		cache := config.NewClientSideCache(1, 60000).
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -99,8 +98,7 @@ func (suite *GlideTestSuite) TestClientSideCache_BasicCacheHitWithMetrics() {
 func (suite *GlideTestSuite) TestClientSideCache_WithoutMetrics() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics disabled
-		cache := config.NewClientSideCache(1).
-			WithEntryTtlMs(60000).
+		cache := config.NewClientSideCache(1, 60000).
 			WithMetrics(false)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -148,8 +146,7 @@ func (suite *GlideTestSuite) TestClientSideCache_WithoutMetrics() {
 func (suite *GlideTestSuite) TestClientSideCache_NilValuesNotCached() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
-		cache := config.NewClientSideCache(1).
-			WithEntryTtlMs(60000).
+		cache := config.NewClientSideCache(1, 60000).
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -182,8 +179,7 @@ func (suite *GlideTestSuite) TestClientSideCache_NilValuesNotCached() {
 func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with short TTL
-		cache := config.NewClientSideCache(1).
-			WithEntryTtlMs(2000). // 2 seconds
+		cache := config.NewClientSideCache(1, 2000). // 2 seconds
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -231,8 +227,7 @@ func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 func (suite *GlideTestSuite) TestClientSideCache_MultipleKeys() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
-		cache := config.NewClientSideCache(1).
-			WithEntryTtlMs(60000).
+		cache := config.NewClientSideCache(1, 60000).
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -347,7 +342,7 @@ func (suite *GlideTestSuite) TestClientSideCache_NoCacheMetrics() {
 func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLRU() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with LRU eviction
-		cache := config.NewClientSideCache(1). // 1 KB to force eviction
+		cache := config.NewClientSideCache(1, 0). // 1 KB to force eviction
 							WithEvictionPolicy(config.EvictionPolicyLRU).
 							WithMetrics(true)
 
@@ -431,7 +426,7 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLRU() {
 func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with LFU eviction
-		cache := config.NewClientSideCache(1). // 1 KB - small cache to trigger evictions
+		cache := config.NewClientSideCache(1, 0). // 1 KB - small cache to trigger evictions
 							WithEvictionPolicy(config.EvictionPolicyLFU).
 							WithMetrics(true)
 
@@ -542,7 +537,7 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 func (suite *GlideTestSuite) TestClientSideCache_MaxMemoryLimit() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with small memory limit
-		cache := config.NewClientSideCache(1). // 1 KB
+		cache := config.NewClientSideCache(1, 0). // 1 KB
 							WithEvictionPolicy(config.EvictionPolicyLRU).
 							WithMetrics(true)
 
@@ -609,7 +604,7 @@ func (suite *GlideTestSuite) TestClientSideCache_MaxMemoryLimit() {
 func (suite *GlideTestSuite) TestClientSideCache_SharedCache() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration
-		cache := config.NewClientSideCache(1).
+		cache := config.NewClientSideCache(1, 0).
 			WithMetrics(true)
 
 		testClient1, err := suite.createClientWithCache(client, cache)
@@ -649,7 +644,7 @@ func (suite *GlideTestSuite) TestClientSideCache_SharedCache() {
 func (suite *GlideTestSuite) TestClientSideCache_ErrorHandling() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration
-		cache := config.NewClientSideCache(1).WithMetrics(true)
+		cache := config.NewClientSideCache(1, 0).WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
@@ -672,7 +667,7 @@ func (suite *GlideTestSuite) TestClientSideCache_ErrorHandling() {
 func (suite *GlideTestSuite) TestClientSideCache_CacheableCommands() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration
-		cache := config.NewClientSideCache(1).
+		cache := config.NewClientSideCache(1, 0).
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
