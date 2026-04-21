@@ -3062,11 +3062,11 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
     let client = client_adapter.core.client.clone();
     client_adapter.execute_request(request_id, async move {
         match metrics_type {
-            0 => client.cache_hit_rate().map_err(|err| err.into()), // HitRate
-            1 => client.cache_miss_rate().map_err(|err| err.into()), // MissRate
-            2 => client.cache_entry_count().map_err(|err| err.into()), // EntryCount
-            3 => client.cache_evictions().map_err(|err| err.into()), // Evictions
-            4 => client.cache_expirations().map_err(|err| err.into()), // Expirations
+            0 => client.cache_hit_rate(),    // HitRate
+            1 => client.cache_miss_rate(),   // MissRate
+            2 => client.cache_entry_count(), // EntryCount
+            3 => client.cache_evictions(),   // Evictions
+            4 => client.cache_expirations(), // Expirations
             _ => Err(RedisError::from((
                 ErrorKind::ClientError,
                 "Invalid cache metrics type",
