@@ -700,7 +700,7 @@ fn update_retry_map(
         RetryMethod::NoRetry => {
             // Do nothing
         }
-        RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
+        RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry | RetryMethod::ReconnectAndRefreshSlots => {
             // If we the retry method is reconnect and the user has set the retry_connection_error flag to true,
             // we will retry the commands, if not, we will trigger reconnection.
             let effective_retry_method = if pipeline_retry_strategy.retry_connection_error {
@@ -868,7 +868,7 @@ where
             RetryMethod::NoRetry => {
                 // The server error was already added to the pipeline responses, so we can just continue.
             }
-            RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
+            RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry | RetryMethod::ReconnectAndRefreshSlots => {
                 handle_reconnect_logic(
                     indices_addresses_and_error,
                     core.clone(),

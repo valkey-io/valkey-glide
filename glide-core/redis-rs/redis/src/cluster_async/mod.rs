@@ -870,6 +870,11 @@ enum Next<C> {
         sleep_duration: Option<Duration>,
         moved_redirect: Option<RedirectNode>,
     },
+    ReconnectAndRefreshSlots {
+        request: Option<PendingRequest<C>>,
+        target: String,
+        sleep_duration: Option<Duration>,
+    },
     ReconnectToInitialNodes {
         // if not set, then a reconnect should happen without sending a request afterwards
         request: Option<PendingRequest<C>>,
@@ -927,7 +932,7 @@ impl<C> Future for Request<C> {
                     let retry_method = err.retry_method();
                     let next = if err.kind() == ErrorKind::AllConnectionsUnavailable {
                         Next::ReconnectToInitialNodes { request: None }.into()
-                    } else if matches!(err.retry_method(), RetryMethod::MovedRedirect)
+                    } else if matches!(err.retry_method(), RetryMethod::MovedRedirect | RetryMethod::ReconnectAndRefreshSlots)
                         || matches!(target, OperationTarget::NotFound)
                     {
                         Next::RefreshSlots {
@@ -1031,6 +1036,17 @@ impl<C> Future for Request<C> {
                             sleep: boxed_sleep(sleep_duration),
                         });
                         self.poll(cx)
+                    }
+                    RetryMethod::ReconnectAndRefreshSlots => {
+                        let mut request = this.request.take().unwrap();
+                        request.info.reset_routing();
+                        warn!("disconnected from {:?}, triggering reconnect and slot refresh", address);
+                        Next::ReconnectAndRefreshSlots {
+                            request: Some(request),
+                            target: address,
+                            sleep_duration: Some(sleep_duration),
+                        }
+                        .into()
                     }
                     RetryMethod::Reconnect | RetryMethod::ReconnectAndRetry => {
                         let mut request = this.request.take().unwrap();
@@ -2974,6 +2990,34 @@ where
                         }));
                     }
                 }
+                Next::ReconnectAndRefreshSlots {
+                    request,
+                    target,
+                    sleep_duration,
+                } => {
+                    poll_flush_action = poll_flush_action
+                        .change_state(PollFlushAction::RebuildSlotsAndReconnect(
+                            HashSet::from_iter([target]),
+                        ));
+                    if let Some(request) = request {
+                        let future = match sleep_duration {
+                            Some(sleep_duration) => RequestState::Sleep {
+                                sleep: boxed_sleep(sleep_duration),
+                            },
+                            None => RequestState::Future {
+                                future: Self::try_request(
+                                    request.info.clone(),
+                                    self.inner.clone(),
+                                ).boxed(),
+                            },
+                        };
+                        self.in_flight_requests.push(Box::pin(Request {
+                            retry_params: self.inner.cluster_params.read().expect(MUTEX_READ_ERR).retry_params.clone(),
+                            request: Some(request),
+                            future,
+                        }));
+                    }
+                }
                 Next::Reconnect { request, target } => {
                     poll_flush_action = poll_flush_action
                         .change_state(PollFlushAction::Reconnect(HashSet::from_iter([target])));
@@ -3022,6 +3066,7 @@ enum PollFlushAction {
     None,
     RebuildSlots,
     Reconnect(HashSet<String>),
+    RebuildSlotsAndReconnect(HashSet<String>),
     ReconnectFromInitialConnections,
 }
 
@@ -3035,7 +3080,26 @@ impl PollFlushAction {
                 PollFlushAction::ReconnectFromInitialConnections
             }
 
-            (PollFlushAction::RebuildSlots, _) | (_, PollFlushAction::RebuildSlots) => {
+            // RebuildSlotsAndReconnect: merge addresses if both sides have them
+            (
+                PollFlushAction::RebuildSlotsAndReconnect(mut addrs),
+                PollFlushAction::RebuildSlotsAndReconnect(new_addrs),
+            ) => {
+                addrs.extend(new_addrs);
+                PollFlushAction::RebuildSlotsAndReconnect(addrs)
+            }
+            (PollFlushAction::RebuildSlotsAndReconnect(addrs), _)
+            | (_, PollFlushAction::RebuildSlotsAndReconnect(addrs)) => {
+                PollFlushAction::RebuildSlotsAndReconnect(addrs)
+            }
+
+            // RebuildSlots + Reconnect => RebuildSlotsAndReconnect
+            (PollFlushAction::RebuildSlots, PollFlushAction::Reconnect(addrs))
+            | (PollFlushAction::Reconnect(addrs), PollFlushAction::RebuildSlots) => {
+                PollFlushAction::RebuildSlotsAndReconnect(addrs)
+            }
+
+            (PollFlushAction::RebuildSlots, _) => {
                 PollFlushAction::RebuildSlots
             }
 
@@ -3107,6 +3171,24 @@ where
                     // Update state
                     self.state =
                         ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
+                }
+                PollFlushAction::RebuildSlotsAndReconnect(addresses) => {
+                    // Spawn slot refresh as fire-and-forget (independent task)
+                    let _ = ClusterConnInner::spawn_refresh_slots_task(
+                        self.inner.clone(),
+                        &RefreshPolicy::Throttable,
+                    );
+
+                    // Track reconnect in state machine
+                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
+                        ClusterConnInner::trigger_refresh_connection_tasks(
+                            self.inner.clone(),
+                            addresses,
+                            RefreshConnectionType::OnlyUserConnection,
+                            true,
+                        )
+                        .map(|_| ()),
+                    )));
                 }
                 PollFlushAction::ReconnectFromInitialConnections => {
                     self.state =

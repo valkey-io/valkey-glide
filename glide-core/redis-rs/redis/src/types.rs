@@ -896,6 +896,8 @@ pub(crate) enum RetryMethod {
     AskRedirect,
     MovedRedirect,
     WaitAndRetryOnPrimaryRedirectOnReplica,
+    /// Reconnect to the node and also trigger a topology refresh (slot refresh).
+    ReconnectAndRefreshSlots,
 }
 
 /// Indicates a general failure in the library.
@@ -1057,6 +1059,7 @@ impl RedisError {
         match self.retry_method() {
             RetryMethod::Reconnect => true,
             RetryMethod::ReconnectAndRetry => true,
+            RetryMethod::ReconnectAndRefreshSlots => true,
             RetryMethod::NoRetry => false,
             RetryMethod::RetryImmediately => false,
             RetryMethod::WaitAndRetry => false,
@@ -1159,7 +1162,7 @@ impl RedisError {
             ErrorKind::ParseError => RetryMethod::Reconnect,
             ErrorKind::AuthenticationFailed => RetryMethod::Reconnect,
             ErrorKind::AllConnectionsUnavailable => RetryMethod::Reconnect,
-            ErrorKind::ConnectionNotFoundForRoute => RetryMethod::Reconnect,
+            ErrorKind::ConnectionNotFoundForRoute => RetryMethod::ReconnectAndRefreshSlots,
 
             ErrorKind::IoError => match &self.repr {
                 ErrorRepr::IoError(err) => match err.kind() {

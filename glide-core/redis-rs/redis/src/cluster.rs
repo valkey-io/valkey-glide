@@ -776,6 +776,9 @@ where
                                 }
                             }
                         }
+                        RetryMethod::ReconnectAndRefreshSlots => {
+                            self.refresh_slots()?;
+                        }
                         RetryMethod::NoRetry => {
                             return Err(err);
                         }
