@@ -37,6 +37,7 @@ EXCLUDED_API_FUNCTIONS = {
         "create_leaked_value",
         "start_socket_listener_external",
         "value_from_pointer",
+        "aclose",
     ],
     "sync_only": [],
 }

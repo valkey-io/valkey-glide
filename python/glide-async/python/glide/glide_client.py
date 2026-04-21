@@ -2,6 +2,7 @@
 
 import sys
 import threading
+from types import TracebackType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -289,6 +290,12 @@ class BaseClient(CoreCommands):
 
     async def close(self, err_message: Optional[str] = None) -> None:
         """
+        Forwards to `aclose`, the more common method for async resources.
+        """
+        await self.aclose(err_message)
+
+    async def aclose(self, err_message: Optional[str] = None) -> None:
+        """
         Terminate the client by closing all associated resources, including the socket and any active futures.
         All open futures will be closed with an exception.
 
@@ -312,6 +319,17 @@ class BaseClient(CoreCommands):
                 self._pubsub_lock.release()
 
             await self._stream.aclose()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> None:
+        await self.aclose()
 
     def _get_future(self, callback_idx: int) -> "TFuture":
         response_future: "TFuture" = _get_new_future_instance()
