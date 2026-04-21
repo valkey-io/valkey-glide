@@ -1018,4 +1018,160 @@ mod compression_tests {
         // Test invalid request has no name
         assert_eq!(RequestType::InvalidRequest.command_name(), None);
     }
+
+    #[test]
+    fn test_from_command_name() {
+        // Test commands that support compression
+        assert!(matches!(
+            RequestType::from_command_name("SET"),
+            Some(RequestType::Set)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("MSET"),
+            Some(RequestType::MSet)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("MSETNX"),
+            Some(RequestType::MSetNX)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("SETEX"),
+            Some(RequestType::SetEx)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("PSETEX"),
+            Some(RequestType::PSetEx)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("SETNX"),
+            Some(RequestType::SetNX)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("GET"),
+            Some(RequestType::Get)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("MGET"),
+            Some(RequestType::MGet)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("GETEX"),
+            Some(RequestType::GetEx)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("GETDEL"),
+            Some(RequestType::GetDel)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("GETSET"),
+            Some(RequestType::GetSet)
+        ));
+
+        // Test incompatible commands - string manipulation
+        assert!(matches!(
+            RequestType::from_command_name("APPEND"),
+            Some(RequestType::Append)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("GETRANGE"),
+            Some(RequestType::GetRange)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("SETRANGE"),
+            Some(RequestType::SetRange)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("STRLEN"),
+            Some(RequestType::Strlen)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("LCS"),
+            Some(RequestType::LCS)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("SUBSTR"),
+            Some(RequestType::Substr)
+        ));
+
+        // Test incompatible commands - numeric operations
+        assert!(matches!(
+            RequestType::from_command_name("INCR"),
+            Some(RequestType::Incr)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("INCRBY"),
+            Some(RequestType::IncrBy)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("INCRBYFLOAT"),
+            Some(RequestType::IncrByFloat)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("DECR"),
+            Some(RequestType::Decr)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("DECRBY"),
+            Some(RequestType::DecrBy)
+        ));
+
+        // Test incompatible commands - bit operations
+        assert!(matches!(
+            RequestType::from_command_name("GETBIT"),
+            Some(RequestType::GetBit)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("SETBIT"),
+            Some(RequestType::SetBit)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("BITCOUNT"),
+            Some(RequestType::BitCount)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("BITPOS"),
+            Some(RequestType::BitPos)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("BITFIELD"),
+            Some(RequestType::BitField)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("BITFIELD_RO"),
+            Some(RequestType::BitFieldReadOnly)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("BITOP"),
+            Some(RequestType::BitOp)
+        ));
+
+        // Test case insensitivity
+        assert!(matches!(
+            RequestType::from_command_name("set"),
+            Some(RequestType::Set)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("Set"),
+            Some(RequestType::Set)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("sEt"),
+            Some(RequestType::Set)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("append"),
+            Some(RequestType::Append)
+        ));
+        assert!(matches!(
+            RequestType::from_command_name("APPEND"),
+            Some(RequestType::Append)
+        ));
+
+        // Test unknown commands return None
+        assert!(RequestType::from_command_name("UNKNOWN").is_none());
+        assert!(RequestType::from_command_name("HSET").is_none());
+        assert!(RequestType::from_command_name("LPUSH").is_none());
+        assert!(RequestType::from_command_name("ZADD").is_none());
+        assert!(RequestType::from_command_name("").is_none());
+    }
 }
