@@ -203,13 +203,13 @@ public class Benchmarking {
             } else if (e.getMessage() != null && e.getMessage().contains("maximum inflight requests")) {
                 // Suppress spam when inflight limit < concurrent tasks
             } else {
-                System.err.println(
-                        "["
-                                + LocalDateTime.now().format(formatter)
-                                + "] ERROR [ExecutionException] Action="
-                                + action
-                                + " | Message="
-                                + e.getMessage());
+                // System.err.println(
+                //         "["
+                //                 + LocalDateTime.now().format(formatter)
+                //                 + "] ERROR [ExecutionException] Action="
+                //                 + action
+                //                 + " | Message="
+                //                 + e.getMessage());
             }
         } catch (InterruptedException e) {
             System.err.println(
@@ -224,15 +224,15 @@ public class Benchmarking {
             }
             throw new RuntimeException("The thread was interrupted", e);
         } catch (Exception e) {
-            System.err.println(
-                    "["
-                            + LocalDateTime.now().format(formatter)
-                            + "] ERROR ["
-                            + e.getClass().getSimpleName()
-                            + "] Action="
-                            + action
-                            + " | Message="
-                            + e.getMessage());
+            // System.err.println(
+            //         "["
+            //                 + LocalDateTime.now().format(formatter)
+            //                 + "] ERROR ["
+            //                 + e.getClass().getSimpleName()
+            //                 + "] Action="
+            //                 + action
+            //                 + " | Message="
+            //                 + e.getMessage());
         }
         long after = System.nanoTime();
         long latencyNanos = after - before;
@@ -443,7 +443,7 @@ public static Thread startCanaryThread(Client client, boolean async) {
                     config.host, config.port, config.tls,
                     config.clusterModeEnabled, config.tcpNoDelay,
                     1000));  // always 1000ms for warmup
-    warmupData(List.of(warmupClient), dataSize, config.warmupKeyCount, async, config.debugLogging);
+    //(List.of(warmupClient), dataSize, config.warmupKeyCount, async, config.debugLogging);
     warmupClient.closeConnection();
 }
                     // =========================================================

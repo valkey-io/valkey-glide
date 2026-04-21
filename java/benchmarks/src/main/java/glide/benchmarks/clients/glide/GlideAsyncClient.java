@@ -12,6 +12,7 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
+import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.benchmarks.clients.AsyncClient;
 import glide.benchmarks.utils.ConnectionSettings;
@@ -25,7 +26,7 @@ public class GlideAsyncClient implements AsyncClient<String> {
 
     @Override
     public void connectToValkey(ConnectionSettings connectionSettings) {
-        Logger.init(Logger.Level.INFO, "glide.log");
+        Logger.init(Logger.Level.DEBUG);
 
         if (connectionSettings.clusterMode) {
             // Build advanced config with tcpNoDelay
@@ -33,7 +34,7 @@ public class GlideAsyncClient implements AsyncClient<String> {
                     AdvancedGlideClusterClientConfiguration.builder()
                             .refreshTopologyFromInitialNodes(true)
                             .periodicChecks(
-                                    PeriodicChecksManualInterval.builder().durationInSec(600).build()) // 10 minutes
+                                    PeriodicChecksStatus.DISABLED) // 10 minutes
                             .tlsAdvancedConfiguration(
                                     TlsAdvancedConfiguration.builder().useInsecureTLS(true).build())
                             .build();
@@ -45,10 +46,10 @@ public class GlideAsyncClient implements AsyncClient<String> {
                             // .readFrom(ReadFrom.AZ_AFFINITY_REPLICAS_AND_PRIMARY)
                             // .clientAZ("us-east-1c")
                             .requestTimeout(connectionSettings.requestTimeoutMs);
-            if (connectionSettings.inflightLimit > 0) {
-                configBuilder.inflightRequestsLimit(connectionSettings.inflightLimit);
-                System.out.printf("Setting inflight requests limit to %d%n", connectionSettings.inflightLimit);
-            }
+            // if (connectionSettings.inflightLimit > 0) {
+            //     configBuilder.inflightRequestsLimit(connectionSettings.inflightLimit);
+            //     System.out.printf("Setting inflight requests limit to %d%n", connectionSettings.inflightLimit);
+            // }
             GlideClusterClientConfiguration config = configBuilder.build();
             try {
                 glideClient = GlideClusterClient.createClient(config).get(10, SECONDS);
