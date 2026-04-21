@@ -100,4 +100,29 @@ impl Client {
     pub fn reserve_inflight_request(&self) -> Option<MockInflightTracker> {
         Some(MockInflightTracker) // Always allow in mock
     }
+
+    /// Mock cache_hit_rate method for Miri tests
+    pub fn cache_hit_rate(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_miss_rate method for Miri tests
+    pub fn cache_miss_rate(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_entry_count method for Miri tests
+    pub fn cache_entry_count(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_evictions method for Miri tests
+    pub fn cache_evictions(&self) -> RedisResult<Value> {
+        todo!()
+    }
+
+    /// Mock cache_expirations method for Miri tests
+    pub fn cache_expirations(&self) -> RedisResult<Value> {
+        todo!()
+    }
 }

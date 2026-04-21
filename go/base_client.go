@@ -872,7 +872,10 @@ func (client *baseClient) RefreshIamToken(ctx context.Context) (string, error) {
 //	Returns the requested metric value, or an error if the operation fails.
 //
 // Note: This is an internal method. Use the specific cache metrics methods for the public API.
-func (client *baseClient) submitGetCacheMetrics(ctx context.Context, metricsType protobuf.CacheMetricsType) (*C.struct_CommandResponse, error) {
+func (client *baseClient) submitGetCacheMetrics(
+	ctx context.Context,
+	metricsType protobuf.CacheMetricsType,
+) (*C.struct_CommandResponse, error) {
 	// Check if context is already done
 	select {
 	case <-ctx.Done():

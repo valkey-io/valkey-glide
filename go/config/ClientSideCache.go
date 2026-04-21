@@ -133,11 +133,11 @@ func NewClientSideCache(maxCacheKb uint64) *ClientSideCache {
 	counterMu.Unlock()
 
 	return &ClientSideCache{
-		CacheId:         cacheId,
-		MaxCacheKb:      maxCacheKb,
-		EntryTtlMs:      nil,
-		EvictionPolicy:  nil,
-		EnableMetrics:   false,
+		CacheId:        cacheId,
+		MaxCacheKb:     maxCacheKb,
+		EntryTtlMs:     nil,
+		EvictionPolicy: nil,
+		EnableMetrics:  false,
 	}
 }
 

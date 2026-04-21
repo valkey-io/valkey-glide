@@ -530,6 +530,7 @@ func (config *ClientConfiguration) WithSubscriptionConfig(
 // client creation.
 func (config *ClientConfiguration) WithReadOnly(readOnly bool) *ClientConfiguration {
 	config.readOnly = readOnly
+	return config
 }
 
 // WithClientSideCache sets the client-side cache configuration for the client.

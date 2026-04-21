@@ -28,7 +28,10 @@ type CacheClient interface {
 }
 
 // Helper function to create a client with cache configuration
-func (suite *GlideTestSuite) createClientWithCache(baseClient interfaces.BaseClientCommands, cache *config.ClientSideCache) (CacheClient, error) {
+func (suite *GlideTestSuite) createClientWithCache(
+	baseClient interfaces.BaseClientCommands,
+	cache *config.ClientSideCache,
+) (CacheClient, error) {
 	switch baseClient.(type) {
 	case *glide.Client:
 		clientConfig := suite.defaultClientConfig().WithClientSideCache(cache)
@@ -556,11 +559,11 @@ func (suite *GlideTestSuite) TestClientSideCache_MaxMemoryLimit() {
 
 		var keys []string
 
-		// Add 10 keys to force cache eviction 
+		// Add 10 keys to force cache eviction
 		for i := 1; i <= 10; i++ {
 			key := fmt.Sprintf("key%d_%s", i, uuid.NewString()[:8])
 			keys = append(keys, key)
-			
+
 			result, err := testClient1.Set(ctx, key, largeValue)
 			suite.verifyOK(result, err)
 
