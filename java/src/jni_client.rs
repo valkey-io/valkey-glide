@@ -55,6 +55,22 @@ pub extern "system" fn JNI_OnUnload(_vm: *const JavaVM, _reserved: *const c_void
     crate::cleanup_global_caches();
 }
 
+/// Invalidate cached JNI method IDs so the next call re-initializes them.
+/// Called when callback completion fails — stale method IDs (e.g. from classloader
+/// changes) would cause every subsequent callback to fail permanently. Clearing the
+/// cache lets the fallback `find_class` path re-discover the correct method IDs.
+///
+/// Safe to call at any time: the Mutex<Option<...>> pattern means the next caller
+/// will re-populate the cache from the current JNIEnv.
+fn invalidate_jni_caches() {
+    if let Some(cache_mutex) = METHOD_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+    if let Some(cache_mutex) = GLIDE_CORE_CLIENT_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+}
+
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
 type CallbackResult = Result<ServerValue, ServerError>;
@@ -432,6 +448,11 @@ fn process_callback_job_with_env(
                     if let Err(e) = complete_java_callback(env, callback_id, &java_result) {
                         log::error!("JNI completion failed for callback {callback_id}: {e}");
                         let _ = env.exception_clear();
+                        invalidate_jni_caches();
+                        fail_all_pending_futures(
+                            env,
+                            "JNI callback completion failed — cached method IDs may be stale",
+                        );
                     }
                 }
                 Err(e) => {
@@ -445,6 +466,11 @@ fn process_callback_job_with_env(
                     ) {
                         log::error!("JNI error completion failed for callback {callback_id}: {e2}");
                         let _ = env.exception_clear();
+                        invalidate_jni_caches();
+                        fail_all_pending_futures(
+                            env,
+                            "JNI error callback completion failed — cached method IDs may be stale",
+                        );
                     }
                 }
             }
@@ -462,6 +488,11 @@ fn process_callback_job_with_env(
             {
                 log::error!("JNI error completion failed for callback {callback_id}: {e}");
                 let _ = env.exception_clear();
+                invalidate_jni_caches();
+                fail_all_pending_futures(
+                    env,
+                    "JNI error callback completion failed — cached method IDs may be stale",
+                );
             }
         }
     }
