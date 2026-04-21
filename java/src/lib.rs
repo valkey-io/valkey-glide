@@ -253,11 +253,8 @@ async fn execute_command_request_and_complete(
                 #[allow(clippy::collapsible_if)]
                 if client.is_compression_enabled() {
                     if let Err(e) = process_command_for_compression(&mut cmd, &client) {
-                        // Check if this is an incompatible command error - these should be returned as errors
-                        if matches!(
-                            e,
-                            glide_core::compression::CompressionError::IncompatibleCommand { .. }
-                        ) {
+                        // Incompatible command errors should be returned to the user
+                        if e.is_incompatible_command() {
                             return Err(redis::RedisError::from((
                                 redis::ErrorKind::ClientError,
                                 "Incompatible command with compression",
@@ -331,11 +328,8 @@ async fn execute_command_request_and_complete(
                     #[allow(clippy::collapsible_if)]
                     if client.is_compression_enabled() {
                         if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
-                            // Check if this is an incompatible command error - these should be returned as errors
-                            if matches!(
-                                e,
-                                glide_core::compression::CompressionError::IncompatibleCommand { .. }
-                            ) {
+                            // Incompatible command errors should be returned to the user
+                            if e.is_incompatible_command() {
                                 return Err(redis::RedisError::from((
                                     redis::ErrorKind::ClientError,
                                     "Incompatible command with compression",

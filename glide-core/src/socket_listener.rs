@@ -345,11 +345,8 @@ async fn send_command(
     #[allow(clippy::collapsible_if)]
     if client.is_compression_enabled() {
         if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
-            // Check if this is an incompatible command error - these should be returned as errors
-            if matches!(
-                compression_error,
-                crate::compression::CompressionError::IncompatibleCommand { .. }
-            ) {
+            // Incompatible command errors should be returned to the user
+            if compression_error.is_incompatible_command() {
                 return Err(ClientUsageError::User(compression_error.to_string()));
             }
             // For other compression errors (e.g., compression failed), log and continue
@@ -594,11 +591,8 @@ async fn send_batch(
         // Apply compression to command arguments if needed
         // This also validates that the command is compatible with compression
         if let Err(e) = process_command_for_compression(&mut redis_cmd, client) {
-            // Check if this is an incompatible command error - these should be returned as errors
-            if matches!(
-                e,
-                crate::compression::CompressionError::IncompatibleCommand { .. }
-            ) {
+            // Incompatible command errors should be returned to the user
+            if e.is_incompatible_command() {
                 return Err(ClientUsageError::User(e.to_string()));
             }
             // Log other compression errors but continue with uncompressed command

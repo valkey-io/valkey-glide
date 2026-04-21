@@ -769,6 +769,7 @@ mod compression_tests {
             "APPEND modifies string data on the server",
         );
         assert!(matches!(err, CompressionError::IncompatibleCommand { .. }));
+        assert!(err.is_incompatible_command());
         assert!(err.to_string().contains("APPEND"));
         assert!(err.to_string().contains("incompatible with compression"));
         assert!(err.to_string().contains("modifies string data"));
@@ -780,6 +781,21 @@ mod compression_tests {
 
         let err3 = CompressionError::incompatible_command("INCR", "expects numeric string");
         assert_ne!(err, err3);
+
+        // Test is_incompatible_command returns false for other error types
+        let compression_err =
+            CompressionError::compression_failed("zstd", Some(3), 1000, "test error");
+        assert!(!compression_err.is_incompatible_command());
+
+        let decompression_err =
+            CompressionError::decompression_failed("lz4", 500, "test error");
+        assert!(!decompression_err.is_incompatible_command());
+
+        let unsupported_err = CompressionError::unsupported_backend("brotli");
+        assert!(!unsupported_err.is_incompatible_command());
+
+        let config_err = CompressionError::invalid_configuration("zstd", "invalid level");
+        assert!(!config_err.is_incompatible_command());
     }
 
     #[test]

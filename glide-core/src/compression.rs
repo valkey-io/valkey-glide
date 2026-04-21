@@ -152,6 +152,12 @@ impl CompressionError {
             CompressionError::IncompatibleCommand { .. } => "",
         }
     }
+
+    /// Returns true if this error is an IncompatibleCommand error.
+    /// These errors should be propagated to the user rather than logged and ignored.
+    pub fn is_incompatible_command(&self) -> bool {
+        matches!(self, CompressionError::IncompatibleCommand { .. })
+    }
 }
 
 /// Format byte size in human-readable format
