@@ -972,6 +972,51 @@ impl RequestType {
         }
     }
 
+    /// Parses a command name string and returns the corresponding `RequestType`.
+    /// This is used for CustomCommand handling where we need to determine the actual
+    /// command type from the command name for compression processing.
+    ///
+    /// Returns `None` if the command name is not recognized or not relevant for compression.
+    pub fn from_command_name(name: &str) -> Option<Self> {
+        match name.to_uppercase().as_str() {
+            // Commands that support compression
+            "SET" => Some(RequestType::Set),
+            "MSET" => Some(RequestType::MSet),
+            "MSETNX" => Some(RequestType::MSetNX),
+            "SETEX" => Some(RequestType::SetEx),
+            "PSETEX" => Some(RequestType::PSetEx),
+            "SETNX" => Some(RequestType::SetNX),
+            "GET" => Some(RequestType::Get),
+            "MGET" => Some(RequestType::MGet),
+            "GETEX" => Some(RequestType::GetEx),
+            "GETDEL" => Some(RequestType::GetDel),
+            "GETSET" => Some(RequestType::GetSet),
+            // Incompatible commands - string manipulation
+            "APPEND" => Some(RequestType::Append),
+            "GETRANGE" => Some(RequestType::GetRange),
+            "SETRANGE" => Some(RequestType::SetRange),
+            "STRLEN" => Some(RequestType::Strlen),
+            "LCS" => Some(RequestType::LCS),
+            "SUBSTR" => Some(RequestType::Substr),
+            // Incompatible commands - numeric operations
+            "INCR" => Some(RequestType::Incr),
+            "INCRBY" => Some(RequestType::IncrBy),
+            "INCRBYFLOAT" => Some(RequestType::IncrByFloat),
+            "DECR" => Some(RequestType::Decr),
+            "DECRBY" => Some(RequestType::DecrBy),
+            // Incompatible commands - bit operations
+            "GETBIT" => Some(RequestType::GetBit),
+            "SETBIT" => Some(RequestType::SetBit),
+            "BITCOUNT" => Some(RequestType::BitCount),
+            "BITPOS" => Some(RequestType::BitPos),
+            "BITFIELD" => Some(RequestType::BitField),
+            "BITFIELD_RO" => Some(RequestType::BitFieldReadOnly),
+            "BITOP" => Some(RequestType::BitOp),
+            // Unknown command - not relevant for compression
+            _ => None,
+        }
+    }
+
     /// Returns a `Cmd` set with the command name matching the request.
     pub fn get_command(&self) -> Option<Cmd> {
         match self {

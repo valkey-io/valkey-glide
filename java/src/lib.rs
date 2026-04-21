@@ -66,36 +66,12 @@ fn process_command_for_compression(
     }
 
     let command_name = &all_args[0];
-    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
-    let request_type = match command_str.as_str() {
-        "SET" => glide_core::request_type::RequestType::Set,
-        "MSET" => glide_core::request_type::RequestType::MSet,
-        "MSETNX" => glide_core::request_type::RequestType::MSetNX,
-        "SETEX" => glide_core::request_type::RequestType::SetEx,
-        "PSETEX" => glide_core::request_type::RequestType::PSetEx,
-        "SETNX" => glide_core::request_type::RequestType::SetNX,
-        // Incompatible commands - string manipulation
-        "APPEND" => glide_core::request_type::RequestType::Append,
-        "GETRANGE" => glide_core::request_type::RequestType::GetRange,
-        "SETRANGE" => glide_core::request_type::RequestType::SetRange,
-        "STRLEN" => glide_core::request_type::RequestType::Strlen,
-        "LCS" => glide_core::request_type::RequestType::LCS,
-        "SUBSTR" => glide_core::request_type::RequestType::Substr,
-        // Incompatible commands - numeric operations
-        "INCR" => glide_core::request_type::RequestType::Incr,
-        "INCRBY" => glide_core::request_type::RequestType::IncrBy,
-        "INCRBYFLOAT" => glide_core::request_type::RequestType::IncrByFloat,
-        "DECR" => glide_core::request_type::RequestType::Decr,
-        "DECRBY" => glide_core::request_type::RequestType::DecrBy,
-        // Incompatible commands - bit operations
-        "GETBIT" => glide_core::request_type::RequestType::GetBit,
-        "SETBIT" => glide_core::request_type::RequestType::SetBit,
-        "BITCOUNT" => glide_core::request_type::RequestType::BitCount,
-        "BITPOS" => glide_core::request_type::RequestType::BitPos,
-        "BITFIELD" => glide_core::request_type::RequestType::BitField,
-        "BITFIELD_RO" => glide_core::request_type::RequestType::BitFieldReadOnly,
-        "BITOP" => glide_core::request_type::RequestType::BitOp,
-        _ => return Ok(()),
+    let command_str = String::from_utf8_lossy(command_name);
+
+    let request_type = match glide_core::request_type::RequestType::from_command_name(&command_str)
+    {
+        Some(rt) => rt,
+        None => return Ok(()), // Unknown command - no compression processing needed
     };
 
     // Check if the command is incompatible with compression - this should error out

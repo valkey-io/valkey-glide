@@ -1915,45 +1915,10 @@ fn resolve_custom_command_type(args: &[Vec<u8>]) -> RequestType {
     }
 
     let command_name = &args[0];
-    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
+    let command_str = String::from_utf8_lossy(command_name);
 
-    match command_str.as_str() {
-        // Commands that support compression
-        "SET" => RequestType::Set,
-        "MSET" => RequestType::MSet,
-        "MSETNX" => RequestType::MSetNX,
-        "SETEX" => RequestType::SetEx,
-        "PSETEX" => RequestType::PSetEx,
-        "SETNX" => RequestType::SetNX,
-        "GET" => RequestType::Get,
-        "MGET" => RequestType::MGet,
-        "GETEX" => RequestType::GetEx,
-        "GETDEL" => RequestType::GetDel,
-        "GETSET" => RequestType::GetSet,
-        // Incompatible commands - string manipulation
-        "APPEND" => RequestType::Append,
-        "GETRANGE" => RequestType::GetRange,
-        "SETRANGE" => RequestType::SetRange,
-        "STRLEN" => RequestType::Strlen,
-        "LCS" => RequestType::LCS,
-        "SUBSTR" => RequestType::Substr,
-        // Incompatible commands - numeric operations
-        "INCR" => RequestType::Incr,
-        "INCRBY" => RequestType::IncrBy,
-        "INCRBYFLOAT" => RequestType::IncrByFloat,
-        "DECR" => RequestType::Decr,
-        "DECRBY" => RequestType::DecrBy,
-        // Incompatible commands - bit operations
-        "GETBIT" => RequestType::GetBit,
-        "SETBIT" => RequestType::SetBit,
-        "BITCOUNT" => RequestType::BitCount,
-        "BITPOS" => RequestType::BitPos,
-        "BITFIELD" => RequestType::BitField,
-        "BITFIELD_RO" => RequestType::BitFieldReadOnly,
-        "BITOP" => RequestType::BitOp,
-        // Unknown command - keep as CustomCommand (no compression processing)
-        _ => RequestType::CustomCommand,
-    }
+    // Use the centralized from_command_name method in glide-core
+    RequestType::from_command_name(&command_str).unwrap_or(RequestType::CustomCommand)
 }
 
 ///
