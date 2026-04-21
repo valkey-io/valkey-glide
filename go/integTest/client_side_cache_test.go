@@ -47,7 +47,7 @@ func (suite *GlideTestSuite) TestClientSideCache_BasicCacheHitWithMetrics() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
 		cache := config.NewClientSideCache(1).
-			WithEntryTtlSeconds(60).
+			WithEntryTtlMs(60000).
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -97,7 +97,7 @@ func (suite *GlideTestSuite) TestClientSideCache_WithoutMetrics() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics disabled
 		cache := config.NewClientSideCache(1).
-			WithEntryTtlSeconds(60).
+			WithEntryTtlMs(60000).
 			WithMetrics(false)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -146,7 +146,7 @@ func (suite *GlideTestSuite) TestClientSideCache_NilValuesNotCached() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
 		cache := config.NewClientSideCache(1).
-			WithEntryTtlSeconds(60).
+			WithEntryTtlMs(60000).
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -180,7 +180,7 @@ func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with short TTL
 		cache := config.NewClientSideCache(1).
-			WithEntryTtlSeconds(2). // 2 seconds
+			WithEntryTtlMs(2000). // 2 seconds
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
@@ -229,7 +229,7 @@ func (suite *GlideTestSuite) TestClientSideCache_MultipleKeys() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
 		cache := config.NewClientSideCache(1).
-			WithEntryTtlSeconds(60).
+			WithEntryTtlMs(60000).
 			WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)

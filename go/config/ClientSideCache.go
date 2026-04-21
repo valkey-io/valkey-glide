@@ -61,10 +61,10 @@ type ClientSideCache struct {
 	// When this limit is reached, entries are evicted based on the eviction policy.
 	MaxCacheKb uint64
 
-	// EntryTtlSeconds is the Time-To-Live for cached entries in seconds.
+	// EntryTtlMs is the Time-To-Live for cached entries in milliseconds.
 	// After this duration, entries automatically expire and are removed from the cache.
 	// If nil, no expiration is applied.
-	EntryTtlSeconds *uint64
+	EntryTtlMs *uint64
 
 	// EvictionPolicy is the policy for evicting entries when the cache reaches its maximum size.
 	// If nil, the default policy of LRU will be used.
@@ -119,7 +119,7 @@ func init() {
 // Example:
 //
 //	cache := NewClientSideCache(1024) // 1 MB cache
-//	cache.EntryTtlSeconds = &[]uint64{60}[0] // 1 minute TTL
+//	cache.EntryTtlMs = &[]uint64{60000}[0] // 1 minute TTL
 //	cache.EvictionPolicy = &[]EvictionPolicy{EvictionPolicyLRU}[0]
 //	cache.EnableMetrics = true
 func NewClientSideCache(maxCacheKb uint64) *ClientSideCache {
@@ -135,19 +135,19 @@ func NewClientSideCache(maxCacheKb uint64) *ClientSideCache {
 	return &ClientSideCache{
 		CacheId:         cacheId,
 		MaxCacheKb:      maxCacheKb,
-		EntryTtlSeconds: nil,
+		EntryTtlMs:      nil,
 		EvictionPolicy:  nil,
 		EnableMetrics:   false,
 	}
 }
 
-// WithEntryTtlSeconds sets the TTL for cache entries in seconds.
+// WithEntryTtlMs sets the TTL for cache entries in milliseconds.
 // Returns the same ClientSideCache instance for method chaining.
-func (c *ClientSideCache) WithEntryTtlSeconds(ttlSeconds uint64) *ClientSideCache {
-	if ttlSeconds == 0 {
-		panic("ttlSeconds must be positive")
+func (c *ClientSideCache) WithEntryTtlMs(ttlMs uint64) *ClientSideCache {
+	if ttlMs == 0 {
+		panic("ttlMs must be positive")
 	}
-	c.EntryTtlSeconds = &ttlSeconds
+	c.EntryTtlMs = &ttlMs
 	return c
 }
 
@@ -175,8 +175,8 @@ func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
 		EnableMetrics: c.EnableMetrics,
 	}
 
-	if c.EntryTtlSeconds != nil {
-		protoCache.EntryTtlSeconds = c.EntryTtlSeconds
+	if c.EntryTtlMs != nil {
+		protoCache.EntryTtlMs = *c.EntryTtlMs
 	}
 
 	if c.EvictionPolicy != nil {
