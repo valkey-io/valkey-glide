@@ -424,8 +424,8 @@ public class ConnectionManager {
                             cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
 
                             // Set optional TTL
-                            if (clientSideCache.getEntryTtlSeconds() != null) {
-                                cacheBuilder.setEntryTtlSeconds(clientSideCache.getEntryTtlSeconds());
+                            if (clientSideCache.getEntryTtlMs() != null) {
+                                cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
                             }
 
                             // Set optional eviction policy

@@ -42,10 +42,10 @@ public class ClientSideCacheTests {
     public static Stream<Arguments> getCacheEnabledClients() {
         // Create separate cache instances to avoid sharing between standalone and cluster clients
         ClientSideCache standaloneCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlSeconds(60L).enableMetrics(true).build();
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(true).build();
 
         ClientSideCache clusterCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlSeconds(60L).enableMetrics(true).build();
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(true).build();
 
         GlideClient standaloneClient =
                 GlideClient.createClient(commonClientConfig().clientSideCache(standaloneCache).build())
@@ -79,10 +79,10 @@ public class ClientSideCacheTests {
     public static Stream<Arguments> getCacheNoMetricsClients() {
         // Create separate cache instances to avoid sharing between standalone and cluster clients
         ClientSideCache standaloneCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlSeconds(60L).enableMetrics(false).build();
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(false).build();
 
         ClientSideCache clusterCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlSeconds(60L).enableMetrics(false).build();
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(false).build();
 
         GlideClient standaloneClient =
                 GlideClient.createClient(commonClientConfig().clientSideCache(standaloneCache).build())
@@ -205,7 +205,7 @@ public class ClientSideCacheTests {
         ClientSideCache shortTtlCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1L)
-                        .entryTtlSeconds(2L) // 2 seconds
+                        .entryTtlMs(2000L) // 2 seconds
                         .enableMetrics(true)
                         .build();
 
@@ -327,7 +327,7 @@ public class ClientSideCacheTests {
         ClientSideCache lruCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1L) // 1 KB to force eviction
-                        .entryTtlSeconds(null)
+                        .entryTtlMs(null)
                         .evictionPolicy(EvictionPolicy.LRU)
                         .enableMetrics(true)
                         .build();
@@ -398,7 +398,7 @@ public class ClientSideCacheTests {
         ClientSideCache lfuCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1L) // 1 KB - small cache to trigger evictions
-                        .entryTtlSeconds(null)
+                        .entryTtlMs(null)
                         .evictionPolicy(EvictionPolicy.LFU)
                         .enableMetrics(true)
                         .build();
@@ -485,7 +485,7 @@ public class ClientSideCacheTests {
         ClientSideCache memoryLimitCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1L) // 1 KB
-                        .entryTtlSeconds(null)
+                        .entryTtlMs(null)
                         .enableMetrics(true)
                         .evictionPolicy(EvictionPolicy.LRU)
                         .build();
@@ -534,7 +534,7 @@ public class ClientSideCacheTests {
         ClientSideCache sharedCache =
                 ClientSideCache.builder()
                         .maxCacheKb(1024L)
-                        .entryTtlSeconds(60L)
+                        .entryTtlMs(60000L)
                         .evictionPolicy(null)
                         .enableMetrics(true)
                         .build();

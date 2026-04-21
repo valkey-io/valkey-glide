@@ -18,7 +18,7 @@ import lombok.NonNull;
  * // Create cache with custom configuration
  * ClientSideCache cache = ClientSideCache.builder()
  *     .maxCacheKb(2048)
- *     .entryTtlSeconds(300)
+ *     .entryTtlMs(300)
  *     .evictionPolicy(EvictionPolicy.LRU)
  *     .enableMetrics(true)
  *     .build();
@@ -34,8 +34,8 @@ public class ClientSideCache {
     /** Maximum memory limit for the cache in kilobytes. */
     private final long maxCacheKb;
 
-    /** Optional TTL (Time-To-Live) for cache entries in seconds. */
-    private final Long entryTtlSeconds;
+    /** Optional TTL (Time-To-Live) for cache entries in milliseconds. */
+    private final Long entryTtlMs;
 
     /** Eviction policy to use when cache reaches memory limit. Defaults to LRU if not specified. */
     @Builder.Default private final EvictionPolicy evictionPolicy = EvictionPolicy.LRU;
