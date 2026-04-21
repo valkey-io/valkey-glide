@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::str::{from_utf8, FromStr};
 use std::time::Duration;
 
+use crate::cache::glide_cache::GlideCache;
 use crate::cmd::{cmd, pipe, Cmd};
 use crate::parser::Parser;
 use crate::pipeline::Pipeline;
@@ -234,6 +235,8 @@ pub struct RedisConnectionInfo {
     pub client_name: Option<String>,
     /// Optionally a library name that should be used for connection
     pub lib_name: Option<String>,
+    /// Optionally a cache used for client-side caching
+    pub cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl FromStr for ConnectionInfo {
@@ -392,6 +395,7 @@ fn url_to_tcp_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             },
             client_name: None,
             lib_name: None,
+            cache: None,
         },
     })
 }
@@ -425,6 +429,7 @@ fn url_to_unix_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             },
             client_name: None,
             lib_name: None,
+            cache: None,
         },
     })
 }
@@ -1872,6 +1877,7 @@ mod tests {
                         protocol: ProtocolVersion::RESP2,
                         client_name: None,
                         lib_name: None,
+                        cache: None,
                     },
                 },
             ),
