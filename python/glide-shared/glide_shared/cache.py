@@ -1,6 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 import threading
-import uuid
 from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, Optional
@@ -45,14 +44,13 @@ class ClientSideCache:
     """
 
     # Class variables - shared across all instances
-    _uuid_prefix: ClassVar[str] = uuid.uuid4().hex[:8]
     _counter_lock: ClassVar[threading.Lock] = threading.Lock()
     _counter: ClassVar[int] = 0
 
     # Instance variables - unique per instance
     cache_id: str
     max_cache_kb: int
-    entry_ttl_seconds: Optional[int] = None
+    entry_ttl_ms: int
     eviction_policy: Optional[EvictionPolicy] = None
     enable_metrics: bool = False
 
@@ -60,7 +58,7 @@ class ClientSideCache:
     def create(
         cls,
         max_cache_kb: int,
-        entry_ttl_seconds: Optional[int] = None,
+        entry_ttl_ms: int,
         eviction_policy: Optional[EvictionPolicy] = None,
         enable_metrics: bool = False,
     ) -> "ClientSideCache":
@@ -79,9 +77,9 @@ class ClientSideCache:
             max_cache_kb (int): Maximum size of the cache in kilobytes (KB). This limits
                 the total memory used by cached keys and values. When this limit is reached,
                 entries are evicted based on the eviction policy.
-            entry_ttl_seconds (Optional[int]): Time-To-Live for cached entries
-                in seconds. After this duration, entries automatically expire and are removed
-                from the cache. If not specified (None), no expiration is applied.
+            entry_ttl_ms (int): Time-To-Live for cached entries in milliseconds. After this
+                duration, entries automatically expire and are removed from the cache.
+                Set to 0 to disable TTL expiration (entries remain until evicted or invalidated).
             eviction_policy (Optional[EvictionPolicy]): Policy for evicting entries when
                 the cache reaches its maximum size. If not specified (None), the default
                 policy of LRU will be used.
@@ -95,24 +93,24 @@ class ClientSideCache:
             Create a basic cache:
             >>> cache = ClientSideCache.create(
             ...     max_cache_kb=10,  # 10 KB
-            ...     entry_ttl_seconds=60,  # 1 minute TTL
+            ...     entry_ttl_ms=60000,  # 1 minute TTL
             ...     eviction_policy=EvictionPolicy.LRU,
             ...     enable_metrics=True
             ... )
         """
         if max_cache_kb <= 0:
             raise ValueError("max_cache_kb must be positive")
-        if entry_ttl_seconds is not None and entry_ttl_seconds <= 0:
-            raise ValueError("entry_ttl_seconds must be positive")
+        if entry_ttl_ms < 0:
+            raise ValueError("entry_ttl_ms must be non-negative (0 = no expiration)")
 
         with cls._counter_lock:
-            cache_id = f"{cls._uuid_prefix}-{cls._counter}"
+            cache_id = str(cls._counter)
             cls._counter += 1
 
         return cls(
             cache_id=cache_id,
             max_cache_kb=max_cache_kb,
-            entry_ttl_seconds=entry_ttl_seconds,
+            entry_ttl_ms=entry_ttl_ms,
             eviction_policy=eviction_policy,
             enable_metrics=enable_metrics,
         )

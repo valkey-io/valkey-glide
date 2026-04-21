@@ -1089,6 +1089,6 @@ pub fn is_key_cached(
     key: &[u8],
     cache_key_type: redis::cache::glide_cache::CachedKeyType,
 ) -> bool {
-    let cache = redis::cache::get_or_create_cache(cache_id, 1000, None, None, true);
+    let cache = redis::cache::get_or_create_cache(cache_id, 1000, 0, None, true);
     cache.get(key, cache_key_type).is_some()
 }

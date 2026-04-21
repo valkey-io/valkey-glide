@@ -17,7 +17,7 @@ class TestClientSideCache:
         """Test basic cache hit/miss behavior with metrics tracking."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
-            entry_ttl_seconds=60,
+            entry_ttl_ms=60_000,
             enable_metrics=True,
         )
 
@@ -61,7 +61,7 @@ class TestClientSideCache:
         """Test that cache works but metrics are disabled."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
-            entry_ttl_seconds=60,
+            entry_ttl_ms=60_000,
             enable_metrics=False,  # Disabled
         )
 
@@ -108,7 +108,7 @@ class TestClientSideCache:
         """Test that NIL values are not cached."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
-            entry_ttl_seconds=60,
+            entry_ttl_ms=60_000,
             enable_metrics=True,
         )
 
@@ -141,7 +141,7 @@ class TestClientSideCache:
         """Test that cache entries expire after TTL."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
-            entry_ttl_seconds=2,  # 2 seconds
+            entry_ttl_ms=2_000,  # 2 seconds
             enable_metrics=True,
         )
 
@@ -184,7 +184,7 @@ class TestClientSideCache:
         """Test caching of multiple keys."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
-            entry_ttl_seconds=60,
+            entry_ttl_ms=60_000,
             enable_metrics=True,
         )
 
@@ -267,7 +267,7 @@ class TestClientSideCache:
         """Test LRU eviction policy."""
         cache = ClientSideCache.create(
             max_cache_kb=1,  # 1 KB to force eviction
-            entry_ttl_seconds=None,
+            entry_ttl_ms=600_000,
             eviction_policy=EvictionPolicy.LRU,
             enable_metrics=True,
         )
@@ -328,7 +328,7 @@ class TestClientSideCache:
         """Test LFU (Least Frequently Used) eviction policy."""
         cache = ClientSideCache.create(
             max_cache_kb=1,  # 1 KB - small cache to trigger evictions
-            entry_ttl_seconds=None,
+            entry_ttl_ms=600_000,
             eviction_policy=EvictionPolicy.LFU,
             enable_metrics=True,
         )
@@ -407,7 +407,7 @@ class TestClientSideCache:
     async def test_shared_cache(self, request, protocol, cluster_mode):
         cache = ClientSideCache.create(
             max_cache_kb=1024,
-            entry_ttl_seconds=60,
+            entry_ttl_ms=60_000,
             eviction_policy=None,
             enable_metrics=True,
         )
@@ -445,12 +445,54 @@ class TestClientSideCache:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cache_no_ttl_expiration(self, request, protocol, cluster_mode):
+        """Test that entry_ttl_ms=0 disables TTL expiration — entries persist until evicted."""
+        cache = ClientSideCache.create(
+            max_cache_kb=1,
+            entry_ttl_ms=0,  # No TTL expiration
+            enable_metrics=True,
+        )
+
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            cache=cache,
+        )
+
+        # Set and GET
+        assert await client.set("no_ttl_key", "no_ttl_value") == "OK"
+        assert await client.get("no_ttl_key") == b"no_ttl_value"
+
+        # Entry should be cached
+        assert await client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
+
+        # Wait a bit and verify entry is still cached (no TTL expiration)
+        await asyncio.sleep(3)
+
+        # GET should still be a cache hit (no expiration)
+        assert await client.get("no_ttl_key") == b"no_ttl_value"
+
+        # Verify no expirations occurred
+        expirations = await client.get_cache_expirations()
+        assert expirations == 0, "Expected 0 expirations with TTL disabled"
+
+        # Verify metrics: 1 miss + 2 hits = 3 total
+        assert await client.get_cache_total_lookups() == 2, "Expected 2 total lookups"
+        hit_rate = await client.get_cache_hit_rate()
+        assert hit_rate == 0.5, "Expected 66.67% hit rate"
+
+        await client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cache_wrong_key_type_raises_error(
         self, request, protocol, cluster_mode
     ):
         """Test that attempting to cache unsupported key types raises an error."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
+            entry_ttl_ms=60_000,
             enable_metrics=True,
         )
 
@@ -477,7 +519,7 @@ class TestClientSideCache:
         """Test that only cacheable commands are cached."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
-            entry_ttl_seconds=60,
+            entry_ttl_ms=60_000,
             enable_metrics=True,
         )
 
@@ -514,3 +556,17 @@ class TestClientSideCache:
 
         await client.flushall()
         await client.close()
+
+    def test_cache_entry_ttl_ms_validation(self):
+        """Test that entry_ttl_ms validation allows 0 and rejects negative values."""
+        # 0 should be allowed (no expiration)
+        cache = ClientSideCache.create(max_cache_kb=1, entry_ttl_ms=0)
+        assert cache.entry_ttl_ms == 0
+
+        # Positive should be allowed
+        cache = ClientSideCache.create(max_cache_kb=1, entry_ttl_ms=60_000)
+        assert cache.entry_ttl_ms == 60_000
+
+        # Negative should raise
+        with pytest.raises(ValueError, match="entry_ttl_ms must be non-negative"):
+            ClientSideCache.create(max_cache_kb=1, entry_ttl_ms=-1)

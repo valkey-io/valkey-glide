@@ -64,7 +64,8 @@ impl ConnectionRequest {
 pub struct ClientSideCache {
     pub cache_id: String,
     pub max_cache_kb: u64,
-    pub entry_ttl_seconds: Option<u64>,
+    /// Time-to-live for cached entries in milliseconds (0 = no expiration).
+    pub entry_ttl_ms: u64,
     pub eviction_policy: Option<EvictionPolicy>,
     pub enable_metrics: bool,
 }
@@ -339,7 +340,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .map(|proto_cache| ClientSideCache {
                 cache_id: chars_to_string_option(&proto_cache.cache_id).unwrap_or_default(),
                 max_cache_kb: proto_cache.max_cache_kb,
-                entry_ttl_seconds: proto_cache.entry_ttl_seconds,
+                entry_ttl_ms: proto_cache.entry_ttl_ms,
                 eviction_policy: proto_cache
                     .eviction_policy
                     .and_then(|enum_or_unknown| enum_or_unknown.enum_value().ok())

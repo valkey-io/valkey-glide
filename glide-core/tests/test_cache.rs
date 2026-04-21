@@ -26,7 +26,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: "test_cache".to_string().into(),
                         max_cache_kb: 1,
-                        entry_ttl_seconds: None,
+                        entry_ttl_ms: 0,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -129,7 +129,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: "test_cache_no_metrics".to_string().into(),
                         max_cache_kb: 10 * 1024,
-                        entry_ttl_seconds: Some(60),
+                        entry_ttl_ms: 60_000,
                         eviction_policy: None,
                         enable_metrics: false, // Disabled
                         ..Default::default()
@@ -234,7 +234,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: "test_cache_nil".to_string().into(),
                         max_cache_kb: 1,
-                        entry_ttl_seconds: Some(60),
+                        entry_ttl_ms: 60_000,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -304,7 +304,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: "test_cache_ttl".to_string().into(),
                         max_cache_kb: 1,
-                        entry_ttl_seconds: Some(2), // 2 seconds
+                        entry_ttl_ms: 2_000, // 2 seconds
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -401,7 +401,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: "test_cache_multi".to_string().into(),
                         max_cache_kb: 1,
-                        entry_ttl_seconds: Some(60),
+                        entry_ttl_ms: 60_000,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -580,7 +580,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: cache_id.to_string().into(),
                         max_cache_kb: 1, // 1 KB = 1024 bytes
-                        entry_ttl_seconds: None,
+                        entry_ttl_ms: 0,
                         eviction_policy: Some(EvictionPolicy::LRU.into()),
                         enable_metrics: true,
                         ..Default::default()
@@ -686,7 +686,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: cache_id.to_string().into(),
                         max_cache_kb: 1, // 1 KB
-                        entry_ttl_seconds: None,
+                        entry_ttl_ms: 0,
                         eviction_policy: Some(EvictionPolicy::LFU.into()),
                         enable_metrics: true,
                         ..Default::default()
@@ -827,7 +827,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: shared_cache_id.to_string().into(),
                         max_cache_kb: 10 * 1024,
-                        entry_ttl_seconds: Some(60),
+                        entry_ttl_ms: 60_000,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -845,7 +845,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: shared_cache_id.to_string().into(),
                         max_cache_kb: 10 * 1024,
-                        entry_ttl_seconds: Some(60),
+                        entry_ttl_ms: 60_000,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -939,7 +939,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: cache_id.to_string().into(),
                         max_cache_kb: 1, // 1 KB
-                        entry_ttl_seconds: None,
+                        entry_ttl_ms: 0,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -1016,7 +1016,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: cache_id.to_string().into(),
                         max_cache_kb: 1, // 1 KB
-                        entry_ttl_seconds: None,
+                        entry_ttl_ms: 0,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()
@@ -1121,7 +1121,7 @@ pub(crate) mod test_cache {
                     client_side_cache: Some(ClientSideCache {
                         cache_id: "test_cache_oversized".to_string().into(),
                         max_cache_kb: 1, // 1 KB
-                        entry_ttl_seconds: None,
+                        entry_ttl_ms: 0,
                         eviction_policy: None,
                         enable_metrics: true,
                         ..Default::default()

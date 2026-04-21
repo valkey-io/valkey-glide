@@ -82,7 +82,7 @@ message PubSubSubscriptions
 message ClientSideCache {
     string cache_id = 1;
     uint64 max_cache_kb = 2;
-    optional uint64 entry_ttl_seconds = 3;
+    uint64 entry_ttl_ms = 3; // 0 = no expiration
     optional EvictionPolicy eviction_policy = 4;
     bool enable_metrics = 5;
 }

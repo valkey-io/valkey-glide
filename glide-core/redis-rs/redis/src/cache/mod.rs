@@ -15,10 +15,10 @@ use std::{
     time::Duration,
 };
 use tokio::task::JoinHandle;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Interval between cache registry housekeeping runs (cleanup of dead weak references)
-const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(60 * 5); // Every 5 minutes
+const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(60);
 
 lazy_static! {
     /// Registry of all active caches (weak references)
@@ -50,14 +50,14 @@ pub enum EvictionPolicy {
 /// # Arguments
 /// * `cache_id` - Unique identifier for the cache
 /// * `max_cache_kb` - Maximum cache size in kilobytes
-/// * `ttl_sec` - Optional time-to-live in seconds (None = no expiration)
+/// * `ttl_ms` - Time-to-live in milliseconds (0 = no expiration)
 /// * `eviction_policy` - Eviction policy (LRU or LFU, defaults to LRU)
 /// * `enable_metrics` - Whether to enable metrics tracking, such as hit/miss counts.
 #[must_use]
 pub fn get_or_create_cache(
     cache_id: &str,
     max_cache_kb: u64,
-    ttl_sec: Option<u64>,
+    ttl_ms: u64,
     eviction_policy: Option<EvictionPolicy>,
     enable_metrics: bool,
 ) -> Arc<dyn GlideCache> {
@@ -68,9 +68,9 @@ pub fn get_or_create_cache(
         .get(cache_id)
         .and_then(Weak::upgrade)
     {
-        warn!(
+        debug!(
             "cache_lifetime - Cache `{cache_id}` already exists — returning existing instance. \
-             New config parameters (max_cache_kb={max_cache_kb}, ttl_sec={ttl_sec:?}, \
+             New config parameters (max_cache_kb={max_cache_kb}, ttl_ms={ttl_ms}, \
              eviction_policy={eviction_policy:?}, enable_metrics={enable_metrics}) are ignored. \
              Drop all references to recreate with different config."
         );
@@ -82,7 +82,7 @@ pub fn get_or_create_cache(
 
     // Double-check: another thread may have created the cache while we waited
     if let Some(cache) = registry.get(cache_id).and_then(Weak::upgrade) {
-        warn!(
+        debug!(
             "cache_lifetime - Cache `{cache_id}` already exists (after write lock) — returning existing instance. \
              New config parameters are ignored."
         );
@@ -92,7 +92,11 @@ pub fn get_or_create_cache(
     // Create cache configuration
     let config = CacheConfig {
         max_memory_bytes: max_cache_kb.saturating_mul(1024), // Convert KB to bytes
-        ttl: ttl_sec.map(Duration::from_secs),
+        ttl: if ttl_ms > 0 {
+            Some(Duration::from_millis(ttl_ms))
+        } else {
+            None
+        },
         enable_metrics,
     };
 
@@ -104,8 +108,8 @@ pub fn get_or_create_cache(
     };
 
     info!(
-        "cache_creation - Creating {policy:?} cache `{cache_id}` (max={}KB, ttl={ttl_sec:?})",
-        max_cache_kb
+        "cache_creation - Creating {policy:?} cache `{cache_id}` (max={}KB, ttl={}ms)",
+        max_cache_kb, ttl_ms
     );
 
     // Store weak reference in registry
@@ -200,40 +204,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_lru_cache() {
-        let cache = get_or_create_cache(
-            "test_lru_cache",
-            1024,
-            None,
-            Some(EvictionPolicy::Lru),
-            false,
-        );
+        let cache =
+            get_or_create_cache("test_lru_cache", 1024, 0, Some(EvictionPolicy::Lru), false);
         assert_eq!(cache.entry_count(), 0);
         cleanup_cache("test_lru_cache");
     }
 
     #[tokio::test]
     async fn test_create_lfu_cache() {
-        let cache = get_or_create_cache(
-            "test_lfu_cache",
-            1024,
-            None,
-            Some(EvictionPolicy::Lfu),
-            false,
-        );
+        let cache =
+            get_or_create_cache("test_lfu_cache", 1024, 0, Some(EvictionPolicy::Lfu), false);
         assert_eq!(cache.entry_count(), 0);
         cleanup_cache("test_lfu_cache");
     }
 
     #[tokio::test]
     async fn test_create_cache_with_metrics() {
-        let cache = get_or_create_cache("test_metrics_cache", 1024, None, None, true);
+        let cache = get_or_create_cache("test_metrics_cache", 1024, 0, None, true);
         assert!(cache.metrics().is_ok());
         cleanup_cache("test_metrics_cache");
     }
 
     #[tokio::test]
     async fn test_create_cache_without_metrics() {
-        let cache = get_or_create_cache("test_no_metrics_cache", 1024, None, None, false);
+        let cache = get_or_create_cache("test_no_metrics_cache", 1024, 0, None, false);
         assert!(cache.metrics().is_err());
         cleanup_cache("test_no_metrics_cache");
     }
@@ -241,8 +235,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_existing_cache() {
         let cache_id = "test_get_existing";
-        let cache1 = get_or_create_cache(cache_id, 1024, None, None, false);
-        let cache2 = get_or_create_cache(cache_id, 2048, Some(30), Some(EvictionPolicy::Lfu), true);
+        let cache1 = get_or_create_cache(cache_id, 1024, 0, None, false);
+        let cache2 = get_or_create_cache(cache_id, 2048, 30000, Some(EvictionPolicy::Lfu), true);
 
         assert!(Arc::ptr_eq(&cache1, &cache2));
         cleanup_cache(cache_id);
@@ -250,8 +244,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_different_cache_ids_create_different_caches() {
-        let cache1 = get_or_create_cache("test_diff_1", 1024, None, None, false);
-        let cache2 = get_or_create_cache("test_diff_2", 1024, None, None, false);
+        let cache1 = get_or_create_cache("test_diff_1", 1024, 0, None, false);
+        let cache2 = get_or_create_cache("test_diff_2", 1024, 0, None, false);
 
         assert!(!Arc::ptr_eq(&cache1, &cache2));
         cleanup_cache("test_diff_1");
@@ -265,7 +259,7 @@ mod tests {
         let cache_id = "test_registered";
         let exists_before = CACHE_REGISTRY.read().unwrap().contains_key(cache_id);
 
-        let _cache = get_or_create_cache(cache_id, 1024, None, None, false);
+        let _cache = get_or_create_cache(cache_id, 1024, 0, None, false);
 
         let exists_after = CACHE_REGISTRY.read().unwrap().contains_key(cache_id);
 
@@ -277,7 +271,7 @@ mod tests {
     #[tokio::test]
     async fn test_weak_reference_upgrades_while_cache_alive() {
         let cache_id = "test_weak_upgrade";
-        let cache = get_or_create_cache(cache_id, 1024, None, None, false);
+        let cache = get_or_create_cache(cache_id, 1024, 0, None, false);
 
         let upgraded = CACHE_REGISTRY
             .read()
@@ -294,11 +288,11 @@ mod tests {
     async fn test_cache_recreated_after_drop() {
         let cache_id = "test_recreate";
 
-        let cache1 = get_or_create_cache(cache_id, 1024, None, None, false);
+        let cache1 = get_or_create_cache(cache_id, 1024, 0, None, false);
         assert!(cache1.metrics().is_err());
         drop(cache1);
 
-        let cache2 = get_or_create_cache(cache_id, 1024, None, None, true);
+        let cache2 = get_or_create_cache(cache_id, 1024, 0, None, true);
         assert!(cache2.metrics().is_ok());
         cleanup_cache(cache_id);
     }
@@ -310,7 +304,7 @@ mod tests {
         use crate::Value;
         use glide_cache::CachedKeyType;
 
-        let cache = get_or_create_cache("test_operations", 10_000, None, None, false);
+        let cache = get_or_create_cache("test_operations", 10_000, 0, None, false);
 
         cache.insert(
             b"key1".to_vec(),
@@ -394,7 +388,7 @@ mod tests {
         let cache = get_or_create_cache(
             "test_concurrent_lru",
             100,
-            None,
+            0,
             Some(EvictionPolicy::Lru),
             true,
         );
@@ -407,7 +401,7 @@ mod tests {
         let cache = get_or_create_cache(
             "test_concurrent_lfu",
             100,
-            None,
+            0,
             Some(EvictionPolicy::Lfu),
             true,
         );

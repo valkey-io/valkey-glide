@@ -179,7 +179,7 @@ pub async fn get_valkey_connection_info(
             get_or_create_cache(
                 &client_side_cache.cache_id,
                 client_side_cache.max_cache_kb,
-                client_side_cache.entry_ttl_seconds,
+                client_side_cache.entry_ttl_ms,
                 client_side_cache.eviction_policy,
                 client_side_cache.enable_metrics,
             )
@@ -2043,7 +2043,7 @@ impl Client {
             get_or_create_cache(
                 &config.cache_id,
                 config.max_cache_kb,
-                config.entry_ttl_seconds,
+                config.entry_ttl_ms,
                 config.eviction_policy,
                 config.enable_metrics,
             )
