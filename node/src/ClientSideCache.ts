@@ -31,10 +31,10 @@ export interface ClientSideCacheConfig {
     maxCacheKb: number;
 
     /**
-     * Optional Time-To-Live for cache entries in seconds.
+     * Optional Time-To-Live for cache entries in milliseconds.
      * If not specified, entries will not expire based on time.
      */
-    entryTtlSeconds?: number;
+    entryTtlMs?: number;
 
     /**
      * Optional eviction policy to use when cache reaches memory limit.
@@ -54,9 +54,9 @@ export interface ClientSideCacheConfig {
  */
 export interface ClientSideCacheOptions {
     /**
-     * Optional Time-To-Live for cache entries in seconds.
+     * Optional Time-To-Live for cache entries in milliseconds.
      */
-    entryTtlSeconds?: number;
+    entryTtlMs?: number;
 
     /**
      * Optional eviction policy to use when cache reaches memory limit.
@@ -86,7 +86,7 @@ export interface ClientSideCacheOptions {
  * const customCache = new ClientSideCache({
  *   cacheId: "my-cache",
  *   maxCacheKb: 2048,
- *   entryTtlSeconds: 300,
+ *   entryTtlMs: 300000,
  *   evictionPolicy: EvictionPolicy.LFU,
  *   enableMetrics: true
  * });
@@ -104,9 +104,9 @@ export class ClientSideCache {
     readonly maxCacheKb: number;
 
     /**
-     * Optional Time-To-Live for cache entries in seconds.
+     * Optional Time-To-Live for cache entries in milliseconds.
      */
-    readonly entryTtlSeconds?: number;
+    readonly entryTtlMs?: number;
 
     /**
      * Optional eviction policy to use when cache reaches memory limit.
@@ -123,7 +123,7 @@ export class ClientSideCache {
      *
      * @param config - Configuration options for the cache
      * @throws {Error} If maxCacheKb is not a positive number
-     * @throws {Error} If entryTtlSeconds is provided but not a positive number
+     * @throws {Error} If entryTtlMs is provided but not a positive number
      */
     constructor(config: ClientSideCacheConfig) {
         if (config.maxCacheKb <= 0) {
@@ -131,17 +131,17 @@ export class ClientSideCache {
         }
 
         if (
-            config.entryTtlSeconds !== undefined &&
-            config.entryTtlSeconds <= 0
+            config.entryTtlMs !== undefined &&
+            config.entryTtlMs <= 0
         ) {
             throw new Error(
-                "entryTtlSeconds must be a positive number when provided",
+                "entryTtlMs must be a positive number when provided",
             );
         }
 
         this.cacheId = config.cacheId ?? generateCacheId();
         this.maxCacheKb = config.maxCacheKb;
-        this.entryTtlSeconds = config.entryTtlSeconds;
+        this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;
         this.enableMetrics = config.enableMetrics ?? true;
     }
@@ -153,7 +153,7 @@ export class ClientSideCache {
      * @param options - Optional configuration options
      * @returns A new ClientSideCache instance with auto-generated cache ID
      * @throws {Error} If maxCacheKb is not a positive number
-     * @throws {Error} If entryTtlSeconds is provided but not a positive number
+     * @throws {Error} If entryTtlMs is provided but not a positive number
      *
      * @example
      * ```typescript
@@ -162,7 +162,7 @@ export class ClientSideCache {
      *
      * // Cache with TTL and LFU eviction
      * const cacheWithOptions = ClientSideCache.create(2048, {
-     *   entryTtlSeconds: 300,
+     *   entryTtlMs: 300000,
      *   evictionPolicy: EvictionPolicy.LFU,
      *   enableMetrics: false
      * });
@@ -174,7 +174,7 @@ export class ClientSideCache {
     ): ClientSideCache {
         return new ClientSideCache({
             maxCacheKb,
-            entryTtlSeconds: options?.entryTtlSeconds,
+            entryTtlMs: options?.entryTtlMs,
             evictionPolicy: options?.evictionPolicy,
             enableMetrics: options?.enableMetrics,
         });

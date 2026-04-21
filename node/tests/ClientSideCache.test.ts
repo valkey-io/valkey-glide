@@ -107,7 +107,7 @@ describe("ClientSideCache", () => {
                     "test basic cache hit with metrics",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -159,7 +159,7 @@ describe("ClientSideCache", () => {
                     "test cache without metrics",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: false, // Disabled
                         });
 
@@ -197,7 +197,7 @@ describe("ClientSideCache", () => {
                     "test cache nil values not cached",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -226,7 +226,7 @@ describe("ClientSideCache", () => {
                     "test cache ttl expiration",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 2, // 2 seconds
+                            entryTtlMs: 2000, // 2 seconds
                             enableMetrics: true,
                         });
 
@@ -269,7 +269,7 @@ describe("ClientSideCache", () => {
                     "test cache multiple keys",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -540,7 +540,7 @@ describe("ClientSideCache", () => {
                     "test shared cache",
                     async () => {
                         const cache = ClientSideCache.create(1024, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -612,7 +612,7 @@ describe("ClientSideCache", () => {
                     "test cacheable commands",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -696,7 +696,7 @@ describe("ClientSideCache", () => {
                     "test basic cache hit with metrics",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -748,7 +748,7 @@ describe("ClientSideCache", () => {
                     "test cache without metrics",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: false, // Disabled
                         });
 
@@ -788,7 +788,7 @@ describe("ClientSideCache", () => {
                     "test cache nil values not cached",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -821,7 +821,7 @@ describe("ClientSideCache", () => {
                     "test cache ttl expiration",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 2, // 2 seconds
+                            entryTtlMs: 2000, // 2 seconds
                             enableMetrics: true,
                         });
 
@@ -870,7 +870,7 @@ describe("ClientSideCache", () => {
                     "test cache multiple keys",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -1162,7 +1162,7 @@ describe("ClientSideCache", () => {
                     "test shared cache",
                     async () => {
                         const cache = ClientSideCache.create(1024, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 
@@ -1236,7 +1236,7 @@ describe("ClientSideCache", () => {
                     "test cacheable commands",
                     async () => {
                         const cache = ClientSideCache.create(1, {
-                            entryTtlSeconds: 60,
+                            entryTtlMs: 60000,
                             enableMetrics: true,
                         });
 

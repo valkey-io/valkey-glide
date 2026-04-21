@@ -937,7 +937,7 @@ export interface BaseClientConfiguration {
      *   clientSideCache: new ClientSideCache({
      *     cacheId: 'shared-cache',
      *     maxCacheKb: 2048,
-     *     entryTtlSeconds: 300,
+     *     entryTtlMs: 300000,
      *     evictionPolicy: EvictionPolicy.LFU,
      *     enableMetrics: true,
      *   }),
@@ -9365,7 +9365,7 @@ export class BaseClient {
             clientSideCache = connection_request.ClientSideCache.create({
                 cacheId: cache.cacheId,
                 maxCacheKb: cache.maxCacheKb,
-                entryTtlSeconds: cache.entryTtlSeconds,
+                entryTtlMs: cache.entryTtlMs,
                 evictionPolicy: cache.evictionPolicy,
                 enableMetrics: cache.enableMetrics,
             });
