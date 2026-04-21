@@ -106,8 +106,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test basic cache hit with metrics",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 
@@ -158,8 +157,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache without metrics",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: false, // Disabled
                         });
 
@@ -196,8 +194,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache nil values not cached",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 
@@ -225,8 +222,8 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache ttl expiration",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 2000, // 2 seconds
+                        const cache = ClientSideCache.create(1, 2000, {
+                            // 2 seconds
                             enableMetrics: true,
                         });
 
@@ -268,8 +265,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache multiple keys",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 
@@ -343,7 +339,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache eviction policy lru",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             // 1 KB to force eviction
                             evictionPolicy: EvictionPolicy.LRU,
                             enableMetrics: true,
@@ -405,7 +401,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache eviction policy lfu",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             // 1 KB - small cache to trigger evictions
                             evictionPolicy: EvictionPolicy.LFU,
                             enableMetrics: true,
@@ -480,7 +476,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache max memory limit",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             // 1 KB
                             evictionPolicy: EvictionPolicy.LRU,
                             enableMetrics: true,
@@ -539,8 +535,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test shared cache",
                     async () => {
-                        const cache = ClientSideCache.create(1024, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1024, 60000, {
                             enableMetrics: true,
                         });
 
@@ -583,7 +578,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache wrong key type raises error",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             enableMetrics: true,
                         });
 
@@ -611,8 +606,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cacheable commands",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 
@@ -695,8 +689,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test basic cache hit with metrics",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 
@@ -747,8 +740,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache without metrics",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: false, // Disabled
                         });
 
@@ -787,8 +779,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache nil values not cached",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 
@@ -820,8 +811,8 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache ttl expiration",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 2000, // 2 seconds
+                        const cache = ClientSideCache.create(1, 2000, {
+                            // 2 seconds
                             enableMetrics: true,
                         });
 
@@ -869,8 +860,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache multiple keys",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 
@@ -946,7 +936,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache eviction policy lru",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             // 1 KB to force eviction
                             evictionPolicy: EvictionPolicy.LRU,
                             enableMetrics: true,
@@ -1012,7 +1002,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache eviction policy lfu",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             // 1 KB - small cache to trigger evictions
                             evictionPolicy: EvictionPolicy.LFU,
                             enableMetrics: true,
@@ -1095,7 +1085,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache max memory limit",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             // 1 KB
                             evictionPolicy: EvictionPolicy.LRU,
                             enableMetrics: true,
@@ -1161,8 +1151,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test shared cache",
                     async () => {
-                        const cache = ClientSideCache.create(1024, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1024, 60000, {
                             enableMetrics: true,
                         });
 
@@ -1205,7 +1194,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cache wrong key type raises error",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
+                        const cache = ClientSideCache.create(1, 0, {
                             enableMetrics: true,
                         });
 
@@ -1235,8 +1224,7 @@ describe("ClientSideCache", () => {
                 it(
                     "test cacheable commands",
                     async () => {
-                        const cache = ClientSideCache.create(1, {
-                            entryTtlMs: 60000,
+                        const cache = ClientSideCache.create(1, 60000, {
                             enableMetrics: true,
                         });
 

@@ -31,10 +31,10 @@ export interface ClientSideCacheConfig {
     maxCacheKb: number;
 
     /**
-     * Optional Time-To-Live for cache entries in milliseconds.
-     * If not specified, entries will not expire based on time.
+     * Time-To-Live for cache entries in milliseconds.
+     * Set to 0 to disable TTL expiration (entries remain until evicted or invalidated).
      */
-    entryTtlMs?: number;
+    entryTtlMs: number;
 
     /**
      * Optional eviction policy to use when cache reaches memory limit.
@@ -53,11 +53,6 @@ export interface ClientSideCacheConfig {
  * Optional configuration options for the static create method.
  */
 export interface ClientSideCacheOptions {
-    /**
-     * Optional Time-To-Live for cache entries in milliseconds.
-     */
-    entryTtlMs?: number;
-
     /**
      * Optional eviction policy to use when cache reaches memory limit.
      */
@@ -80,7 +75,7 @@ export interface ClientSideCacheOptions {
  * @example
  * ```typescript
  * // Create cache with auto-generated ID
- * const cache = ClientSideCache.create(1024); // 1MB cache
+ * const cache = ClientSideCache.create(1024, 60000); // 1MB cache, 1 min TTL
  *
  * // Create cache with custom configuration
  * const customCache = new ClientSideCache({
@@ -104,9 +99,9 @@ export class ClientSideCache {
     readonly maxCacheKb: number;
 
     /**
-     * Optional Time-To-Live for cache entries in milliseconds.
+     * Time-To-Live for cache entries in milliseconds. 0 means no expiration.
      */
-    readonly entryTtlMs?: number;
+    readonly entryTtlMs: number;
 
     /**
      * Optional eviction policy to use when cache reaches memory limit.
@@ -123,16 +118,16 @@ export class ClientSideCache {
      *
      * @param config - Configuration options for the cache
      * @throws {Error} If maxCacheKb is not a positive number
-     * @throws {Error} If entryTtlMs is provided but not a positive number
+     * @throws {Error} If entryTtlMs is negative
      */
     constructor(config: ClientSideCacheConfig) {
         if (config.maxCacheKb <= 0) {
             throw new Error("maxCacheKb must be a positive number");
         }
 
-        if (config.entryTtlMs !== undefined && config.entryTtlMs <= 0) {
+        if (config.entryTtlMs < 0) {
             throw new Error(
-                "entryTtlMs must be a positive number when provided",
+                "entryTtlMs must be non-negative (0 = no expiration)",
             );
         }
 
@@ -147,19 +142,19 @@ export class ClientSideCache {
      * Factory method to create a ClientSideCache with auto-generated cache ID.
      *
      * @param maxCacheKb - Maximum memory limit for the cache in kilobytes
+     * @param entryTtlMs - TTL for cache entries in milliseconds. Use 0 for no expiration.
      * @param options - Optional configuration options
      * @returns A new ClientSideCache instance with auto-generated cache ID
      * @throws {Error} If maxCacheKb is not a positive number
-     * @throws {Error} If entryTtlMs is provided but not a positive number
+     * @throws {Error} If entryTtlMs is negative
      *
      * @example
      * ```typescript
-     * // Simple cache with 1MB limit
-     * const cache = ClientSideCache.create(1024);
+     * // Simple cache with 1MB limit and no TTL
+     * const cache = ClientSideCache.create(1024, 0);
      *
      * // Cache with TTL and LFU eviction
-     * const cacheWithOptions = ClientSideCache.create(2048, {
-     *   entryTtlMs: 300000,
+     * const cacheWithOptions = ClientSideCache.create(2048, 300000, {
      *   evictionPolicy: EvictionPolicy.LFU,
      *   enableMetrics: false
      * });
@@ -167,11 +162,12 @@ export class ClientSideCache {
      */
     static create(
         maxCacheKb: number,
+        entryTtlMs: number,
         options?: Partial<ClientSideCacheOptions>,
     ): ClientSideCache {
         return new ClientSideCache({
             maxCacheKb,
-            entryTtlMs: options?.entryTtlMs,
+            entryTtlMs,
             evictionPolicy: options?.evictionPolicy,
             enableMetrics: options?.enableMetrics,
         });
