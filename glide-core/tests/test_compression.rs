@@ -787,8 +787,7 @@ mod compression_tests {
             CompressionError::compression_failed("zstd", Some(3), 1000, "test error");
         assert!(!compression_err.is_incompatible_command());
 
-        let decompression_err =
-            CompressionError::decompression_failed("lz4", 500, "test error");
+        let decompression_err = CompressionError::decompression_failed("lz4", 500, "test error");
         assert!(!decompression_err.is_incompatible_command());
 
         let unsupported_err = CompressionError::unsupported_backend("brotli");
