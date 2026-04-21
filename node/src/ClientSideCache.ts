@@ -130,10 +130,7 @@ export class ClientSideCache {
             throw new Error("maxCacheKb must be a positive number");
         }
 
-        if (
-            config.entryTtlMs !== undefined &&
-            config.entryTtlMs <= 0
-        ) {
+        if (config.entryTtlMs !== undefined && config.entryTtlMs <= 0) {
             throw new Error(
                 "entryTtlMs must be a positive number when provided",
             );
