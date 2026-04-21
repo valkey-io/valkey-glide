@@ -1906,7 +1906,6 @@ unsafe fn free_command_response_elements(command_response: CommandResponse) {
     }
 }
 
-/// Converts a double pointer to a vec.
 /// Resolves the actual RequestType for a CustomCommand by parsing the command name from the first argument.
 /// This is needed for compression validation since CustomCommand doesn't carry the actual command type.
 fn resolve_custom_command_type(args: &[Vec<u8>]) -> RequestType {
