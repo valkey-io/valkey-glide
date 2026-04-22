@@ -42,9 +42,6 @@ on:
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-engine/action.yml
             - .github/workflows/start-valkey-docker/action.yml
-    # Nightly run at 12:00 AM UTC (alongside python.yml)
-    schedule:
-        - cron: "0 0 * * *"
     workflow_dispatch:
         inputs:
             name:

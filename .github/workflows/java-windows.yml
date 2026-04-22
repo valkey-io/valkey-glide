@@ -1,5 +1,6 @@
-# Isolated from java.yml to prevent Windows flakiness (20.8% failure rate)
-# from cancelling or blocking non-Windows Java jobs (1.4–6.4% failure rate).
+# Isolated from java.yml to prevent Windows flakiness
+# from cancelling or blocking non-Windows Java jobs.
+# Once these have fixed we should remove this an re-enable Windows testing in java.yml
 name: Java Windows CI
 
 permissions:
@@ -59,8 +60,7 @@ concurrency:
     group: java-windows-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
     cancel-in-progress: true
 
-run-name:
-    ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && (inputs.name == '' && format('{0} @ {1} {2}', github.ref_name, github.sha, toJson(inputs)) || inputs.name) || '' }}
 
 jobs:
     get-matrices:

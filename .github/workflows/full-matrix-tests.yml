@@ -87,6 +87,8 @@ jobs:
         name: Run CI for java client
         secrets: inherit
 
+    # Java Windows test should be part of the java.yml workflow, but it is currently too flaky thus we have moved it to a separate workflow.
+    # This was added to ensure FMT still runs Java Windows tests.
     run-full-tests-for-java-windows:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)
         uses: ./.github/workflows/java-windows.yml

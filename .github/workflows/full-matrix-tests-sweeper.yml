@@ -3,7 +3,9 @@ name: CI - Trigger periodic full matrix tests for relevant branches
 on:
     workflow_dispatch:
 
-    # schedule: # disabled - scheduling moved to per-language workflows
+    # Disabled. Scheduling moved to per-language workflows to isolate flaky
+    # tests. Once flaky tests are resolved we should re-enable this.
+    # schedule:
     #     - cron: "0 3 * * *"
 
 permissions:
