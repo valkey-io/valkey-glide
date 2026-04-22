@@ -928,14 +928,13 @@ export interface BaseClientConfiguration {
      * // Simple cache configuration
      * const config: BaseClientConfiguration = {
      *   addresses: [{ host: 'localhost', port: 6379 }],
-     *   clientSideCache: ClientSideCache.create(1024), // 1MB cache
+     *   clientSideCache: ClientSideCache.create(1024, 0), // 1MB cache, no TTL
      * };
      *
      * // Advanced cache configuration
      * const advancedConfig: BaseClientConfiguration = {
      *   addresses: [{ host: 'localhost', port: 6379 }],
      *   clientSideCache: new ClientSideCache({
-     *     cacheId: 'shared-cache',
      *     maxCacheKb: 2048,
      *     entryTtlMs: 300000,
      *     evictionPolicy: EvictionPolicy.LFU,
@@ -9662,7 +9661,7 @@ export class BaseClient {
         const response = await this.createRefreshIamTokenPromise(refresh);
         return response; // "OK"
     }
-    /*
+    /**
      * Get the cache hit rate (hits / total requests).
      *
      * @returns The cache hit rate as a number between 0.0 and 1.0.

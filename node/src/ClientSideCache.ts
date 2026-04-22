@@ -2,31 +2,17 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { EvictionPolicy } from "./EvictionPolicy.js";
+import { randomUUID } from "crypto";
 
-/**
- * Generates a unique cache ID using timestamp and random numbers.
- * @returns A unique string identifier
- */
-function generateCacheId(): string {
-    const timestamp = Date.now().toString(36);
-    const randomPart = Math.random().toString(36).substring(2, 15);
-    return `cache_${timestamp}_${randomPart}`;
-}
+import { EvictionPolicy } from "./EvictionPolicy.js";
 
 /**
  * Configuration options for creating a ClientSideCache.
  */
 export interface ClientSideCacheConfig {
     /**
-     * Unique identifier for the cache instance.
-     * If not provided, a unique ID will be auto-generated.
-     */
-    cacheId?: string;
-
-    /**
      * Maximum memory limit for the cache in kilobytes.
-     * Must be a positive number.
+     * Must be greater than zero.
      */
     maxCacheKb: number;
 
@@ -79,7 +65,6 @@ export interface ClientSideCacheOptions {
  *
  * // Create cache with custom configuration
  * const customCache = new ClientSideCache({
- *   cacheId: "my-cache",
  *   maxCacheKb: 2048,
  *   entryTtlMs: 300000,
  *   evictionPolicy: EvictionPolicy.LFU,
@@ -89,7 +74,8 @@ export interface ClientSideCacheOptions {
  */
 export class ClientSideCache {
     /**
-     * Unique identifier for the cache instance.
+     * @internal
+     * Unique identifier for the cache instance. Auto-generated using UUID.
      */
     readonly cacheId: string;
 
@@ -131,7 +117,7 @@ export class ClientSideCache {
             );
         }
 
-        this.cacheId = config.cacheId ?? generateCacheId();
+        this.cacheId = randomUUID();
         this.maxCacheKb = config.maxCacheKb;
         this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;

@@ -234,7 +234,7 @@ export interface ClusterPubSubState {
  *     { host: 'cluster-node-2.example.com', port: 6379 },
  *   ],
  *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+ with multi-database cluster mode)
- *   clientSideCache: ClientSideCache.create(2048), // Enable 2MB client-side cache
+ *   clientSideCache: ClientSideCache.create(2048, 0), // Enable 2MB client-side cache, no TTL
  *   periodicChecks: {
  *     duration_in_sec: 30, // Perform periodic checks every 30 seconds
  *   },
