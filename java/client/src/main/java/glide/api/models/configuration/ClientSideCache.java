@@ -1,18 +1,24 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
-import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NonNull;
 
 /**
  * Configuration for client-side caching. Client-side caching reduces network round-trips and server
  * load by storing frequently accessed data locally on the client.
  *
+ * <p>Use the {@link #create} factory method or the builder to create instances. The cache ID is
+ * auto-generated internally.
+ *
+ * <p>In order for 2 clients to share the same cache, they must be created with the same {@code
+ * ClientSideCache} instance. Clients with different {@code ClientSideCache} instances will have
+ * separate caches, even if the configurations are identical.
+ *
  * @example
  *     <pre>{@code
- * // Create cache with auto-generated ID
+ * // Create cache with default settings
  * ClientSideCache cache = ClientSideCache.create(1024, 60000);
  *
  * // Create cache with custom configuration
@@ -28,8 +34,14 @@ import lombok.NonNull;
 @Builder
 public class ClientSideCache {
 
-    /** Unique identifier for the cache instance. */
-    @NonNull @Builder.Default private final String cacheId = generateCacheId();
+    /** Thread-safe counter for generating unique cache IDs, matching Python's counter approach. */
+    private static final AtomicLong ID_COUNTER = new AtomicLong(0);
+
+    /**
+     * Unique identifier for the cache instance. Auto-generated internally. Used to determine cache
+     * sharing between clients.
+     */
+    @Builder.Default private final String cacheId = generateCacheId();
 
     /** Maximum memory limit for the cache in kilobytes. */
     private final long maxCacheKb;
@@ -58,11 +70,24 @@ public class ClientSideCache {
     }
 
     /**
-     * Generates a unique cache identifier.
+     * Generates a unique cache identifier using an incrementing counter, consistent with the Python
+     * client implementation.
      *
      * @return A unique cache ID string.
      */
     private static String generateCacheId() {
-        return "cache-" + UUID.randomUUID().toString();
+        return String.valueOf(ID_COUNTER.getAndIncrement());
+    }
+
+    /**
+     * Customized builder that hides the {@code cacheId} setter. The cache ID is always auto-generated
+     * and should not be set by users.
+     */
+    public static class ClientSideCacheBuilder {
+        // Hide the cacheId setter from the public API. Lombok will still use the
+        // @Builder.Default initializer internally, so the auto-generated ID is applied.
+        private ClientSideCacheBuilder cacheId(String cacheId) {
+            return this;
+        }
     }
 }
