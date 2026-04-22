@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import glide.TestConfiguration;
 import glide.TestUtilities;
 import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
@@ -53,7 +54,7 @@ public class StandaloneClientTests {
 
         String info = (String) client.customCommand(new String[] {"CLIENT", "INFO"}).get();
         assertTrue(info.contains("lib-name=GlideJava"));
-        assertTrue(info.contains("lib-ver=unknown"));
+        assertTrue(info.contains("lib-ver=" + TestConfiguration.EXPECTED_GLIDE_VERSION));
 
         client.close();
     }
