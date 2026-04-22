@@ -19,6 +19,7 @@
 * FFI: Add OpenTelemetry DB semantic convention attributes to FFI path ([#5596](https://github.com/valkey-io/valkey-glide/issues/5596))
 * JAVA: Add cluster management commands (CLUSTER MEET, CLUSTER FORGET, CLUSTER REPLICATE, CLUSTER REPLICAS, CLUSTER COUNT-FAILURE-REPORTS, CLUSTER FAILOVER, CLUSTER SETSLOT, CLUSTER BUMPEPOCH, CLUSTER SET-CONFIG-EPOCH, CLUSTER FLUSHSLOTS, CLUSTER RESET, READONLY, READWRITE, ASKING, CLUSTER SAVECONFIG, CLUSTER GETKEYSINSLOT) ([#5503](https://github.com/valkey-io/valkey-glide/pull/5503))
 * Go: Client-Side Caching Support ([#5721](https://github.com/valkey-io/valkey-glide/pull/5721))
+* Go: Add `PeriodicChecks` configuration to `AdvancedClusterClientConfiguration` — supports `PeriodicChecksEnabled`, `PeriodicChecksDisabled`, and `PeriodicChecksManualInterval` modes for controlling cluster topology check intervals ([#5842](https://github.com/valkey-io/valkey-glide/issues/5842))
 * JAVA: Client-Side Caching Support ([#5172](https://github.com/valkey-io/valkey-glide/pull/5172))
 * Node: Client-Side Caching Support ([#5720](https://github.com/valkey-io/valkey-glide/pull/5720))
 
