@@ -1407,3 +1407,58 @@ func TestConfig_NodeDiscoveryMode_DiscoverAll(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, protobuf.NodeDiscoveryMode_DiscoverAll, result.NodeDiscoveryMode)
 }
+
+func TestClusterConfig_PeriodicChecks_DefaultNotSet(t *testing.T) {
+	// When no periodic checks config is set, the protobuf field should be nil (server uses default).
+	config := NewClusterClientConfiguration()
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default cluster config to protobuf: %v", err)
+	}
+	assert.Nil(t, result.PeriodicChecks)
+}
+
+func TestClusterConfig_PeriodicChecks_Enabled(t *testing.T) {
+	// Explicitly setting PeriodicChecksEnabled should not set any protobuf field (default behavior).
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithPeriodicChecks(PeriodicChecksEnabled{}),
+		)
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.Nil(t, result.PeriodicChecks)
+}
+
+func TestClusterConfig_PeriodicChecks_Disabled(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithPeriodicChecks(PeriodicChecksDisabled{}),
+		)
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.NotNil(t, result.PeriodicChecks)
+	_, ok := result.PeriodicChecks.(*protobuf.ConnectionRequest_PeriodicChecksDisabled)
+	assert.True(t, ok, "expected PeriodicChecksDisabled protobuf type")
+}
+
+func TestClusterConfig_PeriodicChecks_ManualInterval(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithPeriodicChecks(PeriodicChecksManualInterval{DurationInSec: 30}),
+		)
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.NotNil(t, result.PeriodicChecks)
+	manual, ok := result.PeriodicChecks.(*protobuf.ConnectionRequest_PeriodicChecksManualInterval)
+	assert.True(t, ok, "expected PeriodicChecksManualInterval protobuf type")
+	assert.Equal(t, uint32(30), manual.PeriodicChecksManualInterval.DurationInSec)
+}
