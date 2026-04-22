@@ -337,16 +337,27 @@ async fn send_command(
     }
 
     // Process command arguments for compression if compression is enabled
-    if client.is_compression_enabled()
-        && let Err(compression_error) = process_command_for_compression(&mut cmd, &client)
-    {
-        log_warn(
-            "send_command",
-            format!(
-                "Compression processing failed: {}, continuing with original command",
-                compression_error
-            ),
-        );
+    // This also validates that the command is compatible with compression
+    // Note: We intentionally keep these as separate if statements for clarity:
+    // - First check: is compression enabled?
+    // - Second check: did compression processing fail?
+    // - Third check: is it an incompatible command error?
+    #[allow(clippy::collapsible_if)]
+    if client.is_compression_enabled() {
+        if let Err(compression_error) = process_command_for_compression(&mut cmd, &client) {
+            // Incompatible command errors should be returned to the user
+            if compression_error.is_incompatible_command() {
+                return Err(ClientUsageError::User(compression_error.to_string()));
+            }
+            // For other compression errors (e.g., compression failed), log and continue
+            log_warn(
+                "send_command",
+                format!(
+                    "Compression processing failed: {}, continuing with original command",
+                    compression_error
+                ),
+            );
+        }
     }
 
     client
@@ -419,6 +430,14 @@ fn process_command_for_compression(
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
 
+    // If compression is not enabled, skip all processing
+    if compression_manager_ref
+        .map(|m| !m.is_enabled())
+        .unwrap_or(true)
+    {
+        return Ok(());
+    }
+
     // Collect all arguments first to avoid borrowing issues
     let all_args: Vec<Vec<u8>> = cmd
         .args_iter()
@@ -444,8 +463,35 @@ fn process_command_for_compression(
         "SETEX" => crate::request_type::RequestType::SetEx,
         "PSETEX" => crate::request_type::RequestType::PSetEx,
         "SETNX" => crate::request_type::RequestType::SetNX,
-        _ => return Ok(()), // Unknown command, no compression needed
+        // Incompatible commands - string manipulation
+        "APPEND" => crate::request_type::RequestType::Append,
+        "GETRANGE" => crate::request_type::RequestType::GetRange,
+        "SETRANGE" => crate::request_type::RequestType::SetRange,
+        "STRLEN" => crate::request_type::RequestType::Strlen,
+        "LCS" => crate::request_type::RequestType::LCS,
+        "SUBSTR" => crate::request_type::RequestType::Substr,
+        // Incompatible commands - numeric operations
+        "INCR" => crate::request_type::RequestType::Incr,
+        "INCRBY" => crate::request_type::RequestType::IncrBy,
+        "INCRBYFLOAT" => crate::request_type::RequestType::IncrByFloat,
+        "DECR" => crate::request_type::RequestType::Decr,
+        "DECRBY" => crate::request_type::RequestType::DecrBy,
+        // Incompatible commands - bit operations
+        "GETBIT" => crate::request_type::RequestType::GetBit,
+        "SETBIT" => crate::request_type::RequestType::SetBit,
+        "BITCOUNT" => crate::request_type::RequestType::BitCount,
+        "BITPOS" => crate::request_type::RequestType::BitPos,
+        "BITFIELD" => crate::request_type::RequestType::BitField,
+        "BITFIELD_RO" => crate::request_type::RequestType::BitFieldReadOnly,
+        "BITOP" => crate::request_type::RequestType::BitOp,
+        _ => return Ok(()), // Unknown command, no compression processing needed
     };
+
+    // Check if the command is incompatible with compression - this should error out
+    crate::compression::validate_command_compression_compatibility(
+        request_type,
+        compression_manager_ref,
+    )?;
 
     // Get arguments excluding the command name
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
@@ -543,8 +589,13 @@ async fn send_batch(
         let mut redis_cmd = get_redis_command(&command)?;
 
         // Apply compression to command arguments if needed
+        // This also validates that the command is compatible with compression
         if let Err(e) = process_command_for_compression(&mut redis_cmd, client) {
-            // Log compression error but continue with uncompressed command
+            // Incompatible command errors should be returned to the user
+            if e.is_incompatible_command() {
+                return Err(ClientUsageError::User(e.to_string()));
+            }
+            // Log other compression errors but continue with uncompressed command
             log_warn(
                 "batch_command_compression",
                 format!("Failed to compress batch command arguments: {}", e),
