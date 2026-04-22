@@ -131,6 +131,7 @@ tasks.register('buildRust', Exec) {
     }
     workingDir project.rootDir
     environment CARGO_TERM_COLOR: 'always'
+    environment GLIDE_VERSION: System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
 }
 
 tasks.register('buildWithRust') {
