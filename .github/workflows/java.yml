@@ -36,6 +36,10 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
+    # Nightly full-matrix run (non-Windows) at 1:00 AM UTC, staggered to avoid runner contention
+    schedule:
+        - cron: "0 1 * * *"
+
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -74,7 +78,7 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
-            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            host-matrix-output: ${{ steps.filter-hosts.outputs.host-matrix }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
             - uses: actions/checkout@v4
@@ -84,7 +88,12 @@ jobs:
                   language-name: java
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-                  run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
+                  run-with-macos: ${{ github.event_name == 'schedule' && 'use-self-hosted' || github.event.inputs.run-with-macos }}
+            # Windows is tested separately in java-windows.yml to isolate its higher failure rate
+            - id: filter-hosts
+              shell: bash
+              run: |
+                  echo "host-matrix=$(echo '${{ steps.get-matrices.outputs.host-matrix-output }}' | jq -c '[.[] | select(.OS != "windows")]')" >> $GITHUB_OUTPUT
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}

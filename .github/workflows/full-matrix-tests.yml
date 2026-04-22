@@ -87,6 +87,12 @@ jobs:
         name: Run CI for java client
         secrets: inherit
 
+    run-full-tests-for-java-windows:
+        if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.java == true)
+        uses: ./.github/workflows/java-windows.yml
+        name: Run CI for java Windows client
+        secrets: inherit
+
     run-full-tests-for-python:
         if: (github.repository_owner == 'valkey-io' && github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.python == true)
         uses: ./.github/workflows/python.yml

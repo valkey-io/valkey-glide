@@ -37,6 +37,10 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
+    # Nightly full-matrix run at 12:00 AM UTC, staggered to avoid runner contention with other languages
+    schedule:
+        - cron: "0 0 * * *"
+
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -97,7 +101,7 @@ run-name:
 env:
     # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
     RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
-    RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos) }}
+    RUN_WITH_MACOS: ${{ github.event_name == 'schedule' && 'use-self-hosted' || github.event.inputs.run-with-macos }}
     RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
     RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
 

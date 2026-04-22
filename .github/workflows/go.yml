@@ -35,6 +35,9 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
+    # Nightly full-matrix run at 1:30 AM UTC, staggered to avoid runner contention with other languages
+    schedule:
+        - cron: "30 1 * * *"
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -91,7 +94,7 @@ jobs:
                   language-name: go
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
+                  run-with-macos: ${{ github.event_name == 'schedule' && 'use-self-hosted' || github.event.inputs.run-with-macos }}
 
     test-go:
         name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
