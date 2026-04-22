@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+from .cache import ClientSideCache, EvictionPolicy
 from .commands.batch import Batch, ClusterBatch, ClusterTransaction, TBatch, Transaction
 from .commands.batch_options import (
     BatchOptions,
@@ -352,4 +353,7 @@ __all__ = [
     "OpenTelemetryConfig",
     "OpenTelemetryMetricsConfig",
     "OpenTelemetryTracesConfig",
+    # Cache
+    "ClientSideCache",
+    "EvictionPolicy",
 ]

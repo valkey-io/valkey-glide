@@ -5,17 +5,23 @@ import static glide.api.BaseClient.OK;
 
 import glide.api.models.exceptions.GlideException;
 import glide.ffi.resolvers.OpenTelemetryResolver;
-import lombok.AllArgsConstructor;
 import response.ResponseOuterClass.Response;
 
 /**
  * Response resolver responsible for evaluating the Valkey response object with a success or
  * failure.
+ *
+ * <p>Uses an explicit constructor instead of Lombok-generated members so the JNI-facing response
+ * path is easy to follow in stack traces; mention motivation in the PR description when this
+ * pattern changes.
  */
-@AllArgsConstructor
 public class BaseResponseResolver implements GlideExceptionCheckedFunction<Response, Object> {
 
-    private GlideExceptionCheckedFunction<Long, Object> respPointerResolver;
+    private final GlideExceptionCheckedFunction<Long, Object> respPointerResolver;
+
+    public BaseResponseResolver(GlideExceptionCheckedFunction<Long, Object> respPointerResolver) {
+        this.respPointerResolver = respPointerResolver;
+    }
 
     /**
      * Extracts value from the DirectByteBuffer response.
