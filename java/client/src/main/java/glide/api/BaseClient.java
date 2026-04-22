@@ -339,7 +339,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
@@ -437,12 +436,22 @@ public abstract class BaseClient
     }
 
     /** Auxiliary builder which wraps all fields */
-    @RequiredArgsConstructor
     protected static class ClientBuilder {
         private final ConnectionManager connectionManager;
         private final CommandManager commandManager;
         private final MessageHandler messageHandler;
         private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
+
+        protected ClientBuilder(
+                ConnectionManager connectionManager,
+                CommandManager commandManager,
+                MessageHandler messageHandler,
+                Optional<BaseSubscriptionConfiguration> subscriptionConfiguration) {
+            this.connectionManager = connectionManager;
+            this.commandManager = commandManager;
+            this.messageHandler = messageHandler;
+            this.subscriptionConfiguration = subscriptionConfiguration;
+        }
     }
 
     /**

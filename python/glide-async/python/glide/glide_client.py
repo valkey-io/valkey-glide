@@ -2,6 +2,7 @@
 
 import sys
 import threading
+from types import TracebackType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -52,6 +53,7 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide_shared.protobuf.command_request_pb2 import (
+    CacheMetricsType,
     Command,
     CommandRequest,
     RefreshIamToken,
@@ -289,6 +291,12 @@ class BaseClient(CoreCommands):
 
     async def close(self, err_message: Optional[str] = None) -> None:
         """
+        Forwards to `aclose`, the more common method for async resources.
+        """
+        await self.aclose(err_message)
+
+    async def aclose(self, err_message: Optional[str] = None) -> None:
+        """
         Terminate the client by closing all associated resources, including the socket and any active futures.
         All open futures will be closed with an exception.
 
@@ -312,6 +320,17 @@ class BaseClient(CoreCommands):
                 self._pubsub_lock.release()
 
             await self._stream.aclose()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc: Optional[BaseException],
+        tb: Optional[TracebackType],
+    ) -> None:
+        await self.aclose()
 
     def _get_future(self, callback_idx: int) -> "TFuture":
         response_future: "TFuture" = _get_new_future_instance()
@@ -843,6 +862,27 @@ class BaseClient(CoreCommands):
             desired_subscriptions=desired_subscriptions,
             actual_subscriptions=actual_subscriptions,
         )
+
+    async def _get_cache_metrics(
+        self, metrics_type: CacheMetricsType.ValueType
+    ) -> TResult:
+        """
+        Get cache metrics.
+
+        Args:
+            metrics_type: Type of metric to retrieve (e.g., hit rate, miss rate).
+
+        Returns:
+            The requested cache metric.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+        """
+        request = CommandRequest()
+        request.callback_idx = self._get_callback_index()
+        request.get_cache_metrics.metrics_types = metrics_type
+        response = await self._write_request_await_response(request)
+        return response
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):

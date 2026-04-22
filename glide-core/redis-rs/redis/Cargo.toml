@@ -85,6 +85,7 @@ telemetrylib = { path = "../../telemetry" }
 logger_core = { path = "../../../logger_core" }
 
 lazy_static = "1"
+lru = "0.16.2"
 
 [features]
 default = [

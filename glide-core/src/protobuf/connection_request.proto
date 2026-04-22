@@ -79,6 +79,19 @@ message PubSubSubscriptions
     map<uint32, PubSubChannelsOrPatterns> channels_or_patterns_by_type = 1;
 }
 
+message ClientSideCache {
+    string cache_id = 1;
+    uint64 max_cache_kb = 2;
+    uint64 entry_ttl_ms = 3; // 0 = no expiration
+    optional EvictionPolicy eviction_policy = 4;
+    bool enable_metrics = 5;
+}
+
+enum EvictionPolicy {
+    LRU = 0;
+    LFU = 1;
+}
+
 // IMPORTANT - if you add fields here, you probably need to add them also in client/mod.rs:`sanitized_request_string`.
 message ConnectionRequest {
     repeated NodeAddress addresses = 1;
@@ -109,6 +122,7 @@ message ConnectionRequest {
     optional bool tcp_nodelay = 24;
     optional uint32 pubsub_reconciliation_interval_ms = 25;
     optional bool read_only = 26;
+    optional ClientSideCache client_side_cache = 27;
 }
 
 message ConnectionRetryStrategy {
