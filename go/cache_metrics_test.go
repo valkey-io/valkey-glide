@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
@@ -49,7 +50,9 @@ func TestCacheMetrics_WithoutCaching(t *testing.T) {
 
 func TestCacheMetrics_WithCachingButMetricsDisabled(t *testing.T) {
 	// Test that hit/miss rate methods return appropriate errors when metrics are disabled
-	cache := config.NewClientSideCache(1024, 0).WithMetrics(false)
+	cache, err := config.NewClientSideCache(1024, 0)
+	require.NoError(t, err)
+	cache.WithMetrics(false)
 	clientConfig := config.NewClientConfiguration().WithClientSideCache(cache)
 	client, err := NewClient(clientConfig)
 	if err != nil {
@@ -87,7 +90,9 @@ func TestCacheMetrics_WithCachingButMetricsDisabled(t *testing.T) {
 
 func TestCacheMetrics_WithCachingAndMetricsEnabled(t *testing.T) {
 	// Test that cache metrics methods work when caching and metrics are enabled
-	cache := config.NewClientSideCache(1024, 0).WithMetrics(true)
+	cache, err := config.NewClientSideCache(1024, 0)
+	require.NoError(t, err)
+	cache.WithMetrics(true)
 	clientConfig := config.NewClientConfiguration().WithClientSideCache(cache)
 	client, err := NewClient(clientConfig)
 	if err != nil {
@@ -160,4 +165,12 @@ func TestCacheMetrics_ClusterClient_WithoutCaching(t *testing.T) {
 	_, err = client.GetCacheExpirations(ctx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "caching not enabled")
+}
+
+func TestNewClientSideCache_ZeroMaxCacheKb(t *testing.T) {
+	// Test that NewClientSideCache returns an error when maxCacheKb is 0
+	cache, err := config.NewClientSideCache(0, 60000)
+	assert.Nil(t, cache)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "maxCacheKb must be positive")
 }

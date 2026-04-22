@@ -49,20 +49,22 @@ func (suite *GlideTestSuite) createClientWithCache(
 func (suite *GlideTestSuite) TestClientSideCache_BasicCacheHitWithMetrics() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
-		cache := config.NewClientSideCache(1, 60000).
-			WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 60000)
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		key := "cache_test_key_" + uuid.New().String()
 
 		// Set a key
-		result, err := testClient.Set(ctx, "cache_test_key", "cache_test_value")
+		result, err := testClient.Set(ctx, key, "cache_test_value")
 		suite.verifyOK(result, err)
 
 		// First GET - cache miss
-		value, err := testClient.Get(ctx, "cache_test_key")
+		value, err := testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "cache_test_value", value.Value())
 
@@ -72,12 +74,12 @@ func (suite *GlideTestSuite) TestClientSideCache_BasicCacheHitWithMetrics() {
 		assert.Equal(suite.T(), int64(1), entryCount)
 
 		// Second GET - cache hit
-		value, err = testClient.Get(ctx, "cache_test_key")
+		value, err = testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "cache_test_value", value.Value())
 
 		// Third GET - cache hit
-		value, err = testClient.Get(ctx, "cache_test_key")
+		value, err = testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "cache_test_value", value.Value())
 
@@ -98,24 +100,26 @@ func (suite *GlideTestSuite) TestClientSideCache_BasicCacheHitWithMetrics() {
 func (suite *GlideTestSuite) TestClientSideCache_WithoutMetrics() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics disabled
-		cache := config.NewClientSideCache(1, 60000).
-			WithMetrics(false)
+		cache, err := config.NewClientSideCache(1, 60000)
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(false)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		key := "key_" + uuid.New().String()
 
 		// Cache should work
-		result, err := testClient.Set(ctx, "key", "value")
+		result, err := testClient.Set(ctx, key, "value")
 		suite.verifyOK(result, err)
 
-		value, err := testClient.Get(ctx, "key")
+		value, err := testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
 		// Should be cached
-		value, err = testClient.Get(ctx, "key")
+		value, err = testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
@@ -146,16 +150,18 @@ func (suite *GlideTestSuite) TestClientSideCache_WithoutMetrics() {
 func (suite *GlideTestSuite) TestClientSideCache_NilValuesNotCached() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
-		cache := config.NewClientSideCache(1, 60000).
-			WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 60000)
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		key := "nonexistent_key_" + uuid.New().String()
 
 		// GET non-existent key (returns nil)
-		value, err := testClient.Get(ctx, "nonexistent_key")
+		value, err := testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), value.IsNil())
 
@@ -165,7 +171,7 @@ func (suite *GlideTestSuite) TestClientSideCache_NilValuesNotCached() {
 		assert.Equal(suite.T(), int64(0), entryCount)
 
 		// GET again - should NOT be cached (NIL values not cached)
-		value, err = testClient.Get(ctx, "nonexistent_key")
+		value, err = testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.True(suite.T(), value.IsNil())
 
@@ -179,19 +185,21 @@ func (suite *GlideTestSuite) TestClientSideCache_NilValuesNotCached() {
 func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with short TTL
-		cache := config.NewClientSideCache(1, 2000). // 2 seconds
-			WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 2000) // 2 seconds
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		key := "ttl_key_" + uuid.New().String()
 
 		// Set and GET
-		result, err := testClient.Set(ctx, "ttl_key", "ttl_value")
+		result, err := testClient.Set(ctx, key, "ttl_value")
 		suite.verifyOK(result, err)
 
-		value, err := testClient.Get(ctx, "ttl_key")
+		value, err := testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "ttl_value", value.Value())
 
@@ -200,7 +208,7 @@ func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 		assert.Equal(suite.T(), int64(1), entryCount)
 
 		// Second GET - from cache
-		value, err = testClient.Get(ctx, "ttl_key")
+		value, err = testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "ttl_value", value.Value())
 
@@ -208,7 +216,7 @@ func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 		time.Sleep(3 * time.Second)
 
 		// GET after expiration - should fetch from server again
-		value, err = testClient.Get(ctx, "ttl_key")
+		value, err = testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "ttl_value", value.Value())
 
@@ -227,26 +235,28 @@ func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 func (suite *GlideTestSuite) TestClientSideCache_MultipleKeys() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with metrics enabled
-		cache := config.NewClientSideCache(1, 60000).
-			WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 60000)
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		prefix := uuid.New().String()[:8]
 
 		// Set 3 keys
 		for i := 1; i <= 3; i++ {
-			key := "key" + string(rune('0'+i))
-			value := "value" + string(rune('0'+i))
+			key := fmt.Sprintf("key%d_%s", i, prefix)
+			value := fmt.Sprintf("value%d", i)
 			result, err := testClient.Set(ctx, key, value)
 			suite.verifyOK(result, err)
 		}
 
 		// GET each key twice (miss + hit)
 		for i := 1; i <= 3; i++ {
-			key := "key" + string(rune('0'+i))
-			expectedValue := "value" + string(rune('0'+i))
+			key := fmt.Sprintf("key%d_%s", i, prefix)
+			expectedValue := fmt.Sprintf("value%d", i)
 
 			// First GET - miss
 			value, err := testClient.Get(ctx, key)
@@ -275,20 +285,21 @@ func (suite *GlideTestSuite) TestClientSideCache_NoCacheMetrics() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// No cache configured - use default client
 		ctx := context.Background()
+		key := "key_" + uuid.New().String()
 
 		// Set and GET multiple times
-		result, err := client.Set(ctx, "key", "value")
+		result, err := client.Set(ctx, key, "value")
 		suite.verifyOK(result, err)
 
-		value, err := client.Get(ctx, "key")
+		value, err := client.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
-		value, err = client.Get(ctx, "key")
+		value, err = client.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
-		value, err = client.Get(ctx, "key")
+		value, err = client.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
@@ -342,21 +353,22 @@ func (suite *GlideTestSuite) TestClientSideCache_NoCacheMetrics() {
 func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLRU() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with LRU eviction
-		cache := config.NewClientSideCache(1, 0). // 1 KB to force eviction
-							WithEvictionPolicy(config.EvictionPolicyLRU).
-							WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 0) // 1 KB to force eviction
+		require.NoError(suite.T(), err)
+		cache.WithEvictionPolicy(config.EvictionPolicyLRU).WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		prefix := uuid.New().String()[:8]
 
 		// Use larger values to force eviction
 		value := strings.Repeat("x", 250) // ~250 bytes
 
 		// Set and cache 3 keys
 		for i := 1; i <= 3; i++ {
-			key := "lru_key" + string(rune('0'+i))
+			key := fmt.Sprintf("lru_key%d_%s", i, prefix)
 			result, err := testClient.Set(ctx, key, value)
 			suite.verifyOK(result, err)
 
@@ -371,13 +383,14 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLRU() {
 		assert.Equal(suite.T(), int64(3), entryCount)
 
 		// Access key1 to make it recently used
-		retrievedValue, err := testClient.Get(ctx, "lru_key1")
+		key1 := fmt.Sprintf("lru_key1_%s", prefix)
+		retrievedValue, err := testClient.Get(ctx, key1)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 
 		// Add 2 more keys - should evict key2 and key3 (least recently used)
 		for i := 4; i <= 5; i++ {
-			key := "lru_key" + string(rune('0'+i))
+			key := fmt.Sprintf("lru_key%d_%s", i, prefix)
 			result, err := testClient.Set(ctx, key, value)
 			suite.verifyOK(result, err)
 
@@ -397,7 +410,7 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLRU() {
 		assert.Greater(suite.T(), hitRate, 0.0)
 
 		// Check that key1 is still cached
-		retrievedValue, err = testClient.Get(ctx, "lru_key1")
+		retrievedValue, err = testClient.Get(ctx, key1)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 
@@ -409,11 +422,13 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLRU() {
 		oldMissRate, err := testClient.GetCacheMissRate(ctx)
 		assert.NoError(suite.T(), err)
 
-		retrievedValue, err = testClient.Get(ctx, "lru_key2")
+		key2 := fmt.Sprintf("lru_key2_%s", prefix)
+		retrievedValue, err = testClient.Get(ctx, key2)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 
-		retrievedValue, err = testClient.Get(ctx, "lru_key3")
+		key3 := fmt.Sprintf("lru_key3_%s", prefix)
+		retrievedValue, err = testClient.Get(ctx, key3)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 
@@ -426,43 +441,49 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLRU() {
 func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with LFU eviction
-		cache := config.NewClientSideCache(1, 0). // 1 KB - small cache to trigger evictions
-							WithEvictionPolicy(config.EvictionPolicyLFU).
-							WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 0) // 1 KB - small cache to trigger evictions
+		require.NoError(suite.T(), err)
+		cache.WithEvictionPolicy(config.EvictionPolicyLFU).WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		prefix := uuid.New().String()[:8]
 		value := strings.Repeat("x", 250) // ~250 bytes
 
+		key1 := fmt.Sprintf("key1_%s", prefix)
+		key2 := fmt.Sprintf("key2_%s", prefix)
+		key3 := fmt.Sprintf("key3_%s", prefix)
+		key4 := fmt.Sprintf("key4_%s", prefix)
+
 		// Set key1 and access it multiple times (high frequency)
-		result, err := testClient.Set(ctx, "key1", value)
+		result, err := testClient.Set(ctx, key1, value)
 		suite.verifyOK(result, err)
 
 		for i := 0; i < 5; i++ {
-			retrievedValue, err := testClient.Get(ctx, "key1")
+			retrievedValue, err := testClient.Get(ctx, key1)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), value, retrievedValue.Value())
 		}
 		// key1 frequency: 5
 
 		// Set key2 and access it a few times (medium frequency)
-		result, err = testClient.Set(ctx, "key2", value)
+		result, err = testClient.Set(ctx, key2, value)
 		suite.verifyOK(result, err)
 
 		for i := 0; i < 2; i++ {
-			retrievedValue, err := testClient.Get(ctx, "key2")
+			retrievedValue, err := testClient.Get(ctx, key2)
 			assert.NoError(suite.T(), err)
 			assert.Equal(suite.T(), value, retrievedValue.Value())
 		}
 		// key2 frequency: 2
 
 		// Set key3 with minimal access (low frequency)
-		result, err = testClient.Set(ctx, "key3", value)
+		result, err = testClient.Set(ctx, key3, value)
 		suite.verifyOK(result, err)
 
-		retrievedValue, err := testClient.Get(ctx, "key3")
+		retrievedValue, err := testClient.Get(ctx, key3)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 		// key3 frequency: 1
@@ -478,10 +499,10 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 		assert.Equal(suite.T(), int64(3), entryCount)
 
 		// Set key4 - this should trigger eviction of key3 (lowest frequency)
-		result, err = testClient.Set(ctx, "key4", value)
+		result, err = testClient.Set(ctx, key4, value)
 		suite.verifyOK(result, err)
 
-		retrievedValue, err = testClient.Get(ctx, "key4")
+		retrievedValue, err = testClient.Get(ctx, key4)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 		// key4 frequency: 1
@@ -500,7 +521,7 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 		oldHitRate, err := testClient.GetCacheHitRate(ctx)
 		assert.NoError(suite.T(), err)
 
-		retrievedValue, err = testClient.Get(ctx, "key1")
+		retrievedValue, err = testClient.Get(ctx, key1)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 
@@ -512,7 +533,7 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 		oldMissRate, err := testClient.GetCacheMissRate(ctx)
 		assert.NoError(suite.T(), err)
 
-		retrievedValue, err = testClient.Get(ctx, "key3") // Should be a miss
+		retrievedValue, err = testClient.Get(ctx, key3) // Should be a miss
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 
@@ -524,7 +545,7 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 		oldHitRate, err = testClient.GetCacheHitRate(ctx)
 		assert.NoError(suite.T(), err)
 
-		retrievedValue, err = testClient.Get(ctx, "key2")
+		retrievedValue, err = testClient.Get(ctx, key2)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), value, retrievedValue.Value())
 
@@ -537,9 +558,9 @@ func (suite *GlideTestSuite) TestClientSideCache_EvictionPolicyLFU() {
 func (suite *GlideTestSuite) TestClientSideCache_MaxMemoryLimit() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration with small memory limit
-		cache := config.NewClientSideCache(1, 0). // 1 KB
-							WithEvictionPolicy(config.EvictionPolicyLRU).
-							WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 0) // 1 KB
+		require.NoError(suite.T(), err)
+		cache.WithEvictionPolicy(config.EvictionPolicyLRU).WithMetrics(true)
 
 		testClient1, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
@@ -556,7 +577,7 @@ func (suite *GlideTestSuite) TestClientSideCache_MaxMemoryLimit() {
 
 		// Add 10 keys to force cache eviction
 		for i := 1; i <= 10; i++ {
-			key := fmt.Sprintf("key%d_%s", i, uuid.NewString()[:8])
+			key := fmt.Sprintf("key%d_%s", i, uuid.New().String()[:8])
 			keys = append(keys, key)
 
 			result, err := testClient1.Set(ctx, key, largeValue)
@@ -603,9 +624,13 @@ func (suite *GlideTestSuite) TestClientSideCache_MaxMemoryLimit() {
 
 func (suite *GlideTestSuite) TestClientSideCache_SharedCache() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		// Create cache configuration
-		cache := config.NewClientSideCache(1, 0).
-			WithMetrics(true)
+		// Create a single cache configuration. When multiple clients share the same
+		// ClientSideCache instance, they share both the cached data and the metrics
+		// (hit/miss counters). This means operations from any client contribute to
+		// the same metrics pool.
+		cache, err := config.NewClientSideCache(1, 0)
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(true)
 
 		testClient1, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
@@ -614,11 +639,12 @@ func (suite *GlideTestSuite) TestClientSideCache_SharedCache() {
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		key := "shared_key_" + uuid.New().String()
 
-		result, err := testClient1.Set(ctx, "shared_key", "value")
+		result, err := testClient1.Set(ctx, key, "value")
 		suite.verifyOK(result, err)
 
-		value, err := testClient1.Get(ctx, "shared_key")
+		value, err := testClient1.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
@@ -627,10 +653,11 @@ func (suite *GlideTestSuite) TestClientSideCache_SharedCache() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), entryCount)
 
-		value, err = testClient2.Get(ctx, "shared_key")
+		value, err = testClient2.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
+		// Both clients share the same metrics: 1 miss (client1) + 1 hit (client2) = 50% hit rate
 		hitRate2, err := testClient2.GetCacheHitRate(ctx)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 0.5, hitRate2)
@@ -644,22 +671,25 @@ func (suite *GlideTestSuite) TestClientSideCache_SharedCache() {
 func (suite *GlideTestSuite) TestClientSideCache_ErrorHandling() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration
-		cache := config.NewClientSideCache(1, 0).WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 0)
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		key := "string-key-" + uuid.New().String()
 
-		result, err := testClient.Set(ctx, "string-key", "value")
+		result, err := testClient.Set(ctx, key, "value")
 		suite.verifyOK(result, err)
 
-		value, err := testClient.Get(ctx, "string-key")
+		value, err := testClient.Get(ctx, key)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
 		// Try to use HGETALL on a string key - should error
-		_, err = testClient.HGetAll(ctx, "string-key")
+		_, err = testClient.HGetAll(ctx, key)
 		assert.Error(suite.T(), err)
 	})
 }
@@ -667,20 +697,25 @@ func (suite *GlideTestSuite) TestClientSideCache_ErrorHandling() {
 func (suite *GlideTestSuite) TestClientSideCache_CacheableCommands() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		// Create cache configuration
-		cache := config.NewClientSideCache(1, 0).
-			WithMetrics(true)
+		cache, err := config.NewClientSideCache(1, 0)
+		require.NoError(suite.T(), err)
+		cache.WithMetrics(true)
 
 		testClient, err := suite.createClientWithCache(client, cache)
 		require.NoError(suite.T(), err)
 
 		ctx := context.Background()
+		prefix := uuid.New().String()[:8]
+		stringKey := fmt.Sprintf("key_%s", prefix)
+		hashKey := fmt.Sprintf("hash_%s", prefix)
+		setKey := fmt.Sprintf("setkey_%s", prefix)
 
 		// SET command - not cacheable
-		result, err := testClient.Set(ctx, "key", "value")
+		result, err := testClient.Set(ctx, stringKey, "value")
 		suite.verifyOK(result, err)
 
 		// GET command - cacheable
-		value, err := testClient.Get(ctx, "key")
+		value, err := testClient.Get(ctx, stringKey)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "value", value.Value())
 
@@ -690,11 +725,11 @@ func (suite *GlideTestSuite) TestClientSideCache_CacheableCommands() {
 		assert.Equal(suite.T(), int64(1), entryCount)
 
 		// HGETALL command - cacheable
-		count, err := testClient.HSet(ctx, "hash", map[string]string{"field1": "val1"})
+		count, err := testClient.HSet(ctx, hashKey, map[string]string{"field1": "val1"})
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), count)
 
-		hashValue, err := testClient.HGetAll(ctx, "hash")
+		hashValue, err := testClient.HGetAll(ctx, hashKey)
 		assert.NoError(suite.T(), err)
 		expected := map[string]string{"field1": "val1"}
 		assert.Equal(suite.T(), expected, hashValue)
@@ -704,11 +739,11 @@ func (suite *GlideTestSuite) TestClientSideCache_CacheableCommands() {
 		assert.Equal(suite.T(), int64(2), entryCount)
 
 		// SMEMBERS command - cacheable
-		count, err = testClient.SAdd(ctx, "setkey", []string{"member1"})
+		count, err = testClient.SAdd(ctx, setKey, []string{"member1"})
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(1), count)
 
-		members, err := testClient.SMembers(ctx, "setkey")
+		members, err := testClient.SMembers(ctx, setKey)
 		assert.NoError(suite.T(), err)
 		expectedMembers := map[string]struct{}{"member1": {}}
 		assert.Equal(suite.T(), expectedMembers, members)

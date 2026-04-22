@@ -4,7 +4,7 @@ use glide_core::ConnectionRequest;
 use glide_core::client::Client as GlideClient;
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::command_request::SimpleRoutes;
-use glide_core::command_request::{Routes, SlotTypes};
+use glide_core::command_request::{CacheMetricsType, Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors::RequestErrorType;
 use glide_core::errors::{self, error_message};
@@ -17,7 +17,7 @@ use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
-use protobuf::Message;
+use protobuf::{Enum, Message};
 use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
@@ -3061,13 +3061,13 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
 
     let client = client_adapter.core.client.clone();
     client_adapter.execute_request(request_id, async move {
-        match metrics_type {
-            0 => client.cache_hit_rate(),    // HitRate
-            1 => client.cache_miss_rate(),   // MissRate
-            2 => client.cache_entry_count(), // EntryCount
-            3 => client.cache_evictions(),   // Evictions
-            4 => client.cache_expirations(), // Expirations
-            _ => Err(RedisError::from((
+        match CacheMetricsType::from_i32(metrics_type) {
+            Some(CacheMetricsType::HitRate) => client.cache_hit_rate(),
+            Some(CacheMetricsType::MissRate) => client.cache_miss_rate(),
+            Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
+            Some(CacheMetricsType::Evictions) => client.cache_evictions(),
+            Some(CacheMetricsType::Expirations) => client.cache_expirations(),
+            Some(CacheMetricsType::TotalLookups) | None => Err(RedisError::from((
                 ErrorKind::ClientError,
                 "Invalid cache metrics type",
                 format!("Unsupported metrics type: {}", metrics_type),

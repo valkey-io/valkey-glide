@@ -4,7 +4,6 @@ package config
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/google/uuid"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/protobuf"
@@ -52,9 +51,11 @@ func (e EvictionPolicy) String() string {
 //     background cleanup of expired entries.
 //   - Currently, only read commands that retrieve entire values are cached (GET, HGETALL, SMEMBERS).
 type ClientSideCache struct {
-	// CacheId is a unique identifier for the cache instance.
-	// Multiple clients can share the same cache by using the same cache ID.
-	CacheId string
+	// cacheId is a unique identifier for the cache instance, used internally to
+	// identify the cache in the Rust core. Multiple clients sharing the same
+	// ClientSideCache instance will use the same cacheId and therefore share
+	// cached data and metrics.
+	cacheId string
 
 	// MaxCacheKb is the maximum size of the cache in kilobytes (KB).
 	// This limits the total memory used by cached keys and values.
@@ -72,18 +73,6 @@ type ClientSideCache struct {
 
 	// EnableMetrics enables collection of cache metrics such as hit/miss rates.
 	EnableMetrics bool
-}
-
-// Package-level variables for generating unique cache IDs
-var (
-	uuidPrefix string
-	counter    uint64
-	counterMu  sync.Mutex
-)
-
-// Initialize the UUID prefix once when the package is loaded
-func init() {
-	uuidPrefix = uuid.New().String()[:8]
 }
 
 // NewClientSideCache creates a new ClientSideCache configuration with an auto-generated unique ID.
@@ -116,29 +105,27 @@ func init() {
 //
 // Returns:
 //   - *ClientSideCache: A new ClientSideCache instance with auto-generated cache ID.
+//   - error: An error if maxCacheKb is 0.
 //
 // Example:
 //
-//	cache := NewClientSideCache(1024, 60000) // 1 MB cache, 1 minute TTL
-//	cache.EvictionPolicy = &[]EvictionPolicy{EvictionPolicyLRU}[0]
-//	cache.EnableMetrics = true
-func NewClientSideCache(maxCacheKb uint64, entryTtlMs uint64) *ClientSideCache {
+//	cache, err := NewClientSideCache(1024, 60000) // 1 MB cache, 1 minute TTL
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	cache.WithEvictionPolicy(EvictionPolicyLRU).WithMetrics(true)
+func NewClientSideCache(maxCacheKb uint64, entryTtlMs uint64) (*ClientSideCache, error) {
 	if maxCacheKb == 0 {
-		panic("maxCacheKb must be positive")
+		return nil, fmt.Errorf("maxCacheKb must be positive")
 	}
 
-	counterMu.Lock()
-	cacheId := fmt.Sprintf("%s-%d", uuidPrefix, counter)
-	counter++
-	counterMu.Unlock()
-
 	return &ClientSideCache{
-		CacheId:        cacheId,
+		cacheId:        uuid.New().String(),
 		MaxCacheKb:     maxCacheKb,
 		EntryTtlMs:     entryTtlMs,
 		EvictionPolicy: nil,
 		EnableMetrics:  false,
-	}
+	}, nil
 }
 
 // WithEvictionPolicy sets the eviction policy for the cache.
@@ -160,7 +147,7 @@ func (c *ClientSideCache) WithMetrics(enable bool) *ClientSideCache {
 // communication with the Rust core.
 func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
 	protoCache := &protobuf.ClientSideCache{
-		CacheId:       c.CacheId,
+		CacheId:       c.cacheId,
 		MaxCacheKb:    c.MaxCacheKb,
 		EntryTtlMs:    c.EntryTtlMs,
 		EnableMetrics: c.EnableMetrics,
