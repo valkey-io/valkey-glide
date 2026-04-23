@@ -3270,7 +3270,28 @@ where
         Ok((address, conn))
     }
 
-    fn poll_recover(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
+    /// Fail all pending requests immediately with ClientError.
+    /// Called when entering recovery to prevent requests from waiting for slow
+    /// reconnection cycles.
+    fn fail_pending_requests(inner: &Core<C>) {
+        let mut rx_guard = inner
+            .pending_requests_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut requests = Vec::new();
+        while let Ok(request) = rx_guard.try_recv() {
+            requests.push(request);
+        }
+        drop(rx_guard);
+        for request in requests {
+            let _ = request.sender.send(Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Connection in recovery",
+            ))));
+        }
+    }
+
+    fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
         trace!("entered poll_recover");
 
         let recover_future = match &mut self.state {
@@ -3280,15 +3301,17 @@ where
 
         match recover_future {
             RecoverFuture::RefreshingSlots(handle) => {
-                // Check if the task has completed
-                match handle.now_or_never() {
-                    Some(Ok(Ok(()))) => {
+                // Use poll() instead of now_or_never() to properly register the waker.
+                // now_or_never() returns None without waking, causing poll_flush to busy-spin.
+                match Pin::new(handle).poll(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(Ok(Ok(()))) => {
                         // Task succeeded
                         trace!("Slot refresh completed successfully!");
                         self.state = ConnectionState::PollComplete;
-                        return Poll::Ready(Ok(()));
+                        Poll::Ready(Ok(()))
                     }
-                    Some(Ok(Err(e))) => {
+                    Poll::Ready(Ok(Err(e))) => {
                         // Task completed but returned an engine error
                         trace!("Slot refresh failed: {:?}", e);
 
@@ -3301,7 +3324,7 @@ where
                             self.state = ConnectionState::Recover(
                                 RecoverFuture::ReconnectToInitialNodes(handle),
                             );
-                            return Poll::Ready(Err(e));
+                            Poll::Ready(Err(e))
                         } else {
                             // Retry refresh
                             let new_handle = Self::spawn_refresh_slots_task(
@@ -3311,15 +3334,15 @@ where
                             self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
                                 new_handle,
                             ));
-                            return Poll::Ready(Ok(()));
+                            Poll::Ready(Ok(()))
                         }
                     }
-                    Some(Err(join_err)) => {
+                    Poll::Ready(Err(join_err)) => {
                         if join_err.is_cancelled() {
                             // Task was intentionally aborted - don't treat as an error
                             trace!("Slot refresh task was aborted");
                             self.state = ConnectionState::PollComplete;
-                            return Poll::Ready(Ok(()));
+                            Poll::Ready(Ok(()))
                         } else {
                             // Task panicked - try reconnecting to initial nodes as a recovery strategy
                             warn!("Slot refresh task panicked: {:?} - attempting recovery by reconnecting to initial nodes", join_err);
@@ -3341,69 +3364,50 @@ where
                                 "Slot refresh task panicked",
                                 format!("{join_err:?}"),
                             ));
-                            return Poll::Ready(Err(err));
+                            Poll::Ready(Err(err))
                         }
                     }
-                    None => {
-                        // Task is still running
-                        // Just continue and return Ok to not block poll_flush
-                    }
                 }
-
-                // Always return Ready to not block poll_flush
-                Poll::Ready(Ok(()))
             }
             RecoverFuture::ReconnectToInitialNodes(ref mut handle) => {
-                // Check if the task has completed
-                match handle.now_or_never() {
-                    Some(Ok(())) => {
+                match Pin::new(handle).poll(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(Ok(())) => {
                         trace!("Reconnected to initial nodes");
                         self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
                     }
-                    Some(Err(join_err)) => {
+                    Poll::Ready(Err(join_err)) => {
                         if join_err.is_cancelled() {
                             trace!("Reconnect to initial nodes task was aborted");
                         } else {
                             warn!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err);
                         }
                         self.state = ConnectionState::PollComplete;
-                    }
-                    None => {
-                        // Task is still running
-                        // Just continue and return Ok to not block poll_flush
+                        Poll::Ready(Ok(()))
                     }
                 }
-
-                // Always return Ready to not block poll_flush
-                Poll::Ready(Ok(()))
             }
-            RecoverFuture::Reconnect(ref mut handle) => {
-                // Check if the task has completed
-                match handle.now_or_never() {
-                    Some(Ok(())) => {
-                        trace!("Reconnected connections");
-                        self.state = ConnectionState::PollComplete;
-                    }
-                    Some(Err(join_err)) => {
-                        if join_err.is_cancelled() {
-                            trace!("Reconnect task was aborted");
-                        } else {
-                            warn!(
-                                "Reconnect task panicked: {:?} - marking recovery as complete",
-                                join_err
-                            );
-                        }
-                        self.state = ConnectionState::PollComplete;
-                    }
-                    None => {
-                        // Task is still running
-                        // Just continue and return Ok to not block poll_flush
-                    }
+            RecoverFuture::Reconnect(ref mut handle) => match Pin::new(handle).poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Ok(())) => {
+                    trace!("Reconnected connections");
+                    self.state = ConnectionState::PollComplete;
+                    Poll::Ready(Ok(()))
                 }
-
-                // Always return Ready to not block poll_flush
-                Poll::Ready(Ok(()))
-            }
+                Poll::Ready(Err(join_err)) => {
+                    if join_err.is_cancelled() {
+                        trace!("Reconnect task was aborted");
+                    } else {
+                        warn!(
+                            "Reconnect task panicked: {:?} - marking recovery as complete",
+                            join_err
+                        );
+                    }
+                    self.state = ConnectionState::PollComplete;
+                    Poll::Ready(Ok(()))
+                }
+            },
         }
     }
 
@@ -3651,56 +3655,57 @@ where
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
         trace!("poll_flush: {:?}", self.state);
-        loop {
-            self.send_refresh_error();
+        self.send_refresh_error();
 
-            if let Err(err) = ready!(self.as_mut().poll_recover(cx)) {
-                // We failed to reconnect, while we will try again we will report the
-                // error if we can to avoid getting trapped in an infinite loop of
-                // trying to reconnect
+        match self.as_mut().poll_recover(cx) {
+            Poll::Pending => {
+                // Fail any requests queued while in recovery
+                ClusterConnInner::fail_pending_requests(&self.inner);
+                return Poll::Pending;
+            }
+            Poll::Ready(Err(err)) => {
                 self.refresh_error = Some(err);
-
-                // Give other tasks a chance to progress before we try to recover
-                // again. Since the future may not have registered a wake up we do so
-                // now so the task is not forgotten
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
+            Poll::Ready(Ok(())) => {}
+        }
 
-            match ready!(self.poll_complete(cx)) {
-                PollFlushAction::None => return Poll::Ready(Ok(())),
-                PollFlushAction::RebuildSlots => {
-                    // Spawn refresh task
-                    let task_handle = ClusterConnInner::spawn_refresh_slots_task(
-                        self.inner.clone(),
-                        &RefreshPolicy::Throttable,
-                    );
-
-                    // Update state
-                    self.state =
-                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
-                }
-                PollFlushAction::ReconnectFromInitialConnections => {
-                    let inner = self.inner.clone();
-                    let handle = tokio::spawn(async move {
-                        ClusterConnInner::reconnect_to_initial_nodes(inner).await
-                    });
-                    self.state =
-                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(handle));
-                }
-                PollFlushAction::Reconnect(addresses) => {
-                    let inner = self.inner.clone();
-                    let handle = tokio::spawn(async move {
-                        ClusterConnInner::trigger_refresh_connection_tasks(
-                            inner,
-                            addresses,
-                            RefreshConnectionType::OnlyUserConnection,
-                            true,
-                        )
-                        .await;
-                    });
-                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
-                }
+        match ready!(self.poll_complete(cx)) {
+            PollFlushAction::None => Poll::Ready(Ok(())),
+            PollFlushAction::RebuildSlots => {
+                let task_handle = ClusterConnInner::spawn_refresh_slots_task(
+                    self.inner.clone(),
+                    &RefreshPolicy::Throttable,
+                );
+                self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+            PollFlushAction::ReconnectFromInitialConnections => {
+                let inner = self.inner.clone();
+                let handle = tokio::spawn(async move {
+                    ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                });
+                self.state =
+                    ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(handle));
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+            PollFlushAction::Reconnect(addresses) => {
+                let inner = self.inner.clone();
+                let handle = tokio::spawn(async move {
+                    ClusterConnInner::trigger_refresh_connection_tasks(
+                        inner,
+                        addresses,
+                        RefreshConnectionType::OnlyUserConnection,
+                        true,
+                    )
+                    .await;
+                });
+                self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
+                cx.waker().wake_by_ref();
+                Poll::Pending
             }
         }
     }

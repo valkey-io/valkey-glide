@@ -410,7 +410,8 @@ public class ClusterClientTests {
                     break;
                 } catch (Exception e) {
                     if (e.getMessage() != null
-                            && e.getMessage().contains("AllConnectionsUnavailable")
+                            && (e.getMessage().contains("AllConnectionsUnavailable")
+                                    || e.getMessage().contains("Connection in recovery"))
                             && i < maxRetries - 1) {
                         Thread.sleep(500);
                         continue;
@@ -426,7 +427,8 @@ public class ClusterClientTests {
                     break;
                 } catch (Exception e) {
                     if (e.getMessage() != null
-                            && e.getMessage().contains("AllConnectionsUnavailable")
+                            && (e.getMessage().contains("AllConnectionsUnavailable")
+                                    || e.getMessage().contains("Connection in recovery"))
                             && i < maxRetries - 1) {
                         Thread.sleep(500);
                         continue;
