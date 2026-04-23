@@ -155,6 +155,11 @@ describe("ClientSideCache", () => {
                         expect(Math.abs(hitRate + missRate - 1.0)).toBeLessThan(
                             0.0001,
                         );
+
+                        // Verify total lookups: 1 miss + 2 hits = 3
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(3);
                     },
                     TIMEOUT,
                 );
@@ -223,6 +228,11 @@ describe("ClientSideCache", () => {
                         // Miss rate should be 100%
                         const missRate = await client.getCacheMissRate();
                         expect(missRate).toBe(1.0);
+
+                        // Total lookups should be 2
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(2);
                     },
                     TIMEOUT,
                 );
@@ -266,6 +276,11 @@ describe("ClientSideCache", () => {
                         // Miss rate should be 2 misses out of 3 total = 66.67%
                         const missRate = await client.getCacheMissRate();
                         expect(missRate).toBeCloseTo(2.0 / 3.0, 2);
+
+                        // Total lookups should be 3
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(3);
                     },
                     TIMEOUT,
                 );
@@ -305,6 +320,11 @@ describe("ClientSideCache", () => {
                         // Verify metrics: 3 misses + 3 hits = 50% hit rate
                         const hitRate = await client.getCacheHitRate();
                         expect(hitRate).toBe(0.5);
+
+                        // Total lookups should be 6
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(6);
                     },
                     TIMEOUT,
                 );
@@ -569,6 +589,11 @@ describe("ClientSideCache", () => {
 
                             expect(await client2.getCacheHitRate()).toBe(0.5);
                             expect(await client1.getCacheHitRate()).toBe(0.5);
+
+                            // Total lookups should be 2
+                            const totalLookups =
+                                await client1.getCacheTotalLookups();
+                            expect(totalLookups).toBe(2);
                         } finally {
                             client1.close();
                             client2.close();
@@ -735,6 +760,11 @@ describe("ClientSideCache", () => {
                         expect(Math.abs(hitRate + missRate - 1.0)).toBeLessThan(
                             0.0001,
                         );
+
+                        // Verify total lookups: 1 miss + 2 hits = 3
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(3);
                     },
                     TIMEOUT,
                 );
@@ -809,6 +839,11 @@ describe("ClientSideCache", () => {
                         // Miss rate should be 100%
                         const missRate = await client.getCacheMissRate();
                         expect(missRate).toBe(1.0);
+
+                        // Total lookups should be 2
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(2);
                     },
                     TIMEOUT,
                 );
@@ -858,6 +893,11 @@ describe("ClientSideCache", () => {
                         // Miss rate should be 2 misses out of 3 total = 66.67%
                         const missRate = await client.getCacheMissRate();
                         expect(missRate).toBeCloseTo(2.0 / 3.0, 2);
+
+                        // Total lookups should be 3
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(3);
                     },
                     TIMEOUT,
                 );
@@ -897,6 +937,11 @@ describe("ClientSideCache", () => {
                         // Verify metrics: 3 misses + 3 hits = 50% hit rate
                         const hitRate = await client.getCacheHitRate();
                         expect(hitRate).toBe(0.5);
+
+                        // Total lookups should be 6
+                        const totalLookups =
+                            await client.getCacheTotalLookups();
+                        expect(totalLookups).toBe(6);
                     },
                     TIMEOUT,
                 );
@@ -1179,6 +1224,11 @@ describe("ClientSideCache", () => {
 
                             expect(await client2.getCacheHitRate()).toBe(0.5);
                             expect(await client1.getCacheHitRate()).toBe(0.5);
+
+                            // Total lookups should be 2
+                            const totalLookups =
+                                await client1.getCacheTotalLookups();
+                            expect(totalLookups).toBe(2);
                         } finally {
                             client1.close();
                             client2.close();
