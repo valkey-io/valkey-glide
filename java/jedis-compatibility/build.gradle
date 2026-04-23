@@ -7,11 +7,6 @@ plugins {
 }
 
 repositories {
-    // For uber JAR builds, the client uber JAR is published to mavenLocal first,
-    // so we need to resolve it from there before it reaches Maven Central.
-    if (System.getenv("UBER_JAR_BUILD") == "true") {
-        mavenLocal()
-    }
     mavenCentral()
 }
 
@@ -28,19 +23,10 @@ tasks.withType(Javadoc) {
 ext {
     // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
     arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
-    isUberJarBuild = System.getenv("UBER_JAR_BUILD") == "true"
 }
 
 dependencies {
-    // For uber JAR CD builds, depend on the published Maven artifact so the POM
-    // declares the correct transitive dependency on the platform-independent uber JAR.
-    // For local dev / CI / per-platform CD builds, use the Gradle project dependency.
-    if (project.ext.isUberJarBuild) {
-        def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
-        api "io.valkey:valkey-glide:${releaseVersion}"
-    } else {
-        implementation project(':client')
-    }
+    implementation project(':client')
 
     // Apache Commons Pool 2 for connection pooling - part of public API
     api group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
@@ -90,45 +76,12 @@ tasks.register('copyNativeLib', Copy) {
     into sourceSets.main.output.resourcesDir
 }
 
-// Task for uber JAR: copy all platform native libraries from a staging directory
-// populated by the CI workflow after downloading artifacts from all platform builds.
-// Structure mirrors the client: build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
-tasks.register('copyAllNativeLibs', Copy) {
-    description = 'Copy all platform native libraries for uber JAR build from downloaded artifacts'
-
-    def stagingDir = file("${projectDir}/build/native-libs-staging/natives")
-
-    from stagingDir
-    into "${sourceSets.main.output.resourcesDir}/natives"
-    include "**/*.dylib", "**/*.so", "**/*.dll"
-
-    onlyIf {
-        stagingDir.exists() && stagingDir.listFiles()?.length > 0
-    }
-
-    mustRunAfter processResources
-
-    doFirst {
-        println "Copying native libraries from staging: ${stagingDir}"
-        println "To resources dir: ${sourceSets.main.output.resourcesDir}/natives"
-    }
-}
-
-// For uber JAR builds, skip per-platform native lib copy and Rust build — use
-// copyAllNativeLibs which pulls from the CI staging directory instead.
-if (project.ext.isUberJarBuild) {
-    jar.dependsOn('copyAllNativeLibs')
-    javadoc.dependsOn('copyAllNativeLibs')
-    compileTestJava.dependsOn('copyAllNativeLibs')
-    delombok.dependsOn('compileJava')
-} else {
-    jar.dependsOn('copyNativeLib')
-    javadoc.dependsOn('copyNativeLib')
-    compileTestJava.dependsOn('copyNativeLib')
-    delombok.dependsOn('compileJava')
-    copyNativeLib.dependsOn(':client:buildRust')
-    compileJava.dependsOn(':client:jar')
-}
+jar.dependsOn('copyNativeLib')
+javadoc.dependsOn('copyNativeLib')
+compileTestJava.dependsOn('copyNativeLib')
+delombok.dependsOn('compileJava')
+copyNativeLib.dependsOn(':client:buildRust')
+compileJava.dependsOn(':client:jar')
 
 tasks.withType(Test) {
     useJUnitPlatform()
@@ -145,12 +98,8 @@ tasks.withType(Test) {
     }
 }
 
-// For uber JAR builds, produce a platform-independent JAR (no classifier).
-// For per-platform builds, keep the platform classifier as before.
 jar {
-    if (project.ext.isUberJarBuild) {
-        archiveClassifier = ''
-    } else if (project.hasProperty('target') && project.target.contains("musl")) {
+    if (project.hasProperty('target') && project.target.contains("musl")) {
         archiveClassifier = "linux_musl_${arch}"
     } else {
         archiveClassifier = osdetector.classifier
@@ -211,13 +160,6 @@ publishing {
 }
 
 publishMavenJavaPublicationToMavenLocal.dependsOn jar
-
-// Suppress Gradle module metadata (.module file). Multiple platform-classified JARs
-// are published under the same Maven coordinate, and the .module file cannot correctly
-// represent this. The POM is the source of truth for dependency declarations.
-tasks.withType(GenerateModuleMetadata) {
-    enabled = false
-}
 
 tasks.withType(Sign) {
     def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion;
