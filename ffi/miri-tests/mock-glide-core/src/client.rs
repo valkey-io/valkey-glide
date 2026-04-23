@@ -125,4 +125,9 @@ impl Client {
     pub fn cache_expirations(&self) -> RedisResult<Value> {
         todo!()
     }
+
+    /// Mock cache_total_lookups method for Miri tests
+    pub fn cache_total_lookups(&self) -> RedisResult<Value> {
+        todo!()
+    }
 }

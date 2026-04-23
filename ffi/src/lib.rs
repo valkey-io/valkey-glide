@@ -3067,7 +3067,8 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
             Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
             Some(CacheMetricsType::Evictions) => client.cache_evictions(),
             Some(CacheMetricsType::Expirations) => client.cache_expirations(),
-            Some(CacheMetricsType::TotalLookups) | None => Err(RedisError::from((
+            Some(CacheMetricsType::TotalLookups) => client.cache_total_lookups(),
+            None => Err(RedisError::from((
                 ErrorKind::ClientError,
                 "Invalid cache metrics type",
                 format!("Unsupported metrics type: {}", metrics_type),

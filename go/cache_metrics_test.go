@@ -46,6 +46,11 @@ func TestCacheMetrics_WithoutCaching(t *testing.T) {
 	_, err = client.GetCacheExpirations(ctx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "caching not enabled")
+
+	// Test GetCacheTotalLookups
+	_, err = client.GetCacheTotalLookups(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "caching not enabled")
 }
 
 func TestCacheMetrics_WithCachingButMetricsDisabled(t *testing.T) {
@@ -84,6 +89,11 @@ func TestCacheMetrics_WithCachingButMetricsDisabled(t *testing.T) {
 
 	// Test GetCacheExpirations - should fail when metrics are disabled
 	_, err = client.GetCacheExpirations(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "metrics not enabled")
+
+	// Test GetCacheTotalLookups - should fail when metrics are disabled
+	_, err = client.GetCacheTotalLookups(ctx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "metrics not enabled")
 }
@@ -128,6 +138,11 @@ func TestCacheMetrics_WithCachingAndMetricsEnabled(t *testing.T) {
 	expirations, err := client.GetCacheExpirations(ctx)
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, expirations, int64(0))
+
+	// Test GetCacheTotalLookups
+	totalLookups, err := client.GetCacheTotalLookups(ctx)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, totalLookups, int64(0))
 }
 
 func TestCacheMetrics_ClusterClient_WithoutCaching(t *testing.T) {
@@ -163,6 +178,11 @@ func TestCacheMetrics_ClusterClient_WithoutCaching(t *testing.T) {
 
 	// Test GetCacheExpirations
 	_, err = client.GetCacheExpirations(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "caching not enabled")
+
+	// Test GetCacheTotalLookups
+	_, err = client.GetCacheTotalLookups(ctx)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "caching not enabled")
 }

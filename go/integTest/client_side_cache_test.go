@@ -24,6 +24,7 @@ type CacheClient interface {
 	GetCacheEntryCount(ctx context.Context) (int64, error)
 	GetCacheEvictions(ctx context.Context) (int64, error)
 	GetCacheExpirations(ctx context.Context) (int64, error)
+	GetCacheTotalLookups(ctx context.Context) (int64, error)
 	FlushAll(ctx context.Context) (string, error)
 }
 
@@ -137,6 +138,10 @@ func (suite *GlideTestSuite) TestClientSideCache_WithoutMetrics() {
 		assert.Contains(suite.T(), strings.ToLower(err.Error()), "metrics")
 
 		_, err = testClient.GetCacheExpirations(ctx)
+		assert.Error(suite.T(), err)
+		assert.Contains(suite.T(), strings.ToLower(err.Error()), "metrics")
+
+		_, err = testClient.GetCacheTotalLookups(ctx)
 		assert.Error(suite.T(), err)
 		assert.Contains(suite.T(), strings.ToLower(err.Error()), "metrics")
 
@@ -322,6 +327,10 @@ func (suite *GlideTestSuite) TestClientSideCache_NoCacheMetrics() {
 			assert.Error(suite.T(), err)
 			assert.Contains(suite.T(), strings.ToLower(err.Error()), "not enabled")
 
+			_, err = c.GetCacheTotalLookups(ctx)
+			assert.Error(suite.T(), err)
+			assert.Contains(suite.T(), strings.ToLower(err.Error()), "not enabled")
+
 			_, err = c.GetCacheEntryCount(ctx)
 			assert.Error(suite.T(), err)
 			assert.Contains(suite.T(), strings.ToLower(err.Error()), "not enabled")
@@ -340,6 +349,10 @@ func (suite *GlideTestSuite) TestClientSideCache_NoCacheMetrics() {
 			assert.Contains(suite.T(), strings.ToLower(err.Error()), "not enabled")
 
 			_, err = c.GetCacheExpirations(ctx)
+			assert.Error(suite.T(), err)
+			assert.Contains(suite.T(), strings.ToLower(err.Error()), "not enabled")
+
+			_, err = c.GetCacheTotalLookups(ctx)
 			assert.Error(suite.T(), err)
 			assert.Contains(suite.T(), strings.ToLower(err.Error()), "not enabled")
 

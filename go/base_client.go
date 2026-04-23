@@ -1129,6 +1129,44 @@ func (client *baseClient) GetCacheExpirations(ctx context.Context) (int64, error
 	return handleIntResponse(result)
 }
 
+// GetCacheTotalLookups returns the total number of cache lookups (hits + misses).
+//
+// This method retrieves the sum of cache hits and misses, representing the
+// total number of cache lookup operations performed.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the total number of cache lookups as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	totalLookups, err := client.GetCacheTotalLookups(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get total cache lookups: %v", err)
+//	    return
+//	}
+//	log.Printf("Total cache lookups: %d", totalLookups)
+func (client *baseClient) GetCacheTotalLookups(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_TotalLookups)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
 //
 // See [valkey.io] for details.
