@@ -75,7 +75,7 @@ jobs:
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: java
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}                 
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
             # Filter host matrix to only include Windows.
             - id: filter-hosts
               shell: bash
