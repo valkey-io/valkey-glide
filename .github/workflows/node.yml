@@ -291,7 +291,7 @@ jobs:
         if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
-            host-matrix-output: ${{ steps.filter-hosts.outputs.host-matrix }}
+            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
@@ -302,11 +302,6 @@ jobs:
                   language-name: node
                   run-full-matrix: true
                   containers: true
-            # Amazon Linux is tested separately in node-amazon-linux.yml to isolate its higher failure rate
-            - id: filter-hosts
-              shell: bash
-              run: |
-                  echo "host-matrix=$(echo '${{ steps.get-matrices.outputs.host-matrix-output }}' | jq -c '[.[] | select(.OS != "amazon-linux")]')" >> $GITHUB_OUTPUT
 
     test-node-container:
         runs-on: ${{ matrix.host.RUNNER }}
