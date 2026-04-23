@@ -189,6 +189,9 @@ describe("ClientSideCache", () => {
                         await expect(
                             client.getCacheExpirations(),
                         ).rejects.toThrow(/metrics/i);
+                        await expect(
+                            client.getCacheTotalLookups(),
+                        ).rejects.toThrow(/metrics/i);
 
                         // Entry count should still work
                         expect(await client.getCacheEntryCount()).toBe(1);
@@ -333,6 +336,9 @@ describe("ClientSideCache", () => {
                         ).rejects.toThrow(/not enabled/i);
                         await expect(
                             client.getCacheExpirations(),
+                        ).rejects.toThrow(/not enabled/i);
+                        await expect(
+                            client.getCacheTotalLookups(),
                         ).rejects.toThrow(/not enabled/i);
                         await expect(
                             client.getCacheEntryCount(),
@@ -765,6 +771,9 @@ describe("ClientSideCache", () => {
                         await expect(
                             client.getCacheExpirations(),
                         ).rejects.toThrow(/metrics/i);
+                        await expect(
+                            client.getCacheTotalLookups(),
+                        ).rejects.toThrow(/metrics/i);
 
                         // Entry count should still work
                         expect(await client.getCacheEntryCount()).toBe(1);
@@ -921,6 +930,9 @@ describe("ClientSideCache", () => {
                         ).rejects.toThrow(/not enabled/i);
                         await expect(
                             client.getCacheExpirations(),
+                        ).rejects.toThrow(/not enabled/i);
+                        await expect(
+                            client.getCacheTotalLookups(),
                         ).rejects.toThrow(/not enabled/i);
                         await expect(
                             client.getCacheEntryCount(),

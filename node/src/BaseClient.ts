@@ -9749,6 +9749,24 @@ export class BaseClient {
     }
 
     /**
+     * Get the total number of cache lookups (hits + misses).
+     *
+     * @returns The total number of cache lookups.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const totalLookups = await client.getCacheTotalLookups();
+     * console.log(`Total cache lookups: ${totalLookups}`);
+     * // Output: Total cache lookups: 5000
+     * ```
+     */
+    public async getCacheTotalLookups(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.TotalLookups,
+        );
+    }
+
+    /**
      * Subscribes the client to the specified channels (non-blocking).
      * Returns immediately without waiting for subscription confirmation.
      *
