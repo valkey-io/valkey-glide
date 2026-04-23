@@ -249,33 +249,56 @@ jobs:
                   echo "Downloaded native library artifacts:"
                   find native-libs-downloaded -type f
 
-            - name: Organize native libraries for uber JARs
+            - name: Organize native libraries for uber JAR
               shell: bash
               run: |
-                  # Stage native libraries into both client and jedis-compatibility modules.
-                  # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
-                  # Target:    java/<module>/build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
-                  STAGING_DIRS=(
-                      "java/client/build/native-libs-staging/natives"
-                      "java/jedis-compatibility/build/native-libs-staging/natives"
-                  )
+                  # Create staging directory for native libraries
+                  mkdir -p java/client/build/native-libs-staging/natives
 
-                  for staging_dir in "${STAGING_DIRS[@]}"; do
-                      mkdir -p "$staging_dir"
-                      for artifact_dir in native-libs-downloaded/native-lib-*; do
-                          if [ -d "$artifact_dir" ]; then
-                              echo "Processing $artifact_dir -> $staging_dir"
-                              find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
-                                  rel_path="${lib_file#$artifact_dir/}"
-                                  target_path="$staging_dir/$rel_path"
-                                  mkdir -p "$(dirname "$target_path")"
-                                  cp "$lib_file" "$target_path"
-                              done
-                          fi
-                      done
-                      echo "Native libraries staged in $staging_dir:"
-                      find "$staging_dir" -type f
+                  # Copy all native libraries from downloaded artifacts
+                  # Structure: native-libs-downloaded/native-lib-{TARGET}/{platform}/{arch}/*.{so,dylib,dll}
+                  # Target structure: java/client/build/native-libs-staging/natives/{platform}/{arch}/*.{so,dylib,dll}
+                  for artifact_dir in native-libs-downloaded/native-lib-*; do
+                      if [ -d "$artifact_dir" ]; then
+                          echo "Processing $artifact_dir"
+                          # Find all native library files and copy them preserving the platform/arch structure
+                          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
+                              # Extract the relative path from the artifact directory
+                              rel_path="${lib_file#$artifact_dir/}"
+                              target_path="java/client/build/native-libs-staging/natives/$rel_path"
+                              # Create target directory if it doesn't exist
+                              mkdir -p "$(dirname "$target_path")"
+                              # Copy the file
+                              cp "$lib_file" "$target_path"
+                          done
+                      fi
                   done
+
+                  echo "Native libraries staged:"
+                  find java/client/build/native-libs-staging -type f
+
+            - name: Organize jedis native libraries for uber JAR
+              shell: bash
+              run: |
+                  # Create staging directory for jedis native libraries
+                  # Reuse the same native-libs-downloaded artifacts, preserving the
+                  # natives/{platform}/{arch}/ directory structure
+                  mkdir -p java/jedis-compatibility/build/native-libs-staging/natives
+
+                  for artifact_dir in native-libs-downloaded/native-lib-*; do
+                      if [ -d "$artifact_dir" ]; then
+                          echo "Processing $artifact_dir"
+                          find "$artifact_dir" -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.dll" \) | while read -r lib_file; do
+                              rel_path="${lib_file#$artifact_dir/}"
+                              target_path="java/jedis-compatibility/build/native-libs-staging/natives/$rel_path"
+                              mkdir -p "$(dirname "$target_path")"
+                              cp "$lib_file" "$target_path"
+                          done
+                      fi
+                  done
+
+                  echo "Jedis native libraries staged:"
+                  find java/jedis-compatibility/build/native-libs-staging -type f
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
