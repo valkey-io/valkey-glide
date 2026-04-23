@@ -3020,7 +3020,7 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
 /// Get cache metrics for the client.
 ///
 /// This function retrieves cache performance metrics such as hit rate, miss rate,
-/// entry count, evictions, and expirations based on the specified metrics type.
+/// entry count, evictions, expirations and total lookups based on the specified metrics type.
 ///
 /// # Parameters
 ///
@@ -3032,6 +3032,7 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
 ///   - 2: EntryCount - Number of entries in cache as an integer
 ///   - 3: Evictions - Number of cache evictions as an integer
 ///   - 4: Expirations - Number of cache expirations as an integer
+///   - 5: TotalLookups - Total cache lookups as an integer
 ///
 /// # Returns
 ///
