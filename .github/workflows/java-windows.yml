@@ -35,9 +35,9 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
-    # Nightly full-matrix run at 2:00 AM UTC, scheduled after java.yml (non-Windows) completes
+    # Weekly full-matrix run on Friday at 2:00 AM UTC
     schedule:
-        - cron: "0 2 * * *"
+        - cron: "0 2 * * 5"
 
     workflow_dispatch:
         inputs:
