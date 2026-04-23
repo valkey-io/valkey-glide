@@ -173,9 +173,12 @@ public class ClientSideCacheTests {
         ExecutionException expirationsException =
                 assertThrows(ExecutionException.class, () -> client.getCacheExpirations().get());
         assertTrue(expirationsException.getCause().getMessage().toLowerCase().contains("metrics"));
+
+        ExecutionException totalLookupsException =
+                assertThrows(ExecutionException.class, () -> client.getCacheTotalLookups().get());
+        assertTrue(totalLookupsException.getCause().getMessage().toLowerCase().contains("metrics"));
     }
 
-    /** Test that NIL (null) values are not cached. */
     @ParameterizedTest(autoCloseArguments = true)
     @MethodSource("getCacheEnabledClients")
     @SneakyThrows
@@ -316,6 +319,10 @@ public class ClientSideCacheTests {
         ExecutionException entryCountException =
                 assertThrows(ExecutionException.class, () -> client.getCacheEntryCount().get());
         assertTrue(entryCountException.getCause().getMessage().toLowerCase().contains("not enabled"));
+
+        ExecutionException totalLookupsException =
+                assertThrows(ExecutionException.class, () -> client.getCacheTotalLookups().get());
+        assertTrue(totalLookupsException.getCause().getMessage().toLowerCase().contains("not enabled"));
     }
 
     /** Test LRU (Least Recently Used) eviction policy. */

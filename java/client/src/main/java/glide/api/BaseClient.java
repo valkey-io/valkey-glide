@@ -1220,6 +1220,26 @@ public abstract class BaseClient
         return getCacheMetrics(CacheMetricsType.Expirations).thenApply(result -> (Long) result);
     }
 
+    /**
+     * Get the total number of cache lookups (hits + misses).
+     *
+     * <p>This method returns the sum of cache hits and misses, representing the total number of cache
+     * lookup operations performed. Only available when client-side caching is enabled with metrics
+     * collection.
+     *
+     * @return A CompletableFuture that resolves to the total number of cache lookups.
+     * @throws RequestException if caching is not enabled or metrics are disabled.
+     * @example
+     *     <pre>{@code
+     * // Get total cache lookups
+     * Long totalLookups = client.getCacheTotalLookups().get();
+     * System.out.println("Total cache lookups: " + totalLookups);
+     * }</pre>
+     */
+    public CompletableFuture<Long> getCacheTotalLookups() {
+        return getCacheMetrics(CacheMetricsType.TotalLookups).thenApply(result -> (Long) result);
+    }
+
     @Override
     public CompletableFuture<Long> del(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);

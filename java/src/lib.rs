@@ -2581,14 +2581,17 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getCacheMetrics(
             let client_result = ensure_client_for_handle(handle_id).await;
             match client_result {
                 Ok(client) => {
-                    // Convert metrics_type to CacheMetricsType enum
-                    let result = match metrics_type {
-                        0 => client.cache_hit_rate(),    // HitRate
-                        1 => client.cache_miss_rate(),   // MissRate
-                        2 => client.cache_entry_count(), // EntryCount
-                        3 => client.cache_evictions(),   // Evictions
-                        4 => client.cache_expirations(), // Expirations
-                        _ => Err(redis::RedisError::from((
+                    use glide_core::command_request::CacheMetricsType;
+                    use protobuf::Enum;
+
+                    let result = match CacheMetricsType::from_i32(metrics_type) {
+                        Some(CacheMetricsType::HitRate) => client.cache_hit_rate(),
+                        Some(CacheMetricsType::MissRate) => client.cache_miss_rate(),
+                        Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
+                        Some(CacheMetricsType::Evictions) => client.cache_evictions(),
+                        Some(CacheMetricsType::Expirations) => client.cache_expirations(),
+                        Some(CacheMetricsType::TotalLookups) => client.cache_total_lookups(),
+                        None => Err(redis::RedisError::from((
                             redis::ErrorKind::ClientError,
                             "Invalid cache metrics type",
                             format!("Unknown metrics type: {}", metrics_type),
