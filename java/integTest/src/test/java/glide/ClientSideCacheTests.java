@@ -139,6 +139,10 @@ public class ClientSideCacheTests {
         assertEquals(2.0 / 3.0, hitRate, 0.001, "Expected 66.67% hit rate");
         assertEquals(1.0 / 3.0, missRate, 0.001, "Expected 33.33% miss rate");
         assertEquals(1.0, hitRate + missRate, 0.0001, "Rates should sum to 1.0");
+
+        // Verify total lookups: 1 miss + 2 hits = 3
+        Long totalLookups = client.getCacheTotalLookups().get();
+        assertEquals(3L, totalLookups, "Expected 3 total lookups (1 miss + 2 hits)");
     }
 
     /** Test that cache works but metrics are disabled when configured. */
@@ -197,6 +201,10 @@ public class ClientSideCacheTests {
         // Miss rate should be 100%
         Double missRate = client.getCacheMissRate().get();
         assertEquals(1.0, missRate, 0.001, "Expected 100% miss rate");
+
+        // Total lookups should be 2
+        Long totalLookups = client.getCacheTotalLookups().get();
+        assertEquals(2L, totalLookups, "Expected 2 total lookups");
     }
 
     /** Test that cache entries expire after their TTL. */
@@ -250,6 +258,10 @@ public class ClientSideCacheTests {
             // Miss rate should be 2 misses out of 3 total = 66.67%
             Double missRate = shortTtlClient.getCacheMissRate().get();
             assertEquals(2.0 / 3.0, missRate, 0.001, "Expected 66.67% miss rate");
+
+            // Total lookups should be 3
+            Long totalLookups = shortTtlClient.getCacheTotalLookups().get();
+            assertEquals(3L, totalLookups, "Expected 3 total lookups");
         } finally {
             shortTtlClient.close();
         }
@@ -283,6 +295,10 @@ public class ClientSideCacheTests {
         // Verify metrics: 3 misses + 3 hits = 50% hit rate
         Double hitRate = client.getCacheHitRate().get();
         assertEquals(0.5, hitRate, 0.001, "Expected 50% hit rate");
+
+        // Total lookups should be 6
+        Long totalLookups = client.getCacheTotalLookups().get();
+        assertEquals(6L, totalLookups, "Expected 6 total lookups (3 misses + 3 hits)");
     }
 
     /** Test that clients without cache configuration cannot access cache metrics. */
@@ -579,6 +595,10 @@ public class ClientSideCacheTests {
 
             assertEquals(0.5, client2.getCacheHitRate().get(), 0.001);
             assertEquals(0.5, client1.getCacheHitRate().get(), 0.001);
+
+            // Total lookups should be 2
+            Long totalLookups = client1.getCacheTotalLookups().get();
+            assertEquals(2L, totalLookups, "Expected 2 total lookups on shared cache");
         } finally {
             client1.close();
             client2.close();
