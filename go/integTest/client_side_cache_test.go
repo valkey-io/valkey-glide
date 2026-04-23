@@ -95,6 +95,11 @@ func (suite *GlideTestSuite) TestClientSideCache_BasicCacheHitWithMetrics() {
 
 		// Rates should sum to 1.0
 		assert.InDelta(suite.T(), 1.0, hitRate+missRate, 0.0001)
+
+		// Verify total lookups: 1 miss + 2 hits = 3
+		totalLookups, err := testClient.GetCacheTotalLookups(ctx)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), totalLookups, "Expected 3 total lookups (1 miss + 2 hits)")
 	})
 }
 
@@ -184,6 +189,11 @@ func (suite *GlideTestSuite) TestClientSideCache_NilValuesNotCached() {
 		missRate, err := testClient.GetCacheMissRate(ctx)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 1.0, missRate)
+
+		// Total lookups should be 2
+		totalLookups, err := testClient.GetCacheTotalLookups(ctx)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), totalLookups, "Expected 2 total lookups")
 	})
 }
 
@@ -234,6 +244,11 @@ func (suite *GlideTestSuite) TestClientSideCache_TTLExpiration() {
 		missRate, err := testClient.GetCacheMissRate(ctx)
 		assert.NoError(suite.T(), err)
 		assert.InDelta(suite.T(), 2.0/3.0, missRate, 0.001)
+
+		// Total lookups should be 3
+		totalLookups, err := testClient.GetCacheTotalLookups(ctx)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(3), totalLookups, "Expected 3 total lookups")
 	})
 }
 
@@ -283,6 +298,11 @@ func (suite *GlideTestSuite) TestClientSideCache_MultipleKeys() {
 		hitRate, err := testClient.GetCacheHitRate(ctx)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 0.5, hitRate)
+
+		// Total lookups should be 6
+		totalLookups, err := testClient.GetCacheTotalLookups(ctx)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(6), totalLookups, "Expected 6 total lookups (3 misses + 3 hits)")
 	})
 }
 
@@ -678,6 +698,11 @@ func (suite *GlideTestSuite) TestClientSideCache_SharedCache() {
 		hitRate1, err := testClient1.GetCacheHitRate(ctx)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), 0.5, hitRate1)
+
+		// Total lookups should be 2
+		totalLookups, err := testClient1.GetCacheTotalLookups(ctx)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), int64(2), totalLookups, "Expected 2 total lookups on shared cache")
 	})
 }
 
