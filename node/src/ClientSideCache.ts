@@ -30,7 +30,7 @@ export interface ClientSideCacheConfig {
 
     /**
      * Whether to enable metrics collection for this cache.
-     * Defaults to true if not specified.
+     * Defaults to false if not specified.
      */
     enableMetrics?: boolean;
 }
@@ -121,7 +121,7 @@ export class ClientSideCache {
         this.maxCacheKb = config.maxCacheKb;
         this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;
-        this.enableMetrics = config.enableMetrics ?? true;
+        this.enableMetrics = config.enableMetrics ?? false;
     }
 
     /**
@@ -149,7 +149,7 @@ export class ClientSideCache {
     static create(
         maxCacheKb: number,
         entryTtlMs: number,
-        options?: Partial<ClientSideCacheOptions>,
+        options?: ClientSideCacheOptions,
     ): ClientSideCache {
         return new ClientSideCache({
             maxCacheKb,

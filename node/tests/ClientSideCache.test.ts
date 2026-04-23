@@ -29,7 +29,6 @@ const TIMEOUT = 50000;
 const CLEANUP_TIMEOUT = 10000;
 
 describe("ClientSideCache", () => {
-    const testsFailed = 0;
     let standaloneCluster: ValkeyCluster;
     let clusterCluster: ValkeyCluster;
 
@@ -61,16 +60,22 @@ describe("ClientSideCache", () => {
     }, 30000);
 
     afterAll(async () => {
-        if (testsFailed === 0) {
-            await standaloneCluster.close();
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            await clusterCluster.close();
-        } else {
-            await standaloneCluster.close(true);
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            await clusterCluster.close(true);
-        }
+        await standaloneCluster.close();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        await clusterCluster.close();
     }, CLEANUP_TIMEOUT);
+
+    /**
+     * Helper to set a key on the server and GET it to populate the client-side cache.
+     */
+    async function setAndCacheKey(
+        client: GlideClient | GlideClusterClient,
+        key: string,
+        value: string,
+    ): Promise<void> {
+        expect(await client.set(key, value)).toBe("OK");
+        expect(await client.get(key)).toBe(value);
+    }
 
     describe("Standalone Client-side Cache Tests", () => {
         let client: GlideClient;
@@ -355,10 +360,7 @@ describe("ClientSideCache", () => {
 
                         // Set and cache 3 keys
                         for (let i = 1; i <= 3; i++) {
-                            expect(await client.set(`lru_key${i}`, value)).toBe(
-                                "OK",
-                            );
-                            expect(await client.get(`lru_key${i}`)).toBe(value);
+                            await setAndCacheKey(client, `lru_key${i}`, value);
                         }
 
                         // Cache should have 3 entries now
@@ -369,10 +371,7 @@ describe("ClientSideCache", () => {
 
                         // Add 2 more keys - should evict key2 and key3 (least recently used)
                         for (let i = 4; i <= 5; i++) {
-                            expect(await client.set(`lru_key${i}`, value)).toBe(
-                                "OK",
-                            );
-                            expect(await client.get(`lru_key${i}`)).toBe(value);
+                            await setAndCacheKey(client, `lru_key${i}`, value);
                         }
 
                         // Verify 2 evictions occurred
@@ -431,8 +430,7 @@ describe("ClientSideCache", () => {
                         // key2 frequency: 2
 
                         // Set key3 with minimal access (low frequency)
-                        expect(await client.set("key3", value)).toBe("OK");
-                        expect(await client.get("key3")).toBe(value);
+                        await setAndCacheKey(client, "key3", value);
                         // key3 frequency: 1
 
                         // Verify cache is working
@@ -443,8 +441,7 @@ describe("ClientSideCache", () => {
                         expect(await client.getCacheEntryCount()).toBe(3);
 
                         // Set key4 - this should trigger eviction of key3 (lowest frequency)
-                        expect(await client.set("key4", value)).toBe("OK");
-                        expect(await client.get("key4")).toBe(value);
+                        await setAndCacheKey(client, "key4", value);
                         // key4 frequency: 1
 
                         // Check that cache entry count is still 3
@@ -497,10 +494,9 @@ describe("ClientSideCache", () => {
 
                             // Add 10 keys to force eviction
                             for (let i = 1; i <= 10; i++) {
-                                expect(
-                                    await client1.set(`key${i}`, largeValue),
-                                ).toBe("OK");
-                                expect(await client1.get(`key${i}`)).toBe(
+                                await setAndCacheKey(
+                                    client1,
+                                    `key${i}`,
                                     largeValue,
                                 );
                                 expect(await client1.get(`key${i}`)).toBe(
@@ -952,10 +948,9 @@ describe("ClientSideCache", () => {
 
                         // Set and cache 3 keys (use hash tags for cluster mode)
                         for (let i = 1; i <= 3; i++) {
-                            expect(
-                                await client.set(`{cache}lru_key${i}`, value),
-                            ).toBe("OK");
-                            expect(await client.get(`{cache}lru_key${i}`)).toBe(
+                            await setAndCacheKey(
+                                client,
+                                `{cache}lru_key${i}`,
                                 value,
                             );
                         }
@@ -968,10 +963,9 @@ describe("ClientSideCache", () => {
 
                         // Add 2 more keys - should evict key2 and key3 (least recently used)
                         for (let i = 4; i <= 5; i++) {
-                            expect(
-                                await client.set(`{cache}lru_key${i}`, value),
-                            ).toBe("OK");
-                            expect(await client.get(`{cache}lru_key${i}`)).toBe(
+                            await setAndCacheKey(
+                                client,
+                                `{cache}lru_key${i}`,
                                 value,
                             );
                         }
@@ -1036,10 +1030,7 @@ describe("ClientSideCache", () => {
                         // key2 frequency: 2
 
                         // Set key3 with minimal access (low frequency)
-                        expect(await client.set("{cache}key3", value)).toBe(
-                            "OK",
-                        );
-                        expect(await client.get("{cache}key3")).toBe(value);
+                        await setAndCacheKey(client, "{cache}key3", value);
                         // key3 frequency: 1
 
                         // Verify cache is working
@@ -1050,10 +1041,7 @@ describe("ClientSideCache", () => {
                         expect(await client.getCacheEntryCount()).toBe(3);
 
                         // Set key4 - this should trigger eviction of key3 (lowest frequency)
-                        expect(await client.set("{cache}key4", value)).toBe(
-                            "OK",
-                        );
-                        expect(await client.get("{cache}key4")).toBe(value);
+                        await setAndCacheKey(client, "{cache}key4", value);
                         // key4 frequency: 1
 
                         // Check that cache entry count is still 3
@@ -1106,15 +1094,11 @@ describe("ClientSideCache", () => {
 
                             // Add 10 keys to force eviction (use hash tags for cluster mode)
                             for (let i = 1; i <= 10; i++) {
-                                expect(
-                                    await client1.set(
-                                        `{cache}key${i}`,
-                                        largeValue,
-                                    ),
-                                ).toBe("OK");
-                                expect(
-                                    await client1.get(`{cache}key${i}`),
-                                ).toBe(largeValue);
+                                await setAndCacheKey(
+                                    client1,
+                                    `{cache}key${i}`,
+                                    largeValue,
+                                );
                                 expect(
                                     await client1.get(`{cache}key${i}`),
                                 ).toBe(largeValue);
