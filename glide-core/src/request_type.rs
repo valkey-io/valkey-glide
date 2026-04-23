@@ -860,6 +860,163 @@ impl RequestType {
         }
     }
 
+    /// Returns the reason why this command is incompatible with compression, if any.
+    /// Returns `None` if the command is compatible with compression.
+    ///
+    /// Commands that are incompatible with compression are those that:
+    /// - Manipulate string data on the server side (APPEND, GETRANGE, SETRANGE, STRLEN, LCS)
+    /// - Perform numeric operations on string values (INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY)
+    /// - Perform bit operations on string values (GETBIT, SETBIT, BITCOUNT, BITPOS, BITFIELD, BITFIELD_RO, BITOP)
+    pub fn compression_incompatibility_reason(self) -> Option<&'static str> {
+        match self {
+            // String manipulation commands - operate on raw bytes server-side
+            RequestType::Append => Some(
+                "APPEND modifies string data on the server, which would corrupt compressed values",
+            ),
+            RequestType::GetRange => Some(
+                "GETRANGE returns a substring of the raw bytes, which would return compressed data instead of the original value",
+            ),
+            RequestType::SetRange => Some(
+                "SETRANGE modifies bytes at a specific offset, which would corrupt compressed values",
+            ),
+            RequestType::Strlen => Some(
+                "STRLEN returns the length of the raw bytes, which would return the compressed size instead of the original size",
+            ),
+            RequestType::LCS => Some(
+                "LCS compares raw bytes between strings, which would compare compressed data instead of original values",
+            ),
+            RequestType::Substr => Some(
+                "SUBSTR (deprecated alias for GETRANGE) returns a substring of raw bytes, which would return compressed data",
+            ),
+
+            // Numeric operations - expect numeric string values
+            RequestType::Incr => {
+                Some("INCR expects a numeric string value, but would receive compressed bytes")
+            }
+            RequestType::IncrBy => {
+                Some("INCRBY expects a numeric string value, but would receive compressed bytes")
+            }
+            RequestType::IncrByFloat => Some(
+                "INCRBYFLOAT expects a numeric string value, but would receive compressed bytes",
+            ),
+            RequestType::Decr => {
+                Some("DECR expects a numeric string value, but would receive compressed bytes")
+            }
+            RequestType::DecrBy => {
+                Some("DECRBY expects a numeric string value, but would receive compressed bytes")
+            }
+
+            // Bit operations - operate on raw binary data
+            RequestType::GetBit => Some(
+                "GETBIT reads bits from raw bytes, which would read from compressed data instead of original value",
+            ),
+            RequestType::SetBit => {
+                Some("SETBIT modifies bits in raw bytes, which would corrupt compressed values")
+            }
+            RequestType::BitCount => Some(
+                "BITCOUNT counts bits in raw bytes, which would count bits in compressed data instead of original value",
+            ),
+            RequestType::BitPos => Some(
+                "BITPOS finds bit positions in raw bytes, which would search in compressed data instead of original value",
+            ),
+            RequestType::BitField => Some(
+                "BITFIELD performs bit operations on raw bytes, which would operate on compressed data",
+            ),
+            RequestType::BitFieldReadOnly => Some(
+                "BITFIELD_RO reads bits from raw bytes, which would read from compressed data instead of original value",
+            ),
+            RequestType::BitOp => Some(
+                "BITOP performs bitwise operations between strings, which would operate on compressed data",
+            ),
+
+            // All other commands are compatible
+            _ => None,
+        }
+    }
+
+    /// Returns the command name as a string, if available.
+    pub fn command_name(self) -> Option<&'static str> {
+        match self {
+            RequestType::InvalidRequest => None,
+            RequestType::CustomCommand => Some("CUSTOM"),
+            RequestType::Get => Some("GET"),
+            RequestType::Set => Some("SET"),
+            RequestType::Append => Some("APPEND"),
+            RequestType::GetRange => Some("GETRANGE"),
+            RequestType::SetRange => Some("SETRANGE"),
+            RequestType::Strlen => Some("STRLEN"),
+            RequestType::LCS => Some("LCS"),
+            RequestType::Substr => Some("SUBSTR"),
+            RequestType::Incr => Some("INCR"),
+            RequestType::IncrBy => Some("INCRBY"),
+            RequestType::IncrByFloat => Some("INCRBYFLOAT"),
+            RequestType::Decr => Some("DECR"),
+            RequestType::DecrBy => Some("DECRBY"),
+            RequestType::GetBit => Some("GETBIT"),
+            RequestType::SetBit => Some("SETBIT"),
+            RequestType::BitCount => Some("BITCOUNT"),
+            RequestType::BitPos => Some("BITPOS"),
+            RequestType::BitField => Some("BITFIELD"),
+            RequestType::BitFieldReadOnly => Some("BITFIELD_RO"),
+            RequestType::BitOp => Some("BITOP"),
+            RequestType::MGet => Some("MGET"),
+            RequestType::MSet => Some("MSET"),
+            RequestType::MSetNX => Some("MSETNX"),
+            RequestType::SetEx => Some("SETEX"),
+            RequestType::PSetEx => Some("PSETEX"),
+            RequestType::SetNX => Some("SETNX"),
+            RequestType::GetEx => Some("GETEX"),
+            RequestType::GetDel => Some("GETDEL"),
+            RequestType::GetSet => Some("GETSET"),
+            _ => None, // For other commands, return None
+        }
+    }
+
+    /// Parses a command name string and returns the corresponding `RequestType`.
+    /// This is used for CustomCommand handling where we need to determine the actual
+    /// command type from the command name for compression processing.
+    ///
+    /// Returns `None` if the command name is not recognized or not relevant for compression.
+    pub fn from_command_name(name: &str) -> Option<Self> {
+        match name.to_uppercase().as_str() {
+            // Commands that support compression
+            "SET" => Some(RequestType::Set),
+            "MSET" => Some(RequestType::MSet),
+            "MSETNX" => Some(RequestType::MSetNX),
+            "SETEX" => Some(RequestType::SetEx),
+            "PSETEX" => Some(RequestType::PSetEx),
+            "SETNX" => Some(RequestType::SetNX),
+            "GET" => Some(RequestType::Get),
+            "MGET" => Some(RequestType::MGet),
+            "GETEX" => Some(RequestType::GetEx),
+            "GETDEL" => Some(RequestType::GetDel),
+            "GETSET" => Some(RequestType::GetSet),
+            // Incompatible commands - string manipulation
+            "APPEND" => Some(RequestType::Append),
+            "GETRANGE" => Some(RequestType::GetRange),
+            "SETRANGE" => Some(RequestType::SetRange),
+            "STRLEN" => Some(RequestType::Strlen),
+            "LCS" => Some(RequestType::LCS),
+            "SUBSTR" => Some(RequestType::Substr),
+            // Incompatible commands - numeric operations
+            "INCR" => Some(RequestType::Incr),
+            "INCRBY" => Some(RequestType::IncrBy),
+            "INCRBYFLOAT" => Some(RequestType::IncrByFloat),
+            "DECR" => Some(RequestType::Decr),
+            "DECRBY" => Some(RequestType::DecrBy),
+            // Incompatible commands - bit operations
+            "GETBIT" => Some(RequestType::GetBit),
+            "SETBIT" => Some(RequestType::SetBit),
+            "BITCOUNT" => Some(RequestType::BitCount),
+            "BITPOS" => Some(RequestType::BitPos),
+            "BITFIELD" => Some(RequestType::BitField),
+            "BITFIELD_RO" => Some(RequestType::BitFieldReadOnly),
+            "BITOP" => Some(RequestType::BitOp),
+            // Unknown command - not relevant for compression
+            _ => None,
+        }
+    }
+
     /// Returns a `Cmd` set with the command name matching the request.
     pub fn get_command(&self) -> Option<Cmd> {
         match self {

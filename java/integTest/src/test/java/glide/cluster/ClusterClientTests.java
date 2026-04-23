@@ -4,6 +4,7 @@ package glide.cluster;
 import static glide.Constants.IP_ADDRESS_V4;
 import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestConfiguration.CLUSTER_HOSTS;
+import static glide.TestConfiguration.EXPECTED_GLIDE_VERSION;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.IAM_USERNAME;
 import static glide.TestUtilities.assertConnected;
@@ -55,7 +56,7 @@ public class ClusterClientTests {
         String info =
                 (String) client.customCommand(new String[] {"CLIENT", "INFO"}).get().getSingleValue();
         assertTrue(info.contains("lib-name=GlideJava"));
-        assertTrue(info.contains("lib-ver=unknown"));
+        assertTrue(info.contains("lib-ver=" + EXPECTED_GLIDE_VERSION));
 
         client.close();
     }

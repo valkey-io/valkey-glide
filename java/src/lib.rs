@@ -45,6 +45,14 @@ fn process_command_for_compression(
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
 
+    // If compression is not enabled, skip all processing
+    if compression_manager_ref
+        .map(|m| !m.is_enabled())
+        .unwrap_or(true)
+    {
+        return Ok(());
+    }
+
     let all_args: Vec<Vec<u8>> = cmd
         .args_iter()
         .filter_map(|arg| match arg {
@@ -58,11 +66,19 @@ fn process_command_for_compression(
     }
 
     let command_name = &all_args[0];
-    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
-    let request_type = match command_str.as_str() {
-        "SET" => glide_core::request_type::RequestType::Set,
-        _ => return Ok(()),
+    let command_str = String::from_utf8_lossy(command_name);
+
+    let request_type = match glide_core::request_type::RequestType::from_command_name(&command_str)
+    {
+        Some(rt) => rt,
+        None => return Ok(()), // Unknown command - no compression processing needed
     };
+
+    // Check if the command is incompatible with compression - this should error out
+    glide_core::compression::validate_command_compression_compatibility(
+        request_type,
+        compression_manager_ref,
+    )?;
 
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
     glide_core::compression::process_command_args_for_compression(
@@ -229,10 +245,27 @@ async fn execute_command_request_and_complete(
                 })?;
 
                 // Apply compression to command arguments if compression is enabled
-                if client.is_compression_enabled()
-                    && let Err(e) = process_command_for_compression(&mut cmd, &client)
-                {
-                    log::warn!("Compression processing failed: {e}, continuing with original command");
+                // This also validates that the command is compatible with compression
+                // Note: We intentionally keep these as separate if statements for clarity:
+                // - First check: is compression enabled?
+                // - Second check: did compression processing fail?
+                // - Third check: is it an incompatible command error?
+                #[allow(clippy::collapsible_if)]
+                if client.is_compression_enabled() {
+                    if let Err(e) = process_command_for_compression(&mut cmd, &client) {
+                        // Incompatible command errors should be returned to the user
+                        if e.is_incompatible_command() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Incompatible command with compression",
+                                e.to_string(),
+                            )));
+                        }
+                        // For other compression errors, log and continue
+                        log::warn!(
+                            "Compression processing failed: {e}, continuing with original command"
+                        );
+                    }
                 }
 
                 // Compute routing
@@ -291,10 +324,21 @@ async fn execute_command_request_and_complete(
                         ))
                     })?;
                     // Apply compression to each command in the batch
-                    if client.is_compression_enabled()
-                        && let Err(e) = process_command_for_compression(&mut valkey_cmd, &client)
-                    {
-                        log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                    // This also validates that the command is compatible with compression
+                    #[allow(clippy::collapsible_if)]
+                    if client.is_compression_enabled() {
+                        if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
+                            // Incompatible command errors should be returned to the user
+                            if e.is_incompatible_command() {
+                                return Err(redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Incompatible command with compression",
+                                    e.to_string(),
+                                )));
+                            }
+                            // For other compression errors, log and continue
+                            log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                        }
                     }
                     pipeline.add_command(valkey_cmd);
                 }

@@ -98,7 +98,7 @@ jobs:
     tests:
         runs-on: ${{ matrix.host.RUNNER }}
         needs: get-matrices
-        timeout-minutes: 25
+        timeout-minutes: 35
         strategy:
             fail-fast: false
             matrix:

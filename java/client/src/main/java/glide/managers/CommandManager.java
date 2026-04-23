@@ -42,7 +42,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -50,7 +49,6 @@ import response.ResponseOuterClass.Response;
  * CommandManager that submits command requests directly to the Rust glide-core. Handles command
  * serialization, routing, and response processing for all client operations.
  */
-@RequiredArgsConstructor
 public class CommandManager {
 
     private static final Set<String> BLOCKING_COMMAND_NAMES =
@@ -71,6 +69,10 @@ public class CommandManager {
 
     /** Core client connection. */
     private final GlideCoreClient coreClient;
+
+    public CommandManager(GlideCoreClient coreClient) {
+        this.coreClient = coreClient;
+    }
 
     /**
      * Apply a response handler with cleanup on exception. If the handler throws, the stored object in

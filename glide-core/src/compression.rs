@@ -29,6 +29,8 @@ pub enum CompressionError {
     UnsupportedBackend { backend_name: String },
     /// Invalid compression configuration
     InvalidConfiguration { backend: String, reason: String },
+    /// Command is incompatible with compression
+    IncompatibleCommand { command: String, reason: String },
 }
 
 impl std::fmt::Display for CompressionError {
@@ -80,6 +82,13 @@ impl std::fmt::Display for CompressionError {
                     backend, reason
                 )
             }
+            CompressionError::IncompatibleCommand { command, reason } => {
+                write!(
+                    f,
+                    "Command '{}' is incompatible with compression: {}",
+                    command, reason
+                )
+            }
         }
     }
 }
@@ -126,6 +135,13 @@ impl CompressionError {
         }
     }
 
+    pub fn incompatible_command(command: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::IncompatibleCommand {
+            command: command.into(),
+            reason: reason.into(),
+        }
+    }
+
     /// Returns the backend name associated with this error
     pub fn backend(&self) -> &str {
         match self {
@@ -133,7 +149,14 @@ impl CompressionError {
             CompressionError::DecompressionFailed { backend, .. } => backend,
             CompressionError::InvalidConfiguration { backend, .. } => backend,
             CompressionError::UnsupportedBackend { backend_name } => backend_name,
+            CompressionError::IncompatibleCommand { .. } => "",
         }
+    }
+
+    /// Returns true if this error is an IncompatibleCommand error.
+    /// These errors should be propagated to the user rather than logged and ignored.
+    pub fn is_incompatible_command(&self) -> bool {
+        matches!(self, CompressionError::IncompatibleCommand { .. })
     }
 }
 
@@ -710,6 +733,14 @@ pub fn process_command_args_for_compression(
         return Ok(());
     }
 
+    // Check if the command is incompatible with compression
+    if let Some(reason) = request_type.compression_incompatibility_reason() {
+        return Err(CompressionError::incompatible_command(
+            request_type.command_name().unwrap_or("unknown"),
+            reason,
+        ));
+    }
+
     let behavior = request_type.compression_behavior();
     if behavior != CommandCompressionBehavior::CompressValues {
         return Ok(());
@@ -723,6 +754,31 @@ pub fn process_command_args_for_compression(
         RequestType::SetNX => compress_single_value_command(args, manager, 1),
         _ => Ok(()),
     }
+}
+
+/// Validates that a command is compatible with compression.
+/// Returns an error if the command is incompatible with compression when compression is enabled.
+pub fn validate_command_compression_compatibility(
+    request_type: RequestType,
+    compression_manager: Option<&CompressionManager>,
+) -> CompressionResult<()> {
+    let Some(manager) = compression_manager else {
+        return Ok(());
+    };
+
+    if !manager.is_enabled() {
+        return Ok(());
+    }
+
+    // Check if the command is incompatible with compression
+    if let Some(reason) = request_type.compression_incompatibility_reason() {
+        return Err(CompressionError::incompatible_command(
+            request_type.command_name().unwrap_or("unknown"),
+            reason,
+        ));
+    }
+
+    Ok(())
 }
 
 fn compress_single_value_command(
