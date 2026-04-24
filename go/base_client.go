@@ -856,6 +856,317 @@ func (client *baseClient) RefreshIamToken(ctx context.Context) (string, error) {
 	return client.submitRefreshIamToken(ctx)
 }
 
+// submitGetCacheMetrics is the internal implementation for retrieving cache metrics.
+//
+// This method sends a cache metrics request to the core client to get the specified
+// metric value. It handles context cancellation and manages the asynchronous communication
+// with the underlying C client.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//	metricsType - The type of metrics to retrieve using protobuf.CacheMetricsType.
+//
+// Return value:
+//
+//	Returns the requested metric value, or an error if the operation fails.
+//
+// Note: This is an internal method. Use the specific cache metrics methods for the public API.
+func (client *baseClient) submitGetCacheMetrics(
+	ctx context.Context,
+	metricsType protobuf.CacheMetricsType,
+) (*C.struct_CommandResponse, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		// Continue with execution
+	}
+
+	// Create a channel to receive the result
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, NewClosingError("GetCacheMetrics failed. The client is closed.")
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	C.get_cache_metrics(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.int(metricsType),
+	)
+	client.mu.Unlock()
+
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
+		return nil, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+
+	return payload.value, nil
+}
+
+// GetCacheHitRate returns the cache hit rate as a percentage (0.0 to 1.0).
+//
+// This method retrieves the ratio of cache hits to total cache requests.
+// A higher hit rate indicates better cache performance.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the cache hit rate as a float64 (0.0 to 1.0).
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	hitRate, err := client.GetCacheHitRate(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache hit rate: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache hit rate: %.2f%%", hitRate*100)
+func (client *baseClient) GetCacheHitRate(ctx context.Context) (float64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_HitRate)
+	if err != nil {
+		return 0.0, err
+	}
+
+	return handleFloatResponse(result)
+}
+
+// GetCacheMissRate returns the cache miss rate as a percentage (0.0 to 1.0).
+//
+// This method retrieves the ratio of cache misses to total cache requests.
+// A lower miss rate indicates better cache performance.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the cache miss rate as a float64 (0.0 to 1.0).
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	missRate, err := client.GetCacheMissRate(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache miss rate: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache miss rate: %.2f%%", missRate*100)
+func (client *baseClient) GetCacheMissRate(ctx context.Context) (float64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_MissRate)
+	if err != nil {
+		return 0.0, err
+	}
+
+	return handleFloatResponse(result)
+}
+
+// GetCacheEntryCount returns the current number of entries in the cache.
+//
+// This method retrieves the total count of cached entries currently stored
+// in the client-side cache.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the number of cache entries as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	entryCount, err := client.GetCacheEntryCount(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache entry count: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache contains %d entries", entryCount)
+func (client *baseClient) GetCacheEntryCount(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_EntryCount)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// GetCacheEvictions returns the total number of cache evictions.
+//
+// This method retrieves the count of entries that have been evicted from
+// the cache due to memory pressure or eviction policy enforcement.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the number of cache evictions as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	evictions, err := client.GetCacheEvictions(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache evictions: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache has evicted %d entries", evictions)
+func (client *baseClient) GetCacheEvictions(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_Evictions)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// GetCacheExpirations returns the total number of cache expirations.
+//
+// This method retrieves the count of entries that have expired from
+// the cache due to TTL (Time-To-Live) expiration.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the number of cache expirations as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	expirations, err := client.GetCacheExpirations(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache expirations: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache has expired %d entries", expirations)
+func (client *baseClient) GetCacheExpirations(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_Expirations)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// GetCacheTotalLookups returns the total number of cache lookups (hits + misses).
+//
+// This method retrieves the sum of cache hits and misses, representing the
+// total number of cache lookup operations performed.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the total number of cache lookups as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	totalLookups, err := client.GetCacheTotalLookups(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get total cache lookups: %v", err)
+//	    return
+//	}
+//	log.Printf("Total cache lookups: %d", totalLookups)
+func (client *baseClient) GetCacheTotalLookups(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_TotalLookups)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
 //
 // See [valkey.io] for details.

@@ -4,7 +4,7 @@ use glide_core::ConnectionRequest;
 use glide_core::client::Client as GlideClient;
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::command_request::SimpleRoutes;
-use glide_core::command_request::{Routes, SlotTypes};
+use glide_core::command_request::{CacheMetricsType, Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors::RequestErrorType;
 use glide_core::errors::{self, error_message};
@@ -17,7 +17,7 @@ use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
-use protobuf::Message;
+use protobuf::{Enum, Message};
 use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
@@ -3043,6 +3043,67 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
     let mut client = client_adapter.core.client.clone();
     client_adapter.execute_request(request_id, async move {
         client.refresh_iam_token().await.map(|_| Value::Okay)
+    })
+}
+
+/// Get cache metrics for the client.
+///
+/// This function retrieves cache performance metrics such as hit rate, miss rate,
+/// entry count, evictions, expirations and total lookups based on the specified metrics type.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid client returned from [`create_client`].
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
+/// * `metrics_type`: Integer representing the type of cache metrics to retrieve:
+///   - 0: HitRate - Cache hit rate as a double (0.0 to 1.0)
+///   - 1: MissRate - Cache miss rate as a double (0.0 to 1.0)  
+///   - 2: EntryCount - Number of entries in cache as an integer
+///   - 3: Evictions - Number of cache evictions as an integer
+///   - 4: Expirations - Number of cache expirations as an integer
+///   - 5: TotalLookups - Total cache lookups as an integer
+///
+/// # Returns
+///
+/// * A pointer to a [`CommandResult`] containing the requested metric value on success, or an error if:
+///   - Client-side caching is not enabled
+///   - Metrics tracking is disabled
+///   - Invalid metrics type is specified
+///   - Client is closed or invalid
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn get_cache_metrics(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    metrics_type: i32,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let client = client_adapter.core.client.clone();
+    client_adapter.execute_request(request_id, async move {
+        match CacheMetricsType::from_i32(metrics_type) {
+            Some(CacheMetricsType::HitRate) => client.cache_hit_rate(),
+            Some(CacheMetricsType::MissRate) => client.cache_miss_rate(),
+            Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
+            Some(CacheMetricsType::Evictions) => client.cache_evictions(),
+            Some(CacheMetricsType::Expirations) => client.cache_expirations(),
+            Some(CacheMetricsType::TotalLookups) => client.cache_total_lookups(),
+            None => Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Invalid cache metrics type",
+                format!("Unsupported metrics type: {}", metrics_type),
+            ))),
+        }
     })
 }
 
