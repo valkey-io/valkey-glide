@@ -9,7 +9,7 @@ use crate::compression::zstd_backend::ZstdBackend;
 use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn, log_warn_rate_limited};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cache::{get_or_create_cache, glide_cache::GlideCache};
@@ -957,6 +957,15 @@ impl Client {
             let tracker = match self.reserve_inflight_request() {
                 Some(t) => t,
                 None => {
+                    let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
+                    log_warn_rate_limited!(
+                        "inflight",
+                        10,
+                        format!(
+                            "Inflight request limit exhausted. limit={}, available={}",
+                            self.inflight_requests_limit, available
+                        )
+                    );
                     return Err(RedisError::from((
                         ErrorKind::ClientError,
                         "Reached maximum inflight requests",
