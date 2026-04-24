@@ -9,6 +9,7 @@ import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
@@ -409,6 +410,37 @@ public class ConnectionManager {
                                 compressionBuilder.setCompressionLevel(cc.getCompressionLevel());
                             }
                             requestBuilder.setCompressionConfig(compressionBuilder.build());
+                        }
+
+                        // Set client-side cache configuration if provided
+                        ClientSideCache clientSideCache = configuration.getClientSideCache();
+                        if (clientSideCache != null) {
+                            connection_request.ConnectionRequestOuterClass.ClientSideCache.Builder cacheBuilder =
+                                    connection_request.ConnectionRequestOuterClass.ClientSideCache.newBuilder();
+
+                            // Set required fields
+                            cacheBuilder.setCacheId(clientSideCache.getCacheId());
+                            cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
+                            cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+
+                            // Set TTL (0 = no expiration)
+                            cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
+
+                            // Set optional eviction policy
+                            if (clientSideCache.getEvictionPolicy() != null) {
+                                switch (clientSideCache.getEvictionPolicy()) {
+                                    case LRU:
+                                        cacheBuilder.setEvictionPolicy(
+                                                connection_request.ConnectionRequestOuterClass.EvictionPolicy.LRU);
+                                        break;
+                                    case LFU:
+                                        cacheBuilder.setEvictionPolicy(
+                                                connection_request.ConnectionRequestOuterClass.EvictionPolicy.LFU);
+                                        break;
+                                }
+                            }
+
+                            requestBuilder.setClientSideCache(cacheBuilder.build());
                         }
 
                         // Build and serialize to bytes

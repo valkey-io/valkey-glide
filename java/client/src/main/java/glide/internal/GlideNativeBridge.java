@@ -87,4 +87,7 @@ public class GlideNativeBridge {
 
     /** Mark a callback as timed out on the native side. */
     public static native void markTimedOut(long callbackId);
+
+    /** Get cache metrics */
+    public static native void getCacheMetrics(long clientPtr, long callbackId, int metricsType);
 }

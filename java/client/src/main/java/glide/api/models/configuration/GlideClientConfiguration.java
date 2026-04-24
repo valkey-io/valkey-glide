@@ -25,6 +25,7 @@ import lombok.experimental.SuperBuilder;
  *         .clientName("GLIDE")
  *         .subscriptionConfiguration(subscriptionConfiguration)
  *         .inflightRequestsLimit(1000)
+ *         .clientSideCache(ClientSideCache.create(1024, 60000))
  *         .advancedConfiguration(AdvancedGlideClientConfiguration.builder().connectionTimeout(500).build())
  *         .readOnly(true)
  *         .build();
@@ -34,6 +35,9 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 @ToString
 public class GlideClientConfiguration extends BaseClientConfiguration {
+
+    /** Client-side cache configuration. If provided, enables caching for this client. */
+    private final ClientSideCache clientSideCache;
 
     /** Subscription configuration for the current client. */
     private final StandaloneSubscriptionConfiguration subscriptionConfiguration;

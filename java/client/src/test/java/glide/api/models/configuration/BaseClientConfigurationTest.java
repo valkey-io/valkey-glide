@@ -31,6 +31,11 @@ public class BaseClientConfigurationTest {
             return null;
         }
 
+        @Override
+        public ClientSideCache getClientSideCache() {
+            return null;
+        }
+
         public static class TestClientConfigurationBuilder
                 extends BaseClientConfigurationBuilder<
                         TestClientConfiguration, TestClientConfigurationBuilder> {

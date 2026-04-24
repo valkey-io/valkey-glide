@@ -33,6 +33,9 @@ public abstract class BaseClientConfiguration {
     @Singular
     private final List<NodeAddress> addresses;
 
+    /** Client-side cache configuration. If provided, enables caching for this client. */
+    public abstract ClientSideCache getClientSideCache();
+
     /**
      * True if communication with the cluster should use Transport Level Security.
      *
