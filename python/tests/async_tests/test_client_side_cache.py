@@ -1,6 +1,5 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-import asyncio
-
+import anyio
 import pytest
 from glide_shared import RequestError
 from glide_shared.cache import ClientSideCache, EvictionPolicy
@@ -162,7 +161,7 @@ class TestClientSideCache:
         assert await client.get("ttl_key") == b"ttl_value"
 
         # Wait for TTL to expire
-        await asyncio.sleep(3)
+        await anyio.sleep(3)
 
         # GET after expiration - should fetch from server again
         assert await client.get("ttl_key") == b"ttl_value"
@@ -468,7 +467,7 @@ class TestClientSideCache:
         assert await client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
 
         # Wait a bit and verify entry is still cached (no TTL expiration)
-        await asyncio.sleep(3)
+        await anyio.sleep(3)
 
         # GET should still be a cache hit (no expiration)
         assert await client.get("no_ttl_key") == b"no_ttl_value"
