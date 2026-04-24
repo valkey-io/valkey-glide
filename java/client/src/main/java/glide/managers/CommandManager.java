@@ -688,7 +688,7 @@ public class CommandManager {
                             } else {
                                 responseBuilder.setRespPointer(0L);
                             }
-                            return responseHandler.apply(responseBuilder.build());
+                            return applyHandlerWithCleanup(responseBuilder.build(), responseHandler);
                         });
     }
 

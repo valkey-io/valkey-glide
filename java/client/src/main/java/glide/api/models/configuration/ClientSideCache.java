@@ -55,8 +55,8 @@ public class ClientSideCache {
     /** Eviction policy to use when cache reaches memory limit. Defaults to LRU if not specified. */
     @Builder.Default private final EvictionPolicy evictionPolicy = EvictionPolicy.LRU;
 
-    /** Whether to enable metrics collection for the cache. Defaults to true. */
-    @Builder.Default private final boolean enableMetrics = true;
+    /** Whether to enable metrics collection for the cache. Defaults to false. */
+    @Builder.Default private final boolean enableMetrics = false;
 
     /**
      * Creates a ClientSideCache with auto-generated cache ID and default settings.
@@ -80,8 +80,8 @@ public class ClientSideCache {
     }
 
     /**
-     * Customized builder that hides the {@code cacheId} setter. The cache ID is always auto-generated
-     * and should not be set by users.
+     * Customized builder that hides the {@code cacheId} setter and adds validation. The cache ID is
+     * always auto-generated and should not be set by users.
      */
     public static class ClientSideCacheBuilder {
         // Hide the cacheId setter from the public API. Lombok will still use the
@@ -89,5 +89,25 @@ public class ClientSideCache {
         private ClientSideCacheBuilder cacheId(String cacheId) {
             return this;
         }
+    }
+
+    // Private constructor with validation, called by Lombok's generated build() method.
+    private ClientSideCache(
+            String cacheId,
+            long maxCacheKb,
+            long entryTtlMs,
+            EvictionPolicy evictionPolicy,
+            boolean enableMetrics) {
+        if (maxCacheKb <= 0) {
+            throw new IllegalArgumentException("maxCacheKb must be positive");
+        }
+        if (entryTtlMs < 0) {
+            throw new IllegalArgumentException("entryTtlMs must be non-negative (0 = no expiration)");
+        }
+        this.cacheId = cacheId;
+        this.maxCacheKb = maxCacheKb;
+        this.entryTtlMs = entryTtlMs;
+        this.evictionPolicy = evictionPolicy;
+        this.enableMetrics = enableMetrics;
     }
 }

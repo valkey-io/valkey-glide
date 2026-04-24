@@ -2559,7 +2559,7 @@ fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
 /// Get cache metrics asynchronously
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_getCacheMetrics(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     client_ptr: jlong,
     callback_id: jlong,
@@ -2568,16 +2568,11 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_getCacheMetrics(
     run_ffi(|| {
         let handle_id = client_ptr as u64;
 
-        let jvm = match env.get_java_vm() {
-            Ok(jvm) => Arc::new(jvm),
-            Err(_) => {
-                log::error!("JVM error in getCacheMetrics");
-                return Some(());
-            }
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "getCacheMetrics") else {
+            return Some(());
         };
 
-        let runtime = get_runtime();
-        runtime.spawn(async move {
+        get_runtime().spawn(async move {
             let client_result = ensure_client_for_handle(handle_id).await;
             match client_result {
                 Ok(client) => {
