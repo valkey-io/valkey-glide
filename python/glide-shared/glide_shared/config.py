@@ -109,19 +109,19 @@ class NodeDiscoveryMode(Enum):
     Controls how the client discovers node roles and topology in standalone mode.
     """
 
-    STANDARD = ProtobufNodeDiscoveryMode.STANDARD
+    STANDARD = ProtobufNodeDiscoveryMode.Standard
     """
     Default: verify node roles via INFO REPLICATION, use only provided addresses.
     The client connects to all provided addresses and identifies which is the primary.
     """
-    STATIC = ProtobufNodeDiscoveryMode.STATIC
+    STATIC = ProtobufNodeDiscoveryMode.Static
     """
     Skip role detection entirely. Trust provided addresses as-is; first address is primary.
     Use when connecting through a proxy (e.g., Envoy) or when the topology is known and static.
 
     Note: Do not set ``client_name`` when using this mode with a proxy.
     """
-    DISCOVER_ALL = ProtobufNodeDiscoveryMode.DISCOVER_ALL
+    DISCOVER_ALL = ProtobufNodeDiscoveryMode.DiscoverAll
     """
     Discover full topology (primary + all replicas) from any starting node.
     Provide any single node address and the client will find and connect to all other nodes.

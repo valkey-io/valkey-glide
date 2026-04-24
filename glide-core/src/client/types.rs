@@ -401,9 +401,9 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             .enum_value()
             .ok()
             .map(|val| match val {
-                protobuf::NodeDiscoveryMode::STANDARD => NodeDiscoveryMode::Standard,
-                protobuf::NodeDiscoveryMode::STATIC => NodeDiscoveryMode::Static,
-                protobuf::NodeDiscoveryMode::DISCOVER_ALL => NodeDiscoveryMode::DiscoverAll,
+                protobuf::NodeDiscoveryMode::Standard => NodeDiscoveryMode::Standard,
+                protobuf::NodeDiscoveryMode::Static => NodeDiscoveryMode::Static,
+                protobuf::NodeDiscoveryMode::DiscoverAll => NodeDiscoveryMode::DiscoverAll,
             })
             .unwrap_or_default();
 

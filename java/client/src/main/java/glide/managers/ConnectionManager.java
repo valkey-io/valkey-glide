@@ -396,10 +396,10 @@ public class ConnectionManager {
                             NodeDiscoveryMode mode = standaloneConfig.getNodeDiscoveryMode();
                             if (mode == NodeDiscoveryMode.STATIC) {
                                 requestBuilder.setNodeDiscoveryMode(
-                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.STATIC);
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.Static);
                             } else if (mode == NodeDiscoveryMode.DISCOVER_ALL) {
                                 requestBuilder.setNodeDiscoveryMode(
-                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.DISCOVER_ALL);
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.DiscoverAll);
                             }
                         }
 

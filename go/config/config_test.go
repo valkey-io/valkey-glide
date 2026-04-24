@@ -1324,7 +1324,7 @@ func TestConfig_NodeDiscoveryMode_Default(t *testing.T) {
 	result, err := config.ToProtobuf()
 	assert.NoError(t, err)
 	// Default is STANDARD (0), which is the zero value
-	assert.Equal(t, protobuf.NodeDiscoveryMode_STANDARD, result.NodeDiscoveryMode)
+	assert.Equal(t, protobuf.NodeDiscoveryMode_Standard, result.NodeDiscoveryMode)
 }
 
 func TestConfig_NodeDiscoveryMode_Static(t *testing.T) {
@@ -1332,7 +1332,7 @@ func TestConfig_NodeDiscoveryMode_Static(t *testing.T) {
 		WithNodeDiscoveryMode(NodeDiscoveryModeStatic)
 	result, err := config.ToProtobuf()
 	assert.NoError(t, err)
-	assert.Equal(t, protobuf.NodeDiscoveryMode_STATIC, result.NodeDiscoveryMode)
+	assert.Equal(t, protobuf.NodeDiscoveryMode_Static, result.NodeDiscoveryMode)
 }
 
 func TestConfig_NodeDiscoveryMode_DiscoverAll(t *testing.T) {
@@ -1340,5 +1340,5 @@ func TestConfig_NodeDiscoveryMode_DiscoverAll(t *testing.T) {
 		WithNodeDiscoveryMode(NodeDiscoveryModeDiscoverAll)
 	result, err := config.ToProtobuf()
 	assert.NoError(t, err)
-	assert.Equal(t, protobuf.NodeDiscoveryMode_DISCOVER_ALL, result.NodeDiscoveryMode)
+	assert.Equal(t, protobuf.NodeDiscoveryMode_DiscoverAll, result.NodeDiscoveryMode)
 }
