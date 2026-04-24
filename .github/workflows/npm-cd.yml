@@ -236,8 +236,7 @@ jobs:
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
                     sudo apt update
                     sudo apt install -y gcc pkg-config openssl libssl-dev python3-pip
-                    pip3 install ziglang
-                    export PATH="$HOME/.local/bin:$PATH"
+                    sudo pip3 install ziglang --break-system-packages
                   else
                     brew update
                     brew install tree
