@@ -237,6 +237,7 @@ jobs:
                     sudo apt update
                     sudo apt install -y gcc pkg-config openssl libssl-dev python3-pip
                     pip3 install ziglang
+                    export PATH="$HOME/.local/bin:$PATH"
                   else
                     brew update
                     brew install tree
