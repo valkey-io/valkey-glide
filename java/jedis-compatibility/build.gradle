@@ -113,6 +113,7 @@ publishing {
             artifactId = 'valkey-glide-jedis-compatibility'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
             pom {
+                packaging = 'jar'
                 name = 'valkey-glide-jedis-compatibility'
                 description = 'Jedis compatibility layer for Valkey GLIDE'
                 url = 'https://github.com/valkey-io/valkey-glide.git'
