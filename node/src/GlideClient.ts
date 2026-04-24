@@ -153,7 +153,7 @@ export interface StandalonePubSubState {
  * ```typescript
  * const config: GlideClientConfiguration = {
  *   databaseId: 1, // Inherited from BaseClientConfiguration
- *   clientSideCache: ClientSideCache.create(1024), // Enable 1MB client-side cache
+ *   clientSideCache: ClientSideCache.create(1024, 60000), // 1MB cache, 1 min TTL
  *   pubsubSubscriptions: {
  *     channelsAndPatterns: {
  *       [GlideClientConfiguration.PubSubChannelModes.Pattern]: new Set(['news.*']),
