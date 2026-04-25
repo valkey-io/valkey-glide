@@ -1728,8 +1728,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
                             // Add commands to pipeline using existing bridge logic
                             for cmd in &batch.commands {
-                                match protobuf_bridge::create_valkey_command(cmd) {
-                                    Ok(valkey_cmd) => pipeline.add_command(valkey_cmd),
+                                let mut valkey_cmd = match protobuf_bridge::create_valkey_command(cmd) {
+                                    Ok(cmd) => cmd,
                                     Err(e) => {
                                         return Err(redis::RedisError::from((
                                             redis::ErrorKind::ClientError,
@@ -1738,6 +1738,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         )));
                                     }
                                 };
+                                // Apply compression to each command in the batch
+                                // This also validates that the command is compatible with compression
+                                #[allow(clippy::collapsible_if)]
+                                if client.is_compression_enabled() {
+                                    if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
+                                        // Incompatible command errors should be returned to the user
+                                        if e.is_incompatible_command() {
+                                            return Err(redis::RedisError::from((
+                                                redis::ErrorKind::ClientError,
+                                                "Incompatible command with compression",
+                                                e.to_string(),
+                                            )));
+                                        }
+                                        // For other compression errors, log and continue
+                                        log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                                    }
+                                }
+                                pipeline.add_command(valkey_cmd);
                             }
 
                             // Get routing using FFI approach
@@ -1807,7 +1825,34 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                     }
                                 }
                             }
-                            exec_res
+
+                            // Process batch response for decompression if compression is enabled
+                            match exec_res {
+                                Ok(value) => {
+                                    if client.is_compression_enabled() {
+                                        if let Some(manager) = client.compression_manager() {
+                                            match glide_core::compression::decompress_batch_response(
+                                                value.clone(),
+                                                manager.as_ref(),
+                                            ) {
+                                                Ok(decompressed) => Ok(decompressed),
+                                                Err(e) => {
+                                                    log::warn!(
+                                                        "Failed to decompress batch response: {}, returning original",
+                                                        e
+                                                    );
+                                                    Ok(value)
+                                                }
+                                            }
+                                        } else {
+                                            Ok(value)
+                                        }
+                                    } else {
+                                        Ok(value)
+                                    }
+                                }
+                                Err(e) => Err(e),
+                            }
                         }
                         .await;
 
