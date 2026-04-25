@@ -4,11 +4,11 @@ Short, descriptive name for the feature.
 
 ## Abstract (Required)
 
-Two or three sentences describing the feature and the value it delivers. This is the elevator pitch for stakeholders.
+Two or three sentences describing the feature and the value it delivers.
 
 ## Motivation (Required)
 
-Ariticulate the value of adding this new feature. Build the case by looking beyond the originating issue to the broader ecosystem and market opportunity.
+Build the case by looking beyond the originating issue to the broader ecosystem and market opportunity.
 
 - **Market / ecosystem demand** — how widely used is the underlying capability? Cite adoption data, deployment prevalence, or presence in major managed services. 
 - **Competitive / parity gap** — do other established clients already support this? Not supporting it risks users choosing another client.
