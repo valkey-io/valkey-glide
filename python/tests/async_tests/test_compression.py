@@ -995,7 +995,9 @@ class TestCompressionBatch:
         ), f"Batch MGET should decompress all 3 values, got {decompressed_count}"
 
         # Cleanup
-        await compression_client.delete(cast(List[Union[str, bytes]], [key1, key2, key3]))
+        await compression_client.delete(
+            cast(List[Union[str, bytes]], [key1, key2, key3])
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1063,13 +1065,14 @@ class TestCompressionBatch:
         ), f"Transaction MGET should decompress all 3 values, got {decompressed_count}"
 
         # Cleanup
-        await compression_client.delete(cast(List[Union[str, bytes]], [key1, key2, key3]))
+        await compression_client.delete(
+            cast(List[Union[str, bytes]], [key1, key2, key3])
+        )
 
 
 @pytest.mark.anyio
 class TestCompressionEdgeCases:
     """Test compression edge cases and error handling."""
-
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
