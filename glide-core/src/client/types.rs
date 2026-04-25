@@ -44,6 +44,7 @@ pub struct ConnectionRequest {
     pub pubsub_reconciliation_interval_ms: Option<u32>,
     pub read_only: bool,
     pub client_side_cache: Option<ClientSideCache>,
+    pub node_discovery_mode: NodeDiscoveryMode,
 }
 
 /// Default connection timeout used when not specified in the request.
@@ -149,6 +150,20 @@ pub enum TlsMode {
     NoTls,
     InsecureTls,
     SecureTls,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
+/// Controls how the client discovers node roles and topology in standalone mode.
+pub enum NodeDiscoveryMode {
+    /// Default: verify node roles via INFO REPLICATION, use only provided addresses.
+    #[default]
+    Standard,
+    /// Skip role detection entirely. Trust provided addresses as-is; first address is primary.
+    /// Suitable for proxies (e.g., Envoy) or known-static topologies.
+    /// Note: Do not set `client_name` when using this mode with a proxy.
+    Static,
+    /// Discover full topology (primary + all replicas) from any starting node.
+    DiscoverAll,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -381,6 +396,17 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             value.pubsub_reconciliation_interval_ms.filter(|&v| v != 0);
         let read_only = value.read_only.unwrap_or(false);
 
+        let node_discovery_mode = value
+            .node_discovery_mode
+            .enum_value()
+            .ok()
+            .map(|val| match val {
+                protobuf::NodeDiscoveryMode::Standard => NodeDiscoveryMode::Standard,
+                protobuf::NodeDiscoveryMode::Static => NodeDiscoveryMode::Static,
+                protobuf::NodeDiscoveryMode::DiscoverAll => NodeDiscoveryMode::DiscoverAll,
+            })
+            .unwrap_or_default();
+
         ConnectionRequest {
             read_from,
             client_name,
@@ -407,6 +433,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,
             read_only,
+            node_discovery_mode,
         }
     }
 }

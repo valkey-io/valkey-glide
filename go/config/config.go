@@ -191,6 +191,21 @@ func mapReadFrom(readFrom ReadFrom) protobuf.ReadFrom {
 	return protobuf.ReadFrom_Primary
 }
 
+// NodeDiscoveryMode controls how the client discovers node roles and topology in standalone mode.
+type NodeDiscoveryMode int32
+
+const (
+	// NodeDiscoveryModeStandard verifies node roles via INFO REPLICATION, uses only provided addresses.
+	NodeDiscoveryModeStandard NodeDiscoveryMode = 0
+	// NodeDiscoveryModeStatic skips role detection. Trusts provided addresses as-is; first is primary.
+	// Use when connecting through a proxy (e.g., Envoy) or when the topology is known and static.
+	// Note: Do not set clientName when using this mode with a proxy.
+	NodeDiscoveryModeStatic NodeDiscoveryMode = 1
+	// NodeDiscoveryModeDiscoverAll discovers full topology (primary + all replicas) from any starting node.
+	// Provide any single node address and the client will find and connect to all other nodes.
+	NodeDiscoveryModeDiscoverAll NodeDiscoveryMode = 2
+)
+
 type baseClientConfiguration struct {
 	addresses         []NodeAddress
 	useTLS            bool
@@ -337,7 +352,8 @@ type ClientConfiguration struct {
 	// readOnly enables read-only mode for the standalone client.
 	// When enabled, the client will skip primary node detection during connection initialization
 	// and will reject write commands. This is useful for connecting to replica-only deployments.
-	readOnly bool
+	readOnly          bool
+	nodeDiscoveryMode NodeDiscoveryMode
 }
 
 // NewClientConfiguration returns a [ClientConfiguration] with default configuration settings. For further
@@ -361,6 +377,10 @@ func (config *ClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequest, er
 			return nil, errors.New("read-only mode is not compatible with AZAffinity strategies")
 		}
 		request.ReadOnly = &config.readOnly
+	}
+
+	if config.nodeDiscoveryMode != NodeDiscoveryModeStandard {
+		request.NodeDiscoveryMode = protobuf.NodeDiscoveryMode(config.nodeDiscoveryMode)
 	}
 
 	if config.subscriptionConfig != nil {
@@ -540,6 +560,13 @@ func (config *ClientConfiguration) WithClientSideCache(
 	clientSideCache *ClientSideCache,
 ) *ClientConfiguration {
 	config.clientSideCache = clientSideCache
+	return config
+}
+
+// WithNodeDiscoveryMode sets the node discovery mode for the standalone client.
+// See [NodeDiscoveryMode] for available modes.
+func (config *ClientConfiguration) WithNodeDiscoveryMode(mode NodeDiscoveryMode) *ClientConfiguration {
+	config.nodeDiscoveryMode = mode
 	return config
 }
 

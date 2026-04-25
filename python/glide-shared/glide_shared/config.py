@@ -19,6 +19,9 @@ from glide_shared.protobuf.connection_request_pb2 import (
     ConnectionRequest,
 )
 from glide_shared.protobuf.connection_request_pb2 import (
+    NodeDiscoveryMode as ProtobufNodeDiscoveryMode,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
     ProtocolVersion as SentProtocolVersion,
 )
 from glide_shared.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
@@ -98,6 +101,30 @@ class CompressionBackend(Enum):
     LZ4 = ProtobufCompressionBackend.LZ4
     """
     Use lz4 compression backend.
+    """
+
+
+class NodeDiscoveryMode(Enum):
+    """
+    Controls how the client discovers node roles and topology in standalone mode.
+    """
+
+    STANDARD = ProtobufNodeDiscoveryMode.Standard
+    """
+    Default: verify node roles via INFO REPLICATION, use only provided addresses.
+    The client connects to all provided addresses and identifies which is the primary.
+    """
+    STATIC = ProtobufNodeDiscoveryMode.Static
+    """
+    Skip role detection entirely. Trust provided addresses as-is; first address is primary.
+    Use when connecting through a proxy (e.g., Envoy) or when the topology is known and static.
+
+    Note: Do not set ``client_name`` when using this mode with a proxy.
+    """
+    DISCOVER_ALL = ProtobufNodeDiscoveryMode.DiscoverAll
+    """
+    Discover full topology (primary + all replicas) from any starting node.
+    Provide any single node address and the client will find and connect to all other nodes.
     """
 
 
@@ -933,6 +960,8 @@ class GlideClientConfiguration(BaseClientConfiguration):
               even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
+        node_discovery_mode (NodeDiscoveryMode): Controls how the client discovers node roles
+            and topology in standalone mode. If not set, `STANDARD` will be used.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -993,6 +1022,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         compression: Optional[CompressionConfiguration] = None,
         read_only: bool = False,
         client_side_cache: Optional[ClientSideCache] = None,
+        node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
     ):
         super().__init__(
             addresses=addresses,
@@ -1013,6 +1043,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         )
         self.pubsub_subscriptions = pubsub_subscriptions
         self.read_only = read_only
+        self.node_discovery_mode = node_discovery_mode
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -1022,6 +1053,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
 
         # Set read_only mode
         request.read_only = self.read_only
+
+        # Set node discovery mode
+        request.node_discovery_mode = self.node_discovery_mode.value
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:

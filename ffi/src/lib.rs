@@ -1331,6 +1331,7 @@ fn is_known_connection_options_json_key(key: &str) -> bool {
             | "tcp_nodelay"
             | "lazy_connect"
             | "read_only"
+            | "node_discovery_mode"
             | "pubsub_reconciliation_interval_ms"
             | "compression_config"
             | "periodic_checks"
@@ -1586,6 +1587,20 @@ fn apply_json_options(
             .as_bool()
             .ok_or_else(|| "read_only must be a boolean".to_string())?;
         request.read_only = Some(enabled);
+    }
+
+    // Handle node_discovery_mode
+    if let Some(mode) = obj.get("node_discovery_mode") {
+        let mode_str = mode
+            .as_str()
+            .ok_or_else(|| "node_discovery_mode must be a string".to_string())?;
+        let mode_enum = match mode_str {
+            "Standard" => connection_request::NodeDiscoveryMode::Standard,
+            "Static" => connection_request::NodeDiscoveryMode::Static,
+            "DiscoverAll" => connection_request::NodeDiscoveryMode::DiscoverAll,
+            _ => return Err(format!("Unknown node_discovery_mode value: {}", mode_str)),
+        };
+        request.node_discovery_mode = ::protobuf::EnumOrUnknown::new(mode_enum);
     }
 
     // Handle pubsub_reconciliation_interval_ms

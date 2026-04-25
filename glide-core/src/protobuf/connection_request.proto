@@ -62,6 +62,15 @@ enum CompressionBackend {
     LZ4 = 1;
 }
 
+// Controls how the client discovers node roles and topology in standalone mode.
+enum NodeDiscoveryMode {
+    Standard = 0;       // Default: verify node roles, use only provided addresses
+    Static = 1;         // Skip role detection, trust provided addresses as-is.
+                        // Suitable for proxies (e.g., Envoy) or known-static topologies.
+                        // Note: Do not set client_name when using this mode with a proxy.
+    DiscoverAll = 2;    // Discover full topology from any starting node
+}
+
 message CompressionConfig {
     bool enabled = 1;
     CompressionBackend backend = 2;
@@ -123,6 +132,7 @@ message ConnectionRequest {
     optional uint32 pubsub_reconciliation_interval_ms = 25;
     optional bool read_only = 26;
     optional ClientSideCache client_side_cache = 27;
+    NodeDiscoveryMode node_discovery_mode = 28;
 }
 
 message ConnectionRetryStrategy {

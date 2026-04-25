@@ -1,6 +1,7 @@
 ## Pending 2.4
 
 #### Changes
+* CORE, Python, Java, Node, Go: Add `NodeDiscoveryMode` configuration for standalone clients — `STATIC` mode skips role detection for proxy compatibility (e.g., Envoy), `DISCOVER_ALL` mode discovers full topology (primary + all replicas) from any starting node ([#5724](https://github.com/valkey-io/valkey-glide/pull/5724))
 * Go: Add Valkey Search (FT) command support — FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.DROPINDEX, FT.LIST, FT.INFO, FT.EXPLAIN, FT.EXPLAINCLI, FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE, FT.ALIASLIST with full Valkey Search 1.2 options for both standalone and cluster clients ([#5590](https://github.com/valkey-io/valkey-glide/pull/5590))
 * FFI: Add URI-based client creation API with full ConnectionRequest support ([#5620](https://github.com/valkey-io/valkey-glide/pull/5620))
     * New `create_client_from_uri` FFI function accepts Redis/Valkey URI strings and optional JSON configuration

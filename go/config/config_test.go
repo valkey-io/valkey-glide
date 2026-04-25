@@ -1314,3 +1314,31 @@ func TestConfig_ReadOnly_FluentAPI(t *testing.T) {
 	assert.Equal(t, "localhost", result.Addresses[0].Host)
 	assert.Equal(t, uint32(6379), result.Addresses[0].Port)
 }
+
+// ============================================================================
+// NodeDiscoveryMode Tests
+// ============================================================================
+
+func TestConfig_NodeDiscoveryMode_Default(t *testing.T) {
+	config := NewClientConfiguration()
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	// Default is STANDARD (0), which is the zero value
+	assert.Equal(t, protobuf.NodeDiscoveryMode_Standard, result.NodeDiscoveryMode)
+}
+
+func TestConfig_NodeDiscoveryMode_Static(t *testing.T) {
+	config := NewClientConfiguration().
+		WithNodeDiscoveryMode(NodeDiscoveryModeStatic)
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, protobuf.NodeDiscoveryMode_Static, result.NodeDiscoveryMode)
+}
+
+func TestConfig_NodeDiscoveryMode_DiscoverAll(t *testing.T) {
+	config := NewClientConfiguration().
+		WithNodeDiscoveryMode(NodeDiscoveryModeDiscoverAll)
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, protobuf.NodeDiscoveryMode_DiscoverAll, result.NodeDiscoveryMode)
+}

@@ -16,6 +16,7 @@ import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.NodeDiscoveryMode;
 import glide.api.models.configuration.PeriodicChecksConfig;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
@@ -391,6 +392,14 @@ public class ConnectionManager {
                             GlideClientConfiguration standaloneConfig = (GlideClientConfiguration) configuration;
                             if (standaloneConfig.isReadOnly()) {
                                 requestBuilder.setReadOnly(true);
+                            }
+                            NodeDiscoveryMode mode = standaloneConfig.getNodeDiscoveryMode();
+                            if (mode == NodeDiscoveryMode.STATIC) {
+                                requestBuilder.setNodeDiscoveryMode(
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.Static);
+                            } else if (mode == NodeDiscoveryMode.DISCOVER_ALL) {
+                                requestBuilder.setNodeDiscoveryMode(
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.DiscoverAll);
                             }
                         }
 

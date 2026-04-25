@@ -17,16 +17,22 @@ import (
 )
 
 func startDedicatedValkeyServer(suite *GlideTestSuite, clusterMode bool) (string, error) {
-	// Build command arguments
+	return startDedicatedValkeyServerWithReplicas(suite, clusterMode, 0)
+}
+
+func startDedicatedValkeyServerWithReplicas(
+	suite *GlideTestSuite,
+	clusterMode bool,
+	replicaCount int,
+) (string, error) {
 	args := []string{}
 	args = append(args, "start")
 	if clusterMode {
 		args = append(args, "--cluster-mode")
 	}
 
-	args = append(args, fmt.Sprintf("-r %d", 0))
+	args = append(args, fmt.Sprintf("-r %d", replicaCount))
 
-	// Execute cluster manager script
 	output := runClusterManager(suite, args, false)
 
 	return output, nil
