@@ -979,8 +979,7 @@ public class CompressionTests {
             // Verify compression happened
             long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
             assertTrue(
-                    compressedCount >= 3,
-                    "All 3 SET values should be compressed, got " + compressedCount);
+                    compressedCount >= 3, "All 3 SET values should be compressed, got " + compressedCount);
 
             // Verify decompression happened
             long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
@@ -1023,7 +1022,10 @@ public class CompressionTests {
             long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
             assertTrue(
                     compressedCount >= numKeys,
-                    "Cluster: All " + numKeys + " values should be compressed in batch, got " + compressedCount);
+                    "Cluster: All "
+                            + numKeys
+                            + " values should be compressed in batch, got "
+                            + compressedCount);
 
             // Build batch with GET commands
             glide.api.models.ClusterBatch getBatch = new glide.api.models.ClusterBatch(false);
@@ -1039,7 +1041,10 @@ public class CompressionTests {
             long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
             assertTrue(
                     decompressedCount >= numKeys,
-                    "Cluster: All " + numKeys + " values should be decompressed in batch, got " + decompressedCount);
+                    "Cluster: All "
+                            + numKeys
+                            + " values should be decompressed in batch, got "
+                            + decompressedCount);
 
             // Verify all values are correct
             for (Object result : getResults) {
@@ -1144,8 +1149,7 @@ public class CompressionTests {
             // Verify compression happened
             long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
             assertTrue(
-                    compressedCount >= 3,
-                    "Batch MSET should compress all 3 values, got " + compressedCount);
+                    compressedCount >= 3, "Batch MSET should compress all 3 values, got " + compressedCount);
 
             // Verify decompression happened
             long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
