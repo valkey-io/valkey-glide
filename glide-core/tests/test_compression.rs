@@ -1189,4 +1189,87 @@ mod compression_tests {
         assert!(RequestType::from_command_name("ZADD").is_none());
         assert!(RequestType::from_command_name("").is_none());
     }
+
+    #[test]
+    fn test_decompress_batch_response() {
+        use glide_core::compression::decompress_batch_response;
+        use glide_core::compression::zstd_backend::ZstdBackend;
+        use redis::Value;
+
+        // Create an enabled compression manager
+        let backend = Box::new(ZstdBackend::new());
+        let config = CompressionConfig::new(CompressionBackendType::Zstd);
+        let manager = CompressionManager::new(backend, config).unwrap();
+
+        // Test with array of uncompressed values (should return as-is)
+        let array_response = Value::Array(vec![
+            Value::BulkString(b"value1".to_vec()),
+            Value::BulkString(b"value2".to_vec()),
+            Value::Nil,
+        ]);
+        let result = decompress_batch_response(array_response.clone(), &manager);
+        assert!(result.is_ok());
+        let decompressed = result.unwrap();
+        match decompressed {
+            Value::Array(values) => {
+                assert_eq!(values.len(), 3);
+                assert_eq!(values[0], Value::BulkString(b"value1".to_vec()));
+                assert_eq!(values[1], Value::BulkString(b"value2".to_vec()));
+                assert_eq!(values[2], Value::Nil);
+            }
+            _ => panic!("Expected array response"),
+        }
+
+        // Test with array containing compressed values
+        let test_data = b"test data for compression that is long enough to be compressed";
+        let compressed = manager.compress_value(test_data).into_owned();
+        let array_with_compressed = Value::Array(vec![
+            Value::BulkString(compressed.clone()),
+            Value::BulkString(b"uncompressed".to_vec()),
+        ]);
+        let result = decompress_batch_response(array_with_compressed, &manager);
+        assert!(result.is_ok());
+        let decompressed = result.unwrap();
+        match decompressed {
+            Value::Array(values) => {
+                assert_eq!(values.len(), 2);
+                // First value should be decompressed
+                assert_eq!(values[0], Value::BulkString(test_data.to_vec()));
+                // Second value should remain unchanged
+                assert_eq!(values[1], Value::BulkString(b"uncompressed".to_vec()));
+            }
+            _ => panic!("Expected array response"),
+        }
+
+        // Test with non-array response (single value)
+        let single_response = Value::BulkString(compressed.clone());
+        let result = decompress_batch_response(single_response, &manager);
+        assert!(result.is_ok());
+        let decompressed = result.unwrap();
+        assert_eq!(decompressed, Value::BulkString(test_data.to_vec()));
+
+        // Test with disabled compression manager
+        let disabled_config = CompressionConfig {
+            enabled: false,
+            backend: CompressionBackendType::Zstd,
+            compression_level: None,
+            min_compression_size: 64,
+        };
+        let disabled_backend = Box::new(ZstdBackend::new());
+        let disabled_manager = CompressionManager::new(disabled_backend, disabled_config).unwrap();
+
+        // With disabled manager, compressed data should NOT be decompressed
+        let array_with_compressed = Value::Array(vec![Value::BulkString(compressed.clone())]);
+        let result = decompress_batch_response(array_with_compressed, &disabled_manager);
+        assert!(result.is_ok());
+        let not_decompressed = result.unwrap();
+        match not_decompressed {
+            Value::Array(values) => {
+                assert_eq!(values.len(), 1);
+                // Value should remain compressed since manager is disabled
+                assert_eq!(values[0], Value::BulkString(compressed));
+            }
+            _ => panic!("Expected array response"),
+        }
+    }
 }

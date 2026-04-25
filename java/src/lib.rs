@@ -420,7 +420,34 @@ async fn execute_command_request_and_complete(
                         }
                     }
                 }
-                exec_res
+
+                // Process batch response for decompression if compression is enabled
+                match exec_res {
+                    Ok(value) => {
+                        if client.is_compression_enabled() {
+                            if let Some(manager) = client.compression_manager() {
+                                match glide_core::compression::decompress_batch_response(
+                                    value.clone(),
+                                    manager.as_ref(),
+                                ) {
+                                    Ok(decompressed) => Ok(decompressed),
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Failed to decompress batch response: {}, returning original",
+                                            e
+                                        );
+                                        Ok(value)
+                                    }
+                                }
+                            } else {
+                                Ok(value)
+                            }
+                        } else {
+                            Ok(value)
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
             }
             _ => Err(redis::RedisError::from((
                 redis::ErrorKind::ClientError,
