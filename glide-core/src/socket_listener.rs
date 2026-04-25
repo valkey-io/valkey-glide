@@ -383,8 +383,6 @@ fn process_batch_response_for_decompression(
     response: redis::Value,
     client: &Client,
 ) -> Result<redis::Value, crate::compression::CompressionError> {
-    use redis::Value;
-
     // Get compression manager from client
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
@@ -394,32 +392,7 @@ fn process_batch_response_for_decompression(
         return Ok(response);
     };
 
-    if !manager.is_enabled() {
-        return Ok(response);
-    }
-
-    // Process based on response type
-    match response {
-        Value::Array(responses) => {
-            // Process each response using the existing decompression function
-            let mut processed_responses = Vec::with_capacity(responses.len());
-            for response in responses {
-                let processed_response = match crate::compression::decompress_single_value_response(
-                    response.clone(),
-                    manager,
-                ) {
-                    Ok(decompressed) => decompressed,
-                    Err(_) => response, // Return original on error
-                };
-                processed_responses.push(processed_response);
-            }
-
-            Ok(Value::Array(processed_responses))
-        }
-
-        // For non-array responses, try to decompress directly
-        other => crate::compression::decompress_single_value_response(other, manager),
-    }
+    crate::compression::decompress_batch_response(response, manager)
 }
 
 fn process_command_for_compression(

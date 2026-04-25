@@ -884,6 +884,45 @@ pub fn decompress_mget_response(
     }
 }
 
+/// Decompress a batch (pipeline/transaction) response.
+///
+/// This function processes the response from a batch operation and decompresses
+/// individual response values using magic header detection.
+///
+/// # Arguments
+/// * `response` - The batch response value (typically an array of responses)
+/// * `manager` - The compression manager to use for decompression
+///
+/// # Returns
+/// * `Ok(Value)` - The processed response with decompressed values
+/// * `Err(CompressionError)` - If critical decompression errors occur
+pub fn decompress_batch_response(
+    response: redis::Value,
+    manager: &CompressionManager,
+) -> CompressionResult<redis::Value> {
+    use redis::Value;
+
+    if !manager.is_enabled() {
+        return Ok(response);
+    }
+
+    match response {
+        Value::Array(responses) => {
+            let mut processed_responses = Vec::with_capacity(responses.len());
+            for resp in responses {
+                let processed = match decompress_single_value_response(resp.clone(), manager) {
+                    Ok(decompressed) => decompressed,
+                    Err(_) => resp, // Return original on error
+                };
+                processed_responses.push(processed);
+            }
+            Ok(Value::Array(processed_responses))
+        }
+        // For non-array responses, try to decompress directly
+        other => decompress_single_value_response(other, manager),
+    }
+}
+
 /// Magic prefix for compressed data headers (first 3 bytes)
 pub const MAGIC_PREFIX: [u8; 3] = [0x00, 0x01, 0x02];
 
