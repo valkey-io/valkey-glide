@@ -1285,9 +1285,12 @@ mod compression_tests {
         let manager = CompressionManager::new(backend, config).unwrap();
 
         // Create compressed test data
-        let test_data1 = b"test data for compression that is long enough to be compressed - value 1";
-        let test_data2 = b"test data for compression that is long enough to be compressed - value 2";
-        let test_data3 = b"test data for compression that is long enough to be compressed - value 3";
+        let test_data1 =
+            b"test data for compression that is long enough to be compressed - value 1";
+        let test_data2 =
+            b"test data for compression that is long enough to be compressed - value 2";
+        let test_data3 =
+            b"test data for compression that is long enough to be compressed - value 3";
         let compressed1 = manager.compress_value(test_data1).into_owned();
         let compressed2 = manager.compress_value(test_data2).into_owned();
         let compressed3 = manager.compress_value(test_data3).into_owned();
@@ -1331,13 +1334,9 @@ mod compression_tests {
         }
 
         // Test with deeply nested arrays (edge case)
-        let deeply_nested = Value::Array(vec![
-            Value::Array(vec![
-                Value::Array(vec![
-                    Value::BulkString(compressed1.clone()),
-                ]),
-            ]),
-        ]);
+        let deeply_nested = Value::Array(vec![Value::Array(vec![Value::Array(vec![
+            Value::BulkString(compressed1.clone()),
+        ])])]);
 
         let result = decompress_batch_response(deeply_nested, &manager);
         assert!(result.is_ok());
@@ -1345,30 +1344,27 @@ mod compression_tests {
 
         // Verify the deeply nested value was decompressed
         match decompressed {
-            Value::Array(level1) => {
-                match &level1[0] {
-                    Value::Array(level2) => {
-                        match &level2[0] {
-                            Value::Array(level3) => {
-                                assert_eq!(level3[0], Value::BulkString(test_data1.to_vec()));
-                            }
-                            _ => panic!("Expected array at level 3"),
-                        }
+            Value::Array(level1) => match &level1[0] {
+                Value::Array(level2) => match &level2[0] {
+                    Value::Array(level3) => {
+                        assert_eq!(level3[0], Value::BulkString(test_data1.to_vec()));
                     }
-                    _ => panic!("Expected array at level 2"),
-                }
-            }
+                    _ => panic!("Expected array at level 3"),
+                },
+                _ => panic!("Expected array at level 2"),
+            },
             _ => panic!("Expected array at level 1"),
         }
 
         // Test with mixed nested and non-nested values
         let mixed_response = Value::Array(vec![
-            Value::BulkString(compressed1.clone()),  // Direct compressed value
-            Value::Array(vec![                        // Nested array with compressed values
+            Value::BulkString(compressed1.clone()), // Direct compressed value
+            Value::Array(vec![
+                // Nested array with compressed values
                 Value::BulkString(compressed2.clone()),
                 Value::Nil,
             ]),
-            Value::SimpleString("OK".to_string()),   // Simple string
+            Value::SimpleString("OK".to_string()), // Simple string
         ]);
 
         let result = decompress_batch_response(mixed_response, &manager);
