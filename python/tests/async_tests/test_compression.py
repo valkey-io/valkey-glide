@@ -6,7 +6,7 @@ import base64
 import json
 import os
 import random
-from typing import Callable, List, Union, cast
+from typing import Callable, List, Optional, Union, cast
 
 import pytest
 from glide import GlideClient, GlideClusterClient, TGlideClient
@@ -975,7 +975,7 @@ class TestCompressionBatch:
         assert results[0] == OK
 
         # Verify MGET results (decompressed)
-        mget_results = results[1]
+        mget_results = cast(List[Optional[bytes]], results[1])
         assert len(mget_results) == 3
         assert mget_results[0] == value1.encode()
         assert mget_results[1] == value2.encode()
@@ -1045,7 +1045,7 @@ class TestCompressionBatch:
         assert results[0] == OK
 
         # Verify MGET results (decompressed)
-        mget_results = results[1]
+        mget_results = cast(List[Optional[bytes]], results[1])
         assert len(mget_results) == 3
         assert mget_results[0] == value1.encode()
         assert mget_results[1] == value2.encode()
