@@ -37,3 +37,12 @@ pub fn process_command_args_for_compression(
 ) -> Result<(), String> {
     Ok(())
 }
+
+/// Mock function to decompress batch response
+/// In Miri tests, this is a no-op that returns the value unchanged
+pub fn decompress_batch_response(
+    value: redis::Value,
+    _compression_manager: &CompressionManager,
+) -> Result<redis::Value, String> {
+    Ok(value)
+}
