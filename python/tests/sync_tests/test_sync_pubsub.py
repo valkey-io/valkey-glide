@@ -1716,285 +1716,6 @@ class TestSyncPubSub:
             sync_client_cleanup(client_pattern, None)
             sync_client_cleanup(client_sharded, None)
 
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize(
-        "subscription_method",
-        [
-            SubscriptionMethod.Config,
-            SubscriptionMethod.Lazy,
-            SubscriptionMethod.Blocking,
-        ],
-    )
-    def test_sync_pubsub_exact_max_size_message(
-        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
-    ):
-        """
-        Tests publishing and receiving maximum size messages in PUBSUB.
-
-        This test verifies that very large messages (512MB - BulkString max size) can be published and received
-        correctly in both cluster and standalone modes. It ensures that the PUBSUB system
-        can handle maximum size messages without errors and that async and sync message
-        retrieval methods can coexist and function correctly.
-
-        The test covers the following scenarios:
-        - Setting up PUBSUB subscription for a specific channel.
-        - Publishing two maximum size messages to the channel.
-        - Verifying that the messages are received correctly using both async and sync methods.
-        - Ensuring that no additional messages are left after the expected messages are received.
-        """
-
-        channel = get_random_string(10)
-        message = "1" * 512 * 1024 * 1024
-        message2 = "2" * 512 * 1024 * 1024
-
-        with sync_pubsub_test_clients(
-            request,
-            cluster_mode,
-            subscription_method,
-            channels={channel},
-            timeout=30000,  # 30 seconds for large messages
-        ) as (listening_client, publishing_client):
-            result = publishing_client.publish(message, channel)
-            if cluster_mode:
-                assert result == 1
-
-            result = publishing_client.publish(message2, channel)
-            if cluster_mode:
-                assert result == 1
-            # allow the message to propagate
-            time.sleep(15)
-
-            async_msg = listening_client.get_pubsub_message()
-            assert async_msg.message == message.encode()
-            assert async_msg.channel == channel.encode()
-            assert async_msg.pattern is None
-
-            sync_msg = listening_client.try_get_pubsub_message()
-            assert sync_msg
-            assert sync_msg.message == message2.encode()
-            assert sync_msg.channel == channel.encode()
-            assert sync_msg.pattern is None
-
-            # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
-            assert listening_client.try_get_pubsub_message() is None
-
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
-    @pytest.mark.skip_if_version_below("7.0.0")
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize(
-        "subscription_method",
-        [
-            SubscriptionMethod.Config,
-            SubscriptionMethod.Lazy,
-            SubscriptionMethod.Blocking,
-        ],
-    )
-    def test_sync_pubsub_sharded_max_size_message(
-        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
-    ):
-        """
-        Tests publishing and receiving maximum size messages in sharded PUBSUB.
-
-        This test verifies that very large messages (512MB - BulkString max size) can be published and received
-        correctly. It ensures that the PUBSUB system
-        can handle maximum size messages without errors and that async and sync message
-        retrieval methods can coexist and function correctly.
-
-        The test covers the following scenarios:
-        - Setting up PUBSUB subscription for a specific sharded channel.
-        - Publishing two maximum size messages to the channel.
-        - Verifying that the messages are received correctly using both async and sync methods.
-        - Ensuring that no additional messages are left after the expected messages are received.
-        """
-
-        channel = get_random_string(10)
-        message = "1" * 512 * 1024 * 1024
-        message2 = "2" * 512 * 1024 * 1024
-
-        with sync_pubsub_test_clients(
-            request,
-            cluster_mode,
-            subscription_method,
-            sharded={channel},
-        ) as (listening_client, publishing_client):
-            assert (
-                cast(GlideClusterClient, publishing_client).publish(
-                    message, channel, sharded=True
-                )
-                == 1
-            )
-
-            assert (
-                cast(GlideClusterClient, publishing_client).publish(
-                    message2, channel, sharded=True
-                )
-                == 1
-            )
-
-            # allow the message to propagate
-            time.sleep(15)
-
-            async_msg = listening_client.get_pubsub_message()
-            sync_msg = listening_client.try_get_pubsub_message()
-            assert sync_msg
-
-            assert async_msg.message == message
-            assert async_msg.channel == channel
-            assert async_msg.pattern is None
-
-            assert sync_msg.message == message2
-            assert sync_msg.channel == channel
-            assert sync_msg.pattern is None
-
-            # assert there are no messages to read
-            with pytest.raises(TimeoutError):
-                run_sync_func_with_timeout_in_thread(
-                    lambda: listening_client.get_pubsub_message(), timeout=3.0
-                )
-
-            assert listening_client.try_get_pubsub_message() is None
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize(
-        "subscription_method",
-        [
-            SubscriptionMethod.Config,
-            SubscriptionMethod.Lazy,
-            SubscriptionMethod.Blocking,
-        ],
-    )
-    def test_sync_pubsub_exact_max_size_message_callback(
-        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
-    ):
-        """
-        Tests publishing and receiving maximum size messages in exact PUBSUB with callback method.
-
-        This test verifies that very large messages (512MB - BulkString max size) can be published and received
-        correctly in both cluster and standalone modes. It ensures that the PUBSUB system
-        can handle maximum size messages without errors and that the callback message
-        retrieval method works as expected.
-
-        The test covers the following scenarios:
-        - Setting up PUBSUB subscription for a specific channel with a callback.
-        - Publishing a maximum size message to the channel.
-        - Verifying that the message is received correctly using the callback method.
-        """
-
-        channel = get_random_string(10)
-        message = "0" * 12 * 1024 * 1024
-
-        callback_messages: List[PubSubMsg] = []
-        callback, context = new_message, callback_messages
-
-        with sync_pubsub_test_clients(
-            request,
-            cluster_mode,
-            subscription_method,
-            channels={channel},
-            callback=callback,
-            context=context,
-            timeout=10000,
-        ) as (listening_client, publishing_client):
-            # Wait for subscription to be established before publishing
-            sync_wait_for_subscription_state_if_needed(
-                listening_client,
-                subscription_method,
-                expected_channels={channel},
-            )
-
-            result = publishing_client.publish(message, channel)
-            if cluster_mode:
-                assert result == 1
-            # Wait for message to propagate
-            wait_for_messages(1, callback_messages, timeout=30.0)
-
-            assert len(callback_messages) == 1
-
-            assert callback_messages[0].message == message.encode()
-            assert callback_messages[0].channel == channel.encode()
-            assert callback_messages[0].pattern is None
-
-    @pytest.mark.skip(
-        reason="This test requires special configuration for client-output-buffer-limit for valkey-server and timeouts seems "
-        + "to vary across platforms and server versions"
-    )
-    @pytest.mark.skip_if_version_below("7.0.0")
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize(
-        "subscription_method",
-        [
-            SubscriptionMethod.Config,
-            SubscriptionMethod.Lazy,
-            SubscriptionMethod.Blocking,
-        ],
-    )
-    def test_sync_pubsub_sharded_max_size_message_callback(
-        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
-    ):
-        """
-        Tests publishing and receiving maximum size messages in sharded PUBSUB with callback method.
-
-        This test verifies that very large messages (512MB - BulkString max size) can be published and received
-        correctly. It ensures that the PUBSUB system
-        can handle maximum size messages without errors and that the callback message
-        retrieval method works as expected.
-
-        The test covers the following scenarios:
-        - Setting up PUBSUB subscription for a specific sharded channel with a callback.
-        - Publishing a maximum size message to the channel.
-        - Verifying that the message is received correctly using the callback method.
-        """
-
-        channel = get_random_string(10)
-        message = "0" * 512 * 1024 * 1024
-
-        callback_messages: List[PubSubMsg] = []
-        callback, context = new_message, callback_messages
-
-        with sync_pubsub_test_clients(
-            request,
-            cluster_mode,
-            subscription_method,
-            sharded={channel},
-            callback=callback,
-            context=context,
-            timeout=10000,
-        ) as (listening_client, publishing_client):
-            # Wait for subscription to be established before publishing
-            sync_wait_for_subscription_state_if_needed(
-                listening_client,
-                subscription_method,
-                expected_sharded={channel},
-            )
-
-            assert (
-                cast(GlideClusterClient, publishing_client).publish(
-                    message, channel, sharded=True
-                )
-                == 1
-            )
-
-            # Wait for message with polling
-            wait_for_messages(1, callback_messages, timeout=45.0)
-
-            assert len(callback_messages) == 1
-
-            assert callback_messages[0].message == message.encode()
-            assert callback_messages[0].channel == channel.encode()
-            assert callback_messages[0].pattern is None
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     def test_sync_pubsub_resp2_raise_an_error(self, request, cluster_mode: bool):
         """Tests that when creating a resp2 client with PUBSUB - an error will be raised"""
@@ -4177,3 +3898,264 @@ class TestSyncPubSub:
 
             if listening_client:
                 listening_client.close()
+
+
+class TestSyncPubSubMaxSize:
+    """
+    Tests for publishing and receiving maximum size messages (512MB) in PUBSUB.
+
+    These tests require the server's client-output-buffer-limit for pubsub to be
+    disabled (set to 0 0 0) so that the 512MB messages are not rejected by the
+    server's default 32MB hard limit. The autouse fixture handles this configuration
+    automatically for both standalone and cluster modes.
+    """
+
+    @pytest.fixture(autouse=True)
+    def configure_buffer_limit(self, request):
+        """Disable pubsub output buffer limit for max-size message tests."""
+        cluster_client = create_sync_client(request, cluster_mode=True)
+        standalone_client = create_sync_client(request, cluster_mode=False)
+        try:
+            cluster_client.config_set(
+                {"client-output-buffer-limit": "pubsub 0 0 0"}
+            )
+            standalone_client.config_set(
+                {"client-output-buffer-limit": "pubsub 0 0 0"}
+            )
+            yield
+        finally:
+            cluster_client.config_set(
+                {"client-output-buffer-limit": "pubsub 33554432 8388608 60"}
+            )
+            standalone_client.config_set(
+                {"client-output-buffer-limit": "pubsub 33554432 8388608 60"}
+            )
+            cluster_client.close()
+            standalone_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_pubsub_exact_max_size_message(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Tests publishing and receiving maximum size messages (512MB) in PUBSUB.
+
+        Verifies that very large messages (512MB - BulkString max size) can be published
+        and received correctly in both cluster and standalone modes.
+        """
+
+        channel = get_random_string(10)
+        message = "1" * 512 * 1024 * 1024
+        message2 = "2" * 512 * 1024 * 1024
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels={channel},
+            timeout=30000,
+        ) as (listening_client, publishing_client):
+            result = publishing_client.publish(message, channel)
+            if cluster_mode:
+                assert result == 1
+
+            result = publishing_client.publish(message2, channel)
+            if cluster_mode:
+                assert result == 1
+            # allow the message to propagate
+            time.sleep(15)
+
+            async_msg = listening_client.get_pubsub_message()
+            assert async_msg.message == message.encode()
+            assert async_msg.channel == channel.encode()
+            assert async_msg.pattern is None
+
+            sync_msg = listening_client.try_get_pubsub_message()
+            assert sync_msg
+            assert sync_msg.message == message2.encode()
+            assert sync_msg.channel == channel.encode()
+            assert sync_msg.pattern is None
+
+            # assert there are no messages to read
+            with pytest.raises(TimeoutError):
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
+
+            assert listening_client.try_get_pubsub_message() is None
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_pubsub_sharded_max_size_message(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Tests publishing and receiving maximum size messages (512MB) in sharded PUBSUB.
+
+        Verifies that very large messages (512MB - BulkString max size) can be published
+        and received correctly via sharded channels.
+        """
+
+        channel = get_random_string(10)
+        message = "1" * 512 * 1024 * 1024
+        message2 = "2" * 512 * 1024 * 1024
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded={channel},
+        ) as (listening_client, publishing_client):
+            assert (
+                cast(GlideClusterClient, publishing_client).publish(
+                    message, channel, sharded=True
+                )
+                == 1
+            )
+
+            assert (
+                cast(GlideClusterClient, publishing_client).publish(
+                    message2, channel, sharded=True
+                )
+                == 1
+            )
+
+            # allow the message to propagate
+            time.sleep(15)
+
+            async_msg = listening_client.get_pubsub_message()
+            sync_msg = listening_client.try_get_pubsub_message()
+            assert sync_msg
+
+            assert async_msg.message == message
+            assert async_msg.channel == channel
+            assert async_msg.pattern is None
+
+            assert sync_msg.message == message2
+            assert sync_msg.channel == channel
+            assert sync_msg.pattern is None
+
+            # assert there are no messages to read
+            with pytest.raises(TimeoutError):
+                run_sync_func_with_timeout_in_thread(
+                    lambda: listening_client.get_pubsub_message(), timeout=3.0
+                )
+
+            assert listening_client.try_get_pubsub_message() is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_pubsub_exact_max_size_message_callback(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Tests publishing and receiving maximum size messages (512MB) in exact PUBSUB
+        with callback method.
+        """
+
+        channel = get_random_string(10)
+        message = "0" * 512 * 1024 * 1024
+
+        callback_messages: List[PubSubMsg] = []
+        callback, context = new_message, callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            channels={channel},
+            callback=callback,
+            context=context,
+            timeout=30000,
+        ) as (listening_client, publishing_client):
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_channels={channel},
+            )
+
+            result = publishing_client.publish(message, channel)
+            if cluster_mode:
+                assert result == 1
+            wait_for_messages(1, callback_messages, timeout=45.0)
+
+            assert len(callback_messages) == 1
+            assert callback_messages[0].message == message.encode()
+            assert callback_messages[0].channel == channel.encode()
+            assert callback_messages[0].pattern is None
+
+    @pytest.mark.skip_if_version_below("7.0.0")
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize(
+        "subscription_method",
+        [
+            SubscriptionMethod.Config,
+            SubscriptionMethod.Lazy,
+            SubscriptionMethod.Blocking,
+        ],
+    )
+    def test_sync_pubsub_sharded_max_size_message_callback(
+        self, request, cluster_mode: bool, subscription_method: SubscriptionMethod
+    ):
+        """
+        Tests publishing and receiving maximum size messages (512MB) in sharded PUBSUB
+        with callback method.
+        """
+
+        channel = get_random_string(10)
+        message = "0" * 512 * 1024 * 1024
+
+        callback_messages: List[PubSubMsg] = []
+        callback, context = new_message, callback_messages
+
+        with sync_pubsub_test_clients(
+            request,
+            cluster_mode,
+            subscription_method,
+            sharded={channel},
+            callback=callback,
+            context=context,
+            timeout=30000,
+        ) as (listening_client, publishing_client):
+            sync_wait_for_subscription_state_if_needed(
+                listening_client,
+                subscription_method,
+                expected_sharded={channel},
+            )
+
+            assert (
+                cast(GlideClusterClient, publishing_client).publish(
+                    message, channel, sharded=True
+                )
+                == 1
+            )
+
+            wait_for_messages(1, callback_messages, timeout=45.0)
+
+            assert len(callback_messages) == 1
+            assert callback_messages[0].message == message.encode()
+            assert callback_messages[0].channel == channel.encode()
+            assert callback_messages[0].pattern is None
