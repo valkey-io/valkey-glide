@@ -1,0 +1,12 @@
+Read the investigation workflow from /home/ec2-user/valkey-glide/flaky/agent/system_prompt.md, then execute the following task:
+
+Investigate flaky test from GitHub issue #5547 in the valkey-io/valkey-glide repository.
+
+Steps:
+1. Fetch the issue details using GitHub MCP (owner: valkey-io, repo: valkey-glide, issue: 5547)
+2. Read the issue body and comments to understand the flaky behavior
+3. Identify the test ID, language, and failure pattern
+4. Read the test source code
+5. Reproduce by running 1000 iterations using the scripts in flaky/scripts/
+6. Analyze failures, identify root cause, propose fix(es)
+7. Write findings to flaky/results/issue-5547/findings.md

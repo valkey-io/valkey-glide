@@ -15,16 +15,13 @@
 #   --language <lang>    Language filter (default: python)
 #   --iterations <N>     Reproduction iterations (default: 1000)
 #   --limit <N>          Max tests to investigate in --from-db mode (default: 5)
-#   --skip-worktree      Run in current directory instead of creating a worktree
-#   --skip-build         Skip the build step
-#   --skip-clusters      Skip cluster setup (assumes clusters are already running)
+#   --build              Build the client before running (default: no build)
 set -euo pipefail
 
 REPO_ROOT="/home/ec2-user/valkey-glide"
-WORKTREE_BASE="/home/ec2-user/valkey-glide-worktrees"
-AGENT_DIR="$REPO_ROOT/flakky/agent"
-SCRIPTS_DIR="$REPO_ROOT/flakky/scripts"
-RESULTS_DIR="$REPO_ROOT/flakky/results"
+AGENT_DIR="$REPO_ROOT/flaky/agent"
+SCRIPTS_DIR="$REPO_ROOT/flaky/scripts"
+RESULTS_DIR="$REPO_ROOT/flaky/results"
 
 # Defaults
 ISSUE=""
@@ -34,9 +31,7 @@ LANGUAGE="python"
 ITERATIONS=1000
 FROM_DB=false
 DB_LIMIT=5
-SKIP_WORKTREE=false
-SKIP_BUILD=false
-SKIP_CLUSTERS=false
+BUILD=false
 
 usage() {
   sed -n '2,/^set /{ /^#/s/^# \?//p }' "$0"
@@ -52,9 +47,7 @@ while [[ $# -gt 0 ]]; do
     --language)   LANGUAGE="$2"; shift 2 ;;
     --iterations) ITERATIONS="$2"; shift 2 ;;
     --limit)      DB_LIMIT="$2"; shift 2 ;;
-    --skip-worktree) SKIP_WORKTREE=true; shift ;;
-    --skip-build)    SKIP_BUILD=true; shift ;;
-    --skip-clusters) SKIP_CLUSTERS=true; shift ;;
+    --build)         BUILD=true; shift ;;
     -h|--help)    usage ;;
     *)            echo "Unknown option: $1"; usage ;;
   esac
@@ -87,38 +80,19 @@ fi
 WORK_DIR="$REPO_ROOT"
 BRANCH_NAME="flaky/$RUN_ID"
 
-# --- Step 1: Create worktree ---
-if [[ "$SKIP_WORKTREE" == false ]]; then
-  WORK_DIR="$WORKTREE_BASE/$RUN_ID"
-  echo "==> Creating worktree at $WORK_DIR (branch: $BRANCH_NAME)"
-  mkdir -p "$WORKTREE_BASE"
-  cd "$REPO_ROOT"
-  git worktree add -b "$BRANCH_NAME" "$WORK_DIR" main 2>/dev/null || {
-    # Branch may already exist
-    git worktree add "$WORK_DIR" "$BRANCH_NAME" 2>/dev/null || {
-      echo "Worktree already exists at $WORK_DIR, reusing."
-    }
-  }
-else
-  echo "==> Skipping worktree, working in $REPO_ROOT"
-fi
+# --- Step 1: Checkout branch from alexl/flaky-agent ---
+cd "$REPO_ROOT"
+echo "==> Checking out branch $BRANCH_NAME from alexl/flaky-agent"
+git checkout -B "$BRANCH_NAME" alexl/flaky-agent
 
 # --- Step 2: Build (Python) ---
-if [[ "$SKIP_BUILD" == false && "$LANGUAGE" == "python" ]]; then
+if [[ "$BUILD" == true && "$LANGUAGE" == "python" ]]; then
   echo "==> Building Python client..."
   cd "$WORK_DIR/python"
-  python3 dev.py build --client async --mode release
-  python3 dev.py build --client sync --mode release
+  python3 dev.py build --client all --mode release
 fi
 
-# --- Step 3: Start clusters ---
-if [[ "$SKIP_CLUSTERS" == false ]]; then
-  echo "==> Setting up test clusters..."
-  bash "$SCRIPTS_DIR/setup_clusters.sh" "$WORK_DIR"
-  source "$WORK_DIR/flakky/cluster_env.sh" 2>/dev/null || source "$REPO_ROOT/flakky/cluster_env.sh" 2>/dev/null || true
-fi
-
-# --- Step 4: Build the agent prompt ---
+# --- Step 3: Build the agent prompt ---
 build_agent_prompt() {
   local system_prompt
   system_prompt=$(cat "$AGENT_DIR/system_prompt.md")
@@ -132,9 +106,10 @@ Steps:
 2. Read the issue body and comments to understand the flaky behavior
 3. Identify the test ID, language, and failure pattern
 4. Read the test source code
-5. Reproduce by running ${ITERATIONS} iterations using the scripts in flakky/scripts/
+5. Reproduce by running ${ITERATIONS} iterations using the scripts in flaky/scripts/
 6. Analyze failures, identify root cause, propose fix(es)
-7. Write findings to flakky/results/${RUN_ID}/findings.md"
+7. Write findings to flaky/results/${RUN_ID}/findings.md
+8. Commit, push to origin, and open a draft PR on Aryex/valkey-glide"
 
   elif [[ -n "$CSV_FILE" ]]; then
     local csv_content
@@ -146,7 +121,7 @@ ${csv_content}
 \`\`\`
 
 For each entry, follow the full investigation workflow: understand, reproduce (${ITERATIONS} iterations), root-cause, fix, record.
-Write findings for each test to flakky/results/<issue_id>/findings.md"
+Write findings for each test to flaky/results/<issue_id>/findings.md"
 
   elif [[ "$FROM_DB" == true ]]; then
     local db_results
@@ -171,9 +146,9 @@ For each test above:
 1. Query the DB for full failure history (platforms, engines, dates)
 2. Read the raw CI logs from /home/ec2-user/valkey-glide-logs/runs/ for stack traces
 3. Read the test source code
-4. Reproduce with ${ITERATIONS} iterations using flakky/scripts/run_python_test.sh
+4. Reproduce with ${ITERATIONS} iterations using flaky/scripts/run_python_test.sh
 5. Identify root cause and propose fix(es)
-6. Write findings to flakky/results/${RUN_ID}/<test_name>/findings.md"
+6. Write findings to flaky/results/${RUN_ID}/<test_name>/findings.md"
 
   elif [[ -n "$TEST_ID" ]]; then
     task_block="Investigate flaky test: ${TEST_ID} (language: ${LANGUAGE})
@@ -185,10 +160,12 @@ Steps:
    bash ${SCRIPTS_DIR}/run_python_test.sh \"${TEST_ID}\" ${ITERATIONS} ${RESULTS_DIR}/${RUN_ID}
 3. Analyze any failures from the iteration logs
 4. Identify root cause and propose fix(es)
-5. Write findings to flakky/results/${RUN_ID}/findings.md"
+5. Write findings to flaky/results/${RUN_ID}/findings.md"
   fi
 
-  echo "${task_block}"
+  echo "Read the investigation workflow from ${AGENT_DIR}/system_prompt.md, then execute the following task:
+
+${task_block}"
 }
 
 AGENT_PROMPT=$(build_agent_prompt)
@@ -207,25 +184,7 @@ echo "Iterations:  $ITERATIONS"
 echo "============================================"
 echo ""
 echo "Agent prompt saved to $OUT_DIR/agent_prompt.txt"
-echo ""
-echo "To launch the agent, run:"
-echo ""
-echo "  kiro-cli chat --system-prompt $AGENT_DIR/system_prompt.md \\"
-echo "    --prompt \"$OUT_DIR/agent_prompt.txt\" \\"
-echo "    --working-dir $WORK_DIR"
-echo ""
-echo "Or manually start a kiro-cli session and paste the prompt."
 
-# --- Step 5: Auto-launch if kiro-cli is available ---
-if command -v kiro-cli &>/dev/null; then
-  echo ""
-  read -r -p "Launch agent now? [Y/n] " REPLY
-  REPLY=${REPLY:-Y}
-  if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-    echo "==> Launching agent..."
-    exec kiro-cli chat \
-      --system-prompt "$AGENT_DIR/system_prompt.md" \
-      --prompt "$(cat "$OUT_DIR/agent_prompt.txt")" \
-      --working-dir "$WORK_DIR"
-  fi
-fi
+echo "==> Launching agent..."
+cd "$WORK_DIR"
+exec kiro-cli chat --no-interactive --trust-all-tools --model claude-opus-4.6 "Read and follow the instructions in $OUT_DIR/agent_prompt.txt"

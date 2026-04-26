@@ -8,24 +8,22 @@ MAX_ITER="${2:-1000}"
 OUT_DIR="$3"
 mkdir -p "$OUT_DIR"
 
-cleanup() { bash "$SCRIPT_DIR/cleanup_clusters.sh" 2>/dev/null || true; rm -f "$OUT_DIR"/tmp_*.log; }
+cleanup() { rm -f "$OUT_DIR"/tmp_*.log; }
 trap cleanup EXIT
 
-PYTEST="python3 -m pytest"
-[ -x ".env/bin/pytest" ] && PYTEST=".env/bin/pytest"
-
+# Build pytest args for dev.py test --args
 if [[ "$TEST_NAME" == *"::"* ]]; then
   TEST_FILE="${TEST_NAME%%::*}"
   TEST_METHOD="${TEST_NAME##*::}"
-  PYTEST_ARGS="$TEST_FILE -k $TEST_METHOD"
+  DEV_ARGS="--args $TEST_FILE -k $TEST_METHOD -x --timeout=120 -q"
 else
-  PYTEST_ARGS="-k $TEST_NAME"
+  DEV_ARGS="--args -k $TEST_NAME -x --timeout=120 -q"
 fi
 
 FAIL_COUNT=0
 for i in $(seq 1 "$MAX_ITER"); do
   printf "\r[iteration %d/%d] %s" "$i" "$MAX_ITER" "$TEST_NAME" >&2
-  if ! $PYTEST $PYTEST_ARGS -x --timeout=120 -q 2>"$OUT_DIR/tmp_stderr.log" >"$OUT_DIR/tmp_stdout.log"; then
+  if ! python3 dev.py test $DEV_ARGS 2>"$OUT_DIR/tmp_stderr.log" >"$OUT_DIR/tmp_stdout.log"; then
     if grep -q "no tests ran\|no tests collected" "$OUT_DIR/tmp_stdout.log" "$OUT_DIR/tmp_stderr.log" 2>/dev/null; then
       echo "" >&2
       echo "SKIP — no tests matched: $TEST_NAME"
