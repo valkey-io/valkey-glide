@@ -1272,4 +1272,127 @@ mod compression_tests {
             _ => panic!("Expected array response"),
         }
     }
+
+    #[test]
+    fn test_decompress_batch_response_nested_arrays() {
+        use glide_core::compression::decompress_batch_response;
+        use glide_core::compression::zstd_backend::ZstdBackend;
+        use redis::Value;
+
+        // Create an enabled compression manager
+        let backend = Box::new(ZstdBackend::new());
+        let config = CompressionConfig::new(CompressionBackendType::Zstd);
+        let manager = CompressionManager::new(backend, config).unwrap();
+
+        // Create compressed test data
+        let test_data1 = b"test data for compression that is long enough to be compressed - value 1";
+        let test_data2 = b"test data for compression that is long enough to be compressed - value 2";
+        let test_data3 = b"test data for compression that is long enough to be compressed - value 3";
+        let compressed1 = manager.compress_value(test_data1).into_owned();
+        let compressed2 = manager.compress_value(test_data2).into_owned();
+        let compressed3 = manager.compress_value(test_data3).into_owned();
+
+        // Simulate a batch response with MSET result (OK) followed by MGET result (nested array)
+        // This is what happens when you do: batch.mset(...); batch.mget(...); exec(batch);
+        let batch_response = Value::Array(vec![
+            // MSET result
+            Value::SimpleString("OK".to_string()),
+            // MGET result - nested array with compressed values
+            Value::Array(vec![
+                Value::BulkString(compressed1.clone()),
+                Value::BulkString(compressed2.clone()),
+                Value::BulkString(compressed3.clone()),
+            ]),
+        ]);
+
+        let result = decompress_batch_response(batch_response, &manager);
+        assert!(result.is_ok());
+        let decompressed = result.unwrap();
+
+        match decompressed {
+            Value::Array(values) => {
+                assert_eq!(values.len(), 2);
+
+                // First value should be MSET result (OK)
+                assert_eq!(values[0], Value::SimpleString("OK".to_string()));
+
+                // Second value should be decompressed MGET result (nested array)
+                match &values[1] {
+                    Value::Array(mget_values) => {
+                        assert_eq!(mget_values.len(), 3);
+                        assert_eq!(mget_values[0], Value::BulkString(test_data1.to_vec()));
+                        assert_eq!(mget_values[1], Value::BulkString(test_data2.to_vec()));
+                        assert_eq!(mget_values[2], Value::BulkString(test_data3.to_vec()));
+                    }
+                    _ => panic!("Expected nested array for MGET result"),
+                }
+            }
+            _ => panic!("Expected array response"),
+        }
+
+        // Test with deeply nested arrays (edge case)
+        let deeply_nested = Value::Array(vec![
+            Value::Array(vec![
+                Value::Array(vec![
+                    Value::BulkString(compressed1.clone()),
+                ]),
+            ]),
+        ]);
+
+        let result = decompress_batch_response(deeply_nested, &manager);
+        assert!(result.is_ok());
+        let decompressed = result.unwrap();
+
+        // Verify the deeply nested value was decompressed
+        match decompressed {
+            Value::Array(level1) => {
+                match &level1[0] {
+                    Value::Array(level2) => {
+                        match &level2[0] {
+                            Value::Array(level3) => {
+                                assert_eq!(level3[0], Value::BulkString(test_data1.to_vec()));
+                            }
+                            _ => panic!("Expected array at level 3"),
+                        }
+                    }
+                    _ => panic!("Expected array at level 2"),
+                }
+            }
+            _ => panic!("Expected array at level 1"),
+        }
+
+        // Test with mixed nested and non-nested values
+        let mixed_response = Value::Array(vec![
+            Value::BulkString(compressed1.clone()),  // Direct compressed value
+            Value::Array(vec![                        // Nested array with compressed values
+                Value::BulkString(compressed2.clone()),
+                Value::Nil,
+            ]),
+            Value::SimpleString("OK".to_string()),   // Simple string
+        ]);
+
+        let result = decompress_batch_response(mixed_response, &manager);
+        assert!(result.is_ok());
+        let decompressed = result.unwrap();
+
+        match decompressed {
+            Value::Array(values) => {
+                assert_eq!(values.len(), 3);
+                // First value should be decompressed
+                assert_eq!(values[0], Value::BulkString(test_data1.to_vec()));
+                // Second value should be nested array with decompressed values
+                match &values[1] {
+                    Value::Array(nested) => {
+                        assert_eq!(nested.len(), 2);
+                        assert_eq!(nested[0], Value::BulkString(test_data2.to_vec()));
+                        assert_eq!(nested[1], Value::Nil);
+                    }
+                    _ => panic!("Expected nested array"),
+                }
+                // Third value should be unchanged
+                assert_eq!(values[2], Value::SimpleString("OK".to_string()));
+            }
+            _ => panic!("Expected array response"),
+        }
+    }
 }

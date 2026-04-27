@@ -887,7 +887,8 @@ pub fn decompress_mget_response(
 /// Decompress a batch (pipeline/transaction) response.
 ///
 /// This function processes the response from a batch operation and decompresses
-/// individual response values using magic header detection.
+/// individual response values using magic header detection. It recursively handles
+/// nested arrays (like MGET responses within a batch).
 ///
 /// # Arguments
 /// * `response` - The batch response value (typically an array of responses)
@@ -910,9 +911,22 @@ pub fn decompress_batch_response(
         Value::Array(responses) => {
             let mut processed_responses = Vec::with_capacity(responses.len());
             for resp in responses {
-                let processed = match decompress_single_value_response(resp.clone(), manager) {
-                    Ok(decompressed) => decompressed,
-                    Err(_) => resp, // Return original on error
+                // Recursively process nested arrays (e.g., MGET responses within a batch)
+                let processed = match &resp {
+                    Value::Array(_) => {
+                        // Recursively decompress nested arrays
+                        match decompress_batch_response(resp.clone(), manager) {
+                            Ok(decompressed) => decompressed,
+                            Err(_) => resp, // Return original on error
+                        }
+                    }
+                    _ => {
+                        // For non-array values, try single value decompression
+                        match decompress_single_value_response(resp.clone(), manager) {
+                            Ok(decompressed) => decompressed,
+                            Err(_) => resp, // Return original on error
+                        }
+                    }
                 };
                 processed_responses.push(processed);
             }
