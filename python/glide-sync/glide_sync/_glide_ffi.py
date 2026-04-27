@@ -49,7 +49,8 @@ class _GlideFFI:
     def _init_ffi(self):
         self._ffi = FFI()
 
-        self._ffi.cdef("""
+        self._ffi.cdef(
+            """
             // ============== SCRIPT MANAGEMENT ==============
             typedef struct {
                 uint8_t* ptr;
@@ -159,6 +160,12 @@ class _GlideFFI:
             CommandResult* refresh_iam_token(
                 const void* client_adapter_ptr,
                 uintptr_t request_id
+            );
+
+            CommandResult* get_cache_metrics(
+                const void* client_adapter_ptr,
+                uintptr_t request_id,
+                int metrics_type
             );
 
             // ============== CLIENT MANAGEMENT ==============
@@ -335,7 +342,8 @@ class _GlideFFI:
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();
-            """)
+            """
+        )
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
