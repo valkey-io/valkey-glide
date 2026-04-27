@@ -1025,12 +1025,12 @@ pub fn try_decompress_batch_response(
     manager: Option<&CompressionManager>,
 ) -> redis::Value {
     match manager {
-        Some(mgr) => decompress_batch_response(value, mgr).unwrap_or_else(|_| {
-            // This branch is currently unreachable since decompress_batch_response
+        Some(mgr) => {
+            // This unwrap_or is currently unreachable since decompress_batch_response
             // always returns Ok, but we keep it for future-proofing.
             // Return Nil as fallback since we've consumed the original value.
-            redis::Value::Nil
-        }),
+            decompress_batch_response(value, mgr).unwrap_or(redis::Value::Nil)
+        }
         None => value,
     }
 }
