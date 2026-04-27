@@ -196,14 +196,13 @@ class CompressionConfiguration:
         max_decompressed_size (Optional[int]): Maximum allowed size in bytes for decompressed data.
             This limit prevents decompression bombs (maliciously crafted compressed data that expands to huge sizes).
             If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
-            Set to None to disable the limit (not recommended).
     """
 
     enabled: bool = False
     backend: CompressionBackend = CompressionBackend.ZSTD
     compression_level: Optional[int] = None
     min_compression_size: int = 64
-    max_decompressed_size: Optional[int] = 512 * 1024 * 1024  # 512MB default
+    max_decompressed_size: Optional[int] = None  # Use Rust default (512MB)
 
     def __post_init__(self) -> None:
         """Validate compression configuration parameters."""
@@ -221,6 +220,9 @@ class CompressionConfiguration:
             raise ConfigurationError(
                 f"min_compression_size should be at least {min_size} bytes"
             )
+
+        if self.max_decompressed_size is not None and self.max_decompressed_size <= 0:
+            raise ConfigurationError("max_decompressed_size must be positive if set")
 
         # Note: compression_level validation is performed by the Rust core,
         # which uses the actual compression library's valid ranges.
@@ -248,6 +250,9 @@ class CompressionConfiguration:
         if self.compression_level is not None:
             config.compression_level = self.compression_level
 
+        # Handle max_decompressed_size:
+        # - None = don't set field, let Rust use its default (512MB)
+        # - int > 0 = use that value
         if self.max_decompressed_size is not None:
             config.max_decompressed_size = self.max_decompressed_size
 

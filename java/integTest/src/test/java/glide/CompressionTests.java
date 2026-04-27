@@ -5,6 +5,7 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -1277,8 +1278,8 @@ public class CompressionTests {
     @Test
     public void test_compression_config_default_max_decompressed_size() {
         CompressionConfiguration config = CompressionConfiguration.builder().build();
-        assertEquals(
-                CompressionConfiguration.DEFAULT_MAX_DECOMPRESSED_SIZE, config.getMaxDecompressedSize());
+        // Default is null (use Rust default of 512MB)
+        assertNull(config.getMaxDecompressedSize());
     }
 
     @Test
@@ -1290,10 +1291,10 @@ public class CompressionTests {
     }
 
     @Test
-    public void test_compression_config_disable_max_decompressed_size() {
+    public void test_compression_config_null_max_decompressed_size_uses_rust_default() {
         CompressionConfiguration config =
                 CompressionConfiguration.builder().maxDecompressedSize(null).build();
-        assertEquals(null, config.getMaxDecompressedSize());
+        assertNull(config.getMaxDecompressedSize());
     }
 
     @Test

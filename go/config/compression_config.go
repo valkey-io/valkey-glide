@@ -49,20 +49,19 @@ type CompressionConfiguration struct {
 	// Maximum allowed size in bytes for decompressed data.
 	// This limit prevents decompression bombs (maliciously crafted compressed data
 	// that expands to huge sizes).
-	// If nil, the limit is disabled (not recommended).
-	// Defaults to 512MB (matching Valkey's proto-max-bulk-len).
+	// If nil, the Rust default (512MB) is used.
 	maxDecompressedSize *uint64
 }
 
 // NewCompressionConfiguration returns a [CompressionConfiguration] with compression enabled,
 // ZSTD backend, default compression level, and minimum compression size of 64 bytes.
+// The max decompressed size defaults to the Rust core's default (512MB).
 func NewCompressionConfiguration() *CompressionConfiguration {
-	defaultMaxSize := DefaultMaxDecompressedSize
 	return &CompressionConfiguration{
 		enabled:             true,
 		backend:             ZSTD,
 		minCompressionSize:  DefaultMinCompressionSize,
-		maxDecompressedSize: &defaultMaxSize,
+		maxDecompressedSize: nil, // Use Rust default
 	}
 }
 
@@ -96,8 +95,7 @@ func (c *CompressionConfiguration) WithMinCompressionSize(size uint32) *Compress
 
 // WithMaxDecompressedSize sets the maximum allowed size in bytes for decompressed data.
 // This limit prevents decompression bombs (maliciously crafted compressed data that expands to huge sizes).
-// Defaults to DefaultMaxDecompressedSize (512MB, matching Valkey's proto-max-bulk-len).
-// Pass nil to disable the limit (not recommended).
+// If nil, the Rust default (512MB) is used.
 func (c *CompressionConfiguration) WithMaxDecompressedSize(size *uint64) *CompressionConfiguration {
 	c.maxDecompressedSize = size
 	return c
@@ -112,9 +110,11 @@ func (c *CompressionConfiguration) Validate() error {
 			c.minCompressionSize,
 		)
 	}
+
 	if c.maxDecompressedSize != nil && *c.maxDecompressedSize == 0 {
-		return fmt.Errorf("max_decompressed_size must be positive")
+		return fmt.Errorf("max_decompressed_size must be positive if set")
 	}
+
 	return nil
 }
 

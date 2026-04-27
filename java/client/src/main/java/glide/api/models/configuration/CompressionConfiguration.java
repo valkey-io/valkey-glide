@@ -79,11 +79,10 @@ public class CompressionConfiguration {
 
     /**
      * Maximum allowed size in bytes for decompressed data. This limit prevents decompression bombs
-     * (maliciously crafted compressed data that expands to huge sizes). If {@code null}, the limit is
-     * disabled (not recommended). Defaults to {@link #DEFAULT_MAX_DECOMPRESSED_SIZE} (512MB, matching
-     * Valkey's proto-max-bulk-len).
+     * (maliciously crafted compressed data that expands to huge sizes). If {@code null}, the Rust
+     * default (512MB) is used. Defaults to {@code null} (use Rust default).
      */
-    @Builder.Default private final Long maxDecompressedSize = DEFAULT_MAX_DECOMPRESSED_SIZE;
+    @Builder.Default private final Long maxDecompressedSize = null;
 
     /**
      * Validates the configuration parameters.

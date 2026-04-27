@@ -77,9 +77,8 @@ message CompressionConfig {
     optional int32 compression_level = 3;
     uint32 min_compression_size = 4;
     // Maximum allowed size for decompressed data to prevent decompression bombs.
-    // Default is 512MB (matching Valkey's proto-max-bulk-len).
-    // Set to 0 to use the default value.
-    uint64 max_decompressed_size = 5;
+    // If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
+    optional uint64 max_decompressed_size = 5;
 }
 
 message PubSubChannelsOrPatterns

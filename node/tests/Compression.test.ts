@@ -1158,16 +1158,6 @@ describe("Compression", () => {
         }).not.toThrow();
     });
 
-    it("compression_config_null_max_decompressed_size_disables_limit", () => {
-        // null should disable the limit (not throw)
-        expect(() => {
-            validateCompressionConfiguration({
-                enabled: true,
-                maxDecompressedSize: null,
-            });
-        }).not.toThrow();
-    });
-
     it("compression_config_zero_max_decompressed_size_throws", () => {
         expect(() => {
             validateCompressionConfiguration({

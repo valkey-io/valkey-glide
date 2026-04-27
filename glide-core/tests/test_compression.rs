@@ -1458,7 +1458,7 @@ mod compression_tests {
             .with_max_decompressed_size(Some(1024 * 1024)); // 1MB
         assert_eq!(config.max_decompressed_size, Some(1024 * 1024));
 
-        // Test with_max_decompressed_size builder with None (disable limit)
+        // Test with_max_decompressed_size builder with None (no limit - internal use only)
         let config =
             CompressionConfig::new(CompressionBackendType::Zstd).with_max_decompressed_size(None);
         assert_eq!(config.max_decompressed_size, None);

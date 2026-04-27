@@ -1921,8 +1921,8 @@ class TestCompressionMaxDecompressedSize:
         assert protobuf.max_decompressed_size == 100 * 1024 * 1024
 
     def test_compression_config_protobuf_omits_none_max_decompressed_size(self):
-        """Test that None max_decompressed_size is not set in protobuf."""
+        """Test that None max_decompressed_size is not set in protobuf (uses Rust default)."""
         config = CompressionConfiguration(enabled=True, max_decompressed_size=None)
         protobuf = config._to_protobuf()
-        # When None, the field should not be set (will be 0 in protobuf)
+        # When None, the field should not be set (will be 0 in protobuf, Rust uses default)
         assert protobuf.max_decompressed_size == 0

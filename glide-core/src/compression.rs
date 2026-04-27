@@ -249,7 +249,6 @@ pub struct CompressionConfig {
     pub min_compression_size: usize,
     /// Maximum allowed size for decompressed data to prevent decompression bombs.
     /// Default is 512MB (matching Valkey's proto-max-bulk-len).
-    /// Set to None to disable the limit (not recommended).
     pub max_decompressed_size: Option<usize>,
 }
 
@@ -285,7 +284,7 @@ impl CompressionConfig {
     }
 
     /// Set the maximum allowed decompressed size.
-    /// Set to None to disable the limit (not recommended for untrusted data).
+    /// If None, no limit is enforced (used internally for testing).
     pub fn with_max_decompressed_size(mut self, size: Option<usize>) -> Self {
         self.max_decompressed_size = size;
         self
