@@ -1011,7 +1011,7 @@ pub fn decompress_batch_response(
 /// Attempts to decompress a batch response if a compression manager is provided.
 ///
 /// This is a convenience wrapper around `decompress_batch_response` that handles
-/// the Option<CompressionManager> case. If no manager is provided or decompression
+/// the `Option<CompressionManager>` case. If no manager is provided or decompression
 /// fails, returns the original value (or Nil if the value was consumed on error).
 ///
 /// # Arguments
