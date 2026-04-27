@@ -1158,6 +1158,7 @@ func TestCompressionConfiguration_AllFieldsSetWithMaxDecompressedSize(t *testing
 	assert.Equal(t, uint32(256), pb.MinCompressionSize)
 	assert.Equal(t, maxSize, pb.MaxDecompressedSize)
 }
+
 func TestCompressionConfiguration_WithEnabledToggle(t *testing.T) {
 	// Start enabled, disable, re-enable
 	compressionConfig := NewCompressionConfiguration().
