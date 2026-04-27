@@ -66,7 +66,7 @@ mod compression_tests {
         let backend = ZstdBackend::new();
         let mut corrupted_data = create_header(0x01).to_vec();
         corrupted_data.extend_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF]); // Invalid compressed data
-        let result = backend.decompress(&corrupted_data);
+        let result = backend.decompress(&corrupted_data, None);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
@@ -77,7 +77,7 @@ mod compression_tests {
         // Scenario 6: Decompressing data without proper header (triggers DecompressionFailed)
         let backend = Lz4Backend::new();
         let invalid_data = b"not compressed data";
-        let result = backend.decompress(invalid_data);
+        let result = backend.decompress(invalid_data, None);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
@@ -516,7 +516,7 @@ mod compression_tests {
         assert_eq!(extract_backend_id(&compressed), Some(0x01));
 
         // Test decompression
-        let decompressed = backend.decompress(&compressed).unwrap();
+        let decompressed = backend.decompress(&compressed, None).unwrap();
         assert_eq!(decompressed, original_data);
 
         // Test compression of very large data
@@ -528,13 +528,13 @@ mod compression_tests {
         assert_eq!(extract_backend_id(&compressed), Some(0x01));
 
         // Test decompression of very large data
-        let decompressed = backend.decompress(&compressed).unwrap();
+        let decompressed = backend.decompress(&compressed, None).unwrap();
         assert_eq!(decompressed, very_large_data.as_bytes());
 
         // Test with default level
         let compressed_default = backend.compress(original_data, None).unwrap();
         assert!(compressed_default.len() < original_data.len()); // Assert that it compresses
-        let decompressed_default = backend.decompress(&compressed_default).unwrap();
+        let decompressed_default = backend.decompress(&compressed_default, None).unwrap();
         assert_eq!(decompressed_default, original_data);
 
         // Test is_compressed on uncompressed data
@@ -562,7 +562,7 @@ mod compression_tests {
         assert_eq!(extract_backend_id(&compressed), Some(0x02));
 
         // Test decompression
-        let decompressed = backend.decompress(&compressed).unwrap();
+        let decompressed = backend.decompress(&compressed, None).unwrap();
         assert_eq!(decompressed, original_data);
 
         // Test compression of very large data
@@ -574,21 +574,21 @@ mod compression_tests {
         assert_eq!(extract_backend_id(&compressed), Some(0x02));
 
         // Test decompression of very large data
-        let decompressed = backend.decompress(&compressed).unwrap();
+        let decompressed = backend.decompress(&compressed, None).unwrap();
         assert_eq!(decompressed, very_large_data.as_bytes());
 
         // Test compression with high compression level
         let compressed_hc = backend.compress(original_data, Some(9)).unwrap();
         assert!(compressed_hc.len() > HEADER_SIZE);
         assert!(backend.is_compressed(&compressed_hc));
-        let decompressed_hc = backend.decompress(&compressed_hc).unwrap();
+        let decompressed_hc = backend.decompress(&compressed_hc, None).unwrap();
         assert_eq!(decompressed_hc, original_data);
 
         // Test compression with fast mode (negative level)
         let compressed_fast = backend.compress(original_data, Some(-5)).unwrap();
         assert!(compressed_fast.len() > HEADER_SIZE);
         assert!(backend.is_compressed(&compressed_fast));
-        let decompressed_fast = backend.decompress(&compressed_fast).unwrap();
+        let decompressed_fast = backend.decompress(&compressed_fast, None).unwrap();
         assert_eq!(decompressed_fast, original_data);
 
         // Test that invalid compression level is rejected
@@ -990,6 +990,7 @@ mod compression_tests {
             backend: CompressionBackendType::Zstd,
             compression_level: None,
             min_compression_size: 64,
+            max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
         };
         let disabled_manager = CompressionManager::new(backend, disabled_config).unwrap();
         let result = validate_command_compression_compatibility(
@@ -1254,6 +1255,7 @@ mod compression_tests {
             backend: CompressionBackendType::Zstd,
             compression_level: None,
             min_compression_size: 64,
+            max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
         };
         let disabled_backend = Box::new(ZstdBackend::new());
         let disabled_manager = CompressionManager::new(disabled_backend, disabled_config).unwrap();
@@ -1390,5 +1392,118 @@ mod compression_tests {
             }
             _ => panic!("Expected array response"),
         }
+    }
+
+    #[test]
+    fn test_max_decompressed_size_limit() {
+        use glide_core::compression::lz4_backend::Lz4Backend;
+        use glide_core::compression::zstd_backend::ZstdBackend;
+
+        // Test ZSTD with size limit
+        let zstd_backend = ZstdBackend::new();
+        let test_data = b"test data for compression that is long enough to be compressed - value 1";
+        let compressed = zstd_backend.compress(test_data, Some(3)).unwrap();
+
+        // Decompression should succeed with a large enough limit
+        let result = zstd_backend.decompress(&compressed, Some(1024));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), test_data);
+
+        // Decompression should fail with a too-small limit
+        let result = zstd_backend.decompress(&compressed, Some(10));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
+        assert!(err.to_string().contains("exceeds maximum allowed size"));
+
+        // Test LZ4 with size limit
+        let lz4_backend = Lz4Backend::new();
+        let compressed = lz4_backend.compress(test_data, None).unwrap();
+
+        // Decompression should succeed with a large enough limit
+        let result = lz4_backend.decompress(&compressed, Some(1024));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), test_data);
+
+        // Decompression should fail with a too-small limit (LZ4 validates before allocation)
+        let result = lz4_backend.decompress(&compressed, Some(10));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
+        assert!(err.to_string().contains("exceeds maximum allowed size"));
+
+        // Test with None limit (no limit)
+        let result = zstd_backend.decompress(&compressed, None);
+        // This will fail because the data was compressed with LZ4, not ZSTD
+        // Let's use the correct backend
+        let result = lz4_backend.decompress(&compressed, None);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_compression_config_max_decompressed_size() {
+        // Test default config has max_decompressed_size set
+        let config = CompressionConfig::new(CompressionBackendType::Zstd);
+        assert_eq!(
+            config.max_decompressed_size,
+            Some(DEFAULT_MAX_DECOMPRESSED_SIZE)
+        );
+
+        // Test disabled config also has max_decompressed_size set
+        let config = CompressionConfig::disabled();
+        assert_eq!(
+            config.max_decompressed_size,
+            Some(DEFAULT_MAX_DECOMPRESSED_SIZE)
+        );
+
+        // Test with_max_decompressed_size builder
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_max_decompressed_size(Some(1024 * 1024)); // 1MB
+        assert_eq!(config.max_decompressed_size, Some(1024 * 1024));
+
+        // Test with_max_decompressed_size builder with None (disable limit)
+        let config =
+            CompressionConfig::new(CompressionBackendType::Zstd).with_max_decompressed_size(None);
+        assert_eq!(config.max_decompressed_size, None);
+    }
+
+    #[test]
+    fn test_compression_manager_respects_max_decompressed_size() {
+        use glide_core::compression::zstd_backend::ZstdBackend;
+
+        // Create test data that's large enough to be compressed
+        let test_data = "A".repeat(200); // Large enough to exceed min_compression_size
+        let test_data_bytes = test_data.as_bytes();
+
+        // Create a manager with a small max_decompressed_size
+        let backend = Box::new(ZstdBackend::new());
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_min_compression_size(64)
+            .with_max_decompressed_size(Some(50)); // Very small limit
+        let manager = CompressionManager::new(backend, config).unwrap();
+
+        // Compress some data
+        let compressed = manager.compress_value(test_data_bytes);
+        // Verify it was actually compressed
+        assert!(has_magic_header(&compressed), "Data should be compressed");
+
+        // Decompression should fail because the decompressed size exceeds the limit
+        let result = manager.decompress_value(&compressed);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
+        assert!(err.to_string().contains("exceeds maximum allowed size"));
+
+        // Create a manager with a larger limit
+        let backend = Box::new(ZstdBackend::new());
+        let config = CompressionConfig::new(CompressionBackendType::Zstd)
+            .with_min_compression_size(64)
+            .with_max_decompressed_size(Some(1024)); // Larger limit
+        let manager = CompressionManager::new(backend, config).unwrap();
+
+        // Decompression should succeed
+        let result = manager.decompress_value(&compressed);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), test_data_bytes);
     }
 }
