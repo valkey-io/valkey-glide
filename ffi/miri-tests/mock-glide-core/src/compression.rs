@@ -46,3 +46,12 @@ pub fn decompress_batch_response(
 ) -> Result<redis::Value, String> {
     Ok(value)
 }
+
+/// Mock function to try decompress batch response with optional manager
+/// In Miri tests, this is a no-op that returns the value unchanged
+pub fn try_decompress_batch_response(
+    value: redis::Value,
+    _manager: Option<&CompressionManager>,
+) -> redis::Value {
+    value
+}
