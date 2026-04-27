@@ -994,21 +994,10 @@ pub fn decompress_batch_response(
             let mut processed_responses = Vec::with_capacity(responses.len());
             for resp in responses {
                 // Recursively process nested arrays (e.g., MGET responses within a batch)
-                let processed = match &resp {
-                    Value::Array(_) => {
-                        // Recursively decompress nested arrays
-                        match decompress_batch_response(resp.clone(), manager) {
-                            Ok(decompressed) => decompressed,
-                            Err(_) => resp, // Return original on error
-                        }
-                    }
-                    _ => {
-                        // For non-array values, try single value decompression
-                        match decompress_single_value_response(resp.clone(), manager) {
-                            Ok(decompressed) => decompressed,
-                            Err(_) => resp, // Return original on error
-                        }
-                    }
+                // We take ownership of resp to avoid cloning
+                let processed = match resp {
+                    Value::Array(_) => decompress_batch_response(resp, manager)?,
+                    other => decompress_single_value_response(other, manager)?,
                 };
                 processed_responses.push(processed);
             }
@@ -1016,6 +1005,33 @@ pub fn decompress_batch_response(
         }
         // For non-array responses, try to decompress directly
         other => decompress_single_value_response(other, manager),
+    }
+}
+
+/// Attempts to decompress a batch response if a compression manager is provided.
+///
+/// This is a convenience wrapper around `decompress_batch_response` that handles
+/// the Option<CompressionManager> case. If no manager is provided or decompression
+/// fails, returns the original value (or Nil if the value was consumed on error).
+///
+/// # Arguments
+/// * `value` - The batch response value to decompress
+/// * `manager` - Optional compression manager
+///
+/// # Returns
+/// The decompressed value, or the original value if no manager or decompression not needed
+pub fn try_decompress_batch_response(
+    value: redis::Value,
+    manager: Option<&CompressionManager>,
+) -> redis::Value {
+    match manager {
+        Some(mgr) => decompress_batch_response(value, mgr).unwrap_or_else(|_| {
+            // This branch is currently unreachable since decompress_batch_response
+            // always returns Ok, but we keep it for future-proofing.
+            // Return Nil as fallback since we've consumed the original value.
+            redis::Value::Nil
+        }),
+        None => value,
     }
 }
 
