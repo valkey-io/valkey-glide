@@ -1243,8 +1243,8 @@ fn create_client_from_uri_internal(
             .map_err(|e| format!("Invalid UTF-8 in URI: {}", e))?
     };
 
-    let url = parse_connection_url(uri_string)
-        .ok_or_else(|| format!("Invalid connection URI: {}", uri_string))?;
+    let url =
+        parse_connection_url(uri_string).ok_or_else(|| "Invalid connection URI".to_string())?;
 
     // Build base ConnectionRequest from URI
     let mut request = connection_request::ConnectionRequest::new();
@@ -1363,8 +1363,14 @@ fn apply_json_options(
     request: &mut connection_request::ConnectionRequest,
     json_str: &str,
 ) -> Result<(), String> {
-    let json_value: serde_json::Value =
-        serde_json::from_str(json_str).map_err(|e| format!("Invalid JSON: {}", e))?;
+    let json_value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+        format!(
+            "Invalid JSON in connection options: {:?} at line {}, column {}",
+            e.classify(),
+            e.line(),
+            e.column()
+        )
+    })?;
 
     if !json_value.is_object() {
         return Err("JSON options must be an object".to_string());
