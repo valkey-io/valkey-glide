@@ -22,7 +22,6 @@ use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
 use redis::cluster_routing::ResponsePolicy;
-use redis::cluster_routing::Routable;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };

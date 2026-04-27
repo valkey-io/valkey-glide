@@ -4,8 +4,11 @@
 
 use crate::request_type::RequestType;
 
-/// Re-export the minimum compressed size constant from glide-core
-pub use glide_core::compression::MIN_COMPRESSED_SIZE;
+/// Header size for compressed data (3 bytes magic + 1 byte version + 1 byte backend_id)
+pub const HEADER_SIZE: usize = 5;
+
+/// Minimum compressed size (header + at least 1 byte of payload)
+pub const MIN_COMPRESSED_SIZE: usize = HEADER_SIZE + 1;
 
 /// Mock compression manager
 #[derive(Debug)]
