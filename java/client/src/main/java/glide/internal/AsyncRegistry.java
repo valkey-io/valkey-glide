@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
+import glide.api.logging.Logger;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.RequestException;
@@ -33,6 +34,21 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class AsyncRegistry {
 
+    /** Rate-limit interval for timeout/disconnect log messages (in nanoseconds) */
+    private static final long LOG_RATE_LIMIT_NS = 5_000_000_000L; // 5 seconds
+
+    /** Last log timestamp for timeout errors */
+    private static final AtomicLong lastTimeoutLogNs = new AtomicLong(0);
+
+    /** Last log timestamp for disconnect errors */
+    private static final AtomicLong lastDisconnectLogNs = new AtomicLong(0);
+
+    /** Suppressed timeout log count since last emitted log */
+    private static final AtomicLong suppressedTimeoutLogs = new AtomicLong(0);
+
+    /** Suppressed disconnect log count since last emitted log */
+    private static final AtomicLong suppressedDisconnectLogs = new AtomicLong(0);
+
     /** Thread-safe storage for active futures. Using ConcurrentHashMap for lock-free operations. */
     private static final ConcurrentHashMap<Long, CompletableFuture<Object>> activeFutures =
             new ConcurrentHashMap<>(estimateInitialCapacity());
@@ -50,6 +66,10 @@ public final class AsyncRegistry {
 
     /** Thread-safe ID generator for correlation IDs. */
     private static final AtomicLong nextId = new AtomicLong(1);
+
+    /** Registration timestamps for measuring elapsed time on errors. */
+    private static final ConcurrentHashMap<Long, Long> registrationTimestamps =
+            new ConcurrentHashMap<>();
 
     /**
      * Shutdown flag to prevent race conditions between register() and shutdown()/failAllWithError().
@@ -143,11 +163,13 @@ public final class AsyncRegistry {
 
         // Store original future for completion by native code
         activeFutures.put(correlationId, originalFuture);
+        registrationTimestamps.put(correlationId, System.nanoTime());
 
         // Double-check shutdown flag after insertion to handle race with shutdown()
         // If shutdown started between our first check and the put(), clean up and fail
         if (isShutdown.get()) {
             activeFutures.remove(correlationId);
+            registrationTimestamps.remove(correlationId);
             if (maxInflightRequests > 0) {
                 decrementInflightCount(clientHandle);
             }
@@ -214,6 +236,7 @@ public final class AsyncRegistry {
                 (result, error) -> {
                     // Atomic cleanup - no race conditions
                     activeFutures.remove(correlationId);
+                    registrationTimestamps.remove(correlationId);
 
                     // Cancel the timeout task if it hasn't fired yet
                     // Using cancel(false) to avoid interrupting the scheduler thread
@@ -278,6 +301,31 @@ public final class AsyncRegistry {
                         ? "Unknown error from native code"
                         : errorMessage;
 
+        // Log elapsed time for timeout and disconnect errors (rate-limited)
+        if (errorTypeCode == 2 || errorTypeCode == 3) {
+            Long registeredAt = registrationTimestamps.get(correlationId);
+            if (registeredAt != null) {
+                long elapsedMs = (System.nanoTime() - registeredAt) / 1_000_000;
+                boolean isTimeout = errorTypeCode == 2;
+                AtomicLong lastLogRef = isTimeout ? lastTimeoutLogNs : lastDisconnectLogNs;
+                AtomicLong suppressedRef = isTimeout ? suppressedTimeoutLogs : suppressedDisconnectLogs;
+                String errorTypeName = isTimeout ? "Timeout" : "Disconnect";
+
+                long now = System.nanoTime();
+                long lastLog = lastLogRef.get();
+                if (now - lastLog >= LOG_RATE_LIMIT_NS && lastLogRef.compareAndSet(lastLog, now)) {
+                    long suppressed = suppressedRef.getAndSet(0);
+                    String suffix = suppressed > 0 ? " (suppressed " + suppressed + " similar)" : "";
+                    Logger.log(
+                            Logger.Level.WARN,
+                            "AsyncRegistry",
+                            errorTypeName + " after " + elapsedMs + "ms: " + msg + suffix);
+                } else {
+                    suppressedRef.incrementAndGet();
+                }
+            }
+        }
+
         RuntimeException ex;
         switch (errorTypeCode) {
             case 2:
@@ -315,6 +363,7 @@ public final class AsyncRegistry {
         // Cancel user futures with interrupt (may be blocked waiting)
         activeFutures.values().forEach(future -> future.cancel(true));
         activeFutures.clear();
+        registrationTimestamps.clear();
         clientInflightCounts.clear();
 
         // Shutdown the timeout scheduler
@@ -339,6 +388,7 @@ public final class AsyncRegistry {
                         : errorMessage;
         activeFutures.forEach((id, future) -> future.completeExceptionally(new ClosingException(msg)));
         activeFutures.clear();
+        registrationTimestamps.clear();
 
         timeoutTasks.values().forEach(task -> task.cancel(false));
         timeoutTasks.clear();
@@ -359,6 +409,7 @@ public final class AsyncRegistry {
         timeoutTasks.values().forEach(task -> task.cancel(false));
         timeoutTasks.clear();
         activeFutures.clear();
+        registrationTimestamps.clear();
         clientInflightCounts.clear();
         nextId.set(1);
     }

@@ -51,7 +51,9 @@ use pipeline_routing::{
     route_for_pipeline, PipelineResponses, ResponsePoliciesMap,
 };
 
-use logger_core::log_error;
+use logger_core::log_info_rate_limited;
+use logger_core::log_warn_rate_limited;
+use logger_core::{log_debug_lazy, log_error_lazy, log_info_lazy, log_trace_lazy, log_warn_lazy};
 use rand::seq::IteratorRandom;
 
 use std::{
@@ -113,7 +115,7 @@ use tokio::sync::{
     mpsc,
     oneshot::{self, Receiver},
 };
-use tracing::{debug, info, trace, warn};
+// tracing macros replaced by logger_core lazy macros
 
 use self::{
     connections_container::{ConnectionAndAddress, ConnectionType, ConnectionsMap},
@@ -273,7 +275,7 @@ where
         cmd: &Cmd,
         routing: cluster_routing::RoutingInfo,
     ) -> RedisResult<Value> {
-        trace!("route_command");
+        log_trace_lazy!("cluster", "route_command");
         let (sender, receiver) = oneshot::channel();
         self.0
             .send(Message {
@@ -1206,9 +1208,12 @@ impl<C> Future for Request<C> {
                     // Updating the slot map based on the MOVED error is an optimization.
                     // If it fails, proceed by retrying the request with the redirected node,
                     // and allow the slot refresh task to correct the slot map.
-                    info!(
-                        "Failed to update the slot map based on the received MOVED error.
+                    log_info_lazy!(
+                        "cluster",
+                        format!(
+                            "Failed to update the slot map based on the received MOVED error.
                         Error: {err:?}"
+                        )
                     );
                 }
                 if let Some(request) = self.project().request.take() {
@@ -1263,9 +1268,9 @@ impl<C> Future for Request<C> {
                 request.retry = request.retry.saturating_add(1);
                 // Record retry attempts metric if telemetry is initialized
                 if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
-                    log_error(
+                    log_error_lazy!(
                         "OpenTelemetry:retry_error",
-                        format!("Failed to record retry attempt: {e}"),
+                        format!("Failed to record retry attempt: {e}")
                     );
                 }
 
@@ -1281,7 +1286,10 @@ impl<C> Future for Request<C> {
                 let address = match target {
                     OperationTarget::Node { address } => address,
                     OperationTarget::FanOut => {
-                        trace!("Request error `{}` multi-node request", err);
+                        log_trace_lazy!(
+                            "cluster",
+                            format!("Request error `{}` multi-node request", err)
+                        );
 
                         // Fanout operations are retried per internal request, and don't need additional retries.
                         // If the error is ConnectionNotFoundForRoute, trigger a slot refresh
@@ -1311,13 +1319,17 @@ impl<C> Future for Request<C> {
                         .into();
                     }
                     OperationTarget::FatalError => {
-                        trace!("Fatal error encountered: {:?}", err);
+                        log_trace_lazy!("cluster", format!("Fatal error encountered: {:?}", err));
                         self.respond(Err(err));
                         return Next::Done.into();
                     }
                 };
 
-                warn!("Received request error {} on node {:?}.", err, address);
+                log_warn_rate_limited!(
+                    "cluster",
+                    5,
+                    format!("Received request error {} on node {:?}.", err, address)
+                );
 
                 match err.retry_method() {
                     RetryMethod::AskRedirect => {
@@ -1364,7 +1376,11 @@ impl<C> Future for Request<C> {
                         let mut request = this.request.take().unwrap();
                         // TODO should we reset the redirect here?
                         request.info.reset_routing();
-                        warn!("disconnected from {:?}", address);
+                        log_warn_rate_limited!(
+                            "cluster",
+                            5,
+                            format!("disconnected from {:?}", address)
+                        );
                         let should_retry =
                             matches!(err.retry_method(), RetryMethod::ReconnectAndRetry);
                         Next::Reconnect {
@@ -1634,7 +1650,10 @@ where
                 connections.1.unwrap_or("".to_string()),
             )));
         }
-        info!("Connected to initial nodes:\n{}", connections.0);
+        log_info_lazy!(
+            "cluster",
+            format!("Connected to initial nodes:\n{}", connections.0)
+        );
         Ok(connections.0)
     }
 
@@ -1667,7 +1686,10 @@ where
             {
                 Ok(map) => map,
                 Err(err) => {
-                    warn!("Can't reconnect to initial nodes: `{err}`");
+                    log_warn_lazy!(
+                        "cluster",
+                        format!("Can't reconnect to initial nodes: `{err}`")
+                    );
                     return;
                 }
             };
@@ -1682,7 +1704,10 @@ where
             )
             .await
             {
-                warn!("Can't refresh slots with initial nodes: `{err}`");
+                log_warn_lazy!(
+                    "cluster",
+                    format!("Can't refresh slots with initial nodes: `{err}`")
+                );
             };
         })
     }
@@ -1698,7 +1723,10 @@ where
         let _guard = match inner.topology_refresh_lock.try_lock() {
             Ok(guard) => guard,
             Err(_) => {
-                debug!("Skipping connection validation - topology refresh in progress");
+                log_debug_lazy!(
+                    "cluster",
+                    "Skipping connection validation - topology refresh in progress"
+                );
                 return;
             }
         };
@@ -1766,7 +1794,10 @@ where
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
     ) {
-        trace!("refresh_and_update_connections: calling trigger_refresh_connection_tasks");
+        log_trace_lazy!(
+            "cluster",
+            "refresh_and_update_connections: calling trigger_refresh_connection_tasks"
+        );
         let refresh_task_notifiers = Self::trigger_refresh_connection_tasks(
             inner.clone(),
             addresses,
@@ -1775,7 +1806,10 @@ where
         )
         .await;
 
-        trace!("refresh_and_update_connections: Await on all tasks' refresh notifier");
+        log_trace_lazy!(
+            "cluster",
+            "refresh_and_update_connections: Await on all tasks' refresh notifier"
+        );
         futures::future::join_all(
             refresh_task_notifiers
                 .iter()
@@ -1794,7 +1828,10 @@ where
         conn_type: RefreshConnectionType,
         check_existing_conn: bool,
     ) -> Vec<Arc<Notify>> {
-        debug!("Triggering refresh connections tasks to {:?} ", addresses);
+        log_debug_lazy!(
+            "cluster",
+            format!("Triggering refresh connections tasks to {:?} ", addresses)
+        );
 
         let mut notifiers = Vec::<Arc<Notify>>::new();
 
@@ -1810,7 +1847,10 @@ where
                     // Store the notifier
                     notifiers.push(notifier.get_notifier());
                 }
-                debug!("Skipping refresh for {}: already in progress", address);
+                log_debug_lazy!(
+                    "cluster",
+                    format!("Skipping refresh for {}: already in progress", address)
+                );
                 continue; // Skip creating a new refresh task
             }
 
@@ -1824,9 +1864,13 @@ where
             }
 
             let handle = tokio::spawn(async move {
-                info!(
-                    "refreshing connection task to {:?} started",
-                    address_clone_for_task
+                log_info_rate_limited!(
+                    "cluster",
+                    10,
+                    format!(
+                        "refreshing connection task to {:?} started",
+                        address_clone_for_task
+                    )
                 );
 
                 // We run infinite retries to reconnect until it succeeds or it's aborted from outside.
@@ -1873,10 +1917,8 @@ where
 
                                 first_attempt = false;
                             }
-                            debug!(
-                                "Failed to refresh connection for node {}. Error: `{:?}`. Retrying in {:?}",
-                                address_clone_for_task, err, backoff_duration
-                            );
+                            log_debug_lazy!("cluster", format!("Failed to refresh connection for node {}. Error: `{:?}`. Retrying in {:?}",
+                                address_clone_for_task, err, backoff_duration));
                             tokio::time::sleep(backoff_duration).await;
                         }
                     }
@@ -1884,9 +1926,13 @@ where
 
                 match node_result {
                     Ok(node) => {
-                        info!(
-                            "Succeeded to refresh connection for node {}.",
-                            address_clone_for_task
+                        log_info_rate_limited!(
+                            "cluster",
+                            10,
+                            format!(
+                                "Succeeded to refresh connection for node {}.",
+                                address_clone_for_task
+                            )
                         );
                         inner_clone
                             .conn_lock
@@ -1894,9 +1940,12 @@ where
                             .replace_or_add_connection_for_address(&address_clone_for_task, node);
                     }
                     Err(err) => {
-                        warn!(
-                            "Failed to refresh connection for node {}. Error: `{:?}`",
-                            address_clone_for_task, err
+                        log_warn_lazy!(
+                            "cluster",
+                            format!(
+                                "Failed to refresh connection for node {}. Error: `{:?}`",
+                                address_clone_for_task, err
+                            )
                         );
                     }
                 }
@@ -1908,9 +1957,12 @@ where
                     .refresh_address_in_progress
                     .remove(&address_clone_for_task);
 
-                debug!(
-                    "Refreshing connection task to {:?} is done",
-                    address_clone_for_task
+                log_debug_lazy!(
+                    "cluster",
+                    format!(
+                        "Refreshing connection task to {:?} is done",
+                        address_clone_for_task
+                    )
                 );
             });
 
@@ -1927,7 +1979,7 @@ where
                 .refresh_address_in_progress
                 .insert(address.clone(), refresh_task_state);
         }
-        debug!("trigger_refresh_connection_tasks: Done");
+        log_debug_lazy!("cluster", "trigger_refresh_connection_tasks: Done");
         notifiers
     }
 
@@ -2332,12 +2384,27 @@ where
             rate_limiter,
         } = &inner.slot_refresh_state;
         // Ensure only a single slot refresh operation occurs at a time
+        // Time the acquisition attempt for diagnostic visibility
+        let acquire_start = std::time::Instant::now();
         if in_progress
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
+            log_warn_lazy!("topology_refresh", format!(
+                "Concurrent slot refresh rejected by compare_exchange (another refresh is already in progress)"));
             return Ok(());
         }
+        let acquire_elapsed = acquire_start.elapsed();
+        if acquire_elapsed > Duration::from_millis(100) {
+            log_warn_lazy!(
+                "topology_refresh",
+                format!(
+                    "in_progress lock acquisition took {:?} (>100ms threshold)",
+                    acquire_elapsed
+                )
+            );
+        }
+
         let mut should_refresh_slots = true;
         if *policy == RefreshPolicy::Throttable {
             // Check if the current slot refresh is triggered before the wait duration has passed
@@ -2346,17 +2413,16 @@ where
                 let passed_time = SystemTime::now()
                     .duration_since(last_run_time)
                     .unwrap_or_else(|err| {
-                        warn!(
-                            "Failed to get the duration since the last slot refresh, received error: {:?}",
-                            err
-                        );
+                        log_warn_lazy!("cluster", format!("Failed to get the duration since the last slot refresh, received error: {:?}",
+                            err));
                         // Setting the passed time to 0 will force the current refresh to continue and reset the stored last_run timestamp with the current one
                         Duration::from_secs(0)
                     });
                 let wait_duration = rate_limiter.wait_duration();
                 if passed_time <= wait_duration {
-                    debug!("Skipping slot refresh as the wait duration hasn't yet passed. Passed time = {:?},
-                            Wait duration = {:?}", passed_time, wait_duration);
+                    log_debug_lazy!("topology_refresh", format!(
+                        "Throttle: skipping slot refresh. passed_time={:?}, wait_duration={:?}, policy={:?}",
+                        passed_time, wait_duration, policy));
                     should_refresh_slots = false;
                 }
             }
@@ -2376,6 +2442,10 @@ where
                 Self::refresh_slots(inner.clone(), curr_retry, trigger)
                     .await
                     .map_err(|err| {
+                        log_warn_lazy!(
+                            "topology_refresh",
+                            format!("Slot refresh retry {} failed: {:?}", curr_retry, err)
+                        );
                         if matches!(
                             err.kind(),
                             ErrorKind::AllConnectionsUnavailable
@@ -2427,9 +2497,12 @@ where
             {
                 Ok(topology_changed) => !topology_changed,
                 Err(err) => {
-                    warn!(
-                        "Failed to refresh slots during periodic topology checks:\n{:?}",
-                        err
+                    log_warn_lazy!(
+                        "cluster",
+                        format!(
+                            "Failed to refresh slots during periodic topology checks:\n{:?}",
+                            err
+                        )
                     );
                     true
                 }
@@ -2479,7 +2552,10 @@ where
 
         if let Some(failed) = failed_connections {
             if !failed.is_empty() {
-                trace!("check_for_topology_diff: calling trigger_refresh_connection_tasks");
+                log_trace_lazy!(
+                    "cluster",
+                    "check_for_topology_diff: calling trigger_refresh_connection_tasks"
+                );
                 Self::trigger_refresh_connection_tasks(
                     inner,
                     failed,
@@ -2613,9 +2689,13 @@ where
             }
         }
 
-        info!("refresh_slots found nodes:\n{new_connections}");
+        log_info_lazy!(
+            "cluster",
+            format!("refresh_slots found nodes:\n{new_connections}")
+        );
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write();
+        let old_topology_hash = write_guard.get_current_topology_hash();
         // Clear the refresh tasks of the prev instance
         // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
         write_guard.refresh_conn_state.clear_refresh_state();
@@ -2635,6 +2715,13 @@ where
             sync.handle_topology_refresh(&write_guard.slot_map);
         }
 
+        log_info_lazy!(
+            "slot_refresh",
+            format!(
+                "ConnectionsContainer replaced: old_topology_hash={:?}, new_topology_hash={:?}",
+                old_topology_hash, topology_hash
+            )
+        );
         Ok(())
     }
 
@@ -2670,7 +2757,18 @@ where
             match curr_shard_addrs.attempt_shard_role_update(new_primary.clone()) {
                 // Scenario 1: No changes needed as the new primary is already the current slot owner.
                 // Scenario 2: Failover occurred and the new primary was promoted from a replica.
-                ShardUpdateResult::AlreadyPrimary | ShardUpdateResult::Promoted => return Ok(()),
+                ShardUpdateResult::AlreadyPrimary => {
+                    log_info_rate_limited!("moved_error", 10, format!(
+                        "Scenario 1 (No Change): slot={}, new_primary={} is already the current slot owner",
+                        slot, new_primary));
+                    return Ok(());
+                }
+                ShardUpdateResult::Promoted => {
+                    log_info_rate_limited!("moved_error", 10, format!(
+                        "Scenario 2 (Failover): slot={}, new_primary={} promoted from replica within same shard",
+                        slot, new_primary));
+                    return Ok(());
+                }
                 // The node was not found in this shard, proceed with further scenarios.
                 ShardUpdateResult::NodeNotFound => {}
             }
@@ -2686,6 +2784,9 @@ where
                 if is_existing_primary {
                     // Scenario 3: Slot Migration - The new primary is an existing primary in another shard
                     // Update the associated addresses for `slot` to `shard_addrs`.
+                    log_info_rate_limited!("moved_error", 10, format!(
+                        "Scenario 3 (Slot Migration): slot={}, new_primary={} is an existing primary in another shard",
+                        slot, new_primary));
                     drop(nodes_iter);
                     return wlock_conn_container
                         .slot_map
@@ -2693,6 +2794,9 @@ where
                 } else {
                     // Scenario 4: The MOVED error redirects to `new_primary` which is known as a replica in a shard that doesn’t own `slot`.
                     // Remove the replica from its existing shard and treat it as a new node in a new shard.
+                    log_info_rate_limited!("moved_error", 10, format!(
+                        "Scenario 4 (Replica Moved to Different Shard): slot={}, new_primary={} was a replica in a different shard",
+                        slot, new_primary));
                     shard_addrs_arc.remove_replica(new_primary.clone())?;
                     drop(nodes_iter);
                     return wlock_conn_container.slot_map.add_new_primary(
@@ -2706,6 +2810,9 @@ where
 
         drop(nodes_iter);
         // Scenario 5: New Node - The new primary is not present in the current slots map, add it as a primary of a new shard.
+        log_info_rate_limited!("moved_error", 10, format!(
+            "Scenario 5 (New Node): slot={}, new_primary={} is unknown, adding as new shard primary",
+            slot, new_primary));
         wlock_conn_container
             .slot_map
             .add_new_primary(slot, new_primary, None)
@@ -2717,7 +2824,7 @@ where
         core: Core<C>,
         response_policy: Option<ResponsePolicy>,
     ) -> OperationResult {
-        trace!("execute_on_multiple_nodes");
+        log_trace_lazy!("cluster", "execute_on_multiple_nodes");
 
         #[allow(clippy::type_complexity)]
         fn into_channels<C>(
@@ -2831,7 +2938,7 @@ where
 
             InternalRoutingInfo::SingleNode(routing) => routing,
         };
-        trace!("route request to single node");
+        log_trace_lazy!("cluster", "route request to single node");
 
         let (address, mut conn) = Self::get_connection(routing, core, Some(cmd.clone()))
             .await
@@ -2852,7 +2959,7 @@ where
         count: usize,
         conn: impl Future<Output = RedisResult<(String, C)>>,
     ) -> OperationResult {
-        trace!("try_pipeline_request");
+        log_trace_lazy!("cluster", "try_pipeline_request");
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
         if let Some(span) = pipeline.span() {
             set_routed_node_on_span(&span, &address);
@@ -3149,9 +3256,12 @@ where
                             .into());
                     }
 
-                    debug!(
-                        "SpecificNode: No connection found for route `{route:?}`.
+                    log_debug_lazy!(
+                        "cluster",
+                        format!(
+                            "SpecificNode: No connection found for route `{route:?}`.
                         Checking for reconnect tasks before redirecting to a random node."
+                        )
                     );
 
                     // Step 3: Obtain the reconnect notifier, ensuring the lock is released immediately after.
@@ -3162,15 +3272,11 @@ where
 
                     // Step 4: If a notifier exists, wait for it to signal completion.
                     if let Some(notifier) = reconnect_notifier {
-                        debug!(
-                            "SpecificNode: Waiting on reconnect notifier for route `{route:?}`."
-                        );
+                        log_debug_lazy!("cluster", format!("SpecificNode: Waiting on reconnect notifier for route `{route:?}`."));
 
                         notifier.notified().await;
 
-                        debug!(
-                            "SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup."
-                        );
+                        log_debug_lazy!("cluster", format!("SpecificNode: Finished waiting on notifier for route `{route:?}`. Retrying connection lookup."));
 
                         // Step 5: Retry the connection lookup after waiting for the reconnect task.
                         if let Some((conn, address)) =
@@ -3178,14 +3284,10 @@ where
                         {
                             conn_check = ConnectionCheck::Found((conn, address));
                         } else {
-                            debug!(
-                                "SpecificNode: No connection found for route `{route:?}` after waiting on reconnect notifier. Proceeding to random node."
-                            );
+                            log_debug_lazy!("cluster", format!("SpecificNode: No connection found for route `{route:?}` after waiting on reconnect notifier. Proceeding to random node."));
                         }
                     } else {
-                        debug!(
-                            "SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node."
-                        );
+                        log_debug_lazy!("cluster", format!("SpecificNode: No active reconnect task for route `{route:?}`. Proceeding to random node."));
                     }
 
                     conn_check
@@ -3213,6 +3315,9 @@ where
         let (address, mut conn) = match conn_check {
             ConnectionCheck::Found((address, connection)) => (address, connection.await),
             ConnectionCheck::OnlyAddress(address) => {
+                log_warn_rate_limited!("moved_error", 10, format!(
+                    "MOVED target address {} not found in current connection map, triggering refresh",
+                    address));
                 // Trigger refresh task and get the single notifier
                 let mut notifiers = Self::trigger_refresh_connection_tasks(
                     core.clone(),
@@ -3224,20 +3329,29 @@ where
 
                 // Extract the single notifier (if any)
                 if let Some(refresh_notifier) = notifiers.pop() {
-                    debug!(
-                        "get_connection: Waiting on the refresh notifier for address: {}",
-                        address
+                    log_debug_lazy!(
+                        "cluster",
+                        format!(
+                            "get_connection: Waiting on the refresh notifier for address: {}",
+                            address
+                        )
                     );
                     // Wait for the refresh task to notify that it's done reconnecting (or transitioning).
                     refresh_notifier.notified().await;
-                    debug!(
-                        "get_connection: After waiting on the refresh notifier for address: {}",
-                        address
+                    log_debug_lazy!(
+                        "cluster",
+                        format!(
+                            "get_connection: After waiting on the refresh notifier for address: {}",
+                            address
+                        )
                     );
                 } else {
-                    debug!(
-                        "get_connection: No notifier to wait on for address: {}",
-                        address
+                    log_debug_lazy!(
+                        "cluster",
+                        format!(
+                            "get_connection: No notifier to wait on for address: {}",
+                            address
+                        )
                     );
                 }
 
@@ -3245,7 +3359,10 @@ where
                 let conn_option = core.conn_lock.read().connection_for_address(&address);
 
                 if let Some((address, conn)) = conn_option {
-                    debug!("get_connection: Connection found for address: {}", address);
+                    log_debug_lazy!(
+                        "cluster",
+                        format!("get_connection: Connection found for address: {}", address)
+                    );
                     (address, conn.await)
                 } else {
                     return Err((
@@ -3295,6 +3412,17 @@ where
             requests.push(request);
         }
         drop(rx_guard);
+        let count = requests.len();
+        if count > 0 {
+            log_warn_rate_limited!(
+                "cluster",
+                5,
+                format!(
+                    "fail_pending_requests: failing {} pending requests (Connection in recovery)",
+                    count
+                )
+            );
+        }
         for request in requests {
             let _ = request.sender.send(Err(RedisError::from((
                 ErrorKind::ClientError,
@@ -3304,7 +3432,7 @@ where
     }
 
     fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
-        trace!("entered poll_recover");
+        log_trace_lazy!("cluster", "entered poll_recover");
 
         let recover_future = match &mut self.state {
             ConnectionState::PollComplete => return Poll::Ready(Ok(())),
@@ -3319,13 +3447,17 @@ where
                     Poll::Pending => Poll::Pending,
                     Poll::Ready(Ok(Ok(()))) => {
                         // Task succeeded
-                        trace!("Slot refresh completed successfully!");
+                        log_info_rate_limited!(
+                            "slot_refresh",
+                            10,
+                            "poll_recover: slot refresh completed successfully, recovery complete"
+                        );
                         self.state = ConnectionState::PollComplete;
                         Poll::Ready(Ok(()))
                     }
                     Poll::Ready(Ok(Err(e))) => {
                         // Task completed but returned an engine error
-                        trace!("Slot refresh failed: {:?}", e);
+                        log_trace_lazy!("cluster", format!("Slot refresh failed: {:?}", e));
 
                         if e.kind() == ErrorKind::AllConnectionsUnavailable {
                             // If all connections unavailable, try reconnect
@@ -3352,12 +3484,12 @@ where
                     Poll::Ready(Err(join_err)) => {
                         if join_err.is_cancelled() {
                             // Task was intentionally aborted - don't treat as an error
-                            trace!("Slot refresh task was aborted");
+                            log_trace_lazy!("cluster", "Slot refresh task was aborted");
                             self.state = ConnectionState::PollComplete;
                             Poll::Ready(Ok(()))
                         } else {
                             // Task panicked - try reconnecting to initial nodes as a recovery strategy
-                            warn!("Slot refresh task panicked: {:?} - attempting recovery by reconnecting to initial nodes", join_err);
+                            log_warn_lazy!("cluster", format!("Slot refresh task panicked: {:?} - attempting recovery by reconnecting to initial nodes", join_err));
 
                             // TODO - consider a gracefully closing of the client
                             // Since a panic indicates a bug in the refresh logic,
@@ -3385,15 +3517,18 @@ where
                 match Pin::new(handle).poll(cx) {
                     Poll::Pending => Poll::Pending,
                     Poll::Ready(Ok(())) => {
-                        trace!("Reconnected to initial nodes");
+                        log_trace_lazy!("cluster", "Reconnected to initial nodes");
                         self.state = ConnectionState::PollComplete;
                         Poll::Ready(Ok(()))
                     }
                     Poll::Ready(Err(join_err)) => {
                         if join_err.is_cancelled() {
-                            trace!("Reconnect to initial nodes task was aborted");
+                            log_trace_lazy!(
+                                "cluster",
+                                "Reconnect to initial nodes task was aborted"
+                            );
                         } else {
-                            warn!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err);
+                            log_warn_lazy!("cluster", format!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err));
                         }
                         self.state = ConnectionState::PollComplete;
                         Poll::Ready(Ok(()))
@@ -3403,17 +3538,20 @@ where
             RecoverFuture::Reconnect(ref mut handle) => match Pin::new(handle).poll(cx) {
                 Poll::Pending => Poll::Pending,
                 Poll::Ready(Ok(())) => {
-                    trace!("Reconnected connections");
+                    log_trace_lazy!("cluster", "Reconnected connections");
                     self.state = ConnectionState::PollComplete;
                     Poll::Ready(Ok(()))
                 }
                 Poll::Ready(Err(join_err)) => {
                     if join_err.is_cancelled() {
-                        trace!("Reconnect task was aborted");
+                        log_trace_lazy!("cluster", "Reconnect task was aborted");
                     } else {
-                        warn!(
-                            "Reconnect task panicked: {:?} - marking recovery as complete",
-                            join_err
+                        log_warn_lazy!(
+                            "cluster",
+                            format!(
+                                "Reconnect task panicked: {:?} - marking recovery as complete",
+                                join_err
+                            )
                         );
                     }
                     self.state = ConnectionState::PollComplete;
@@ -3666,7 +3804,9 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
-        trace!("poll_flush: {:?}", self.state);
+        log_trace_lazy!("cluster", format!("poll_flush: {:?}", self.state));
+        // Adaptive health snapshot: healthy=5min, recovery=10s
+        static LAST_HEALTH_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         self.send_refresh_error();
 
         match self.as_mut().poll_recover(cx) {
@@ -3684,8 +3824,48 @@ where
         }
 
         match ready!(self.poll_complete(cx)) {
-            PollFlushAction::None => Poll::Ready(Ok(())),
+            PollFlushAction::None => {
+                // Adaptive health snapshot
+                let now_secs = SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let last_health = LAST_HEALTH_LOG.load(Ordering::Relaxed);
+                let in_recovery = matches!(self.state, ConnectionState::Recover(_));
+                let interval = if in_recovery { 10 } else { 300 };
+                if now_secs >= last_health + interval {
+                    LAST_HEALTH_LOG.store(now_secs, Ordering::Relaxed);
+                    let in_flight = self.in_flight_requests.len();
+                    if in_recovery {
+                        log_info_lazy!(
+                            "cluster",
+                            format!(
+                                "poll_flush health (recovery): in_flight_requests={}",
+                                in_flight
+                            )
+                        );
+                    } else {
+                        log_debug_lazy!(
+                            "cluster",
+                            format!(
+                                "poll_flush health (healthy): in_flight_requests={}",
+                                in_flight
+                            )
+                        );
+                    }
+                }
+                Poll::Ready(Ok(()))
+            }
             PollFlushAction::RebuildSlots => {
+                let in_flight = self.in_flight_requests.len();
+                log_info_rate_limited!(
+                    "cluster",
+                    10,
+                    format!(
+                        "poll_flush: transitioning to RebuildSlots, in_flight_requests={}",
+                        in_flight
+                    )
+                );
                 let task_handle = ClusterConnInner::spawn_refresh_slots_task(
                     self.inner.clone(),
                     &RefreshPolicy::Throttable,
@@ -3695,6 +3875,10 @@ where
                 Poll::Pending
             }
             PollFlushAction::ReconnectFromInitialConnections => {
+                let in_flight = self.in_flight_requests.len();
+                log_info_rate_limited!("cluster", 10, format!(
+                    "poll_flush: transitioning to ReconnectFromInitialConnections, in_flight_requests={}",
+                    in_flight));
                 let inner = self.inner.clone();
                 let handle = tokio::spawn(async move {
                     ClusterConnInner::reconnect_to_initial_nodes(inner).await
@@ -3705,6 +3889,14 @@ where
                 Poll::Pending
             }
             PollFlushAction::Reconnect(addresses) => {
+                let in_flight = self.in_flight_requests.len();
+                log_info_rate_limited!(
+                    "cluster",
+                    10,
+                    format!(
+                    "poll_flush: transitioning to Reconnect(addresses={:?}), in_flight_requests={}",
+                    addresses, in_flight)
+                );
                 let inner = self.inner.clone();
                 let handle = tokio::spawn(async move {
                     ClusterConnInner::trigger_refresh_connection_tasks(
@@ -3972,6 +4164,10 @@ where
     // During initial connection, use existing connections to avoid double DNS lookup
     let use_initial_nodes_lookup = refresh_topology_from_initial_nodes
         && !matches!(trigger, SlotRefreshTrigger::InitialConnection);
+
+    log_info_lazy!("slot_refresh", format!(
+        "calculate_topology_from_random_nodes: use_initial_nodes={}, num_to_query={}, trigger={:?}, retry={}",
+        use_initial_nodes_lookup, num_of_nodes_to_query, trigger, curr_retry));
 
     // Get connections either from seed nodes or random existing connections.
     let (requested_nodes, mut failed_addresses) = if use_initial_nodes_lookup {
