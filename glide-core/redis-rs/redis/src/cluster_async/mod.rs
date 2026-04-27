@@ -1283,7 +1283,19 @@ impl<C> Future for Request<C> {
                     OperationTarget::FanOut => {
                         trace!("Request error `{}` multi-node request", err);
 
-                        // Fanout operation are retried per internal request, and don't need additional retries.
+                        // Fanout operations are retried per internal request, and don't need additional retries.
+                        // If the error is ConnectionNotFoundForRoute, trigger a slot refresh
+                        // to discover potential topology changes (e.g., failover).
+                        if err.kind() == ErrorKind::ConnectionNotFoundForRoute {
+                            let mut request = this.request.take().unwrap();
+                            request.info.reset_routing();
+                            return Next::RefreshSlots {
+                                request: Some(request),
+                                sleep_duration: Some(sleep_duration),
+                                moved_redirect: None,
+                            }
+                            .into();
+                        }
                         self.respond(Err(err));
                         return Next::Done.into();
                     }
