@@ -2,6 +2,7 @@
 
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
+use logger_core::log_warn_lazy;
 
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
@@ -262,8 +263,9 @@ async fn execute_command_request_and_complete(
                             )));
                         }
                         // For other compression errors, log and continue
-                        log::warn!(
-                            "Compression processing failed: {e}, continuing with original command"
+                        log_warn_lazy!(
+                            "compression",
+                            format!("Compression processing failed: {e}, continuing with original command")
                         );
                     }
                 }
@@ -311,10 +313,9 @@ async fn execute_command_request_and_complete(
                             }
                         }
                         Err(err) => {
-                            log::warn!(
-                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                root_span_ptr,
-                                err
+                            log_warn_lazy!(
+                                "otel",
+                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                             );
                         }
                     }
@@ -349,7 +350,7 @@ async fn execute_command_request_and_complete(
                                 )));
                             }
                             // For other compression errors, log and continue
-                            log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                            log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
                         }
                     }
                     pipeline.add_command(valkey_cmd);
@@ -424,10 +425,9 @@ async fn execute_command_request_and_complete(
                             }
                         }
                         Err(err) => {
-                            log::warn!(
-                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                root_span_ptr,
-                                err
+                            log_warn_lazy!(
+                                "otel",
+                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                             );
                         }
                     }
@@ -1745,7 +1745,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                             )));
                                         }
                                         // For other compression errors, log and continue
-                                        log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                                        log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
                                     }
                                 }
                                 pipeline.add_command(valkey_cmd);
@@ -1810,10 +1810,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         }
                                     }
                                     Err(err) => {
-                                        log::warn!(
-                                            "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                            root_span_ptr,
-                                            err
+                                        log_warn_lazy!(
+                                            "otel",
+                                            format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                                         );
                                     }
                                 }
@@ -1830,9 +1829,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                             ) {
                                                 Ok(decompressed) => Ok(decompressed),
                                                 Err(e) => {
-                                                    log::warn!(
-                                                        "Failed to decompress batch response: {}, returning original",
-                                                        e
+                                                    log_warn_lazy!(
+                                                        "compression",
+                                                        format!("Failed to decompress batch response: {}, returning original", e)
                                                     );
                                                     Ok(value)
                                                 }
