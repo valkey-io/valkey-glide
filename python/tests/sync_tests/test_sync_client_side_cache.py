@@ -553,6 +553,7 @@ class TestSyncClientSideCache:
         entry_count = client.get_cache_entry_count()
         assert entry_count == 3, "Expected 3 entries in cache after SMEMBERS"
 
+        client.flushall()
         client.close()
 
     def test_sync_cache_entry_ttl_ms_validation(self):
