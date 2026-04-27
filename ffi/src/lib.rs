@@ -3387,28 +3387,10 @@ pub unsafe extern "C" fn batch(
 
         // Process batch response for decompression if compression is enabled
         match result {
-            Ok(value) => {
-                if let Some(ref manager) = compression_manager_for_decompression {
-                    match glide_core::compression::decompress_batch_response(
-                        value.clone(),
-                        manager.as_ref(),
-                    ) {
-                        Ok(decompressed) => Ok(decompressed),
-                        Err(e) => {
-                            logger_core::log_warn(
-                                "batch_decompression",
-                                format!(
-                                    "Failed to decompress batch response: {}, returning original",
-                                    e
-                                ),
-                            );
-                            Ok(value)
-                        }
-                    }
-                } else {
-                    Ok(value)
-                }
-            }
+            Ok(value) => Ok(glide_core::compression::try_decompress_batch_response(
+                value,
+                compression_manager_for_decompression.as_deref(),
+            )),
             Err(e) => Err(e),
         }
     })
