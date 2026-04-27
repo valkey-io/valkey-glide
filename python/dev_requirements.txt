@@ -19,5 +19,5 @@ pytest_asyncio
 # Sync Client
 types-cffi
 setuptools
-wheel >= 0.45
+wheel >= 0.47.0
 build
