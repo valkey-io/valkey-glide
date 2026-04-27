@@ -181,7 +181,9 @@ pub type CompressionResult<T> = Result<T, CompressionError>;
 
 pub trait CompressionBackend: Send + Sync + fmt::Debug {
     fn compress(&self, data: &[u8], level: Option<i32>) -> CompressionResult<Vec<u8>>;
-    fn decompress(&self, data: &[u8]) -> CompressionResult<Vec<u8>>;
+    /// Decompress data with an optional size limit to prevent decompression bombs.
+    /// If max_size is Some and the decompressed data would exceed it, returns an error.
+    fn decompress(&self, data: &[u8], max_size: Option<usize>) -> CompressionResult<Vec<u8>>;
     fn is_compressed(&self, data: &[u8]) -> bool;
     fn backend_name(&self) -> &'static str;
     fn default_level(&self) -> Option<i32>;
@@ -236,12 +238,19 @@ impl std::str::FromStr for CompressionBackendType {
     }
 }
 
+/// Default maximum decompressed size (512MB, matching Valkey's proto-max-bulk-len)
+pub const DEFAULT_MAX_DECOMPRESSED_SIZE: usize = 512 * 1024 * 1024;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompressionConfig {
     pub enabled: bool,
     pub backend: CompressionBackendType,
     pub compression_level: Option<i32>,
     pub min_compression_size: usize,
+    /// Maximum allowed size for decompressed data to prevent decompression bombs.
+    /// Default is 512MB (matching Valkey's proto-max-bulk-len).
+    /// Set to None to disable the limit (not recommended).
+    pub max_decompressed_size: Option<usize>,
 }
 
 impl CompressionConfig {
@@ -251,6 +260,7 @@ impl CompressionConfig {
             backend,
             compression_level: backend.default_level(),
             min_compression_size: 64,
+            max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
         }
     }
 
@@ -260,6 +270,7 @@ impl CompressionConfig {
             backend: CompressionBackendType::Zstd,
             compression_level: None,
             min_compression_size: 64,
+            max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
         }
     }
 
@@ -270,6 +281,13 @@ impl CompressionConfig {
 
     pub fn with_min_compression_size(mut self, size: usize) -> Self {
         self.min_compression_size = size;
+        self
+    }
+
+    /// Set the maximum allowed decompressed size.
+    /// Set to None to disable the limit (not recommended for untrusted data).
+    pub fn with_max_decompressed_size(mut self, size: Option<usize>) -> Self {
+        self.max_decompressed_size = size;
         self
     }
 
@@ -411,13 +429,14 @@ impl CompressionManager {
             // If the data was compressed with our configured backend, use it
             // This respects the client's compression configuration
             let result = if backend_id == self.backend.backend_id() {
-                self.backend.decompress(value)
+                self.backend
+                    .decompress(value, self.config.max_decompressed_size)
             } else {
                 // Otherwise, use a static backend for decompression
                 // Static backends are shared and don't allocate on each call
                 // Return error if backend is not supported
                 let backend = get_backend_for_decompression(backend_id)?;
-                backend.decompress(value)
+                backend.decompress(value, self.config.max_decompressed_size)
             };
 
             // Update telemetry on successful decompression
@@ -495,7 +514,7 @@ pub mod zstd_backend {
             Ok(result)
         }
 
-        fn decompress(&self, data: &[u8]) -> CompressionResult<Vec<u8>> {
+        fn decompress(&self, data: &[u8], max_size: Option<usize>) -> CompressionResult<Vec<u8>> {
             if !self.is_compressed(data) {
                 return Err(CompressionError::decompression_failed(
                     self.backend_name(),
@@ -506,15 +525,63 @@ pub mod zstd_backend {
 
             let compressed_data = &data[HEADER_SIZE..];
 
-            let decompressed_data = zstd::decode_all(compressed_data).map_err(|e| {
-                CompressionError::decompression_failed(
-                    self.backend_name(),
-                    data.len(),
-                    e.to_string(),
-                )
-            })?;
+            // Use streaming decompression with size limit to prevent decompression bombs
+            if let Some(max) = max_size {
+                use std::io::Read;
+                let mut decoder = zstd::Decoder::new(compressed_data).map_err(|e| {
+                    CompressionError::decompression_failed(
+                        self.backend_name(),
+                        data.len(),
+                        e.to_string(),
+                    )
+                })?;
 
-            Ok(decompressed_data)
+                // Read with a size limit
+                let mut decompressed = Vec::new();
+                let mut buffer = [0u8; 8192];
+                let mut total_read = 0usize;
+
+                loop {
+                    let bytes_read = decoder.read(&mut buffer).map_err(|e| {
+                        CompressionError::decompression_failed(
+                            self.backend_name(),
+                            data.len(),
+                            e.to_string(),
+                        )
+                    })?;
+
+                    if bytes_read == 0 {
+                        break;
+                    }
+
+                    total_read += bytes_read;
+                    if total_read > max {
+                        return Err(CompressionError::decompression_failed(
+                            self.backend_name(),
+                            data.len(),
+                            format!(
+                                "decompressed size exceeds maximum allowed size of {} bytes",
+                                max
+                            ),
+                        ));
+                    }
+
+                    decompressed.extend_from_slice(&buffer[..bytes_read]);
+                }
+
+                Ok(decompressed)
+            } else {
+                // No size limit - use the simpler decode_all
+                let decompressed_data = zstd::decode_all(compressed_data).map_err(|e| {
+                    CompressionError::decompression_failed(
+                        self.backend_name(),
+                        data.len(),
+                        e.to_string(),
+                    )
+                })?;
+
+                Ok(decompressed_data)
+            }
         }
 
         fn is_compressed(&self, data: &[u8]) -> bool {
@@ -637,7 +704,7 @@ pub mod lz4_backend {
             Ok(result)
         }
 
-        fn decompress(&self, data: &[u8]) -> CompressionResult<Vec<u8>> {
+        fn decompress(&self, data: &[u8], max_size: Option<usize>) -> CompressionResult<Vec<u8>> {
             if !self.is_compressed(data) {
                 return Err(CompressionError::decompression_failed(
                     self.backend_name(),
@@ -660,6 +727,21 @@ pub mod lz4_backend {
             let original_size_u32 =
                 u32::from_le_bytes([size_bytes[0], size_bytes[1], size_bytes[2], size_bytes[3]]);
             let compressed_block = &compressed_data[4..];
+
+            // Validate size against max_decompressed_size BEFORE allocation
+            // This prevents decompression bombs where a malicious header claims a huge size
+            if let Some(max) = max_size
+                && original_size_u32 as usize > max
+            {
+                return Err(CompressionError::decompression_failed(
+                    self.backend_name(),
+                    data.len(),
+                    format!(
+                        "claimed decompressed size ({} bytes) exceeds maximum allowed size ({} bytes)",
+                        original_size_u32, max
+                    ),
+                ));
+            }
 
             // LZ4 block decompression requires knowing the uncompressed size
             // The API uses i32, so we must reject sizes that don't fit
