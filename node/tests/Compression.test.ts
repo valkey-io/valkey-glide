@@ -1096,4 +1096,70 @@ describe("Compression", () => {
         },
         TIMEOUT,
     );
+
+    // --- Max Decompressed Size Tests ---
+
+    it("compression_config_default_max_decompressed_size", () => {
+        // Default config should not throw
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+            });
+        }).not.toThrow();
+    });
+
+    it("compression_config_custom_max_decompressed_size", () => {
+        // Custom max decompressed size should not throw
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+                maxDecompressedSize: 100 * 1024 * 1024, // 100MB
+            });
+        }).not.toThrow();
+    });
+
+    it("compression_config_null_max_decompressed_size_disables_limit", () => {
+        // null should disable the limit (not throw)
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+                maxDecompressedSize: null,
+            });
+        }).not.toThrow();
+    });
+
+    it("compression_config_zero_max_decompressed_size_throws", () => {
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+                maxDecompressedSize: 0,
+            });
+        }).toThrow(ConfigurationError);
+    });
+
+    it("compression_config_negative_max_decompressed_size_throws", () => {
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+                maxDecompressedSize: -1,
+            });
+        }).toThrow(ConfigurationError);
+    });
+
+    it.each([false, true])(
+        "compression_client_with_custom_max_decompressed_size cluster_mode=%p",
+        async (clusterMode) => {
+            // Test that client can be created with custom max_decompressed_size
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+                maxDecompressedSize: 100 * 1024 * 1024, // 100MB
+            });
+            const key = uniqueKey("max_decomp_test");
+
+            // Basic set/get should work
+            await setAndExpectCompression(client, key, TEXT_1K);
+            expect(await client.get(key)).toBe(TEXT_1K);
+        },
+        TIMEOUT,
+    );
 });
