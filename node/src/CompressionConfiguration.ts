@@ -20,6 +20,9 @@ const MIN_COMPRESSED_SIZE = 6;
 /** Default minimum size in bytes for values to be compressed. */
 const DEFAULT_MIN_COMPRESSION_SIZE = 64;
 
+/** Default maximum decompressed size (512MB, matching Valkey's proto-max-bulk-len). */
+const DEFAULT_MAX_DECOMPRESSED_SIZE = 512 * 1024 * 1024;
+
 /**
  * Configuration for automatic compression of values sent to the server.
  *
@@ -39,6 +42,12 @@ const DEFAULT_MIN_COMPRESSION_SIZE = 64;
  *     enabled: true,
  *     backend: CompressionBackend.LZ4,
  *     minCompressionSize: 128,
+ * };
+ *
+ * // Enable compression with custom max decompressed size limit
+ * const config: CompressionConfiguration = {
+ *     enabled: true,
+ *     maxDecompressedSize: 100 * 1024 * 1024, // 100MB limit
  * };
  * ```
  */
@@ -63,6 +72,14 @@ export interface CompressionConfiguration {
      * Must be at least 6 bytes. Defaults to 64 bytes.
      */
     minCompressionSize?: number;
+    /**
+     * Maximum allowed size in bytes for decompressed data.
+     * This limit prevents decompression bombs (maliciously crafted compressed data
+     * that expands to huge sizes).
+     * If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
+     * Set to null to disable the limit (not recommended).
+     */
+    maxDecompressedSize?: number | null;
 }
 
 /**
@@ -85,6 +102,14 @@ export function validateCompressionConfiguration(
         !Number.isInteger(config.compressionLevel)
     ) {
         throw new ConfigurationError("compressionLevel must be an integer");
+    }
+
+    if (
+        config.maxDecompressedSize !== undefined &&
+        config.maxDecompressedSize !== null &&
+        config.maxDecompressedSize <= 0
+    ) {
+        throw new ConfigurationError("maxDecompressedSize must be positive");
     }
 }
 
@@ -110,6 +135,14 @@ export function compressionConfigToProtobuf(
     if (config.compressionLevel !== undefined) {
         proto.compressionLevel = config.compressionLevel;
     }
+
+    // Handle maxDecompressedSize: undefined means use default, null means disable
+    if (config.maxDecompressedSize === undefined) {
+        proto.maxDecompressedSize = DEFAULT_MAX_DECOMPRESSED_SIZE;
+    } else if (config.maxDecompressedSize !== null) {
+        proto.maxDecompressedSize = config.maxDecompressedSize;
+    }
+    // If null, don't set the field (disables the limit)
 
     return connection_request.CompressionConfig.create(proto);
 }
