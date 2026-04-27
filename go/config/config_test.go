@@ -1107,8 +1107,8 @@ func TestCompressionConfiguration_DefaultMaxDecompressedSize(t *testing.T) {
 
 	pb, err := compressionConfig.toProtobuf()
 	assert.NoError(t, err)
-	// Default is nil, which means "use Rust default" - protobuf field is not set (0)
-	assert.Equal(t, uint64(0), pb.MaxDecompressedSize)
+	// Default is nil, which means "use Rust default" - protobuf field is not set
+	assert.Nil(t, pb.MaxDecompressedSize)
 }
 
 func TestCompressionConfiguration_WithCustomMaxDecompressedSize(t *testing.T) {
@@ -1118,7 +1118,8 @@ func TestCompressionConfiguration_WithCustomMaxDecompressedSize(t *testing.T) {
 
 	pb, err := compressionConfig.toProtobuf()
 	assert.NoError(t, err)
-	assert.Equal(t, customSize, pb.MaxDecompressedSize)
+	assert.NotNil(t, pb.MaxDecompressedSize)
+	assert.Equal(t, customSize, *pb.MaxDecompressedSize)
 }
 
 func TestCompressionConfiguration_WithNilMaxDecompressedSizeUsesRustDefault(t *testing.T) {
@@ -1127,8 +1128,8 @@ func TestCompressionConfiguration_WithNilMaxDecompressedSizeUsesRustDefault(t *t
 
 	pb, err := compressionConfig.toProtobuf()
 	assert.NoError(t, err)
-	// When nil, the protobuf field is not set (0), Rust will use its default
-	assert.Equal(t, uint64(0), pb.MaxDecompressedSize)
+	// When nil, the protobuf field is not set, Rust will use its default
+	assert.Nil(t, pb.MaxDecompressedSize)
 }
 
 func TestCompressionConfiguration_WithZeroMaxDecompressedSizeReturnsError(t *testing.T) {
@@ -1158,7 +1159,8 @@ func TestCompressionConfiguration_AllFieldsSetWithMaxDecompressedSize(t *testing
 	assert.NotNil(t, pb.CompressionLevel)
 	assert.Equal(t, level, *pb.CompressionLevel)
 	assert.Equal(t, uint32(256), pb.MinCompressionSize)
-	assert.Equal(t, maxSize, pb.MaxDecompressedSize)
+	assert.NotNil(t, pb.MaxDecompressedSize)
+	assert.Equal(t, maxSize, *pb.MaxDecompressedSize)
 }
 
 func TestCompressionConfiguration_WithEnabledToggle(t *testing.T) {
