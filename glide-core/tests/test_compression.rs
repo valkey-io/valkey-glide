@@ -1432,10 +1432,7 @@ mod compression_tests {
         assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
         assert!(err.to_string().contains("exceeds maximum allowed size"));
 
-        // Test with None limit (no limit)
-        let result = zstd_backend.decompress(&compressed, None);
-        // This will fail because the data was compressed with LZ4, not ZSTD
-        // Let's use the correct backend
+        // Test with None limit (no limit) - use the correct backend (LZ4)
         let result = lz4_backend.decompress(&compressed, None);
         assert!(result.is_ok());
     }
