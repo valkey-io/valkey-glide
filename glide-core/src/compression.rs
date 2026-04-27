@@ -559,7 +559,8 @@ pub mod zstd_backend {
                             self.backend_name(),
                             data.len(),
                             format!(
-                                "decompressed size exceeds maximum allowed size of {} bytes",
+                                "decompressed size exceeds maximum allowed size of {} bytes. \
+                                To handle larger values, increase 'max_decompressed_size' in your CompressionConfiguration.",
                                 max
                             ),
                         ));
@@ -736,7 +737,8 @@ pub mod lz4_backend {
                     self.backend_name(),
                     data.len(),
                     format!(
-                        "claimed decompressed size ({} bytes) exceeds maximum allowed size ({} bytes)",
+                        "claimed decompressed size ({} bytes) exceeds maximum allowed size ({} bytes). \
+                        To handle larger values, increase 'max_decompressed_size' in your CompressionConfiguration.",
                         original_size_u32, max
                     ),
                 ));
