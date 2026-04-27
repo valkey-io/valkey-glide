@@ -63,6 +63,7 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         "backend",
         "compression_level",
         "min_compression_size",
+        "max_decompressed_size",
     )
     # Check if the attribute name itself is in exclusions
     if name in exclusions:
