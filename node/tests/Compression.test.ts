@@ -1097,6 +1097,46 @@ describe("Compression", () => {
         TIMEOUT,
     );
 
+    it.each([false, true])(
+        "compression_empty_batch cluster_mode=%p",
+        async (clusterMode) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+
+            const before = getNumericStats(client);
+
+            // Build empty transaction
+            const transaction = clusterMode
+                ? new ClusterTransaction()
+                : new Transaction();
+
+            // Execute empty transaction
+            const results = clusterMode
+                ? await (client as GlideClusterClient).exec(
+                      transaction as ClusterTransaction,
+                      true,
+                  )
+                : await (client as GlideClient).exec(
+                      transaction as Transaction,
+                      true,
+                  );
+
+            // Empty batch should return empty array
+            expect(results).toEqual([]);
+
+            // No compression/decompression should happen
+            const after = getNumericStats(client);
+            expect(after.total_values_compressed).toBe(
+                before.total_values_compressed,
+            );
+            expect(after.total_values_decompressed).toBe(
+                before.total_values_decompressed,
+            );
+        },
+        TIMEOUT,
+    );
+
     // --- Max Decompressed Size Tests ---
 
     it("compression_config_default_max_decompressed_size", () => {
