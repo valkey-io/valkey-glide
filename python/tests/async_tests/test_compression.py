@@ -1894,10 +1894,10 @@ class TestCompressionMaxDecompressedSize:
     """Test max_decompressed_size configuration for decompression bomb protection."""
 
     def test_compression_config_default_max_decompressed_size(self):
-        """Test that CompressionConfiguration has default max_decompressed_size."""
+        """Test that CompressionConfiguration has default max_decompressed_size of None (uses Rust default)."""
         config = CompressionConfiguration(enabled=True)
-        # Default is 512MB
-        assert config.max_decompressed_size == 512 * 1024 * 1024
+        # Default is None (Rust will use 512MB)
+        assert config.max_decompressed_size is None
 
     def test_compression_config_custom_max_decompressed_size(self):
         """Test that CompressionConfiguration accepts custom max_decompressed_size."""
@@ -1906,11 +1906,6 @@ class TestCompressionMaxDecompressedSize:
             enabled=True, max_decompressed_size=100 * 1024 * 1024
         )
         assert config.max_decompressed_size == 100 * 1024 * 1024
-
-    def test_compression_config_disable_max_decompressed_size(self):
-        """Test that max_decompressed_size can be disabled with None."""
-        config = CompressionConfiguration(enabled=True, max_decompressed_size=None)
-        assert config.max_decompressed_size is None
 
     def test_compression_config_protobuf_includes_max_decompressed_size(self):
         """Test that max_decompressed_size is included in protobuf conversion."""
