@@ -10,7 +10,7 @@ use std::{
     fmt::Debug,
     sync::{
         atomic::{AtomicU64, Ordering},
-        Mutex,
+        RwLock,
     },
     time::{Duration, Instant},
 };
@@ -332,7 +332,7 @@ pub trait EvictionStrategy: Send + Sync + Debug {
 /// - Evict-until-space-available loop
 #[derive(Debug)]
 pub struct GlideCacheImpl<S: EvictionStrategy> {
-    pub(crate) store: Mutex<S>,
+    pub(crate) store: RwLock<S>,
     core: CacheCore,
 }
 impl<S: EvictionStrategy> GlideCacheImpl<S> {
@@ -348,12 +348,13 @@ impl<S: EvictionStrategy> GlideCacheImpl<S> {
             config.enable_metrics
         );
         std::sync::Arc::new(Self {
-            store: Mutex::new(strategy),
+            store: RwLock::new(strategy),
             core: CacheCore::new(config),
         })
     }
 
     /// Remove an expired entry if present, updating memory and stats.
+    /// Caller must hold a write lock on the store.
     /// Uses `peek` to avoid affecting eviction ordering.
     fn remove_if_expired(&self, store: &mut S, key: &[u8]) -> bool {
         let is_expired = store.peek(key).is_some_and(|e| e.is_expired());
@@ -535,15 +536,22 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
     }
 
     fn get(&self, key: &[u8], expected_type: CachedKeyType) -> Option<Value> {
-        let mut store = self.store.lock().unwrap();
-
-        // Check expiration without promoting
-        if self.remove_if_expired(&mut store, key) {
-            return None;
-        }
-
-        // Peek first (no promotion) — check type + clone value
+        // Fast path: read lock for peek + clone (concurrent readers allowed)
         let value = {
+            let store = self.store.read().unwrap();
+
+            // Check expiration via peek (read-only)
+            let is_expired = store.peek(key).is_some_and(|e| e.is_expired());
+            if is_expired {
+                // Need write lock to remove expired entry — drop read lock first
+                drop(store);
+                let mut store = self.store.write().unwrap();
+                // Re-check and remove under write lock (another thread may have already removed it)
+                self.remove_if_expired(&mut store, key);
+                return None;
+            }
+
+            // Peek: check type + clone value (read-only, no promotion yet)
             let entry = store.peek(key)?;
             if entry.key_type != expected_type {
                 debug!(
@@ -555,11 +563,14 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
                 return None;
             }
             entry.value.clone()
+            // Read lock dropped here
         };
-        // Immutable borrow dropped here
 
-        // Now promote (mutates LRU order / LFU frequency)
-        store.promote(key);
+        // Slow path: write lock only for promote (mutates LRU order / LFU frequency)
+        {
+            let mut store = self.store.write().unwrap();
+            store.promote(key);
+        }
 
         Some(value)
     }
@@ -576,7 +587,7 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
             return;
         }
 
-        let mut store = self.store.lock().unwrap();
+        let mut store = self.store.write().unwrap();
 
         // Remove existing entry if present
         if let Some(existing) = store.remove(&key) {
@@ -607,7 +618,7 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
     }
 
     fn invalidate(&self, key: &[u8]) {
-        let mut store = self.store.lock().unwrap();
+        let mut store = self.store.write().unwrap();
 
         if let Some(entry) = store.remove(key) {
             self.core.uncharge(entry.size);
@@ -627,7 +638,7 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
     }
 
     fn entry_count(&self) -> u64 {
-        self.store.lock().unwrap().len() as u64
+        self.store.read().unwrap().len() as u64
     }
 }
 
