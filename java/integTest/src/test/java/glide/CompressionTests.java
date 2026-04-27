@@ -1271,4 +1271,68 @@ public class CompressionTests {
             client.del(new String[] {key1, key2, key3}).get();
         }
     }
+
+    // --- Max Decompressed Size Tests ---
+
+    @Test
+    public void test_compression_config_default_max_decompressed_size() {
+        CompressionConfiguration config = CompressionConfiguration.builder().build();
+        assertEquals(
+                CompressionConfiguration.DEFAULT_MAX_DECOMPRESSED_SIZE, config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_custom_max_decompressed_size() {
+        long customSize = 100L * 1024 * 1024; // 100MB
+        CompressionConfiguration config =
+                CompressionConfiguration.builder().maxDecompressedSize(customSize).build();
+        assertEquals(customSize, config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_disable_max_decompressed_size() {
+        CompressionConfiguration config =
+                CompressionConfiguration.builder().maxDecompressedSize(null).build();
+        assertEquals(null, config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_max_decompressed_size_zero_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(0L).build());
+    }
+
+    @Test
+    public void test_compression_config_max_decompressed_size_negative_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(-1L).build());
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_client_with_custom_max_decompressed_size() {
+        // Test that client can be created with custom max_decompressed_size
+        try (GlideClient client =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .compressionConfiguration(
+                                                CompressionConfiguration.builder()
+                                                        .enabled(true)
+                                                        .maxDecompressedSize(100L * 1024 * 1024) // 100MB
+                                                        .build())
+                                        .build())
+                        .get()) {
+            String key = randomKey("max_decomp_test");
+            String value = generateCompressibleText(200);
+
+            // Basic set/get should work
+            assertEquals(OK, client.set(key, value).get());
+            assertEquals(value, client.get(key).get());
+
+            // Cleanup
+            client.del(new String[] {key}).get();
+        }
+    }
 }

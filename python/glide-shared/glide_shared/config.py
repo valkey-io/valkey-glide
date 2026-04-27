@@ -193,12 +193,17 @@ class CompressionConfiguration:
             ZSTD default is 3
             LZ4 default is 0
         min_compression_size (int): The minimum size in bytes for values to be compressed. Values smaller than this will not be compressed. Defaults to 64 bytes.
+        max_decompressed_size (Optional[int]): Maximum allowed size in bytes for decompressed data.
+            This limit prevents decompression bombs (maliciously crafted compressed data that expands to huge sizes).
+            If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
+            Set to None to disable the limit (not recommended).
     """
 
     enabled: bool = False
     backend: CompressionBackend = CompressionBackend.ZSTD
     compression_level: Optional[int] = None
     min_compression_size: int = 64
+    max_decompressed_size: Optional[int] = 512 * 1024 * 1024  # 512MB default
 
     def __post_init__(self) -> None:
         """Validate compression configuration parameters."""
@@ -242,6 +247,9 @@ class CompressionConfiguration:
 
         if self.compression_level is not None:
             config.compression_level = self.compression_level
+
+        if self.max_decompressed_size is not None:
+            config.max_decompressed_size = self.max_decompressed_size
 
         return config
 
