@@ -599,6 +599,18 @@ impl ClientAdapter {
                                     _ => unreachable!(),
                                 }
                                 unsafe { (success_callback)(request_id, &resp as *const _) };
+                                // Debug canary: poison the stack response after the
+                                // callback returns so that any binding that stashed the
+                                // pointer instead of copying will read obvious garbage
+                                // and trip sanitizers / debug assertions.
+                                #[cfg(debug_assertions)]
+                                unsafe {
+                                    std::ptr::write_bytes(
+                                        &mut resp as *mut CommandResponse as *mut u8,
+                                        0xDE,
+                                        std::mem::size_of::<CommandResponse>(),
+                                    );
+                                }
                                 return std::ptr::null_mut();
                             }
                             _ => {}
@@ -2015,6 +2027,14 @@ impl ResponseArena {
 
     /// Allocate a node in the arena, returning its index.
     fn alloc_node(&mut self) -> usize {
+        debug_assert!(
+            self.nodes.len() < self.nodes.capacity(),
+            "Arena node Vec would reallocate ({} nodes, capacity {}). \
+             This means count_nodes() underestimated — all previously handed-out \
+             pointers would be invalidated after finalize().",
+            self.nodes.len(),
+            self.nodes.capacity(),
+        );
         let idx = self.nodes.len();
         self.nodes.push(CommandResponse::default());
         idx
