@@ -6,7 +6,7 @@ import base64
 import json
 import os
 import random
-from typing import Callable, List, Union, cast
+from typing import Callable, List, Optional, Union, cast
 
 import pytest
 from glide import GlideClient, GlideClusterClient, TGlideClient
@@ -929,6 +929,146 @@ class TestCompressionBatch:
         # Cleanup
         await compression_client.delete(cast(List[Union[str, bytes]], keys))
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_batch_mset_mget_in_batch(
+        self, compression_client: TGlideClient, cluster_mode: bool
+    ):
+        """Test MSET and MGET both inside a batch operation with compression."""
+        key_prefix = f"{{batch_mset_mget}}_{get_random_string(8)}"
+        key1 = f"{key_prefix}_1"
+        key2 = f"{key_prefix}_2"
+        key3 = f"{key_prefix}_3"
+        value1 = generate_compressible_text(1024)
+        value2 = generate_compressible_text(1024)
+        value3 = generate_compressible_text(1024)
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+        initial_decompressed = initial_stats["total_values_decompressed"]
+
+        # Create batch with MSET and MGET
+        batch = (
+            Batch(is_atomic=False)
+            if isinstance(compression_client, GlideClient)
+            else ClusterBatch(is_atomic=False)
+        )
+
+        keys_and_values = {key1: value1, key2: value2, key3: value3}
+        batch.mset(cast(dict, keys_and_values))
+        batch.mget(cast(List[Union[str, bytes]], [key1, key2, key3]))
+
+        # Execute batch
+        if isinstance(compression_client, GlideClient):
+            results = await cast(GlideClient, compression_client).exec(
+                cast(Batch, batch), raise_on_error=True
+            )
+        else:
+            results = await cast(GlideClusterClient, compression_client).exec(
+                cast(ClusterBatch, batch), raise_on_error=True
+            )
+        assert results is not None
+        assert len(results) == 2
+
+        # Verify MSET result
+        assert results[0] == OK
+
+        # Verify MGET results (decompressed)
+        mget_results = cast(List[Optional[bytes]], results[1])
+        assert len(mget_results) == 3
+        assert mget_results[0] == value1.encode()
+        assert mget_results[1] == value2.encode()
+        assert mget_results[2] == value3.encode()
+
+        # Verify compression was applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count >= 3
+        ), f"Batch MSET should compress all 3 values, got {compressed_count}"
+
+        # Verify decompression was applied
+        decompressed_count = stats["total_values_decompressed"] - initial_decompressed
+        assert (
+            decompressed_count >= 3
+        ), f"Batch MGET should decompress all 3 values, got {decompressed_count}"
+
+        # Cleanup
+        await compression_client.delete(
+            cast(List[Union[str, bytes]], [key1, key2, key3])
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_compression_transaction_mset_mget(
+        self, compression_client: TGlideClient, cluster_mode: bool
+    ):
+        """Test MSET and MGET in an atomic transaction with compression."""
+        key_prefix = f"{{tx_mset_mget}}_{get_random_string(8)}"
+        key1 = f"{key_prefix}_1"
+        key2 = f"{key_prefix}_2"
+        key3 = f"{key_prefix}_3"
+        value1 = generate_compressible_text(1024)
+        value2 = generate_compressible_text(1024)
+        value3 = generate_compressible_text(1024)
+
+        # Get initial statistics
+        initial_stats = await compression_client.get_statistics()
+        initial_compressed = initial_stats["total_values_compressed"]
+        initial_decompressed = initial_stats["total_values_decompressed"]
+
+        # Create atomic batch (transaction) with MSET and MGET
+        batch = (
+            Batch(is_atomic=True)
+            if isinstance(compression_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
+
+        keys_and_values = {key1: value1, key2: value2, key3: value3}
+        batch.mset(cast(dict, keys_and_values))
+        batch.mget(cast(List[Union[str, bytes]], [key1, key2, key3]))
+
+        # Execute transaction
+        if isinstance(compression_client, GlideClient):
+            results = await cast(GlideClient, compression_client).exec(
+                cast(Batch, batch), raise_on_error=True
+            )
+        else:
+            results = await cast(GlideClusterClient, compression_client).exec(
+                cast(ClusterBatch, batch), raise_on_error=True
+            )
+        assert results is not None
+        assert len(results) == 2
+
+        # Verify MSET result
+        assert results[0] == OK
+
+        # Verify MGET results (decompressed)
+        mget_results = cast(List[Optional[bytes]], results[1])
+        assert len(mget_results) == 3
+        assert mget_results[0] == value1.encode()
+        assert mget_results[1] == value2.encode()
+        assert mget_results[2] == value3.encode()
+
+        # Verify compression was applied
+        stats = await compression_client.get_statistics()
+        compressed_count = stats["total_values_compressed"] - initial_compressed
+        assert (
+            compressed_count >= 3
+        ), f"Transaction MSET should compress all 3 values, got {compressed_count}"
+
+        # Verify decompression was applied
+        decompressed_count = stats["total_values_decompressed"] - initial_decompressed
+        assert (
+            decompressed_count >= 3
+        ), f"Transaction MGET should decompress all 3 values, got {decompressed_count}"
+
+        # Cleanup
+        await compression_client.delete(
+            cast(List[Union[str, bytes]], [key1, key2, key3])
+        )
+
 
 @pytest.mark.anyio
 class TestCompressionEdgeCases:
@@ -1747,3 +1887,37 @@ class TestCompressionIncompatibleCommands:
 
         # Cleanup
         await compression_client.delete([key])
+
+
+@pytest.mark.anyio
+class TestCompressionMaxDecompressedSize:
+    """Test max_decompressed_size configuration for decompression bomb protection."""
+
+    def test_compression_config_default_max_decompressed_size(self):
+        """Test that CompressionConfiguration has default max_decompressed_size of None (uses Rust default)."""
+        config = CompressionConfiguration(enabled=True)
+        # Default is None (Rust will use 512MB)
+        assert config.max_decompressed_size is None
+
+    def test_compression_config_custom_max_decompressed_size(self):
+        """Test that CompressionConfiguration accepts custom max_decompressed_size."""
+        # 100MB limit
+        config = CompressionConfiguration(
+            enabled=True, max_decompressed_size=100 * 1024 * 1024
+        )
+        assert config.max_decompressed_size == 100 * 1024 * 1024
+
+    def test_compression_config_protobuf_includes_max_decompressed_size(self):
+        """Test that max_decompressed_size is included in protobuf conversion."""
+        config = CompressionConfiguration(
+            enabled=True, max_decompressed_size=100 * 1024 * 1024
+        )
+        protobuf = config._to_protobuf()
+        assert protobuf.max_decompressed_size == 100 * 1024 * 1024
+
+    def test_compression_config_protobuf_omits_none_max_decompressed_size(self):
+        """Test that None max_decompressed_size is not set in protobuf (uses Rust default)."""
+        config = CompressionConfiguration(enabled=True, max_decompressed_size=None)
+        protobuf = config._to_protobuf()
+        # When None, the field should not be set (will be 0 in protobuf, Rust uses default)
+        assert protobuf.max_decompressed_size == 0

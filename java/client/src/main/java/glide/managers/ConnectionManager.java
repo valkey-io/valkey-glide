@@ -418,6 +418,9 @@ public class ConnectionManager {
                             if (cc.getCompressionLevel() != null) {
                                 compressionBuilder.setCompressionLevel(cc.getCompressionLevel());
                             }
+                            if (cc.getMaxDecompressedSize() != null) {
+                                compressionBuilder.setMaxDecompressedSize(cc.getMaxDecompressedSize());
+                            }
                             requestBuilder.setCompressionConfig(compressionBuilder.build());
                         }
 

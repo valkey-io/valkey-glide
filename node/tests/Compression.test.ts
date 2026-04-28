@@ -13,6 +13,7 @@ import {
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     BaseClientConfiguration,
+    ClusterTransaction,
     CompressionBackend,
     CompressionConfiguration,
     ConfigurationError,
@@ -22,6 +23,7 @@ import {
     ProtocolVersion,
     RequestError,
     TimeUnit,
+    Transaction,
     validateCompressionConfiguration,
 } from "../build-ts";
 import {
@@ -807,6 +809,386 @@ describe("Compression", () => {
 
             // BITCOUNT
             expect(await client.bitcount(key)).toBeGreaterThanOrEqual(0);
+        },
+        TIMEOUT,
+    );
+
+    // --- Batch/Transaction Compression Tests ---
+
+    it(
+        "compression_transaction_set_get_standalone",
+        async () => {
+            client = await createCompressedClient(false, { enabled: true });
+            const key1 = uniqueKey("{tx_test}_1");
+            const key2 = uniqueKey("{tx_test}_2");
+            const key3 = uniqueKey("{tx_test}_3");
+
+            const before = getNumericStats(client);
+
+            // Build transaction with SET and GET commands
+            const transaction = new Transaction();
+            transaction.set(key1, TEXT_1K);
+            transaction.set(key2, TEXT_1K);
+            transaction.set(key3, TEXT_1K);
+            transaction.get(key1);
+            transaction.get(key2);
+            transaction.get(key3);
+
+            // Execute transaction
+            const results = await (client as GlideClient).exec(
+                transaction,
+                true,
+            );
+            expect(results).not.toBeNull();
+            expect(results!.length).toBe(6);
+
+            // Verify SET results
+            expect(results![0]).toBe("OK");
+            expect(results![1]).toBe("OK");
+            expect(results![2]).toBe("OK");
+
+            // Verify GET results (decompressed)
+            expect(results![3]).toBe(TEXT_1K);
+            expect(results![4]).toBe(TEXT_1K);
+            expect(results![5]).toBe(TEXT_1K);
+
+            const after = getNumericStats(client);
+            // All 3 SET values should be compressed
+            expect(
+                after.total_values_compressed - before.total_values_compressed,
+            ).toBeGreaterThanOrEqual(3);
+            // All 3 GET values should be decompressed
+            expect(
+                after.total_values_decompressed -
+                    before.total_values_decompressed,
+            ).toBeGreaterThanOrEqual(3);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "compression_transaction_batch_many_keys_standalone",
+        async () => {
+            client = await createCompressedClient(false, { enabled: true });
+            const numKeys = 50;
+            const keyPrefix = uniqueKey("{batch_test}");
+            const keys: string[] = [];
+
+            const before = getNumericStats(client);
+
+            // Build transaction with SET commands
+            const setTransaction = new Transaction();
+
+            for (let i = 0; i < numKeys; i++) {
+                const key = `${keyPrefix}_${i}`;
+                keys.push(key);
+                setTransaction.set(key, TEXT_1K);
+            }
+
+            // Execute SET transaction
+            const setResults = await (client as GlideClient).exec(
+                setTransaction,
+                true,
+            );
+            expect(setResults).not.toBeNull();
+            expect(setResults!.length).toBe(numKeys);
+
+            for (const result of setResults!) {
+                expect(result).toBe("OK");
+            }
+
+            // Verify compression happened
+            const afterSet = getNumericStats(client);
+            expect(
+                afterSet.total_values_compressed -
+                    before.total_values_compressed,
+            ).toBeGreaterThanOrEqual(numKeys);
+
+            // Build transaction with GET commands
+            const getTransaction = new Transaction();
+
+            for (const key of keys) {
+                getTransaction.get(key);
+            }
+
+            // Execute GET transaction
+            const getResults = await (client as GlideClient).exec(
+                getTransaction,
+                true,
+            );
+            expect(getResults).not.toBeNull();
+            expect(getResults!.length).toBe(numKeys);
+
+            // Verify all values are correct
+            for (const result of getResults!) {
+                expect(result).toBe(TEXT_1K);
+            }
+
+            // Verify decompression happened
+            const afterGet = getNumericStats(client);
+            expect(
+                afterGet.total_values_decompressed -
+                    before.total_values_decompressed,
+            ).toBeGreaterThanOrEqual(numKeys);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "compression_cluster_transaction_set_get",
+        async () => {
+            client = await createCompressedClient(true, { enabled: true });
+            const numKeys = 30;
+            const keyPrefix = uniqueKey("{cluster_tx_test}");
+            const keys: string[] = [];
+
+            const before = getNumericStats(client);
+
+            // Build cluster transaction with SET commands (using hash tag for same slot)
+            const setTransaction = new ClusterTransaction();
+
+            for (let i = 0; i < numKeys; i++) {
+                const key = `${keyPrefix}_${i}`;
+                keys.push(key);
+                setTransaction.set(key, TEXT_1K);
+            }
+
+            // Execute SET transaction
+            const setResults = await (client as GlideClusterClient).exec(
+                setTransaction,
+                true,
+            );
+            expect(setResults).not.toBeNull();
+            expect(setResults!.length).toBe(numKeys);
+
+            for (const result of setResults!) {
+                expect(result).toBe("OK");
+            }
+
+            // Verify compression happened
+            const afterSet = getNumericStats(client);
+            expect(
+                afterSet.total_values_compressed -
+                    before.total_values_compressed,
+            ).toBeGreaterThanOrEqual(numKeys);
+
+            // Build cluster transaction with GET commands
+            const getTransaction = new ClusterTransaction();
+
+            for (const key of keys) {
+                getTransaction.get(key);
+            }
+
+            // Execute GET transaction
+            const getResults = await (client as GlideClusterClient).exec(
+                getTransaction,
+                true,
+            );
+            expect(getResults).not.toBeNull();
+            expect(getResults!.length).toBe(numKeys);
+
+            // Verify all values are correct
+            for (const result of getResults!) {
+                expect(result).toBe(TEXT_1K);
+            }
+
+            // Verify decompression happened
+            const afterGet = getNumericStats(client);
+            expect(
+                afterGet.total_values_decompressed -
+                    before.total_values_decompressed,
+            ).toBeGreaterThanOrEqual(numKeys);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "compression_transaction_mixed_commands",
+        async () => {
+            client = await createCompressedClient(false, { enabled: true });
+            const key1 = uniqueKey("{mixed_test}_1");
+            const key2 = uniqueKey("{mixed_test}_2");
+
+            const before = getNumericStats(client);
+
+            // Build transaction with mixed SET and GET commands
+            const transaction = new Transaction();
+            transaction.set(key1, TEXT_1K);
+            transaction.get(key1);
+            transaction.set(key2, TEXT_1K);
+            transaction.get(key2);
+            transaction.get(key1);
+
+            // Execute transaction
+            const results = await (client as GlideClient).exec(
+                transaction,
+                true,
+            );
+            expect(results).not.toBeNull();
+            expect(results!.length).toBe(5);
+
+            // Verify results
+            expect(results![0]).toBe("OK"); // SET key1
+            expect(results![1]).toBe(TEXT_1K); // GET key1
+            expect(results![2]).toBe("OK"); // SET key2
+            expect(results![3]).toBe(TEXT_1K); // GET key2
+            expect(results![4]).toBe(TEXT_1K); // GET key1 again
+
+            const after = getNumericStats(client);
+            // 2 SET values should be compressed
+            expect(
+                after.total_values_compressed - before.total_values_compressed,
+            ).toBeGreaterThanOrEqual(2);
+            // 3 GET values should be decompressed
+            expect(
+                after.total_values_decompressed -
+                    before.total_values_decompressed,
+            ).toBeGreaterThanOrEqual(3);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "compression_transaction_below_threshold_not_compressed",
+        async () => {
+            client = await createCompressedClient(false, {
+                enabled: true,
+                minCompressionSize: 256,
+            });
+            const key1 = uniqueKey("{threshold_test}_1");
+            const key2 = uniqueKey("{threshold_test}_2");
+            const smallValue = "A".repeat(100); // Below 256 threshold
+
+            const before = getNumericStats(client);
+
+            // Build transaction with small values
+            const transaction = new Transaction();
+            transaction.set(key1, smallValue);
+            transaction.set(key2, smallValue);
+            transaction.get(key1);
+            transaction.get(key2);
+
+            // Execute transaction
+            const results = await (client as GlideClient).exec(
+                transaction,
+                true,
+            );
+            expect(results).not.toBeNull();
+            expect(results!.length).toBe(4);
+
+            // Verify SET results
+            expect(results![0]).toBe("OK");
+            expect(results![1]).toBe("OK");
+
+            // Verify GET results
+            expect(results![2]).toBe(smallValue);
+            expect(results![3]).toBe(smallValue);
+
+            const after = getNumericStats(client);
+            // Values below threshold should not be compressed
+            expect(after.total_values_compressed).toBe(
+                before.total_values_compressed,
+            );
+            // Skipped count should increase
+            expect(after.compression_skipped_count).toBeGreaterThan(
+                before.compression_skipped_count,
+            );
+        },
+        TIMEOUT,
+    );
+
+    it.each([false, true])(
+        "compression_empty_batch cluster_mode=%p",
+        async (clusterMode) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+
+            const before = getNumericStats(client);
+
+            // Build empty transaction
+            const transaction = clusterMode
+                ? new ClusterTransaction()
+                : new Transaction();
+
+            // Execute empty transaction
+            const results = clusterMode
+                ? await (client as GlideClusterClient).exec(
+                      transaction as ClusterTransaction,
+                      true,
+                  )
+                : await (client as GlideClient).exec(
+                      transaction as Transaction,
+                      true,
+                  );
+
+            // Empty batch should return empty array
+            expect(results).toEqual([]);
+
+            // No compression/decompression should happen
+            const after = getNumericStats(client);
+            expect(after.total_values_compressed).toBe(
+                before.total_values_compressed,
+            );
+            expect(after.total_values_decompressed).toBe(
+                before.total_values_decompressed,
+            );
+        },
+        TIMEOUT,
+    );
+
+    // --- Max Decompressed Size Tests ---
+
+    it("compression_config_default_max_decompressed_size", () => {
+        // Default config should not throw
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+            });
+        }).not.toThrow();
+    });
+
+    it("compression_config_custom_max_decompressed_size", () => {
+        // Custom max decompressed size should not throw
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+                maxDecompressedSize: 100 * 1024 * 1024, // 100MB
+            });
+        }).not.toThrow();
+    });
+
+    it("compression_config_zero_max_decompressed_size_throws", () => {
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+                maxDecompressedSize: 0,
+            });
+        }).toThrow(ConfigurationError);
+    });
+
+    it("compression_config_negative_max_decompressed_size_throws", () => {
+        expect(() => {
+            validateCompressionConfiguration({
+                enabled: true,
+                maxDecompressedSize: -1,
+            });
+        }).toThrow(ConfigurationError);
+    });
+
+    it.each([false, true])(
+        "compression_client_with_custom_max_decompressed_size cluster_mode=%p",
+        async (clusterMode) => {
+            // Test that client can be created with custom max_decompressed_size
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+                maxDecompressedSize: 100 * 1024 * 1024, // 100MB
+            });
+            const key = uniqueKey("max_decomp_test");
+
+            // Basic set/get should work
+            await setAndExpectCompression(client, key, TEXT_1K);
+            expect(await client.get(key)).toBe(TEXT_1K);
         },
         TIMEOUT,
     );

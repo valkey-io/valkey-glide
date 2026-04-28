@@ -22,6 +22,9 @@ use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
 use redis::cluster_routing::ResponsePolicy;
+// Routable trait provides the command() method used for response policy lookup.
+// In miri-tests with mock-redis, this may appear unused due to mock implementations.
+#[allow(unused_imports)]
 use redis::cluster_routing::Routable;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -3078,7 +3081,7 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
 /// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
 /// * `metrics_type`: Integer representing the type of cache metrics to retrieve:
 ///   - 0: HitRate - Cache hit rate as a double (0.0 to 1.0)
-///   - 1: MissRate - Cache miss rate as a double (0.0 to 1.0)  
+///   - 1: MissRate - Cache miss rate as a double (0.0 to 1.0)
 ///   - 2: EntryCount - Number of entries in cache as an integer
 ///   - 3: Evictions - Number of cache evictions as an integer
 ///   - 4: Expirations - Number of cache expirations as an integer
@@ -3348,6 +3351,8 @@ pub unsafe extern "C" fn batch(
 
     // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();
+    // Clone for use in async block
+    let compression_manager_for_decompression = compression_manager.clone();
 
     // TODO handle panics
     let mut pipeline = match unsafe { create_pipeline(batch_ptr, compression_manager.as_ref()) } {
@@ -3373,7 +3378,7 @@ pub unsafe extern "C" fn batch(
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
     client_adapter.execute_request(callback_index, async move {
-        if pipeline.is_atomic() {
+        let result = if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
                 .await
@@ -3387,6 +3392,15 @@ pub unsafe extern "C" fn batch(
                     pipeline_retry_strategy,
                 )
                 .await
+        };
+
+        // Process batch response for decompression if compression is enabled
+        match result {
+            Ok(value) => Ok(glide_core::compression::try_decompress_batch_response(
+                value,
+                compression_manager_for_decompression.as_deref(),
+            )),
+            Err(e) => Err(e),
         }
     })
 }

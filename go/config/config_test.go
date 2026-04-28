@@ -1098,6 +1098,71 @@ func TestCompressionConfiguration_WithEnabledFalse(t *testing.T) {
 	assert.Equal(t, uint32(64), pb.MinCompressionSize)
 }
 
+// ============================================================================
+// Max Decompressed Size Tests
+// ============================================================================
+
+func TestCompressionConfiguration_DefaultMaxDecompressedSize(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration()
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	// Default is nil, which means "use Rust default" - protobuf field is not set
+	assert.Nil(t, pb.MaxDecompressedSize)
+}
+
+func TestCompressionConfiguration_WithCustomMaxDecompressedSize(t *testing.T) {
+	var customSize uint64 = 100 * 1024 * 1024 // 100MB
+	compressionConfig := NewCompressionConfiguration().
+		WithMaxDecompressedSize(&customSize)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, pb.MaxDecompressedSize)
+	assert.Equal(t, customSize, *pb.MaxDecompressedSize)
+}
+
+func TestCompressionConfiguration_WithNilMaxDecompressedSizeUsesRustDefault(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMaxDecompressedSize(nil)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	// When nil, the protobuf field is not set, Rust will use its default
+	assert.Nil(t, pb.MaxDecompressedSize)
+}
+
+func TestCompressionConfiguration_WithZeroMaxDecompressedSizeReturnsError(t *testing.T) {
+	var zeroSize uint64 = 0
+	compressionConfig := NewCompressionConfiguration().
+		WithMaxDecompressedSize(&zeroSize)
+
+	// Zero is invalid - must be positive if set
+	err := compressionConfig.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "max_decompressed_size must be positive")
+}
+
+func TestCompressionConfiguration_AllFieldsSetWithMaxDecompressedSize(t *testing.T) {
+	var level int32 = 5
+	var maxSize uint64 = 100 * 1024 * 1024 // 100MB
+	compressionConfig := NewCompressionConfiguration().
+		WithBackend(ZSTD).
+		WithCompressionLevel(level).
+		WithMinCompressionSize(256).
+		WithMaxDecompressedSize(&maxSize)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.Enabled)
+	assert.Equal(t, protobuf.CompressionBackend_ZSTD, pb.Backend)
+	assert.NotNil(t, pb.CompressionLevel)
+	assert.Equal(t, level, *pb.CompressionLevel)
+	assert.Equal(t, uint32(256), pb.MinCompressionSize)
+	assert.NotNil(t, pb.MaxDecompressedSize)
+	assert.Equal(t, maxSize, *pb.MaxDecompressedSize)
+}
+
 func TestCompressionConfiguration_WithEnabledToggle(t *testing.T) {
 	// Start enabled, disable, re-enable
 	compressionConfig := NewCompressionConfiguration().

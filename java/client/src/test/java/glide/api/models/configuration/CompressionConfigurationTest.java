@@ -18,6 +18,8 @@ public class CompressionConfigurationTest {
         assertEquals(CompressionBackend.ZSTD, config.getBackend());
         assertNull(config.getCompressionLevel());
         assertEquals(64, config.getMinCompressionSize());
+        // Default is null (use Rust default of 512MB)
+        assertNull(config.getMaxDecompressedSize());
     }
 
     @Test
@@ -28,11 +30,13 @@ public class CompressionConfigurationTest {
                         .backend(CompressionBackend.LZ4)
                         .compressionLevel(5)
                         .minCompressionSize(256)
+                        .maxDecompressedSize(1024L * 1024 * 100) // 100MB
                         .build();
         assertEquals(false, config.isEnabled());
         assertEquals(CompressionBackend.LZ4, config.getBackend());
         assertEquals(5, (int) config.getCompressionLevel());
         assertEquals(256, config.getMinCompressionSize());
+        assertEquals(1024L * 1024 * 100, config.getMaxDecompressedSize());
     }
 
     @Test
@@ -66,5 +70,26 @@ public class CompressionConfigurationTest {
         assertThrows(
                 ConfigurationError.class,
                 () -> CompressionConfiguration.builder().minCompressionSize(-1).build());
+    }
+
+    @Test
+    public void max_decompressed_size_null_uses_rust_default() {
+        CompressionConfiguration config =
+                CompressionConfiguration.builder().maxDecompressedSize(null).build();
+        assertNull(config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void max_decompressed_size_zero_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(0L).build());
+    }
+
+    @Test
+    public void max_decompressed_size_negative_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(-1L).build());
     }
 }

@@ -388,6 +388,13 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                 backend,
                 compression_level: proto_config.compression_level,
                 min_compression_size: proto_config.min_compression_size as usize,
+                // Handle optional max_decompressed_size:
+                // - None (not set) = use default (512MB)
+                // - Some(n) = use n as the limit
+                max_decompressed_size: proto_config
+                    .max_decompressed_size
+                    .map(|size| size as usize)
+                    .or(Some(crate::compression::DEFAULT_MAX_DECOMPRESSED_SIZE)),
             }
         });
 
