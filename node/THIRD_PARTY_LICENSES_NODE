@@ -24803,7 +24803,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: libc:0.2.185
+Package: libc:0.2.186
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -37680,7 +37680,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: rustls:0.23.38
+Package: rustls:0.23.39
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -38166,7 +38166,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: rustls-pki-types:1.14.0
+Package: rustls-pki-types:1.14.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -63448,7 +63448,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: protobufjs:7.5.5
+Package: protobufjs:7.5.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -63566,7 +63566,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @protobufjs:codegen:2.0.4
+Package: @protobufjs:codegen:2.0.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -63690,7 +63690,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @protobufjs:inquire:1.1.0
+Package: @protobufjs:inquire:1.1.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -63783,7 +63783,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @protobufjs:utf8:1.1.0
+Package: @protobufjs:utf8:1.1.1
 
 The following copyrights and licenses were found in the source code of this package:
 
