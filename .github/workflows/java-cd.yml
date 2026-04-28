@@ -331,11 +331,41 @@ jobs:
                   cd -
                   cp $src_folder/bundle.jar bundle-uber-jar.jar
 
+            - name: Build jedis-compatibility (no classifier, no natives)
+              working-directory: java
+              shell: bash
+              env:
+                  GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+                  JEDIS_NO_CLASSIFIER_BUILD: "true"
+              run: |
+                  ./gradlew --build-cache :jedis-compatibility:publishToMavenLocal \
+                  -x buildRust \
+                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
+                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+            - name: Bundle jedis-compatibility no-classifier JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  src_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
+                  cd $src_folder
+                  jar -cvf jedis-bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $src_folder/jedis-bundle.jar jedis-bundle-no-classifier.jar
+
             - name: Upload uber JAR artifact
               uses: actions/upload-artifact@v4
               with:
                   name: java-uber-jar
                   path: java/bundle-uber-jar.jar
+
+            - name: Upload jedis no-classifier artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: jedis-no-classifier
+                  path: java/jedis-bundle-no-classifier.jar
 
     publish-to-maven-central-deployment:
         if: ${{ inputs.maven_publish == true || github.event_name == 'push' }}

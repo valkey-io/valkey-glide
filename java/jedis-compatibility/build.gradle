@@ -60,27 +60,7 @@ javadoc {
     failOnError = false // Disable javadoc errors for compatibility layer
 }
 
-tasks.register('copyNativeLib', Copy) {
-    def target
-    if (project.hasProperty('target')) {
-        target = project.target
-        from "${projectDir}/../target/${target}/release/"
-    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
-    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
-    } else {
-        from "${projectDir}/../target/release/"
-    }
-    include "*.dylib", "*.so", "*.dll"
-    into sourceSets.main.output.resourcesDir
-}
-
-jar.dependsOn('copyNativeLib')
-javadoc.dependsOn('copyNativeLib')
-compileTestJava.dependsOn('copyNativeLib')
 delombok.dependsOn('compileJava')
-copyNativeLib.dependsOn(':client:buildRust')
 compileJava.dependsOn(':client:jar')
 
 tasks.withType(Test) {
@@ -99,7 +79,11 @@ tasks.withType(Test) {
 }
 
 jar {
-    if (project.hasProperty('target') && project.target.contains("musl")) {
+    def isNoClassifierBuild = System.getenv("JEDIS_NO_CLASSIFIER_BUILD") == "true"
+
+    if (isNoClassifierBuild) {
+        archiveClassifier = ''
+    } else if (project.hasProperty('target') && project.target.contains("musl")) {
         archiveClassifier = "linux_musl_${arch}"
     } else {
         archiveClassifier = osdetector.classifier
@@ -129,6 +113,7 @@ publishing {
             artifactId = 'valkey-glide-jedis-compatibility'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
             pom {
+                packaging = 'jar'
                 name = 'valkey-glide-jedis-compatibility'
                 description = 'Jedis compatibility layer for Valkey GLIDE'
                 url = 'https://github.com/valkey-io/valkey-glide.git'
