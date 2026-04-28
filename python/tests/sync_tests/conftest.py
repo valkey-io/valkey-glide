@@ -4,6 +4,7 @@ import time
 from typing import Generator, List, Optional
 
 import pytest
+from glide_shared.cache import ClientSideCache
 from glide_shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -143,6 +144,7 @@ def create_sync_client(
     client_cert_pem: Optional[bytes] = None,
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
+    cache: Optional[ClientSideCache] = None,
 ) -> TSyncGlideClient:
     # Create sync client
     config = create_sync_client_config(
@@ -171,6 +173,7 @@ def create_sync_client(
         client_cert_pem=client_cert_pem,
         client_key_pem=client_key_pem,
         read_only=read_only,
+        cache=cache,
     )
     if cluster_mode:
         return SyncGlideClusterClient.create(config)

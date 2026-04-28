@@ -161,6 +161,12 @@ class _GlideFFI:
                 uintptr_t request_id
             );
 
+            CommandResult* get_cache_metrics(
+                const void* client_adapter_ptr,
+                uintptr_t request_id,
+                int metrics_type
+            );
+
             // ============== CLIENT MANAGEMENT ==============
             typedef enum {
                 Async = 0,

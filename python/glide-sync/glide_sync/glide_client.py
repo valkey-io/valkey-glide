@@ -912,6 +912,32 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
+    def _get_cache_metrics(self, metrics_type: int) -> TResult:
+        """
+        Get cache metrics.
+
+        Args:
+            metrics_type: Type of metric to retrieve (e.g., hit rate, miss rate).
+
+        Returns:
+            The requested cache metric.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+        """
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        result = self._lib.get_cache_metrics(
+            client_adapter_ptr,
+            0,  # Request ID (0 for sync use)
+            metrics_type,
+        )
+        return self._handle_cmd_result(result)
+
     def close(self) -> None:
         if not self._is_closed:
             self._is_closed = True
