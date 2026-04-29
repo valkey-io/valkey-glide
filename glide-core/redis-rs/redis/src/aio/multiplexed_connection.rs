@@ -1,6 +1,7 @@
 use super::{ConnectionLike, Runtime};
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
+use crate::cache::glide_cache::GlideCache;
 use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
@@ -521,26 +522,68 @@ where
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
-        self.sender
-            .send(PipelineMessage {
+        // Timeout on pipeline send to detect dead connections. The pipeline channel
+        // is bounded (50 slots). Under normal operation, a slot frees in microseconds.
+        // Defaults to 100ms unless request_timeout is shorter, with a minimum of 1ms.
+        let send_timeout = std::cmp::max(
+            std::cmp::min(timeout, std::time::Duration::from_millis(100)),
+            std::time::Duration::from_millis(1),
+        );
+        let send_start = std::time::Instant::now();
+        match tokio::time::timeout(
+            send_timeout,
+            self.sender.send(PipelineMessage {
                 input,
                 pipeline_response_count,
                 output: sender,
                 is_transaction: is_atomic,
                 is_fenced,
-            })
-            .await
-            .map_err(|err| {
-                // If an error occurs here, it means the request never reached the server, as guaranteed
-                // by the 'send' function. Since the server did not receive the data, it is safe to retry
-                // the request.
-                RedisError::from((
+            }),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                return Err(RedisError::from((
                     crate::ErrorKind::FatalSendError,
                     "Failed to send the request to the server",
                     err.to_string(),
-                ))
-            })?;
-        match Runtime::locate().timeout(timeout, receiver).await {
+                )));
+            }
+            Err(_elapsed) => {
+                return Err(RedisError::from((
+                    crate::ErrorKind::FatalSendError,
+                    "Pipeline channel full — connection likely dead",
+                )));
+            }
+        }
+        let send_elapsed = send_start.elapsed();
+        let send_warn_threshold = std::cmp::min(timeout / 4, std::time::Duration::from_millis(500));
+        if send_elapsed > send_warn_threshold {
+            logger_core::log_warn_rate_limited!(
+                "pipeline",
+                5,
+                format!(
+                    "pipeline.send() blocked for {:?} (threshold={:?}, response_timeout={:?}, channel capacity=50)",
+                    send_elapsed, send_warn_threshold, timeout
+                )
+            );
+        }
+        let recv_start = std::time::Instant::now();
+        let recv_result = Runtime::locate().timeout(timeout, receiver).await;
+        let recv_elapsed = recv_start.elapsed();
+        let recv_warn_threshold = std::cmp::min(timeout / 2, std::time::Duration::from_secs(5));
+        if recv_elapsed > recv_warn_threshold {
+            logger_core::log_warn_rate_limited!(
+                "pipeline",
+                5,
+                format!(
+                    "Response wait took {:?} (threshold={:?}, response_timeout={:?})",
+                    recv_elapsed, recv_warn_threshold, timeout
+                )
+            );
+        }
+        match recv_result {
             Ok(Ok(result)) => result,
             Ok(Err(err)) => {
                 // The `sender` was dropped, likely indicating a failure in the stream.
@@ -578,6 +621,7 @@ pub struct MultiplexedConnection {
     push_manager: PushManager,
     availability_zone: Option<String>,
     password: Option<String>,
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl Debug for MultiplexedConnection {
@@ -641,6 +685,7 @@ impl MultiplexedConnection {
             .with_protocol(connection_info.redis.protocol)
             .with_password(connection_info.redis.password.clone())
             .with_availability_zone(None)
+            .with_cache(connection_info.redis.cache.clone())
             .build()
             .await?;
 
@@ -678,6 +723,12 @@ impl MultiplexedConnection {
     /// Sends an already encoded (packed) command into the TCP socket and
     /// reads the single response from it.
     pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+        // First try to get from cache
+        if let Some(cache) = &self.cache {
+            if let Some(value) = cache.get_cached_cmd(cmd) {
+                return Ok(value);
+            }
+        }
         let result = self
             .pipeline
             .send_single(
@@ -694,6 +745,15 @@ impl MultiplexedConnection {
                         kind: PushKind::Disconnection,
                         data: vec![],
                     });
+                }
+            }
+        }
+
+        // Store in cache if applicable
+        if let Some(cache) = &self.cache {
+            if let Ok(value) = &result {
+                if *value != Value::Nil {
+                    cache.set_cached_cmd(cmd, value.clone());
                 }
             }
         }
@@ -786,6 +846,8 @@ pub struct MultiplexedConnectionBuilder {
     password: Option<String>,
     /// Represents the node's availability zone
     availability_zone: Option<String>,
+    /// Client-side cache
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl MultiplexedConnectionBuilder {
@@ -799,6 +861,7 @@ impl MultiplexedConnectionBuilder {
             protocol: None,
             password: None,
             availability_zone: None,
+            cache: None,
         }
     }
 
@@ -838,6 +901,12 @@ impl MultiplexedConnectionBuilder {
         self
     }
 
+    /// Sets the cache for the `MultiplexedConnectionBuilder`.
+    pub fn with_cache(mut self, cache: Option<Arc<dyn GlideCache>>) -> Self {
+        self.cache = cache;
+        self
+    }
+
     /// Builds and returns a new `MultiplexedConnection` instance using the configured settings.
     pub async fn build(self) -> RedisResult<MultiplexedConnection> {
         let db = self.db.unwrap_or_default();
@@ -856,6 +925,7 @@ impl MultiplexedConnectionBuilder {
             protocol,
             password,
             availability_zone: self.availability_zone,
+            cache: self.cache,
         };
 
         Ok(con)
@@ -959,5 +1029,141 @@ impl MultiplexedConnection {
     /// Returns `PushManager` of Connection, this method is used to subscribe/unsubscribe from Push types
     pub fn get_push_manager(&self) -> PushManager {
         self.push_manager.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::channel::mpsc as futures_mpsc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::task::{Context, Poll};
+    use std::time::Duration;
+
+    /// A Sink+Stream where poll_ready/poll_flush return Pending when stall flag is set,
+    /// simulating a dead TCP connection where the send buffer is full.
+    struct StallingSink {
+        stall: Arc<AtomicBool>,
+        inner_tx: futures_mpsc::Sender<Vec<u8>>,
+        inner_rx: futures_mpsc::Receiver<RedisResult<Value>>,
+    }
+
+    impl Stream for StallingSink {
+        type Item = RedisResult<Value>;
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Pin::new(&mut self.inner_rx).poll_next(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for StallingSink {
+        type Error = RedisError;
+
+        fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            if self.stall.load(Ordering::Relaxed) {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.get_mut().inner_tx)
+                .poll_ready(cx)
+                .map_err(|e| {
+                    RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+                })
+        }
+
+        fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+            Pin::new(&mut self.inner_tx).start_send(item).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.stall.load(Ordering::Relaxed) {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.inner_tx).poll_flush(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_close(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Pin::new(&mut self.inner_tx).poll_close(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_send_timeout_when_sink_stalls() {
+        // Test for #5715: Pipeline send blocks forever on dead shard
+        // See: https://github.com/valkey-io/valkey-glide/issues/5715
+        //
+        // When a TCP connection becomes half-open (e.g., network partition without RST),
+        // the send buffer fills and AsyncWrite::poll_write blocks indefinitely. This
+        // causes the pipeline's internal 50-slot channel to fill, and any subsequent
+        // send() call blocks forever waiting for a slot.
+        //
+        // The adaptive send timeout (min(timeout, 100ms), floor 1ms) wraps the channel
+        // send, so it fails with FatalSendError instead of hanging. This test verifies
+        // that behavior by creating a pipeline with no driver (never drains), filling
+        // the channel, and asserting the next send completes within the timeout.
+
+        let stall_flag = Arc::new(AtomicBool::new(false));
+        let (sink_tx, _sink_rx) = futures_mpsc::channel(100);
+        let (_resp_tx, resp_rx) = futures_mpsc::channel(100);
+
+        let stalling_sink = StallingSink {
+            stall: stall_flag.clone(),
+            inner_tx: sink_tx,
+            inner_rx: resp_rx,
+        };
+
+        // Create pipeline but don't drive it, the channel will fill and send() will block
+        let (mut pipeline, driver) = Pipeline::new(stalling_sink, None);
+        std::mem::forget(driver);
+
+        // Fill the 50-slot pipeline channel
+        for _ in 0..50 {
+            let mut pipeline_clone = pipeline.clone();
+            tokio::spawn(async move {
+                let _ = pipeline_clone
+                    .send_single(
+                        crate::cmd("PING").get_packed_command(),
+                        Duration::from_secs(60),
+                        false,
+                    )
+                    .await;
+            });
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Next send should hit the send timeout  instead of blocking forever
+        let timeout = Duration::from_millis(200);
+        let start = std::time::Instant::now();
+        let result = pipeline
+            .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+            .await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "Expected error when sink is stalled");
+        let err = result.unwrap_err();
+        assert!(
+            err.kind() == crate::ErrorKind::FatalSendError
+                || err.kind() == crate::ErrorKind::IoError,
+            "Expected FatalSendError or IoError, got: {:?}",
+            err.kind()
+        );
+        assert!(
+            elapsed < Duration::from_millis(200),
+            "Send took {:?}, expected < 200ms (send_timeout = 100ms). \
+             Without the fix, this hangs forever.",
+            elapsed,
+        );
     }
 }

@@ -43,7 +43,7 @@ EXCLUDED_API_FUNCTIONS = {
 }
 
 EXCLUDED_API_FILENAMES = {
-    "async_only": [],
+    "async_only": ["cache.py"],
     "sync_only": ["_glide_ffi.py"],
 }
 
@@ -87,8 +87,11 @@ EXCLUDED_TESTS = {
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_deprecation_warnings.py",
+        "test_client_side_cache.py",
     ],
-    "sync_only": [],
+    "sync_only": [
+        "test_sync_client_side_cache.py",
+    ],
 }
 
 

@@ -30,6 +30,7 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClientSideCache,
     ClosingError,
     ClusterBatchOptions,
     CompressionConfiguration,
@@ -628,6 +629,21 @@ export type ReadFrom =
     | "allNodes";
 
 /**
+ * Controls how the client discovers node roles and topology in standalone mode.
+ */
+export enum NodeDiscoveryMode {
+    /** Default: verify node roles via INFO REPLICATION, use only provided addresses. */
+    Standard = 0,
+    /** Skip role detection entirely. Trust provided addresses as-is; first address is primary.
+     *  Use when connecting through a proxy (e.g., Envoy) or when the topology is known and static.
+     *  Note: Do not set `clientName` when using this mode with a proxy. */
+    Static = 1,
+    /** Discover full topology (primary + all replicas) from any starting node.
+     *  Provide any single node address and the client will find and connect to all other nodes. */
+    DiscoverAll = 2,
+}
+
+/**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
  *
  * @remarks
@@ -893,6 +909,7 @@ export interface BaseClientConfiguration {
      * ```
      */
     lazyConnect?: boolean;
+
     /**
      * Configuration for automatic compression of values.
      * When enabled, values that meet the minimum size threshold will be
@@ -908,6 +925,40 @@ export interface BaseClientConfiguration {
      * ```
      */
     compression?: CompressionConfiguration;
+
+    /**
+     * Client-side cache configuration.
+     *
+     * @remarks
+     * When provided, enables client-side caching for cacheable commands (GET, HGETALL, SMEMBERS).
+     * The cache reduces network round-trips and server load by storing frequently accessed data locally.
+     *
+     * - **Memory Management**: The cache respects the configured memory limit and evicts entries based on the specified policy.
+     * - **TTL Support**: Entries can have optional time-to-live values for automatic expiration.
+     * - **Shared Caches**: Multiple clients can share the same cache instance using the same cache ID.
+     * - **Metrics**: Optional metrics collection provides insights into cache performance.
+     *
+     * @example
+     * ```typescript
+     * // Simple cache configuration
+     * const config: BaseClientConfiguration = {
+     *   addresses: [{ host: 'localhost', port: 6379 }],
+     *   clientSideCache: ClientSideCache.create(1024, 0), // 1MB cache, no TTL
+     * };
+     *
+     * // Advanced cache configuration
+     * const advancedConfig: BaseClientConfiguration = {
+     *   addresses: [{ host: 'localhost', port: 6379 }],
+     *   clientSideCache: new ClientSideCache({
+     *     maxCacheKb: 2048,
+     *     entryTtlMs: 300000,
+     *     evictionPolicy: EvictionPolicy.LFU,
+     *     enableMetrics: true,
+     *   }),
+     * };
+     * ```
+     */
+    clientSideCache?: ClientSideCache;
 }
 
 /**
@@ -1533,6 +1584,47 @@ export class BaseClient {
                 },
             );
         });
+    }
+
+    protected createGetCacheMetricsPromise(
+        command: command_request.GetCacheMetrics,
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<number>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [resolve, reject];
+
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    getCacheMetrics: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
+    }
+
+    /**
+     * @internal
+     * Get cache metrics.
+     *
+     * @param metricsType - Type of metric to retrieve (e.g., hit rate, miss rate).
+     * @returns The requested cache metric.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     */
+    private async getCacheMetrics(
+        metricsType: command_request.CacheMetricsType,
+    ): Promise<number> {
+        const getCacheMetrics = command_request.GetCacheMetrics.create({
+            metricsTypes: metricsType,
+        });
+        return await this.createGetCacheMetricsPromise(getCacheMetrics);
     }
 
     protected createScriptInvocationPromise<T = GlideString>(
@@ -9279,6 +9371,20 @@ export class BaseClient {
             );
         }
 
+        // Configure client-side cache if provided
+        let clientSideCache: connection_request.IClientSideCache | undefined;
+
+        if (options.clientSideCache) {
+            const cache = options.clientSideCache;
+            clientSideCache = connection_request.ClientSideCache.create({
+                cacheId: cache.cacheId,
+                maxCacheKb: cache.maxCacheKb,
+                entryTtlMs: cache.entryTtlMs,
+                evictionPolicy: cache.evictionPolicy,
+                enableMetrics: cache.enableMetrics,
+            });
+        }
+
         const request: connection_request.IConnectionRequest = {
             protocol,
             clientName: options.clientName,
@@ -9295,6 +9401,7 @@ export class BaseClient {
             clientAz: options.clientAz ?? null,
             connectionRetryStrategy: options.connectionBackoff,
             lazyConnect: options.lazyConnect ?? false,
+            clientSideCache,
         };
 
         if (options.compression) {
@@ -9568,6 +9675,110 @@ export class BaseClient {
         const refresh = command_request.RefreshIamToken.create({});
         const response = await this.createRefreshIamTokenPromise(refresh);
         return response; // "OK"
+    }
+    /**
+     * Get the cache hit rate (hits / total requests).
+     *
+     * @returns The cache hit rate as a number between 0.0 and 1.0.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const hitRate = await client.getCacheHitRate();
+     * console.log(`Cache hit rate: ${(hitRate * 100).toFixed(2)}%`);
+     * // Output: Cache hit rate: 85.50%
+     * ```
+     */
+    public async getCacheHitRate(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.HitRate,
+        );
+    }
+    /**
+     * Get the cache miss rate (misses / total requests).
+     *
+     * @returns The cache miss rate as a number between 0.0 and 1.0.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const missRate = await client.getCacheMissRate();
+     * console.log(`Cache miss rate: ${(missRate * 100).toFixed(2)}%`);
+     * // Output: Cache miss rate: 14.50%
+     * ```
+     */
+    public async getCacheMissRate(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.MissRate,
+        );
+    }
+    /**
+     * Get the current number of entries in the client-side cache.
+     *
+     * @returns The number of entries in the cache.
+     * @throws RequestError if client-side caching is not enabled.
+     * @example
+     * ```typescript
+     * const entryCount = await client.getCacheEntryCount();
+     * console.log(`Cache entry count: ${entryCount}`);
+     * // Output: Cache entry count: 1500
+     * ```
+     */
+    public async getCacheEntryCount(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.EntryCount,
+        );
+    }
+    /**
+     * Get the total number of entries evicted from the client-side cache due to memory constraints.
+     *
+     * @returns The number of evictions.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const evictions = await client.getCacheEvictions();
+     * console.log(`Cache evictions: ${evictions}`);
+     * // Output: Cache evictions: 100
+     * ```
+     */
+    public async getCacheEvictions(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.Evictions,
+        );
+    }
+
+    /**
+     * Get the total number of entries expired from the client-side cache.
+     *
+     * @returns The number of expirations.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const expirations = await client.getCacheExpirations();
+     * console.log(`Cache expirations: ${expirations}`);
+     * // Output: Cache expirations: 250
+     * ```
+     */
+    public async getCacheExpirations(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.Expirations,
+        );
+    }
+
+    /**
+     * Get the total number of cache lookups (hits + misses).
+     *
+     * @returns The total number of cache lookups.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const totalLookups = await client.getCacheTotalLookups();
+     * console.log(`Total cache lookups: ${totalLookups}`);
+     * // Output: Total cache lookups: 5000
+     * ```
+     */
+    public async getCacheTotalLookups(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.TotalLookups,
+        );
     }
 
     /**

@@ -15,6 +15,7 @@ import {
     GlideReturnType,
     GlideString,
     PubSubMsg,
+    NodeDiscoveryMode,
 } from "./BaseClient";
 import { Batch } from "./Batch";
 import {
@@ -146,12 +147,14 @@ export interface StandalonePubSubState {
  * This configuration allows you to tailor the client's behavior when connecting to a standalone Valkey Glide server.
  *
  * - **Database Selection**: Use `databaseId` (inherited from BaseClientConfiguration) to specify which logical database to connect to.
+ * - **Client-Side Caching**: Use `clientSideCache` (inherited from BaseClientConfiguration) to enable local caching for improved performance.
  * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
  *
  * @example
  * ```typescript
  * const config: GlideClientConfiguration = {
  *   databaseId: 1, // Inherited from BaseClientConfiguration
+ *   clientSideCache: ClientSideCache.create(1024, 60000), // 1MB cache, 1 min TTL
  *   pubsubSubscriptions: {
  *     channelsAndPatterns: {
  *       [GlideClientConfiguration.PubSubChannelModes.Pattern]: new Set(['news.*']),
@@ -191,6 +194,12 @@ export type GlideClientConfiguration = BaseClientConfiguration & {
      * Defaults to false.
      */
     readOnly?: boolean;
+    /**
+     * Controls how the client discovers node roles and topology in standalone mode.
+     *
+     * @see {@link NodeDiscoveryMode} for available modes.
+     */
+    nodeDiscoveryMode?: NodeDiscoveryMode;
 };
 
 /**
@@ -237,6 +246,11 @@ export class GlideClient extends BaseClient {
         // Set read-only mode if specified
         if (options.readOnly !== undefined) {
             configuration.readOnly = options.readOnly;
+        }
+
+        if (options.nodeDiscoveryMode !== undefined) {
+            configuration.nodeDiscoveryMode =
+                options.nodeDiscoveryMode as number;
         }
 
         return configuration;

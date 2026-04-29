@@ -2,6 +2,7 @@
 
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
+use logger_core::log_warn_lazy;
 
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
@@ -45,6 +46,14 @@ fn process_command_for_compression(
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
 
+    // If compression is not enabled, skip all processing
+    if compression_manager_ref
+        .map(|m| !m.is_enabled())
+        .unwrap_or(true)
+    {
+        return Ok(());
+    }
+
     let all_args: Vec<Vec<u8>> = cmd
         .args_iter()
         .filter_map(|arg| match arg {
@@ -58,11 +67,19 @@ fn process_command_for_compression(
     }
 
     let command_name = &all_args[0];
-    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
-    let request_type = match command_str.as_str() {
-        "SET" => glide_core::request_type::RequestType::Set,
-        _ => return Ok(()),
+    let command_str = String::from_utf8_lossy(command_name);
+
+    let request_type = match glide_core::request_type::RequestType::from_command_name(&command_str)
+    {
+        Some(rt) => rt,
+        None => return Ok(()), // Unknown command - no compression processing needed
     };
+
+    // Check if the command is incompatible with compression - this should error out
+    glide_core::compression::validate_command_compression_compatibility(
+        request_type,
+        compression_manager_ref,
+    )?;
 
     let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
     glide_core::compression::process_command_args_for_compression(
@@ -229,10 +246,28 @@ async fn execute_command_request_and_complete(
                 })?;
 
                 // Apply compression to command arguments if compression is enabled
-                if client.is_compression_enabled()
-                    && let Err(e) = process_command_for_compression(&mut cmd, &client)
-                {
-                    log::warn!("Compression processing failed: {e}, continuing with original command");
+                // This also validates that the command is compatible with compression
+                // Note: We intentionally keep these as separate if statements for clarity:
+                // - First check: is compression enabled?
+                // - Second check: did compression processing fail?
+                // - Third check: is it an incompatible command error?
+                #[allow(clippy::collapsible_if)]
+                if client.is_compression_enabled() {
+                    if let Err(e) = process_command_for_compression(&mut cmd, &client) {
+                        // Incompatible command errors should be returned to the user
+                        if e.is_incompatible_command() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::ClientError,
+                                "Incompatible command with compression",
+                                e.to_string(),
+                            )));
+                        }
+                        // For other compression errors, log and continue
+                        log_warn_lazy!(
+                            "compression",
+                            format!("Compression processing failed: {e}, continuing with original command")
+                        );
+                    }
                 }
 
                 // Compute routing
@@ -249,7 +284,19 @@ async fn execute_command_request_and_complete(
                     None
                 };
 
+                let send_start = std::time::Instant::now();
                 let exec = client.send_command(&mut cmd, routing).await;
+                let send_elapsed = send_start.elapsed();
+                if send_elapsed > std::time::Duration::from_secs(1) {
+                    logger_core::log_warn_rate_limited!(
+                        "jni_command",
+                        5,
+                        format!(
+                            "send_command took {:?} for callback_id={}",
+                            send_elapsed, callback_id
+                        )
+                    );
+                }
 
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
@@ -266,10 +313,9 @@ async fn execute_command_request_and_complete(
                             }
                         }
                         Err(err) => {
-                            log::warn!(
-                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                root_span_ptr,
-                                err
+                            log_warn_lazy!(
+                                "otel",
+                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                             );
                         }
                     }
@@ -291,10 +337,21 @@ async fn execute_command_request_and_complete(
                         ))
                     })?;
                     // Apply compression to each command in the batch
-                    if client.is_compression_enabled()
-                        && let Err(e) = process_command_for_compression(&mut valkey_cmd, &client)
-                    {
-                        log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                    // This also validates that the command is compatible with compression
+                    #[allow(clippy::collapsible_if)]
+                    if client.is_compression_enabled() {
+                        if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
+                            // Incompatible command errors should be returned to the user
+                            if e.is_incompatible_command() {
+                                return Err(redis::RedisError::from((
+                                    redis::ErrorKind::ClientError,
+                                    "Incompatible command with compression",
+                                    e.to_string(),
+                                )));
+                            }
+                            // For other compression errors, log and continue
+                            log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
+                        }
                     }
                     pipeline.add_command(valkey_cmd);
                 }
@@ -368,15 +425,22 @@ async fn execute_command_request_and_complete(
                             }
                         }
                         Err(err) => {
-                            log::warn!(
-                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                root_span_ptr,
-                                err
+                            log_warn_lazy!(
+                                "otel",
+                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                             );
                         }
                     }
                 }
-                exec_res
+
+                // Process batch response for decompression if compression is enabled
+                match exec_res {
+                    Ok(value) => Ok(glide_core::compression::try_decompress_batch_response(
+                        value,
+                        client.compression_manager().as_deref(),
+                    )),
+                    Err(e) => Err(e),
+                }
             }
             _ => Err(redis::RedisError::from((
                 redis::ErrorKind::ClientError,
@@ -1657,8 +1721,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
                             // Add commands to pipeline using existing bridge logic
                             for cmd in &batch.commands {
-                                match protobuf_bridge::create_valkey_command(cmd) {
-                                    Ok(valkey_cmd) => pipeline.add_command(valkey_cmd),
+                                let mut valkey_cmd = match protobuf_bridge::create_valkey_command(cmd) {
+                                    Ok(cmd) => cmd,
                                     Err(e) => {
                                         return Err(redis::RedisError::from((
                                             redis::ErrorKind::ClientError,
@@ -1667,6 +1731,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         )));
                                     }
                                 };
+                                // Apply compression to each command in the batch
+                                // This also validates that the command is compatible with compression
+                                #[allow(clippy::collapsible_if)]
+                                if client.is_compression_enabled() {
+                                    if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
+                                        // Incompatible command errors should be returned to the user
+                                        if e.is_incompatible_command() {
+                                            return Err(redis::RedisError::from((
+                                                redis::ErrorKind::ClientError,
+                                                "Incompatible command with compression",
+                                                e.to_string(),
+                                            )));
+                                        }
+                                        // For other compression errors, log and continue
+                                        log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
+                                    }
+                                }
+                                pipeline.add_command(valkey_cmd);
                             }
 
                             // Get routing using FFI approach
@@ -1728,15 +1810,41 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         }
                                     }
                                     Err(err) => {
-                                        log::warn!(
-                                            "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                            root_span_ptr,
-                                            err
+                                        log_warn_lazy!(
+                                            "otel",
+                                            format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                                         );
                                     }
                                 }
                             }
-                            exec_res
+
+                            // Process batch response for decompression if compression is enabled
+                            match exec_res {
+                                Ok(value) => {
+                                    if client.is_compression_enabled() {
+                                        if let Some(manager) = client.compression_manager() {
+                                            match glide_core::compression::decompress_batch_response(
+                                                value.clone(),
+                                                manager.as_ref(),
+                                            ) {
+                                                Ok(decompressed) => Ok(decompressed),
+                                                Err(e) => {
+                                                    log_warn_lazy!(
+                                                        "compression",
+                                                        format!("Failed to decompress batch response: {}, returning original", e)
+                                                    );
+                                                    Ok(value)
+                                                }
+                                            }
+                                        } else {
+                                            Ok(value)
+                                        }
+                                    } else {
+                                        Ok(value)
+                                    }
+                                }
+                                Err(e) => Err(e),
+                            }
                         }
                         .await;
 
@@ -2510,4 +2618,67 @@ fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
         .expect("OK_STRING_GLOBAL should be initialized");
     let local = env.new_local_ref(global.as_obj())?;
     Ok(JString::from(local))
+}
+
+/// Get cache metrics asynchronously
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_getCacheMetrics(
+    mut env: JNIEnv,
+    _class: JClass,
+    client_ptr: jlong,
+    callback_id: jlong,
+    metrics_type: jint,
+) {
+    run_ffi(|| {
+        let handle_id = client_ptr as u64;
+
+        let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "getCacheMetrics") else {
+            return Some(());
+        };
+
+        get_runtime().spawn(async move {
+            let client_result = ensure_client_for_handle(handle_id).await;
+            match client_result {
+                Ok(client) => {
+                    use glide_core::command_request::CacheMetricsType;
+                    use protobuf::Enum;
+
+                    let result = match CacheMetricsType::from_i32(metrics_type) {
+                        Some(CacheMetricsType::HitRate) => client.cache_hit_rate(),
+                        Some(CacheMetricsType::MissRate) => client.cache_miss_rate(),
+                        Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
+                        Some(CacheMetricsType::Evictions) => client.cache_evictions(),
+                        Some(CacheMetricsType::Expirations) => client.cache_expirations(),
+                        Some(CacheMetricsType::TotalLookups) => client.cache_total_lookups(),
+                        None => Err(redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Invalid cache metrics type",
+                            format!("Unknown metrics type: {}", metrics_type),
+                        ))),
+                    };
+
+                    let final_result = result.map_err(|e| {
+                        redis::RedisError::from((
+                            redis::ErrorKind::ClientError,
+                            "Cache metrics error",
+                            e.to_string(),
+                        ))
+                    });
+
+                    complete_callback(jvm, callback_id, final_result, false);
+                }
+                Err(err) => {
+                    let error = Err(redis::RedisError::from((
+                        redis::ErrorKind::ClientError,
+                        "Client not found",
+                        err.to_string(),
+                    )));
+                    complete_callback(jvm, callback_id, error, false);
+                }
+            }
+        });
+
+        Some(())
+    })
+    .unwrap_or(())
 }

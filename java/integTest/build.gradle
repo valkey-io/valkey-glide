@@ -34,8 +34,8 @@ dependencies {
     // Use published GLIDE artifact
     implementation group: 'io.valkey', name: 'valkey-glide', version: project.ext.defaultReleaseVersion, classifier: classifier
 
-    // Use published jedis-compatibility artifact
-    testImplementation group: 'io.valkey', name: 'valkey-glide-jedis-compatibility', version: project.ext.defaultReleaseVersion, classifier: osdetector.classifier
+    // Use project dependency for jedis-compatibility (resolves directly, no Maven Local needed)
+    testImplementation project(':jedis-compatibility')
 
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
     implementation 'com.google.code.gson:gson:2.13.2'
@@ -279,10 +279,10 @@ gradle.buildFinished {
         println "Failed to clean up cluster folders: ${e.message}"
     }
 }
-compileTestJava.dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
+compileTestJava.dependsOn ':client:publishToMavenLocal'
 
 tasks.withType(Test) {
-    dependsOn ':client:publishToMavenLocal', ':jedis-compatibility:publishToMavenLocal'
+    dependsOn ':client:publishToMavenLocal'
     useJUnitPlatform()
     if (!project.gradle.startParameter.taskNames.contains(':integTest:modulesTest')) {
         dependsOn 'beforeTests'

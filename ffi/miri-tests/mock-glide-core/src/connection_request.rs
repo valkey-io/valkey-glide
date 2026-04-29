@@ -8,6 +8,7 @@ pub use glide_core::connection_request::{
     ConnectionRetryStrategy,
     IamCredentials,
     NodeAddress,
+    NodeDiscoveryMode,
     PeriodicChecksDisabled,
     PeriodicChecksManualInterval,
     ProtocolVersion,
