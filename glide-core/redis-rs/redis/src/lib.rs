@@ -384,7 +384,8 @@ pub use crate::types::{
     Value,
     PushKind,
     VerbatimFormat,
-    ProtocolVersion
+    ProtocolVersion,
+    AddressResolver,
 };
 
 #[cfg(feature = "aio")]

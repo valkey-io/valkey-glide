@@ -2681,10 +2681,14 @@ where
         // Await all connection futures, this is bounded by `connection_timeout`.
         let results = futures::future::join_all(connection_futures).await;
 
-        // Collect successful connections
+        // Collect successful connections and extract resolved IPs for reverse lookup.
         let new_connections = ConnectionsMap(DashMap::with_capacity(nodes_len));
+        let mut resolved_ips: Vec<(String, IpAddr)> = Vec::new();
         for (addr, result) in results {
             if let Ok(node) = result {
+                if let Some(ip) = node.user_connection.ip {
+                    resolved_ips.push((addr.clone(), ip));
+                }
                 new_connections.0.insert(addr, node);
             }
         }
@@ -2693,12 +2697,17 @@ where
             "cluster",
             format!("refresh_slots found nodes:\n{new_connections}")
         );
+        // Populate IP→address reverse lookup from DNS-resolved IPs,
+        // then carry over any IPs from the previous slot map that weren't re-resolved.
+        new_slots.populate_ips(resolved_ips);
+
         // Reset the current slot map and connection vector with the new ones
         let mut write_guard = inner.conn_lock.write();
         let old_topology_hash = write_guard.get_current_topology_hash();
         // Clear the refresh tasks of the prev instance
         // TODO - Maybe we can take the running refresh tasks and use them instead of running new connection creation
         write_guard.refresh_conn_state.clear_refresh_state();
+        new_slots.carry_over_ips_from(&write_guard.slot_map);
         let read_from_replicas =
             inner.get_cluster_param(|params| params.read_from_replicas.clone());
         *write_guard = ConnectionsContainer::new(
@@ -2723,6 +2732,29 @@ where
             )
         );
         Ok(())
+    }
+
+    /// Resolves a raw address (which may be a raw IP:port from a MOVED/ASK redirect)
+    /// to a canonical hostname:port usable for connection lookup.
+    ///
+    /// Resolution order:
+    /// 1. Reverse IP lookup: parse the host as an IP and look it up in the slot map's
+    ///    IP→address table (built from DNS resolution during CLUSTER SLOTS refresh).
+    /// 2. Raw address fallback: return the original address unchanged.
+    pub(crate) fn resolve_address(inner: &Arc<InnerCore<C>>, address: &str) -> String {
+        let conn_lock = inner.conn_lock.read();
+
+        // Step 1: Reverse IP lookup via slot map.
+        if let Some((host, _port)) = address.rsplit_once(':') {
+            if let Ok(ip) = host.parse::<IpAddr>() {
+                if let Some(node_addr) = conn_lock.slot_map.node_address_for_ip(ip) {
+                    return (*node_addr).clone();
+                }
+            }
+        }
+
+        // Step 2: Return raw address as fallback.
+        address.to_string()
     }
 
     /// Handles MOVED errors by updating the client's slot and node mappings based on the new primary's role:
@@ -3671,7 +3703,11 @@ where
                             future: Box::pin(ClusterConnInner::update_upon_moved_error(
                                 self.inner.clone(),
                                 moved_redirect.slot,
-                                moved_redirect.address.into(),
+                                ClusterConnInner::resolve_address(
+                                    &self.inner,
+                                    &moved_redirect.address,
+                                )
+                                .into(),
                             )),
                         })
                     } else if let Some(ref request) = request {
@@ -4239,6 +4275,7 @@ where
     let tls_mode = inner.get_cluster_param(|params| params.tls);
 
     let read_from_replicas = inner.get_cluster_param(|params| params.read_from_replicas.clone());
+    let address_resolver = inner.get_cluster_param(|params| params.address_resolver.clone());
     TopologyQueryResult {
         topology_result: calculate_topology(
             topology_values,
@@ -4246,6 +4283,7 @@ where
             tls_mode,
             num_of_nodes_to_query,
             read_from_replicas,
+            address_resolver.as_ref().map(Arc::as_ref),
         ),
         failed_connections: Some(failed_addresses),
     }
