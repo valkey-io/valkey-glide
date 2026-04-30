@@ -225,8 +225,6 @@ jobs:
               working-directory: ./node/rust-client
               id: build-action
               run: |
-                  npm install -g @napi-rs/cli@2
-
                   # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" ]]; then
                     additional_param="--zig"
@@ -338,11 +336,7 @@ jobs:
               working-directory: ./node
               shell: bash
               run: |
-                  # Install only production dependencies to speed up installation
-                  npm install --only=prod
-
-                  # Install only dev dependencies needed for building TypeScript
-                  npm install --no-save typescript protobufjs-cli replace @napi-rs/cli@2
+                  npm ci
 
             # Setup npm package directories using NAPI-RS artifacts command
             - name: Setup npm package directories
@@ -418,10 +412,6 @@ jobs:
                   cd ./npm/glide
                   sed -i 's/"version": "0\.0\.0"/"version": "'"${NAPI_RS_VERSION_FROM_TAG}"'"/' package.json
                   echo "Base package version is now: $(jq -r .version package.json)"
-
-            - name: Install NAPI-RS CLI
-              shell: bash
-              run: npm install -g @napi-rs/cli@2
 
             # Use prepublishOnly, which call to napi prepublish -t npm to set up everything properly, versions of native modules reflecting the base package version, and optional dependencies base on triples are added to the base package.
             - name: Publish packages
