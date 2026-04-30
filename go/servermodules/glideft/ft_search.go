@@ -93,6 +93,11 @@ func sortDocuments(docs []models.FtSearchDocument, opts *options.FtSearchOptions
 		return
 	}
 
+	// When WITHSORTKEYS is not set, sorting relies on the sort field being present
+	// in each document's Fields map. If the sort field was excluded via RETURN, the
+	// values will all be empty strings and the original (arbitrary map iteration)
+	// order is preserved by SliceStable — which is the best we can do without
+	// server-side ordering guarantees.
 	var desc bool
 	if opts != nil {
 		desc = opts.SortByOrder == constants.FtSearchSortOrderDesc

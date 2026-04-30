@@ -2213,3 +2213,178 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 
 	glideft.FtDropIndex(ctx, client, index)
 }
+
+// --- ft_search_sortby_with_return_excluding_sort_field ---
+// Verifies that SORTBY still works when the sort field is excluded from RETURN.
+// The client-side sort falls back gracefully: all fieldAsString values are ""
+// so SliceStable preserves the original order. Using WITHSORTKEYS is the
+// correct way to guarantee order in this scenario.
+
+func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortField() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+
+	prefix := "{" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewNumericField("price").SetSortable(true),
+			options.NewTextField("name").SetSortable(true),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	client.HSet(ctx, prefix+"1", map[string]string{"price": "10", "name": "Zebra"})
+	client.HSet(ctx, prefix+"2", map[string]string{"price": "20", "name": "Aardvark"})
+	client.HSet(ctx, prefix+"3", map[string]string{"price": "30", "name": "Mango"})
+	time.Sleep(time.Second)
+
+	// SORTBY price ASC, but RETURN only "name" (price excluded).
+	// The server sorts by price, but the Go client iterates a map[string]any
+	// which loses insertion order. Without WITHSORTKEYS the client-side re-sort
+	// cannot recover the order (price field is missing). The result should still
+	// succeed (no error) and all 3 documents should be present.
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	names := map[string]bool{}
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		names[n] = true
+		_, hasPrice := doc.Fields["price"]
+		assert.False(suite.T(), hasPrice, "price should not be in RETURN fields")
+	}
+	assert.True(suite.T(), names["Zebra"])
+	assert.True(suite.T(), names["Aardvark"])
+	assert.True(suite.T(), names["Mango"])
+
+	// With WITHSORTKEYS the client-side re-sort uses the sort key values to
+	// reconstruct the server's order.
+	// ASC by price: 10→20→30 → Zebra, Aardvark, Mango
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	var ascNames []string
+	for _, doc := range result.Documents {
+		assert.NotEmpty(suite.T(), doc.SortKey, "SortKey must be populated with WITHSORTKEYS")
+		n, _ := doc.Fields["name"].(string)
+		ascNames = append(ascNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Zebra", "Aardvark", "Mango"}, ascNames)
+
+	// DESC by price: 30→20→10 → Mango, Aardvark, Zebra
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderDesc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	var descNames []string
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		descNames = append(descNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Mango", "Aardvark", "Zebra"}, descNames)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
+// --- ft_search_sortby_with_return_excluding_sort_field (standalone) ---
+
+func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStandalone() {
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
+	client := suite.defaultClient()
+	ctx := context.Background()
+
+	prefix := "sortret-" + uuid.New().String() + ":"
+	index := prefix + "index"
+
+	_, err := glideft.FtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewNumericField("price").SetSortable(true),
+			options.NewTextField("name").SetSortable(true),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	client.HSet(ctx, prefix+"1", map[string]string{"price": "10", "name": "Zebra"})
+	client.HSet(ctx, prefix+"2", map[string]string{"price": "20", "name": "Aardvark"})
+	client.HSet(ctx, prefix+"3", map[string]string{"price": "30", "name": "Mango"})
+	time.Sleep(time.Second)
+
+	// SORTBY price ASC, RETURN only "name" — no error, all docs present
+	result, err := glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	names := map[string]bool{}
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		names[n] = true
+	}
+	assert.True(suite.T(), names["Zebra"])
+	assert.True(suite.T(), names["Aardvark"])
+	assert.True(suite.T(), names["Mango"])
+
+	// ASC by price with WITHSORTKEYS: 10→20→30 → Zebra, Aardvark, Mango
+	result, err = glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	var ascNames []string
+	for _, doc := range result.Documents {
+		assert.NotEmpty(suite.T(), doc.SortKey)
+		n, _ := doc.Fields["name"].(string)
+		ascNames = append(ascNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Zebra", "Aardvark", "Mango"}, ascNames)
+
+	// DESC by price with WITHSORTKEYS: 30→20→10 → Mango, Aardvark, Zebra
+	result, err = glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderDesc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	var descNames []string
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		descNames = append(descNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Mango", "Aardvark", "Zebra"}, descNames)
+
+	glideft.FtDropIndex(ctx, client, index)
+}
