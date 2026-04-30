@@ -34,7 +34,7 @@ class TestClientSideCache:
         assert await client.get("cache_test_key") == b"cache_test_value"
 
         # Entry count should be 1
-        assert await client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
+        assert client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
 
         # Second GET - cache hit
         assert await client.get("cache_test_key") == b"cache_test_value"
@@ -43,9 +43,9 @@ class TestClientSideCache:
         assert await client.get("cache_test_key") == b"cache_test_value"
 
         # Verify metrics: 1 miss + 2 hits = 3 total
-        hit_rate = await client.get_cache_hit_rate()
-        miss_rate = await client.get_cache_miss_rate()
-        total_lookups = await client.get_cache_total_lookups()
+        hit_rate = client.get_cache_hit_rate()
+        miss_rate = client.get_cache_miss_rate()
+        total_lookups = client.get_cache_total_lookups()
 
         assert hit_rate == pytest.approx(2.0 / 3.0), "Expected 66.67% hit rate"
         assert miss_rate == pytest.approx(1.0 / 3.0), "Expected 33.33% miss rate"
@@ -78,26 +78,26 @@ class TestClientSideCache:
 
         # metrics should fail
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_hit_rate()
+            client.get_cache_hit_rate()
         assert "metrics" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_miss_rate()
+            client.get_cache_miss_rate()
         assert "metrics" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_total_lookups()
+            client.get_cache_total_lookups()
         assert "metrics" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_evictions()
+            client.get_cache_evictions()
         assert "metrics" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_expirations()
+            client.get_cache_expirations()
         assert "metrics" in str(exc_info.value).lower()
 
-        assert await client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
+        assert client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
 
         await client.close()
 
@@ -122,15 +122,15 @@ class TestClientSideCache:
         assert await client.get("nonexistent_key") is None
 
         # Entry count should be 0
-        assert await client.get_cache_entry_count() == 0, "Expected 0 entries in cache"
+        assert client.get_cache_entry_count() == 0, "Expected 0 entries in cache"
 
         # GET again - should NOT be cached (NIL values not cached)
         assert await client.get("nonexistent_key") is None
 
         # Miss rate should be 100%, total lookups = 2
-        miss_rate = await client.get_cache_miss_rate()
+        miss_rate = client.get_cache_miss_rate()
         assert miss_rate == 1.0, "Expected 100% miss rate"
-        assert await client.get_cache_total_lookups() == 2, "Expected 2 total lookups"
+        assert client.get_cache_total_lookups() == 2, "Expected 2 total lookups"
 
         await client.close()
 
@@ -155,7 +155,7 @@ class TestClientSideCache:
         assert await client.set("ttl_key", "ttl_value") == "OK"
         assert await client.get("ttl_key") == b"ttl_value"
 
-        assert await client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
+        assert client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
 
         # Second GET - from cache
         assert await client.get("ttl_key") == b"ttl_value"
@@ -167,13 +167,13 @@ class TestClientSideCache:
         assert await client.get("ttl_key") == b"ttl_value"
 
         # Expiration count should be 1
-        expirations = await client.get_cache_expirations()
+        expirations = client.get_cache_expirations()
         assert expirations == 1, "Expected 1 expiration"
 
         # Miss rate should be 2 misses out of 3 total = 66.67%
-        miss_rate = await client.get_cache_miss_rate()
+        miss_rate = client.get_cache_miss_rate()
         assert miss_rate == pytest.approx(2.0 / 3.0), "Expected 66.67% miss rate"
-        assert await client.get_cache_total_lookups() == 3, "Expected 3 total lookups"
+        assert client.get_cache_total_lookups() == 3, "Expected 3 total lookups"
 
         await client.close()
 
@@ -204,13 +204,13 @@ class TestClientSideCache:
             assert await client.get(f"key{i}") == f"value{i}".encode()
 
         # Entry count should be 3
-        assert await client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
+        assert client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
 
         # Verify metrics: 3 misses + 3 hits = 50% hit rate
-        hit_rate = await client.get_cache_hit_rate()
+        hit_rate = client.get_cache_hit_rate()
         assert hit_rate == 0.5, "Expected 50% hit rate"
         assert (
-            await client.get_cache_total_lookups() == 6
+            client.get_cache_total_lookups() == 6
         ), "Expected 6 total lookups (3 misses + 3 hits)"
 
         await client.close()
@@ -235,27 +235,27 @@ class TestClientSideCache:
 
         # Metrics should error
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_hit_rate()
+            client.get_cache_hit_rate()
         assert "not enabled" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_miss_rate()
+            client.get_cache_miss_rate()
         assert "not enabled" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_total_lookups()
+            client.get_cache_total_lookups()
         assert "not enabled" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_evictions()
+            client.get_cache_evictions()
         assert "not enabled" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_expirations()
+            client.get_cache_expirations()
         assert "not enabled" in str(exc_info.value).lower()
 
         with pytest.raises(Exception) as exc_info:
-            await client.get_cache_entry_count()
+            client.get_cache_entry_count()
         assert "not enabled" in str(exc_info.value).lower()
 
         await client.close()
@@ -287,7 +287,7 @@ class TestClientSideCache:
             assert await client.get(f"lru_key{i}") == value.encode()
 
         # Cache should have 3 entries now
-        assert await client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
+        assert client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
 
         # Access key1 to make it recently used
         assert await client.get("lru_key1") == value.encode()
@@ -298,23 +298,23 @@ class TestClientSideCache:
             assert await client.get(f"lru_key{i}") == value.encode()
 
         # Verify 2 evictions occurred
-        evictions = await client.get_cache_evictions()
+        evictions = client.get_cache_evictions()
         assert evictions == 2, "Expected 2 evictions"
 
         # Verify cache is working (hit rate > 0)
-        hit_rate = await client.get_cache_hit_rate()
+        hit_rate = client.get_cache_hit_rate()
         assert hit_rate > 0, "Cache should have some hits"
 
         # Check that key1 is still cached
         assert await client.get("lru_key1") == value.encode()
-        new_hit_rate = await client.get_cache_hit_rate()
+        new_hit_rate = client.get_cache_hit_rate()
         assert new_hit_rate > hit_rate, "Key1 should still be in cache"
 
         # Check that key2 and key3 are evicted
-        old_miss_rate = await client.get_cache_miss_rate()
+        old_miss_rate = client.get_cache_miss_rate()
         assert await client.get("lru_key2") == value.encode()
         assert await client.get("lru_key3") == value.encode()
-        new_miss_rate = await client.get_cache_miss_rate()
+        new_miss_rate = client.get_cache_miss_rate()
         assert (
             new_miss_rate > old_miss_rate
         ), "Key2 and Key3 should be evicted from cache"
@@ -359,11 +359,11 @@ class TestClientSideCache:
         # key3 frequency: 1
 
         # Verify cache is working
-        hit_rate = await client.get_cache_hit_rate()
+        hit_rate = client.get_cache_hit_rate()
         assert hit_rate > 0, "Cache should have some hits"
 
         # Cache should have 3 entries now
-        assert await client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
+        assert client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
 
         # Set key4 - this should trigger eviction of key3 (lowest frequency)
         assert await client.set("key4", value) == "OK"
@@ -371,30 +371,30 @@ class TestClientSideCache:
         # key4 frequency: 1
 
         # Check that cache entry count is still 3
-        assert await client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
+        assert client.get_cache_entry_count() == 3, "Expected 3 entries in cache"
         # Verify 1 eviction occurred
-        assert await client.get_cache_evictions() == 1, "Expected 1 eviction"
+        assert client.get_cache_evictions() == 1, "Expected 1 eviction"
 
         # Check that key1 (highest frequency) is still cached
-        old_hit_rate = await client.get_cache_hit_rate()
+        old_hit_rate = client.get_cache_hit_rate()
         assert await client.get("key1") == value.encode()
-        new_hit_rate = await client.get_cache_hit_rate()
+        new_hit_rate = client.get_cache_hit_rate()
         assert (
             new_hit_rate > old_hit_rate
         ), "key1 (highest frequency) should still be cached"
 
         # Check that key3 (lowest frequency) was evicted
-        old_miss_rate = await client.get_cache_miss_rate()
+        old_miss_rate = client.get_cache_miss_rate()
         assert await client.get("key3") == value.encode()  # Should be a miss
-        new_miss_rate = await client.get_cache_miss_rate()
+        new_miss_rate = client.get_cache_miss_rate()
         assert (
             new_miss_rate > old_miss_rate
         ), "key3 (lowest frequency) should have been evicted"
 
         # key2 (medium frequency) should still be cached
-        old_hit_rate = await client.get_cache_hit_rate()
+        old_hit_rate = client.get_cache_hit_rate()
         assert await client.get("key2") == value.encode()
-        new_hit_rate = await client.get_cache_hit_rate()
+        new_hit_rate = client.get_cache_hit_rate()
         assert (
             new_hit_rate > old_hit_rate
         ), "key2 (medium frequency) should still be cached"
@@ -429,15 +429,15 @@ class TestClientSideCache:
         assert await client.get("shared_key") == b"value"
 
         # Entry count should be 1
-        entry_count = await client2.get_cache_entry_count()
+        entry_count = client2.get_cache_entry_count()
         assert entry_count == 1, "Expected 1 entry in shared cache"
 
         assert await client2.get("shared_key") == b"value"
 
-        assert await client2.get_cache_hit_rate() == 0.5
-        assert await client.get_cache_hit_rate() == 0.5
+        assert client2.get_cache_hit_rate() == 0.5
+        assert client.get_cache_hit_rate() == 0.5
         assert (
-            await client.get_cache_total_lookups() == 2
+            client.get_cache_total_lookups() == 2
         ), "Expected 2 total lookups on shared cache"
         await client.close()
         await client2.close()
@@ -464,7 +464,7 @@ class TestClientSideCache:
         assert await client.get("no_ttl_key") == b"no_ttl_value"
 
         # Entry should be cached
-        assert await client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
+        assert client.get_cache_entry_count() == 1, "Expected 1 entry in cache"
 
         # Wait a bit and verify entry is still cached (no TTL expiration)
         await anyio.sleep(3)
@@ -473,13 +473,13 @@ class TestClientSideCache:
         assert await client.get("no_ttl_key") == b"no_ttl_value"
 
         # Verify no expirations occurred
-        expirations = await client.get_cache_expirations()
+        expirations = client.get_cache_expirations()
         assert expirations == 0, "Expected 0 expirations with TTL disabled"
 
-        # Verify metrics: 1 miss + 2 hits = 3 total
-        assert await client.get_cache_total_lookups() == 2, "Expected 2 total lookups"
-        hit_rate = await client.get_cache_hit_rate()
-        assert hit_rate == 0.5, "Expected 66.67% hit rate"
+        # Verify metrics: 1 miss + 1 hit = 2 total
+        assert client.get_cache_total_lookups() == 2, "Expected 2 total lookups"
+        hit_rate = client.get_cache_hit_rate()
+        assert hit_rate == 0.5, "Expected 50% hit rate"
 
         await client.close()
 
@@ -536,21 +536,21 @@ class TestClientSideCache:
         assert await client.get("key") == b"value"
 
         # check that now the cache entry count is 1
-        entry_count = await client.get_cache_entry_count()
+        entry_count = client.get_cache_entry_count()
         assert entry_count == 1, "Expected 1 entry in cache after GET"
 
         # HGETALL command - cacheable
         assert await client.hset("hashkey", {"field1": "val1"}) == 1
         assert await client.hgetall("hashkey") == {b"field1": b"val1"}
 
-        entry_count = await client.get_cache_entry_count()
+        entry_count = client.get_cache_entry_count()
         assert entry_count == 2, "Expected 2 entries in cache after HGETALL"
 
         # SMEMBERS command - cacheable
         assert await client.sadd("setkey", ["member1"]) == 1
         assert await client.smembers("setkey") == {b"member1"}
 
-        entry_count = await client.get_cache_entry_count()
+        entry_count = client.get_cache_entry_count()
         assert entry_count == 3, "Expected 3 entries in cache after SMEMBERS"
 
         await client.flushall()
