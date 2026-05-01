@@ -3990,12 +3990,43 @@ where
             Ok(InitialNodeConnectionsResult {
                 connections,
                 addresses_needing_refresh,
-            }) => (connections, addresses_needing_refresh),
+            }) => {
+                if connections.is_empty() {
+                    // Initial nodes returned no usable connections (e.g., dead primary during failover).
+                    // Fall back to existing cluster connections which may report updated topology.
+                    log_info_lazy!("slot_refresh",
+                        "Initial nodes returned no connections, falling back to existing cluster connections");
+                    if let Some(random_conns) = inner
+                        .conn_lock
+                        .read()
+                        .expect(MUTEX_READ_ERR)
+                        .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
+                    {
+                        (random_conns, addresses_needing_refresh)
+                    } else {
+                        (connections, addresses_needing_refresh)
+                    }
+                } else {
+                    (connections, addresses_needing_refresh)
+                }
+            }
             Err(err) => {
-                return TopologyQueryResult {
-                    topology_result: Err(err),
-                    failed_connections: None,
-                };
+                // Initial nodes query failed entirely. Fall back to existing cluster connections.
+                log_info_lazy!("slot_refresh",
+                    format!("Initial nodes query failed ({}), falling back to existing cluster connections", err));
+                if let Some(random_conns) = inner
+                    .conn_lock
+                    .read()
+                    .expect(MUTEX_READ_ERR)
+                    .random_connections(num_of_nodes_to_query, ConnectionType::PreferManagement)
+                {
+                    (random_conns, HashSet::new())
+                } else {
+                    return TopologyQueryResult {
+                        topology_result: Err(err),
+                        failed_connections: None,
+                    };
+                }
             }
         }
     } else if let Some(random_conns) = inner
