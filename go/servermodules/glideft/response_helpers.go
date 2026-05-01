@@ -12,14 +12,14 @@ import (
 
 func toStringResult(result any, err error) (string, error) {
 	if err != nil {
-		return "", err
+		return models.DefaultStringResponse, err
 	}
 	if result == nil {
-		return "", nil
+		return models.DefaultStringResponse, nil
 	}
 	s, ok := result.(string)
 	if !ok {
-		return "", fmt.Errorf("unexpected response type: %T, expected string", result)
+		return models.DefaultStringResponse, fmt.Errorf("unexpected response type: %T, expected string", result)
 	}
 	return s, nil
 }

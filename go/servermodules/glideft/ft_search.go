@@ -130,11 +130,11 @@ func sortDocuments(docs []models.FtSearchDocument, opts *options.FtSearchOptions
 
 func fieldAsString(fields map[string]any, key string) string {
 	if fields == nil {
-		return ""
+		return models.DefaultStringResponse
 	}
 	v, ok := fields[key]
 	if !ok {
-		return ""
+		return models.DefaultStringResponse
 	}
 	switch val := v.(type) {
 	case string:
@@ -144,6 +144,6 @@ func fieldAsString(fields map[string]any, key string) string {
 	case float64:
 		return strconv.FormatFloat(val, 'f', -1, 64)
 	default:
-		return ""
+		return models.DefaultStringResponse
 	}
 }

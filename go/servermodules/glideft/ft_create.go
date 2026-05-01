@@ -5,6 +5,7 @@ package glideft
 import (
 	"context"
 
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -34,7 +35,7 @@ func FtCreate(
 ) (string, error) {
 	args, err := buildCreateArgs(indexName, schema, opts)
 	if err != nil {
-		return "", err
+		return models.DefaultStringResponse, err
 	}
 	return toStringResult(execStandalone(client, ctx, args))
 }
@@ -49,7 +50,7 @@ func ClusterFtCreate(
 ) (string, error) {
 	args, err := buildCreateArgs(indexName, schema, opts)
 	if err != nil {
-		return "", err
+		return models.DefaultStringResponse, err
 	}
 	return toStringResult(execCluster(client, ctx, args))
 }
