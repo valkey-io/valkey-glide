@@ -34,9 +34,6 @@ on:
             - .github/workflows/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
-    # Nightly full-matrix run at 12:30 AM UTC, staggered to avoid runner contention with other languages
-    schedule:
-        - cron: "30 0 * * *"
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -88,7 +85,7 @@ jobs:
               with:
                   language-name: node
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-                  run-with-macos: ${{ github.event_name == 'schedule' && 'use-self-hosted' || github.event.inputs.run-with-macos }}
+                  run-with-macos: ${{ github.event.inputs.run-with-macos }}
 
     test-node:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}

@@ -23,9 +23,6 @@ on:
             - deny.toml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/redis-rs.yml
-    # Nightly run at 2:30 AM UTC
-    schedule:
-        - cron: "30 2 * * *"
     workflow_dispatch:
     workflow_call:
 

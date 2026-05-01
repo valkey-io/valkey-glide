@@ -36,10 +36,6 @@ on:
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
-    # Nightly full-matrix run (non-Windows) at 1:00 AM UTC, staggered to avoid runner contention
-    schedule:
-        - cron: "0 1 * * *"
-
     workflow_dispatch:
         inputs:
             full-matrix:
@@ -63,6 +59,10 @@ on:
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
                 type: string
+                default: false
+            windows-only:
+                description: "Run Windows tests only (used by fmt-java-windows.yml to isolate flaky Windows runs)"
+                type: boolean
                 default: false
 
 concurrency:
@@ -88,12 +88,22 @@ jobs:
                   language-name: java
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
-                  run-with-macos: ${{ github.event_name == 'schedule' && 'use-self-hosted' || github.event.inputs.run-with-macos }}
-            # Windows is tested separately in java-windows.yml to isolate its higher failure rate
+                  run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
+            # Windows is flaky and tested separately via fmt-java-windows.yml.
+            # By default this workflow excludes Windows from the host matrix.
+            # When called with windows-only: true, keep Windows only.
             - id: filter-hosts
               shell: bash
+              env:
+                  WINDOWS_ONLY: ${{ inputs.windows-only }}
+                  HOST_MATRIX: ${{ steps.get-matrices.outputs.host-matrix-output }}
               run: |
-                  echo "host-matrix=$(echo '${{ steps.get-matrices.outputs.host-matrix-output }}' | jq -c '[.[] | select(.OS != "windows")]')" >> $GITHUB_OUTPUT
+                  if [[ "$WINDOWS_ONLY" == "true" ]]; then
+                      FILTER='[.[] | select(.OS == "windows")]'
+                  else
+                      FILTER='[.[] | select(.OS != "windows")]'
+                  fi
+                  echo "host-matrix=$(echo "$HOST_MATRIX" | jq -c "$FILTER")" >> $GITHUB_OUTPUT
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
