@@ -15,6 +15,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/servermodules/glideft"
 )
 
 func intPtr(v int) *int         { return &v }
@@ -47,10 +48,27 @@ func (suite *GlideTestSuite) jsonSetCluster(ctx context.Context, client *glide.C
 	assert.NoError(suite.T(), err)
 }
 
-// createIndexHelper creates a simple HASH index with a numeric and text field.
-func (suite *GlideTestSuite) createIndexHelper(ctx context.Context, ft *glide.GlideFt, indexName string) string {
+// createIndexHelper creates a simple HASH index with a numeric and text field (cluster).
+func (suite *GlideTestSuite) createIndexHelper(ctx context.Context, client *glide.ClusterClient, indexName string) string {
 	prefix := "{hash-search-" + uuid.New().String() + "}:"
-	_, err := ft.Create(ctx, indexName,
+	_, err := glideft.ClusterFtCreate(ctx, client, indexName,
+		[]options.Field{
+			options.NewNumericField("price"),
+			options.NewTextField("title"),
+		},
+		&options.FtCreateOptions{
+			DataType: constants.IndexDataTypeHash,
+			Prefixes: []string{prefix},
+		},
+	)
+	suite.NoError(err)
+	return prefix
+}
+
+// createIndexHelperStandalone creates a simple HASH index with a numeric and text field (standalone).
+func (suite *GlideTestSuite) createIndexHelperStandalone(ctx context.Context, client *glide.Client, indexName string) string {
+	prefix := "hash-search-" + uuid.New().String() + ":"
+	_, err := glideft.FtCreate(ctx, client, indexName,
 		[]options.Field{
 			options.NewNumericField("price"),
 			options.NewTextField("title"),
@@ -68,11 +86,10 @@ func (suite *GlideTestSuite) createIndexHelper(ctx context.Context, ft *glide.Gl
 
 func (suite *GlideTestSuite) TestModuleFtCreate() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	// simple HNSW vector index
-	res, err := ft.Create(ctx, uuid.New().String(),
+	res, err := glideft.ClusterFtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewVectorFieldHNSW("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		}, nil)
@@ -80,7 +97,7 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// JSON index with FLAT vector + prefix
-	res, err = ft.Create(ctx, uuid.New().String(),
+	res, err = glideft.ClusterFtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewVectorFieldFlat("$.vec", constants.DistanceMetricL2, 6).SetAlias("VEC"),
 		},
@@ -89,7 +106,7 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// HNSW with extra parameters
-	res, err = ft.Create(ctx, uuid.New().String(),
+	res, err = glideft.ClusterFtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewVectorFieldHNSW("doc_embedding", constants.DistanceMetricCosine, 1536).
 				SetNumberOfEdges(40).
@@ -101,7 +118,7 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// multiple fields
-	res, err = ft.Create(ctx, uuid.New().String(),
+	res, err = glideft.ClusterFtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("published_at"),
@@ -113,7 +130,7 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 
 	// multiple prefixes
 	dupIndex := uuid.New().String()
-	res, err = ft.Create(ctx, dupIndex,
+	res, err = glideft.ClusterFtCreate(ctx, client, dupIndex,
 		[]options.Field{
 			options.NewTagField("author_id"),
 			options.NewTagField("author_ids"),
@@ -128,13 +145,13 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// duplicate index → error
-	_, err = ft.Create(ctx, dupIndex,
+	_, err = glideft.ClusterFtCreate(ctx, client, dupIndex,
 		[]options.Field{options.NewTextField("title"), options.NewTextField("name")}, nil)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "already exists")
 
 	// no fields → error
-	_, err = ft.Create(ctx, uuid.New().String(), []options.Field{}, nil)
+	_, err = glideft.ClusterFtCreate(ctx, client, uuid.New().String(), []options.Field{}, nil)
 	assert.Error(suite.T(), err)
 	errMsg := err.Error()
 	assert.True(suite.T(),
@@ -143,7 +160,7 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 		"unexpected error: "+errMsg)
 
 	// duplicate field name → error
-	_, err = ft.Create(ctx, uuid.New().String(),
+	_, err = glideft.ClusterFtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{options.NewTextField("name"), options.NewTextField("name")}, nil)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
@@ -156,13 +173,12 @@ func (suite *GlideTestSuite) TestModuleFtCreate() {
 
 func (suite *GlideTestSuite) TestModuleFtSearch() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldHNSW("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		},
@@ -177,7 +193,7 @@ func (suite *GlideTestSuite) TestModuleFtSearch() {
 	assert.NoError(suite.T(), err)
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "*=>[KNN 2 @VEC $query_vec]",
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "*=>[KNN 2 @VEC $query_vec]",
 		&options.FtSearchOptions{
 			Params:       []options.FtSearchParam{{Key: "query_vec", Value: vec0}},
 			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "vec"}},
@@ -197,7 +213,7 @@ func (suite *GlideTestSuite) TestModuleFtSearch() {
 	assert.Equal(suite.T(), vec1, docsByKey[prefix+"1"]["vec"])
 
 	// querying non-existing index → error
-	_, err = ft.Search(ctx, uuid.New().String(), "*", nil)
+	_, err = glideft.ClusterFtSearch(ctx, client, uuid.New().String(), "*", nil)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -208,13 +224,12 @@ func (suite *GlideTestSuite) TestModuleFtSearch() {
 
 func (suite *GlideTestSuite) TestModuleFtSearchNoContent() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		},
@@ -227,7 +242,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContent() {
 	client.HSet(ctx, prefix+"1", map[string]string{"vec": vec1})
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "*=>[KNN 2 @VEC $query_vec]",
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "*=>[KNN 2 @VEC $query_vec]",
 		&options.FtSearchOptions{
 			NoContent: true,
 			Params:    []options.FtSearchParam{{Key: "query_vec", Value: vec0}},
@@ -249,13 +264,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContent() {
 
 func (suite *GlideTestSuite) TestModuleFtSearchDialect() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		},
@@ -266,7 +280,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialect() {
 	client.HSet(ctx, prefix+"0", map[string]string{"vec": vec0})
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "*=>[KNN 1 @VEC $query_vec]",
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "*=>[KNN 1 @VEC $query_vec]",
 		&options.FtSearchOptions{
 			Dialect:      intPtr(2),
 			Params:       []options.FtSearchParam{{Key: "query_vec", Value: vec0}},
@@ -283,15 +297,14 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialect() {
 
 func (suite *GlideTestSuite) TestModuleFtDropAndFtList() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	index := uuid.New().String()
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewVectorFieldHNSW("vec", constants.DistanceMetricL2, 2)}, nil)
 	assert.NoError(suite.T(), err)
 
-	before, err := ft.List(ctx)
+	before, err := glideft.ClusterFtList(ctx, client)
 	assert.NoError(suite.T(), err)
 	beforeSet := make(map[string]bool)
 	for _, n := range before {
@@ -299,10 +312,10 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtList() {
 	}
 	assert.True(suite.T(), beforeSet[index])
 
-	_, err = ft.DropIndex(ctx, index)
+	_, err = glideft.ClusterFtDropIndex(ctx, client, index)
 	assert.NoError(suite.T(), err)
 
-	after, err := ft.List(ctx)
+	after, err := glideft.ClusterFtList(ctx, client)
 	assert.NoError(suite.T(), err)
 	afterSet := make(map[string]bool)
 	for _, n := range after {
@@ -315,7 +328,7 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtList() {
 	assert.Equal(suite.T(), beforeSet, afterSet)
 
 	// drop non-existent → error
-	_, err = ft.DropIndex(ctx, index)
+	_, err = glideft.ClusterFtDropIndex(ctx, client, index)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -328,13 +341,12 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefixBicycles := "{bicycles-" + uuid.New().String() + "}:"
 	indexBicycles := prefixBicycles + "idx"
 
-	_, err := ft.Create(ctx, indexBicycles,
+	_, err := glideft.ClusterFtCreate(ctx, client, indexBicycles,
 		[]options.Field{
 			options.NewTextField("$.model").SetAlias("model"),
 			options.NewNumericField("$.price").SetAlias("price"),
@@ -348,7 +360,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
 	}
 	time.Sleep(time.Second)
 
-	aggreg, err := ft.Aggregate(ctx, indexBicycles, "*",
+	aggreg, err := glideft.ClusterFtAggregate(ctx, client, indexBicycles, "*",
 		&options.FtAggregateOptions{
 			LoadFields: []string{"__key"},
 			Clauses: []options.FtAggregateClause{
@@ -371,20 +383,19 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicycles() {
 	assert.Equal(suite.T(), float64(4), condCounts["used"])
 	assert.Equal(suite.T(), float64(1), condCounts["refurbished"])
 
-	ft.DropIndex(ctx, indexBicycles)
+	glideft.ClusterFtDropIndex(ctx, client, indexBicycles)
 }
 
 func (suite *GlideTestSuite) TestModuleFtAggregateMovies() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("AGGREGATE is currently not fully supported")
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefixMovies := "{movies-" + uuid.New().String() + "}:"
 	indexMovies := prefixMovies + "idx"
 
-	_, err := ft.Create(ctx, indexMovies,
+	_, err := glideft.ClusterFtCreate(ctx, client, indexMovies,
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("release_year"),
@@ -410,7 +421,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMovies() {
 	}
 	time.Sleep(time.Second)
 
-	aggreg, err := ft.Aggregate(ctx, indexMovies, "*",
+	aggreg, err := glideft.ClusterFtAggregate(ctx, client, indexMovies, "*",
 		&options.FtAggregateOptions{
 			LoadAll: true,
 			Clauses: []options.FtAggregateClause{
@@ -449,18 +460,17 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMovies() {
 	assert.Equal(suite.T(), float64(559490), genreMap["Thriller"]["nb_of_votes"])
 	assert.Equal(suite.T(), float64(9), genreMap["Thriller"]["avg_rating"])
 
-	ft.DropIndex(ctx, indexMovies)
+	glideft.ClusterFtDropIndex(ctx, client, indexMovies)
 }
 
 // --- ft_info ---
 
 func (suite *GlideTestSuite) TestModuleFtInfo() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	index := uuid.New().String()
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldHNSW("$.vec", constants.DistanceMetricCosine, 42).SetAlias("VEC"),
 			options.NewTextField("$.name").SetAlias("name"),
@@ -468,7 +478,7 @@ func (suite *GlideTestSuite) TestModuleFtInfo() {
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeJSON, Prefixes: []string{"123"}})
 	assert.NoError(suite.T(), err)
 
-	info, err := ft.Info(ctx, index)
+	info, err := glideft.ClusterFtInfo(ctx, client, index)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), index, info["index_name"])
 
@@ -535,8 +545,8 @@ func (suite *GlideTestSuite) TestModuleFtInfo() {
 	assert.Equal(suite.T(), "$.name", textField["identifier"])
 
 	// querying a missing index → error
-	ft.DropIndex(ctx, index)
-	_, err = ft.Info(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
+	_, err = glideft.ClusterFtInfo(ctx, client, index)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -549,64 +559,63 @@ func (suite *GlideTestSuite) TestModuleFtAliasOperations() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("ALIAS is currently unsupported")
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	alias1 := "alias1-" + uuid.New().String()
 	alias2 := "alias2-" + uuid.New().String()
 	indexName := uuid.New().String() + "-index"
 
-	_, err := ft.Create(ctx, indexName,
+	_, err := glideft.ClusterFtCreate(ctx, client, indexName,
 		[]options.Field{options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2)}, nil)
 	assert.NoError(suite.T(), err)
 
 	// add alias1
-	res, err := ft.AliasAdd(ctx, alias1, indexName)
+	res, err := glideft.ClusterFtAliasAdd(ctx, client, alias1, indexName)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
-	aliases, err := ft.AliasList(ctx)
+	aliases, err := glideft.ClusterFtAliasList(ctx, client)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), indexName, aliases[alias1])
 
 	// duplicate alias → error
-	_, err = ft.AliasAdd(ctx, alias1, indexName)
+	_, err = glideft.ClusterFtAliasAdd(ctx, client, alias1, indexName)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Alias already exists")
 
 	// aliasupdate creates alias2
-	res, err = ft.AliasUpdate(ctx, alias2, indexName)
+	res, err = glideft.ClusterFtAliasUpdate(ctx, client, alias2, indexName)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
-	aliases, err = ft.AliasList(ctx)
+	aliases, err = glideft.ClusterFtAliasList(ctx, client)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), indexName, aliases[alias1])
 	assert.Equal(suite.T(), indexName, aliases[alias2])
 
 	// delete alias2
-	res, err = ft.AliasDel(ctx, alias2)
+	res, err = glideft.ClusterFtAliasDel(ctx, client, alias2)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// delete alias1
-	res, err = ft.AliasDel(ctx, alias1)
+	res, err = glideft.ClusterFtAliasDel(ctx, client, alias1)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// aliasdel on non-existent → error
-	_, err = ft.AliasDel(ctx, alias2)
+	_, err = glideft.ClusterFtAliasDel(ctx, client, alias2)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Alias does not exist")
 
 	// aliasadd with non-existent index → error
-	_, err = ft.AliasAdd(ctx, alias1, "nonexistent_index")
+	_, err = glideft.ClusterFtAliasAdd(ctx, client, alias1, "nonexistent_index")
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
 		"unexpected error: "+err.Error())
 
-	ft.DropIndex(ctx, indexName)
+	glideft.ClusterFtDropIndex(ctx, client, indexName)
 }
 
 // --- ft_explain ---
@@ -615,28 +624,27 @@ func (suite *GlideTestSuite) TestModuleFtExplain() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	indexName := uuid.New().String()
-	suite.createIndexHelper(ctx, ft, indexName)
+	suite.createIndexHelper(ctx, client, indexName)
 
 	query := "@price:[0 10]"
-	result, err := ft.Explain(ctx, indexName, query)
+	result, err := glideft.ClusterFtExplain(ctx, client, indexName, query)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), result, "price")
 	assert.Contains(suite.T(), result, "0")
 	assert.Contains(suite.T(), result, "10")
 
 	// wildcard query
-	resultAll, err := ft.Explain(ctx, indexName, "*")
+	resultAll, err := glideft.ClusterFtExplain(ctx, client, indexName, "*")
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), resultAll, "*")
 
-	ft.DropIndex(ctx, indexName)
+	glideft.ClusterFtDropIndex(ctx, client, indexName)
 
 	// missing index → error
-	_, err = ft.Explain(ctx, uuid.New().String(), "*")
+	_, err = glideft.ClusterFtExplain(ctx, client, uuid.New().String(), "*")
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -649,14 +657,13 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLI() {
 	// TODO: remove once it has been implemented in Valkey Search
 	suite.T().Skip("EXPLAIN is currently unsupported")
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	indexName := uuid.New().String()
-	suite.createIndexHelper(ctx, ft, indexName)
+	suite.createIndexHelper(ctx, client, indexName)
 
 	query := "@price:[0 10]"
-	result, err := ft.ExplainCLI(ctx, indexName, query)
+	result, err := glideft.ClusterFtExplainCLI(ctx, client, indexName, query)
 	assert.NoError(suite.T(), err)
 	joined := strings.Join(result, " ")
 	assert.Contains(suite.T(), joined, "price")
@@ -664,14 +671,14 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLI() {
 	assert.Contains(suite.T(), joined, "10")
 
 	// wildcard query
-	resultAll, err := ft.ExplainCLI(ctx, indexName, "*")
+	resultAll, err := glideft.ClusterFtExplainCLI(ctx, client, indexName, "*")
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), strings.Join(resultAll, " "), "*")
 
-	ft.DropIndex(ctx, indexName)
+	glideft.ClusterFtDropIndex(ctx, client, indexName)
 
 	// missing index → error
-	_, err = ft.ExplainCLI(ctx, uuid.New().String(), "*")
+	_, err = glideft.ClusterFtExplainCLI(ctx, client, uuid.New().String(), "*")
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -682,13 +689,12 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLI() {
 
 func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("price").SetSortable(true),
 			options.NewTextField("name"),
@@ -702,7 +708,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
 	time.Sleep(time.Second)
 
 	// ASC — verify documents are returned in ascending price order
-	result, err := ft.Search(ctx, index, "@price:[1 +inf]",
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{SortBy: "price", SortByOrder: constants.FtSearchSortOrderAsc})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), result.TotalResults)
@@ -714,7 +720,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
 	assert.Equal(suite.T(), []string{"10", "20", "30"}, ascPrices)
 
 	// DESC — verify documents are returned in descending price order
-	result, err = ft.Search(ctx, index, "@price:[1 +inf]",
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{SortBy: "price", SortByOrder: constants.FtSearchSortOrderDesc})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), result.TotalResults)
@@ -725,20 +731,19 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortBy() {
 	}
 	assert.Equal(suite.T(), []string{"30", "20", "10"}, descPrices)
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_search_1_2_withsortkeys ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeys() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("price").SetSortable(true),
 			options.NewTextField("name"),
@@ -751,7 +756,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeys() {
 	client.HSet(ctx, prefix+"3", map[string]string{"price": "30", "name": "Zebra"})
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "@price:[1 +inf]",
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{
 			SortBy:       "price",
 			SortByOrder:  constants.FtSearchSortOrderAsc,
@@ -785,20 +790,19 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeys() {
 	assert.True(suite.T(), foundPrices["20"])
 	assert.True(suite.T(), foundPrices["30"])
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_search_1_2_text_query_flags ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlags() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
@@ -810,35 +814,34 @@ func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlags() {
 	time.Sleep(time.Second)
 
 	// VERBATIM — no stemming; "hello" matches 3 docs
-	result, err := ft.Search(ctx, index, "hello", &options.FtSearchOptions{Verbatim: true})
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "hello", &options.FtSearchOptions{Verbatim: true})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), result.TotalResults)
 
 	// SLOP without INORDER — "hello world" with slop 1 matches 2 docs
-	result, err = ft.Search(ctx, index, "hello world", &options.FtSearchOptions{Slop: intPtr(1)})
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "hello world", &options.FtSearchOptions{Slop: intPtr(1)})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), result.TotalResults)
 
 	// SLOP + INORDER — only "hello world" (in order)
-	result, err = ft.Search(ctx, index, "hello world",
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "hello world",
 		&options.FtSearchOptions{InOrder: true, Slop: intPtr(1)})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), result.TotalResults)
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_search_1_2_shard_consistency ---
 
 func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewTagField("tag"),
 			options.NewNumericField("score"),
@@ -851,7 +854,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
 	time.Sleep(time.Second)
 
 	// SOMESHARDS + INCONSISTENT
-	result, err := ft.Search(ctx, index, "@tag:{test}",
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "@tag:{test}",
 		&options.FtSearchOptions{
 			ShardScope:  options.FtSearchShardScopeSomeShards,
 			Consistency: options.FtSearchConsistencyInconsistent,
@@ -860,7 +863,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
 	assert.Equal(suite.T(), int64(2), result.TotalResults)
 
 	// ALLSHARDS + CONSISTENT
-	result, err = ft.Search(ctx, index, "@tag:{test}",
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "@tag:{test}",
 		&options.FtSearchOptions{
 			ShardScope:  options.FtSearchShardScopeAllShards,
 			Consistency: options.FtSearchConsistencyConsistent,
@@ -868,20 +871,19 @@ func (suite *GlideTestSuite) TestModuleFtSearchShardConsistency() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), result.TotalResults)
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_aggregate_1_2_query_flags ---
 
 func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("score"),
 			options.NewTextField("title"),
@@ -894,7 +896,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
 	time.Sleep(time.Second)
 
 	// VERBATIM
-	result, err := ft.Aggregate(ctx, index, "@score:[1 +inf]",
+	result, err := glideft.ClusterFtAggregate(ctx, client, index, "@score:[1 +inf]",
 		&options.FtAggregateOptions{Verbatim: true})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 2, len(result))
@@ -902,7 +904,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
 	assert.Empty(suite.T(), result[1])
 
 	// INORDER + SLOP
-	result, err = ft.Aggregate(ctx, index, "@score:[1 +inf]",
+	result, err = glideft.ClusterFtAggregate(ctx, client, index, "@score:[1 +inf]",
 		&options.FtAggregateOptions{InOrder: true, Slop: intPtr(1)})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 2, len(result))
@@ -910,7 +912,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
 	assert.Empty(suite.T(), result[1])
 
 	// DIALECT
-	result, err = ft.Aggregate(ctx, index, "@score:[1 +inf]",
+	result, err = glideft.ClusterFtAggregate(ctx, client, index, "@score:[1 +inf]",
 		&options.FtAggregateOptions{Dialect: intPtr(2)})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 2, len(result))
@@ -918,27 +920,26 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlags() {
 	assert.Empty(suite.T(), result[1])
 
 	// LOAD (loadAll) — fields should be present in result
-	result, err = ft.Aggregate(ctx, index, "@score:[20 +inf]",
+	result, err = glideft.ClusterFtAggregate(ctx, client, index, "@score:[20 +inf]",
 		&options.FtAggregateOptions{LoadAll: true})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 1, len(result))
 	assert.Equal(suite.T(), "hello there", result[0]["title"])
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_create_1_2_index_options ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
 	// SCORE + LANGUAGE + SKIPINITIALSCAN
-	res, err := ft.Create(ctx, index,
+	res, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:        constants.IndexDataTypeHash,
@@ -949,10 +950,10 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 		})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// MINSTEMSIZE — words shorter than 6 chars are not stemmed
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:    constants.IndexDataTypeHash,
@@ -964,14 +965,14 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "running"})
 	client.HSet(ctx, prefix+"2", map[string]string{"title": "plays"})
 	time.Sleep(time.Second)
-	r, _ := ft.Search(ctx, index, "run", nil)
+	r, _ := glideft.ClusterFtSearch(ctx, client, index, "run", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	r, _ = ft.Search(ctx, index, "play", nil)
+	r, _ = glideft.ClusterFtSearch(ctx, client, index, "play", nil)
 	assert.Equal(suite.T(), int64(0), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// NOSTOPWORDS — "the" should be indexable
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:    constants.IndexDataTypeHash,
@@ -982,12 +983,12 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "the quick fox"})
 	time.Sleep(time.Second)
-	r, _ = ft.Search(ctx, index, "the", nil)
+	r, _ = glideft.ClusterFtSearch(ctx, client, index, "the", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// STOPWORDS — "fox" and "an" are stop words
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:  constants.IndexDataTypeHash,
@@ -998,16 +999,16 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "the quick fox"})
 	time.Sleep(time.Second)
-	r, _ = ft.Search(ctx, index, "the", nil)
+	r, _ = glideft.ClusterFtSearch(ctx, client, index, "the", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	r, _ = ft.Search(ctx, index, "quick", nil)
+	r, _ = glideft.ClusterFtSearch(ctx, client, index, "quick", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	_, err = ft.Search(ctx, index, "fox", nil) // stop word as query → error
+	_, err = glideft.ClusterFtSearch(ctx, client, index, "fox", nil) // stop word as query → error
 	assert.Error(suite.T(), err)
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// NOOFFSETS — SLOP queries should fail
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:  constants.IndexDataTypeHash,
@@ -1018,25 +1019,24 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptions() {
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello"})
 	time.Sleep(time.Second)
-	r, _ = ft.Search(ctx, index, "hello", nil)
+	r, _ = glideft.ClusterFtSearch(ctx, client, index, "hello", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	_, err = ft.Search(ctx, index, "hello", &options.FtSearchOptions{Slop: intPtr(1)})
+	_, err = glideft.ClusterFtSearch(ctx, client, index, "hello", &options.FtSearchOptions{Slop: intPtr(1)})
 	assert.Error(suite.T(), err) // SLOP requires offsets
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_create_1_2_field_options ---
 
 func (suite *GlideTestSuite) TestModuleFtCreateFieldOptions() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
 	// TextField nostem + weight + sortable; NumericField sortable; TagField sortable
-	res, err := ft.Create(ctx, index,
+	res, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewTextField("title").SetNoStem(true).SetWeight(1.0).SetSortable(true),
 			options.NewNumericField("price").SetSortable(true),
@@ -1050,55 +1050,54 @@ func (suite *GlideTestSuite) TestModuleFtCreateFieldOptions() {
 	time.Sleep(time.Second)
 
 	// sortable numeric field works with SORTBY
-	r, err := ft.Search(ctx, index, "@price:[1 +inf]",
+	r, err := glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{SortBy: "price", SortByOrder: constants.FtSearchSortOrderAsc})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
 
 	// nostem: "hello" matches, "hellos" does not
-	r, _ = ft.Search(ctx, index, "hello", nil)
+	r, _ = glideft.ClusterFtSearch(ctx, client, index, "hello", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	r, _ = ft.Search(ctx, index, "hellos", nil)
+	r, _ = glideft.ClusterFtSearch(ctx, client, index, "hellos", nil)
 	assert.Equal(suite.T(), int64(0), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// TextField with WITHSUFFIXTRIE — suffix queries work
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title").SetWithSuffixTrie(true)},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello world"})
 	time.Sleep(time.Second)
-	r, err = ft.Search(ctx, index, "*orld", nil)
+	r, err = glideft.ClusterFtSearch(ctx, client, index, "*orld", nil)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// TextField with NOSUFFIXTRIE — suffix queries fail
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title").SetNoSuffixTrie(true)},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello world"})
 	time.Sleep(time.Second)
-	_, err = ft.Search(ctx, index, "*orld", nil)
+	_, err = glideft.ClusterFtSearch(ctx, client, index, "*orld", nil)
 	assert.Error(suite.T(), err)
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // --- ft_info_1_2_options ---
 
 func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 	client := suite.defaultClusterClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{" + uuid.New().String() + "}:"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
@@ -1107,14 +1106,14 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 	time.Sleep(time.Second)
 
 	// LOCAL scope
-	localInfo, err := ft.InfoWithOptions(ctx, index,
+	localInfo, err := glideft.ClusterFtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{Scope: options.FtInfoScopeLocal})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), index, localInfo["index_name"])
 	assert.NotNil(suite.T(), localInfo["num_docs"])
 
 	// LOCAL + ALLSHARDS + CONSISTENT
-	localWithFlags, err := ft.InfoWithOptions(ctx, index,
+	localWithFlags, err := glideft.ClusterFtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{
 			Scope:       options.FtInfoScopeLocal,
 			ShardScope:  options.FtInfoShardScopeAllShards,
@@ -1124,7 +1123,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 	assert.Equal(suite.T(), index, localWithFlags["index_name"])
 
 	// LOCAL + SOMESHARDS + INCONSISTENT
-	localWithAltFlags, err := ft.InfoWithOptions(ctx, index,
+	localWithAltFlags, err := glideft.ClusterFtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{
 			Scope:       options.FtInfoScopeLocal,
 			ShardScope:  options.FtInfoShardScopeSomeShards,
@@ -1134,7 +1133,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 	assert.Equal(suite.T(), index, localWithAltFlags["index_name"])
 
 	// PRIMARY scope — may fail if coordinator not enabled
-	primaryInfo, err := ft.InfoWithOptions(ctx, index,
+	primaryInfo, err := glideft.ClusterFtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{Scope: options.FtInfoScopePrimary})
 	if err != nil {
 		assert.Contains(suite.T(), err.Error(), "PRIMARY option is not valid")
@@ -1143,7 +1142,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 	}
 
 	// CLUSTER scope — may fail if coordinator not enabled
-	clusterInfo, err := ft.InfoWithOptions(ctx, index,
+	clusterInfo, err := glideft.ClusterFtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{Scope: options.FtInfoScopeCluster})
 	if err != nil {
 		assert.Contains(suite.T(), err.Error(), "CLUSTER option is not valid")
@@ -1151,7 +1150,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptions() {
 		assert.Equal(suite.T(), index, clusterInfo["index_name"])
 	}
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 }
 
 // =============================================================================
@@ -1165,11 +1164,10 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	// simple HNSW vector index
-	res, err := ft.Create(ctx, uuid.New().String(),
+	res, err := glideft.FtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewVectorFieldHNSW("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		}, nil)
@@ -1177,7 +1175,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// JSON index with FLAT vector + prefix
-	res, err = ft.Create(ctx, uuid.New().String(),
+	res, err = glideft.FtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewVectorFieldFlat("$.vec", constants.DistanceMetricL2, 6).SetAlias("VEC"),
 		},
@@ -1186,7 +1184,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// HNSW with extra parameters
-	res, err = ft.Create(ctx, uuid.New().String(),
+	res, err = glideft.FtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewVectorFieldHNSW("doc_embedding", constants.DistanceMetricCosine, 1536).
 				SetNumberOfEdges(40).
@@ -1198,7 +1196,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// multiple fields
-	res, err = ft.Create(ctx, uuid.New().String(),
+	res, err = glideft.FtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("published_at"),
@@ -1210,7 +1208,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 
 	// multiple prefixes
 	dupIndex := uuid.New().String()
-	res, err = ft.Create(ctx, dupIndex,
+	res, err = glideft.FtCreate(ctx, client, dupIndex,
 		[]options.Field{
 			options.NewTagField("author_id"),
 			options.NewTagField("author_ids"),
@@ -1225,13 +1223,13 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 	assert.Equal(suite.T(), glide.OK, res)
 
 	// duplicate index → error
-	_, err = ft.Create(ctx, dupIndex,
+	_, err = glideft.FtCreate(ctx, client, dupIndex,
 		[]options.Field{options.NewTextField("title"), options.NewTextField("name")}, nil)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "already exists")
 
 	// no fields → error
-	_, err = ft.Create(ctx, uuid.New().String(), []options.Field{}, nil)
+	_, err = glideft.FtCreate(ctx, client, uuid.New().String(), []options.Field{}, nil)
 	assert.Error(suite.T(), err)
 	errMsg := err.Error()
 	assert.True(suite.T(),
@@ -1240,7 +1238,7 @@ func (suite *GlideTestSuite) TestModuleFtCreateStandalone() {
 		"unexpected error: "+errMsg)
 
 	// duplicate field name → error
-	_, err = ft.Create(ctx, uuid.New().String(),
+	_, err = glideft.FtCreate(ctx, client, uuid.New().String(),
 		[]options.Field{options.NewTextField("name"), options.NewTextField("name")}, nil)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
@@ -1256,13 +1254,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "search-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldHNSW("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		},
@@ -1277,7 +1274,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchStandalone() {
 	assert.NoError(suite.T(), err)
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "*=>[KNN 2 @VEC $query_vec]",
+	result, err := glideft.FtSearch(ctx, client, index, "*=>[KNN 2 @VEC $query_vec]",
 		&options.FtSearchOptions{
 			Params:       []options.FtSearchParam{{Key: "query_vec", Value: vec0}},
 			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "vec"}},
@@ -1296,7 +1293,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchStandalone() {
 	assert.Equal(suite.T(), vec1, docsByKey[prefix+"1"]["vec"])
 
 	// querying non-existing index → error
-	_, err = ft.Search(ctx, uuid.New().String(), "*", nil)
+	_, err = glideft.FtSearch(ctx, client, uuid.New().String(), "*", nil)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -1310,13 +1307,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContentStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "nocontent-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		},
@@ -1329,7 +1325,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchNoContentStandalone() {
 	client.HSet(ctx, prefix+"1", map[string]string{"vec": vec1})
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "*=>[KNN 2 @VEC $query_vec]",
+	result, err := glideft.FtSearch(ctx, client, index, "*=>[KNN 2 @VEC $query_vec]",
 		&options.FtSearchOptions{
 			NoContent: true,
 			Params:    []options.FtSearchParam{{Key: "query_vec", Value: vec0}},
@@ -1353,13 +1349,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialectStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "dialect-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2).SetAlias("VEC"),
 		},
@@ -1370,7 +1365,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchDialectStandalone() {
 	client.HSet(ctx, prefix+"0", map[string]string{"vec": vec0})
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "*=>[KNN 1 @VEC $query_vec]",
+	result, err := glideft.FtSearch(ctx, client, index, "*=>[KNN 1 @VEC $query_vec]",
 		&options.FtSearchOptions{
 			Dialect:      intPtr(2),
 			Params:       []options.FtSearchParam{{Key: "query_vec", Value: vec0}},
@@ -1390,15 +1385,14 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtListStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	index := uuid.New().String()
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewVectorFieldHNSW("vec", constants.DistanceMetricL2, 2)}, nil)
 	assert.NoError(suite.T(), err)
 
-	before, err := ft.List(ctx)
+	before, err := glideft.FtList(ctx, client)
 	assert.NoError(suite.T(), err)
 	beforeSet := make(map[string]bool)
 	for _, n := range before {
@@ -1406,10 +1400,10 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtListStandalone() {
 	}
 	assert.True(suite.T(), beforeSet[index])
 
-	_, err = ft.DropIndex(ctx, index)
+	_, err = glideft.FtDropIndex(ctx, client, index)
 	assert.NoError(suite.T(), err)
 
-	after, err := ft.List(ctx)
+	after, err := glideft.FtList(ctx, client)
 	assert.NoError(suite.T(), err)
 	afterSet := make(map[string]bool)
 	for _, n := range after {
@@ -1421,7 +1415,7 @@ func (suite *GlideTestSuite) TestModuleFtDropAndFtListStandalone() {
 	assert.Equal(suite.T(), beforeSet, afterSet)
 
 	// drop non-existent → error
-	_, err = ft.DropIndex(ctx, index)
+	_, err = glideft.FtDropIndex(ctx, client, index)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -1437,13 +1431,12 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefixBicycles := "bicycles-" + uuid.New().String() + ":"
 	indexBicycles := prefixBicycles + "idx"
 
-	_, err := ft.Create(ctx, indexBicycles,
+	_, err := glideft.FtCreate(ctx, client, indexBicycles,
 		[]options.Field{
 			options.NewTextField("$.model").SetAlias("model"),
 			options.NewNumericField("$.price").SetAlias("price"),
@@ -1457,7 +1450,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 	}
 	time.Sleep(time.Second)
 
-	aggreg, err := ft.Aggregate(ctx, indexBicycles, "*",
+	aggreg, err := glideft.FtAggregate(ctx, client, indexBicycles, "*",
 		&options.FtAggregateOptions{
 			LoadFields: []string{"__key"},
 			Clauses: []options.FtAggregateClause{
@@ -1480,7 +1473,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateBicyclesStandalone() {
 	assert.Equal(suite.T(), float64(4), condCounts["used"])
 	assert.Equal(suite.T(), float64(1), condCounts["refurbished"])
 
-	ft.DropIndex(ctx, indexBicycles)
+	glideft.FtDropIndex(ctx, client, indexBicycles)
 }
 
 // --- ft_aggregate movies (standalone) ---
@@ -1492,13 +1485,12 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMoviesStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefixMovies := "movies-" + uuid.New().String() + ":"
 	indexMovies := prefixMovies + "idx"
 
-	_, err := ft.Create(ctx, indexMovies,
+	_, err := glideft.FtCreate(ctx, client, indexMovies,
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("release_year"),
@@ -1524,7 +1516,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMoviesStandalone() {
 	}
 	time.Sleep(time.Second)
 
-	aggreg, err := ft.Aggregate(ctx, indexMovies, "*",
+	aggreg, err := glideft.FtAggregate(ctx, client, indexMovies, "*",
 		&options.FtAggregateOptions{
 			LoadAll: true,
 			Clauses: []options.FtAggregateClause{
@@ -1563,7 +1555,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateMoviesStandalone() {
 	assert.Equal(suite.T(), float64(559490), genreMap["Thriller"]["nb_of_votes"])
 	assert.Equal(suite.T(), float64(9), genreMap["Thriller"]["avg_rating"])
 
-	ft.DropIndex(ctx, indexMovies)
+	glideft.FtDropIndex(ctx, client, indexMovies)
 }
 
 // --- ft_info (standalone) ---
@@ -1573,11 +1565,10 @@ func (suite *GlideTestSuite) TestModuleFtInfoStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	index := uuid.New().String()
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewVectorFieldHNSW("$.vec", constants.DistanceMetricCosine, 42).SetAlias("VEC"),
 			options.NewTextField("$.name").SetAlias("name"),
@@ -1585,7 +1576,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoStandalone() {
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeJSON, Prefixes: []string{"123"}})
 	assert.NoError(suite.T(), err)
 
-	info, err := ft.Info(ctx, index)
+	info, err := glideft.FtInfo(ctx, client, index)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), index, info["index_name"])
 
@@ -1645,8 +1636,8 @@ func (suite *GlideTestSuite) TestModuleFtInfoStandalone() {
 	assert.NotNil(suite.T(), textField)
 	assert.Equal(suite.T(), "$.name", textField["identifier"])
 
-	ft.DropIndex(ctx, index)
-	_, err = ft.Info(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
+	_, err = glideft.FtInfo(ctx, client, index)
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -1662,57 +1653,56 @@ func (suite *GlideTestSuite) TestModuleFtAliasOperationsStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	alias1 := "alias1-" + uuid.New().String()
 	alias2 := "alias2-" + uuid.New().String()
 	indexName := uuid.New().String() + "-index"
 
-	_, err := ft.Create(ctx, indexName,
+	_, err := glideft.FtCreate(ctx, client, indexName,
 		[]options.Field{options.NewVectorFieldFlat("vec", constants.DistanceMetricL2, 2)}, nil)
 	assert.NoError(suite.T(), err)
 
-	res, err := ft.AliasAdd(ctx, alias1, indexName)
+	res, err := glideft.FtAliasAdd(ctx, client, alias1, indexName)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
-	aliases, err := ft.AliasList(ctx)
+	aliases, err := glideft.FtAliasList(ctx, client)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), indexName, aliases[alias1])
 
-	_, err = ft.AliasAdd(ctx, alias1, indexName)
+	_, err = glideft.FtAliasAdd(ctx, client, alias1, indexName)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Alias already exists")
 
-	res, err = ft.AliasUpdate(ctx, alias2, indexName)
+	res, err = glideft.FtAliasUpdate(ctx, client, alias2, indexName)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
-	aliases, err = ft.AliasList(ctx)
+	aliases, err = glideft.FtAliasList(ctx, client)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), indexName, aliases[alias1])
 	assert.Equal(suite.T(), indexName, aliases[alias2])
 
-	res, err = ft.AliasDel(ctx, alias2)
+	res, err = glideft.FtAliasDel(ctx, client, alias2)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
-	res, err = ft.AliasDel(ctx, alias1)
+	res, err = glideft.FtAliasDel(ctx, client, alias1)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 
-	_, err = ft.AliasDel(ctx, alias2)
+	_, err = glideft.FtAliasDel(ctx, client, alias2)
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "Alias does not exist")
 
-	_, err = ft.AliasAdd(ctx, alias1, "nonexistent_index")
+	_, err = glideft.FtAliasAdd(ctx, client, alias1, "nonexistent_index")
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
 		"unexpected error: "+err.Error())
 
-	ft.DropIndex(ctx, indexName)
+	glideft.FtDropIndex(ctx, client, indexName)
 }
 
 // --- ft_explain (standalone) ---
@@ -1724,26 +1714,25 @@ func (suite *GlideTestSuite) TestModuleFtExplainStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	indexName := uuid.New().String()
-	suite.createIndexHelper(ctx, ft, indexName)
+	suite.createIndexHelperStandalone(ctx, client, indexName)
 
 	query := "@price:[0 10]"
-	result, err := ft.Explain(ctx, indexName, query)
+	result, err := glideft.FtExplain(ctx, client, indexName, query)
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), result, "price")
 	assert.Contains(suite.T(), result, "0")
 	assert.Contains(suite.T(), result, "10")
 
-	resultAll, err := ft.Explain(ctx, indexName, "*")
+	resultAll, err := glideft.FtExplain(ctx, client, indexName, "*")
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), resultAll, "*")
 
-	ft.DropIndex(ctx, indexName)
+	glideft.FtDropIndex(ctx, client, indexName)
 
-	_, err = ft.Explain(ctx, uuid.New().String(), "*")
+	_, err = glideft.FtExplain(ctx, client, uuid.New().String(), "*")
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -1759,27 +1748,26 @@ func (suite *GlideTestSuite) TestModuleFtExplainCLIStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	indexName := uuid.New().String()
-	suite.createIndexHelper(ctx, ft, indexName)
+	suite.createIndexHelperStandalone(ctx, client, indexName)
 
 	query := "@price:[0 10]"
-	result, err := ft.ExplainCLI(ctx, indexName, query)
+	result, err := glideft.FtExplainCLI(ctx, client, indexName, query)
 	assert.NoError(suite.T(), err)
 	joined := strings.Join(result, " ")
 	assert.Contains(suite.T(), joined, "price")
 	assert.Contains(suite.T(), joined, "0")
 	assert.Contains(suite.T(), joined, "10")
 
-	resultAll, err := ft.ExplainCLI(ctx, indexName, "*")
+	resultAll, err := glideft.FtExplainCLI(ctx, client, indexName, "*")
 	assert.NoError(suite.T(), err)
 	assert.Contains(suite.T(), strings.Join(resultAll, " "), "*")
 
-	ft.DropIndex(ctx, indexName)
+	glideft.FtDropIndex(ctx, client, indexName)
 
-	_, err = ft.ExplainCLI(ctx, uuid.New().String(), "*")
+	_, err = glideft.FtExplainCLI(ctx, client, uuid.New().String(), "*")
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(),
 		strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not exist"),
@@ -1793,13 +1781,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "sortby-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("price").SetSortable(true),
 			options.NewTextField("name"),
@@ -1813,7 +1800,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
 	time.Sleep(time.Second)
 
 	// ASC
-	result, err := ft.Search(ctx, index, "@price:[1 +inf]",
+	result, err := glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{SortBy: "price", SortByOrder: constants.FtSearchSortOrderAsc})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), result.TotalResults)
@@ -1825,7 +1812,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
 	assert.Equal(suite.T(), []string{"10", "20", "30"}, ascPrices)
 
 	// DESC
-	result, err = ft.Search(ctx, index, "@price:[1 +inf]",
+	result, err = glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{SortBy: "price", SortByOrder: constants.FtSearchSortOrderDesc})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), result.TotalResults)
@@ -1836,7 +1823,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchSortByStandalone() {
 	}
 	assert.Equal(suite.T(), []string{"30", "20", "10"}, descPrices)
 
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 }
 
 // --- ft_search withsortkeys (standalone) ---
@@ -1846,13 +1833,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeysStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "sortkeys-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("price").SetSortable(true),
 			options.NewTextField("name"),
@@ -1865,7 +1851,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeysStandalone() {
 	client.HSet(ctx, prefix+"3", map[string]string{"price": "30", "name": "Zebra"})
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "@price:[1 +inf]",
+	result, err := glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{
 			SortBy:       "price",
 			SortByOrder:  constants.FtSearchSortOrderAsc,
@@ -1895,7 +1881,7 @@ func (suite *GlideTestSuite) TestModuleFtSearchWithSortKeysStandalone() {
 	assert.True(suite.T(), foundPrices["20"])
 	assert.True(suite.T(), foundPrices["30"])
 
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 }
 
 // --- ft_search text query flags (standalone) ---
@@ -1905,13 +1891,12 @@ func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlagsStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "textflags-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
@@ -1923,22 +1908,22 @@ func (suite *GlideTestSuite) TestModuleFtSearchTextQueryFlagsStandalone() {
 	time.Sleep(time.Second)
 
 	// VERBATIM
-	result, err := ft.Search(ctx, index, "hello", &options.FtSearchOptions{Verbatim: true})
+	result, err := glideft.FtSearch(ctx, client, index, "hello", &options.FtSearchOptions{Verbatim: true})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(3), result.TotalResults)
 
 	// SLOP without INORDER
-	result, err = ft.Search(ctx, index, "hello world", &options.FtSearchOptions{Slop: intPtr(1)})
+	result, err = glideft.FtSearch(ctx, client, index, "hello world", &options.FtSearchOptions{Slop: intPtr(1)})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(2), result.TotalResults)
 
 	// SLOP + INORDER
-	result, err = ft.Search(ctx, index, "hello world",
+	result, err = glideft.FtSearch(ctx, client, index, "hello world",
 		&options.FtSearchOptions{InOrder: true, Slop: intPtr(1)})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), result.TotalResults)
 
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 }
 
 // --- ft_aggregate query flags (standalone) ---
@@ -1948,13 +1933,12 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "aggflags-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("score"),
 			options.NewTextField("title"),
@@ -1967,7 +1951,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
 	time.Sleep(time.Second)
 
 	// VERBATIM
-	result, err := ft.Aggregate(ctx, index, "@score:[1 +inf]",
+	result, err := glideft.FtAggregate(ctx, client, index, "@score:[1 +inf]",
 		&options.FtAggregateOptions{Verbatim: true})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 2, len(result))
@@ -1975,7 +1959,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
 	assert.Empty(suite.T(), result[1])
 
 	// INORDER + SLOP
-	result, err = ft.Aggregate(ctx, index, "@score:[1 +inf]",
+	result, err = glideft.FtAggregate(ctx, client, index, "@score:[1 +inf]",
 		&options.FtAggregateOptions{InOrder: true, Slop: intPtr(1)})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 2, len(result))
@@ -1983,7 +1967,7 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
 	assert.Empty(suite.T(), result[1])
 
 	// DIALECT
-	result, err = ft.Aggregate(ctx, index, "@score:[1 +inf]",
+	result, err = glideft.FtAggregate(ctx, client, index, "@score:[1 +inf]",
 		&options.FtAggregateOptions{Dialect: intPtr(2)})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 2, len(result))
@@ -1991,13 +1975,13 @@ func (suite *GlideTestSuite) TestModuleFtAggregateQueryFlagsStandalone() {
 	assert.Empty(suite.T(), result[1])
 
 	// LOAD (loadAll)
-	result, err = ft.Aggregate(ctx, index, "@score:[20 +inf]",
+	result, err = glideft.FtAggregate(ctx, client, index, "@score:[20 +inf]",
 		&options.FtAggregateOptions{LoadAll: true})
 	assert.NoError(suite.T(), err)
 	require.Equal(suite.T(), 1, len(result))
 	assert.Equal(suite.T(), "hello there", result[0]["title"])
 
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 }
 
 // --- ft_create index options (standalone) ---
@@ -2007,14 +1991,13 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "idxopts-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
 	// SCORE + LANGUAGE + SKIPINITIALSCAN
-	res, err := ft.Create(ctx, index,
+	res, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:        constants.IndexDataTypeHash,
@@ -2025,10 +2008,10 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 		})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// MINSTEMSIZE
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:    constants.IndexDataTypeHash,
@@ -2040,14 +2023,14 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "running"})
 	client.HSet(ctx, prefix+"2", map[string]string{"title": "plays"})
 	time.Sleep(time.Second)
-	r, _ := ft.Search(ctx, index, "run", nil)
+	r, _ := glideft.FtSearch(ctx, client, index, "run", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	r, _ = ft.Search(ctx, index, "play", nil)
+	r, _ = glideft.FtSearch(ctx, client, index, "play", nil)
 	assert.Equal(suite.T(), int64(0), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// NOSTOPWORDS
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:    constants.IndexDataTypeHash,
@@ -2058,12 +2041,12 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "the quick fox"})
 	time.Sleep(time.Second)
-	r, _ = ft.Search(ctx, index, "the", nil)
+	r, _ = glideft.FtSearch(ctx, client, index, "the", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// STOPWORDS
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:  constants.IndexDataTypeHash,
@@ -2074,16 +2057,16 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "the quick fox"})
 	time.Sleep(time.Second)
-	r, _ = ft.Search(ctx, index, "the", nil)
+	r, _ = glideft.FtSearch(ctx, client, index, "the", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	r, _ = ft.Search(ctx, index, "quick", nil)
+	r, _ = glideft.FtSearch(ctx, client, index, "quick", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	_, err = ft.Search(ctx, index, "fox", nil)
+	_, err = glideft.FtSearch(ctx, client, index, "fox", nil)
 	assert.Error(suite.T(), err)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// NOOFFSETS
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{
 			DataType:  constants.IndexDataTypeHash,
@@ -2094,11 +2077,11 @@ func (suite *GlideTestSuite) TestModuleFtCreateIndexOptionsStandalone() {
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello"})
 	time.Sleep(time.Second)
-	r, _ = ft.Search(ctx, index, "hello", nil)
+	r, _ = glideft.FtSearch(ctx, client, index, "hello", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	_, err = ft.Search(ctx, index, "hello", &options.FtSearchOptions{Slop: intPtr(1)})
+	_, err = glideft.FtSearch(ctx, client, index, "hello", &options.FtSearchOptions{Slop: intPtr(1)})
 	assert.Error(suite.T(), err)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 }
 
 // --- ft_create field options (standalone) ---
@@ -2108,13 +2091,12 @@ func (suite *GlideTestSuite) TestModuleFtCreateFieldOptionsStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "fieldopts-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	res, err := ft.Create(ctx, index,
+	res, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewTextField("title").SetNoStem(true).SetWeight(1.0).SetSortable(true),
 			options.NewNumericField("price").SetSortable(true),
@@ -2127,41 +2109,41 @@ func (suite *GlideTestSuite) TestModuleFtCreateFieldOptionsStandalone() {
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello", "price": "10", "tag": "a,b"})
 	time.Sleep(time.Second)
 
-	r, err := ft.Search(ctx, index, "@price:[1 +inf]",
+	r, err := glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
 		&options.FtSearchOptions{SortBy: "price", SortByOrder: constants.FtSearchSortOrderAsc})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
 
-	r, _ = ft.Search(ctx, index, "hello", nil)
+	r, _ = glideft.FtSearch(ctx, client, index, "hello", nil)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	r, _ = ft.Search(ctx, index, "hellos", nil)
+	r, _ = glideft.FtSearch(ctx, client, index, "hellos", nil)
 	assert.Equal(suite.T(), int64(0), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// WITHSUFFIXTRIE
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title").SetWithSuffixTrie(true)},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello world"})
 	time.Sleep(time.Second)
-	r, err = ft.Search(ctx, index, "*orld", nil)
+	r, err = glideft.FtSearch(ctx, client, index, "*orld", nil)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), int64(1), r.TotalResults)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// NOSUFFIXTRIE
-	res, err = ft.Create(ctx, index,
+	res, err = glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title").SetNoSuffixTrie(true)},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), glide.OK, res)
 	client.HSet(ctx, prefix+"1", map[string]string{"title": "hello world"})
 	time.Sleep(time.Second)
-	_, err = ft.Search(ctx, index, "*orld", nil)
+	_, err = glideft.FtSearch(ctx, client, index, "*orld", nil)
 	assert.Error(suite.T(), err)
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 }
 
 // --- ft_info with options (standalone) ---
@@ -2171,13 +2153,12 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 		suite.T().Skip("No standalone server configured")
 	}
 	client := suite.defaultClient()
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "infoopts-" + uuid.New().String() + ":"
 	index := prefix + "index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{options.NewTextField("title")},
 		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
 	assert.NoError(suite.T(), err)
@@ -2186,14 +2167,14 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 	time.Sleep(time.Second)
 
 	// LOCAL scope
-	localInfo, err := ft.InfoWithOptions(ctx, index,
+	localInfo, err := glideft.FtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{Scope: options.FtInfoScopeLocal})
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), index, localInfo["index_name"])
 	assert.NotNil(suite.T(), localInfo["num_docs"])
 
 	// LOCAL + ALLSHARDS + CONSISTENT
-	localWithFlags, err := ft.InfoWithOptions(ctx, index,
+	localWithFlags, err := glideft.FtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{
 			Scope:       options.FtInfoScopeLocal,
 			ShardScope:  options.FtInfoShardScopeAllShards,
@@ -2203,7 +2184,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 	assert.Equal(suite.T(), index, localWithFlags["index_name"])
 
 	// LOCAL + SOMESHARDS + INCONSISTENT
-	localWithAltFlags, err := ft.InfoWithOptions(ctx, index,
+	localWithAltFlags, err := glideft.FtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{
 			Scope:       options.FtInfoScopeLocal,
 			ShardScope:  options.FtInfoShardScopeSomeShards,
@@ -2213,7 +2194,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 	assert.Equal(suite.T(), index, localWithAltFlags["index_name"])
 
 	// PRIMARY scope
-	primaryInfo, err := ft.InfoWithOptions(ctx, index,
+	primaryInfo, err := glideft.FtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{Scope: options.FtInfoScopePrimary})
 	if err != nil {
 		assert.Contains(suite.T(), err.Error(), "PRIMARY option is not valid")
@@ -2222,7 +2203,7 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 	}
 
 	// CLUSTER scope
-	clusterInfo, err := ft.InfoWithOptions(ctx, index,
+	clusterInfo, err := glideft.FtInfoWithOptions(ctx, client, index,
 		&options.FtInfoOptions{Scope: options.FtInfoScopeCluster})
 	if err != nil {
 		assert.Contains(suite.T(), err.Error(), "CLUSTER option is not valid")
@@ -2230,5 +2211,180 @@ func (suite *GlideTestSuite) TestModuleFtInfoWithOptionsStandalone() {
 		assert.Equal(suite.T(), index, clusterInfo["index_name"])
 	}
 
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
+}
+
+// --- ft_search_sortby_with_return_excluding_sort_field ---
+// Verifies that SORTBY still works when the sort field is excluded from RETURN.
+// The client-side sort falls back gracefully: all fieldAsString values are ""
+// so SliceStable preserves the original order. Using WITHSORTKEYS is the
+// correct way to guarantee order in this scenario.
+
+func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortField() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+
+	prefix := "{" + uuid.New().String() + "}:"
+	index := prefix + "index"
+
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewNumericField("price").SetSortable(true),
+			options.NewTextField("name").SetSortable(true),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	client.HSet(ctx, prefix+"1", map[string]string{"price": "10", "name": "Zebra"})
+	client.HSet(ctx, prefix+"2", map[string]string{"price": "20", "name": "Aardvark"})
+	client.HSet(ctx, prefix+"3", map[string]string{"price": "30", "name": "Mango"})
+	time.Sleep(time.Second)
+
+	// SORTBY price ASC, but RETURN only "name" (price excluded).
+	// The server sorts by price, but the Go client iterates a map[string]any
+	// which loses insertion order. Without WITHSORTKEYS the client-side re-sort
+	// cannot recover the order (price field is missing). The result should still
+	// succeed (no error) and all 3 documents should be present.
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	names := map[string]bool{}
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		names[n] = true
+		_, hasPrice := doc.Fields["price"]
+		assert.False(suite.T(), hasPrice, "price should not be in RETURN fields")
+	}
+	assert.True(suite.T(), names["Zebra"])
+	assert.True(suite.T(), names["Aardvark"])
+	assert.True(suite.T(), names["Mango"])
+
+	// With WITHSORTKEYS the client-side re-sort uses the sort key values to
+	// reconstruct the server's order.
+	// ASC by price: 10→20→30 → Zebra, Aardvark, Mango
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	var ascNames []string
+	for _, doc := range result.Documents {
+		assert.NotEmpty(suite.T(), doc.SortKey, "SortKey must be populated with WITHSORTKEYS")
+		n, _ := doc.Fields["name"].(string)
+		ascNames = append(ascNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Zebra", "Aardvark", "Mango"}, ascNames)
+
+	// DESC by price: 30→20→10 → Mango, Aardvark, Zebra
+	result, err = glideft.ClusterFtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderDesc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	var descNames []string
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		descNames = append(descNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Mango", "Aardvark", "Zebra"}, descNames)
+
+	glideft.ClusterFtDropIndex(ctx, client, index)
+}
+
+// --- ft_search_sortby_with_return_excluding_sort_field (standalone) ---
+
+func (suite *GlideTestSuite) TestModuleFtSearchSortByReturnExcludesSortFieldStandalone() {
+	if len(suite.standaloneHosts) == 0 {
+		suite.T().Skip("No standalone server configured")
+	}
+	client := suite.defaultClient()
+	ctx := context.Background()
+
+	prefix := "sortret-" + uuid.New().String() + ":"
+	index := prefix + "index"
+
+	_, err := glideft.FtCreate(ctx, client, index,
+		[]options.Field{
+			options.NewNumericField("price").SetSortable(true),
+			options.NewTextField("name").SetSortable(true),
+		},
+		&options.FtCreateOptions{DataType: constants.IndexDataTypeHash, Prefixes: []string{prefix}})
+	assert.NoError(suite.T(), err)
+
+	client.HSet(ctx, prefix+"1", map[string]string{"price": "10", "name": "Zebra"})
+	client.HSet(ctx, prefix+"2", map[string]string{"price": "20", "name": "Aardvark"})
+	client.HSet(ctx, prefix+"3", map[string]string{"price": "30", "name": "Mango"})
+	time.Sleep(time.Second)
+
+	// SORTBY price ASC, RETURN only "name" — no error, all docs present
+	result, err := glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	assert.Equal(suite.T(), 3, len(result.Documents))
+	names := map[string]bool{}
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		names[n] = true
+	}
+	assert.True(suite.T(), names["Zebra"])
+	assert.True(suite.T(), names["Aardvark"])
+	assert.True(suite.T(), names["Mango"])
+
+	// ASC by price with WITHSORTKEYS: 10→20→30 → Zebra, Aardvark, Mango
+	result, err = glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderAsc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	var ascNames []string
+	for _, doc := range result.Documents {
+		assert.NotEmpty(suite.T(), doc.SortKey)
+		n, _ := doc.Fields["name"].(string)
+		ascNames = append(ascNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Zebra", "Aardvark", "Mango"}, ascNames)
+
+	// DESC by price with WITHSORTKEYS: 30→20→10 → Mango, Aardvark, Zebra
+	result, err = glideft.FtSearch(ctx, client, index, "@price:[1 +inf]",
+		&options.FtSearchOptions{
+			SortBy:       "price",
+			SortByOrder:  constants.FtSearchSortOrderDesc,
+			WithSortKeys: true,
+			ReturnFields: []options.FtSearchReturnField{{FieldIdentifier: "name"}},
+		})
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), int64(3), result.TotalResults)
+	var descNames []string
+	for _, doc := range result.Documents {
+		n, _ := doc.Fields["name"].(string)
+		descNames = append(descNames, n)
+	}
+	assert.Equal(suite.T(), []string{"Mango", "Aardvark", "Zebra"}, descNames)
+
+	glideft.FtDropIndex(ctx, client, index)
 }
