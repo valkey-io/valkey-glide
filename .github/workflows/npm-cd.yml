@@ -225,6 +225,8 @@ jobs:
               working-directory: ./node/rust-client
               id: build-action
               run: |
+                  npm ci
+                  
                   # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" ]]; then
                     additional_param="--zig"
