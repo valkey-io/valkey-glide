@@ -98,10 +98,7 @@ func sortDocuments(docs []models.FtSearchDocument, opts *options.FtSearchOptions
 	// values will all be empty strings and the original (arbitrary map iteration)
 	// order is preserved by SliceStable — which is the best we can do without
 	// server-side ordering guarantees.
-	var desc bool
-	if opts != nil {
-		desc = opts.SortByOrder == constants.FtSearchSortOrderDesc
-	}
+	desc := opts.SortByOrder == constants.FtSearchSortOrderDesc
 
 	sort.SliceStable(docs, func(i, j int) bool {
 		var a, b string
