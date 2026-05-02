@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 )
 
 // Default connection and request timeouts for testing.
