@@ -2,6 +2,7 @@
 package glide.internal;
 
 import glide.api.logging.Logger;
+import glide.api.models.configuration.AddressResolver;
 import glide.ffi.resolvers.NativeUtils;
 
 /**
@@ -23,8 +24,19 @@ public class GlideNativeBridge {
         }
     }
 
-    /** Create a new native client instance */
-    public static native long createClient(byte[] connectionRequestBytes);
+    /**
+     * Create a new native client instance.
+     *
+     * <p>If an AddressResolver is provided, it will be stored as a global reference on the native
+     * side to prevent garbage collection while the client is alive. The resolver will be called from
+     * any thread when address resolution is needed.
+     *
+     * @param connectionRequestBytes Protobuf-encoded ConnectionRequest
+     * @param addressResolver The address resolver callback, or null if not needed
+     * @return Native client handle, or 0 on failure
+     */
+    public static native long createClient(
+            byte[] connectionRequestBytes, AddressResolver addressResolver);
 
     /** Execute command asynchronously */
     public static native void executeCommandAsync(
