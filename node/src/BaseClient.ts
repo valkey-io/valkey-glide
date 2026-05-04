@@ -9,13 +9,7 @@
 
 import Long from "long";
 import * as net from "net";
-import {
-    Buffer,
-    BufferWriter,
-    Long as ProtoLong,
-    Reader,
-    Writer,
-} from "protobufjs/minimal";
+import { Buffer, BufferWriter, Reader, Writer } from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -287,7 +281,7 @@ import {
     getStatistics,
     compressionConfigToProtobuf,
     validateCompressionConfiguration,
-    valueFromSplitPointer,
+    valueFromPointer,
 } from ".";
 import {
     command_request,
@@ -543,28 +537,6 @@ export function convertRecordToGlideRecord<T>(
     return Object.entries(data).map(([key, value]) => {
         return { key, value };
     });
-}
-
-/**
- * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
- * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
- */
-class PointerResponse {
-    pointer: number | ProtoLong | null;
-    // As Javascript does not support 64-bit integers,
-    // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
-    high: number | undefined;
-    low: number | undefined;
-
-    constructor(
-        pointer: number | ProtoLong | null,
-        high?: number | undefined,
-        low?: number | undefined,
-    ) {
-        this.pointer = pointer;
-        this.high = high;
-        this.low = low;
-    }
 }
 
 /** Represents the types of services that can be used for IAM authentication. */
@@ -1326,33 +1298,13 @@ export class BaseClient {
             const errorType = getRequestErrorClass(message.requestError.type);
             reject(new errorType(message.requestError.message ?? undefined));
         } else if (message.respPointer != null) {
-            let pointer;
-
-            if (typeof message.respPointer === "number") {
-                // Response from type number
-                const long = Long.fromNumber(message.respPointer);
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    long.high,
-                    long.low,
-                );
-            } else {
-                // Response from type long
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    message.respPointer.high,
-                    message.respPointer.low,
-                );
-            }
+            const ptrNum =
+                typeof message.respPointer === "number"
+                    ? message.respPointer
+                    : message.respPointer.toNumber();
 
             try {
-                resolve(
-                    valueFromSplitPointer(
-                        pointer.high!,
-                        pointer.low!,
-                        decoder === Decoder.String,
-                    ),
-                );
+                resolve(valueFromPointer(ptrNum, decoder === Decoder.String));
             } catch (err: unknown) {
                 Logger.log("error", "Decoder", `Decoding error: '${err}'`);
                 reject(
@@ -1853,19 +1805,14 @@ export class BaseClient {
             (decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (responsePointer) {
-            if (typeof responsePointer !== "number") {
-                nextPushNotificationValue = valueFromSplitPointer(
-                    responsePointer.high,
-                    responsePointer.low,
-                    isStringDecoder,
-                ) as Record<string, unknown>;
-            } else {
-                nextPushNotificationValue = valueFromSplitPointer(
-                    0,
-                    responsePointer,
-                    isStringDecoder,
-                ) as Record<string, unknown>;
-            }
+            const ptrNum =
+                typeof responsePointer === "number"
+                    ? responsePointer
+                    : responsePointer.toNumber();
+            nextPushNotificationValue = valueFromPointer(
+                ptrNum,
+                isStringDecoder,
+            ) as Record<string, unknown>;
 
             const messageKind = nextPushNotificationValue["kind"];
 
