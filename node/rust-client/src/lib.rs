@@ -14,7 +14,6 @@ use tikv_jemallocator::Jemalloc;
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 pub const FINISHED_SCAN_CURSOR: &str = "finished";
-use byteorder::{LittleEndian, WriteBytesExt};
 use bytes::Bytes;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::client::ConnectionError;
@@ -419,29 +418,27 @@ fn resp_value_to_js(val: Value, js_env: Env, string_decoder: bool) -> Result<JsU
     }
 }
 
+/// Dereference a response pointer passed as a single JS number.
+///
+/// napi-rs marshals `i64` via `napi_get_value_int64`, which preserves all
+/// bits for values within the safe integer range. User-space heap addresses
+/// on current 64-bit platforms (48-bit on arm64 macOS, 47-bit on x86-64
+/// Linux) are well within this range. Using a single integer avoids the
+/// high/low u32 split and eliminates the class of bugs where the caller
+/// passes the wrong high bits.
 #[napi(
     ts_return_type = "null | string | Uint8Array | number | {} | Boolean | BigInt | Set<any> | any[] | Buffer"
 )]
-pub fn value_from_split_pointer(
+pub fn value_from_pointer(
     js_env: Env,
-    high_bits: u32,
-    low_bits: u32,
+    pointer_number: i64,
     string_decoder: bool,
 ) -> Result<JsUnknown> {
-    let mut bytes = [0_u8; 8];
-    (&mut bytes[..4])
-        .write_u32::<LittleEndian>(low_bits)
-        .unwrap();
-    (&mut bytes[4..])
-        .write_u32::<LittleEndian>(high_bits)
-        .unwrap();
-    let pointer = u64::from_le_bytes(bytes);
-    let value = unsafe { Box::from_raw(pointer as *mut Value) };
+    let value = unsafe { Box::from_raw(pointer_number as *mut Value) };
     resp_value_to_js(*value, js_env, string_decoder)
 }
 
-// Pointers are split because JS cannot represent a full usize using its `number` object.
-// The pointer is split into 2 `number`s, and then combined back in `value_from_split_pointer`.
+// Split a pointer into [low, high] u32 pair for testing utilities.
 fn split_pointer<T>(pointer: *mut T) -> [u32; 2] {
     let pointer = pointer as usize;
     let bytes = usize::to_le_bytes(pointer);
