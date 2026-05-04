@@ -6,6 +6,7 @@ from glide_shared import (
     ALL_SHARDED_CHANNELS,
     OK,
     TOK,
+    AddressResolver,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     AggregationType,
@@ -193,6 +194,7 @@ __all__ = [
     "BatchRetryStrategy",
     "ClusterBatchOptions",
     # Config
+    "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
     "GlideClientConfiguration",

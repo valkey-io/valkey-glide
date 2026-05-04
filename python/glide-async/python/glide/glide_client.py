@@ -28,6 +28,8 @@ from glide.glide import (
     drop_otel_span,
     get_cache_metric_from_registry,
     get_statistics,
+    register_address_resolver,
+    remove_address_resolver,
     start_socket_listener_external,
     value_from_pointer,
 )
@@ -275,8 +277,19 @@ class BaseClient(CoreCommands):
         # Start the reader loop as a background task
         self._reader_task = self._create_task(self._reader_loop)
 
-        # Set the client configurations
-        await self._set_connection_configurations()
+        # Register address resolver in the global registry before sending the
+        # connection request, so the socket listener can pick it up.
+        if self.config.address_resolver is not None:
+            register_address_resolver(self.config.address_resolver)
+
+        try:
+            # Set the client configurations
+            await self._set_connection_configurations()
+        except Exception:
+            # Clean up the resolver from the registry if connection fails
+            if self.config.address_resolver is not None:
+                remove_address_resolver()
+            raise
 
         return self
 

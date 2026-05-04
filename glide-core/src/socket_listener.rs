@@ -901,7 +901,16 @@ async fn create_client(
     request: ConnectionRequest,
     push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    let client = match Client::new(request.into(), push_tx).await {
+    let mut conn_request: crate::client::ConnectionRequest = request.into();
+
+    // Check the global address resolver registry for a pending resolver.
+    // Language bindings (e.g., Python async) register resolvers here before
+    // sending the connection request over the UDS socket.
+    if let Some(resolver) = crate::address_resolver_registry::remove("pending") {
+        conn_request.address_resolver = Some(resolver);
+    }
+
+    let client = match Client::new(conn_request, push_tx).await {
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
