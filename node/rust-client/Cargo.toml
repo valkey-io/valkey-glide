@@ -17,7 +17,6 @@ tokio = { version = "1", features = ["rt", "macros", "rt-multi-thread"] }
 napi = { version = "2", default-features = false, features = ["napi8"] }
 napi-derive = "2"
 logger_core = { path = "../../logger_core" }
-byteorder = "1"
 bytes = "1"
 num-traits = "0.2"
 
