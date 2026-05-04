@@ -8,7 +8,6 @@ name: FMT Java
 permissions:
     contents: read
     actions: write
-    id-token: write
 
 on:
     # Nightly at 01:00 UTC.

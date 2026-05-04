@@ -7,7 +7,6 @@ name: FMT Go
 permissions:
     contents: read
     actions: write
-    id-token: write
 
 on:
     # Nightly at 01:30 UTC.
