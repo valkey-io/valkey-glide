@@ -61,7 +61,7 @@ on:
                 type: string
                 default: false
             windows-only:
-                description: "Run Windows tests only (used by fmt-java-windows.yml to isolate flaky Windows runs)"
+                description: "Run Windows tests only."
                 type: boolean
                 default: false
 
@@ -89,9 +89,7 @@ jobs:
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
-            # Windows is flaky and tested separately via fmt-java-windows.yml.
-            # By default this workflow excludes Windows from the host matrix.
-            # When called with windows-only: true, keep Windows only.
+            # Filter hosts based on `windows-only` input
             - id: filter-hosts
               shell: bash
               env:
