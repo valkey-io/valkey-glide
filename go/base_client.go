@@ -162,6 +162,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 			C.uintptr_t(byteCount),
 			&clientType,
 			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
+			(C.AddressResolverCallback)(nil),
 		),
 	)
 	defer C.free_connection_response(cResponse)
