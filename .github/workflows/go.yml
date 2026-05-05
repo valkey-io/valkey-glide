@@ -84,7 +84,7 @@ jobs:
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -106,7 +106,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -194,7 +194,7 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ !github.event.inputs.rc-version }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Set up Go
               uses: actions/setup-go@v5
@@ -237,7 +237,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -273,7 +273,7 @@ jobs:
                   fi
 
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
               with:
                   submodules: recursive
 
@@ -365,7 +365,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Output Matrix Parameters for this job
               run: |

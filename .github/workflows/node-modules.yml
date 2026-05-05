@@ -51,7 +51,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 35
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Install shared dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -114,7 +114,7 @@ jobs:
             - name: Setup self-hosted runner access
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/valkey-glide
 
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
 
             - name: Install Node.js
               uses: actions/setup-node@v5
