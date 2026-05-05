@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
@@ -954,6 +955,586 @@ func (suite *GlideTestSuite) TestCompressionStatistics() {
 	assert.Greater(t, afterStats["total_bytes_decompressed"],
 		initialStats["total_bytes_decompressed"],
 		"total_bytes_decompressed should increase after GET")
+
+	client.Del(context.Background(), []string{key})
+}
+
+// ============================================================================
+// Supported Commands Tests
+// ============================================================================
+
+func (suite *GlideTestSuite) TestCompressionMSetMGet() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key1 := fmt.Sprintf("{mset_test}_1_%s", randomString(8))
+	key2 := fmt.Sprintf("{mset_test}_2_%s", randomString(8))
+	key3 := fmt.Sprintf("{mset_test}_3_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	initialStats := client.GetStatistics()
+	initialCompressed := initialStats["total_values_compressed"]
+
+	// MSET should compress values
+	keyValueMap := map[string]string{
+		key1: value,
+		key2: value,
+		key3: value,
+	}
+	result, err := client.MSet(context.Background(), keyValueMap)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	stats := client.GetStatistics()
+	assert.GreaterOrEqual(t, stats["total_values_compressed"], initialCompressed+3,
+		"MSET should compress all values")
+
+	// MGET should decompress values
+	retrieved, err := client.MGet(context.Background(), []string{key1, key2, key3})
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(retrieved))
+	assert.Equal(t, value, retrieved[0].Value())
+	assert.Equal(t, value, retrieved[1].Value())
+	assert.Equal(t, value, retrieved[2].Value())
+
+	client.Del(context.Background(), []string{key1, key2, key3})
+}
+
+func (suite *GlideTestSuite) TestCompressionMSetNX() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key1 := fmt.Sprintf("{msetnx_test}_1_%s", randomString(8))
+	key2 := fmt.Sprintf("{msetnx_test}_2_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	initialStats := client.GetStatistics()
+	initialCompressed := initialStats["total_values_compressed"]
+
+	// MSETNX should compress values
+	keyValueMap := map[string]string{
+		key1: value,
+		key2: value,
+	}
+	result, err := client.MSetNX(context.Background(), keyValueMap)
+	assert.NoError(t, err)
+	assert.True(t, result, "MSETNX should succeed for new keys")
+
+	stats := client.GetStatistics()
+	assert.GreaterOrEqual(t, stats["total_values_compressed"], initialCompressed+2,
+		"MSETNX should compress all values")
+
+	// Verify values can be retrieved and decompressed
+	retrieved1, err := client.Get(context.Background(), key1)
+	assert.NoError(t, err)
+	assert.Equal(t, value, retrieved1.Value())
+
+	retrieved2, err := client.Get(context.Background(), key2)
+	assert.NoError(t, err)
+	assert.Equal(t, value, retrieved2.Value())
+
+	client.Del(context.Background(), []string{key1, key2})
+}
+
+func (suite *GlideTestSuite) TestCompressionGetEx() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("getex_test_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	// Set value (should be compressed)
+	compressBefore := client.GetStatistics()["total_values_compressed"]
+	_, err := client.Set(context.Background(), key, value)
+	assert.NoError(t, err)
+	assert.Greater(t, client.GetStatistics()["total_values_compressed"], compressBefore,
+		"SET should compress value")
+
+	// GETEX should decompress value
+	decompressBefore := client.GetStatistics()["total_values_decompressed"]
+	opts := options.NewGetExOptions().SetExpiry(options.NewExpiryIn(10 * time.Second))
+	retrieved, err := client.GetExWithOptions(context.Background(), key, *opts)
+	assert.NoError(t, err)
+	assert.Equal(t, value, retrieved.Value())
+	assert.Greater(t, client.GetStatistics()["total_values_decompressed"], decompressBefore,
+		"GETEX should decompress value")
+
+	// Verify TTL was set
+	ttl, err := client.TTL(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Greater(t, ttl, int64(0))
+	assert.LessOrEqual(t, ttl, int64(10))
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionGetDel() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("getdel_test_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	// Set value (should be compressed)
+	compressBefore := client.GetStatistics()["total_values_compressed"]
+	_, err := client.Set(context.Background(), key, value)
+	assert.NoError(t, err)
+	assert.Greater(t, client.GetStatistics()["total_values_compressed"], compressBefore,
+		"SET should compress value")
+
+	// GETDEL should decompress value and delete key
+	decompressBefore := client.GetStatistics()["total_values_decompressed"]
+	retrieved, err := client.GetDel(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, value, retrieved.Value())
+	assert.Greater(t, client.GetStatistics()["total_values_decompressed"], decompressBefore,
+		"GETDEL should decompress value")
+
+	// Verify key was deleted
+	getResult, err := client.Get(context.Background(), key)
+	assert.NoError(t, err)
+	assert.True(t, getResult.IsNil())
+}
+
+func (suite *GlideTestSuite) TestCompressionSetExViaCustomCommand() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("setex_test_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	initialStats := client.GetStatistics()
+	initialCompressed := initialStats["total_values_compressed"]
+
+	// SETEX via custom command should compress value
+	result, err := client.CustomCommand(context.Background(), []string{"SETEX", key, "10", value})
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	stats := client.GetStatistics()
+	assert.Greater(t, stats["total_values_compressed"], initialCompressed,
+		"SETEX should compress value")
+
+	// Verify value can be retrieved and decompressed
+	retrieved, err := client.Get(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, value, retrieved.Value())
+
+	// Verify TTL was set
+	ttl, err := client.TTL(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Greater(t, ttl, int64(0))
+	assert.LessOrEqual(t, ttl, int64(10))
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionPSetExViaCustomCommand() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("psetex_test_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	initialStats := client.GetStatistics()
+	initialCompressed := initialStats["total_values_compressed"]
+
+	// PSETEX via custom command should compress value
+	result, err := client.CustomCommand(context.Background(), []string{"PSETEX", key, "10000", value})
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	stats := client.GetStatistics()
+	assert.Greater(t, stats["total_values_compressed"], initialCompressed,
+		"PSETEX should compress value")
+
+	// Verify value can be retrieved and decompressed
+	retrieved, err := client.Get(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, value, retrieved.Value())
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionSetNXViaCustomCommand() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("setnx_test_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	// Ensure key doesn't exist
+	client.Del(context.Background(), []string{key})
+
+	initialStats := client.GetStatistics()
+	initialCompressed := initialStats["total_values_compressed"]
+
+	// SETNX via custom command should compress value
+	result, err := client.CustomCommand(context.Background(), []string{"SETNX", key, value})
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), result)
+
+	stats := client.GetStatistics()
+	assert.Greater(t, stats["total_values_compressed"], initialCompressed,
+		"SETNX should compress value")
+
+	// Verify value can be retrieved and decompressed
+	retrieved, err := client.Get(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, value, retrieved.Value())
+
+	client.Del(context.Background(), []string{key})
+}
+
+// ============================================================================
+// Incompatible Commands Tests
+// ============================================================================
+
+func (suite *GlideTestSuite) TestCompressionAppendIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("append_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "initial_value")
+	assert.NoError(t, err)
+
+	// APPEND should fail with compression enabled
+	_, err = client.Append(context.Background(), key, "_appended")
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionGetRangeIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("getrange_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, generateCompressibleText(1024))
+	assert.NoError(t, err)
+
+	// GETRANGE should fail with compression enabled
+	_, err = client.GetRange(context.Background(), key, 0, 10)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionSetRangeIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("setrange_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, generateCompressibleText(1024))
+	assert.NoError(t, err)
+
+	// SETRANGE should fail with compression enabled
+	_, err = client.SetRange(context.Background(), key, 5, "replacement")
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionStrlenIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("strlen_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, generateCompressibleText(1024))
+	assert.NoError(t, err)
+
+	// STRLEN should fail with compression enabled
+	_, err = client.Strlen(context.Background(), key)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionIncrIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("incr_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "100")
+	assert.NoError(t, err)
+
+	// INCR should fail with compression enabled
+	_, err = client.Incr(context.Background(), key)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionIncrByIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("incrby_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "100")
+	assert.NoError(t, err)
+
+	// INCRBY should fail with compression enabled
+	_, err = client.IncrBy(context.Background(), key, 10)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionIncrByFloatIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("incrbyfloat_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "100.5")
+	assert.NoError(t, err)
+
+	// INCRBYFLOAT should fail with compression enabled
+	_, err = client.IncrByFloat(context.Background(), key, 0.5)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionDecrIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("decr_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "100")
+	assert.NoError(t, err)
+
+	// DECR should fail with compression enabled
+	_, err = client.Decr(context.Background(), key)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionDecrByIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("decrby_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "100")
+	assert.NoError(t, err)
+
+	// DECRBY should fail with compression enabled
+	_, err = client.DecrBy(context.Background(), key, 10)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionGetBitIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("getbit_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "test_value")
+	assert.NoError(t, err)
+
+	// GETBIT should fail with compression enabled
+	_, err = client.GetBit(context.Background(), key, 0)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionSetBitIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("setbit_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "test_value")
+	assert.NoError(t, err)
+
+	// SETBIT should fail with compression enabled
+	_, err = client.SetBit(context.Background(), key, 0, 1)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionBitCountIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("bitcount_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "test_value")
+	assert.NoError(t, err)
+
+	// BITCOUNT should fail with compression enabled
+	_, err = client.BitCount(context.Background(), key)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionBitPosIncompatible() {
+	client := suite.compressionClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("bitpos_test_%s", randomString(8))
+	_, err := client.Set(context.Background(), key, "test_value")
+	assert.NoError(t, err)
+
+	// BITPOS should fail with compression enabled
+	_, err = client.BitPos(context.Background(), key, 1)
+	assert.Error(t, err)
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "incompatible") || strings.Contains(errMsg, "compression"),
+		"Error should mention incompatibility: %v", err)
+
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompression() {
+	client := suite.defaultClient()
+	defer client.Close()
+
+	t := suite.T()
+
+	key := fmt.Sprintf("no_compression_test_%s", randomString(8))
+
+	// Set initial value
+	_, err := client.Set(context.Background(), key, "100")
+	assert.NoError(t, err)
+
+	// All these commands should work without compression
+	// INCR
+	incrResult, err := client.Incr(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(101), incrResult)
+
+	// INCRBY
+	incrByResult, err := client.IncrBy(context.Background(), key, 10)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(111), incrByResult)
+
+	// DECR
+	decrResult, err := client.Decr(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(110), decrResult)
+
+	// DECRBY
+	decrByResult, err := client.DecrBy(context.Background(), key, 10)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(100), decrByResult)
+
+	// STRLEN
+	_, err = client.Set(context.Background(), key, "hello")
+	assert.NoError(t, err)
+	strlenResult, err := client.Strlen(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(5), strlenResult)
+
+	// APPEND
+	appendResult, err := client.Append(context.Background(), key, " world")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(11), appendResult)
+
+	// GETRANGE
+	getrangeResult, err := client.GetRange(context.Background(), key, 0, 4)
+	assert.NoError(t, err)
+	assert.Equal(t, "hello", getrangeResult)
+
+	// SETRANGE
+	setrangeResult, err := client.SetRange(context.Background(), key, 6, "WORLD")
+	assert.NoError(t, err)
+	assert.Equal(t, int64(11), setrangeResult)
+
+	// GETBIT
+	_, err = client.Set(context.Background(), key, "\x00")
+	assert.NoError(t, err)
+	getbitResult, err := client.GetBit(context.Background(), key, 0)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), getbitResult)
+
+	// SETBIT
+	setbitResult, err := client.SetBit(context.Background(), key, 0, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), setbitResult)
+
+	// BITCOUNT
+	bitcountResult, err := client.BitCount(context.Background(), key)
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, bitcountResult, int64(0))
 
 	client.Del(context.Background(), []string{key})
 }

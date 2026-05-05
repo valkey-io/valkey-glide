@@ -18,6 +18,9 @@ const MinCompressionSize = 6
 // Operators can lower this to MinCompressionSize if they have highly compressible small values.
 const DefaultMinCompressionSize = 64
 
+// DefaultMaxDecompressedSize is the default maximum decompressed size (512MB, matching Valkey's proto-max-bulk-len).
+const DefaultMaxDecompressedSize uint64 = 512 * 1024 * 1024
+
 // CompressionBackend represents the compression algorithm to use.
 type CompressionBackend int
 
@@ -43,15 +46,22 @@ type CompressionConfiguration struct {
 	compressionLevel *int32
 	// Minimum size in bytes for values to be compressed. Defaults to 64.
 	minCompressionSize uint32
+	// Maximum allowed size in bytes for decompressed data.
+	// This limit prevents decompression bombs (maliciously crafted compressed data
+	// that expands to huge sizes).
+	// If nil, the Rust default (512MB) is used.
+	maxDecompressedSize *uint64
 }
 
 // NewCompressionConfiguration returns a [CompressionConfiguration] with compression enabled,
 // ZSTD backend, default compression level, and minimum compression size of 64 bytes.
+// The max decompressed size defaults to the Rust core's default (512MB).
 func NewCompressionConfiguration() *CompressionConfiguration {
 	return &CompressionConfiguration{
-		enabled:            true,
-		backend:            ZSTD,
-		minCompressionSize: DefaultMinCompressionSize,
+		enabled:             true,
+		backend:             ZSTD,
+		minCompressionSize:  DefaultMinCompressionSize,
+		maxDecompressedSize: nil, // Use Rust default
 	}
 }
 
@@ -83,6 +93,14 @@ func (c *CompressionConfiguration) WithMinCompressionSize(size uint32) *Compress
 	return c
 }
 
+// WithMaxDecompressedSize sets the maximum allowed size in bytes for decompressed data.
+// This limit prevents decompression bombs (maliciously crafted compressed data that expands to huge sizes).
+// If nil, the Rust default (512MB) is used.
+func (c *CompressionConfiguration) WithMaxDecompressedSize(size *uint64) *CompressionConfiguration {
+	c.maxDecompressedSize = size
+	return c
+}
+
 // Validate checks that the compression configuration is valid.
 func (c *CompressionConfiguration) Validate() error {
 	if c.minCompressionSize < MinCompressionSize {
@@ -92,6 +110,11 @@ func (c *CompressionConfiguration) Validate() error {
 			c.minCompressionSize,
 		)
 	}
+
+	if c.maxDecompressedSize != nil && *c.maxDecompressedSize == 0 {
+		return fmt.Errorf("max_decompressed_size must be positive if set")
+	}
+
 	return nil
 }
 
@@ -108,6 +131,10 @@ func (c *CompressionConfiguration) toProtobuf() (*protobuf.CompressionConfig, er
 
 	if c.compressionLevel != nil {
 		pbConfig.CompressionLevel = c.compressionLevel
+	}
+
+	if c.maxDecompressedSize != nil {
+		pbConfig.MaxDecompressedSize = c.maxDecompressedSize
 	}
 
 	return pbConfig, nil

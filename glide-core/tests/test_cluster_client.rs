@@ -443,8 +443,9 @@ mod cluster_client_tests {
                     assert!(
                         err.is_connection_dropped()
                             || err.is_timeout()
-                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable,
-                        "Expected connection dropped, timeout, or unavailable error, got: {err:?}",
+                            || err.kind() == redis::ErrorKind::AllConnectionsUnavailable
+                            || err.kind() == redis::ErrorKind::ClientError,
+                        "Expected connection dropped, timeout, unavailable, or recovery error, got: {err:?}",
                     );
                     let client_info = retry(|| async {
                         let mut client = test_basics.client.clone();

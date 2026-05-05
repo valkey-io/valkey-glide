@@ -11,9 +11,11 @@ export * from "../build-ts/native";
 // Export TypeScript APIs
 export * from "./BaseClient.js";
 export * from "./Batch.js";
+export * from "./ClientSideCache.js";
 export * from "./Commands.js";
 export * from "./CompressionConfiguration.js";
 export * from "./Errors.js";
+export * from "./EvictionPolicy.js";
 export * from "./GlideClient.js";
 export * from "./GlideClusterClient.js";
 export * from "./Logger.js";

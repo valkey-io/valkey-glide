@@ -235,8 +235,12 @@ jobs:
                   # Install needed dependencies
                   if [[ "${{ matrix.TARGET }}" == *"linux"* ]]; then
                     sudo apt update
-                    sudo apt install -y snap gcc pkg-config openssl libssl-dev
-                    sudo snap install zig --classic --beta
+                    sudo apt install -y gcc pkg-config openssl libssl-dev
+                    # Install zig via direct binary download (works on all runners without snap/pip)
+                    ZIG_VERSION="0.13.0"
+                    ZIG_ARCH="$(uname -m)"
+                    curl -sSL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}.tar.xz" | sudo tar -xJ -C /usr/local
+                    sudo ln -sf "/usr/local/zig-linux-${ZIG_ARCH}-${ZIG_VERSION}/zig" /usr/local/bin/zig
                   else
                     brew update
                     brew install tree

@@ -256,6 +256,98 @@ create_log!(log_info, INFO);
 create_log!(log_warn, WARN);
 create_log!(log_error, ERROR);
 
+/// Lazy logging macros that only evaluate the message expression if the log level is enabled.
+/// This avoids the cost of `format!(...)` when the level is disabled.
+///
+/// Usage:
+/// ```ignore
+/// log_trace_lazy!("identifier", format!("expensive computation: {}", value));
+/// log_warn_lazy!("identifier", format!("something happened: {:?}", err));
+/// ```
+#[macro_export]
+macro_rules! log_trace_lazy {
+    ($identifier:expr, $message:expr) => {
+        if tracing::event_enabled!(tracing::Level::TRACE) {
+            $crate::log_trace($identifier, $message);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_debug_lazy {
+    ($identifier:expr, $message:expr) => {
+        if tracing::event_enabled!(tracing::Level::DEBUG) {
+            $crate::log_debug($identifier, $message);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_info_lazy {
+    ($identifier:expr, $message:expr) => {
+        if tracing::event_enabled!(tracing::Level::INFO) {
+            $crate::log_info($identifier, $message);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_warn_lazy {
+    ($identifier:expr, $message:expr) => {
+        if tracing::event_enabled!(tracing::Level::WARN) {
+            $crate::log_warn($identifier, $message);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_error_lazy {
+    ($identifier:expr, $message:expr) => {
+        if tracing::event_enabled!(tracing::Level::ERROR) {
+            $crate::log_error($identifier, $message);
+        }
+    };
+}
+
+/// Rate-limited logging macro. Logs at most once per `interval_secs` seconds.
+/// Uses a static AtomicU64 per call site to track the last log time.
+///
+/// Usage:
+/// ```ignore
+/// log_warn_rate_limited!("identifier", 10, format!("something happened: {}", val));
+/// ```
+#[macro_export]
+macro_rules! log_warn_rate_limited {
+    ($identifier:expr, $interval_secs:expr, $message:expr) => {{
+        static LAST_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let last = LAST_LOG.load(std::sync::atomic::Ordering::Relaxed);
+        if now >= last + $interval_secs {
+            LAST_LOG.store(now, std::sync::atomic::Ordering::Relaxed);
+            $crate::log_warn($identifier, $message);
+        }
+    }};
+}
+
+#[macro_export]
+macro_rules! log_info_rate_limited {
+    ($identifier:expr, $interval_secs:expr, $message:expr) => {{
+        static LAST_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let last = LAST_LOG.load(std::sync::atomic::Ordering::Relaxed);
+        if now >= last + $interval_secs {
+            LAST_LOG.store(now, std::sync::atomic::Ordering::Relaxed);
+            $crate::log_info($identifier, $message);
+        }
+    }};
+}
+
 // Logs the given log, with log_identifier and log level prefixed. If the given log level is below the threshold of given when the logger was initialized, the log will be ignored.
 // log_identifier should be used to add context to a log, and make it easier to connect it to other relevant logs. For example, it can be used to pass a task identifier.
 // If this is called before a logger was initialized the log will not be registered.

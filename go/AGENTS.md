@@ -11,7 +11,8 @@ This is the Go client binding for Valkey GLIDE, providing both standalone and cl
 **Architecture:** Go wrapper around Rust FFI core with CGO bindings
 
 **Key Components:**
-- `./` - Main Go client library and interfaces
+- `./` - Main Go client library
+- `interfaces/` - Public client and command interfaces (BaseClientCommands, GlideClientCommands, etc.)
 - `integTest/` - Integration tests and test suites
 - `benchmarks/` - Performance benchmarking tool
 - `internal/` - Internal packages including protobuf definitions
@@ -211,6 +212,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 go/                             # Main Go client library
 ├── client.go                   # Standalone client implementation
 ├── cluster_client.go           # Cluster client implementation
+├── interfaces/                 # Public client and command interfaces
 ├── integTest/                  # Integration test suites
 ├── benchmarks/                 # Performance benchmarking tool
 ├── internal/                   # Internal packages

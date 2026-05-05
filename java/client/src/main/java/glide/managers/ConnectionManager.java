@@ -4,17 +4,20 @@ package glide.managers;
 import static connection_request.ConnectionRequestOuterClass.*;
 
 import glide.api.models.GlideString;
+import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
+import glide.api.models.configuration.NodeDiscoveryMode;
 import glide.api.models.configuration.PeriodicChecksConfig;
 import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
@@ -391,6 +394,14 @@ public class ConnectionManager {
                             if (standaloneConfig.isReadOnly()) {
                                 requestBuilder.setReadOnly(true);
                             }
+                            NodeDiscoveryMode mode = standaloneConfig.getNodeDiscoveryMode();
+                            if (mode == NodeDiscoveryMode.STATIC) {
+                                requestBuilder.setNodeDiscoveryMode(
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.Static);
+                            } else if (mode == NodeDiscoveryMode.DISCOVER_ALL) {
+                                requestBuilder.setNodeDiscoveryMode(
+                                        connection_request.ConnectionRequestOuterClass.NodeDiscoveryMode.DiscoverAll);
+                            }
                         }
 
                         // Set compression configuration
@@ -408,15 +419,55 @@ public class ConnectionManager {
                             if (cc.getCompressionLevel() != null) {
                                 compressionBuilder.setCompressionLevel(cc.getCompressionLevel());
                             }
+                            if (cc.getMaxDecompressedSize() != null) {
+                                compressionBuilder.setMaxDecompressedSize(cc.getMaxDecompressedSize());
+                            }
                             requestBuilder.setCompressionConfig(compressionBuilder.build());
+                        }
+
+                        // Set client-side cache configuration if provided
+                        ClientSideCache clientSideCache = configuration.getClientSideCache();
+                        if (clientSideCache != null) {
+                            connection_request.ConnectionRequestOuterClass.ClientSideCache.Builder cacheBuilder =
+                                    connection_request.ConnectionRequestOuterClass.ClientSideCache.newBuilder();
+
+                            // Set required fields
+                            cacheBuilder.setCacheId(clientSideCache.getCacheId());
+                            cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
+                            cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+
+                            // Set TTL (0 = no expiration)
+                            cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
+
+                            // Set optional eviction policy
+                            if (clientSideCache.getEvictionPolicy() != null) {
+                                switch (clientSideCache.getEvictionPolicy()) {
+                                    case LRU:
+                                        cacheBuilder.setEvictionPolicy(
+                                                connection_request.ConnectionRequestOuterClass.EvictionPolicy.LRU);
+                                        break;
+                                    case LFU:
+                                        cacheBuilder.setEvictionPolicy(
+                                                connection_request.ConnectionRequestOuterClass.EvictionPolicy.LFU);
+                                        break;
+                                }
+                            }
+
+                            requestBuilder.setClientSideCache(cacheBuilder.build());
                         }
 
                         // Build and serialize to bytes
                         ConnectionRequest request = requestBuilder.build();
                         byte[] requestBytes = request.toByteArray();
 
+                        // Get the address resolver (may be null if not configured)
+                        // The resolver is passed directly to native code which stores it as a global reference
+                        // to prevent garbage collection while the client is alive
+                        AddressResolver addressResolver = configuration.getAddressResolver().orElse(null);
+
                         // Create native client with protobuf bytes
-                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes);
+                        // Native code will store the resolver as a global reference if provided
+                        this.nativeClientHandle = GlideNativeBridge.createClient(requestBytes, addressResolver);
 
                         if (nativeClientHandle == 0) {
                             throw new ClosingException("Failed to create client - Connection refused");

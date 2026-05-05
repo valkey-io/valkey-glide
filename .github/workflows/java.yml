@@ -60,6 +60,10 @@ on:
                 description: "Run with macos included (only when necessary)"
                 type: string
                 default: false
+            windows-only:
+                description: "Run Windows tests only."
+                type: boolean
+                default: false
 
 concurrency:
     group: java-${{ github.head_ref || github.ref }}-${{ toJson(inputs) }}
@@ -74,7 +78,7 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
-            host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
+            host-matrix-output: ${{ steps.filter-hosts.outputs.host-matrix }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
             - uses: actions/checkout@v4
@@ -85,6 +89,19 @@ jobs:
                   # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
                   run-with-macos: ${{ (github.event.inputs.run-with-macos) }}
+            # Filter hosts based on `windows-only` input
+            - id: filter-hosts
+              shell: bash
+              env:
+                  WINDOWS_ONLY: ${{ inputs.windows-only }}
+                  HOST_MATRIX: ${{ steps.get-matrices.outputs.host-matrix-output }}
+              run: |
+                  if [[ "$WINDOWS_ONLY" == "true" ]]; then
+                      FILTER='[.[] | select(.OS == "windows")]'
+                  else
+                      FILTER='[.[] | select(.OS != "windows")]'
+                  fi
+                  echo "host-matrix=$(echo "$HOST_MATRIX" | jq -c "$FILTER")" >> $GITHUB_OUTPUT
 
     test-java:
         name: Java Tests - ${{ matrix.java }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}

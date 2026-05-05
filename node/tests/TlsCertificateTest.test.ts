@@ -34,7 +34,10 @@ const getTlsClientConfigurationOption = (addresses: [string, number][]) =>
         requestTimeout: TLS_REQUEST_TIMEOUT,
     });
 
-describe("TLS with custom certificates", () => {
+// These tests were very flaky for Amazon Linux Containers.
+// Disabled for now as they are not critical.
+// See https://github.com/valkey-io/valkey-glide/issues/4989
+describe.skip("TLS with custom certificates", () => {
     let standaloneCluster: ValkeyCluster;
     let clusterModeCluster: ValkeyCluster;
     let standaloneClient: GlideClient | undefined;

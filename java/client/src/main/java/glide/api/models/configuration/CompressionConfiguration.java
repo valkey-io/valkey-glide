@@ -25,6 +25,7 @@ import lombok.Getter;
  *     .backend(CompressionBackend.ZSTD)
  *     .compressionLevel(3)
  *     .minCompressionSize(128)
+ *     .maxDecompressedSize(1024 * 1024 * 100) // 100MB limit
  *     .build();
  *
  * GlideClientConfiguration config = GlideClientConfiguration.builder()
@@ -46,6 +47,9 @@ public class CompressionConfiguration {
 
     /** Default threshold below which values will not be compressed. */
     public static final int DEFAULT_MIN_COMPRESSION_SIZE = 64;
+
+    /** Default maximum decompressed size (512MB, matching Valkey's proto-max-bulk-len). */
+    public static final long DEFAULT_MAX_DECOMPRESSED_SIZE = 512L * 1024 * 1024;
 
     /** Whether compression is enabled. Defaults to {@code true}. */
     @Builder.Default private final boolean enabled = true;
@@ -74,6 +78,13 @@ public class CompressionConfiguration {
     @Builder.Default private final int minCompressionSize = DEFAULT_MIN_COMPRESSION_SIZE;
 
     /**
+     * Maximum allowed size in bytes for decompressed data. This limit prevents decompression bombs
+     * (maliciously crafted compressed data that expands to huge sizes). If {@code null}, the Rust
+     * default (512MB) is used. Defaults to {@code null} (use Rust default).
+     */
+    @Builder.Default private final Long maxDecompressedSize = null;
+
+    /**
      * Validates the configuration parameters.
      *
      * @throws ConfigurationError if any parameter is invalid.
@@ -86,6 +97,10 @@ public class CompressionConfiguration {
                             + " bytes, got "
                             + minCompressionSize);
         }
+        if (maxDecompressedSize != null && maxDecompressedSize <= 0) {
+            throw new ConfigurationError(
+                    "maxDecompressedSize must be positive, got " + maxDecompressedSize);
+        }
     }
 
     /**
@@ -97,11 +112,13 @@ public class CompressionConfiguration {
             boolean enabled,
             CompressionBackend backend,
             Integer compressionLevel,
-            int minCompressionSize) {
+            int minCompressionSize,
+            Long maxDecompressedSize) {
         this.enabled = enabled;
         this.backend = backend;
         this.compressionLevel = compressionLevel;
         this.minCompressionSize = minCompressionSize;
+        this.maxDecompressedSize = maxDecompressedSize;
         validate();
     }
 }

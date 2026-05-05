@@ -22,6 +22,11 @@ public final class TestConfiguration {
 
     public static final Semver SERVER_VERSION;
     public static final boolean TLS = Boolean.parseBoolean(System.getProperty("test.server.tls", ""));
+    // Matches the 'defaultReleaseVersion' fallback defined in the root build.gradle
+    public static final String EXPECTED_GLIDE_VERSION =
+            System.getenv("GLIDE_RELEASE_VERSION") != null
+                    ? System.getenv("GLIDE_RELEASE_VERSION")
+                    : "255.255.255";
 
     static {
         Logger.init(Logger.Level.OFF);

@@ -29,6 +29,8 @@ pub enum CompressionError {
     UnsupportedBackend { backend_name: String },
     /// Invalid compression configuration
     InvalidConfiguration { backend: String, reason: String },
+    /// Command is incompatible with compression
+    IncompatibleCommand { command: String, reason: String },
 }
 
 impl std::fmt::Display for CompressionError {
@@ -80,6 +82,13 @@ impl std::fmt::Display for CompressionError {
                     backend, reason
                 )
             }
+            CompressionError::IncompatibleCommand { command, reason } => {
+                write!(
+                    f,
+                    "Command '{}' is incompatible with compression: {}",
+                    command, reason
+                )
+            }
         }
     }
 }
@@ -126,6 +135,13 @@ impl CompressionError {
         }
     }
 
+    pub fn incompatible_command(command: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::IncompatibleCommand {
+            command: command.into(),
+            reason: reason.into(),
+        }
+    }
+
     /// Returns the backend name associated with this error
     pub fn backend(&self) -> &str {
         match self {
@@ -133,7 +149,14 @@ impl CompressionError {
             CompressionError::DecompressionFailed { backend, .. } => backend,
             CompressionError::InvalidConfiguration { backend, .. } => backend,
             CompressionError::UnsupportedBackend { backend_name } => backend_name,
+            CompressionError::IncompatibleCommand { .. } => "",
         }
+    }
+
+    /// Returns true if this error is an IncompatibleCommand error.
+    /// These errors should be propagated to the user rather than logged and ignored.
+    pub fn is_incompatible_command(&self) -> bool {
+        matches!(self, CompressionError::IncompatibleCommand { .. })
     }
 }
 
@@ -158,7 +181,9 @@ pub type CompressionResult<T> = Result<T, CompressionError>;
 
 pub trait CompressionBackend: Send + Sync + fmt::Debug {
     fn compress(&self, data: &[u8], level: Option<i32>) -> CompressionResult<Vec<u8>>;
-    fn decompress(&self, data: &[u8]) -> CompressionResult<Vec<u8>>;
+    /// Decompress data with an optional size limit to prevent decompression bombs.
+    /// If max_size is Some and the decompressed data would exceed it, returns an error.
+    fn decompress(&self, data: &[u8], max_size: Option<usize>) -> CompressionResult<Vec<u8>>;
     fn is_compressed(&self, data: &[u8]) -> bool;
     fn backend_name(&self) -> &'static str;
     fn default_level(&self) -> Option<i32>;
@@ -213,12 +238,18 @@ impl std::str::FromStr for CompressionBackendType {
     }
 }
 
+/// Default maximum decompressed size (512MB, matching Valkey's proto-max-bulk-len)
+pub const DEFAULT_MAX_DECOMPRESSED_SIZE: usize = 512 * 1024 * 1024;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompressionConfig {
     pub enabled: bool,
     pub backend: CompressionBackendType,
     pub compression_level: Option<i32>,
     pub min_compression_size: usize,
+    /// Maximum allowed size for decompressed data to prevent decompression bombs.
+    /// Default is 512MB (matching Valkey's proto-max-bulk-len).
+    pub max_decompressed_size: Option<usize>,
 }
 
 impl CompressionConfig {
@@ -228,6 +259,7 @@ impl CompressionConfig {
             backend,
             compression_level: backend.default_level(),
             min_compression_size: 64,
+            max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
         }
     }
 
@@ -237,6 +269,7 @@ impl CompressionConfig {
             backend: CompressionBackendType::Zstd,
             compression_level: None,
             min_compression_size: 64,
+            max_decompressed_size: Some(DEFAULT_MAX_DECOMPRESSED_SIZE),
         }
     }
 
@@ -247,6 +280,13 @@ impl CompressionConfig {
 
     pub fn with_min_compression_size(mut self, size: usize) -> Self {
         self.min_compression_size = size;
+        self
+    }
+
+    /// Set the maximum allowed decompressed size.
+    /// If None, no limit is enforced (used internally for testing).
+    pub fn with_max_decompressed_size(mut self, size: Option<usize>) -> Self {
+        self.max_decompressed_size = size;
         self
     }
 
@@ -388,13 +428,14 @@ impl CompressionManager {
             // If the data was compressed with our configured backend, use it
             // This respects the client's compression configuration
             let result = if backend_id == self.backend.backend_id() {
-                self.backend.decompress(value)
+                self.backend
+                    .decompress(value, self.config.max_decompressed_size)
             } else {
                 // Otherwise, use a static backend for decompression
                 // Static backends are shared and don't allocate on each call
                 // Return error if backend is not supported
                 let backend = get_backend_for_decompression(backend_id)?;
-                backend.decompress(value)
+                backend.decompress(value, self.config.max_decompressed_size)
             };
 
             // Update telemetry on successful decompression
@@ -472,7 +513,7 @@ pub mod zstd_backend {
             Ok(result)
         }
 
-        fn decompress(&self, data: &[u8]) -> CompressionResult<Vec<u8>> {
+        fn decompress(&self, data: &[u8], max_size: Option<usize>) -> CompressionResult<Vec<u8>> {
             if !self.is_compressed(data) {
                 return Err(CompressionError::decompression_failed(
                     self.backend_name(),
@@ -483,15 +524,64 @@ pub mod zstd_backend {
 
             let compressed_data = &data[HEADER_SIZE..];
 
-            let decompressed_data = zstd::decode_all(compressed_data).map_err(|e| {
-                CompressionError::decompression_failed(
-                    self.backend_name(),
-                    data.len(),
-                    e.to_string(),
-                )
-            })?;
+            // Use streaming decompression with size limit to prevent decompression bombs
+            if let Some(max) = max_size {
+                use std::io::Read;
+                let mut decoder = zstd::Decoder::new(compressed_data).map_err(|e| {
+                    CompressionError::decompression_failed(
+                        self.backend_name(),
+                        data.len(),
+                        e.to_string(),
+                    )
+                })?;
 
-            Ok(decompressed_data)
+                // Read with a size limit
+                let mut decompressed = Vec::new();
+                let mut buffer = [0u8; 8192];
+                let mut total_read = 0usize;
+
+                loop {
+                    let bytes_read = decoder.read(&mut buffer).map_err(|e| {
+                        CompressionError::decompression_failed(
+                            self.backend_name(),
+                            data.len(),
+                            e.to_string(),
+                        )
+                    })?;
+
+                    if bytes_read == 0 {
+                        break;
+                    }
+
+                    total_read += bytes_read;
+                    if total_read > max {
+                        return Err(CompressionError::decompression_failed(
+                            self.backend_name(),
+                            data.len(),
+                            format!(
+                                "decompressed size exceeds maximum allowed size of {} bytes. \
+                                To handle larger values, increase 'max_decompressed_size' in your CompressionConfiguration.",
+                                max
+                            ),
+                        ));
+                    }
+
+                    decompressed.extend_from_slice(&buffer[..bytes_read]);
+                }
+
+                Ok(decompressed)
+            } else {
+                // No size limit - use the simpler decode_all
+                let decompressed_data = zstd::decode_all(compressed_data).map_err(|e| {
+                    CompressionError::decompression_failed(
+                        self.backend_name(),
+                        data.len(),
+                        e.to_string(),
+                    )
+                })?;
+
+                Ok(decompressed_data)
+            }
         }
 
         fn is_compressed(&self, data: &[u8]) -> bool {
@@ -614,7 +704,7 @@ pub mod lz4_backend {
             Ok(result)
         }
 
-        fn decompress(&self, data: &[u8]) -> CompressionResult<Vec<u8>> {
+        fn decompress(&self, data: &[u8], max_size: Option<usize>) -> CompressionResult<Vec<u8>> {
             if !self.is_compressed(data) {
                 return Err(CompressionError::decompression_failed(
                     self.backend_name(),
@@ -637,6 +727,22 @@ pub mod lz4_backend {
             let original_size_u32 =
                 u32::from_le_bytes([size_bytes[0], size_bytes[1], size_bytes[2], size_bytes[3]]);
             let compressed_block = &compressed_data[4..];
+
+            // Validate size against max_decompressed_size BEFORE allocation
+            // This prevents decompression bombs where a malicious header claims a huge size
+            if let Some(max) = max_size
+                && original_size_u32 as usize > max
+            {
+                return Err(CompressionError::decompression_failed(
+                    self.backend_name(),
+                    data.len(),
+                    format!(
+                        "claimed decompressed size ({} bytes) exceeds maximum allowed size ({} bytes). \
+                        To handle larger values, increase 'max_decompressed_size' in your CompressionConfiguration.",
+                        original_size_u32, max
+                    ),
+                ));
+            }
 
             // LZ4 block decompression requires knowing the uncompressed size
             // The API uses i32, so we must reject sizes that don't fit
@@ -710,6 +816,14 @@ pub fn process_command_args_for_compression(
         return Ok(());
     }
 
+    // Check if the command is incompatible with compression
+    if let Some(reason) = request_type.compression_incompatibility_reason() {
+        return Err(CompressionError::incompatible_command(
+            request_type.command_name().unwrap_or("unknown"),
+            reason,
+        ));
+    }
+
     let behavior = request_type.compression_behavior();
     if behavior != CommandCompressionBehavior::CompressValues {
         return Ok(());
@@ -723,6 +837,31 @@ pub fn process_command_args_for_compression(
         RequestType::SetNX => compress_single_value_command(args, manager, 1),
         _ => Ok(()),
     }
+}
+
+/// Validates that a command is compatible with compression.
+/// Returns an error if the command is incompatible with compression when compression is enabled.
+pub fn validate_command_compression_compatibility(
+    request_type: RequestType,
+    compression_manager: Option<&CompressionManager>,
+) -> CompressionResult<()> {
+    let Some(manager) = compression_manager else {
+        return Ok(());
+    };
+
+    if !manager.is_enabled() {
+        return Ok(());
+    }
+
+    // Check if the command is incompatible with compression
+    if let Some(reason) = request_type.compression_incompatibility_reason() {
+        return Err(CompressionError::incompatible_command(
+            request_type.command_name().unwrap_or("unknown"),
+            reason,
+        ));
+    }
+
+    Ok(())
 }
 
 fn compress_single_value_command(
@@ -825,6 +964,75 @@ pub fn decompress_mget_response(
             Ok(Value::Array(decompressed_values?))
         }
         _ => Ok(value),
+    }
+}
+
+/// Decompress a batch (pipeline/transaction) response.
+///
+/// This function processes the response from a batch operation and decompresses
+/// individual response values using magic header detection. It recursively handles
+/// nested arrays (like MGET responses within a batch).
+///
+/// # Arguments
+/// * `response` - The batch response value (typically an array of responses)
+/// * `manager` - The compression manager to use for decompression
+///
+/// # Returns
+/// * `Ok(Value)` - The processed response with decompressed values
+/// * `Err(CompressionError)` - If critical decompression errors occur
+pub fn decompress_batch_response(
+    response: redis::Value,
+    manager: &CompressionManager,
+) -> CompressionResult<redis::Value> {
+    use redis::Value;
+
+    if !manager.is_enabled() {
+        return Ok(response);
+    }
+
+    match response {
+        Value::Array(responses) => {
+            let mut processed_responses = Vec::with_capacity(responses.len());
+            for resp in responses {
+                // Recursively process nested arrays (e.g., MGET responses within a batch)
+                // We take ownership of resp to avoid cloning
+                let processed = match resp {
+                    Value::Array(_) => decompress_batch_response(resp, manager)?,
+                    other => decompress_single_value_response(other, manager)?,
+                };
+                processed_responses.push(processed);
+            }
+            Ok(Value::Array(processed_responses))
+        }
+        // For non-array responses, try to decompress directly
+        other => decompress_single_value_response(other, manager),
+    }
+}
+
+/// Attempts to decompress a batch response if a compression manager is provided.
+///
+/// This is a convenience wrapper around `decompress_batch_response` that handles
+/// the `Option<CompressionManager>` case. If no manager is provided or decompression
+/// fails, returns the original value (or Nil if the value was consumed on error).
+///
+/// # Arguments
+/// * `value` - The batch response value to decompress
+/// * `manager` - Optional compression manager
+///
+/// # Returns
+/// The decompressed value, or the original value if no manager or decompression not needed
+pub fn try_decompress_batch_response(
+    value: redis::Value,
+    manager: Option<&CompressionManager>,
+) -> redis::Value {
+    match manager {
+        Some(mgr) => {
+            // This unwrap_or is currently unreachable since decompress_batch_response
+            // always returns Ok, but we keep it for future-proofing.
+            // Return Nil as fallback since we've consumed the original value.
+            decompress_batch_response(value, mgr).unwrap_or(redis::Value::Nil)
+        }
+        None => value,
     }
 }
 

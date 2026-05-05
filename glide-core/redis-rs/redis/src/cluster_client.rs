@@ -1,10 +1,11 @@
+use crate::cache::glide_cache::GlideCache;
 use crate::cluster_slotmap::ReadFromReplicaStrategy;
 #[cfg(feature = "cluster-async")]
 use crate::cluster_topology::{
     DEFAULT_SLOTS_REFRESH_MAX_JITTER_MILLI, DEFAULT_SLOTS_REFRESH_WAIT_DURATION,
 };
 use crate::connection::{ConnectionAddr, ConnectionInfo, IntoConnectionInfo};
-use crate::types::{ErrorKind, ProtocolVersion, RedisError, RedisResult};
+use crate::types::{AddressResolver, ErrorKind, ProtocolVersion, RedisError, RedisResult};
 use crate::{cluster, cluster::TlsMode};
 use crate::{PushInfo, RetryStrategy};
 use rand::Rng;
@@ -48,6 +49,8 @@ struct BuilderParams {
     refresh_topology_from_initial_nodes: bool,
     database_id: i64,
     tcp_nodelay: bool,
+    cache: Option<Arc<dyn GlideCache>>,
+    address_resolver: Option<Arc<dyn AddressResolver>>,
 }
 
 #[derive(Clone)]
@@ -151,6 +154,9 @@ pub struct ClusterParams {
     pub(crate) refresh_topology_from_initial_nodes: bool,
     pub(crate) database_id: i64,
     pub(crate) tcp_nodelay: bool,
+    pub(crate) cache: Option<Arc<dyn GlideCache>>,
+    /// Optional callback for resolving addresses before connection.
+    pub(crate) address_resolver: Option<Arc<dyn AddressResolver>>,
 }
 
 impl ClusterParams {
@@ -183,6 +189,8 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
             database_id: value.database_id,
             tcp_nodelay: value.tcp_nodelay,
+            cache: value.cache,
+            address_resolver: value.address_resolver,
         })
     }
 }
@@ -213,6 +221,8 @@ impl ClusterParams {
             refresh_topology_from_initial_nodes: false,
             database_id: 0,
             tcp_nodelay: false,
+            cache: None,
+            address_resolver: None,
         }
     }
 }
@@ -536,6 +546,16 @@ impl ClusterClientBuilder {
         self
     }
 
+    /// Sets an address resolver callback for resolving node addresses.
+    ///
+    /// When set, the resolver will be called to resolve host:port pairs
+    /// before establishing connections to cluster nodes. This allows custom
+    /// DNS resolution or address translation logic.
+    pub fn address_resolver(mut self, resolver: Arc<dyn AddressResolver>) -> ClusterClientBuilder {
+        self.builder_params.address_resolver = Some(resolver);
+        self
+    }
+
     /// Enables timing out on slow connection time.
     ///
     /// If enabled, the cluster will only wait the given time on each connection attempt to each node.
@@ -564,6 +584,12 @@ impl ClusterClientBuilder {
     /// Most cluster configurations only support database 0.
     pub fn database_id(mut self, database_id: i64) -> ClusterClientBuilder {
         self.builder_params.database_id = database_id;
+        self
+    }
+
+    /// Sets the cache for the new ClusterClient.
+    pub fn cache(mut self, cache: Option<Arc<dyn GlideCache>>) -> ClusterClientBuilder {
+        self.builder_params.cache = cache;
         self
     }
 

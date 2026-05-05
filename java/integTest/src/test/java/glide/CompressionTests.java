@@ -5,18 +5,24 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.configuration.CompressionBackend;
 import glide.api.models.configuration.CompressionConfiguration;
 import glide.api.models.exceptions.ConfigurationError;
+import glide.api.models.exceptions.RequestException;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -316,5 +322,1018 @@ public class CompressionTests {
         assertEquals(CompressionBackend.LZ4, config.getBackend());
         assertEquals(5, (int) config.getCompressionLevel());
         assertEquals(128, config.getMinCompressionSize());
+    }
+
+    // ============================================================================
+    // Supported Commands Tests
+    // ============================================================================
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_mset_mget(BaseClient client) {
+        try {
+            String key1 = randomKey("{mset_test}_1");
+            String key2 = randomKey("{mset_test}_2");
+            String key3 = randomKey("{mset_test}_3");
+            String value = generateCompressibleText(1024);
+
+            long before = getStat(client, "total_values_compressed");
+
+            // MSET should compress values
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value);
+            keyValueMap.put(key2, value);
+            keyValueMap.put(key3, value);
+            assertEquals(OK, client.mset(keyValueMap).get());
+
+            assertTrue(
+                    getStat(client, "total_values_compressed") >= before + 3,
+                    "MSET should compress all values");
+
+            // MGET should decompress values
+            String[] retrieved = client.mget(new String[] {key1, key2, key3}).get();
+            assertEquals(3, retrieved.length);
+            assertEquals(value, retrieved[0]);
+            assertEquals(value, retrieved[1]);
+            assertEquals(value, retrieved[2]);
+
+            client.del(new String[] {key1, key2, key3}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_msetnx(BaseClient client) {
+        try {
+            String key1 = randomKey("{msetnx_test}_1");
+            String key2 = randomKey("{msetnx_test}_2");
+            String value = generateCompressibleText(1024);
+
+            long before = getStat(client, "total_values_compressed");
+
+            // MSETNX should compress values
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value);
+            keyValueMap.put(key2, value);
+            assertTrue(client.msetnx(keyValueMap).get(), "MSETNX should succeed for new keys");
+
+            assertTrue(
+                    getStat(client, "total_values_compressed") >= before + 2,
+                    "MSETNX should compress all values");
+
+            // Verify values can be retrieved and decompressed
+            assertEquals(value, client.get(key1).get());
+            assertEquals(value, client.get(key2).get());
+
+            client.del(new String[] {key1, key2}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_getex(BaseClient client) {
+        try {
+            String key = randomKey("getex_test");
+            String value = generateCompressibleText(1024);
+
+            // Set value (should be compressed)
+            long compressBefore = getStat(client, "total_values_compressed");
+            assertEquals(OK, client.set(key, value).get());
+            assertTrue(
+                    getStat(client, "total_values_compressed") > compressBefore, "SET should compress value");
+
+            // GETEX should decompress value
+            long decompressBefore = getStat(client, "total_values_decompressed");
+            String retrieved = client.getex(key, GetExOptions.Seconds(10L)).get();
+            assertEquals(value, retrieved);
+            assertTrue(
+                    getStat(client, "total_values_decompressed") > decompressBefore,
+                    "GETEX should decompress value");
+
+            // Verify TTL was set
+            long ttl = client.ttl(key).get();
+            assertTrue(ttl > 0 && ttl <= 10, "TTL should be set");
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_getdel(BaseClient client) {
+        try {
+            String key = randomKey("getdel_test");
+            String value = generateCompressibleText(1024);
+
+            // Set value (should be compressed)
+            long compressBefore = getStat(client, "total_values_compressed");
+            assertEquals(OK, client.set(key, value).get());
+            assertTrue(
+                    getStat(client, "total_values_compressed") > compressBefore, "SET should compress value");
+
+            // GETDEL should decompress value and delete key
+            long decompressBefore = getStat(client, "total_values_decompressed");
+            String retrieved = client.getdel(key).get();
+            assertEquals(value, retrieved);
+            assertTrue(
+                    getStat(client, "total_values_decompressed") > decompressBefore,
+                    "GETDEL should decompress value");
+
+            // Verify key was deleted
+            assertEquals(null, client.get(key).get());
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_setex_via_custom_command() {
+        try (GlideClient client = compressionClient()) {
+            String key = randomKey("setex_test");
+            String value = generateCompressibleText(1024);
+
+            long before = getStat(client, "total_values_compressed");
+
+            // SETEX via custom command should compress value
+            assertEquals(OK, client.customCommand(new String[] {"SETEX", key, "10", value}).get());
+
+            assertTrue(
+                    getStat(client, "total_values_compressed") > before, "SETEX should compress value");
+
+            // Verify value can be retrieved and decompressed
+            assertEquals(value, client.get(key).get());
+
+            // Verify TTL was set
+            long ttl = client.ttl(key).get();
+            assertTrue(ttl > 0 && ttl <= 10, "TTL should be set");
+
+            client.del(new String[] {key}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_psetex_via_custom_command() {
+        try (GlideClient client = compressionClient()) {
+            String key = randomKey("psetex_test");
+            String value = generateCompressibleText(1024);
+
+            long before = getStat(client, "total_values_compressed");
+
+            // PSETEX via custom command should compress value
+            assertEquals(OK, client.customCommand(new String[] {"PSETEX", key, "10000", value}).get());
+
+            assertTrue(
+                    getStat(client, "total_values_compressed") > before, "PSETEX should compress value");
+
+            // Verify value can be retrieved and decompressed
+            assertEquals(value, client.get(key).get());
+
+            client.del(new String[] {key}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_setnx_via_custom_command() {
+        try (GlideClient client = compressionClient()) {
+            String key = randomKey("setnx_test");
+            String value = generateCompressibleText(1024);
+
+            // Ensure key doesn't exist
+            client.del(new String[] {key}).get();
+
+            long before = getStat(client, "total_values_compressed");
+
+            // SETNX via custom command should compress value
+            assertEquals(1L, client.customCommand(new String[] {"SETNX", key, value}).get());
+
+            assertTrue(
+                    getStat(client, "total_values_compressed") > before, "SETNX should compress value");
+
+            // Verify value can be retrieved and decompressed
+            assertEquals(value, client.get(key).get());
+
+            client.del(new String[] {key}).get();
+        }
+    }
+
+    // ============================================================================
+    // Incompatible Commands Tests
+    // ============================================================================
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_append_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("append_test");
+            assertEquals(OK, client.set(key, "initial_value").get());
+
+            // APPEND should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.append(key, "_appended").get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_getrange_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("getrange_test");
+            assertEquals(OK, client.set(key, generateCompressibleText(1024)).get());
+
+            // GETRANGE should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.getrange(key, 0, 10).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_setrange_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("setrange_test");
+            assertEquals(OK, client.set(key, generateCompressibleText(1024)).get());
+
+            // SETRANGE should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(
+                            ExecutionException.class, () -> client.setrange(key, 5, "replacement").get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_strlen_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("strlen_test");
+            assertEquals(OK, client.set(key, generateCompressibleText(1024)).get());
+
+            // STRLEN should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.strlen(key).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_incr_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("incr_test");
+            assertEquals(OK, client.set(key, "100").get());
+
+            // INCR should fail with compression enabled
+            ExecutionException ex = assertThrows(ExecutionException.class, () -> client.incr(key).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_incrby_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("incrby_test");
+            assertEquals(OK, client.set(key, "100").get());
+
+            // INCRBY should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.incrBy(key, 10).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_incrbyfloat_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("incrbyfloat_test");
+            assertEquals(OK, client.set(key, "100.5").get());
+
+            // INCRBYFLOAT should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.incrByFloat(key, 0.5).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_decr_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("decr_test");
+            assertEquals(OK, client.set(key, "100").get());
+
+            // DECR should fail with compression enabled
+            ExecutionException ex = assertThrows(ExecutionException.class, () -> client.decr(key).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_decrby_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("decrby_test");
+            assertEquals(OK, client.set(key, "100").get());
+
+            // DECRBY should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.decrBy(key, 10).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_getbit_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("getbit_test");
+            assertEquals(OK, client.set(key, "test_value").get());
+
+            // GETBIT should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.getbit(key, 0).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_setbit_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("setbit_test");
+            assertEquals(OK, client.set(key, "test_value").get());
+
+            // SETBIT should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.setbit(key, 0, 1).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_bitcount_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("bitcount_test");
+            assertEquals(OK, client.set(key, "test_value").get());
+
+            // BITCOUNT should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.bitcount(key).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @MethodSource("getCompressionClients")
+    public void compression_bitpos_incompatible(BaseClient client) {
+        try {
+            String key = randomKey("bitpos_test");
+            assertEquals(OK, client.set(key, "test_value").get());
+
+            // BITPOS should fail with compression enabled
+            ExecutionException ex =
+                    assertThrows(ExecutionException.class, () -> client.bitpos(key, 1).get());
+            assertTrue(ex.getCause() instanceof RequestException, "Should throw RequestException");
+            String errorMsg = ex.getCause().getMessage().toLowerCase();
+            assertTrue(
+                    errorMsg.contains("incompatible") || errorMsg.contains("compression"),
+                    "Error should mention incompatibility: " + errorMsg);
+
+            client.del(new String[] {key}).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_incompatible_commands_work_without_compression() {
+        try (GlideClient client = GlideClient.createClient(commonClientConfig().build()).get()) {
+            String key = randomKey("no_compression_test");
+
+            // Set initial value
+            assertEquals(OK, client.set(key, "100").get());
+
+            // All these commands should work without compression
+            // INCR
+            assertEquals(101L, client.incr(key).get());
+
+            // INCRBY
+            assertEquals(111L, client.incrBy(key, 10).get());
+
+            // DECR
+            assertEquals(110L, client.decr(key).get());
+
+            // DECRBY
+            assertEquals(100L, client.decrBy(key, 10).get());
+
+            // STRLEN
+            assertEquals(OK, client.set(key, "hello").get());
+            assertEquals(5L, client.strlen(key).get());
+
+            // APPEND
+            assertEquals(11L, client.append(key, " world").get());
+
+            // GETRANGE
+            assertEquals("hello", client.getrange(key, 0, 4).get());
+
+            // SETRANGE
+            assertEquals(11L, client.setrange(key, 6, "WORLD").get());
+
+            // GETBIT
+            assertEquals(OK, client.set(key, "\u0000").get());
+            assertEquals(0L, client.getbit(key, 0).get());
+
+            // SETBIT
+            assertEquals(0L, client.setbit(key, 0, 1).get());
+
+            // BITCOUNT
+            assertTrue(client.bitcount(key).get() >= 0);
+
+            client.del(new String[] {key}).get();
+        }
+    }
+
+    // ============================================================================
+    // Batch/Pipeline Compression Tests
+    // ============================================================================
+
+    @SneakyThrows
+    @Test
+    public void compression_batch_set_get() {
+        try (GlideClient client = compressionClient()) {
+            int numKeys = 100;
+            String keyPrefix = randomKey("batch_test");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with SET commands (non-atomic pipeline)
+            glide.api.models.Batch batch = new glide.api.models.Batch(false);
+            String[] keys = new String[numKeys];
+            for (int i = 0; i < numKeys; i++) {
+                keys[i] = keyPrefix + "_" + i;
+                batch.set(keys[i], value);
+            }
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(numKeys, results.length);
+            for (Object result : results) {
+                assertEquals(OK, result);
+            }
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= numKeys,
+                    "All " + numKeys + " values should be compressed in batch, got " + compressedCount);
+
+            // Build batch with GET commands
+            glide.api.models.Batch getBatch = new glide.api.models.Batch(false);
+            for (String key : keys) {
+                getBatch.get(key);
+            }
+
+            // Execute GET batch
+            Object[] getResults = client.exec(getBatch, true).get();
+            assertEquals(numKeys, getResults.length);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= numKeys,
+                    "All " + numKeys + " values should be decompressed in batch, got " + decompressedCount);
+
+            // Verify all values are correct
+            for (Object result : getResults) {
+                assertEquals(value, result);
+            }
+
+            // Cleanup
+            client.del(keys).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_batch_mixed_commands() {
+        try (GlideClient client = compressionClient()) {
+            String key1 = randomKey("batch_mixed_1");
+            String key2 = randomKey("batch_mixed_2");
+            String key3 = randomKey("batch_mixed_3");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with mixed SET and GET commands (non-atomic pipeline)
+            glide.api.models.Batch batch = new glide.api.models.Batch(false);
+            batch.set(key1, value);
+            batch.set(key2, value);
+            batch.set(key3, value);
+            batch.get(key1);
+            batch.get(key2);
+            batch.get(key3);
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(6, results.length);
+
+            // Verify SET results
+            assertEquals(OK, results[0]);
+            assertEquals(OK, results[1]);
+            assertEquals(OK, results[2]);
+
+            // Verify GET results (decompressed)
+            assertEquals(value, results[3]);
+            assertEquals(value, results[4]);
+            assertEquals(value, results[5]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3, "All 3 SET values should be compressed, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "All 3 GET values should be decompressed, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_cluster_batch_set_get() {
+        try (GlideClusterClient client = compressionClusterClient()) {
+            int numKeys = 50;
+            String keyPrefix = randomKey("{cluster_batch_test}");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with SET commands (non-atomic pipeline, using hash tag for same slot)
+            glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(false);
+            String[] keys = new String[numKeys];
+            for (int i = 0; i < numKeys; i++) {
+                keys[i] = keyPrefix + "_" + i;
+                batch.set(keys[i], value);
+            }
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(numKeys, results.length);
+            for (Object result : results) {
+                assertEquals(OK, result);
+            }
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= numKeys,
+                    "Cluster: All "
+                            + numKeys
+                            + " values should be compressed in batch, got "
+                            + compressedCount);
+
+            // Build batch with GET commands
+            glide.api.models.ClusterBatch getBatch = new glide.api.models.ClusterBatch(false);
+            for (String key : keys) {
+                getBatch.get(key);
+            }
+
+            // Execute GET batch
+            Object[] getResults = client.exec(getBatch, true).get();
+            assertEquals(numKeys, getResults.length);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= numKeys,
+                    "Cluster: All "
+                            + numKeys
+                            + " values should be decompressed in batch, got "
+                            + decompressedCount);
+
+            // Verify all values are correct
+            for (Object result : getResults) {
+                assertEquals(value, result);
+            }
+
+            // Cleanup
+            client.del(keys).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_transaction_set_get() {
+        try (GlideClient client = compressionClient()) {
+            String key1 = randomKey("tx_test_1");
+            String key2 = randomKey("tx_test_2");
+            String key3 = randomKey("tx_test_3");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build atomic batch (transaction) with SET commands
+            glide.api.models.Batch tx = new glide.api.models.Batch(true);
+            tx.set(key1, value);
+            tx.set(key2, value);
+            tx.set(key3, value);
+            tx.get(key1);
+            tx.get(key2);
+            tx.get(key3);
+
+            // Execute transaction
+            Object[] results = client.exec(tx, true).get();
+            assertEquals(6, results.length);
+
+            // Verify SET results
+            assertEquals(OK, results[0]);
+            assertEquals(OK, results[1]);
+            assertEquals(OK, results[2]);
+
+            // Verify GET results (decompressed)
+            assertEquals(value, results[3]);
+            assertEquals(value, results[4]);
+            assertEquals(value, results[5]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3,
+                    "Transaction: All 3 SET values should be compressed, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Transaction: All 3 GET values should be decompressed, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_batch_mset_mget() {
+        try (GlideClient client = compressionClient()) {
+            String keyPrefix = randomKey("{batch_mset_mget}");
+            String key1 = keyPrefix + "_1";
+            String key2 = keyPrefix + "_2";
+            String key3 = keyPrefix + "_3";
+            String value1 = generateCompressibleText(1024);
+            String value2 = generateCompressibleText(1024);
+            String value3 = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with MSET and MGET commands
+            glide.api.models.Batch batch = new glide.api.models.Batch(false);
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value1);
+            keyValueMap.put(key2, value2);
+            keyValueMap.put(key3, value3);
+            batch.mset(keyValueMap);
+            batch.mget(new String[] {key1, key2, key3});
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(2, results.length);
+
+            // Verify MSET result
+            assertEquals(OK, results[0]);
+
+            // Verify MGET results (decompressed)
+            Object[] mgetResults = (Object[]) results[1];
+            assertEquals(3, mgetResults.length);
+            assertEquals(value1, mgetResults[0]);
+            assertEquals(value2, mgetResults[1]);
+            assertEquals(value3, mgetResults[2]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3, "Batch MSET should compress all 3 values, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Batch MGET should decompress all 3 values, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_cluster_batch_mset_mget() {
+        try (GlideClusterClient client = compressionClusterClient()) {
+            String keyPrefix = randomKey("{cluster_batch_mset_mget}");
+            String key1 = keyPrefix + "_1";
+            String key2 = keyPrefix + "_2";
+            String key3 = keyPrefix + "_3";
+            String value1 = generateCompressibleText(1024);
+            String value2 = generateCompressibleText(1024);
+            String value3 = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build cluster batch with MSET and MGET commands (using hash tag for same slot)
+            glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(false);
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value1);
+            keyValueMap.put(key2, value2);
+            keyValueMap.put(key3, value3);
+            batch.mset(keyValueMap);
+            batch.mget(new String[] {key1, key2, key3});
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(2, results.length);
+
+            // Verify MSET result
+            assertEquals(OK, results[0]);
+
+            // Verify MGET results (decompressed)
+            Object[] mgetResults = (Object[]) results[1];
+            assertEquals(3, mgetResults.length);
+            assertEquals(value1, mgetResults[0]);
+            assertEquals(value2, mgetResults[1]);
+            assertEquals(value3, mgetResults[2]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3,
+                    "Cluster batch MSET should compress all 3 values, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Cluster batch MGET should decompress all 3 values, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_transaction_mset_mget() {
+        try (GlideClient client = compressionClient()) {
+            String keyPrefix = randomKey("{tx_mset_mget}");
+            String key1 = keyPrefix + "_1";
+            String key2 = keyPrefix + "_2";
+            String key3 = keyPrefix + "_3";
+            String value1 = generateCompressibleText(1024);
+            String value2 = generateCompressibleText(1024);
+            String value3 = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build atomic batch (transaction) with MSET and MGET commands
+            glide.api.models.Batch tx = new glide.api.models.Batch(true);
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value1);
+            keyValueMap.put(key2, value2);
+            keyValueMap.put(key3, value3);
+            tx.mset(keyValueMap);
+            tx.mget(new String[] {key1, key2, key3});
+
+            // Execute transaction
+            Object[] results = client.exec(tx, true).get();
+            assertEquals(2, results.length);
+
+            // Verify MSET result
+            assertEquals(OK, results[0]);
+
+            // Verify MGET results (decompressed)
+            Object[] mgetResults = (Object[]) results[1];
+            assertEquals(3, mgetResults.length);
+            assertEquals(value1, mgetResults[0]);
+            assertEquals(value2, mgetResults[1]);
+            assertEquals(value3, mgetResults[2]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3,
+                    "Transaction MSET should compress all 3 values, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Transaction MGET should decompress all 3 values, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    // --- Max Decompressed Size Tests ---
+
+    @Test
+    public void test_compression_config_default_max_decompressed_size() {
+        CompressionConfiguration config = CompressionConfiguration.builder().build();
+        // Default is null (use Rust default of 512MB)
+        assertNull(config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_custom_max_decompressed_size() {
+        long customSize = 100L * 1024 * 1024; // 100MB
+        CompressionConfiguration config =
+                CompressionConfiguration.builder().maxDecompressedSize(customSize).build();
+        assertEquals(customSize, config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_null_max_decompressed_size_uses_rust_default() {
+        CompressionConfiguration config =
+                CompressionConfiguration.builder().maxDecompressedSize(null).build();
+        assertNull(config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_max_decompressed_size_zero_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(0L).build());
+    }
+
+    @Test
+    public void test_compression_config_max_decompressed_size_negative_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(-1L).build());
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_client_with_custom_max_decompressed_size() {
+        // Test that client can be created with custom max_decompressed_size
+        try (GlideClient client =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .compressionConfiguration(
+                                                CompressionConfiguration.builder()
+                                                        .enabled(true)
+                                                        .maxDecompressedSize(100L * 1024 * 1024) // 100MB
+                                                        .build())
+                                        .build())
+                        .get()) {
+            String key = randomKey("max_decomp_test");
+            String value = generateCompressibleText(200);
+
+            // Basic set/get should work
+            assertEquals(OK, client.set(key, value).get());
+            assertEquals(value, client.get(key).get());
+
+            // Cleanup
+            client.del(new String[] {key}).get();
+        }
     }
 }
