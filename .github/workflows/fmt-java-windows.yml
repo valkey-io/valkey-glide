@@ -1,0 +1,29 @@
+# Nightly full-matrix tests for the Java client on Windows hosts.
+# Isolated from fmt-java.yml because Windows runs are currently flakier than
+# other platforms. Uses java.yml with windows-only: true so the Windows test
+# logic lives in one place.
+# Flaky-test isolation work: see #4629.
+name: FMT Java Windows
+
+permissions:
+    contents: read
+    actions: write
+
+on:
+    # Nightly at 03:00 UTC.
+    schedule:
+        - cron: "0 3 * * *"
+    workflow_dispatch:
+
+concurrency:
+    group: fmt-java-windows-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    run-fmt-java-windows:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/java.yml
+        with:
+            windows-only: true
+        name: FMT - Java Windows
+        secrets: inherit

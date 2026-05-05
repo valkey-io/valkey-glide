@@ -9,21 +9,20 @@ import (
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/servermodules/glideft"
 )
 
-func ExampleClusterClient_FT_create() {
+func Example_clusterFtCreate() {
 	if !*vssTest {
 		// Requires a server with the search module loaded. Run with -vss-test to enable.
 		fmt.Println("true") // pass the test
 		return
 	}
 	var client *ClusterClient = getExampleClusterClient()
-
-	ft := client.FT()
 	ctx := context.Background()
 
 	// Create a vector search index on hash keys with prefix "doc:"
-	_, err := ft.Create(ctx, "my_index",
+	_, err := glideft.ClusterFtCreate(ctx, client, "my_index",
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -38,33 +37,31 @@ func ExampleClusterClient_FT_create() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	result, err := ft.List(ctx)
+	result, err := glideft.ClusterFtList(ctx, client)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(len(result) > 0)
 
-	ft.DropIndex(ctx, "my_index")
+	glideft.ClusterFtDropIndex(ctx, client, "my_index")
 
 	// Output:
 	// true
 }
 
-func ExampleClusterClient_FT_search() {
+func Example_clusterFtSearch() {
 	if !*vssTest {
 		// Requires a server with the search module loaded. Run with -vss-test to enable.
 		fmt.Println(1) // pass the test
 		return
 	}
 	var client *ClusterClient = getExampleClusterClient()
-
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{searchdoc}:"
 	index := "{searchdoc}:index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -84,33 +81,31 @@ func ExampleClusterClient_FT_search() {
 	// Allow index to sync
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "@score:[10 10]", nil)
+	result, err := glideft.ClusterFtSearch(ctx, client, index, "@score:[10 10]", nil)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.TotalResults)
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// Output:
 	// 1
 }
 
-func ExampleClusterClient_FT_aggregate() {
+func Example_clusterFtAggregate() {
 	if !*vssTest {
 		// Requires a server with the search module loaded. Run with -vss-test to enable.
 		fmt.Println(2) // pass the test
 		return
 	}
 	var client *ClusterClient = getExampleClusterClient()
-
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "{aggdoc}:"
 	index := "{aggdoc}:index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.ClusterFtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("score"),
 		},
@@ -130,7 +125,7 @@ func ExampleClusterClient_FT_aggregate() {
 	time.Sleep(time.Second)
 
 	// Aggregate with LOAD to retrieve field values for matching documents
-	rows, err := ft.Aggregate(ctx, index, "@score:[20 +inf]",
+	rows, err := glideft.ClusterFtAggregate(ctx, client, index, "@score:[20 +inf]",
 		&options.FtAggregateOptions{
 			LoadAll: true,
 		},
@@ -140,25 +135,23 @@ func ExampleClusterClient_FT_aggregate() {
 	}
 	fmt.Println(len(rows))
 
-	ft.DropIndex(ctx, index)
+	glideft.ClusterFtDropIndex(ctx, client, index)
 
 	// Output:
 	// 2
 }
 
-func ExampleClient_FT_create() {
+func Example_ftCreate() {
 	if !*vssTest {
 		// Requires a server with the search module loaded. Run with -vss-test to enable.
 		fmt.Println("true") // pass the test
 		return
 	}
 	var client *Client = getExampleClient()
-
-	ft := client.FT()
 	ctx := context.Background()
 
 	// Create a vector search index on hash keys with prefix "doc:"
-	_, err := ft.Create(ctx, "my_standalone_index",
+	_, err := glideft.FtCreate(ctx, client, "my_standalone_index",
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -173,33 +166,31 @@ func ExampleClient_FT_create() {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 
-	result, err := ft.List(ctx)
+	result, err := glideft.FtList(ctx, client)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(len(result) > 0)
 
-	ft.DropIndex(ctx, "my_standalone_index")
+	glideft.FtDropIndex(ctx, client, "my_standalone_index")
 
 	// Output:
 	// true
 }
 
-func ExampleClient_FT_search() {
+func Example_ftSearch() {
 	if !*vssTest {
 		// Requires a server with the search module loaded. Run with -vss-test to enable.
 		fmt.Println(1) // pass the test
 		return
 	}
 	var client *Client = getExampleClient()
-
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "searchdoc:"
 	index := "searchdoc:index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -219,33 +210,31 @@ func ExampleClient_FT_search() {
 	// Allow index to sync
 	time.Sleep(time.Second)
 
-	result, err := ft.Search(ctx, index, "@score:[10 10]", nil)
+	result, err := glideft.FtSearch(ctx, client, index, "@score:[10 10]", nil)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}
 	fmt.Println(result.TotalResults)
 
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// Output:
 	// 1
 }
 
-func ExampleClient_FT_aggregate() {
+func Example_ftAggregate() {
 	if !*vssTest {
 		// Requires a server with the search module loaded. Run with -vss-test to enable.
 		fmt.Println(2) // pass the test
 		return
 	}
 	var client *Client = getExampleClient()
-
-	ft := client.FT()
 	ctx := context.Background()
 
 	prefix := "aggdoc:"
 	index := "aggdoc:index"
 
-	_, err := ft.Create(ctx, index,
+	_, err := glideft.FtCreate(ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("score"),
 		},
@@ -265,7 +254,7 @@ func ExampleClient_FT_aggregate() {
 	time.Sleep(time.Second)
 
 	// Aggregate with LOAD to retrieve field values for matching documents
-	rows, err := ft.Aggregate(ctx, index, "@score:[20 +inf]",
+	rows, err := glideft.FtAggregate(ctx, client, index, "@score:[20 +inf]",
 		&options.FtAggregateOptions{
 			LoadAll: true,
 		},
@@ -275,7 +264,7 @@ func ExampleClient_FT_aggregate() {
 	}
 	fmt.Println(len(rows))
 
-	ft.DropIndex(ctx, index)
+	glideft.FtDropIndex(ctx, client, index)
 
 	// Output:
 	// 2
