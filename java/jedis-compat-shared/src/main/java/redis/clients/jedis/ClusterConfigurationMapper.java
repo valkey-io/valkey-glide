@@ -28,11 +28,14 @@ public class ClusterConfigurationMapper {
      *
      * @param nodes the cluster nodes
      * @param jedisConfig the Jedis configuration
+     * @param jedis5CompatibilityLayer when {@code true}, honor {@link
+     *     JedisClientConfig#getRedisProtocol()} when mapping; when {@code false} (Jedis 4.x layer),
+     *     always use RESP2.
      * @return the GLIDE cluster configuration
      * @throws JedisException if configuration is invalid for cluster mode
      */
     public static GlideClusterClientConfiguration mapToGlideClusterConfig(
-            Set<HostAndPort> nodes, JedisClientConfig jedisConfig) {
+            Set<HostAndPort> nodes, JedisClientConfig jedisConfig, boolean jedis5CompatibilityLayer) {
 
         // Check for unsupported features early
         // This feature will be added later:
@@ -76,7 +79,7 @@ public class ClusterConfigurationMapper {
         mapClusterNodes(nodes, builder);
 
         // Map basic connection settings
-        mapConnectionSettings(jedisConfig, builder);
+        mapConnectionSettings(jedisConfig, builder, jedis5CompatibilityLayer);
 
         // Map authentication and SSL/TLS settings
         mapCredentialsAndSsl(jedisConfig, builder);
@@ -97,7 +100,8 @@ public class ClusterConfigurationMapper {
      * @return the GLIDE cluster configuration with default Jedis client config
      */
     public static GlideClusterClientConfiguration mapToGlideClusterConfig(Set<HostAndPort> nodes) {
-        return mapToGlideClusterConfig(nodes, DefaultJedisClientConfig.builder().build());
+        return mapToGlideClusterConfig(
+                nodes, DefaultJedisClientConfig.builder().build(), /* jedis5CompatibilityLayer */ true);
     }
 
     /** Maps cluster nodes to GLIDE configuration. */
@@ -128,7 +132,8 @@ public class ClusterConfigurationMapper {
     /** Maps basic connection settings from Jedis to GLIDE cluster configuration. */
     private static void mapConnectionSettings(
             JedisClientConfig jedisConfig,
-            GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder builder) {
+            GlideClusterClientConfiguration.GlideClusterClientConfigurationBuilder builder,
+            boolean jedis5CompatibilityLayer) {
 
         // Client name
         if (jedisConfig.getClientName() != null) {
@@ -141,8 +146,18 @@ public class ClusterConfigurationMapper {
             builder.requestTimeout(timeout);
         }
 
-        // Protocol version (Jedis 4.x always uses RESP2)
-        builder.protocol(ProtocolVersion.RESP2);
+        // Protocol version
+        if (jedis5CompatibilityLayer) {
+            if (jedisConfig.getRedisProtocol() != null) {
+                builder.protocol(jedisConfig.getRedisProtocol().toGlideProtocol());
+            } else {
+                // Ensure Jedis default behavior (RESP2) is maintained
+                builder.protocol(ProtocolVersion.RESP2);
+            }
+        } else {
+            // Jedis 4.x always uses RESP2
+            builder.protocol(ProtocolVersion.RESP2);
+        }
     }
 
     /** Maps authentication and SSL/TLS settings with comprehensive certificate conversion. */
@@ -361,7 +376,7 @@ public class ClusterConfigurationMapper {
      * @return GLIDE cluster configuration
      */
     public static GlideClusterClientConfiguration createDefaultConfig(
-            Set<HostAndPort> nodes, boolean useSsl) {
+            Set<HostAndPort> nodes, boolean useSsl, boolean jedis5CompatibilityLayer) {
 
         if (nodes == null || nodes.isEmpty()) {
             throw new JedisException("Cluster nodes cannot be null or empty");
@@ -374,20 +389,7 @@ public class ClusterConfigurationMapper {
                         .socketTimeoutMillis(DefaultJedisClientConfig.DEFAULT_TIMEOUT_MILLIS)
                         .build();
 
-        return mapToGlideClusterConfig(nodes, config);
-    }
-
-    /**
-     * Create a cluster connection provider for UnifiedJedis cluster mode.
-     *
-     * @param nodes the cluster nodes
-     * @param clientConfig the client configuration
-     * @param poolConfig the pool configuration (ignored in GLIDE)
-     * @return a cluster connection provider
-     */
-    public static ClusterConnectionProvider createClusterConnectionProvider(
-            Set<HostAndPort> nodes, JedisClientConfig clientConfig, Object poolConfig) {
-        return new ClusterConnectionProvider(nodes, clientConfig);
+        return mapToGlideClusterConfig(nodes, config, jedis5CompatibilityLayer);
     }
 
     // ===== SUPPORTING CLASSES =====

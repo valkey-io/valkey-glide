@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Connection provider for Valkey Cluster. This is part of the Jedis compatibility layer. */
-public class ClusterConnectionProvider implements ConnectionProvider {
+public class ClusterConnectionProvider implements ClusterNodesConnectionProvider {
 
     private final Set<HostAndPort> nodes;
     private final JedisClientConfig clientConfig;

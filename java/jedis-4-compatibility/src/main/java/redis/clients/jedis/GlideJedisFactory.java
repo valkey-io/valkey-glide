@@ -51,7 +51,7 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
         try {
             // Map Jedis configuration to GLIDE configuration
             GlideClientConfiguration glideConfig =
-                    ConfigurationMapper.mapToGlideConfig(host, port, clientConfig);
+                    ConfigurationMapper.mapToGlideConfig(host, port, clientConfig, false);
 
             // Create GLIDE client
             GlideClient glideClient = GlideClient.createClient(glideConfig).get();

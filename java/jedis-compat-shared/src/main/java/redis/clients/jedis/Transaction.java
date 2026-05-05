@@ -34,7 +34,7 @@ import redis.clients.jedis.exceptions.JedisException;
  */
 public class Transaction implements Closeable {
     private final Queue<Response<?>> pipelinedResponses = new LinkedList<>();
-    private final Jedis jedis;
+    private final AbstractGlideJedis jedis;
     private Batch batch;
     private boolean inMulti = false;
     private boolean inWatch = false;
@@ -43,11 +43,11 @@ public class Transaction implements Closeable {
     /**
      * Creates a new transaction associated with a Jedis instance.
      *
-     * <p>This constructor is called internally by {@link Jedis#multi()}.
+     * <p>This constructor is called internally by {@link AbstractGlideJedis#multi()}.
      *
-     * @param jedis the Jedis instance to associate with this transaction
+     * @param jedis the client instance to associate with this transaction
      */
-    public Transaction(Jedis jedis) {
+    public Transaction(AbstractGlideJedis jedis) {
         this.jedis = jedis;
         this.batch = new Batch(true); // true = atomic (transaction)
         this.inMulti = true;
@@ -184,6 +184,7 @@ public class Transaction implements Closeable {
             throw new JedisConnectionException("Transaction interrupted", e);
         } catch (Exception e) {
             broken = true;
+            jedis.markBrokenIfPooledConnectionFailure(e);
             throw new JedisException("Failed to execute transaction", e);
         } finally {
             inMulti = false;

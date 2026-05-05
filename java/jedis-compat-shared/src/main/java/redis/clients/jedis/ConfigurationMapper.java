@@ -29,11 +29,14 @@ public class ConfigurationMapper {
      * @param host the server host
      * @param port the server port
      * @param jedisConfig the Jedis configuration
+     * @param jedis5CompatibilityLayer when {@code true}, honor {@link
+     *     JedisClientConfig#getRedisProtocol()} when mapping to GLIDE; when {@code false} (Jedis 4.x
+     *     layer), always use RESP2.
      * @return corresponding GLIDE configuration
      * @throws JedisConfigurationException if configuration cannot be converted
      */
     public static GlideClientConfiguration mapToGlideConfig(
-            String host, int port, JedisClientConfig jedisConfig) {
+            String host, int port, JedisClientConfig jedisConfig, boolean jedis5CompatibilityLayer) {
 
         // Check for unsupported features early
         if (jedisConfig.getAuthXManager() != null) {
@@ -45,7 +48,7 @@ public class ConfigurationMapper {
                 GlideClientConfiguration.builder();
 
         // Map basic connection settings
-        mapConnectionSettings(jedisConfig, host, port, builder);
+        mapConnectionSettings(jedisConfig, host, port, builder, jedis5CompatibilityLayer);
 
         // Map authentication and SSL/TLS settings
         mapCredentialsAndSsl(jedisConfig, builder);
@@ -64,7 +67,8 @@ public class ConfigurationMapper {
             JedisClientConfig jedisConfig,
             String host,
             int port,
-            GlideClientConfiguration.GlideClientConfigurationBuilder builder) {
+            GlideClientConfiguration.GlideClientConfigurationBuilder builder,
+            boolean jedis5CompatibilityLayer) {
 
         // Address mapping
         builder.address(NodeAddress.builder().host(host).port(port).build());
@@ -89,8 +93,18 @@ public class ConfigurationMapper {
             builder.requestTimeout(timeout);
         }
 
-        // Protocol version (Jedis 4.x always uses RESP2)
-        builder.protocol(ProtocolVersion.RESP2);
+        // Protocol version
+        if (jedis5CompatibilityLayer) {
+            if (jedisConfig.getRedisProtocol() != null) {
+                builder.protocol(jedisConfig.getRedisProtocol().toGlideProtocol());
+            } else {
+                // Ensure Jedis default behavior (RESP2) is maintained
+                builder.protocol(ProtocolVersion.RESP2);
+            }
+        } else {
+            // Jedis 4.x always uses RESP2
+            builder.protocol(ProtocolVersion.RESP2);
+        }
     }
 
     /** Maps authentication and SSL/TLS settings with comprehensive certificate conversion. */
