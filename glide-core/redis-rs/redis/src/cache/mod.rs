@@ -215,7 +215,8 @@ pub fn query_cache_metric(cache_id: &str, metric: CacheMetricType) -> RedisResul
                 "Client-side caching is not enabled",
             ))
         })?;
-    // Drop the read lock before reading metrics
+    // Safe to drop: Weak::upgrade() returned an Arc, so the cache is kept alive
+    // by our strong reference regardless of the registry state.
     drop(registry);
 
     match metric {
