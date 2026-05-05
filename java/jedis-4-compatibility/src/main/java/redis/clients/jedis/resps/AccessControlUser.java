@@ -21,8 +21,7 @@ public class AccessControlUser {
     }
 
     public List<String> getFlags() {
-        return Collections.unmodifiableList(
-                flags); // ✅ Return unmodifiable view to prevent external modification
+        return Collections.unmodifiableList(flags); // unmodifiable view
     }
 
     public void addKey(String key) {
@@ -30,8 +29,7 @@ public class AccessControlUser {
     }
 
     public List<String> getKeys() {
-        return Collections.unmodifiableList(
-                keys); // ✅ Return unmodifiable view to prevent external modification
+        return Collections.unmodifiableList(keys); // unmodifiable view
     }
 
     public void addKeys(String keys) {
@@ -45,8 +43,7 @@ public class AccessControlUser {
     }
 
     public List<String> getPassword() {
-        return Collections.unmodifiableList(
-                passwords); // ✅ Return unmodifiable view to prevent external modification
+        return Collections.unmodifiableList(passwords); // unmodifiable view
     }
 
     public void addChannel(String channel) {
@@ -54,8 +51,7 @@ public class AccessControlUser {
     }
 
     public List<String> getChannels() {
-        return Collections.unmodifiableList(
-                channels); // ✅ Return unmodifiable view to prevent external modification
+        return Collections.unmodifiableList(channels); // unmodifiable view
     }
 
     public void addChannels(String channels) {

@@ -11,6 +11,9 @@ import redis.clients.jedis.args.GeoUnit;
  * (radius or box), and optional modifiers like sorting, count, and result enrichment.
  */
 public class GeoSearchParam {
+
+    private GeoSearchParam() {}
+
     private String fromMember;
     private GeoCoordinate fromCoordinate;
     private Double radius;

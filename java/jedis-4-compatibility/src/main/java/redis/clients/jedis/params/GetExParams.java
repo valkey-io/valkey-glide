@@ -6,6 +6,9 @@ package redis.clients.jedis.params;
  */
 public class GetExParams {
 
+    /** Creates parameters for GETEX (same as {@link #getExParams()}). */
+    public GetExParams() {}
+
     public enum ExpiryType {
         EX,
         PX,

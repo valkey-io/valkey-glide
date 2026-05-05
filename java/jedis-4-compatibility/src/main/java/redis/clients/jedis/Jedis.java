@@ -73,7 +73,6 @@ import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import java.io.Closeable;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -174,9 +173,6 @@ public final class Jedis implements Closeable {
 
     private static final Logger logger = Logger.getLogger(Jedis.class.getName());
 
-    /** Character encoding used for string-to-byte conversions in Valkey operations. */
-    private static final Charset VALKEY_CHARSET = StandardCharsets.UTF_8;
-
     /** Keyword used in hash field expiration commands to specify the number of fields. */
     private static final String FIELDS_KEYWORD = "FIELDS";
 
@@ -188,6 +184,12 @@ public final class Jedis implements Closeable {
     private Pool<Jedis> dataSource; // Following original Jedis pattern
     private volatile boolean closed = false;
     private volatile boolean lazyInitialized = false; // New field to track initialization
+
+    /**
+     * Last logical DB index after a successful {@link #select(int)}; {@code -1} means use {@link
+     * JedisClientConfig#getDatabase()} (initial connection DB).
+     */
+    private volatile int selectedDb = -1;
 
     // Transaction support (Transaction owns its Batch; we only track multi() state)
     private volatile boolean inTransaction = false;
@@ -767,15 +769,14 @@ public final class Jedis implements Closeable {
      */
     public String select(int index) {
         checkNotClosed();
-        if (config.getDatabase() != index) {
-            logger.warning("Database selection may behave differently in GLIDE compatibility mode");
+        ensureInitialized();
+        try {
+            glideClient.select((long) index).get();
+            selectedDb = index;
+            return "OK";
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SELECT failed", e);
         }
-        // TODO (#5457): GLIDE handles database selection differently. This is a placeholder
-        // implementation
-        // In case of Glide, the databaseId is set in GlideClientConfiguration. Will need to re call
-        // the constructor for this to work.
-
-        return "OK";
     }
 
     /**
@@ -1534,7 +1535,7 @@ public final class Jedis implements Closeable {
                     if (obj instanceof GlideString) {
                         glideSet.add((GlideString) obj);
                     } else if (obj != null) {
-                        glideSet.add(GlideString.of(obj.toString().getBytes(VALKEY_CHARSET)));
+                        glideSet.add(GlideString.of(obj.toString().getBytes(StandardCharsets.UTF_8)));
                     }
                 }
                 return new GlideStringSetWrapper(glideSet);
@@ -1869,7 +1870,7 @@ public final class Jedis implements Closeable {
                                                 GlideString.of("GETSET"), GlideString.of(key), GlideString.of(value)
                                             })
                                     .get();
-                    return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+                    return result != null ? result.toString().getBytes(StandardCharsets.UTF_8) : null;
                 });
     }
 
@@ -1920,7 +1921,7 @@ public final class Jedis implements Closeable {
                                         GlideString.of("GET")
                                     })
                             .get();
-            return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+            return result != null ? result.toString().getBytes(StandardCharsets.UTF_8) : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETGET operation failed", e);
         }
@@ -1972,7 +1973,7 @@ public final class Jedis implements Closeable {
                     args.add(GlideString.of("GET"));
 
                     Object result = glideClient.customCommand(args.toArray(new GlideString[0])).get();
-                    return result != null ? result.toString().getBytes(VALKEY_CHARSET) : null;
+                    return result != null ? result.toString().getBytes(StandardCharsets.UTF_8) : null;
                 });
     }
 
@@ -3418,7 +3419,7 @@ public final class Jedis implements Closeable {
         checkNotClosed();
         try {
             ScanOptions options = convertScanParamsToScanOptions(params);
-            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET), options).get();
+            Object[] result = glideClient.scan(new String(cursor, StandardCharsets.UTF_8), options).get();
 
             // Convert to binary ScanResult
             if (result != null && result.length >= 2) {
@@ -3429,7 +3430,7 @@ public final class Jedis implements Closeable {
                     Object[] keysArray = (Object[]) keysObj;
                     List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
-                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
+                        keys.add(key != null ? key.toString().getBytes(StandardCharsets.UTF_8) : null);
                     }
                     return new ScanResult<>(newCursor, keys);
                 }
@@ -3449,7 +3450,7 @@ public final class Jedis implements Closeable {
     public ScanResult<byte[]> scan(final byte[] cursor) {
         checkNotClosed();
         try {
-            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET)).get();
+            Object[] result = glideClient.scan(new String(cursor, StandardCharsets.UTF_8)).get();
 
             // Convert to binary ScanResult
             if (result != null && result.length >= 2) {
@@ -3460,7 +3461,7 @@ public final class Jedis implements Closeable {
                     Object[] keysArray = (Object[]) keysObj;
                     List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
-                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
+                        keys.add(key != null ? key.toString().getBytes(StandardCharsets.UTF_8) : null);
                     }
                     return new ScanResult<>(newCursor, keys);
                 }
@@ -3534,7 +3535,7 @@ public final class Jedis implements Closeable {
             if (type != null) {
                 // Override type from params with explicit type parameter
                 try {
-                    String typeStr = new String(type, VALKEY_CHARSET);
+                    String typeStr = new String(type, StandardCharsets.UTF_8);
                     ScanOptions.ObjectType objectType = ScanOptions.ObjectType.valueOf(typeStr.toUpperCase());
                     options =
                             ScanOptions.builder()
@@ -3546,7 +3547,7 @@ public final class Jedis implements Closeable {
                     // Invalid type, use params as-is
                 }
             }
-            Object[] result = glideClient.scan(new String(cursor, VALKEY_CHARSET), options).get();
+            Object[] result = glideClient.scan(new String(cursor, StandardCharsets.UTF_8), options).get();
 
             // Convert to binary ScanResult
             if (result != null && result.length >= 2) {
@@ -3557,7 +3558,7 @@ public final class Jedis implements Closeable {
                     Object[] keysArray = (Object[]) keysObj;
                     List<byte[]> keys = new ArrayList<>();
                     for (Object key : keysArray) {
-                        keys.add(key != null ? key.toString().getBytes(VALKEY_CHARSET) : null);
+                        keys.add(key != null ? key.toString().getBytes(StandardCharsets.UTF_8) : null);
                     }
                     return new ScanResult<>(newCursor, keys);
                 }
@@ -4042,9 +4043,11 @@ public final class Jedis implements Closeable {
             }
             String[] stringSrcKeys = new String[srcKeys.length];
             for (int i = 0; i < srcKeys.length; i++) {
-                stringSrcKeys[i] = new String(srcKeys[i], VALKEY_CHARSET);
+                stringSrcKeys[i] = new String(srcKeys[i], StandardCharsets.UTF_8);
             }
-            return glideClient.bitop(operation, new String(destKey, VALKEY_CHARSET), stringSrcKeys).get();
+            return glideClient
+                    .bitop(operation, new String(destKey, StandardCharsets.UTF_8), stringSrcKeys)
+                    .get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("BITOP operation failed", e);
         }
@@ -4092,7 +4095,7 @@ public final class Jedis implements Closeable {
             // Convert byte[] arguments to String arguments
             String[] stringArguments = new String[arguments.length];
             for (int i = 0; i < arguments.length; i++) {
-                stringArguments[i] = new String(arguments[i], VALKEY_CHARSET);
+                stringArguments[i] = new String(arguments[i], StandardCharsets.UTF_8);
             }
 
             // Parse Jedis-style arguments into GLIDE BitFieldSubCommands
@@ -4146,7 +4149,7 @@ public final class Jedis implements Closeable {
             // Convert byte[] arguments to String arguments
             String[] stringArguments = new String[arguments.length];
             for (int i = 0; i < arguments.length; i++) {
-                stringArguments[i] = new String(arguments[i], VALKEY_CHARSET);
+                stringArguments[i] = new String(arguments[i], StandardCharsets.UTF_8);
             }
 
             // Parse Jedis-style arguments into GLIDE BitFieldReadOnlySubCommands (only GET operations)
@@ -4443,9 +4446,10 @@ public final class Jedis implements Closeable {
                 () -> {
                     String[] stringElements = new String[elements.length];
                     for (int i = 0; i < elements.length; i++) {
-                        stringElements[i] = new String(elements[i], VALKEY_CHARSET);
+                        stringElements[i] = new String(elements[i], StandardCharsets.UTF_8);
                     }
-                    Boolean result = glideClient.pfadd(new String(key, VALKEY_CHARSET), stringElements).get();
+                    Boolean result =
+                            glideClient.pfadd(new String(key, StandardCharsets.UTF_8), stringElements).get();
                     return result ? 1L : 0L;
                 });
     }
@@ -4499,7 +4503,8 @@ public final class Jedis implements Closeable {
      */
     public long pfcount(final byte[] key) {
         return executeCommandWithGlide(
-                "PFCOUNT", () -> glideClient.pfcount(new String[] {new String(key, VALKEY_CHARSET)}).get());
+                "PFCOUNT",
+                () -> glideClient.pfcount(new String[] {new String(key, StandardCharsets.UTF_8)}).get());
     }
 
     /**
@@ -4513,7 +4518,7 @@ public final class Jedis implements Closeable {
         try {
             String[] stringKeys = new String[keys.length];
             for (int i = 0; i < keys.length; i++) {
-                stringKeys[i] = new String(keys[i], VALKEY_CHARSET);
+                stringKeys[i] = new String(keys[i], StandardCharsets.UTF_8);
             }
             return glideClient.pfcount(stringKeys).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -4536,9 +4541,11 @@ public final class Jedis implements Closeable {
         try {
             String[] stringSourceKeys = new String[sourceKeys.length];
             for (int i = 0; i < sourceKeys.length; i++) {
-                stringSourceKeys[i] = new String(sourceKeys[i], VALKEY_CHARSET);
+                stringSourceKeys[i] = new String(sourceKeys[i], StandardCharsets.UTF_8);
             }
-            return glideClient.pfmerge(new String(destKey, VALKEY_CHARSET), stringSourceKeys).get();
+            return glideClient
+                    .pfmerge(new String(destKey, StandardCharsets.UTF_8), stringSourceKeys)
+                    .get();
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("PFMERGE operation failed", e);
         }
@@ -7481,10 +7488,15 @@ public final class Jedis implements Closeable {
         return sendCommand(cmd, args);
     }
 
-    /** Get the current database index. NOTE: GLIDE manages database selection internally. */
+    /**
+     * Returns the logical database index for this client: {@link JedisClientConfig#getDatabase()} on
+     * connect, or the last index passed to {@link #select(int)} after a successful SELECT.
+     */
     public int getDB() {
-        // TODO: Track database selection in compatibility layer
-        return 0; // Default database for now
+        checkNotClosed();
+        ensureInitialized();
+        int db = selectedDb;
+        return db >= 0 ? db : config.getDatabase();
     }
 
     // ========== LIST COMMANDS ==========
@@ -12815,7 +12827,7 @@ public final class Jedis implements Closeable {
                     } else if (m instanceof GlideString) {
                         members.add(((GlideString) m).getBytes());
                     } else {
-                        members.add(m.toString().getBytes(VALKEY_CHARSET));
+                        members.add(m.toString().getBytes(StandardCharsets.UTF_8));
                     }
                 }
                 return new ScanResult<>(newCursor, members);
@@ -13194,7 +13206,7 @@ public final class Jedis implements Closeable {
                 "OBJECT",
                 () -> {
                     String result = glideClient.objectEncoding(GlideString.of(key)).get();
-                    return result != null ? result.getBytes(VALKEY_CHARSET) : null;
+                    return result != null ? result.getBytes(StandardCharsets.UTF_8) : null;
                 });
     }
 
@@ -13341,9 +13353,9 @@ public final class Jedis implements Closeable {
                             if (obj instanceof GlideString) {
                                 helpMessages.add(((GlideString) obj).getBytes());
                             } else if (obj instanceof String) {
-                                helpMessages.add(((String) obj).getBytes(VALKEY_CHARSET));
+                                helpMessages.add(((String) obj).getBytes(StandardCharsets.UTF_8));
                             } else if (obj != null) {
-                                helpMessages.add(obj.toString().getBytes(VALKEY_CHARSET));
+                                helpMessages.add(obj.toString().getBytes(StandardCharsets.UTF_8));
                             } else {
                                 helpMessages.add(null);
                             }
@@ -13673,7 +13685,7 @@ public final class Jedis implements Closeable {
                     }
                     List<GeoRadiusResponse> responses = new ArrayList<>();
                     for (String m : result) {
-                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                        responses.add(new GeoRadiusResponse(m.getBytes(StandardCharsets.UTF_8)));
                     }
                     return responses;
                 });
@@ -13740,7 +13752,7 @@ public final class Jedis implements Closeable {
                     }
                     List<GeoRadiusResponse> responses = new ArrayList<>();
                     for (String m : result) {
-                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                        responses.add(new GeoRadiusResponse(m.getBytes(StandardCharsets.UTF_8)));
                     }
                     return responses;
                 });
@@ -13811,7 +13823,7 @@ public final class Jedis implements Closeable {
                     }
                     List<GeoRadiusResponse> responses = new ArrayList<>();
                     for (String m : result) {
-                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                        responses.add(new GeoRadiusResponse(m.getBytes(StandardCharsets.UTF_8)));
                     }
                     return responses;
                 });
@@ -13889,7 +13901,7 @@ public final class Jedis implements Closeable {
                     }
                     List<GeoRadiusResponse> responses = new ArrayList<>();
                     for (String m : result) {
-                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                        responses.add(new GeoRadiusResponse(m.getBytes(StandardCharsets.UTF_8)));
                     }
                     return responses;
                 });
@@ -13986,7 +13998,7 @@ public final class Jedis implements Closeable {
                     }
                     List<GeoRadiusResponse> responses = new ArrayList<>();
                     for (String m : result) {
-                        responses.add(new GeoRadiusResponse(m.getBytes(VALKEY_CHARSET)));
+                        responses.add(new GeoRadiusResponse(m.getBytes(StandardCharsets.UTF_8)));
                     }
                     return responses;
                 });
@@ -14013,7 +14025,7 @@ public final class Jedis implements Closeable {
                     if (params.getFromMember() != null) {
                         origin =
                                 new GeoSearchOrigin.MemberOriginBinary(
-                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                                        GlideString.of(params.getFromMember().getBytes(StandardCharsets.UTF_8)));
                     } else if (params.getFromCoordinate() != null) {
                         GeoCoordinate coord = params.getFromCoordinate();
                         origin =
@@ -14373,7 +14385,7 @@ public final class Jedis implements Closeable {
                     if (params.getFromMember() != null) {
                         origin =
                                 new GeoSearchOrigin.MemberOriginBinary(
-                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                                        GlideString.of(params.getFromMember().getBytes(StandardCharsets.UTF_8)));
                     } else if (params.getFromCoordinate() != null) {
                         GeoCoordinate coord = params.getFromCoordinate();
                         origin =
@@ -14471,7 +14483,7 @@ public final class Jedis implements Closeable {
                     if (params.getFromMember() != null) {
                         origin =
                                 new GeoSearchOrigin.MemberOriginBinary(
-                                        GlideString.of(params.getFromMember().getBytes(VALKEY_CHARSET)));
+                                        GlideString.of(params.getFromMember().getBytes(StandardCharsets.UTF_8)));
                     } else if (params.getFromCoordinate() != null) {
                         GeoCoordinate coord = params.getFromCoordinate();
                         origin =

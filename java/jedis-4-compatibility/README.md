@@ -4,16 +4,15 @@ This sub-module provides a Jedis 4.x-compatible API layer for Valkey GLIDE, allo
 
 ## Why a Separate Jedis 4.x Layer?
 
-Jedis 5.x introduced breaking API changes that are incompatible with Jedis 4.x applications:
+This artifact exists because **upstream Jedis 5** changed several public types (notably `JedisPooled` pool generics and optional RESP3 / `RedisProtocol` APIs). Applications that still compile against **Jedis 4.x** signatures need this module; they are not choosing between “Jedis 4” and “Jedis 5” in one classpath—they pick **one** GLIDE compatibility artifact that matches their existing API.
 
-| Feature | Jedis 4.x | Jedis 5.x | Impact |
-|---------|-----------|-----------|--------|
-| Pool Config Generic Type | `GenericObjectPoolConfig<Connection>` | `GenericObjectPoolConfig<Object>` | Method signature mismatch |
-| Pool Config for JedisPool | `GenericObjectPoolConfig<Jedis>` | `GenericObjectPoolConfig<Jedis>` | ✅ Compatible |
-| RedisProtocol API | Not present | `getRedisProtocol()` in config | New method in interface |
-| Protocol Version | Always RESP2 | RESP2/RESP3 configurable | Behavioral difference |
+| Topic | Jedis 4.x–style apps | Notes for this module |
+|-------|----------------------|------------------------|
+| `JedisPooled` pool type | `GenericObjectPoolConfig<Connection>` | Supported here; matches Jedis 4 compile-time types |
+| `JedisPool` | `GenericObjectPoolConfig<Jedis>` | Same as typical Jedis 4 usage |
+| Protocol | RESP2-only surface | Matches Jedis 4 defaults; no `getRedisProtocol()` on this layer |
 
-Apps using Jedis 4.x that rely on `JedisPooled` with `GenericObjectPoolConfig<Connection>` will fail to compile against the Jedis 5.x-compatible layer.
+If you are already on **Jedis 5.x** APIs, use the separate **`jedis-compatibility`** module instead.
 
 ## Architecture
 
@@ -43,24 +42,17 @@ The Jedis 4.x compatibility layer is implemented as a separate Gradle sub-module
 - Always uses RESP2 protocol (Jedis 4.x default)
 - Various parameter classes for command options
 
-## Choosing Between Jedis 4.x and 5.x Layers
+## Choosing a compatibility artifact
 
-### Use `jedis-4-compatibility` if:
-- ✅ Your application uses Jedis 4.x (versions 4.0.x - 4.4.x)
-- ✅ You use `JedisPooled` with `GenericObjectPoolConfig<Connection>`
-- ✅ Your code doesn't use RedisProtocol APIs
-- ✅ You want RESP2-only behavior (Jedis 4.x default)
+### Use `jedis-4-compatibility` when:
+- The application was built against **Jedis 4.x** (e.g. 4.0.x–4.4.x), especially `JedisPooled` with `GenericObjectPoolConfig<Connection>`.
+- You do not need Jedis 5–only configuration such as `getRedisProtocol()` / RESP3 toggles on the Jedis config surface.
 
-### Use `jedis-compatibility` (5.x) if:
-- ✅ Your application uses Jedis 5.x (versions 5.0.x - 5.2.x)
-- ✅ You use `JedisPooled` with `GenericObjectPoolConfig<Object>`
-- ✅ You want RESP3 protocol support
-- ✅ Your code uses newer Jedis 5.x APIs
+### Use `jedis-compatibility` (5.x-oriented) when:
+- The codebase already targets **Jedis 5.x** types and APIs (`GenericObjectPoolConfig<Object>` on `JedisPooled`, RESP3 options, etc.).
 
-### Either works if:
-- ✅ You only use `JedisPool` (uses `GenericObjectPoolConfig<Jedis>` in both)
-- ✅ You use simple constructors without pool configuration
-- ✅ You use `UnifiedJedis`, `JedisCluster`, or standalone `Jedis`
+### Either module may fit when:
+- You only use `JedisPool`, `UnifiedJedis`, `JedisCluster`, or standalone `Jedis` with simple constructors—pick the artifact that matches your **existing** dependency’s major API shape.
 
 ## Usage
 
@@ -145,7 +137,7 @@ try (UnifiedJedis jedis = new UnifiedJedis("localhost", 6379)) {
 | Feature | jedis-4-compatibility | jedis-compatibility (5.x) |
 |---------|----------------------|--------------------------|
 | JedisPooled generic type | `GenericObjectPoolConfig<Connection>` | `GenericObjectPoolConfig<Object>` |
-| RedisProtocol support | ❌ Not available | ✅ Available (`getRedisProtocol()`) |
+| RedisProtocol / `getRedisProtocol()` | Not in this layer | Available in `jedis-compatibility` |
 | Default protocol | RESP2 only | RESP2 (default) or RESP3 |
 | Protocol configuration | Not configurable | Configurable via `DefaultJedisClientConfig.builder().protocol()` |
 | Target Jedis version | 4.0.x - 4.4.x | 5.0.x - 5.2.x |
@@ -218,6 +210,10 @@ implementation 'io.valkey:valkey-glide-jedis-4-compatibility:2.1.0:osx-aarch_64'
 ### Need RESP3 support
 
 **Solution**: Upgrade your application to Jedis 5.x and use the `jedis-compatibility` layer instead. RESP3 is not available in Jedis 4.x.
+
+## Contributor review checklist
+
+Use UTF-8 explicitly (`StandardCharsets.UTF_8`) for `String`/`byte[]` conversions in Jedis-style APIs unless returning raw bytes from `GlideString`. Avoid decorative Unicode in comments. Cluster `SCAN` must keep `ClusterScanCursor` state across Jedis cursor tokens (registry + `WeakReference`, release handles per GLIDE docs). `MigrateParams` must not emit duplicate `COPY`/`REPLACE` or overlapping `AUTH`/`AUTH2`. Unsupported pool/factory constructors should throw `UnsupportedOperationException` with guidance, not silently use `localhost`. Use `java.util.logging` (or the project logger), not `System.err`, for library warnings. For shared maintainer guidance in Cursor, mirror these points in a local rule under `.cursor/rules/` (that directory is often gitignored). Release workflow: `create-uber-jar` publishes **no-classifier** artifacts for both `jedis-compatibility` and `jedis-4-compatibility` when `JEDIS_NO_CLASSIFIER_BUILD=true` (see `java-cd.yml`).
 
 ## License
 

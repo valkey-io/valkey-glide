@@ -15,7 +15,6 @@ public class TSKeyValue<V> extends KeyValue<String, V> {
     }
 
     public Map<String, String> getLabels() {
-        return Collections.unmodifiableMap(
-                labels); // ✅ Return unmodifiable view to prevent external modification
+        return Collections.unmodifiableMap(labels); // unmodifiable view
     }
 }

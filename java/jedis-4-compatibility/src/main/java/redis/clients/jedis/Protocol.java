@@ -368,7 +368,7 @@ public class Protocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone(); // defensive copy
         }
     }
 
@@ -555,7 +555,7 @@ public class Protocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone(); // defensive copy
         }
     }
 
@@ -599,7 +599,7 @@ public class Protocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone(); // defensive copy
         }
     }
 }

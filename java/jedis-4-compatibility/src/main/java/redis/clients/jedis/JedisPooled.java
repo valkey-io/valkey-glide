@@ -99,10 +99,16 @@ public class JedisPooled extends UnifiedJedis {
     //        super(hostAndPort, clientConfig, clientSideCache);
     //    }
 
-    // Pool-related constructors (simplified for GLIDE compatibility)
-    // Note: In original Jedis, these use Connection type, but we use Object for simplicity
+    /**
+     * Not supported on Valkey GLIDE: a {@link PooledObjectFactory} does not describe server
+     * endpoints, and GLIDE owns pooling. Use {@link #JedisPooled(String, int)} or {@link
+     * #JedisPooled(HostAndPort, JedisClientConfig)}.
+     */
     public JedisPooled(PooledObjectFactory<Object> factory) {
-        this(); // Use default connection since GLIDE handles pooling internally
+        throw new UnsupportedOperationException(
+                "JedisPooled(PooledObjectFactory) is not supported: GLIDE manages pooling and requires"
+                        + " host/port (or URI) configuration. Use JedisPooled(String, int) or"
+                        + " JedisPooled(HostAndPort, JedisClientConfig).");
     }
 
     public JedisPooled(final GenericObjectPoolConfig<Connection> poolConfig) {
@@ -789,13 +795,20 @@ public class JedisPooled extends UnifiedJedis {
     //        this(); // Use default connection since GLIDE handles pooling internally
     //    }
 
+    /** Not supported on Valkey GLIDE; see {@link #JedisPooled(PooledObjectFactory)}. */
     public JedisPooled(
             PooledObjectFactory<Object> factory, GenericObjectPoolConfig<Connection> poolConfig) {
-        this(); // Use default connection since GLIDE handles pooling internally
+        throw new UnsupportedOperationException(
+                "JedisPooled(PooledObjectFactory, GenericObjectPoolConfig) is not supported on GLIDE;"
+                        + " use host/port or URI constructors.");
     }
 
-    // Provider-based constructor (simplified for GLIDE compatibility)
+    /**
+     * Not supported on Valkey GLIDE: use typed constructors (host/port, {@link URI}, or {@link
+     * HostAndPort}).
+     */
     public JedisPooled(Object provider) {
-        this(); // Use default connection since GLIDE handles pooling internally
+        throw new UnsupportedOperationException(
+                "JedisPooled(Object) is not supported on GLIDE; use host/port or URI constructors.");
     }
 }

@@ -22,7 +22,9 @@ tasks.withType(Javadoc) {
 
 ext {
     // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
-    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch;
+    arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch
+    // Same env as jedis-compatibility: uber-jar / no-classifier CI skips embedding natives and Rust build
+    isJedisNoClassifierUber = System.getenv("JEDIS_NO_CLASSIFIER_BUILD") == "true"
 }
 
 dependencies {
@@ -76,12 +78,15 @@ tasks.register('copyNativeLib', Copy) {
     into sourceSets.main.output.resourcesDir
 }
 
-jar.dependsOn('copyNativeLib')
-javadoc.dependsOn('copyNativeLib')
-compileTestJava.dependsOn('copyNativeLib')
 delombok.dependsOn('compileJava')
-copyNativeLib.dependsOn(':client:buildRust')
 compileJava.dependsOn(':client:jar')
+
+if (!isJedisNoClassifierUber) {
+    copyNativeLib.dependsOn(':client:buildRust')
+    jar.dependsOn(tasks.named('copyNativeLib'))
+    javadoc.dependsOn(tasks.named('copyNativeLib'))
+    compileTestJava.dependsOn(tasks.named('copyNativeLib'))
+}
 
 tasks.withType(Test) {
     useJUnitPlatform()
@@ -99,7 +104,9 @@ tasks.withType(Test) {
 }
 
 jar {
-    if (project.hasProperty('target') && project.target.contains("musl")) {
+    if (isJedisNoClassifierUber) {
+        archiveClassifier = ''
+    } else if (project.hasProperty('target') && project.target.contains("musl")) {
         archiveClassifier = "linux_musl_${arch}"
     } else {
         archiveClassifier = osdetector.classifier

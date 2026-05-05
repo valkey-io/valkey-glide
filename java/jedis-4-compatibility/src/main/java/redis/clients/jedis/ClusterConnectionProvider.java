@@ -1,7 +1,9 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,17 +30,22 @@ public class ClusterConnectionProvider implements ConnectionProvider {
         return clientConfig;
     }
 
-    /** Get all configured cluster nodes */
+    /** Get all configured cluster nodes (defensive copy). */
     public Set<HostAndPort> getNodes() {
-        return nodes;
+        return Collections.unmodifiableSet(new HashSet<>(nodes));
     }
 
-    /** Get cluster nodes as a map (for compatibility with original Jedis API) */
+    /**
+     * Returns a map of {@code host:port} to a lightweight per-node {@link ConnectionPool} view. Each
+     * pool's {@link ConnectionPool#getResource()} returns a new {@link Connection} for that node;
+     * GLIDE still owns real connections.
+     */
     public Map<String, ConnectionPool> getClusterNodes() {
-        // Since ConnectionPool is deprecated and throws exceptions in GLIDE,
-        // we'll return an empty map to maintain API compatibility
-        // Users should use getNodes() to get the actual cluster nodes
-        return new HashMap<>();
+        Map<String, ConnectionPool> map = new LinkedHashMap<>();
+        for (HostAndPort n : nodes) {
+            map.put(n.getHost() + ":" + n.getPort(), new ConnectionPool(n));
+        }
+        return Collections.unmodifiableMap(map);
     }
 
     @Override

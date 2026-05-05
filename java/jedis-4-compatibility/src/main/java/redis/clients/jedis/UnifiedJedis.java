@@ -20,10 +20,16 @@ import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import java.io.Closeable;
+import java.lang.ref.WeakReference;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import redis.clients.jedis.args.BitCountOption;
 import redis.clients.jedis.args.BitOP;
@@ -95,6 +101,8 @@ import redis.clients.jedis.util.JedisURIHelper;
  */
 public class UnifiedJedis implements Closeable {
 
+    private static final Logger LOGGER = Logger.getLogger(UnifiedJedis.class.getName());
+
     protected final BaseClient baseClient;
     protected final GlideClient glideClient;
     protected final GlideClusterClient glideClusterClient;
@@ -102,6 +110,16 @@ public class UnifiedJedis implements Closeable {
     protected final String resourceId;
     protected final boolean isClusterMode;
     protected volatile boolean closed = false;
+
+    /**
+     * Maps Jedis-style SCAN cursor tokens to GLIDE {@link ClusterScanCursor} instances (cluster mode
+     * only). Entries are removed when consumed; values use weak references so lost cursors can be
+     * collected.
+     */
+    private final ConcurrentHashMap<String, WeakReference<ClusterScanCursor>>
+            clusterScanCursorRegistry = new ConcurrentHashMap<>();
+
+    private final AtomicLong clusterScanCursorToken = new AtomicLong(1);
 
     // ========== STANDALONE CONSTRUCTORS ==========
 
@@ -326,7 +344,10 @@ public class UnifiedJedis implements Closeable {
             }
         } else {
             // Assume standalone provider
-            HostAndPort hostAndPort = provider.getConnection().getHostAndPort();
+            final HostAndPort hostAndPort;
+            try (Connection c = provider.getConnection()) {
+                hostAndPort = c.getHostAndPort();
+            }
             JedisClientConfig config = provider.getClientConfig();
 
             this.config = config;
@@ -661,19 +682,21 @@ public class UnifiedJedis implements Closeable {
     /** Close the connection. */
     @Override
     public void close() {
-        if (!closed) {
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
             closed = true;
-            try {
-                if (baseClient != null) {
-                    baseClient.close();
-                }
-            } catch (ExecutionException e) {
-                // Log the error but don't throw - close should be idempotent
-                System.err.println("Error closing GLIDE client: " + e.getMessage());
-            } finally {
-                if (resourceId != null) {
-                    ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
-                }
+        }
+        try {
+            if (baseClient != null) {
+                baseClient.close();
+            }
+        } catch (ExecutionException e) {
+            LOGGER.log(Level.WARNING, "Error closing GLIDE client", e);
+        } finally {
+            if (resourceId != null) {
+                ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
             }
         }
     }
@@ -1389,8 +1412,9 @@ public class UnifiedJedis implements Closeable {
      * @param pattern the pattern to match keys against (must not be null)
      * @return a set of keys matching the pattern (never null, but can be empty)
      * @throws JedisException if the operation fails
-     * @throws UnsupportedOperationException if called in cluster mode (use SCAN instead)
      * @since Valkey 1.0.0
+     * @apiNote In cluster mode, KEYS is sent via {@code customCommand} using GLIDE default routing
+     *     (single node), not merged across the whole cluster.
      */
     public Set<String> keys(String pattern) {
         checkNotClosed();
@@ -2260,33 +2284,10 @@ public class UnifiedJedis implements Closeable {
     public ScanResult<String> scan(String cursor) {
         checkNotClosed();
         try {
-            Object[] result;
             if (isClusterMode) {
-                // Convert String cursor to ClusterScanCursor
-                ClusterScanCursor clusterCursor;
-                if ("0".equals(cursor)) {
-                    // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
-                } else {
-                    // For subsequent cursors, we need to use the cursor from previous result
-                    // Since we can't reconstruct a ClusterScanCursor from a string,
-                    // we'll use customCommand to maintain compatibility
-                    String[] args = {"SCAN", cursor};
-                    ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
-                    // Handle the custom command result
-                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
-                    String nextCursor = customArray[0].toString();
-                    Object[] keys = (Object[]) customArray[1];
-                    List<String> keyList = new ArrayList<>();
-                    for (Object key : keys) {
-                        keyList.add(key.toString());
-                    }
-                    return new ScanResult<>(nextCursor, keyList);
-                }
-                result = glideClusterClient.scan(clusterCursor).get();
-            } else {
-                result = glideClient.scan(cursor).get();
+                return clusterScanWithGlideCursor(cursor, null);
             }
+            Object[] result = glideClient.scan(cursor).get();
             String nextCursor = (String) result[0];
             String[] keys = (String[]) result[1];
             return new ScanResult<>(nextCursor, Arrays.asList(keys));
@@ -2318,42 +2319,7 @@ public class UnifiedJedis implements Closeable {
 
             Object[] result;
             if (isClusterMode) {
-                ClusterScanCursor clusterCursor;
-                if ("0".equals(cursor)) {
-                    // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
-                    result = glideClusterClient.scan(clusterCursor, options).get();
-                } else {
-                    // For subsequent cursors, use customCommand with params
-                    List<String> args = new ArrayList<>();
-                    args.add("SCAN");
-                    args.add(cursor);
-
-                    // Add ScanParams to command arguments
-                    if (params.getMatchPattern() != null) {
-                        args.add("MATCH");
-                        args.add(params.getMatchPattern());
-                    }
-                    if (params.getCount() != null) {
-                        args.add("COUNT");
-                        args.add(params.getCount().toString());
-                    }
-                    if (params.getType() != null) {
-                        args.add("TYPE");
-                        args.add(params.getType());
-                    }
-
-                    ClusterValue<Object> clusterResult =
-                            glideClusterClient.customCommand(args.toArray(new String[0])).get();
-                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
-                    String nextCursor = customArray[0].toString();
-                    Object[] keys = (Object[]) customArray[1];
-                    List<String> keyList = new ArrayList<>();
-                    for (Object key : keys) {
-                        keyList.add(key.toString());
-                    }
-                    return new ScanResult<>(nextCursor, keyList);
-                }
+                return clusterScanWithGlideCursor(cursor, options);
             } else {
                 result = glideClient.scan(cursor, options).get();
             }
@@ -2430,30 +2396,22 @@ public class UnifiedJedis implements Closeable {
         try {
             Object[] result;
             if (isClusterMode) {
-                // Build SCAN command arguments
-                List<String> args = new ArrayList<>();
-                args.add("SCAN");
-                args.add(cursor);
-
+                ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
                 if (params != null) {
                     if (params.getMatchPattern() != null) {
-                        args.add("MATCH");
-                        args.add(params.getMatchPattern());
+                        builder.matchPattern(params.getMatchPattern());
                     }
                     if (params.getCount() != null) {
-                        args.add("COUNT");
-                        args.add(params.getCount().toString());
+                        builder.count(params.getCount());
                     }
                 }
-
                 if (type != null) {
-                    args.add("TYPE");
-                    args.add(type);
+                    ScanOptions.ObjectType objectType = convertStringToObjectType(type);
+                    if (objectType != null) {
+                        builder.type(objectType);
+                    }
                 }
-
-                ClusterValue<Object> clusterResult =
-                        glideClusterClient.customCommand(args.toArray(new String[0])).get();
-                result = (Object[]) clusterResult.getSingleValue();
+                return clusterScanWithGlideCursor(cursor, builder.build());
             } else {
                 // Convert Jedis ScanParams to GLIDE ScanOptions
                 ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
@@ -3997,7 +3955,7 @@ public class UnifiedJedis implements Closeable {
         try {
             SetOptions options = SetOptions.builder().returnOldValue(true).build();
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
-            return result != null ? result.getBytes() : null;
+            return result != null ? result.getBytes(StandardCharsets.UTF_8) : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SET operation failed", e);
         }
@@ -4020,7 +3978,7 @@ public class UnifiedJedis implements Closeable {
             // Use basic setGet without complex parameter handling
             SetOptions options = SetOptions.builder().returnOldValue(true).build();
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
-            return result != null ? result.getBytes() : null;
+            return result != null ? result.getBytes(StandardCharsets.UTF_8) : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SETGET operation failed with SetParams: " + params, e);
         }
@@ -4458,7 +4416,7 @@ public class UnifiedJedis implements Closeable {
             // Use SET with returnOldValue option to simulate GETSET
             SetOptions options = SetOptions.builder().returnOldValue(true).build();
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
-            return result != null ? result.getBytes() : null;
+            return result != null ? result.getBytes(StandardCharsets.UTF_8) : null;
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("GETSET operation failed", e);
         }
@@ -4488,7 +4446,7 @@ public class UnifiedJedis implements Closeable {
             if (result instanceof String[]) {
                 Set<GlideString> glideSet = new HashSet<>();
                 for (String key : (String[]) result) {
-                    glideSet.add(GlideString.of(key.getBytes()));
+                    glideSet.add(GlideString.of(key.getBytes(StandardCharsets.UTF_8)));
                 }
                 return new redis.clients.jedis.util.GlideStringSetWrapper(glideSet);
             } else if (result == null) {
@@ -4601,42 +4559,18 @@ public class UnifiedJedis implements Closeable {
     public ScanResult<byte[]> scan(byte[] cursor) {
         checkNotClosed();
         try {
-            String cursorStr = new String(cursor);
-            Object[] result;
+            String cursorStr = new String(cursor, StandardCharsets.UTF_8);
             if (isClusterMode) {
-                // Convert String cursor to ClusterScanCursor
-                ClusterScanCursor clusterCursor;
-                if ("0".equals(cursorStr)) {
-                    // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
-                    result = glideClusterClient.scan(clusterCursor).get();
-                    ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
-                    String[] keys = (String[]) result[1];
-                    List<byte[]> binaryKeys =
-                            Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
-                    return new ScanResult<>(nextCursor.toString().getBytes(), binaryKeys);
-                } else {
-                    // For subsequent cursors, use customCommand to maintain compatibility
-                    GlideString[] args = {GlideString.of("SCAN"), GlideString.of(cursorStr)};
-                    ClusterValue<Object> clusterResult = glideClusterClient.customCommand(args).get();
-                    // Handle the custom command result
-                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
-                    String nextCursor = customArray[0].toString();
-                    Object[] keys = (Object[]) customArray[1];
-                    List<byte[]> keyList = new ArrayList<>();
-                    for (Object key : keys) {
-                        keyList.add(key.toString().getBytes());
-                    }
-                    return new ScanResult<>(nextCursor.getBytes(), keyList);
-                }
-            } else {
-                result = glideClient.scan(cursorStr).get();
-                String newCursor = (String) result[0];
-                String[] keys = (String[]) result[1];
-                List<byte[]> binaryKeys =
-                        Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
-                return new ScanResult<>(newCursor.getBytes(), binaryKeys);
+                return binaryScanResultFromStringScan(clusterScanWithGlideCursor(cursorStr, null));
             }
+            Object[] result = glideClient.scan(cursorStr).get();
+            String newCursor = (String) result[0];
+            String[] keys = (String[]) result[1];
+            List<byte[]> binaryKeys =
+                    Arrays.stream(keys)
+                            .map(s -> s == null ? null : s.getBytes(StandardCharsets.UTF_8))
+                            .collect(Collectors.toList());
+            return new ScanResult<>(newCursor.getBytes(StandardCharsets.UTF_8), binaryKeys);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -4655,65 +4589,24 @@ public class UnifiedJedis implements Closeable {
     public ScanResult<byte[]> scan(byte[] cursor, ScanParams params) {
         checkNotClosed();
         try {
-            String cursorStr = new String(cursor);
+            String cursorStr = new String(cursor, StandardCharsets.UTF_8);
             if (params == null) {
                 return scan(cursor);
             }
 
-            // Convert Jedis ScanParams to GLIDE ScanOptions
             ScanOptions options = convertScanParams(params);
 
-            Object[] result;
             if (isClusterMode) {
-                ClusterScanCursor clusterCursor;
-                if ("0".equals(cursorStr)) {
-                    // Initial cursor
-                    clusterCursor = ClusterScanCursor.initalCursor();
-                    result = glideClusterClient.scan(clusterCursor, options).get();
-                    ClusterScanCursor nextCursor = (ClusterScanCursor) result[0];
-                    String[] keys = (String[]) result[1];
-                    List<byte[]> binaryKeys =
-                            Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
-                    return new ScanResult<>(nextCursor.toString().getBytes(), binaryKeys);
-                } else {
-                    // For subsequent cursors, use customCommand with params
-                    List<GlideString> args = new ArrayList<>();
-                    args.add(GlideString.of("SCAN"));
-                    args.add(GlideString.of(cursorStr));
-
-                    // Add ScanParams to command arguments
-                    if (params.getMatchPattern() != null) {
-                        args.add(GlideString.of("MATCH"));
-                        args.add(GlideString.of(params.getMatchPattern()));
-                    }
-                    if (params.getCount() != null) {
-                        args.add(GlideString.of("COUNT"));
-                        args.add(GlideString.of(params.getCount().toString()));
-                    }
-                    if (params.getType() != null) {
-                        args.add(GlideString.of("TYPE"));
-                        args.add(GlideString.of(params.getType()));
-                    }
-
-                    ClusterValue<Object> clusterResult =
-                            glideClusterClient.customCommand(args.toArray(new GlideString[0])).get();
-                    Object[] customArray = (Object[]) clusterResult.getSingleValue();
-                    String nextCursor = customArray[0].toString();
-                    Object[] keys = (Object[]) customArray[1];
-                    List<byte[]> keyList = new ArrayList<>();
-                    for (Object key : keys) {
-                        keyList.add(key.toString().getBytes());
-                    }
-                    return new ScanResult<>(nextCursor.getBytes(), keyList);
-                }
-            } else {
-                result = glideClient.scan(cursorStr, options).get();
-                String newCursor = (String) result[0];
-                String[] keys = (String[]) result[1];
-                List<byte[]> binaryKeys =
-                        Arrays.stream(keys).map(String::getBytes).collect(Collectors.toList());
-                return new ScanResult<>(newCursor.getBytes(), binaryKeys);
+                return binaryScanResultFromStringScan(clusterScanWithGlideCursor(cursorStr, options));
             }
+            Object[] result = glideClient.scan(cursorStr, options).get();
+            String newCursor = (String) result[0];
+            String[] keys = (String[]) result[1];
+            List<byte[]> binaryKeys =
+                    Arrays.stream(keys)
+                            .map(s -> s == null ? null : s.getBytes(StandardCharsets.UTF_8))
+                            .collect(Collectors.toList());
+            return new ScanResult<>(newCursor.getBytes(StandardCharsets.UTF_8), binaryKeys);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
@@ -4733,11 +4626,29 @@ public class UnifiedJedis implements Closeable {
     public ScanResult<byte[]> scan(byte[] cursor, ScanParams params, byte[] type) {
         checkNotClosed();
         try {
-            String cursorStr = new String(cursor);
-            String typeStr = type != null ? new String(type) : null;
-            Object[] result;
+            String cursorStr = new String(cursor, StandardCharsets.UTF_8);
+            String typeStr = type != null ? new String(type, StandardCharsets.UTF_8) : null;
 
-            // Build SCAN command arguments for both cluster and standalone
+            if (isClusterMode) {
+                ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
+                if (params != null) {
+                    if (params.getMatchPattern() != null) {
+                        builder.matchPattern(params.getMatchPattern());
+                    }
+                    if (params.getCount() != null) {
+                        builder.count(params.getCount());
+                    }
+                }
+                if (typeStr != null) {
+                    ScanOptions.ObjectType objectType = convertStringToObjectType(typeStr);
+                    if (objectType != null) {
+                        builder.type(objectType);
+                    }
+                }
+                return binaryScanResultFromStringScan(
+                        clusterScanWithGlideCursor(cursorStr, builder.build()));
+            }
+
             List<GlideString> args = new ArrayList<>();
             args.add(GlideString.of("SCAN"));
             args.add(GlideString.of(cursorStr));
@@ -4758,24 +4669,71 @@ public class UnifiedJedis implements Closeable {
                 args.add(GlideString.of(typeStr));
             }
 
-            if (isClusterMode) {
-                ClusterValue<Object> clusterResult =
-                        glideClusterClient.customCommand(args.toArray(new GlideString[0])).get();
-                result = (Object[]) clusterResult.getSingleValue();
-            } else {
-                result = (Object[]) glideClient.customCommand(args.toArray(new GlideString[0])).get();
-            }
+            Object[] result =
+                    (Object[]) glideClient.customCommand(args.toArray(new GlideString[0])).get();
 
             String newCursor = result[0].toString();
             Object[] keys = (Object[]) result[1];
             List<byte[]> keyList = new ArrayList<>();
             for (Object key : keys) {
-                keyList.add(key.toString().getBytes());
+                keyList.add(key.toString().getBytes(StandardCharsets.UTF_8));
             }
-            return new ScanResult<>(newCursor.getBytes(), keyList);
+            return new ScanResult<>(newCursor.getBytes(StandardCharsets.UTF_8), keyList);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SCAN operation failed", e);
         }
+    }
+
+    private ClusterScanCursor resolveClusterScanCursor(String jedisCursor) {
+        if ("0".equals(jedisCursor)) {
+            return ClusterScanCursor.initialCursor();
+        }
+        WeakReference<ClusterScanCursor> ref = clusterScanCursorRegistry.remove(jedisCursor);
+        if (ref == null) {
+            throw new JedisException("Invalid or expired scan cursor: " + jedisCursor);
+        }
+        ClusterScanCursor cursor = ref.get();
+        if (cursor == null) {
+            throw new JedisException("Invalid or expired scan cursor: " + jedisCursor);
+        }
+        return cursor;
+    }
+
+    private ScanResult<String> clusterScanWithGlideCursor(String jedisCursor, ScanOptions options) {
+        ClusterScanCursor input = resolveClusterScanCursor(jedisCursor);
+        try {
+            Object[] result =
+                    options == null
+                            ? glideClusterClient.scan(input).get()
+                            : glideClusterClient.scan(input, options).get();
+            ClusterScanCursor next = (ClusterScanCursor) result[0];
+            String[] keys = (String[]) result[1];
+            List<String> keyList = Arrays.asList(keys);
+
+            String outCursor;
+            if (next.isFinished()) {
+                outCursor = "0";
+            } else {
+                String id = Long.toString(clusterScanCursorToken.getAndIncrement());
+                clusterScanCursorRegistry.put(id, new WeakReference<>(next));
+                outCursor = id;
+            }
+            return new ScanResult<>(outCursor, keyList);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new JedisException("SCAN operation failed", e);
+        } finally {
+            if (input != ClusterScanCursor.initialCursor()) {
+                input.releaseCursorHandle();
+            }
+        }
+    }
+
+    private static ScanResult<byte[]> binaryScanResultFromStringScan(ScanResult<String> sr) {
+        List<byte[]> binaryKeys =
+                sr.getResult().stream()
+                        .map(s -> s == null ? null : s.getBytes(StandardCharsets.UTF_8))
+                        .collect(Collectors.toList());
+        return new ScanResult<>(sr.getCursor().getBytes(StandardCharsets.UTF_8), binaryKeys);
     }
 
     // ========== STANDALONE-SPECIFIC OPERATIONS ==========

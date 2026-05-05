@@ -7,12 +7,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Manages the lifecycle of Jedis resources including connection tracking, cleanup scheduling, and
  * resource monitoring.
  */
 public class ResourceLifecycleManager {
+
+    private static final Logger LOGGER = Logger.getLogger(ResourceLifecycleManager.class.getName());
 
     private static final ResourceLifecycleManager INSTANCE = new ResourceLifecycleManager();
 
@@ -159,9 +163,7 @@ public class ResourceLifecycleManager {
             try {
                 resource.close();
             } catch (Exception e) {
-                // Log the error but don't throw
-                System.err.println("Error closing resource:");
-                e.printStackTrace();
+                LOGGER.log(Level.WARNING, "Error closing resource", e);
             }
         }
     }
