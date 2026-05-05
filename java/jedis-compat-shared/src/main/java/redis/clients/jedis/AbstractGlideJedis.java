@@ -72,7 +72,6 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
-import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
 import java.util.ArrayList;
@@ -101,22 +100,22 @@ import redis.clients.jedis.args.SortedSetOption;
 import redis.clients.jedis.commands.ProtocolCommand;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
-import redis.clients.jedis.params.BitPosParams;
-import redis.clients.jedis.params.GeoSearchParam;
-import redis.clients.jedis.params.GetExParams;
-import redis.clients.jedis.params.HGetExParams;
-import redis.clients.jedis.params.HSetExParams;
-import redis.clients.jedis.params.LCSParams;
-import redis.clients.jedis.params.LPosParams;
-import redis.clients.jedis.params.ScanParams;
-import redis.clients.jedis.params.SetParams;
-import redis.clients.jedis.params.SortingParams;
-import redis.clients.jedis.params.XAddParams;
-import redis.clients.jedis.params.XTrimParams;
-import redis.clients.jedis.params.ZAddParams;
-import redis.clients.jedis.params.ZIncrByParams;
-import redis.clients.jedis.params.ZParams;
-import redis.clients.jedis.params.ZRangeParams;
+import redis.clients.jedis.params.AbstractBitPosParams;
+import redis.clients.jedis.params.AbstractGeoSearchParam;
+import redis.clients.jedis.params.AbstractGetExParams;
+import redis.clients.jedis.params.AbstractHGetExParams;
+import redis.clients.jedis.params.AbstractHSetExParams;
+import redis.clients.jedis.params.AbstractLCSParams;
+import redis.clients.jedis.params.AbstractLPosParams;
+import redis.clients.jedis.params.AbstractScanParams;
+import redis.clients.jedis.params.AbstractSetParams;
+import redis.clients.jedis.params.AbstractSortingParams;
+import redis.clients.jedis.params.AbstractXAddParams;
+import redis.clients.jedis.params.AbstractXTrimParams;
+import redis.clients.jedis.params.AbstractZAddParams;
+import redis.clients.jedis.params.AbstractZIncrByParams;
+import redis.clients.jedis.params.AbstractZParams;
+import redis.clients.jedis.params.AbstractZRangeParams;
 import redis.clients.jedis.resps.AccessControlLogEntry;
 import redis.clients.jedis.resps.AccessControlUser;
 import redis.clients.jedis.resps.FunctionStats;
@@ -168,8 +167,9 @@ import redis.clients.jedis.util.Pool;
  * @since 1.0.0
  * @see GlideClient
  * @see JedisClientConfig
+ * @see JedisCommon
  */
-public abstract class AbstractGlideJedis implements Closeable {
+public abstract class AbstractGlideJedis extends JedisCommon {
 
     private static final Logger logger = Logger.getLogger(AbstractGlideJedis.class.getName());
 
@@ -201,14 +201,6 @@ public abstract class AbstractGlideJedis implements Closeable {
     // Store connection parameters for lazy initialization (nullable for pooled connections)
     private final String host;
     private final int port;
-
-    /**
-     * When {@code true}, use Jedis 5.x-shaped compatibility semantics for {@link #select(int)} and
-     * {@link #getDB()}; when {@code false}, use Jedis 4.x-shaped semantics.
-     */
-    protected boolean isJedis5CompatibilityLayer() {
-        return false;
-    }
 
     /** Create a new Jedis instance with default localhost:6379 connection. */
     protected AbstractGlideJedis() {
@@ -420,7 +412,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params set parameters
      * @return "OK" if successful, null if not set due to conditions
      */
-    public String set(final String key, final String value, final SetParams params) {
+    public String set(final String key, final String value, final AbstractSetParams<?> params) {
         return executeCommandWithGlide(
                 "SET",
                 () -> {
@@ -437,7 +429,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params set parameters
      * @return "OK" if successful, null if not set due to conditions
      */
-    public String set(final byte[] key, final byte[] value, final SetParams params) {
+    public String set(final byte[] key, final byte[] value, final AbstractSetParams<?> params) {
         return executeCommandWithGlide(
                 "SET",
                 () -> {
@@ -474,8 +466,8 @@ public abstract class AbstractGlideJedis implements Closeable {
         }
     }
 
-    /** Convert Jedis SetParams to GLIDE SetOptions. */
-    private static SetOptions convertSetParamsToSetOptions(SetParams params) {
+    /** Convert Jedis AbstractSetParams<?> to GLIDE SetOptions. */
+    private static SetOptions convertSetParamsToSetOptions(AbstractSetParams<?> params) {
         SetOptions.SetOptionsBuilder builder = SetOptions.builder();
 
         // Handle existence conditions
@@ -519,8 +511,8 @@ public abstract class AbstractGlideJedis implements Closeable {
         return builder.build();
     }
 
-    /** Add SetParams options to String command arguments. */
-    private static void addSetParamsToArgs(List<String> args, SetParams params) {
+    /** Add AbstractSetParams<?> options to String command arguments. */
+    private static void addSetParamsToArgs(List<String> args, AbstractSetParams<?> params) {
         // Handle existence conditions
         if (params.getExistenceCondition() != null) {
             switch (params.getExistenceCondition()) {
@@ -559,8 +551,9 @@ public abstract class AbstractGlideJedis implements Closeable {
         }
     }
 
-    /** Add SetParams options to GlideString command arguments. */
-    private static void addSetParamsToGlideStringArgs(List<GlideString> args, SetParams params) {
+    /** Add AbstractSetParams<?> options to GlideString command arguments. */
+    private static void addSetParamsToGlideStringArgs(
+            List<GlideString> args, AbstractSetParams<?> params) {
         // Handle existence conditions
         if (params.getExistenceCondition() != null) {
             switch (params.getExistenceCondition()) {
@@ -600,8 +593,8 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Convert Jedis GetExParams to GLIDE GetExOptions. This helper method translates between the
-     * Jedis parameter format and the GLIDE native options format for GETEX operations.
+     * Convert Jedis AbstractGetExParams<?> to GLIDE GetExOptions. This helper method translates
+     * between the Jedis parameter format and the GLIDE native options format for GETEX operations.
      *
      * <p>Supported conversions:
      *
@@ -613,12 +606,12 @@ public abstract class AbstractGlideJedis implements Closeable {
      *   <li>PERSIST → GetExOptions.Persist()
      * </ul>
      *
-     * @param params the Jedis GetExParams to convert (must not be null and must have expiration type
-     *     set)
+     * @param params the Jedis AbstractGetExParams<?> to convert (must not be null and must have
+     *     expiration type set)
      * @return the equivalent GLIDE GetExOptions
      * @throws IllegalArgumentException if params is invalid or no expiration type is specified
      */
-    private static GetExOptions convertGetExParamsToGetExOptions(GetExParams params) {
+    private static GetExOptions convertGetExParamsToGetExOptions(AbstractGetExParams<?> params) {
         if (params.getExpirationType() != null) {
             switch (params.getExpirationType()) {
                 case EX:
@@ -634,8 +627,9 @@ public abstract class AbstractGlideJedis implements Closeable {
             }
         }
 
-        // Default case - should not happen with proper GetExParams usage
-        throw new IllegalArgumentException("Invalid GetExParams: no expiration type specified");
+        // Default case - should not happen with proper AbstractGetExParams<?> usage
+        throw new IllegalArgumentException(
+                "Invalid AbstractGetExParams<?>: no expiration type specified");
     }
 
     /**
@@ -1951,7 +1945,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params additional SET parameters
      * @return the old value, or null if key did not exist
      */
-    public String setGet(final String key, final String value, final SetParams params) {
+    public String setGet(final String key, final String value, final AbstractSetParams<?> params) {
         return executeCommandWithGlide(
                 "SETGET",
                 () -> { // Build SET command with correct parameter order: SET key value [params] GET
@@ -1960,7 +1954,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                     args.add(key);
                     args.add(value);
                     addSetParamsToArgs(args, params);
-                    // Add GET option AFTER SetParams
+                    // Add GET option AFTER AbstractSetParams<?>
                     args.add("GET");
 
                     Object result = glideClient.customCommand(args.toArray(new String[0])).get();
@@ -1976,7 +1970,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params additional SET parameters
      * @return the old value, or null if key did not exist
      */
-    public byte[] setGet(final byte[] key, final byte[] value, final SetParams params) {
+    public byte[] setGet(final byte[] key, final byte[] value, final AbstractSetParams<?> params) {
         return executeCommandWithGlide(
                 "SETGET",
                 () -> { // Build SET command with correct parameter order: SET key value [params] GET
@@ -1985,7 +1979,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                     args.add(GlideString.of(key));
                     args.add(GlideString.of(value));
                     addSetParamsToGlideStringArgs(args, params);
-                    // Add GET option AFTER SetParams
+                    // Add GET option AFTER AbstractSetParams<?>
                     args.add(GlideString.of("GET"));
 
                     Object result = glideClient.customCommand(args.toArray(new GlideString[0])).get();
@@ -2037,9 +2031,9 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return the value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
-     * @see GetExParams
+     * @see AbstractGetExParams<?>
      */
-    public String getEx(final String key, final GetExParams params) {
+    public String getEx(final String key, final AbstractGetExParams<?> params) {
         return executeCommandWithGlide(
                 "GETEX",
                 () -> {
@@ -2067,9 +2061,9 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return the binary value of the key, or null if the key does not exist
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
-     * @see GetExParams
+     * @see AbstractGetExParams<?>
      */
-    public byte[] getEx(final byte[] key, final GetExParams params) {
+    public byte[] getEx(final byte[] key, final AbstractGetExParams<?> params) {
         return executeCommandWithGlide(
                 "GETEX",
                 () -> {
@@ -2236,7 +2230,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @since Valkey 7.0.0
      */
-    public LCSMatchResult lcs(String keyA, String keyB, LCSParams params) {
+    public LCSMatchResult lcs(String keyA, String keyB, AbstractLCSParams<?> params) {
         return executeCommandWithGlide(
                 "LCS",
                 () -> {
@@ -2272,7 +2266,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
      * @since Valkey 7.0.0
      */
-    public LCSMatchResult lcs(byte[] keyA, byte[] keyB, LCSParams params) {
+    public LCSMatchResult lcs(byte[] keyA, byte[] keyB, AbstractLCSParams<?> params) {
         return executeCommandWithGlide(
                 "LCS",
                 () -> {
@@ -2301,9 +2295,9 @@ public abstract class AbstractGlideJedis implements Closeable {
                 });
     }
 
-    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options. */
-    private Map<String, Object> callLcsIdxWithParams(String keyA, String keyB, LCSParams params)
-            throws Exception {
+    /** Calls the appropriate GLIDE lcsIdx method based on AbstractLCSParams<?> options. */
+    private Map<String, Object> callLcsIdxWithParams(
+            String keyA, String keyB, AbstractLCSParams<?> params) throws Exception {
         Long minMatchLen = params.getMinMatchLen();
         if (params.isWithMatchLen()) {
             return minMatchLen != null
@@ -2315,9 +2309,12 @@ public abstract class AbstractGlideJedis implements Closeable {
                 : glideClient.lcsIdx(keyA, keyB).get();
     }
 
-    /** Calls the appropriate GLIDE lcsIdx method based on LCSParams options (binary version). */
+    /**
+     * Calls the appropriate GLIDE lcsIdx method based on AbstractLCSParams<?> options (binary
+     * version).
+     */
     private Map<String, Object> callLcsIdxWithParams(
-            GlideString keyA, GlideString keyB, LCSParams params) throws Exception {
+            GlideString keyA, GlideString keyB, AbstractLCSParams<?> params) throws Exception {
         Long minMatchLen = params.getMinMatchLen();
         if (params.isWithMatchLen()) {
             return minMatchLen != null
@@ -3324,8 +3321,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param result the GLIDE scan result
      * @return ScanResult with cursor and keys
      */
-    /** Helper method to convert Jedis LPosParams to GLIDE LPosOptions. */
-    private static LPosOptions convertLPosParamsToLPosOptions(LPosParams params) {
+    /** Helper method to convert Jedis AbstractLPosParams<?> to GLIDE LPosOptions. */
+    private static LPosOptions convertLPosParamsToLPosOptions(AbstractLPosParams<?> params) {
         LPosOptions.LPosOptionsBuilder builder = LPosOptions.builder();
         if (params.getRank() != null) {
             builder.rank((long) params.getRank());
@@ -3381,8 +3378,8 @@ public abstract class AbstractGlideJedis implements Closeable {
         return new ScanResult<>("0", Collections.emptyList());
     }
 
-    /** Convert ScanParams to GLIDE ScanOptions. */
-    private static ScanOptions convertScanParamsToScanOptions(ScanParams params) {
+    /** Convert AbstractScanParams<?> to GLIDE ScanOptions. */
+    private static ScanOptions convertScanParamsToScanOptions(AbstractScanParams<?> params) {
         ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
 
         if (params.getMatchPattern() != null) {
@@ -3414,7 +3411,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the scan parameters
      * @return scan result with new cursor and keys
      */
-    public ScanResult<String> scan(final String cursor, final ScanParams params) {
+    public ScanResult<String> scan(final String cursor, final AbstractScanParams<?> params) {
         return executeCommandWithGlide(
                 "SCAN",
                 () -> {
@@ -3431,7 +3428,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the scan parameters
      * @return scan result with new cursor and keys
      */
-    public ScanResult<byte[]> scan(final byte[] cursor, final ScanParams params) {
+    public ScanResult<byte[]> scan(final byte[] cursor, final AbstractScanParams<?> params) {
         checkNotClosed();
         try {
             ScanOptions options = convertScanParamsToScanOptions(params);
@@ -3511,7 +3508,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param type the type filter
      * @return scan result with new cursor and keys
      */
-    public ScanResult<String> scan(final String cursor, final ScanParams params, final String type) {
+    public ScanResult<String> scan(
+            final String cursor, final AbstractScanParams<?> params, final String type) {
         checkNotClosed();
         try {
             ScanOptions options = convertScanParamsToScanOptions(params);
@@ -3544,7 +3542,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param type the type filter
      * @return scan result with new cursor and keys
      */
-    public ScanResult<byte[]> scan(final byte[] cursor, final ScanParams params, final byte[] type) {
+    public ScanResult<byte[]> scan(
+            final byte[] cursor, final AbstractScanParams<?> params, final byte[] type) {
         checkNotClosed();
         try {
             ScanOptions options = convertScanParamsToScanOptions(params);
@@ -3920,7 +3919,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the bitpos parameters
      * @return the position of the first bit set to the specified value, or -1 if not found
      */
-    public long bitpos(final String key, final boolean value, final BitPosParams params) {
+    public long bitpos(final String key, final boolean value, final AbstractBitPosParams<?> params) {
         checkNotClosed();
         try {
             long bitValue = value ? 1L : 0L;
@@ -3952,7 +3951,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the bitpos parameters
      * @return the position of the first bit set to the specified value, or -1 if not found
      */
-    public long bitpos(final byte[] key, final boolean value, final BitPosParams params) {
+    public long bitpos(final byte[] key, final boolean value, final AbstractBitPosParams<?> params) {
         checkNotClosed();
         try {
             long bitValue = value ? 1L : 0L;
@@ -5356,7 +5355,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
      *     the hash and the value was updated
      */
-    public long hsetex(String key, HSetExParams params, String field, String value) {
+    public long hsetex(String key, AbstractHSetExParams<?> params, String field, String value) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5401,7 +5400,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param hash a map of field-value pairs to set in the hash
      * @return the number of fields that were added
      */
-    public long hsetex(String key, HSetExParams params, Map<String, String> hash) {
+    public long hsetex(String key, AbstractHSetExParams<?> params, Map<String, String> hash) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5449,7 +5448,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param fields the fields whose values are to be retrieved
      * @return a list of the value associated with each field or nil if the field doesn't exist
      */
-    public List<String> hgetex(String key, HGetExParams params, String... fields) {
+    public List<String> hgetex(String key, AbstractHGetExParams<?> params, String... fields) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5532,7 +5531,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return 1 if field is a new field in the hash and value was set, 0 if field already exists in
      *     the hash and the value was updated
      */
-    public long hsetex(byte[] key, HSetExParams params, byte[] field, byte[] value) {
+    public long hsetex(byte[] key, AbstractHSetExParams<?> params, byte[] field, byte[] value) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5577,7 +5576,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param hash a map of field-value pairs to set in the hash
      * @return the number of fields that were added
      */
-    public long hsetex(byte[] key, HSetExParams params, Map<byte[], byte[]> hash) {
+    public long hsetex(byte[] key, AbstractHSetExParams<?> params, Map<byte[], byte[]> hash) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5625,7 +5624,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param fields the fields whose values are to be retrieved
      * @return a list of the value associated with each field or nil if the field doesn't exist
      */
-    public List<byte[]> hgetex(byte[] key, HGetExParams params, byte[]... fields) {
+    public List<byte[]> hgetex(byte[] key, AbstractHGetExParams<?> params, byte[]... fields) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5708,7 +5707,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return scan result with the cursor and the fields
      */
     public ScanResult<Map.Entry<String, String>> hscan(String key, String cursor) {
-        return hscan(key, cursor, new ScanParams());
+        return hscan(key, cursor, AbstractScanParams.empty());
     }
 
     /**
@@ -5719,7 +5718,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return scan result with the cursor and the fields
      */
     public ScanResult<Map.Entry<byte[], byte[]>> hscan(final byte[] key, final byte[] cursor) {
-        return hscan(key, cursor, new ScanParams());
+        return hscan(key, cursor, AbstractScanParams.empty());
     }
 
     /**
@@ -5730,7 +5729,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the scan parameters
      * @return scan result with the cursor and the fields
      */
-    public ScanResult<Map.Entry<String, String>> hscan(String key, String cursor, ScanParams params) {
+    public ScanResult<Map.Entry<String, String>> hscan(
+            String key, String cursor, AbstractScanParams<?> params) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5762,7 +5762,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return scan result with the cursor and the fields
      */
     public ScanResult<Map.Entry<byte[], byte[]>> hscan(
-            final byte[] key, final byte[] cursor, final ScanParams params) {
+            final byte[] key, final byte[] cursor, final AbstractScanParams<?> params) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5794,7 +5794,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return scan result with the cursor and the field names
      */
     public ScanResult<String> hscanNoValues(String key, String cursor) {
-        return hscanNoValues(key, cursor, new ScanParams());
+        return hscanNoValues(key, cursor, AbstractScanParams.empty());
     }
 
     /**
@@ -5805,7 +5805,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return scan result with the cursor and the field names
      */
     public ScanResult<byte[]> hscanNoValues(final byte[] key, final byte[] cursor) {
-        return hscanNoValues(key, cursor, new ScanParams());
+        return hscanNoValues(key, cursor, AbstractScanParams.empty());
     }
 
     /**
@@ -5816,7 +5816,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the scan parameters
      * @return scan result with the cursor and the field names
      */
-    public ScanResult<String> hscanNoValues(String key, String cursor, ScanParams params) {
+    public ScanResult<String> hscanNoValues(String key, String cursor, AbstractScanParams<?> params) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -5846,7 +5846,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return scan result with the cursor and the field names
      */
     public ScanResult<byte[]> hscanNoValues(
-            final byte[] key, final byte[] cursor, final ScanParams params) {
+            final byte[] key, final byte[] cursor, final AbstractScanParams<?> params) {
         checkNotClosed();
         ensureInitialized();
         try {
@@ -6710,8 +6710,8 @@ public abstract class AbstractGlideJedis implements Closeable {
         return Arrays.asList((Long) null);
     }
 
-    /** Helper method to convert Jedis ScanParams to GLIDE HScanOptions. */
-    private static HScanOptions convertScanParamsToHScanOptions(ScanParams params) {
+    /** Helper method to convert Jedis AbstractScanParams<?> to GLIDE HScanOptions. */
+    private static HScanOptions convertScanParamsToHScanOptions(AbstractScanParams<?> params) {
         HScanOptions.HScanOptionsBuilder builder = HScanOptions.builder();
 
         if (params.getMatchPattern() != null) {
@@ -6725,8 +6725,9 @@ public abstract class AbstractGlideJedis implements Closeable {
         return builder.build();
     }
 
-    /** Helper method to convert Jedis ScanParams to GLIDE HScanOptionsBinary. */
-    private static HScanOptionsBinary convertScanParamsToHScanOptionsBinary(ScanParams params) {
+    /** Helper method to convert Jedis AbstractScanParams<?> to GLIDE HScanOptionsBinary. */
+    private static HScanOptionsBinary convertScanParamsToHScanOptionsBinary(
+            AbstractScanParams<?> params) {
         HScanOptionsBinary.HScanOptionsBinaryBuilder builder = HScanOptionsBinary.builder();
 
         if (params.getMatchPattern() != null) {
@@ -6830,14 +6831,14 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Adds an entry to the stream at key with XAddParams. Uses GLIDE type-safe xadd.
+     * Adds an entry to the stream at key with AbstractXAddParams<?>. Uses GLIDE type-safe xadd.
      *
      * @param key stream key
      * @param params add parameters
      * @param hash field-value map
      * @return generated entry ID, or null if stream did not exist and makeStream was false
      */
-    public StreamEntryID xadd(String key, XAddParams params, Map<String, String> hash) {
+    public StreamEntryID xadd(String key, AbstractXAddParams<?> params, Map<String, String> hash) {
         return executeCommandWithGlide(
                 "XADD",
                 () -> {
@@ -6847,14 +6848,15 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Adds an entry to the stream at key with XAddParams - binary version. Uses GLIDE type-safe xadd.
+     * Adds an entry to the stream at key with AbstractXAddParams<?> - binary version. Uses GLIDE
+     * type-safe xadd.
      *
      * @param key stream key
      * @param params add parameters
      * @param hash field-value map
      * @return generated entry ID as byte[], or null if stream did not exist and makeStream was false
      */
-    public byte[] xadd(byte[] key, XAddParams params, Map<byte[], byte[]> hash) {
+    public byte[] xadd(byte[] key, AbstractXAddParams<?> params, Map<byte[], byte[]> hash) {
         return executeCommandWithGlide(
                 "XADD",
                 () -> {
@@ -7083,13 +7085,13 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Trims the stream using XTrimParams. Uses GLIDE xtrim.
+     * Trims the stream using AbstractXTrimParams<?>. Uses GLIDE xtrim.
      *
      * @param key stream key
      * @param params trim parameters
      * @return number of entries deleted
      */
-    public long xtrim(String key, XTrimParams params) {
+    public long xtrim(String key, AbstractXTrimParams<?> params) {
         return executeCommandWithGlide(
                 "XTRIM", () -> glideClient.xtrim(key, params.toStreamTrimOptions()).get());
     }
@@ -7123,13 +7125,13 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Trims the stream using XTrimParams - binary version. Uses GLIDE xtrim.
+     * Trims the stream using AbstractXTrimParams<?> - binary version. Uses GLIDE xtrim.
      *
      * @param key stream key
      * @param params trim parameters
      * @return number of entries deleted
      */
-    public long xtrim(byte[] key, XTrimParams params) {
+    public long xtrim(byte[] key, AbstractXTrimParams<?> params) {
         return xtrim(new String(key), params);
     }
 
@@ -7447,8 +7449,8 @@ public abstract class AbstractGlideJedis implements Closeable {
                 });
     }
 
-    /** Helper method to convert Jedis ScanParams to GLIDE ZScanOptions. */
-    private static ZScanOptions convertScanParamsToZScanOptions(ScanParams params) {
+    /** Helper method to convert Jedis AbstractScanParams<?> to GLIDE ZScanOptions. */
+    private static ZScanOptions convertScanParamsToZScanOptions(AbstractScanParams<?> params) {
         ZScanOptions.ZScanOptionsBuilder builder = ZScanOptions.builder();
 
         if (params.getMatchPattern() != null) {
@@ -7462,8 +7464,9 @@ public abstract class AbstractGlideJedis implements Closeable {
         return builder.build();
     }
 
-    /** Helper method to convert Jedis ScanParams to GLIDE ZScanOptionsBinary. */
-    private static ZScanOptionsBinary convertScanParamsToZScanOptionsBinary(ScanParams params) {
+    /** Helper method to convert Jedis AbstractScanParams<?> to GLIDE ZScanOptionsBinary. */
+    private static ZScanOptionsBinary convertScanParamsToZScanOptionsBinary(
+            AbstractScanParams<?> params) {
         ZScanOptionsBinary.ZScanOptionsBinaryBuilder builder = ZScanOptionsBinary.builder();
 
         if (params.getMatchPattern() != null) {
@@ -8229,7 +8232,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params additional parameters for the search
      * @return the index of the matching element, or null if not found
      */
-    public Long lpos(String key, String element, LPosParams params) {
+    public Long lpos(String key, String element, AbstractLPosParams<?> params) {
         return executeCommandWithGlide(
                 "LPOS",
                 () -> {
@@ -8247,7 +8250,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params additional parameters for the search
      * @return the index of the matching element, or null if not found
      */
-    public Long lpos(final byte[] key, final byte[] element, LPosParams params) {
+    public Long lpos(final byte[] key, final byte[] element, AbstractLPosParams<?> params) {
         return executeCommandWithGlide(
                 "LPOS",
                 () -> {
@@ -8265,7 +8268,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param count the maximum number of matches to return
      * @return list of indices of matching elements
      */
-    public List<Long> lpos(String key, String element, LPosParams params, long count) {
+    public List<Long> lpos(String key, String element, AbstractLPosParams<?> params, long count) {
         return executeCommandWithGlide(
                 "LPOS",
                 () -> {
@@ -8284,7 +8287,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param count the maximum number of matches to return
      * @return list of indices of matching elements
      */
-    public List<Long> lpos(final byte[] key, final byte[] element, LPosParams params, long count) {
+    public List<Long> lpos(
+            final byte[] key, final byte[] element, AbstractLPosParams<?> params, long count) {
         return executeCommandWithGlide(
                 "LPOS",
                 () -> {
@@ -9646,7 +9650,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return the number of elements added or updated, depending on the CH option
      * @since Valkey 3.0.2
      */
-    public long zadd(String key, double score, String member, ZAddParams params) {
+    public long zadd(String key, double score, String member, AbstractZAddParams<?> params) {
         return zadd(key, createMap(member, score), params);
     }
 
@@ -9675,7 +9679,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params additional options for the ZADD command
      * @return the number of elements added or updated, depending on the CH option
      */
-    public long zadd(byte[] key, double score, byte[] member, ZAddParams params) {
+    public long zadd(byte[] key, double score, byte[] member, AbstractZAddParams<?> params) {
         return zadd(key, createMap(member, score), params);
     }
 
@@ -9723,7 +9727,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
      * @since Valkey 3.0.2
      */
-    public long zadd(String key, Map<String, Double> scoreMembers, ZAddParams params) {
+    public long zadd(String key, Map<String, Double> scoreMembers, AbstractZAddParams<?> params) {
         return executeCommandWithGlide(
                 "ZADD",
                 () -> {
@@ -9742,7 +9746,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params additional options for the ZADD command
      * @return the number of elements added or updated, depending on the CH option
      */
-    public long zadd(final byte[] key, Map<byte[], Double> scoreMembers, ZAddParams params) {
+    public long zadd(
+            final byte[] key, Map<byte[], Double> scoreMembers, AbstractZAddParams<?> params) {
         return executeCommandWithGlide(
                 "ZADD",
                 () -> {
@@ -10106,14 +10111,14 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Returns elements from a sorted set using ZRangeParams for advanced range queries.
+     * Returns elements from a sorted set using AbstractZRangeParams<?> for advanced range queries.
      *
      * @param key the key of the sorted set
      * @param zRangeParams the range parameters (by index, score, or lex)
      * @return a list of elements in the specified range
      * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
      */
-    public List<String> zrange(String key, ZRangeParams zRangeParams) {
+    public List<String> zrange(String key, AbstractZRangeParams<?> zRangeParams) {
         return executeCommandWithGlide(
                 "ZRANGE",
                 () -> {
@@ -10123,14 +10128,14 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Returns elements from a sorted set using ZRangeParams for advanced range queries (binary
-     * version).
+     * Returns elements from a sorted set using AbstractZRangeParams<?> for advanced range queries
+     * (binary version).
      *
      * @param key the key of the sorted set
      * @param zRangeParams the range parameters (by index, score, or lex)
      * @return a list of elements in the specified range
      */
-    public List<byte[]> zrange(byte[] key, ZRangeParams zRangeParams) {
+    public List<byte[]> zrange(byte[] key, AbstractZRangeParams<?> zRangeParams) {
         return executeCommandWithGlide(
                 "ZRANGE",
                 () -> {
@@ -10476,7 +10481,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
      * @since Valkey 3.0.2
      */
-    public Double zincrby(String key, double increment, String member, ZIncrByParams params) {
+    public Double zincrby(
+            String key, double increment, String member, AbstractZIncrByParams<?> params) {
         return executeCommandWithGlide(
                 "ZINCRBY",
                 () -> {
@@ -10496,7 +10502,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      *     conditions
      */
     public Double zincrby(
-            final byte[] key, double increment, final byte[] member, ZIncrByParams params) {
+            final byte[] key, double increment, final byte[] member, AbstractZIncrByParams<?> params) {
         return executeCommandWithGlide(
                 "ZINCRBY",
                 () -> {
@@ -10716,13 +10722,13 @@ public abstract class AbstractGlideJedis implements Closeable {
      * destination key.
      *
      * @param dstkey the destination key
-     * @param params the ZParams containing weights and aggregation options
+     * @param params the AbstractZParams<?> containing weights and aggregation options
      * @param sets the keys of the sorted sets to union
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zunionstore/">valkey.io</a>
      * @since Valkey 2.0.0
      */
-    public long zunionstore(String dstkey, ZParams params, String... sets) {
+    public long zunionstore(String dstkey, AbstractZParams<?> params, String... sets) {
         return executeCommandWithGlide(
                 "ZUNIONSTORE",
                 () -> {
@@ -10741,11 +10747,11 @@ public abstract class AbstractGlideJedis implements Closeable {
      * destination key (binary version).
      *
      * @param dstkey the destination key
-     * @param params the ZParams containing weights and aggregation options
+     * @param params the AbstractZParams<?> containing weights and aggregation options
      * @param sets the keys of the sorted sets to union
      * @return the number of elements in the resulting sorted set
      */
-    public long zunionstore(final byte[] dstkey, ZParams params, final byte[]... sets) {
+    public long zunionstore(final byte[] dstkey, AbstractZParams<?> params, final byte[]... sets) {
         return executeCommandWithGlide(
                 "ZUNIONSTORE",
                 () -> {
@@ -10802,13 +10808,13 @@ public abstract class AbstractGlideJedis implements Closeable {
      * destination key.
      *
      * @param dstkey the destination key
-     * @param params the ZParams containing weights and aggregation options
+     * @param params the AbstractZParams<?> containing weights and aggregation options
      * @param sets the keys of the sorted sets to intersect
      * @return the number of elements in the resulting sorted set
      * @see <a href="https://valkey.io/commands/zinterstore/">valkey.io</a>
      * @since Valkey 2.0.0
      */
-    public long zinterstore(String dstkey, ZParams params, String... sets) {
+    public long zinterstore(String dstkey, AbstractZParams<?> params, String... sets) {
         return executeCommandWithGlide(
                 "ZINTERSTORE",
                 () -> {
@@ -10827,11 +10833,11 @@ public abstract class AbstractGlideJedis implements Closeable {
      * destination key (binary version).
      *
      * @param dstkey the destination key
-     * @param params the ZParams containing weights and aggregation options
+     * @param params the AbstractZParams<?> containing weights and aggregation options
      * @param sets the keys of the sorted sets to intersect
      * @return the number of elements in the resulting sorted set
      */
-    public long zinterstore(final byte[] dstkey, ZParams params, final byte[]... sets) {
+    public long zinterstore(final byte[] dstkey, AbstractZParams<?> params, final byte[]... sets) {
         return executeCommandWithGlide(
                 "ZINTERSTORE",
                 () -> {
@@ -11031,7 +11037,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @return a ScanResult containing the next cursor position and a list of Tuples
      * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
      */
-    public ScanResult<Tuple> zscan(String key, String cursor, ScanParams params) {
+    public ScanResult<Tuple> zscan(String key, String cursor, AbstractScanParams<?> params) {
         return executeCommandWithGlide(
                 "ZSCAN",
                 () -> {
@@ -11063,7 +11069,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params scan parameters for pattern matching and count
      * @return a ScanResult containing the next cursor position and a list of Tuples
      */
-    public ScanResult<Tuple> zscan(byte[] key, byte[] cursor, ScanParams params) {
+    public ScanResult<Tuple> zscan(byte[] key, byte[] cursor, AbstractScanParams<?> params) {
         return executeCommandWithGlide(
                 "ZSCAN",
                 () -> {
@@ -11134,7 +11140,7 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Stores elements from a sorted set using ZRangeParams into a destination key.
+     * Stores elements from a sorted set using AbstractZRangeParams<?> into a destination key.
      *
      * @param dest the destination key
      * @param src the source key
@@ -11143,7 +11149,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a>
      * @since Valkey 6.2.0
      */
-    public long zrangestore(String dest, String src, ZRangeParams zRangeParams) {
+    public long zrangestore(String dest, String src, AbstractZRangeParams<?> zRangeParams) {
         return executeCommandWithGlide(
                 "ZRANGESTORE",
                 () -> {
@@ -11153,14 +11159,15 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Stores elements from a sorted set using ZRangeParams into a destination key (binary version).
+     * Stores elements from a sorted set using AbstractZRangeParams<?> into a destination key (binary
+     * version).
      *
      * @param dest the destination key
      * @param src the source key
      * @param zRangeParams the range parameters (by index, score, or lex)
      * @return the number of elements stored in the destination sorted set
      */
-    public long zrangestore(byte[] dest, byte[] src, ZRangeParams zRangeParams) {
+    public long zrangestore(byte[] dest, byte[] src, AbstractZRangeParams<?> zRangeParams) {
         return executeCommandWithGlide(
                 "ZRANGESTORE",
                 () -> {
@@ -11273,12 +11280,12 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Converts Jedis ZAddParams to GLIDE ZAddOptions.
+     * Converts Jedis AbstractZAddParams<?> to GLIDE ZAddOptions.
      *
-     * @param params the Jedis ZAddParams
+     * @param params the Jedis AbstractZAddParams<?>
      * @return the corresponding GLIDE ZAddOptions
      */
-    private static ZAddOptions convertZAddParams(ZAddParams params) {
+    private static ZAddOptions convertZAddParams(AbstractZAddParams<?> params) {
         ZAddOptions.ZAddOptionsBuilder builder = ZAddOptions.builder();
 
         if (params.getNx() != null && params.getNx()) {
@@ -11319,12 +11326,13 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Converts Jedis ZIncrByParams to GLIDE ZAddOptions (ZINCRBY uses ZADD with INCR option).
+     * Converts Jedis AbstractZIncrByParams<?> to GLIDE ZAddOptions (ZINCRBY uses ZADD with INCR
+     * option).
      *
-     * @param params the Jedis ZIncrByParams
+     * @param params the Jedis AbstractZIncrByParams<?>
      * @return the corresponding GLIDE ZAddOptions
      */
-    private static ZAddOptions convertZIncrByParams(ZIncrByParams params) {
+    private static ZAddOptions convertZIncrByParams(AbstractZIncrByParams<?> params) {
         ZAddOptions.ZAddOptionsBuilder builder = ZAddOptions.builder();
 
         if (params.getNx() != null && params.getNx()) {
@@ -11337,12 +11345,12 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Converts ZRangeParams to GLIDE RangeQuery.
+     * Converts AbstractZRangeParams<?> to GLIDE RangeQuery.
      *
-     * @param params the ZRangeParams to convert
+     * @param params the AbstractZRangeParams<?> to convert
      * @return the corresponding GLIDE RangeQuery
      */
-    private static RangeQuery convertZRangeParamsToRangeQuery(ZRangeParams params) {
+    private static RangeQuery convertZRangeParamsToRangeQuery(AbstractZRangeParams<?> params) {
         switch (params.getBy()) {
             case INDEX:
                 int minIdx = (int) params.getMin();
@@ -11377,7 +11385,8 @@ public abstract class AbstractGlideJedis implements Closeable {
                     return new RangeByLex(minLex, maxLex);
                 }
             default:
-                throw new IllegalArgumentException("Unsupported ZRangeParams type: " + params.getBy());
+                throw new IllegalArgumentException(
+                        "Unsupported AbstractZRangeParams<?> type: " + params.getBy());
         }
     }
 
@@ -11430,12 +11439,12 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Converts Jedis ZParams.Aggregate to GLIDE Aggregate.
+     * Converts Jedis {@link AbstractZParams.Aggregate} to GLIDE Aggregate.
      *
      * @param aggregate the Jedis aggregate type
      * @return the corresponding GLIDE Aggregate
      */
-    private static Aggregate convertZParamsAggregate(ZParams.Aggregate aggregate) {
+    private static Aggregate convertZParamsAggregate(AbstractZParams.Aggregate aggregate) {
         switch (aggregate) {
             case SUM:
                 return Aggregate.SUM;
@@ -11449,13 +11458,14 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Converts ZParams and key array to GLIDE KeysOrWeightedKeys.
+     * Converts AbstractZParams<?> and key array to GLIDE KeysOrWeightedKeys.
      *
      * @param keys the sorted set keys
-     * @param params the ZParams containing weights
+     * @param params the AbstractZParams<?> containing weights
      * @return KeysOrWeightedKeys for GLIDE API
      */
-    private static KeysOrWeightedKeys convertZParamsToKeysOrWeighted(String[] keys, ZParams params) {
+    private static KeysOrWeightedKeys convertZParamsToKeysOrWeighted(
+            String[] keys, AbstractZParams<?> params) {
         List<Double> weights = params.getWeights();
         if (weights == null || weights.isEmpty()) {
             return new KeyArray(keys);
@@ -11470,14 +11480,14 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Converts ZParams and binary key array to GLIDE KeysOrWeightedKeysBinary.
+     * Converts AbstractZParams<?> and binary key array to GLIDE KeysOrWeightedKeysBinary.
      *
      * @param keys the sorted set keys (binary)
-     * @param params the ZParams containing weights
+     * @param params the AbstractZParams<?> containing weights
      * @return KeysOrWeightedKeysBinary for GLIDE API
      */
     private static KeysOrWeightedKeysBinary convertZParamsToKeysOrWeightedBinary(
-            byte[][] keys, ZParams params) {
+            byte[][] keys, AbstractZParams<?> params) {
         List<Double> weights = params.getWeights();
         if (weights == null || weights.isEmpty()) {
             GlideString[] glideKeys =
@@ -12777,7 +12787,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the scan parameters
      * @return scan result with next cursor and set of members
      */
-    public ScanResult<String> sscan(String key, String cursor, ScanParams params) {
+    public ScanResult<String> sscan(String key, String cursor, AbstractScanParams<?> params) {
         return executeCommandWithGlide(
                 "SSCAN",
                 () -> {
@@ -12811,7 +12821,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @param params the scan parameters
      * @return scan result with next cursor and set of members
      */
-    public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor, final ScanParams params) {
+    public ScanResult<byte[]> sscan(
+            final byte[] key, final byte[] cursor, final AbstractScanParams<?> params) {
         return executeCommandWithGlide(
                 "SSCAN",
                 () -> {
@@ -12855,8 +12866,8 @@ public abstract class AbstractGlideJedis implements Closeable {
         return new ScanResult<>("0", Collections.emptyList());
     }
 
-    /** Convert ScanParams to GLIDE SScanOptions. */
-    private static SScanOptions convertScanParamsToSScanOptions(ScanParams params) {
+    /** Convert AbstractScanParams<?> to GLIDE SScanOptions. */
+    private static SScanOptions convertScanParamsToSScanOptions(AbstractScanParams<?> params) {
         SScanOptions.SScanOptionsBuilder builder = SScanOptions.builder();
         if (params.getMatchPattern() != null) {
             builder.matchPattern(params.getMatchPattern());
@@ -12923,7 +12934,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
      * @since Valkey 7.0.0
      */
-    public List<String> sortReadonly(String key, SortingParams sortingParams) {
+    public List<String> sortReadonly(String key, AbstractSortingParams<?> sortingParams) {
         return executeCommandWithGlide(
                 "SORT_RO",
                 () -> {
@@ -12944,7 +12955,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/sort_ro/">valkey.io</a> for details.
      * @since Valkey 7.0.0
      */
-    public List<byte[]> sortReadonly(final byte[] key, SortingParams sortingParams) {
+    public List<byte[]> sortReadonly(final byte[] key, AbstractSortingParams<?> sortingParams) {
         return executeCommandWithGlide(
                 "SORT_RO",
                 () -> {
@@ -13000,7 +13011,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @since Valkey 1.0.0
      */
-    public long sort(String key, SortingParams sortingParameters, String dstkey) {
+    public long sort(String key, AbstractSortingParams<?> sortingParameters, String dstkey) {
         return executeCommandWithGlide(
                 "SORT",
                 () -> {
@@ -13020,7 +13031,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for details.
      * @since Valkey 1.0.0
      */
-    public long sort(final byte[] key, SortingParams sortingParameters, final byte[] dstkey) {
+    public long sort(
+            final byte[] key, AbstractSortingParams<?> sortingParameters, final byte[] dstkey) {
         return executeCommandWithGlide(
                 "SORT",
                 () -> {
@@ -13029,8 +13041,8 @@ public abstract class AbstractGlideJedis implements Closeable {
                 });
     }
 
-    /** Convert SortingParams to GLIDE SortOptions. */
-    private static SortOptions convertSortingParamsToSortOptions(SortingParams params) {
+    /** Convert AbstractSortingParams<?> to GLIDE SortOptions. */
+    private static SortOptions convertSortingParamsToSortOptions(AbstractSortingParams<?> params) {
         if (params == null) {
             return SortOptions.builder().build();
         }
@@ -13087,8 +13099,9 @@ public abstract class AbstractGlideJedis implements Closeable {
         return builder.build();
     }
 
-    /** Convert SortingParams to GLIDE SortOptionsBinary. */
-    private static SortOptionsBinary convertSortingParamsToSortOptionsBinary(SortingParams params) {
+    /** Convert AbstractSortingParams<?> to GLIDE SortOptionsBinary. */
+    private static SortOptionsBinary convertSortingParamsToSortOptionsBinary(
+            AbstractSortingParams<?> params) {
         if (params == null) {
             return SortOptionsBinary.builder().build();
         }
@@ -13968,7 +13981,7 @@ public abstract class AbstractGlideJedis implements Closeable {
 
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
-     * are within the borders of the area specified by the GeoSearchParam.
+     * are within the borders of the area specified by the AbstractGeoSearchParam<?>.
      *
      * @param key the key of the sorted set
      * @param params the search parameters
@@ -13976,7 +13989,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
-    public List<GeoRadiusResponse> geosearch(String key, GeoSearchParam params) {
+    public List<GeoRadiusResponse> geosearch(String key, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
                 "GEOSEARCH",
                 () -> {
@@ -13993,7 +14006,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                                         new GeospatialData(coord.getLongitude(), coord.getLatitude()));
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
                     }
 
                     // Determine shape
@@ -14004,7 +14017,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                         shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either radius or width/height");
+                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
                     }
 
                     // For simple search without options, use basic geosearch
@@ -14025,7 +14038,7 @@ public abstract class AbstractGlideJedis implements Closeable {
 
     /**
      * Returns the members of a sorted set populated with geospatial information using GEOADD, which
-     * are within the borders of the area specified by the GeoSearchParam (binary version).
+     * are within the borders of the area specified by the AbstractGeoSearchParam<?> (binary version).
      *
      * @param key the key of the sorted set
      * @param params the search parameters
@@ -14033,7 +14046,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
-    public List<GeoRadiusResponse> geosearch(final byte[] key, GeoSearchParam params) {
+    public List<GeoRadiusResponse> geosearch(final byte[] key, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
                 "GEOSEARCH",
                 () -> {
@@ -14052,7 +14065,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                                         new GeospatialData(coord.getLongitude(), coord.getLatitude()));
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
                     }
 
                     // Determine shape
@@ -14063,7 +14076,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                         shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either radius or width/height");
+                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
                     }
 
                     GlideString[] result = glideClient.geosearch(GlideString.of(key), origin, shape).get();
@@ -14337,8 +14350,8 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
-     * stores the result in a destination key.
+     * Searches for members in a sorted set representing geospatial data using a
+     * AbstractGeoSearchParam<?> and stores the result in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14347,7 +14360,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
-    public long geosearchStore(String dest, String src, GeoSearchParam params) {
+    public long geosearchStore(String dest, String src, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
@@ -14364,7 +14377,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                                         new GeospatialData(coord.getLongitude(), coord.getLatitude()));
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
                     }
 
                     // Determine shape
@@ -14375,7 +14388,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                         shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either radius or width/height");
+                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
                     }
 
                     return glideClient.geosearchstore(dest, src, origin, shape).get();
@@ -14383,8 +14396,8 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
-     * stores the result in a destination key (binary version).
+     * Searches for members in a sorted set representing geospatial data using a
+     * AbstractGeoSearchParam<?> and stores the result in a destination key (binary version).
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14393,7 +14406,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
-    public long geosearchStore(final byte[] dest, final byte[] src, GeoSearchParam params) {
+    public long geosearchStore(
+            final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
@@ -14412,7 +14426,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                                         new GeospatialData(coord.getLongitude(), coord.getLatitude()));
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
                     }
 
                     // Determine shape
@@ -14423,7 +14437,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                         shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either radius or width/height");
+                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
                     }
 
                     return glideClient
@@ -14433,8 +14447,8 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
-     * stores the result with distances in a destination key.
+     * Searches for members in a sorted set representing geospatial data using a
+     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key.
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14443,7 +14457,7 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
-    public long geosearchStoreStoreDist(String dest, String src, GeoSearchParam params) {
+    public long geosearchStoreStoreDist(String dest, String src, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
@@ -14460,7 +14474,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                                         new GeospatialData(coord.getLongitude(), coord.getLatitude()));
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
                     }
 
                     // Determine shape
@@ -14471,7 +14485,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                         shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either radius or width/height");
+                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
                     }
 
                     // Use geosearchstore with STOREDIST option
@@ -14481,8 +14495,9 @@ public abstract class AbstractGlideJedis implements Closeable {
     }
 
     /**
-     * Searches for members in a sorted set representing geospatial data using a GeoSearchParam and
-     * stores the result with distances in a destination key (binary version).
+     * Searches for members in a sorted set representing geospatial data using a
+     * AbstractGeoSearchParam<?> and stores the result with distances in a destination key (binary
+     * version).
      *
      * @param dest the destination key to store the result
      * @param src the source key of the sorted set
@@ -14491,7 +14506,8 @@ public abstract class AbstractGlideJedis implements Closeable {
      * @see <a href="https://valkey.io/commands/geosearchstore/">valkey.io</a> for details.
      * @since Valkey 6.2.0
      */
-    public long geosearchStoreStoreDist(final byte[] dest, final byte[] src, GeoSearchParam params) {
+    public long geosearchStoreStoreDist(
+            final byte[] dest, final byte[] src, AbstractGeoSearchParam<?> params) {
         return executeCommandWithGlide(
                 "GEOSEARCHSTORE",
                 () -> {
@@ -14510,7 +14526,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                                         new GeospatialData(coord.getLongitude(), coord.getLatitude()));
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either fromMember or fromCoordinate");
+                                "AbstractGeoSearchParam<?> must specify either fromMember or fromCoordinate");
                     }
 
                     // Determine shape
@@ -14521,7 +14537,7 @@ public abstract class AbstractGlideJedis implements Closeable {
                         shape = new GeoSearchShape(params.getWidth(), params.getHeight(), glideUnit);
                     } else {
                         throw new IllegalArgumentException(
-                                "GeoSearchParam must specify either radius or width/height");
+                                "AbstractGeoSearchParam<?> must specify either radius or width/height");
                     }
 
                     // Use geosearchstore with STOREDIST option

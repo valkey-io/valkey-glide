@@ -19,11 +19,9 @@ import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
-import java.io.Closeable;
 import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,13 +35,13 @@ import redis.clients.jedis.args.BitOP;
 import redis.clients.jedis.args.ExpiryOption;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
-import redis.clients.jedis.params.BitPosParams;
-import redis.clients.jedis.params.GetExParams;
-import redis.clients.jedis.params.MigrateParams;
-import redis.clients.jedis.params.RestoreParams;
-import redis.clients.jedis.params.ScanParams;
-import redis.clients.jedis.params.SetParams;
-import redis.clients.jedis.params.SortingParams;
+import redis.clients.jedis.params.AbstractBitPosParams;
+import redis.clients.jedis.params.AbstractGetExParams;
+import redis.clients.jedis.params.AbstractMigrateParams;
+import redis.clients.jedis.params.AbstractRestoreParams;
+import redis.clients.jedis.params.AbstractScanParams;
+import redis.clients.jedis.params.AbstractSetParams;
+import redis.clients.jedis.params.AbstractSortingParams;
 import redis.clients.jedis.resps.ScanResult;
 import redis.clients.jedis.util.JedisURIHelper;
 
@@ -100,8 +98,9 @@ import redis.clients.jedis.util.JedisURIHelper;
  * @see GlideClient
  * @see GlideClusterClient
  * @see JedisClientConfig
+ * @see JedisCommon
  */
-public abstract class AbstractUnifiedJedis implements Closeable {
+public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     private static final Logger LOGGER = Logger.getLogger(AbstractUnifiedJedis.class.getName());
 
@@ -122,17 +121,6 @@ public abstract class AbstractUnifiedJedis implements Closeable {
             clusterScanCursorRegistry = new ConcurrentHashMap<>();
 
     private final AtomicLong clusterScanCursorToken = new AtomicLong(1);
-
-    /** {@code true} for the Jedis 5-shaped compatibility module; {@code false} for Jedis 4-shaped. */
-    protected abstract boolean isJedis5CompatibilityLayer();
-
-    /**
-     * Charset used when converting between binary scan cursors/keys and strings (differs between
-     * Jedis 4-shaped and 5-shaped compatibility behavior).
-     */
-    protected Charset jedisBinaryCharset() {
-        return isJedis5CompatibilityLayer() ? Charset.defaultCharset() : StandardCharsets.UTF_8;
-    }
 
     // ========== STANDALONE CONSTRUCTORS ==========
 
@@ -774,7 +762,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * with optional parameters. This method provides advanced SET functionality including conditional
      * setting, expiration, and atomic get-and-set operations.
      *
-     * <p>The SetParams object allows you to specify:
+     * <p>The AbstractSetParams<?> object allows you to specify:
      *
      * <ul>
      *   <li>Existence conditions (NX - only if key doesn't exist, XX - only if key exists)
@@ -793,14 +781,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 1.0.0
      */
-    public String set(String key, String value, SetParams params) {
+    public String set(String key, String value, AbstractSetParams<?> params) {
         checkNotClosed();
         try {
             if (params == null) {
                 return baseClient.set(key, value).get();
             }
 
-            // Convert Jedis SetParams to GLIDE SetOptions
+            // Convert Jedis AbstractSetParams<?> to GLIDE SetOptions
             SetOptions options = convertSetParams(params);
             return baseClient.set(key, value, options).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -808,7 +796,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
         }
     }
 
-    private SetOptions convertSetParams(SetParams params) {
+    private SetOptions convertSetParams(AbstractSetParams<?> params) {
         return convertSetParams(params, false);
     }
 
@@ -853,7 +841,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
      */
-    public String setGet(String key, String value, SetParams params) {
+    public String setGet(String key, String value, AbstractSetParams<?> params) {
         checkNotClosed();
         try {
             SetOptions options;
@@ -867,11 +855,11 @@ public abstract class AbstractUnifiedJedis implements Closeable {
 
             return baseClient.set(key, value, options).get();
         } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETGET operation failed with SetParams: " + params, e);
+            throw new JedisException("SETGET operation failed with AbstractSetParams<?>: " + params, e);
         }
     }
 
-    private SetOptions convertSetParams(SetParams params, boolean forceReturnOldValue) {
+    private SetOptions convertSetParams(AbstractSetParams<?> params, boolean forceReturnOldValue) {
         SetOptions.SetOptionsBuilder builder = SetOptions.builder();
 
         // Handle existence conditions (NX/XX)
@@ -1101,14 +1089,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
      */
-    public String getEx(String key, GetExParams params) {
+    public String getEx(String key, AbstractGetExParams<?> params) {
         checkNotClosed();
         try {
             if (params == null) {
                 return baseClient.get(key).get();
             }
 
-            // Convert Jedis GetExParams to GLIDE GetExOptions
+            // Convert Jedis AbstractGetExParams<?> to GLIDE GetExOptions
             GetExOptions options = convertGetExParams(params);
             return baseClient.getex(key, options).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -1116,7 +1104,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
         }
     }
 
-    private GetExOptions convertGetExParams(GetExParams params) {
+    private GetExOptions convertGetExParams(AbstractGetExParams<?> params) {
         if (params.getExpirationType() == null) {
             return GetExOptions.Persist();
         }
@@ -1893,14 +1881,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 1.0.0
      */
-    public List<String> sort(String key, SortingParams sortingParams) {
+    public List<String> sort(String key, AbstractSortingParams<?> sortingParams) {
         checkNotClosed();
         try {
             if (sortingParams == null) {
                 return sort(key);
             }
 
-            // Convert Jedis SortingParams to GLIDE SortOptions
+            // Convert Jedis AbstractSortingParams<?> to GLIDE SortOptions
             SortOptions options = convertSortingParams(sortingParams);
             String[] result = baseClient.sort(key, options).get();
             return Arrays.asList(result);
@@ -1909,7 +1897,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
         }
     }
 
-    private SortOptions convertSortingParams(SortingParams params) {
+    private SortOptions convertSortingParams(AbstractSortingParams<?> params) {
         SortOptions.SortOptionsBuilder builder = SortOptions.builder();
 
         String[] args = params.getParams();
@@ -1952,7 +1940,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
         return builder.build();
     }
 
-    private SortOptionsBinary convertSortingParamsBinary(SortingParams params) {
+    private SortOptionsBinary convertSortingParamsBinary(AbstractSortingParams<?> params) {
         SortOptionsBinary.SortOptionsBinaryBuilder builder = SortOptionsBinary.builder();
 
         String[] args = params.getParams();
@@ -2034,14 +2022,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 1.0.0
      */
-    public long sort(String key, SortingParams sortingParams, String dstkey) {
+    public long sort(String key, AbstractSortingParams<?> sortingParams, String dstkey) {
         checkNotClosed();
         try {
             if (sortingParams == null) {
                 return sort(key, dstkey);
             }
 
-            // Convert Jedis SortingParams to GLIDE SortOptions
+            // Convert Jedis AbstractSortingParams<?> to GLIDE SortOptions
             SortOptions options = convertSortingParams(sortingParams);
             return baseClient.sortStore(key, dstkey, options).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -2063,14 +2051,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 7.0.0
      */
-    public List<String> sortReadonly(String key, SortingParams sortingParams) {
+    public List<String> sortReadonly(String key, AbstractSortingParams<?> sortingParams) {
         checkNotClosed();
         try {
             if (sortingParams == null) {
                 return sort(key);
             }
 
-            // Convert Jedis SortingParams to GLIDE SortOptions
+            // Convert Jedis AbstractSortingParams<?> to GLIDE SortOptions
             SortOptions options = convertSortingParams(sortingParams);
             String[] result = baseClient.sortReadOnly(key, options).get();
             return Arrays.asList(result);
@@ -2144,7 +2132,8 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 3.0.0
      */
-    public String restore(String key, long ttl, byte[] serializedValue, RestoreParams params) {
+    public String restore(
+            String key, long ttl, byte[] serializedValue, AbstractRestoreParams<?> params) {
         checkNotClosed();
         try {
             if (params == null) {
@@ -2159,7 +2148,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
         }
     }
 
-    private RestoreOptions convertRestoreParams(RestoreParams params) {
+    private RestoreOptions convertRestoreParams(AbstractRestoreParams<?> params) {
         RestoreOptions.RestoreOptionsBuilder builder = RestoreOptions.builder();
 
         String[] args = params.getParams();
@@ -2247,7 +2236,8 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 3.0.0
      */
-    public String migrate(String host, int port, int timeout, MigrateParams params, String... keys) {
+    public String migrate(
+            String host, int port, int timeout, AbstractMigrateParams<?> params, String... keys) {
         checkNotClosed();
         try {
             List<String> args = new ArrayList<>();
@@ -2258,7 +2248,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
             args.add("0"); // destination database (default to 0)
             args.add(String.valueOf(timeout));
 
-            // Add MigrateParams if provided
+            // Add AbstractMigrateParams<?> if provided
             if (params != null) {
                 String[] paramArray = params.getParams();
                 for (String param : paramArray) {
@@ -2375,14 +2365,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 2.8.0
      */
-    public ScanResult<String> scan(String cursor, ScanParams params) {
+    public ScanResult<String> scan(String cursor, AbstractScanParams<?> params) {
         checkNotClosed();
         try {
             if (params == null) {
                 return scan(cursor);
             }
 
-            // Convert Jedis ScanParams to GLIDE ScanOptions
+            // Convert Jedis AbstractScanParams<?> to GLIDE ScanOptions
             ScanOptions options = convertScanParams(params);
 
             Object[] result;
@@ -2401,7 +2391,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
                     args.add("SCAN");
                     args.add(cursor);
 
-                    // Add ScanParams to command arguments
+                    // Add AbstractScanParams<?> to command arguments
                     if (params.getMatchPattern() != null) {
                         args.add("MATCH");
                         args.add(params.getMatchPattern());
@@ -2437,7 +2427,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
         }
     }
 
-    private ScanOptions convertScanParams(ScanParams params) {
+    private ScanOptions convertScanParams(AbstractScanParams<?> params) {
         ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
 
         if (params.getMatchPattern() != null) {
@@ -2497,7 +2487,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 2.8.0
      */
-    public ScanResult<String> scan(String cursor, ScanParams params, String type) {
+    public ScanResult<String> scan(String cursor, AbstractScanParams<?> params, String type) {
         checkNotClosed();
         try {
             Object[] result;
@@ -2545,7 +2535,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
                         glideClusterClient.customCommand(args.toArray(new String[0])).get();
                 result = (Object[]) clusterResult.getSingleValue();
             } else {
-                // Convert Jedis ScanParams to GLIDE ScanOptions
+                // Convert Jedis AbstractScanParams<?> to GLIDE ScanOptions
                 ScanOptions.ScanOptionsBuilder builder = ScanOptions.builder();
 
                 if (type != null) {
@@ -2556,7 +2546,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
                     }
                 }
 
-                // Convert ScanParams if provided
+                // Convert AbstractScanParams<?> if provided
                 if (params != null) {
                     if (params.getMatchPattern() != null) {
                         builder.matchPattern(params.getMatchPattern());
@@ -2821,14 +2811,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 2.8.7
      */
-    public long bitpos(String key, boolean value, BitPosParams params) {
+    public long bitpos(String key, boolean value, AbstractBitPosParams<?> params) {
         checkNotClosed();
         try {
             if (params == null) {
                 return bitpos(key, value);
             }
 
-            // Convert BitPosParams to start/end parameters
+            // Convert AbstractBitPosParams<?> to start/end parameters
             long bitValue = value ? 1L : 0L;
 
             if (params.getStart() != null && params.getEnd() != null) {
@@ -3249,7 +3239,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 2.8.7
      */
-    public long bitpos(byte[] key, boolean value, BitPosParams params) {
+    public long bitpos(byte[] key, boolean value, AbstractBitPosParams<?> params) {
         checkNotClosed();
         try {
             if (params.getStart() != null && params.getEnd() != null) {
@@ -4019,7 +4009,8 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 3.0.0
      */
-    public String restore(byte[] key, long ttl, byte[] serializedValue, RestoreParams params) {
+    public String restore(
+            byte[] key, long ttl, byte[] serializedValue, AbstractRestoreParams<?> params) {
         checkNotClosed();
         try {
             RestoreOptions.RestoreOptionsBuilder optionsBuilder = RestoreOptions.builder();
@@ -4062,7 +4053,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 2.6.12
      */
-    public String set(byte[] key, byte[] value, SetParams params) {
+    public String set(byte[] key, byte[] value, AbstractSetParams<?> params) {
         checkNotClosed();
         try {
             // Use basic set without complex parameter handling to avoid compatibility issues
@@ -4104,7 +4095,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
      */
-    public byte[] setGet(byte[] key, byte[] value, SetParams params) {
+    public byte[] setGet(byte[] key, byte[] value, AbstractSetParams<?> params) {
         checkNotClosed();
         try {
             // Use basic setGet without complex parameter handling
@@ -4112,7 +4103,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
             String result = baseClient.set(GlideString.of(key), GlideString.of(value), options).get();
             return result != null ? result.getBytes() : null;
         } catch (InterruptedException | ExecutionException e) {
-            throw new JedisException("SETGET operation failed with SetParams: " + params, e);
+            throw new JedisException("SETGET operation failed with AbstractSetParams<?>: " + params, e);
         }
     }
 
@@ -4230,14 +4221,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 1.0.0
      */
-    public List<byte[]> sort(byte[] key, SortingParams sortingParams) {
+    public List<byte[]> sort(byte[] key, AbstractSortingParams<?> sortingParams) {
         checkNotClosed();
         try {
             if (sortingParams == null) {
                 return sort(key);
             }
 
-            // Convert Jedis SortingParams to GLIDE SortOptionsBinary
+            // Convert Jedis AbstractSortingParams<?> to GLIDE SortOptionsBinary
             SortOptionsBinary options = convertSortingParamsBinary(sortingParams);
             GlideString[] results = baseClient.sort(GlideString.of(key), options).get();
             return Arrays.stream(results).map(GlideString::getBytes).collect(Collectors.toList());
@@ -4276,14 +4267,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 1.0.0
      */
-    public long sort(byte[] key, SortingParams sortingParams, byte[] dstkey) {
+    public long sort(byte[] key, AbstractSortingParams<?> sortingParams, byte[] dstkey) {
         checkNotClosed();
         try {
             if (sortingParams == null) {
                 return sort(key, dstkey);
             }
 
-            // Convert Jedis SortingParams to GLIDE SortOptionsBinary
+            // Convert Jedis AbstractSortingParams<?> to GLIDE SortOptionsBinary
             SortOptionsBinary options = convertSortingParamsBinary(sortingParams);
             return baseClient.sortStore(GlideString.of(key), GlideString.of(dstkey), options).get();
         } catch (InterruptedException | ExecutionException e) {
@@ -4301,14 +4292,14 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 7.0.0
      */
-    public List<byte[]> sortReadonly(byte[] key, SortingParams sortingParams) {
+    public List<byte[]> sortReadonly(byte[] key, AbstractSortingParams<?> sortingParams) {
         checkNotClosed();
         try {
             if (sortingParams == null) {
                 return sort(key);
             }
 
-            // Convert Jedis SortingParams to GLIDE SortOptionsBinary
+            // Convert Jedis AbstractSortingParams<?> to GLIDE SortOptionsBinary
             SortOptionsBinary options = convertSortingParamsBinary(sortingParams);
             GlideString[] results = baseClient.sortReadOnly(GlideString.of(key), options).get();
             return Arrays.stream(results).map(GlideString::getBytes).collect(Collectors.toList());
@@ -4515,7 +4506,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 6.2.0
      */
-    public byte[] getEx(byte[] key, GetExParams params) {
+    public byte[] getEx(byte[] key, AbstractGetExParams<?> params) {
         checkNotClosed();
         try {
             if (params == null) {
@@ -4523,7 +4514,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
                 return result != null ? result.getBytes() : null;
             }
 
-            // Convert Jedis GetExParams to GLIDE GetExOptions
+            // Convert Jedis AbstractGetExParams<?> to GLIDE GetExOptions
             GetExOptions options = convertGetExParams(params);
             GlideString result = baseClient.getex(GlideString.of(key), options).get();
             return result != null ? result.getBytes() : null;
@@ -4641,7 +4632,8 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 3.0.0
      */
-    public String migrate(String host, int port, int timeout, MigrateParams params, byte[]... keys) {
+    public String migrate(
+            String host, int port, int timeout, AbstractMigrateParams<?> params, byte[]... keys) {
         checkNotClosed();
         try {
             List<GlideString> args = new ArrayList<>();
@@ -4652,7 +4644,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
             args.add(GlideString.of("0")); // destination database (default to 0)
             args.add(GlideString.of(String.valueOf(timeout)));
 
-            // Add MigrateParams if provided
+            // Add AbstractMigrateParams<?> if provided
             if (params != null) {
                 String[] paramArray = params.getParams();
                 for (String param : paramArray) {
@@ -4750,7 +4742,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Valkey 2.8.0
      */
-    public ScanResult<byte[]> scan(byte[] cursor, ScanParams params) {
+    public ScanResult<byte[]> scan(byte[] cursor, AbstractScanParams<?> params) {
         checkNotClosed();
         try {
             Charset cs = jedisBinaryCharset();
@@ -4759,7 +4751,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
                 return scan(cursor);
             }
 
-            // Convert Jedis ScanParams to GLIDE ScanOptions
+            // Convert Jedis AbstractScanParams<?> to GLIDE ScanOptions
             ScanOptions options = convertScanParams(params);
 
             Object[] result;
@@ -4785,7 +4777,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
                     args.add(GlideString.of("SCAN"));
                     args.add(GlideString.of(cursorStr));
 
-                    // Add ScanParams to command arguments
+                    // Add AbstractScanParams<?> to command arguments
                     if (params.getMatchPattern() != null) {
                         args.add(GlideString.of("MATCH"));
                         args.add(GlideString.of(params.getMatchPattern()));
@@ -4836,7 +4828,7 @@ public abstract class AbstractUnifiedJedis implements Closeable {
      * @throws JedisException if the operation fails
      * @since Redis 2.8.0
      */
-    public ScanResult<byte[]> scan(byte[] cursor, ScanParams params, byte[] type) {
+    public ScanResult<byte[]> scan(byte[] cursor, AbstractScanParams<?> params, byte[] type) {
         checkNotClosed();
         try {
             Charset cs = jedisBinaryCharset();
