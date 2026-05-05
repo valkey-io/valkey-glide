@@ -1,0 +1,28 @@
+# Nightly full-matrix tests for the Python client.
+# Thin wrapper around python.yml that isolates scheduling so per-language
+# full-matrix runs can be staggered and failures do not cascade across
+# languages. Flaky-test isolation work: see #4629.
+name: FMT Python
+
+permissions:
+    contents: read
+    actions: write
+
+on:
+    # Nightly at 00:00 UTC.
+    schedule:
+        - cron: "0 0 * * *"
+    workflow_dispatch:
+
+concurrency:
+    group: fmt-python-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    run-fmt-python:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/python.yml
+        with:
+            run-with-macos: use-self-hosted
+        name: FMT - Python
+        secrets: inherit

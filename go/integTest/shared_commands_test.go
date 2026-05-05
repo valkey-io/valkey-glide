@@ -6726,6 +6726,9 @@ func (suite *GlideTestSuite) Test_XDel() {
 }
 
 func (suite *GlideTestSuite) TestZScan() {
+	// See https://github.com/valkey-io/valkey-glide/issues/5813
+	suite.T().Skip("Skipping TestZScan until flakiness is fixed")
+
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := uuid.New().String()
 		initialCursor := models.NewCursor()

@@ -1,0 +1,28 @@
+# Nightly full-matrix tests for the Go client.
+# Thin wrapper around go.yml that isolates scheduling so per-language
+# full-matrix runs can be staggered and failures do not cascade across
+# languages. Flaky-test isolation work: see #4629.
+name: FMT Go
+
+permissions:
+    contents: read
+    actions: write
+
+on:
+    # Nightly at 01:30 UTC.
+    schedule:
+        - cron: "30 1 * * *"
+    workflow_dispatch:
+
+concurrency:
+    group: fmt-go-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    run-fmt-go:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/go.yml
+        with:
+            run-with-macos: use-self-hosted
+        name: FMT - Go
+        secrets: inherit

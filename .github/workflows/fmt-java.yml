@@ -1,0 +1,29 @@
+# Nightly full-matrix tests for the Java client (non-Windows hosts).
+# Thin wrapper around java.yml that isolates scheduling so per-language
+# full-matrix runs can be staggered and failures do not cascade across
+# languages. Windows tests are run by fmt-java-windows.yml to isolate their
+# higher failure rate. Flaky-test isolation work: see #4629.
+name: FMT Java
+
+permissions:
+    contents: read
+    actions: write
+
+on:
+    # Nightly at 01:00 UTC.
+    schedule:
+        - cron: "0 1 * * *"
+    workflow_dispatch:
+
+concurrency:
+    group: fmt-java-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    run-fmt-java:
+        if: github.repository_owner == 'valkey-io'
+        uses: ./.github/workflows/java.yml
+        with:
+            run-with-macos: use-self-hosted
+        name: FMT - Java
+        secrets: inherit
