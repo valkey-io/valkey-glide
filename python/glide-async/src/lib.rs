@@ -323,19 +323,22 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     }
 
     /// Register a Python address resolver callback in the global registry.
-    /// This must be called before creating the client so the socket listener can pick it up.
+    /// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+    /// address_resolver_key field so the socket listener can look it up.
     #[pyfunction]
-    fn register_address_resolver(callback: PyObject) {
+    fn register_address_resolver(callback: PyObject) -> String {
+        let key = uuid::Uuid::new_v4().to_string();
         let resolver = Arc::new(PyAddressResolver {
             callback: Arc::new(callback),
         });
-        glide_core::address_resolver_registry::register("pending".to_string(), resolver);
+        glide_core::address_resolver_registry::register(key.clone(), resolver);
+        key
     }
 
-    /// Remove the pending address resolver from the global registry.
+    /// Remove an address resolver from the global registry by key.
     #[pyfunction]
-    fn remove_address_resolver() {
-        glide_core::address_resolver_registry::remove("pending");
+    fn remove_address_resolver(key: String) {
+        glide_core::address_resolver_registry::remove(&key);
     }
 
     #[pyfunction]

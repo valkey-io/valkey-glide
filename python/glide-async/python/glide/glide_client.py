@@ -150,6 +150,8 @@ class BaseClient(CoreCommands):
         self._pending_tasks: Optional[Set[Awaitable[None]]] = None
         """asyncio-only to avoid gc on pending write tasks"""
 
+        self._address_resolver_key: Optional[str] = None
+
     def _create_task(self, task, *args, **kwargs):
         """framework agnostic free-floating task shim"""
         framework = sniffio.current_async_library()
@@ -280,15 +282,18 @@ class BaseClient(CoreCommands):
         # Register address resolver in the global registry before sending the
         # connection request, so the socket listener can pick it up.
         if self.config.address_resolver is not None:
-            register_address_resolver(self.config.address_resolver)
+            self._address_resolver_key = register_address_resolver(
+                self.config.address_resolver
+            )
 
         try:
             # Set the client configurations
             await self._set_connection_configurations()
         except Exception:
             # Clean up the resolver from the registry if connection fails
-            if self.config.address_resolver is not None:
-                remove_address_resolver()
+            if self._address_resolver_key is not None:
+                remove_address_resolver(self._address_resolver_key)
+                self._address_resolver_key = None
             raise
 
         return self
@@ -352,7 +357,10 @@ class BaseClient(CoreCommands):
         return response_future
 
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        return self.config._create_a_protobuf_conn_request()
+        request = self.config._create_a_protobuf_conn_request()
+        if self._address_resolver_key is not None:
+            request.address_resolver_key = self._address_resolver_key
+        return request
 
     async def _set_connection_configurations(self) -> None:
         conn_request = self._get_protobuf_conn_request()
@@ -938,7 +946,10 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         return [ClusterScanCursor(bytes(response[0]).decode()), response[1]]
 
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        return self.config._create_a_protobuf_conn_request(cluster_mode=True)
+        request = self.config._create_a_protobuf_conn_request(cluster_mode=True)
+        if self._address_resolver_key is not None:
+            request.address_resolver_key = self._address_resolver_key
+        return request
 
     async def get_subscriptions(
         self,
