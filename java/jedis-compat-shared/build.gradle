@@ -21,74 +21,41 @@ tasks.withType(Javadoc) {
 }
 
 ext {
-    // osdetector returns 'aarch_64', but rust triplet has 'aarch64'
     arch = osdetector.arch == 'aarch_64' ? 'aarch64' : osdetector.arch
-    // Same env as jedis-compatibility: uber-jar / no-classifier CI skips embedding natives and Rust build
-    isJedisNoClassifierUber = System.getenv("JEDIS_NO_CLASSIFIER_BUILD") == "true"
 }
 
 dependencies {
-    api project(':jedis-compat-shared')
-
     implementation project(':client')
 
-    // Apache Commons Pool 2 for connection pooling - part of public API
     api group: 'org.apache.commons', name: 'commons-pool2', version: '2.12.1'
 
-    // Apache Commons Lang 3 for utility classes like Pair
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.20.0'
 
-    // Test dependencies
     testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter', version: '5.10.2'
     testImplementation group: 'org.mockito', name: 'mockito-inline', version: '5.2.0'
     testImplementation group: 'org.mockito', name: 'mockito-junit-jupiter', version: '5.2.0'
 
-    // Lombok
     compileOnly 'org.projectlombok:lombok:1.18.44'
     annotationProcessor 'org.projectlombok:lombok:1.18.44'
     testCompileOnly 'org.projectlombok:lombok:1.18.44'
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.44'
 
-    // SpotBugs annotations for static analysis (compile-only to avoid IDE errors)
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.8.0'
 }
 
 java {
-    modularity.inferModulePath = false // Disable module system for compatibility
+    modularity.inferModulePath = false
 }
 
 javadoc {
     dependsOn delombok
     source = delombok.outputs
     options.tags = [ "example:a:Example:", "apiNote:a:API Note:" ]
-    failOnError = false // Disable javadoc errors for compatibility layer
-}
-
-tasks.register('copyNativeLib', Copy) {
-    def target
-    if (project.hasProperty('target')) {
-        target = project.target
-        from "${projectDir}/../target/${target}/release/"
-    } else if (osdetector.os == 'linux' && osdetector.release.id != 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-gnu/release/"
-    } else if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
-        from "${projectDir}/../target/${arch}-unknown-linux-musl/release/"
-    } else {
-        from "${projectDir}/../target/release/"
-    }
-    include "*.dylib", "*.so", "*.dll"
-    into sourceSets.main.output.resourcesDir
+    failOnError = false
 }
 
 delombok.dependsOn('compileJava')
 compileJava.dependsOn(':client:jar')
-
-if (!isJedisNoClassifierUber) {
-    copyNativeLib.dependsOn(':client:buildRust')
-    jar.dependsOn(tasks.named('copyNativeLib'))
-    javadoc.dependsOn(tasks.named('copyNativeLib'))
-    compileTestJava.dependsOn(tasks.named('copyNativeLib'))
-}
 
 tasks.withType(Test) {
     useJUnitPlatform()
@@ -97,7 +64,6 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
-    // Native library path for tests
     if (osdetector.os == 'linux' && osdetector.release.id == 'alpine') {
         jvmArgs "-Djava.library.path=${projectDir}/../target/${arch}-unknown-linux-musl/release"
     } else {
@@ -106,7 +72,9 @@ tasks.withType(Test) {
 }
 
 jar {
-    if (isJedisNoClassifierUber) {
+    def isNoClassifierBuild = System.getenv("JEDIS_NO_CLASSIFIER_BUILD") == "true"
+
+    if (isNoClassifierBuild) {
         archiveClassifier = ''
     } else if (project.hasProperty('target') && project.target.contains("musl")) {
         archiveClassifier = "linux_musl_${arch}"
@@ -125,7 +93,7 @@ tasks.register('sourcesJar', Jar) {
     dependsOn classes
     archiveClassifier = 'sources'
     from sourceSets.main.allSource
-    exclude 'glide/models' // exclude protobuf files
+    exclude 'glide/models'
 }
 
 publishing {
@@ -135,11 +103,12 @@ publishing {
             artifact tasks.named('javadocJar')
             artifact tasks.named('sourcesJar')
             groupId = 'io.valkey'
-            artifactId = 'valkey-glide-jedis-4-compatibility'
+            artifactId = 'valkey-glide-jedis-compat-shared'
             version = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
             pom {
-                name = 'valkey-glide-jedis-4-compatibility'
-                description = 'Jedis 4.x compatibility layer for Valkey GLIDE'
+                packaging = 'jar'
+                name = 'valkey-glide-jedis-compat-shared'
+                description = 'Shared implementation types for Valkey GLIDE Jedis compatibility layers'
                 url = 'https://github.com/valkey-io/valkey-glide.git'
                 inceptionYear = '2024'
                 scm {
@@ -171,8 +140,8 @@ publishing {
 publishMavenJavaPublicationToMavenLocal.dependsOn jar
 
 tasks.withType(Sign) {
-    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion;
-    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != project.ext.defaultReleaseVersion;
+    def releaseVersion = System.getenv("GLIDE_RELEASE_VERSION") ?: project.ext.defaultReleaseVersion
+    def isReleaseVersion = !releaseVersion.endsWith("SNAPSHOT") && releaseVersion != project.ext.defaultReleaseVersion
     onlyIf("isReleaseVersion is set") { isReleaseVersion }
 }
 

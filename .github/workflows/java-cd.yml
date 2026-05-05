@@ -149,10 +149,14 @@ jobs:
                   if [ -d ../jedis-4-compatibility ]; then
                     cp ./secring.gpg ../jedis-4-compatibility/secring.gpg
                   fi
+                  if [ -d ../jedis-compat-shared ]; then
+                    cp ./secring.gpg ../jedis-compat-shared/secring.gpg
+                  fi
 
                   echo "Listing key ring files to verify presence:"
                   ls -l ./secring.gpg ../jedis-compatibility/secring.gpg
                   if [ -f ../jedis-4-compatibility/secring.gpg ]; then ls -l ../jedis-4-compatibility/secring.gpg; fi
+                  if [ -f ../jedis-compat-shared/secring.gpg ]; then ls -l ../jedis-compat-shared/secring.gpg; fi
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
@@ -175,6 +179,11 @@ jobs:
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
                     -Ptarget=${{ matrix.host.TARGET }} $EXTRA_ARGS
 
+                    # Then build jedis-compat-shared (dependency of jedis compatibility artifacts)
+                    $GRADLE_CMD --build-cache :jedis-compat-shared:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
+                    -Ptarget=${{ matrix.host.TARGET }}
+
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} \
@@ -190,6 +199,10 @@ jobs:
                     # Build and publish client first
                     $GRADLE_CMD --build-cache :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
                     -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }} $EXTRA_ARGS
+
+                    # Then build jedis-compat-shared (dependency of jedis compatibility artifacts)
+                    $GRADLE_CMD --build-cache :jedis-compat-shared:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
+                    -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
                     # Then build jedis-compatibility
                     $GRADLE_CMD --build-cache :jedis-compatibility:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg \
@@ -212,6 +225,14 @@ jobs:
                   ls -ltr
                   cd -
                   cp $src_folder/bundle.jar bundle-${{ matrix.host.TARGET }}.jar
+
+                  # Bundle jedis-compat-shared JAR
+                  jedis_shared_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compat-shared/${{ env.RELEASE_VERSION }}
+                  cd $jedis_shared_folder
+                  jar -cvf jedis-shared-bundle.jar *
+                  ls -ltr
+                  cd -
+                  cp $jedis_shared_folder/jedis-shared-bundle.jar jedis-shared-bundle-${{ matrix.host.TARGET }}.jar
 
                   # Bundle jedis-compatibility JAR
                   jedis_src_folder=~/.m2/repository/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
@@ -238,6 +259,7 @@ jobs:
                   name: java-${{ matrix.host.TARGET }}
                   path: |
                       java/bundle*.jar
+                      java/jedis-shared-bundle*.jar
                       java/jedis-bundle*.jar
                       java/jedis4-bundle*.jar
 
@@ -332,6 +354,9 @@ jobs:
                   if [ -d ../jedis-4-compatibility ]; then
                     cp ./secring.gpg ../jedis-4-compatibility/secring.gpg
                   fi
+                  if [ -d ../jedis-compat-shared ]; then
+                    cp ./secring.gpg ../jedis-compat-shared/secring.gpg
+                  fi
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
@@ -360,6 +385,19 @@ jobs:
                   ls -ltr
                   cd -
                   cp $src_folder/bundle.jar bundle-uber-jar.jar
+
+            - name: Build jedis-compat-shared (no classifier, no natives)
+              working-directory: java
+              shell: bash
+              env:
+                  GLIDE_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+                  JEDIS_NO_CLASSIFIER_BUILD: "true"
+              run: |
+                  ./gradlew --build-cache :jedis-compat-shared:publishToMavenLocal \
+                  -x buildRust \
+                  -Psigning.secretKeyRingFile=secring.gpg \
+                  -Psigning.password="${{ secrets.GPG_PASSWORD }}" \
+                  -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
             - name: Build jedis-compatibility (no classifier, no natives)
               working-directory: java
@@ -462,8 +500,14 @@ jobs:
               shell: bash
               run: |
                   mkdir -p build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}
+                  mkdir -p build/io/valkey/valkey-glide-jedis-compat-shared/${{ env.RELEASE_VERSION }}
                   mkdir -p build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
                   mkdir -p build/io/valkey/valkey-glide-jedis-4-compatibility/${{ env.RELEASE_VERSION }}
+
+                  # Move jedis-compat-shared first (dependency of jedis compatibility artifacts)
+                  if ls maven-files/valkey-glide-jedis-compat-shared* 1>/dev/null 2>&1; then
+                    cp -a maven-files/valkey-glide-jedis-compat-shared* build/io/valkey/valkey-glide-jedis-compat-shared/${{ env.RELEASE_VERSION }}
+                  fi
 
                   # Move jedis-compatibility files first
                   cp -a maven-files/valkey-glide-jedis-compatibility* build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}
@@ -474,9 +518,10 @@ jobs:
                   fi
 
                   # Move client files (exclude jedis compatibility artifacts)
-                  find maven-files -name "valkey-glide-*" ! -name "*jedis-compatibility*" ! -name "*jedis-4-compatibility*" -exec cp {} build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/ \;
+                  find maven-files -name "valkey-glide-*" ! -name "*jedis-compat-shared*" ! -name "*jedis-compatibility*" ! -name "*jedis-4-compatibility*" -exec cp {} build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/ \;
 
                   rm -rf build/io/valkey/valkey-glide/${{ env.RELEASE_VERSION }}/META-INF
+                  rm -rf build/io/valkey/valkey-glide-jedis-compat-shared/${{ env.RELEASE_VERSION }}/META-INF
                   rm -rf build/io/valkey/valkey-glide-jedis-compatibility/${{ env.RELEASE_VERSION }}/META-INF
                   rm -rf build/io/valkey/valkey-glide-jedis-4-compatibility/${{ env.RELEASE_VERSION }}/META-INF
                   cd build
