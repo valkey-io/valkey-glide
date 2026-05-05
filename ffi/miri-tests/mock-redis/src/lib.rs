@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 pub use redis::{ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value};
+pub use redis::AddressResolver;
 use std::sync::Arc;
 use telemetrylib::GlideSpan;
 
