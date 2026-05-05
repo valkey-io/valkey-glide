@@ -1,10 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::request_type::RequestType;
-use glide_core::{
-    ConnectionRequest,
-    connection_request::{NodeAddress, TlsMode},
-};
+use glide_core::connection_request::{ConnectionRequest, NodeAddress, TlsMode};
 use miri_tests::{
     ClientType, ConnectionResponse, PushKind, close_client, create_client, create_client_from_uri,
     free_connection_response,
