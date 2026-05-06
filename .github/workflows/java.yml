@@ -426,7 +426,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        if: ${{ inputs.windows-only != true && (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
