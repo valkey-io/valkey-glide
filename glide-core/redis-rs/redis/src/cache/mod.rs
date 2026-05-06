@@ -17,6 +17,8 @@ use std::{
 use tokio::task::JoinHandle;
 use tracing::{debug, info};
 
+use crate::{ErrorKind, RedisError, RedisResult, Value};
+
 /// Interval between cache registry housekeeping runs (cleanup of dead weak references)
 const HOUSEKEEPING_INTERVAL: Duration = Duration::from_secs(60);
 
@@ -171,6 +173,75 @@ fn start_cache_housekeeping() {
     *handle_guard = Some(tokio::spawn(periodic_cache_housekeeping(
         HOUSEKEEPING_INTERVAL,
     )));
+}
+
+/// Cache metric types that can be queried from the registry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheMetricType {
+    /// Cache hit rate (hits / total lookups)
+    HitRate,
+    /// Cache miss rate (misses / total lookups)
+    MissRate,
+    /// Current number of entries stored in the cache
+    EntryCount,
+    /// Total number of entries evicted due to memory constraints
+    Evictions,
+    /// Total number of entries removed due to TTL expiration
+    Expirations,
+    /// Total number of cache lookups (hits + misses)
+    TotalLookups,
+}
+
+/// Query a specific cache metric directly from the global cache registry.
+///
+/// This provides a synchronous path to read cache metrics (which are atomic counters)
+/// without going through the async protobuf/UDS path.
+///
+/// # Arguments
+/// * `cache_id` - The unique identifier of the cache to query
+/// * `metric` - The metric type to retrieve
+///
+/// # Returns
+/// * `Value::Double` for rate metrics (hit_rate, miss_rate)
+/// * `Value::Int` for count metrics (entry_count, evictions, expirations, total_lookups)
+pub fn query_cache_metric(cache_id: &str, metric: CacheMetricType) -> RedisResult<Value> {
+    let registry = CACHE_REGISTRY.read().unwrap();
+    let cache = registry
+        .get(cache_id)
+        .and_then(Weak::upgrade)
+        .ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+    // Safe to drop: Weak::upgrade() returned an Arc, so the cache is kept alive
+    // by our strong reference regardless of the registry state.
+    drop(registry);
+
+    match metric {
+        CacheMetricType::HitRate => {
+            let metrics = cache.metrics()?;
+            Ok(Value::Double(metrics.hit_rate()))
+        }
+        CacheMetricType::MissRate => {
+            let metrics = cache.metrics()?;
+            Ok(Value::Double(metrics.miss_rate()))
+        }
+        CacheMetricType::EntryCount => Ok(Value::Int(cache.entry_count() as i64)),
+        CacheMetricType::Evictions => {
+            let metrics = cache.metrics()?;
+            Ok(Value::Int(metrics.evictions() as i64))
+        }
+        CacheMetricType::Expirations => {
+            let metrics = cache.metrics()?;
+            Ok(Value::Int(metrics.expirations() as i64))
+        }
+        CacheMetricType::TotalLookups => {
+            let metrics = cache.metrics()?;
+            Ok(Value::Int(metrics.total_lookups() as i64))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -407,5 +478,135 @@ mod tests {
         );
         run_concurrent_cache_test(cache);
         cleanup_cache("test_concurrent_lfu");
+    }
+
+    // ==================== query_cache_metric ====================
+
+    #[tokio::test]
+    async fn test_query_cache_metric_not_found() {
+        let result = query_cache_metric("nonexistent_cache", CacheMetricType::HitRate);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("not enabled"));
+    }
+
+    #[tokio::test]
+    async fn test_query_cache_metric_entry_count() {
+        use glide_cache::CachedKeyType;
+
+        let cache_id = "test_query_entry_count";
+        let cache = get_or_create_cache(cache_id, 10_000, 0, None, false);
+
+        // Entry count works without metrics enabled
+        let result = query_cache_metric(cache_id, CacheMetricType::EntryCount);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), crate::Value::Int(0));
+
+        cache.insert(
+            b"key1".to_vec(),
+            CachedKeyType::String,
+            crate::Value::BulkString(b"val".to_vec()),
+        );
+        let result = query_cache_metric(cache_id, CacheMetricType::EntryCount);
+        assert_eq!(result.unwrap(), crate::Value::Int(1));
+
+        cleanup_cache(cache_id);
+    }
+
+    #[tokio::test]
+    async fn test_query_cache_metric_requires_metrics_enabled() {
+        let cache_id = "test_query_no_metrics";
+        let _cache = get_or_create_cache(cache_id, 1024, 0, None, false);
+
+        // Rate/count metrics should fail when metrics not enabled
+        assert!(query_cache_metric(cache_id, CacheMetricType::HitRate).is_err());
+        assert!(query_cache_metric(cache_id, CacheMetricType::MissRate).is_err());
+        assert!(query_cache_metric(cache_id, CacheMetricType::Evictions).is_err());
+        assert!(query_cache_metric(cache_id, CacheMetricType::Expirations).is_err());
+        assert!(query_cache_metric(cache_id, CacheMetricType::TotalLookups).is_err());
+
+        // Entry count should still work
+        assert!(query_cache_metric(cache_id, CacheMetricType::EntryCount).is_ok());
+
+        cleanup_cache(cache_id);
+    }
+
+    #[tokio::test]
+    async fn test_query_cache_metric_with_metrics_enabled() {
+        use glide_cache::CachedKeyType;
+
+        let cache_id = "test_query_with_metrics";
+        let cache = get_or_create_cache(cache_id, 10_000, 0, None, true);
+
+        // Initial state: all zeros
+        assert_eq!(
+            query_cache_metric(cache_id, CacheMetricType::HitRate).unwrap(),
+            crate::Value::Double(0.0)
+        );
+        assert_eq!(
+            query_cache_metric(cache_id, CacheMetricType::TotalLookups).unwrap(),
+            crate::Value::Int(0)
+        );
+
+        // Simulate a miss then a hit
+        cache.insert(
+            b"key1".to_vec(),
+            CachedKeyType::String,
+            crate::Value::BulkString(b"val".to_vec()),
+        );
+        cache.increment_miss();
+        cache.increment_hit();
+
+        assert_eq!(
+            query_cache_metric(cache_id, CacheMetricType::TotalLookups).unwrap(),
+            crate::Value::Int(2)
+        );
+        assert_eq!(
+            query_cache_metric(cache_id, CacheMetricType::HitRate).unwrap(),
+            crate::Value::Double(0.5)
+        );
+        assert_eq!(
+            query_cache_metric(cache_id, CacheMetricType::MissRate).unwrap(),
+            crate::Value::Double(0.5)
+        );
+
+        cleanup_cache(cache_id);
+    }
+
+    #[tokio::test]
+    async fn test_query_cache_metric_evictions_and_expirations() {
+        let cache_id = "test_query_evict_expire";
+        let cache = get_or_create_cache(cache_id, 10_000, 0, None, true);
+
+        // Simulate evictions and expirations via the metrics counters
+        if let Some(stats) = cache.core().stats() {
+            stats.record_eviction();
+            stats.record_eviction();
+            stats.record_expiration();
+        }
+
+        assert_eq!(
+            query_cache_metric(cache_id, CacheMetricType::Evictions).unwrap(),
+            crate::Value::Int(2)
+        );
+        assert_eq!(
+            query_cache_metric(cache_id, CacheMetricType::Expirations).unwrap(),
+            crate::Value::Int(1)
+        );
+
+        cleanup_cache(cache_id);
+    }
+
+    #[tokio::test]
+    async fn test_query_cache_metric_after_drop() {
+        let cache_id = "test_query_after_drop";
+        let cache = get_or_create_cache(cache_id, 1024, 0, None, true);
+        drop(cache);
+
+        // Weak reference should be dead now
+        let result = query_cache_metric(cache_id, CacheMetricType::EntryCount);
+        assert!(result.is_err());
+
+        cleanup_cache(cache_id);
     }
 }

@@ -26,6 +26,7 @@ from glide.glide import (
     create_leaked_bytes_vec,
     create_otel_span,
     drop_otel_span,
+    get_cache_metric_from_registry,
     get_statistics,
     start_socket_listener_external,
     value_from_pointer,
@@ -863,9 +864,7 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
-    async def _get_cache_metrics(
-        self, metrics_type: CacheMetricsType.ValueType
-    ) -> TResult:
+    def _get_cache_metrics(self, metrics_type: CacheMetricsType.ValueType) -> TResult:
         """
         Get cache metrics.
 
@@ -878,11 +877,14 @@ class BaseClient(CoreCommands):
         Raises:
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
         """
-        request = CommandRequest()
-        request.callback_idx = self._get_callback_index()
-        request.get_cache_metrics.metrics_types = metrics_type
-        response = await self._write_request_await_response(request)
-        return response
+        if not self.config.client_side_cache:
+            raise RequestError("Client-side caching is not enabled")
+        try:
+            return get_cache_metric_from_registry(
+                self.config.client_side_cache.cache_id, metrics_type
+            )
+        except Exception as e:
+            raise RequestError(str(e)) from e
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):

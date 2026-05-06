@@ -257,6 +257,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drop_otel_span, m)?)?;
     m.add_function(wrap_pyfunction!(init_opentelemetry, m)?)?;
     m.add_function(wrap_pyfunction!(get_min_compressed_size, m)?)?;
+    m.add_function(wrap_pyfunction!(get_cache_metric_from_registry, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -551,6 +552,45 @@ impl From<Level> for logger_core::Level {
             Level::Trace => logger_core::Level::Trace,
             Level::Off => logger_core::Level::Off,
         }
+    }
+}
+
+/// Synchronously query a cache metric by cache ID and metric type.
+///
+/// This bypasses the async protobuf/UDS path by reading directly from
+/// the global cache registry's atomic counters.
+///
+/// # Arguments
+/// * `cache_id` - The unique identifier of the cache
+/// * `metrics_type` - Integer matching protobuf CacheMetricsType enum values
+///
+/// # Returns
+/// * Python float for rate metrics (hit_rate, miss_rate)
+/// * Python int for count metrics (entry_count, evictions, expirations, total_lookups)
+#[pyfunction]
+fn get_cache_metric_from_registry(
+    py: Python,
+    cache_id: String,
+    metrics_type: i32,
+) -> PyResult<PyObject> {
+    let metric = glide_core::cache_metric_type_from_proto(metrics_type)
+        .map_err(|e| PyTypeError::new_err(e.to_string()))?;
+
+    match redis::cache::query_cache_metric(&cache_id, metric) {
+        Ok(Value::Double(f)) => Ok(f
+            .into_pyobject(py)
+            .expect("Expected a proper conversion of f64 into a Python float.")
+            .into_any()
+            .unbind()),
+        Ok(Value::Int(i)) => Ok(i
+            .into_pyobject(py)
+            .expect("Expected a proper conversion of i64 into a Python int.")
+            .into_any()
+            .unbind()),
+        Ok(_) => Err(PyTypeError::new_err(
+            "Unexpected value type from cache metric query",
+        )),
+        Err(e) => Err(PyTypeError::new_err(e.to_string())),
     }
 }
 
