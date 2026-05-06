@@ -379,9 +379,9 @@ impl redis::AddressResolver for FFIAddressResolver {
         match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
             Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
             Err(_) => {
-                logger_core::log_error(
+                logger_core::log_error_lazy!(
                     "address_resolver",
-                    "Address resolver returned invalid UTF-8 for host, using original address",
+                    "Address resolver returned invalid UTF-8 for host, using original address"
                 );
                 (host.to_string(), port)
             }

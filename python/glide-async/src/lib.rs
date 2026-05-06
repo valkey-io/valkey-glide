@@ -298,22 +298,22 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                         match result.extract::<(String, u16)>(py) {
                             Ok((resolved_host, resolved_port)) => (resolved_host, resolved_port),
                             Err(err) => {
-                                logger_core::log_error(
+                                logger_core::log_error_lazy!(
                                     "address_resolver",
                                     format!(
                                         "Address resolver returned invalid result: {err}. Using original address."
-                                    ),
+                                    )
                                 );
                                 (host, port)
                             }
                         }
                     }
                     Err(err) => {
-                        logger_core::log_error(
+                        logger_core::log_error_lazy!(
                             "address_resolver",
                             format!(
                                 "Address resolver callback failed: {err}. Using original address."
-                            ),
+                            )
                         );
                         (host, port)
                     }
