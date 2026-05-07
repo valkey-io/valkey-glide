@@ -7,11 +7,12 @@ name: FMT Python
 permissions:
     contents: read
     actions: write
+    id-token: write
 
 on:
-    # Nightly at 00:00 UTC.
+    # Nightly at 03:00 UTC (8:00 PM PDT).
     schedule:
-        - cron: "0 0 * * *"
+        - cron: "0 3 * * *"
     workflow_dispatch:
 
 concurrency:

@@ -9,9 +9,9 @@ permissions:
     actions: write
 
 on:
-    # Nightly at 01:30 UTC.
+    # Nightly at 04:30 UTC (9:30 PM PDT).
     schedule:
-        - cron: "30 1 * * *"
+        - cron: "30 4 * * *"
     workflow_dispatch:
 
 concurrency:
