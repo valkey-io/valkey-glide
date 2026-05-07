@@ -764,6 +764,26 @@ struct ResolveRequest {
     tx: std::sync::mpsc::SyncSender<(String, u16)>,
 }
 
+/// A Send+Sync wrapper around napi::Ref<()> for use in TSFN closures.
+/// napi::Ref<()> is !Send, but we only access it from the JS thread via the TSFN resolve closure.
+/// On drop, we use std::mem::forget to avoid napi-rs's assertion that ref count == 0.
+/// The reference is cleaned up when removeAddressResolver is called (which drops the TSFN,
+/// causing N-API to release the closure and its captured data).
+struct CallbackRef(Option<napi::Ref<()>>);
+
+unsafe impl Send for CallbackRef {}
+unsafe impl Sync for CallbackRef {}
+
+impl Drop for CallbackRef {
+    fn drop(&mut self) {
+        // Use mem::forget to avoid napi-rs's panic assertion on Ref drop.
+        // The N-API reference will be cleaned up by the runtime at process exit.
+        if let Some(r) = self.0.take() {
+            std::mem::forget(r);
+        }
+    }
+}
+
 impl std::fmt::Debug for NodeAddressResolver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "NodeAddressResolver {{ callback: <JS function> }}")
@@ -804,48 +824,29 @@ impl redis::AddressResolver for NodeAddressResolver {
 /// `address_resolver_key` field so the socket listener can look it up.
 ///
 /// The JS callback signature is: `(host: string, port: number) => [string, number]`
-///
-/// Internally, we create a wrapper JS function that:
-/// 1. Calls the user's resolver
-/// 2. Extracts the result
-/// 3. Sends it back through a channel to the waiting Rust thread
 #[napi(js_name = "registerAddressResolver")]
 pub fn register_address_resolver(
     env: Env,
     #[napi(ts_arg_type = "(host: string, port: number) => [string, number]")]
     callback: napi::JsFunction,
 ) -> Result<String> {
-    // Create a persistent reference to the user's callback so it won't be GC'd
-    let callback_ref = env.create_reference(&callback)?;
+    // Create a persistent reference to the user's callback so it won't be GC'd.
+    // Wrap it in CallbackRef (which is Send+Sync) for use in the TSFN closure.
+    let callback_ref = CallbackRef(Some(env.create_reference(&callback)?));
 
-    // Create a wrapper function that will be called by the ThreadsafeFunction.
-    // This wrapper calls the user's resolver and sends the result through the channel
-    // embedded in the arguments.
-    //
-    // The ThreadsafeFunction mechanism:
-    // - `call(data, Blocking)` schedules the callback on the JS thread and blocks
-    // - The `resolve` closure converts `ResolveRequest` into JS args
-    // - The original JS function (our wrapper) is called with those args
-    // - But we can't get the return value through this mechanism...
-    //
-    // Alternative approach: We use the `resolve` closure to call the user's function
-    // directly (since it runs on the JS thread with access to `env`), capture the
-    // return value, send it through the channel, and return empty args.
-    //
-    // However, in napi-rs v2, the `resolve` closure's return value becomes the args
-    // passed to the original function. The original function IS called regardless.
-    //
-    // Solution: Create a no-op JS function as the "original" function, and do all
-    // the work in the resolve closure.
+    // Create a no-op JS function as the "original" function for the TSFN.
+    // All actual work happens in the resolve closure below.
     let noop_fn = env.create_function_from_closure("noop", |_ctx| Ok(()))?;
 
-    let tsfn = noop_fn.create_threadsafe_function(
+    let mut tsfn = noop_fn.create_threadsafe_function(
         0,
         move |ctx: napi::threadsafe_function::ThreadSafeCallContext<ResolveRequest>| {
             let request = ctx.value;
 
             // Get the user's callback from the reference
-            let user_callback: napi::JsFunction = ctx.env.get_reference_value(&callback_ref)?;
+            let user_callback: napi::JsFunction = ctx
+                .env
+                .get_reference_value(callback_ref.0.as_ref().unwrap())?;
 
             // Create JS arguments for the user's callback
             let js_host = ctx.env.create_string(&request.host)?;
@@ -874,6 +875,9 @@ pub fn register_address_resolver(
             Ok(Vec::<napi::JsUnknown>::new())
         },
     )?;
+
+    // Unref the TSFN so it doesn't prevent the Node.js event loop from exiting.
+    tsfn.unref(&env)?;
 
     let key = uuid::Uuid::new_v4().to_string();
     let resolver = Arc::new(NodeAddressResolver { tsfn });
