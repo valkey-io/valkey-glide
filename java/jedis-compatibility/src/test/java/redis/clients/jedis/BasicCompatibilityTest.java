@@ -7,6 +7,7 @@ import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.junit.jupiter.api.Test;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.exceptions.JedisException;
+import redis.clients.jedis.params.BitPosParams;
 
 /**
  * Unit tests for Jedis compatibility layer classes. These tests verify API contracts and basic
@@ -164,5 +165,15 @@ public class BasicCompatibilityTest {
                 new JedisConnectionException("Connection failed");
         assertEquals("Connection failed", connectionException.getMessage());
         assertTrue(connectionException instanceof JedisException);
+    }
+
+    @Test
+    public void bitPosParamsConstructorsMatchJedisStyleStartEnd() {
+        assertEquals(Long.valueOf(1L), new BitPosParams(1L).getStart());
+        assertNull(new BitPosParams(1L).getEnd());
+
+        BitPosParams range = new BitPosParams(0L, 10L);
+        assertEquals(Long.valueOf(0L), range.getStart());
+        assertEquals(Long.valueOf(10L), range.getEnd());
     }
 }

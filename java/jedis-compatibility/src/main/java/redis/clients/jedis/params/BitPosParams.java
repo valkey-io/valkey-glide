@@ -8,6 +8,14 @@ public final class BitPosParams extends AbstractBitPosParams<BitPosParams> {
         super();
     }
 
+    public BitPosParams(long start) {
+        super(start);
+    }
+
+    public BitPosParams(long start, long end) {
+        super(start, end);
+    }
+
     public static BitPosParams bitPosParams() {
         return new BitPosParams();
     }

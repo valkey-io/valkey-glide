@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.MigrateParams;
 
 /** Unit tests for Jedis 4.x param helpers (review-driven correctness). */
@@ -30,6 +32,15 @@ public class Jedis4ParamBehaviorTest {
     public void migrateParams_authReplacesAuth2() {
         MigrateParams p = new MigrateParams().auth2("u", "p").auth("onlypass");
         assertArrayEquals(new String[] {"AUTH", "onlypass"}, p.getParams());
+    }
+
+    @Test
+    public void bitPosParamsConstructorsSetStartAndEnd() {
+        assertEquals(Long.valueOf(2L), new BitPosParams(2L).getStart());
+        assertNull(new BitPosParams(2L).getEnd());
+        BitPosParams r = new BitPosParams(0, 10);
+        assertEquals(Long.valueOf(0L), r.getStart());
+        assertEquals(Long.valueOf(10L), r.getEnd());
     }
 
     @Test
