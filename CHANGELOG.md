@@ -36,6 +36,7 @@
 * Node: Client-Side Caching Support ([#5720](https://github.com/valkey-io/valkey-glide/pull/5720))
 * JAVA: Support custom socket address resolution when connecting to valkey ([#4396](https://github.com/valkey-io/valkey-glide/issues/4396))
 * Python: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
+* Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 
 #### Fixes
 * Java: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#5634](https://github.com/valkey-io/valkey-glide/issues/5634))

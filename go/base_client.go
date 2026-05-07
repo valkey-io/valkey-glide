@@ -20,6 +20,10 @@ package glide
 //                     const uint8_t *message, int64_t message_len,
 //                     const uint8_t *channel, int64_t channel_len,
 //                     const uint8_t *pattern, int64_t pattern_len);
+// uint16_t addressResolverCallback(const uint8_t *host, size_t host_len,
+//                                  uint16_t port,
+//                                  uint8_t *resolved_host_buf, size_t resolved_host_buf_len,
+//                                  size_t *resolved_host_len);
 import "C"
 
 import (
@@ -51,6 +55,7 @@ type payload struct {
 
 type clientConfiguration interface {
 	ToProtobuf() (*protobuf.ConnectionRequest, error)
+	GetAddressResolver() config.AddressResolver
 }
 
 type baseClient struct {
@@ -156,15 +161,23 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	}
 	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
 
+	// Set up address resolver if configured
+	var resolverCallback C.AddressResolverCallback
+	if resolver := config.GetAddressResolver(); resolver != nil {
+		setGlobalResolver(resolver)
+		resolverCallback = (C.AddressResolverCallback)(unsafe.Pointer(C.addressResolverCallback))
+	}
+
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
 			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
-			(C.AddressResolverCallback)(nil),
+			resolverCallback,
 		),
 	)
+
 	defer C.free_connection_response(cResponse)
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
