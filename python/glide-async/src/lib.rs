@@ -258,6 +258,8 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(init_opentelemetry, m)?)?;
     m.add_function(wrap_pyfunction!(get_min_compressed_size, m)?)?;
     m.add_function(wrap_pyfunction!(get_cache_metric_from_registry, m)?)?;
+    m.add_function(wrap_pyfunction!(register_address_resolver, m)?)?;
+    m.add_function(wrap_pyfunction!(remove_address_resolver, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -267,6 +269,76 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     #[pyfunction]
     fn get_min_compressed_size() -> usize {
         glide_core::compression::MIN_COMPRESSED_SIZE
+    }
+
+    /// A Python-to-Rust address resolver wrapper that implements the `AddressResolver` trait.
+    /// It holds a reference to the Python callable and invokes it via the GIL when resolution is needed.
+    struct PyAddressResolver {
+        callback: Arc<PyObject>,
+    }
+
+    impl std::fmt::Debug for PyAddressResolver {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "PyAddressResolver {{ callback: <Python callable> }}")
+        }
+    }
+
+    // SAFETY: PyObject is Send+Sync when accessed only through Python::with_gil.
+    unsafe impl Send for PyAddressResolver {}
+    unsafe impl Sync for PyAddressResolver {}
+
+    impl redis::AddressResolver for PyAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            let callback = Arc::clone(&self.callback);
+            let host = host.to_string();
+            Python::with_gil(|py| {
+                match callback.call(py, (host.as_str(), port), None) {
+                    Ok(result) => {
+                        // Expect a tuple (str, int)
+                        match result.extract::<(String, u16)>(py) {
+                            Ok((resolved_host, resolved_port)) => (resolved_host, resolved_port),
+                            Err(err) => {
+                                logger_core::log_error_lazy!(
+                                    "address_resolver",
+                                    format!(
+                                        "Address resolver returned invalid result: {err}. Using original address."
+                                    )
+                                );
+                                (host, port)
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        logger_core::log_error_lazy!(
+                            "address_resolver",
+                            format!(
+                                "Address resolver callback failed: {err}. Using original address."
+                            )
+                        );
+                        (host, port)
+                    }
+                }
+            })
+        }
+    }
+
+    /// Register a Python address resolver callback in the global registry.
+    /// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+    /// address_resolver_key field so the socket listener can look it up.
+    #[pyfunction]
+    fn register_address_resolver(callback: PyObject) -> String {
+        let key = uuid::Uuid::new_v4().to_string();
+        let resolver = Arc::new(PyAddressResolver {
+            callback: Arc::new(callback),
+        });
+        glide_core::address_resolver_registry::register(key.clone(), resolver);
+        key
+    }
+
+    /// Remove an address resolver from the global registry by key.
+    #[pyfunction]
+    fn remove_address_resolver(key: String) {
+        glide_core::address_resolver_registry::remove(&key);
     }
 
     #[pyfunction]

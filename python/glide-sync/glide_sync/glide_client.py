@@ -115,11 +115,43 @@ class BaseClient(CoreCommands):
         # Store reference to prevent garbage collection
         self._pubsub_callback_ref = pubsub_callback
 
+        # Create address resolver callback if configured
+        address_resolver_callback = self._ffi.NULL
+        if self._config.address_resolver is not None:
+            resolver_fn = self._config.address_resolver
+
+            def _address_resolver_callback(
+                host_ptr,
+                host_len,
+                port,
+                resolved_host_buf,
+                resolved_host_buf_len,
+                resolved_host_len_ptr,
+            ):
+                try:
+                    host = self._ffi.buffer(host_ptr, host_len)[:].decode("utf-8")
+                    resolved_host, resolved_port = resolver_fn(host, port)
+                    encoded_host = resolved_host.encode("utf-8")
+                    write_len = min(len(encoded_host), resolved_host_buf_len)
+                    self._ffi.memmove(resolved_host_buf, encoded_host, write_len)
+                    resolved_host_len_ptr[0] = write_len
+                    return resolved_port
+                except Exception:
+                    # On error, return 0 to signal fallback to original address
+                    return 0
+
+            address_resolver_callback = self._ffi.callback(
+                "AddressResolverCallback", _address_resolver_callback
+            )
+            # Store reference to prevent garbage collection
+            self._address_resolver_callback_ref = address_resolver_callback
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
+            address_resolver_callback,
         )
 
         Logger.log(Level.INFO, "connection info", "new connection established")
