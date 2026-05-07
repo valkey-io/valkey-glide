@@ -1376,8 +1376,7 @@ impl<C> Future for Request<C> {
 
                         // Normal MOVED handling: set redirect and refresh slots
                         request.info.set_redirect(
-                            redirect_node
-                                .map(|(node, _slot)| Redirect::Moved(node.to_string())),
+                            redirect_node.map(|(node, _slot)| Redirect::Moved(node.to_string())),
                         );
                         Next::RefreshSlots {
                             request: Some(request),
