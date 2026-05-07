@@ -2,7 +2,7 @@
 
 pub use glide_core::client::{GlideRt, get_or_init_runtime};
 
-use crate::connection_request::ConnectionRequest;
+use crate::ConnectionRequest;
 use redis::{Pipeline, PipelineRetryStrategy, ScanStateRC, Cmd, PushInfo, Value, ClusterScanArgs, RoutingInfo, RedisResult};
 
 pub struct ConnectionError;
