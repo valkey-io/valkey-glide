@@ -144,8 +144,10 @@ describe("AddressResolver", () => {
             const addresses = standaloneCluster.getAddresses();
             const [actualHost, actualPort] = addresses[0];
 
-            // Resolver that always throws
-            const resolver = (_host: string, _port: number): [string, number] => {
+            // Resolver that always throws - params are consumed to satisfy lint
+            const resolver = (host: string, port: number): [string, number] => {
+                void host;
+                void port;
                 throw new Error("test-exception");
             };
 
@@ -174,8 +176,13 @@ describe("AddressResolver", () => {
             const addresses = clusterCluster.getAddresses();
             const [actualHost, actualPort] = addresses[0];
 
-            // Resolver that always throws
-            const resolver = (_host: string, _port: number): [string, number] => {
+            // Resolver that always throws - params are consumed to satisfy lint
+            const clusterResolver = (
+                host: string,
+                port: number,
+            ): [string, number] => {
+                void host;
+                void port;
                 throw new Error("test-exception");
             };
 
@@ -185,7 +192,7 @@ describe("AddressResolver", () => {
                     [[actualHost, actualPort]],
                     ProtocolVersion.RESP3,
                 ),
-                addressResolver: resolver,
+                addressResolver: clusterResolver,
             });
 
             try {
