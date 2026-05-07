@@ -901,7 +901,24 @@ async fn create_client(
     request: ConnectionRequest,
     push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    let client = match Client::new(request.into(), push_tx).await {
+    // Extract the address resolver key before converting (protobuf field won't survive into())
+    let resolver_key = request
+        .address_resolver_key
+        .as_ref()
+        .filter(|k| !k.is_empty())
+        .map(|k| k.to_string());
+
+    let mut conn_request: crate::client::ConnectionRequest = request.into();
+
+    // Look up the address resolver from the global registry using the key
+    // provided in the connection request.
+    if let Some(key) = resolver_key
+        && let Some(resolver) = crate::address_resolver_registry::remove(&key)
+    {
+        conn_request.address_resolver = Some(resolver);
+    }
+
+    let client = match Client::new(conn_request, push_tx).await {
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };

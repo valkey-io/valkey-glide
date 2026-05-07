@@ -305,6 +305,90 @@ pub type PubSubCallback = unsafe extern "C-unwind" fn(
     pattern_len: i64,
 ) -> ();
 
+/// Address resolver callback that is called to resolve server addresses before connection.
+///
+/// The callback receives a host string and port, and should write the resolved host
+/// into the provided buffer and return the resolved port. If the callback returns 0
+/// for the port, the original address is used as a fallback.
+///
+/// # Parameters
+/// * `host`: A pointer to the host string bytes (not null-terminated).
+/// * `host_len`: The length of the host string in bytes.
+/// * `port`: The port number to resolve.
+/// * `resolved_host_buf`: A pointer to a buffer where the resolved host should be written.
+/// * `resolved_host_buf_len`: The length of the resolved host buffer.
+/// * `resolved_host_len`: A pointer where the actual length of the resolved host should be written.
+///
+/// # Returns
+/// The resolved port number. If 0 is returned, the original address is used as a fallback.
+///
+/// # Safety
+/// * `host` must point to `host_len` consecutive properly initialized bytes.
+/// * `resolved_host_buf` must point to `resolved_host_buf_len` consecutive writable bytes.
+/// * `resolved_host_len` must be a valid pointer to a writable `usize`.
+/// * The callback must write the resolved host into `resolved_host_buf` and set `resolved_host_len`.
+pub type AddressResolverCallback = unsafe extern "C-unwind" fn(
+    host: *const u8,
+    host_len: usize,
+    port: u16,
+    resolved_host_buf: *mut u8,
+    resolved_host_buf_len: usize,
+    resolved_host_len: *mut usize,
+) -> u16;
+
+/// A wrapper around an FFI address resolver callback that implements the `AddressResolver` trait.
+struct FFIAddressResolver {
+    callback: AddressResolverCallback,
+}
+
+// SAFETY: The callback is a C function pointer that is safe to send across threads.
+unsafe impl Send for FFIAddressResolver {}
+unsafe impl Sync for FFIAddressResolver {}
+
+impl std::fmt::Debug for FFIAddressResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FFIAddressResolver {{ callback: <C function pointer> }}")
+    }
+}
+
+impl redis::AddressResolver for FFIAddressResolver {
+    fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+        // Provide a buffer for the resolved host (1024 bytes should be more than enough for a hostname)
+        let mut resolved_host_buf = vec![0u8; 1024];
+        let mut resolved_host_len: usize = 0;
+
+        let resolved_port = unsafe {
+            (self.callback)(
+                host.as_ptr(),
+                host.len(),
+                port,
+                resolved_host_buf.as_mut_ptr(),
+                resolved_host_buf.len(),
+                &mut resolved_host_len,
+            )
+        };
+
+        // If the callback returned port 0 or didn't write a host, fall back to original
+        if resolved_port == 0
+            || resolved_host_len == 0
+            || resolved_host_len > resolved_host_buf.len()
+        {
+            return (host.to_string(), port);
+        }
+
+        match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
+            Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
+            Err(_) => {
+                logger_core::log_error_lazy!(
+                    "address_resolver",
+                    "Address resolver returned invalid UTF-8 for host, using original address"
+                );
+                (host.to_string(), port)
+            }
+        }
+    }
+}
+
 /// The connection response.
 ///
 /// It contains either a connection or an error. It is represented as a struct instead of a union for ease of use in the wrapper language.
@@ -885,6 +969,7 @@ fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
     pubsub_callback: Option<PubSubCallback>,
+    address_resolver: Option<AddressResolverCallback>,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
@@ -943,11 +1028,17 @@ fn create_client_internal(
         // tasks (connection drivers, cluster manager) are registered there.
         // The current_thread runtime is only used for block_on in the command path.
         let create_rt = background_runtime.as_ref().unwrap_or(&runtime);
+        let mut connection_request = ConnectionRequest::from(request);
+
+        // Set the address resolver if provided
+        if let Some(resolver_callback) = address_resolver {
+            connection_request.address_resolver = Some(Arc::new(FFIAddressResolver {
+                callback: resolver_callback,
+            }));
+        }
+
         create_rt
-            .block_on(GlideClient::new(
-                ConnectionRequest::from(request),
-                Some(push_tx),
-            ))
+            .block_on(GlideClient::new(connection_request, Some(push_tx)))
             .map_err(|err| err.to_string())?
     };
 
@@ -1015,6 +1106,7 @@ pub unsafe extern "C-unwind" fn create_client(
     connection_request_len: usize,
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
+    address_resolver: AddressResolverCallback,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
     let request_bytes =
@@ -1028,7 +1120,19 @@ pub unsafe extern "C-unwind" fn create_client(
         Some(pubsub_callback)
     };
 
-    let response = match create_client_internal(request_bytes, client_type.clone(), callback_opt) {
+    // Convert address resolver pointer to Option - 0 means no resolver
+    let resolver_opt = if address_resolver as usize == 0 {
+        None
+    } else {
+        Some(address_resolver)
+    };
+
+    let response = match create_client_internal(
+        request_bytes,
+        client_type.clone(),
+        callback_opt,
+        resolver_opt,
+    ) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -1206,7 +1310,7 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     ),
                 },
                 Ok(bytes) => {
-                    match create_client_internal(&bytes, client_type.clone(), callback_opt) {
+                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None) {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(
