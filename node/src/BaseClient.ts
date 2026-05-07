@@ -9513,6 +9513,13 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Clean up address resolver from the global registry
+        if (this.addressResolverKey) {
+            removeAddressResolver(this.addressResolverKey);
+            this.addressResolverKey = undefined;
+        }
+
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
     }
