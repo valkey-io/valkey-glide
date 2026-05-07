@@ -812,7 +812,8 @@ impl redis::AddressResolver for NodeAddressResolver {
 #[napi(js_name = "registerAddressResolver")]
 pub fn register_address_resolver(
     env: Env,
-    #[napi(ts_arg_type = "(host: string, port: number) => [string, number]")] callback: napi::JsFunction,
+    #[napi(ts_arg_type = "(host: string, port: number) => [string, number]")]
+    callback: napi::JsFunction,
 ) -> Result<String> {
     // Create a persistent reference to the user's callback so it won't be GC'd
     let callback_ref = env.create_reference(&callback)?;
@@ -836,9 +837,7 @@ pub fn register_address_resolver(
     //
     // Solution: Create a no-op JS function as the "original" function, and do all
     // the work in the resolve closure.
-    let noop_fn = env.create_function_from_closure("noop", |_ctx| {
-        Ok(())
-    })?;
+    let noop_fn = env.create_function_from_closure("noop", |_ctx| Ok(()))?;
 
     let tsfn = noop_fn.create_threadsafe_function(
         0,
@@ -853,19 +852,18 @@ pub fn register_address_resolver(
             let js_port = ctx.env.create_uint32(request.port as u32)?;
 
             // Call the user's resolver function
-            let result = user_callback.call(None, &[js_host.into_unknown(), js_port.into_unknown()]);
+            let result =
+                user_callback.call(None, &[js_host.into_unknown(), js_port.into_unknown()]);
 
             // Extract the resolved address from the return value
             let resolved = match result {
-                Ok(value) => {
-                    (|| -> napi::Result<(String, u16)> {
-                        let obj = value.coerce_to_object()?;
-                        let h: napi::JsString = obj.get_element(0)?;
-                        let p: napi::JsNumber = obj.get_element(1)?;
-                        Ok((h.into_utf8()?.into_owned()?, p.get_uint32()? as u16))
-                    })()
-                    .unwrap_or((request.host.clone(), request.port))
-                }
+                Ok(value) => (|| -> napi::Result<(String, u16)> {
+                    let obj = value.coerce_to_object()?;
+                    let h: napi::JsString = obj.get_element(0)?;
+                    let p: napi::JsNumber = obj.get_element(1)?;
+                    Ok((h.into_utf8()?.into_owned()?, p.get_uint32()? as u16))
+                })()
+                .unwrap_or((request.host.clone(), request.port)),
                 Err(_) => (request.host.clone(), request.port),
             };
 
