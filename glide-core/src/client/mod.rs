@@ -891,6 +891,15 @@ impl Client {
                 ) {
                     Ok(decompressed_value) => decompressed_value,
                     Err(e) => {
+                        // Propagate critical errors (size limit exceeded, incompatible command)
+                        // to the user instead of silently falling back to raw value
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
                         log_warn(
                             "send_command_decompression",
                             format!("Failed to decompress response: {}", e),

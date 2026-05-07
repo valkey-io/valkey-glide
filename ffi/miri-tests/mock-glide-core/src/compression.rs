@@ -55,6 +55,6 @@ pub fn decompress_batch_response(
 pub fn try_decompress_batch_response(
     value: redis::Value,
     _manager: Option<&CompressionManager>,
-) -> redis::Value {
-    value
+) -> CompressionResult<redis::Value> {
+    Ok(value)
 }

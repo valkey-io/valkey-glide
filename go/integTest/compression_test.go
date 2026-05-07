@@ -1538,3 +1538,159 @@ func (suite *GlideTestSuite) TestCompressionIncompatibleCommandsWorkWithoutCompr
 
 	client.Del(context.Background(), []string{key})
 }
+
+// ============================================================================
+// MaxDecompressedSize Enforcement Tests
+// ============================================================================
+
+// Helper to create a compression client with custom max decompressed size
+func (suite *GlideTestSuite) compressionClientWithMaxSize(maxSize uint64) (*glide.Client, error) {
+	compressionConfig := config.NewCompressionConfiguration().
+		WithMaxDecompressedSize(&maxSize)
+	clientConfig := suite.defaultClientConfig().
+		WithCompressionConfiguration(compressionConfig)
+	return glide.NewClient(clientConfig)
+}
+
+// Helper to create a compression cluster client with custom max decompressed size
+func (suite *GlideTestSuite) compressionClusterClientWithMaxSize(maxSize uint64) (*glide.ClusterClient, error) {
+	compressionConfig := config.NewCompressionConfiguration().
+		WithMaxDecompressedSize(&maxSize)
+	clientConfig := suite.defaultClusterClientConfig().
+		WithCompressionConfiguration(compressionConfig)
+	return glide.NewClusterClient(clientConfig)
+}
+
+func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeEnforced() {
+	t := suite.T()
+
+	// Step 1: Create a client with compression enabled (default max size - 512MB)
+	unlimitedClient := suite.compressionClient()
+	defer unlimitedClient.Close()
+
+	// Step 2: Set a large compressible value (10KB)
+	key := fmt.Sprintf("max_decomp_test_%s", randomString(8))
+	largeValue := generateCompressibleText(10000) // 10KB of compressible data
+
+	result, err := unlimitedClient.Set(context.Background(), key, largeValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Verify the value was compressed
+	stats := unlimitedClient.GetStatistics()
+	assert.Greater(t, stats["total_values_compressed"], uint64(0),
+		"Value should have been compressed")
+
+	// Step 3: Create a client with a small maxDecompressedSize limit (100 bytes)
+	var maxSize uint64 = 100 // Only allow 100 bytes decompressed
+	limitedClient, err := suite.compressionClientWithMaxSize(maxSize)
+	assert.NoError(t, err)
+	defer limitedClient.Close()
+
+	// Step 4: Try to GET the value with the limited client
+	// This SHOULD fail because the decompressed size (10KB) exceeds the limit (100 bytes)
+	_, err = limitedClient.Get(context.Background(), key)
+
+	// Verify the error is returned
+	assert.Error(t, err, "GET should fail when decompressed size exceeds maxDecompressedSize")
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
+		"Error should mention decompression size limit: %v", err)
+
+	// Cleanup
+	unlimitedClient.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeEnforcedCluster() {
+	t := suite.T()
+
+	// Step 1: Create a cluster client with compression enabled (default max size)
+	unlimitedClient := suite.compressionClusterClient()
+	defer unlimitedClient.Close()
+
+	// Step 2: Set a large compressible value (10KB)
+	key := fmt.Sprintf("max_decomp_cluster_test_%s", randomString(8))
+	largeValue := generateCompressibleText(10000)
+
+	result, err := unlimitedClient.Set(context.Background(), key, largeValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Step 3: Create a cluster client with a small maxDecompressedSize limit
+	var maxSize uint64 = 100
+	limitedClient, err := suite.compressionClusterClientWithMaxSize(maxSize)
+	assert.NoError(t, err)
+	defer limitedClient.Close()
+
+	// Step 4: Try to GET the value - should fail
+	_, err = limitedClient.Get(context.Background(), key)
+
+	// Verify the error is returned
+	assert.Error(t, err, "GET should fail when decompressed size exceeds maxDecompressedSize in cluster mode")
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
+		"Error should mention decompression size limit: %v", err)
+
+	// Cleanup
+	unlimitedClient.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeWithMGet() {
+	t := suite.T()
+
+	// Create unlimited client
+	unlimitedClient := suite.compressionClient()
+	defer unlimitedClient.Close()
+
+	// Set multiple large values
+	keys := make([]string, 3)
+	largeValue := generateCompressibleText(5000) // 5KB each
+	for i := 0; i < 3; i++ {
+		keys[i] = fmt.Sprintf("{mget_max_test}_%d_%s", i, randomString(8))
+		_, err := unlimitedClient.Set(context.Background(), keys[i], largeValue)
+		assert.NoError(t, err)
+	}
+
+	// Create limited client
+	var maxSize uint64 = 100
+	limitedClient, err := suite.compressionClientWithMaxSize(maxSize)
+	assert.NoError(t, err)
+	defer limitedClient.Close()
+
+	// Try MGET - should fail
+	_, err = limitedClient.MGet(context.Background(), keys)
+
+	// Verify the error is returned
+	assert.Error(t, err, "MGET should fail when decompressed size exceeds maxDecompressedSize")
+	errMsg := strings.ToLower(err.Error())
+	assert.True(t, strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
+		"Error should mention decompression size limit: %v", err)
+
+	// Cleanup
+	unlimitedClient.Del(context.Background(), keys)
+}
+
+func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeAllowsWithinLimit() {
+	t := suite.T()
+
+	// Create client with 1KB limit
+	var maxSize uint64 = 1024 // 1KB limit
+	client, err := suite.compressionClientWithMaxSize(maxSize)
+	assert.NoError(t, err)
+	defer client.Close()
+
+	key := fmt.Sprintf("within_limit_test_%s", randomString(8))
+	smallValue := generateCompressibleText(500) // 500 bytes, within limit
+
+	// Set and get should work
+	result, err := client.Set(context.Background(), key, smallValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	retrieved, err := client.Get(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, smallValue, retrieved.Value())
+
+	// Cleanup
+	client.Del(context.Background(), []string{key})
+}
