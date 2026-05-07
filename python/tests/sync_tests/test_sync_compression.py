@@ -2126,3 +2126,64 @@ class TestCompressionMaxDecompressedSize:
             client.delete([key])
         finally:
             client.close()
+
+
+
+class TestCompressionSetWithGetOption:
+    """Test SET with GET option returns decompressed value (Bug 2 fix)."""
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_set_with_get_returns_decompressed_value(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SET with GET option returns decompressed old value.
+
+        Bug 2: SET with GET option was returning compressed bytes instead of
+        the decompressed original value.
+        """
+        key = f"set_with_get_test_{get_random_string(8)}"
+        original_value = generate_compressible_text(1024)  # 1KB
+        new_value = generate_compressible_text(2048)  # 2KB
+
+        # First, set the original value
+        assert compression_client.set(key, original_value) == OK
+
+        # Verify compression was applied
+        stats = compression_client.get_statistics()
+        assert (
+            stats["total_values_compressed"] > 0
+        ), "Value should have been compressed"
+
+        # Now use SET with return_old_value option to get the old value
+        old_value = compression_client.set(key, new_value, return_old_value=True)
+
+        # The old value should be the decompressed original value, not compressed bytes
+        assert old_value == original_value.encode(), (
+            f"SET with GET should return decompressed old value. "
+            f"Expected {len(original_value)} bytes, got {len(old_value) if old_value else 0} bytes"
+        )
+
+        # Verify the new value was set correctly
+        retrieved = compression_client.get(key)
+        assert retrieved == new_value.encode()
+
+        # Cleanup
+        compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_set_with_get_returns_none_for_nonexistent_key(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SET with GET option returns None for non-existent key."""
+        key = f"set_with_get_nonexistent_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+
+        # SET with return_old_value on non-existent key should return None
+        old_value = compression_client.set(key, value, return_old_value=True)
+
+        assert old_value is None, "SET with GET on non-existent key should return None"
+
+        # Cleanup
+        compression_client.delete([key])

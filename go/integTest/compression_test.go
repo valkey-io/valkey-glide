@@ -1694,3 +1694,93 @@ func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeAllowsWithinLimit
 	// Cleanup
 	client.Del(context.Background(), []string{key})
 }
+
+
+// ============================================================================
+// SET with GET Option Tests (Bug 2 fix)
+// ============================================================================
+
+func (suite *GlideTestSuite) TestCompressionSetWithGetReturnsDecompressedValue() {
+	t := suite.T()
+
+	client := suite.compressionClient()
+	defer client.Close()
+
+	key := fmt.Sprintf("set_with_get_test_%s", randomString(8))
+	originalValue := generateCompressibleText(1024) // 1KB
+	newValue := generateCompressibleText(2048)      // 2KB
+
+	// First, set the original value
+	result, err := client.Set(context.Background(), key, originalValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Verify compression was applied
+	stats := client.GetStatistics()
+	assert.Greater(t, stats["total_values_compressed"], uint64(0),
+		"Value should have been compressed")
+
+	// Now use SET with returnOldValue option to get the old value
+	setOpts := options.NewSetOptions().SetReturnOldValue(true)
+	oldValue, err := client.SetWithOptions(context.Background(), key, newValue, *setOpts)
+	assert.NoError(t, err)
+
+	// The old value should be the decompressed original value, not compressed bytes
+	assert.Equal(t, originalValue, oldValue.Value(),
+		"SET with GET should return decompressed old value, not compressed bytes")
+
+	// Verify the new value was set correctly
+	retrieved, err := client.Get(context.Background(), key)
+	assert.NoError(t, err)
+	assert.Equal(t, newValue, retrieved.Value())
+
+	// Cleanup
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionSetWithGetReturnsNullForNonexistentKey() {
+	t := suite.T()
+
+	client := suite.compressionClient()
+	defer client.Close()
+
+	key := fmt.Sprintf("set_with_get_nonexistent_%s", randomString(8))
+	value := generateCompressibleText(1024)
+
+	// SET with returnOldValue on non-existent key should return nil
+	setOpts := options.NewSetOptions().SetReturnOldValue(true)
+	oldValue, err := client.SetWithOptions(context.Background(), key, value, *setOpts)
+	assert.NoError(t, err)
+	assert.True(t, oldValue.IsNil(), "SET with GET on non-existent key should return nil")
+
+	// Cleanup
+	client.Del(context.Background(), []string{key})
+}
+
+func (suite *GlideTestSuite) TestCompressionSetWithGetCluster() {
+	t := suite.T()
+
+	client := suite.compressionClusterClient()
+	defer client.Close()
+
+	key := fmt.Sprintf("set_with_get_cluster_%s", randomString(8))
+	originalValue := generateCompressibleText(1024)
+	newValue := generateCompressibleText(2048)
+
+	// First, set the original value
+	result, err := client.Set(context.Background(), key, originalValue)
+	assert.NoError(t, err)
+	assert.Equal(t, "OK", result)
+
+	// Now use SET with returnOldValue option to get the old value
+	setOpts := options.NewSetOptions().SetReturnOldValue(true)
+	oldValue, err := client.SetWithOptions(context.Background(), key, newValue, *setOpts)
+	assert.NoError(t, err)
+
+	// The old value should be the decompressed original value
+	assert.Equal(t, originalValue, oldValue.Value(),
+		"SET with GET in cluster mode should return decompressed old value")
+
+	// Cleanup
+	client.Del(context.Background(), []string{key})
+}
