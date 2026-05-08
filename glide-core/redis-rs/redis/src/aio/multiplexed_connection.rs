@@ -367,11 +367,27 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
-        match ready!(self.as_mut().project().sink_stream.poll_ready(cx)) {
-            Ok(()) => Ok(()).into(),
-            Err(err) => {
+        match self.as_mut().project().sink_stream.poll_ready(cx) {
+            Poll::Ready(Ok(())) => Ok(()).into(),
+            Poll::Ready(Err(err)) => {
                 *self.project().error = Some(err);
                 Ok(()).into()
+            }
+            Poll::Pending => {
+                // Write side is blocked (TCP send buffer full). Drain incoming
+                // responses so the server can free its send buffer and unblock
+                // our writes. Without this, a TCP deadlock occurs with large
+                // payloads. See https://github.com/redis-rs/redis-rs/issues/1955.
+                //
+                // Note: upstream redis-rs calls poll_read unconditionally at the
+                // top (before checking poll_ready). We only call it in the Pending
+                // path because unconditional poll_read registers the read waker,
+                // causing spurious wakeups that starve concurrent request
+                // processing and exhaust the inflight request limit.
+                if matches!(self.as_mut().poll_read(cx), Poll::Ready(Err(()))) {
+                    return Poll::Ready(Err(()));
+                }
+                Poll::Pending
             }
         }
     }
@@ -434,15 +450,34 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
-        ready!(self
+        let flush_result = self
             .as_mut()
             .project()
             .sink_stream
             .poll_flush(cx)
             .map_err(|err| {
                 self.as_mut().send_result(Err(err));
-            }))?;
-        self.poll_read(cx)
+            })?;
+        if flush_result.is_ready() {
+            self.poll_read(cx)
+        } else {
+            // Flush is blocked (TCP send buffer full). Drain incoming responses
+            // so the server can free its send buffer and unblock our writes.
+            // Without this, a TCP deadlock occurs with large payloads.
+            // See https://github.com/redis-rs/redis-rs/issues/1955.
+            //
+            // Note: upstream redis-rs calls poll_read unconditionally at the top
+            // and removes the ready!/poll_read-after-flush pattern. We keep
+            // poll_read only in the Pending path (and retain the post-flush
+            // poll_read for throughput) because unconditional poll_read registers
+            // the read waker on every call, causing spurious wakeups that starve
+            // concurrent request processing and exhaust the inflight request
+            // limit unique to valkey-glide.
+            if matches!(self.as_mut().poll_read(cx), Poll::Ready(Err(()))) {
+                return Poll::Ready(Err(()));
+            }
+            Poll::Pending
+        }
     }
 
     fn poll_close(
@@ -1165,5 +1200,184 @@ mod tests {
              Without the fix, this hangs forever.",
             elapsed,
         );
+    }
+
+    /// A Sink+Stream that simulates the TCP deadlock condition:
+    /// - The write side (poll_ready/poll_flush) returns Pending (simulating full TCP send buffer)
+    /// - The read side (poll_next) has responses available that must be drained
+    ///
+    /// If poll_read is NOT called during poll_ready/poll_flush, the responses will never
+    /// be delivered to the caller, causing a deadlock.
+    struct DeadlockProneStream {
+        /// When true, poll_ready and poll_flush return Pending (simulating TCP backpressure)
+        write_blocked: Arc<AtomicBool>,
+        /// Channel for sending bytes (the write/sink side)
+        inner_tx: futures_mpsc::Sender<Vec<u8>>,
+        /// Channel for receiving responses (the read/stream side)
+        inner_rx: futures_mpsc::Receiver<RedisResult<Value>>,
+        /// Waker storage so we can wake the task when unblocking
+        waker: Option<task::Waker>,
+    }
+
+    impl Stream for DeadlockProneStream {
+        type Item = RedisResult<Value>;
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Pin::new(&mut self.inner_rx).poll_next(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for DeadlockProneStream {
+        type Error = RedisError;
+
+        fn poll_ready(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.write_blocked.load(Ordering::SeqCst) {
+                // Store waker so we can be woken when unblocked
+                self.waker = Some(cx.waker().clone());
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.get_mut().inner_tx)
+                .poll_ready(cx)
+                .map_err(|e| {
+                    RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+                })
+        }
+
+        fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+            Pin::new(&mut self.inner_tx).start_send(item).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.write_blocked.load(Ordering::SeqCst) {
+                self.waker = Some(cx.waker().clone());
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.inner_tx).poll_flush(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_close(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Pin::new(&mut self.inner_tx).poll_close(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+    }
+
+    /// Reproduces the TCP deadlock from https://github.com/redis-rs/redis-rs/issues/1955
+    ///
+    /// Scenario:
+    /// 1. Client sends command #1 (GET) — goes through fine
+    /// 2. Server queues response for command #1
+    /// 3. Client sends command #2 (large SET) — write side becomes blocked (TCP backpressure)
+    /// 4. BUG: poll_ready returns Pending without calling poll_read
+    ///    → response for command #1 is never delivered
+    ///    → command #1's caller hangs forever
+    ///
+    /// With the fix: poll_ready calls poll_read before blocking, so the response
+    /// for command #1 is delivered even while the write side is blocked.
+    #[tokio::test]
+    async fn test_tcp_deadlock_read_blocked_by_write() {
+        let write_blocked = Arc::new(AtomicBool::new(false));
+        let (sink_tx, _sink_rx) = futures_mpsc::channel::<Vec<u8>>(100);
+        let (mut resp_tx, resp_rx) = futures_mpsc::channel::<RedisResult<Value>>(100);
+
+        let stream = DeadlockProneStream {
+            write_blocked: write_blocked.clone(),
+            inner_tx: sink_tx,
+            inner_rx: resp_rx,
+            waker: None,
+        };
+
+        let (pipeline, driver) = Pipeline::new(stream, None);
+        let driver_handle = tokio::spawn(driver);
+
+        // Send first command — this should go through fine
+        let mut pipeline1 = pipeline.clone();
+        let cmd1_handle = tokio::spawn(async move {
+            pipeline1
+                .send_single(
+                    crate::cmd("GET").arg("key1").get_packed_command(),
+                    Duration::from_secs(5),
+                    false,
+                )
+                .await
+        });
+
+        // Give the driver time to process the send
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Now block the write side — simulating TCP send buffer full
+        write_blocked.store(true, Ordering::SeqCst);
+
+        // Send second command — this will block in poll_ready because write is blocked
+        let mut pipeline2 = pipeline.clone();
+        let cmd2_handle = tokio::spawn(async move {
+            pipeline2
+                .send_single(
+                    crate::cmd("SET")
+                        .arg("key2")
+                        .arg("value")
+                        .get_packed_command(),
+                    Duration::from_secs(5),
+                    false,
+                )
+                .await
+        });
+
+        // Give the driver time to attempt the second send and get blocked
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Now inject the response for command #1 on the read side.
+        // If poll_read is called during poll_ready (the fix), this response will be
+        // delivered to cmd1_handle. If not (the bug), cmd1_handle will hang.
+        resp_tx
+            .try_send(Ok(Value::BulkString(b"response1".to_vec())))
+            .expect("Failed to inject response");
+
+        // Wait for command #1 to complete — with the bug, this times out
+        let result = tokio::time::timeout(Duration::from_secs(2), cmd1_handle).await;
+
+        // Cleanup
+        write_blocked.store(false, Ordering::SeqCst);
+        driver_handle.abort();
+        cmd2_handle.abort();
+
+        match result {
+            Ok(Ok(Ok(value))) => {
+                assert_eq!(value, Value::BulkString(b"response1".to_vec()));
+            }
+            Ok(Ok(Err(e))) => {
+                panic!("Command 1 returned error: {:?}", e);
+            }
+            Ok(Err(e)) => {
+                panic!("Command 1 task panicked: {:?}", e);
+            }
+            Err(_) => {
+                panic!(
+                    "TEST FAILED: TCP deadlock detected!\n\
+                     Command #1's response was available on the read side, but the \
+                     multiplexer never delivered it because poll_ready/poll_flush blocked \
+                     on the write side without calling poll_read first.\n\
+                     \n\
+                     Fix: Call self.poll_read(cx) at the beginning of poll_ready() and \
+                     poll_flush() before checking the write side, so responses are always \
+                     drained even when writes are blocked.\n\
+                     \n\
+                     See: https://github.com/redis-rs/redis-rs/issues/1955\n\
+                     Fix: https://github.com/redis-rs/redis-rs/pull/2070"
+                );
+            }
+        }
     }
 }
