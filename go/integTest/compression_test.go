@@ -1594,8 +1594,12 @@ func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeEnforced() {
 	// Verify the error is returned
 	assert.Error(t, err, "GET should fail when decompressed size exceeds maxDecompressedSize")
 	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
-		"Error should mention decompression size limit: %v", err)
+	assert.True(
+		t,
+		strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
+		"Error should mention decompression size limit: %v",
+		err,
+	)
 
 	// Cleanup
 	unlimitedClient.Del(context.Background(), []string{key})
@@ -1628,8 +1632,12 @@ func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeEnforcedCluster()
 	// Verify the error is returned
 	assert.Error(t, err, "GET should fail when decompressed size exceeds maxDecompressedSize in cluster mode")
 	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
-		"Error should mention decompression size limit: %v", err)
+	assert.True(
+		t,
+		strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
+		"Error should mention decompression size limit: %v",
+		err,
+	)
 
 	// Cleanup
 	unlimitedClient.Del(context.Background(), []string{key})
@@ -1663,8 +1671,12 @@ func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeWithMGet() {
 	// Verify the error is returned
 	assert.Error(t, err, "MGET should fail when decompressed size exceeds maxDecompressedSize")
 	errMsg := strings.ToLower(err.Error())
-	assert.True(t, strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
-		"Error should mention decompression size limit: %v", err)
+	assert.True(
+		t,
+		strings.Contains(errMsg, "decompressed") || strings.Contains(errMsg, "exceeds") || strings.Contains(errMsg, "size"),
+		"Error should mention decompression size limit: %v",
+		err,
+	)
 
 	// Cleanup
 	unlimitedClient.Del(context.Background(), keys)
@@ -1694,11 +1706,6 @@ func (suite *GlideTestSuite) TestCompressionMaxDecompressedSizeAllowsWithinLimit
 	// Cleanup
 	client.Del(context.Background(), []string{key})
 }
-
-
-// ============================================================================
-// SET with GET Option Tests (Bug 2 fix)
-// ============================================================================
 
 func (suite *GlideTestSuite) TestCompressionSetWithGetReturnsDecompressedValue() {
 	t := suite.T()
