@@ -2036,9 +2036,7 @@ class TestCompressionMaxDecompressedSize:
 
         try:
             # Set multiple large values
-            keys = [
-                f"{{mget_max}}_{i}_{get_random_string(8)}" for i in range(3)
-            ]
+            keys = [f"{{mget_max}}_{i}_{get_random_string(8)}" for i in range(3)]
             large_value = generate_compressible_text(5000)  # 5KB each
 
             for key in keys:
@@ -2128,7 +2126,6 @@ class TestCompressionMaxDecompressedSize:
             client.close()
 
 
-
 class TestCompressionSetWithGetOption:
     """Test SET with GET option returns decompressed value (Bug 2 fix)."""
 
@@ -2151,9 +2148,7 @@ class TestCompressionSetWithGetOption:
 
         # Verify compression was applied
         stats = compression_client.get_statistics()
-        assert (
-            stats["total_values_compressed"] > 0
-        ), "Value should have been compressed"
+        assert stats["total_values_compressed"] > 0, "Value should have been compressed"
 
         # Now use SET with return_old_value option to get the old value
         old_value = compression_client.set(key, new_value, return_old_value=True)
