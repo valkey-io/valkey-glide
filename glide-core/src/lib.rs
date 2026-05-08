@@ -22,3 +22,35 @@ pub use telemetrylib::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
     GlideOpenTelemetryConfigBuilder, GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
+
+#[cfg(feature = "proto")]
+mod cache_metric_conversion {
+    use crate::command_request::CacheMetricsType;
+    use protobuf::Enum;
+    use redis::{ErrorKind, RedisError, RedisResult, cache::CacheMetricType};
+
+    impl From<CacheMetricsType> for CacheMetricType {
+        fn from(value: CacheMetricsType) -> Self {
+            match value {
+                CacheMetricsType::HitRate => Self::HitRate,
+                CacheMetricsType::MissRate => Self::MissRate,
+                CacheMetricsType::EntryCount => Self::EntryCount,
+                CacheMetricsType::Evictions => Self::Evictions,
+                CacheMetricsType::Expirations => Self::Expirations,
+                CacheMetricsType::TotalLookups => Self::TotalLookups,
+            }
+        }
+    }
+
+    /// Convert a protobuf CacheMetricsType integer value to a CacheMetricType enum.
+    pub fn cache_metric_type_from_proto(value: i32) -> RedisResult<CacheMetricType> {
+        CacheMetricsType::from_i32(value)
+            .map(CacheMetricType::from)
+            .ok_or_else(|| {
+                RedisError::from((ErrorKind::InvalidClientConfig, "Invalid cache metrics type"))
+            })
+    }
+}
+
+#[cfg(feature = "proto")]
+pub use cache_metric_conversion::cache_metric_type_from_proto;
