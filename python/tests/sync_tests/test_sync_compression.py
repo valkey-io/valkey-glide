@@ -2067,7 +2067,7 @@ class TestCompressionMaxDecompressedSize:
             try:
                 # MGET should raise an error with size limit message
                 with pytest.raises(Exception) as exc_info:
-                    limited_client.mget(keys)
+                    limited_client.mget(cast(List[Union[str, bytes]], keys))
 
                 error_msg = str(exc_info.value).lower()
                 assert (
@@ -2079,7 +2079,7 @@ class TestCompressionMaxDecompressedSize:
                 limited_client.close()
 
             # Cleanup
-            unlimited_client.delete(keys)
+            unlimited_client.delete(cast(List[Union[str, bytes]], keys))
         finally:
             unlimited_client.close()
 
