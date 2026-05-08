@@ -3524,7 +3524,13 @@ pub unsafe extern "C" fn batch(
                 value,
                 compression_manager_for_decompression.as_deref(),
             )
-            .map_err(|e| redis::RedisError::from((redis::ErrorKind::IoError, "Decompression error", e.to_string()))),
+            .map_err(|e| {
+                redis::RedisError::from((
+                    redis::ErrorKind::IoError,
+                    "Decompression error",
+                    e.to_string(),
+                ))
+            }),
             Err(e) => Err(e),
         }
     })
