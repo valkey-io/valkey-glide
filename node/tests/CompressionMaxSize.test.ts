@@ -134,7 +134,7 @@ describe("Compression MaxDecompressedSize", () => {
                         RequestError,
                     );
                     await expect(limitedClient.get(key)).rejects.toThrow(
-                        /decompressed size exceeds/i,
+                        /size limit exceeded/i,
                     );
                 } finally {
                     limitedClient.close();
@@ -184,7 +184,7 @@ describe("Compression MaxDecompressedSize", () => {
                         RequestError,
                     );
                     await expect(limitedClient.mget(keys)).rejects.toThrow(
-                        /decompressed size exceeds/i,
+                        /size limit exceeded/i,
                     );
                 } finally {
                     limitedClient.close();
