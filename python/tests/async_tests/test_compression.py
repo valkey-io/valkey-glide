@@ -1921,3 +1921,235 @@ class TestCompressionMaxDecompressedSize:
         protobuf = config._to_protobuf()
         # When None, the field should not be set (will be 0 in protobuf, Rust uses default)
         assert protobuf.max_decompressed_size == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_max_decompressed_size_enforced_on_get(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Test that maxDecompressedSize limit is enforced during decompression.
+
+        When a client with a small maxDecompressedSize tries to decompress a value
+        that exceeds the limit, it should raise an error with a clear message
+        about the size limit being exceeded.
+        """
+        # Step 1: Create a client with compression enabled (default max size - 512MB)
+        unlimited_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+
+        try:
+            # Step 2: Set a large compressible value (10KB)
+            key = f"max_decomp_test_{get_random_string(8)}"
+            large_value = generate_compressible_text(10000)  # 10KB
+
+            await unlimited_client.set(key, large_value)
+
+            # Step 3: Create a client with a small maxDecompressedSize limit (100 bytes)
+            limited_config = create_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,  # We'll set it manually
+            )
+
+            # Set custom compression configuration with small max size
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,  # Only allow 100 bytes decompressed
+            )
+
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = await GlideClusterClient.create(limited_config)
+            else:
+                limited_client = await GlideClient.create(limited_config)
+
+            try:
+                # Step 4: GET should raise an error with size limit message
+                with pytest.raises(Exception) as exc_info:
+                    await limited_client.get(key)
+
+                error_msg = str(exc_info.value).lower()
+                assert (
+                    "decompressed" in error_msg
+                    or "exceeds" in error_msg
+                    or "size" in error_msg
+                ), f"Error should mention decompression size limit: {exc_info.value}"
+            finally:
+                await limited_client.close()
+
+            # Cleanup
+            await unlimited_client.delete([key])
+        finally:
+            await unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_max_decompressed_size_enforced_on_mget(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Test maxDecompressedSize with MGET command."""
+        # Create unlimited client
+        unlimited_client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=True,
+        )
+
+        try:
+            # Set multiple large values
+            keys = [f"{{mget_max}}_{i}_{get_random_string(8)}" for i in range(3)]
+            large_value = generate_compressible_text(5000)  # 5KB each
+
+            for key in keys:
+                await unlimited_client.set(key, large_value)
+
+            # Create limited client
+            limited_config = create_client_config(
+                request,
+                cluster_mode,
+                protocol=protocol,
+                enable_compression=False,
+            )
+
+            limited_config.compression = CompressionConfiguration(
+                enabled=True,
+                backend=CompressionBackend.ZSTD,
+                compression_level=3,
+                min_compression_size=64,
+                max_decompressed_size=100,
+            )
+
+            limited_client: GlideClient | GlideClusterClient
+            if cluster_mode:
+                limited_client = await GlideClusterClient.create(limited_config)
+            else:
+                limited_client = await GlideClient.create(limited_config)
+
+            try:
+                # MGET should raise an error with size limit message
+                with pytest.raises(Exception) as exc_info:
+                    await limited_client.mget(cast(List[Union[str, bytes]], keys))
+
+                error_msg = str(exc_info.value).lower()
+                assert (
+                    "decompressed" in error_msg
+                    or "exceeds" in error_msg
+                    or "size" in error_msg
+                ), f"Error should mention decompression size limit: {exc_info.value}"
+            finally:
+                await limited_client.close()
+
+            # Cleanup
+            await unlimited_client.delete(cast(List[Union[str, bytes]], keys))
+        finally:
+            await unlimited_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_max_decompressed_size_allows_values_within_limit(
+        self, request, cluster_mode: bool, protocol: ProtocolVersion
+    ):
+        """Verify that values within the limit work correctly."""
+        # Create client with 1KB limit
+        config = create_client_config(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            enable_compression=False,
+        )
+
+        config.compression = CompressionConfiguration(
+            enabled=True,
+            backend=CompressionBackend.ZSTD,
+            compression_level=3,
+            min_compression_size=64,
+            max_decompressed_size=1024,  # 1KB limit
+        )
+
+        client: GlideClient | GlideClusterClient
+        if cluster_mode:
+            client = await GlideClusterClient.create(config)
+        else:
+            client = await GlideClient.create(config)
+
+        try:
+            key = f"within_limit_test_{get_random_string(8)}"
+            small_value = generate_compressible_text(500)  # 500 bytes, within limit
+
+            await client.set(key, small_value)
+            retrieved = await client.get(key)
+
+            assert retrieved == small_value.encode()
+
+            # Cleanup
+            await client.delete([key])
+        finally:
+            await client.close()
+
+
+@pytest.mark.anyio
+class TestCompressionSetWithGetOption:
+    """Test SET with GET option returns decompressed value (Bug 2 fix)."""
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_with_get_returns_decompressed_value(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SET with GET option returns decompressed old value.
+
+        Bug 2: SET with GET option was returning compressed bytes instead of
+        the decompressed original value.
+        """
+        key = f"set_with_get_test_{get_random_string(8)}"
+        original_value = generate_compressible_text(1024)  # 1KB
+        new_value = generate_compressible_text(2048)  # 2KB
+
+        # First, set the original value
+        assert await compression_client.set(key, original_value) == OK
+
+        # Verify compression was applied
+        stats = await compression_client.get_statistics()
+        assert stats["total_values_compressed"] > 0, "Value should have been compressed"
+
+        # Now use SET with return_old_value option to get the old value
+        old_value = await compression_client.set(key, new_value, return_old_value=True)
+
+        # The old value should be the decompressed original value, not compressed bytes
+        assert old_value == original_value.encode(), (
+            f"SET with GET should return decompressed old value. "
+            f"Expected {len(original_value)} bytes, got {len(old_value) if old_value else 0} bytes"
+        )
+
+        # Verify the new value was set correctly
+        retrieved = await compression_client.get(key)
+        assert retrieved == new_value.encode()
+
+        # Cleanup
+        await compression_client.delete([key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_set_with_get_returns_none_for_nonexistent_key(
+        self, compression_client: TGlideClient
+    ):
+        """Test that SET with GET option returns None for non-existent key."""
+        key = f"set_with_get_nonexistent_{get_random_string(8)}"
+        value = generate_compressible_text(1024)
+
+        # SET with return_old_value on non-existent key should return None
+        old_value = await compression_client.set(key, value, return_old_value=True)
+
+        assert old_value is None, "SET with GET on non-existent key should return None"
+
+        # Cleanup
+        await compression_client.delete([key])

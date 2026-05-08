@@ -1413,8 +1413,7 @@ mod compression_tests {
         let result = zstd_backend.decompress(&compressed, Some(10));
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
-        assert!(err.to_string().contains("exceeds maximum allowed size"));
+        assert!(matches!(err, CompressionError::SizeLimitExceeded { .. }));
 
         // Test LZ4 with size limit
         let lz4_backend = Lz4Backend::new();
@@ -1429,8 +1428,7 @@ mod compression_tests {
         let result = lz4_backend.decompress(&compressed, Some(10));
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
-        assert!(err.to_string().contains("exceeds maximum allowed size"));
+        assert!(matches!(err, CompressionError::SizeLimitExceeded { .. }));
 
         // Test with None limit (no limit) - use the correct backend (LZ4)
         let result = lz4_backend.decompress(&compressed, None);
@@ -1488,8 +1486,7 @@ mod compression_tests {
         let result = manager.decompress_value(&compressed);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, CompressionError::DecompressionFailed { .. }));
-        assert!(err.to_string().contains("exceeds maximum allowed size"));
+        assert!(matches!(err, CompressionError::SizeLimitExceeded { .. }));
 
         // Create a manager with a larger limit
         let backend = Box::new(ZstdBackend::new());
