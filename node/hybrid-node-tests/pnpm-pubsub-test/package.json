@@ -12,5 +12,8 @@
     "dependencies": {
         "@valkey/valkey-glide": "file:../..",
         "find-free-port": "^2.0.0"
+    },
+    "pnpm": {
+        "onlyBuiltDependencies": ["protobufjs"]
     }
 }
