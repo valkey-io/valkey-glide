@@ -134,7 +134,7 @@ func (c *CompressionConfiguration) toProtobuf() (*protobuf.CompressionConfig, er
 	}
 
 	if c.maxDecompressedSize != nil {
-		pbConfig.MaxDecompressedSize = *c.maxDecompressedSize
+		pbConfig.MaxDecompressedSize = c.maxDecompressedSize
 	}
 
 	return pbConfig, nil
