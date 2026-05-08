@@ -1193,12 +1193,10 @@ describe("Compression", () => {
         TIMEOUT,
     );
 
-    // --- SET with GET option test (Bug 2 fix) ---
 
     it.each([false, true])(
         "compression_set_with_get_returns_decompressed_value cluster_mode=%p",
         async (clusterMode) => {
-            // Bug 2: SET with GET option was returning compressed bytes instead of decompressed value
             client = await createCompressedClient(clusterMode, {
                 enabled: true,
             });
