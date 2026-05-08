@@ -1193,7 +1193,6 @@ describe("Compression", () => {
         TIMEOUT,
     );
 
-
     it.each([false, true])(
         "compression_set_with_get_returns_decompressed_value cluster_mode=%p",
         async (clusterMode) => {

@@ -123,10 +123,13 @@ describe("Compression MaxDecompressedSize", () => {
                 await unlimitedClient.set(key, largeValue);
 
                 // Step 3: Create a client with a small maxDecompressedSize limit (100 bytes)
-                const limitedClient = await createCompressedClient(clusterMode, {
-                    enabled: true,
-                    maxDecompressedSize: 100, // Only allow 100 bytes decompressed
-                });
+                const limitedClient = await createCompressedClient(
+                    clusterMode,
+                    {
+                        enabled: true,
+                        maxDecompressedSize: 100, // Only allow 100 bytes decompressed
+                    },
+                );
 
                 try {
                     // Step 4: GET should throw RequestError with size limit message
@@ -173,10 +176,13 @@ describe("Compression MaxDecompressedSize", () => {
                 }
 
                 // Create limited client
-                const limitedClient = await createCompressedClient(clusterMode, {
-                    enabled: true,
-                    maxDecompressedSize: 100,
-                });
+                const limitedClient = await createCompressedClient(
+                    clusterMode,
+                    {
+                        enabled: true,
+                        maxDecompressedSize: 100,
+                    },
+                );
 
                 try {
                     // MGET should throw RequestError with size limit message
