@@ -136,6 +136,7 @@ message ConnectionRequest {
     optional bool read_only = 26;
     optional ClientSideCache client_side_cache = 27;
     NodeDiscoveryMode node_discovery_mode = 28;
+    optional string address_resolver_key = 29;
 }
 
 message ConnectionRetryStrategy {
