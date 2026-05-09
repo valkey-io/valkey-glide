@@ -84,6 +84,24 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
         "GETEX" => Some(RequestType::GetEx),
         "GETDEL" => Some(RequestType::GetDel),
         "GETSET" => Some(RequestType::GetSet),
+        "SET" => {
+            // SET with GET option returns the old value, which needs decompression
+            // Check if the command has the GET option by looking for "GET" in the arguments
+            // SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time | PXAT unix-time | KEEPTTL]
+            let has_get_option = cmd.args_iter().skip(3).any(|arg| {
+                if let redis::Arg::Simple(bytes) = arg {
+                    bytes.eq_ignore_ascii_case(b"GET")
+                } else {
+                    false
+                }
+            });
+            if has_get_option {
+                // Treat SET with GET option like GETSET for decompression purposes
+                Some(RequestType::GetSet)
+            } else {
+                None
+            }
+        }
         _ => None, // Unknown command or write command, no decompression needed
     }
 }
@@ -891,6 +909,15 @@ impl Client {
                 ) {
                     Ok(decompressed_value) => decompressed_value,
                     Err(e) => {
+                        // Propagate critical errors (size limit exceeded, incompatible command)
+                        // to the user instead of silently falling back to raw value
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
                         log_warn(
                             "send_command_decompression",
                             format!("Failed to decompress response: {}", e),
