@@ -437,10 +437,11 @@ async fn execute_command_request_and_complete(
 
                 // Process batch response for decompression if compression is enabled
                 match exec_res {
-                    Ok(value) => Ok(glide_core::compression::try_decompress_batch_response(
+                    Ok(value) => glide_core::compression::try_decompress_batch_response(
                         value,
                         client.compression_manager().as_deref(),
-                    )),
+                    )
+                    .map_err(|e| redis::RedisError::from((redis::ErrorKind::IoError, "Decompression error", e.to_string()))),
                     Err(e) => Err(e),
                 }
             }

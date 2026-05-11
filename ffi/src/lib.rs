@@ -3520,10 +3520,17 @@ pub unsafe extern "C" fn batch(
 
         // Process batch response for decompression if compression is enabled
         match result {
-            Ok(value) => Ok(glide_core::compression::try_decompress_batch_response(
+            Ok(value) => glide_core::compression::try_decompress_batch_response(
                 value,
                 compression_manager_for_decompression.as_deref(),
-            )),
+            )
+            .map_err(|e| {
+                redis::RedisError::from((
+                    redis::ErrorKind::IoError,
+                    "Decompression error",
+                    e.to_string(),
+                ))
+            }),
             Err(e) => Err(e),
         }
     })
