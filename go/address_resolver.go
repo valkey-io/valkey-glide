@@ -19,9 +19,9 @@ import (
 // different resolvers, the last one set wins for all subsequent resolution calls.
 //
 // In practice this is acceptable because:
-// 1. Most applications use a single resolver for all clients.
-// 2. The resolver is called during client creation and topology refresh,
-//    both of which happen on the client's own runtime.
+//  1. Most applications use a single resolver for all clients.
+//  2. The resolver is called during client creation and topology refresh,
+//     both of which happen on the client's own runtime.
 var (
 	globalResolver   config.AddressResolver
 	globalResolverMu sync.RWMutex
@@ -44,11 +44,11 @@ func getGlobalResolver() config.AddressResolver {
 //export addressResolverCallback
 func addressResolverCallback(
 	host *C.uint8_t,
-	hostLen C.size_t,
+	hostLen C.uintptr_t,
 	port C.uint16_t,
 	resolvedHostBuf *C.uint8_t,
-	resolvedHostBufLen C.size_t,
-	resolvedHostLen *C.size_t,
+	resolvedHostBufLen C.uintptr_t,
+	resolvedHostLen *C.uintptr_t,
 ) C.uint16_t {
 	resolver := getGlobalResolver()
 	if resolver == nil {
@@ -92,7 +92,7 @@ func addressResolverCallback(
 		unsafe.Pointer(&hostBytes[0]),
 		C.size_t(len(hostBytes)),
 	)
-	*resolvedHostLen = C.size_t(len(hostBytes))
+	*resolvedHostLen = C.uintptr_t(len(hostBytes))
 
 	return C.uint16_t(resolvedPort)
 }

@@ -20,10 +20,10 @@ package glide
 //                     const uint8_t *message, int64_t message_len,
 //                     const uint8_t *channel, int64_t channel_len,
 //                     const uint8_t *pattern, int64_t pattern_len);
-// uint16_t addressResolverCallback(const uint8_t *host, size_t host_len,
+// uint16_t addressResolverCallback(const uint8_t *host, uintptr_t host_len,
 //                                  uint16_t port,
-//                                  uint8_t *resolved_host_buf, size_t resolved_host_buf_len,
-//                                  size_t *resolved_host_len);
+//                                  uint8_t *resolved_host_buf, uintptr_t resolved_host_buf_len,
+//                                  uintptr_t *resolved_host_len);
 import "C"
 
 import (

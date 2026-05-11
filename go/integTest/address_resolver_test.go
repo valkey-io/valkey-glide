@@ -196,3 +196,43 @@ func (suite *GlideTestSuite) TestAddressResolverReturnsEmptyFallsBackToOriginal_
 	suite.Require().NoError(err)
 	suite.Equal("PONG", result)
 }
+
+func (suite *GlideTestSuite) TestAddressResolverNil_Standalone() {
+	// Get the actual server address from test configuration
+	actualHost := suite.standaloneHosts[0].Host
+	actualPort := suite.standaloneHosts[0].Port
+
+	// Configure client with nil resolver - should work normally
+	clientConfig := defaultClientConfig().
+		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+		WithAddressResolver(nil)
+
+	client, err := glide.NewClient(clientConfig)
+	suite.Require().NoError(err)
+	defer client.Close()
+
+	ctx := context.Background()
+	result, err := client.Ping(ctx)
+	suite.Require().NoError(err)
+	suite.Equal("PONG", result)
+}
+
+func (suite *GlideTestSuite) TestAddressResolverNil_Cluster() {
+	// Get the actual server address from test configuration
+	actualHost := suite.clusterHosts[0].Host
+	actualPort := suite.clusterHosts[0].Port
+
+	// Configure client with nil resolver - should work normally
+	clientConfig := defaultClusterClientConfig().
+		WithAddress(&config.NodeAddress{Host: actualHost, Port: actualPort}).
+		WithAddressResolver(nil)
+
+	client, err := glide.NewClusterClient(clientConfig)
+	suite.Require().NoError(err)
+	defer client.Close()
+
+	ctx := context.Background()
+	result, err := client.Ping(ctx)
+	suite.Require().NoError(err)
+	suite.Equal("PONG", result)
+}

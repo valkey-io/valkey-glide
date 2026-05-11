@@ -593,6 +593,10 @@ func (config *ClientConfiguration) WithNodeDiscoveryMode(mode NodeDiscoveryMode)
 // to server nodes. This allows custom DNS resolution or address translation logic.
 //
 // If the resolver is nil, addresses are used as configured without modification.
+//
+// Note: Due to FFI constraints, only one resolver can be active globally at a time. If multiple
+// clients are created with different resolvers, the last one set will be used for all clients.
+// In most applications this is not an issue since a single resolver is shared across all clients.
 func (config *ClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClientConfiguration {
 	config.addressResolver = resolver
 	return config
@@ -835,6 +839,10 @@ func (config *ClusterClientConfiguration) WithClientSideCache(
 // to cluster nodes. This allows custom DNS resolution or address translation logic.
 //
 // If the resolver is nil, addresses are used as configured without modification.
+//
+// Note: Due to FFI constraints, only one resolver can be active globally at a time. If multiple
+// clients are created with different resolvers, the last one set will be used for all clients.
+// In most applications this is not an issue since a single resolver is shared across all clients.
 func (config *ClusterClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClusterClientConfiguration {
 	config.addressResolver = resolver
 	return config
