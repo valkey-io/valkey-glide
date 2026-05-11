@@ -11,3 +11,8 @@ excludes:
         - pattern: "hybrid-node-tests/**"
           reason: "TEST_OF"
           comment: "Test files for hybrid node tests"
+
+        - pattern: "pm-and-types-tests/**"
+          reason: "TEST_OF"
+          comment: "Test files for node package and type tests"
+        
