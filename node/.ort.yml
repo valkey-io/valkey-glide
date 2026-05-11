@@ -15,4 +15,3 @@ excludes:
         - pattern: "pm-and-types-tests/**"
           reason: "TEST_OF"
           comment: "Test files for node package and type tests"
-        
