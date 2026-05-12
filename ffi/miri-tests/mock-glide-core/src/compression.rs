@@ -10,6 +10,21 @@ pub const HEADER_SIZE: usize = 5;
 /// Minimum compressed size (header + at least 1 byte of payload)
 pub const MIN_COMPRESSED_SIZE: usize = HEADER_SIZE + 1;
 
+/// Mock compression error type
+#[derive(Debug, Clone)]
+pub struct CompressionError(String);
+
+impl std::fmt::Display for CompressionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for CompressionError {}
+
+/// Mock compression result type
+pub type CompressionResult<T> = Result<T, CompressionError>;
+
 /// Mock compression manager
 #[derive(Debug)]
 pub struct CompressionManager;
@@ -55,6 +70,6 @@ pub fn decompress_batch_response(
 pub fn try_decompress_batch_response(
     value: redis::Value,
     _manager: Option<&CompressionManager>,
-) -> redis::Value {
-    value
+) -> CompressionResult<redis::Value> {
+    Ok(value)
 }
