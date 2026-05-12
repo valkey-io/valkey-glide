@@ -25,6 +25,13 @@ pub enum CompressionError {
         data_size: usize,
         reason: String,
     },
+    /// Decompressed size exceeds the configured maximum (decompression bomb protection)
+    SizeLimitExceeded {
+        backend: String,
+        compressed_size: usize,
+        decompressed_size: usize,
+        max_size: usize,
+    },
     /// Unsupported compression backend
     UnsupportedBackend { backend_name: String },
     /// Invalid compression configuration
@@ -71,6 +78,23 @@ impl std::fmt::Display for CompressionError {
                     write!(f, ": {}", reason)?;
                 }
                 Ok(())
+            }
+            CompressionError::SizeLimitExceeded {
+                backend,
+                compressed_size,
+                decompressed_size,
+                max_size,
+            } => {
+                write!(
+                    f,
+                    "Decompression size limit exceeded: {} decompression of {} data would produce {} bytes, \
+                    exceeding the maximum allowed size of {} bytes. \
+                    To handle larger values, increase 'maxDecompressedSize' in your compression configuration.",
+                    backend.to_uppercase(),
+                    format_size(*compressed_size),
+                    format_size(*decompressed_size),
+                    format_size(*max_size)
+                )
             }
             CompressionError::UnsupportedBackend { backend_name } => {
                 write!(f, "Unsupported compression backend: '{}'", backend_name)
@@ -142,11 +166,26 @@ impl CompressionError {
         }
     }
 
+    pub fn size_limit_exceeded(
+        backend: impl Into<String>,
+        compressed_size: usize,
+        decompressed_size: usize,
+        max_size: usize,
+    ) -> Self {
+        Self::SizeLimitExceeded {
+            backend: backend.into(),
+            compressed_size,
+            decompressed_size,
+            max_size,
+        }
+    }
+
     /// Returns the backend name associated with this error
     pub fn backend(&self) -> &str {
         match self {
             CompressionError::CompressionFailed { backend, .. } => backend,
             CompressionError::DecompressionFailed { backend, .. } => backend,
+            CompressionError::SizeLimitExceeded { backend, .. } => backend,
             CompressionError::InvalidConfiguration { backend, .. } => backend,
             CompressionError::UnsupportedBackend { backend_name } => backend_name,
             CompressionError::IncompatibleCommand { .. } => "",
@@ -157,6 +196,18 @@ impl CompressionError {
     /// These errors should be propagated to the user rather than logged and ignored.
     pub fn is_incompatible_command(&self) -> bool {
         matches!(self, CompressionError::IncompatibleCommand { .. })
+    }
+
+    /// Returns true if this error is a size limit exceeded error.
+    /// These errors should be propagated to the user for security (decompression bomb protection).
+    pub fn is_size_limit_exceeded(&self) -> bool {
+        matches!(self, CompressionError::SizeLimitExceeded { .. })
+    }
+
+    /// Returns true if this error should be propagated to the user rather than
+    /// silently falling back to the original value.
+    pub fn should_propagate(&self) -> bool {
+        self.is_incompatible_command() || self.is_size_limit_exceeded()
     }
 }
 
@@ -555,14 +606,11 @@ pub mod zstd_backend {
 
                     total_read += bytes_read;
                     if total_read > max {
-                        return Err(CompressionError::decompression_failed(
+                        return Err(CompressionError::size_limit_exceeded(
                             self.backend_name(),
                             data.len(),
-                            format!(
-                                "decompressed size exceeds maximum allowed size of {} bytes. \
-                                To handle larger values, increase 'max_decompressed_size' in your CompressionConfiguration.",
-                                max
-                            ),
+                            total_read,
+                            max,
                         ));
                     }
 
@@ -733,14 +781,11 @@ pub mod lz4_backend {
             if let Some(max) = max_size
                 && original_size_u32 as usize > max
             {
-                return Err(CompressionError::decompression_failed(
+                return Err(CompressionError::size_limit_exceeded(
                     self.backend_name(),
                     data.len(),
-                    format!(
-                        "claimed decompressed size ({} bytes) exceeds maximum allowed size ({} bytes). \
-                        To handle larger values, increase 'max_decompressed_size' in your CompressionConfiguration.",
-                        original_size_u32, max
-                    ),
+                    original_size_u32 as usize,
+                    max,
                 ));
             }
 
@@ -935,11 +980,24 @@ pub fn decompress_single_value_response(
 
     match value {
         Value::BulkString(bytes) => {
-            let decompressed = manager.try_decompress_value(&bytes);
+            // Check if data has compression header before attempting decompression
+            if !has_magic_header(&bytes) {
+                // Not compressed, return as-is
+                return Ok(Value::BulkString(bytes));
+            }
+            // Data is compressed - decompress and propagate any errors (including size limit)
+            let decompressed = manager.decompress_value(&bytes)?;
             Ok(Value::BulkString(decompressed))
         }
         Value::SimpleString(s) => {
-            let decompressed = manager.try_decompress_value(s.as_bytes());
+            let bytes = s.as_bytes();
+            // Check if data has compression header before attempting decompression
+            if !has_magic_header(bytes) {
+                // Not compressed, return as-is
+                return Ok(Value::SimpleString(s));
+            }
+            // Data is compressed - decompress and propagate any errors (including size limit)
+            let decompressed = manager.decompress_value(bytes)?;
             match String::from_utf8(decompressed) {
                 Ok(decompressed_string) => Ok(Value::SimpleString(decompressed_string)),
                 Err(e) => Ok(Value::BulkString(e.into_bytes())),
@@ -1012,27 +1070,22 @@ pub fn decompress_batch_response(
 /// Attempts to decompress a batch response if a compression manager is provided.
 ///
 /// This is a convenience wrapper around `decompress_batch_response` that handles
-/// the `Option<CompressionManager>` case. If no manager is provided or decompression
-/// fails, returns the original value (or Nil if the value was consumed on error).
+/// the `Option<CompressionManager>` case.
 ///
 /// # Arguments
 /// * `value` - The batch response value to decompress
 /// * `manager` - Optional compression manager
 ///
 /// # Returns
-/// The decompressed value, or the original value if no manager or decompression not needed
+/// * `Ok(Value)` - The decompressed value, or the original value if no manager
+/// * `Err(CompressionError)` - If decompression fails (e.g., size limit exceeded)
 pub fn try_decompress_batch_response(
     value: redis::Value,
     manager: Option<&CompressionManager>,
-) -> redis::Value {
+) -> CompressionResult<redis::Value> {
     match manager {
-        Some(mgr) => {
-            // This unwrap_or is currently unreachable since decompress_batch_response
-            // always returns Ok, but we keep it for future-proofing.
-            // Return Nil as fallback since we've consumed the original value.
-            decompress_batch_response(value, mgr).unwrap_or(redis::Value::Nil)
-        }
-        None => value,
+        Some(mgr) => decompress_batch_response(value, mgr),
+        None => Ok(value),
     }
 }
 

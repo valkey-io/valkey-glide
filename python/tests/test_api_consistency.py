@@ -38,6 +38,11 @@ EXCLUDED_API_FUNCTIONS = {
         "start_socket_listener_external",
         "value_from_pointer",
         "aclose",
+        # cache metrics sync path (PyO3 only, sync client uses FFI)
+        "get_cache_metric_from_registry",
+        # address resolver registry (PyO3 only, sync client passes callback via FFI)
+        "register_address_resolver",
+        "remove_address_resolver",
     ],
     "sync_only": [],
 }

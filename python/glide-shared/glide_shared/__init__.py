@@ -118,6 +118,7 @@ from .commands.stream import (
     TrimByMinId,
 )
 from .config import (
+    AddressResolver,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -196,6 +197,7 @@ __all__ = [
     "BatchRetryStrategy",
     "ClusterBatchOptions",
     # Config
+    "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
     "CompressionBackend",
