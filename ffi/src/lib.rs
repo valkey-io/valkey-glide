@@ -1933,6 +1933,13 @@ fn apply_json_options(
             .as_object()
             .ok_or_else(|| "client_side_cache must be an object".to_string())?;
 
+        if cache_obj.contains_key("cache_id") {
+            return Err(
+                "client_side_cache.cache_id is not accepted; it is generated internally"
+                    .to_string(),
+            );
+        }
+
         let mut config = connection_request::ClientSideCache::new();
 
         // Auto-generate cache_id (not accepted from JSON input)

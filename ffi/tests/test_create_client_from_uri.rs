@@ -1462,3 +1462,85 @@ fn test_create_client_from_uri_client_side_cache_not_an_object() {
         drop(Box::from_raw(client_type));
     }
 }
+
+#[rstest]
+#[case("lru")]
+#[case("lfu")]
+#[case("LrU")]
+#[case("lFu")]
+fn test_create_client_from_uri_client_side_cache_case_insensitive_eviction_policy(
+    #[case] eviction_policy: &str,
+) {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(format!(
+        r#"{{"client_side_cache": {{"max_cache_kb": 256, "entry_ttl_ms": 5000, "eviction_policy": "{}"}}}}"#,
+        eviction_policy
+    ))
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    if conn_response.connection_error_message.is_null() {
+        assert!(!conn_response.conn_ptr.is_null());
+
+        unsafe {
+            close_client(conn_response.conn_ptr);
+            free_connection_response(response as *mut ConnectionResponse);
+            drop(Box::from_raw(client_type));
+        }
+    } else {
+        let error = parse_error_msg(conn_response.connection_error_message);
+        panic!("Expected success for eviction_policy={eviction_policy:?}, got: {error}");
+    }
+}
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_rejects_cache_id() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{"client_side_cache": {"max_cache_kb": 256, "entry_ttl_ms": 5000, "cache_id": "user-supplied-id"}}"#,
+    )
+    .unwrap();
+
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+
+    let response = unsafe {
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
+    };
+
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+
+    assert!(!conn_response.connection_error_message.is_null());
+    assert!(conn_response.conn_ptr.is_null());
+
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("cache_id"),
+        "Error should mention cache_id, got: {error}"
+    );
+
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
