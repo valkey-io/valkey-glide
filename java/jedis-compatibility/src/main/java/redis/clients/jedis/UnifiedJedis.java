@@ -21,68 +21,68 @@ import redis.clients.jedis.resps.ScanResult;
  *
  * <p>Shares the {@link JedisCommon} umbrella type with {@link Jedis}.
  */
-public class UnifiedJedis extends AbstractUnifiedJedis {
+public class UnifiedJedis extends BaseUnifiedJedis {
 
     public UnifiedJedis() {
-        super();
+        super(true);
     }
 
     public UnifiedJedis(String host, int port) {
-        super(host, port);
+        super(true, host, port);
     }
 
     public UnifiedJedis(HostAndPort hostAndPort) {
-        super(hostAndPort);
+        super(true, hostAndPort);
     }
 
     public UnifiedJedis(String url) {
-        super(url);
+        super(true, url);
     }
 
     public UnifiedJedis(URI uri) {
-        super(uri);
+        super(true, uri);
     }
 
     public UnifiedJedis(URI uri, JedisClientConfig config) {
-        super(uri, config);
+        super(true, uri, config);
     }
 
     public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig) {
-        super(hostAndPort, clientConfig);
+        super(true, hostAndPort, clientConfig);
     }
 
     public UnifiedJedis(String host, int port, JedisClientConfig clientConfig) {
-        super(host, port, clientConfig);
+        super(true, host, port, clientConfig);
     }
 
     public UnifiedJedis(String host, int port, int timeout, String password) {
-        super(host, port, timeout, password);
+        super(true, host, port, timeout, password);
     }
 
     public UnifiedJedis(String host, int port, int timeout) {
-        super(host, port, timeout);
+        super(true, host, port, timeout);
     }
 
     public UnifiedJedis(String host, int port, int timeout, String password, int database) {
-        super(host, port, timeout, password, database);
+        super(true, host, port, timeout, password, database);
     }
 
     public UnifiedJedis(
             String host, int port, int timeout, String password, int database, String clientName) {
-        super(host, port, timeout, password, database, clientName);
+        super(true, host, port, timeout, password, database, clientName);
     }
 
     public UnifiedJedis(Set<HostAndPort> jedisClusterNodes) {
-        super(jedisClusterNodes);
+        super(true, jedisClusterNodes);
     }
 
     public UnifiedJedis(Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig) {
-        super(jedisClusterNodes, clientConfig);
+        super(true, jedisClusterNodes, clientConfig);
     }
 
     public UnifiedJedis(
             Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig, int maxAttempts) {
-        super(jedisClusterNodes, clientConfig, maxAttempts);
+        super(true, jedisClusterNodes, clientConfig, maxAttempts);
     }
 
     public UnifiedJedis(
@@ -90,29 +90,24 @@ public class UnifiedJedis extends AbstractUnifiedJedis {
             JedisClientConfig clientConfig,
             int maxAttempts,
             Duration maxTotalRetriesDuration) {
-        super(jedisClusterNodes, clientConfig, maxAttempts, maxTotalRetriesDuration);
+        super(true, jedisClusterNodes, clientConfig, maxAttempts, maxTotalRetriesDuration);
     }
 
     public UnifiedJedis(ConnectionProvider provider) {
-        super(provider);
+        super(true, provider);
     }
 
     public UnifiedJedis(
             ConnectionProvider provider, int maxAttempts, Duration maxTotalRetriesDuration) {
-        super(provider, maxAttempts, maxTotalRetriesDuration);
+        super(true, provider, maxAttempts, maxTotalRetriesDuration);
     }
 
     protected UnifiedJedis(GlideClient glideClient, JedisClientConfig jedisConfig) {
-        super(glideClient, jedisConfig);
+        super(true, glideClient, jedisConfig);
     }
 
     protected UnifiedJedis(GlideClusterClient glideClusterClient, JedisClientConfig jedisConfig) {
-        super(glideClusterClient, jedisConfig);
-    }
-
-    @Override
-    protected boolean isJedis5CompatibilityLayer() {
-        return true;
+        super(true, glideClusterClient, jedisConfig);
     }
 
     // Stock Jedis parameter types for reflection / linkage; delegate to Abstract* implementations.

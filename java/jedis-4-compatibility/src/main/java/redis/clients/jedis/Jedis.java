@@ -33,22 +33,22 @@ import redis.clients.jedis.resps.Tuple;
  *
  * <p>Shares the {@link JedisCommon} umbrella type with {@link UnifiedJedis}.
  */
-public class Jedis extends AbstractGlideJedis {
+public class Jedis extends BaseJedis {
 
     public Jedis() {
-        super();
+        super(false);
     }
 
     public Jedis(String host, int port) {
-        super(host, port);
+        super(false, host, port);
     }
 
     public Jedis(String host, int port, boolean useSsl) {
-        super(host, port, useSsl);
+        super(false, host, port, useSsl);
     }
 
     public Jedis(String host, int port, JedisClientConfig config) {
-        super(host, port, config);
+        super(false, host, port, config);
     }
 
     public Jedis(
@@ -58,28 +58,23 @@ public class Jedis extends AbstractGlideJedis {
             SSLSocketFactory sslSocketFactory,
             SSLParameters sslParameters,
             HostnameVerifier hostnameVerifier) {
-        super(host, port, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
+        super(false, host, port, ssl, sslSocketFactory, sslParameters, hostnameVerifier);
     }
 
     public Jedis(String host, int port, int timeout) {
-        super(host, port, timeout);
+        super(false, host, port, timeout);
     }
 
     public Jedis(HostAndPort hostAndPort, JedisClientConfig config) {
-        super(hostAndPort, config);
+        super(false, hostAndPort, config);
     }
 
     public Jedis(GlideClient glideClient, JedisClientConfig config) {
-        super(glideClient, config);
+        super(false, glideClient, config);
     }
 
     public Jedis(Connection connection) {
-        super(connection);
-    }
-
-    @Override
-    protected boolean isJedis5CompatibilityLayer() {
-        return false;
+        super(false, connection);
     }
 
     // Stock Jedis parameter types for reflection / linkage; delegate to Abstract* implementations.

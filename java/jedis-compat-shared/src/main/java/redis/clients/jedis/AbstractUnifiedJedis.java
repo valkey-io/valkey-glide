@@ -113,6 +113,12 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
     protected volatile boolean closed = false;
 
     /**
+     * Version compatibility flag: {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x
+     * semantics. Controls charset encoding, connection lifecycle, and scan behavior.
+     */
+    protected final boolean jedis5CompatibilityMode;
+
+    /**
      * Maps Jedis-style SCAN cursor tokens to GLIDE {@link ClusterScanCursor} instances (cluster mode,
      * Jedis 4-shaped compatibility path). Entries are removed when consumed; weak values allow
      * collected cursors to be reclaimed.
@@ -121,6 +127,17 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
             clusterScanCursorRegistry = new ConcurrentHashMap<>();
 
     private final AtomicLong clusterScanCursorToken = new AtomicLong(1);
+
+    /**
+     * Returns whether this instance uses Jedis 5.x compatibility semantics. Concrete implementation
+     * reads from the {@link #jedis5CompatibilityMode} field set during construction.
+     *
+     * @return {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     */
+    @Override
+    protected boolean isJedis5CompatibilityLayer() {
+        return jedis5CompatibilityMode;
+    }
 
     // ========== STANDALONE CONSTRUCTORS ==========
 
@@ -210,6 +227,18 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
      * @throws IllegalArgumentException if configuration parameters are invalid
      */
     protected AbstractUnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig) {
+        this(false, hostAndPort, clientConfig); // Default to Jedis 4.x for backward compatibility
+    }
+
+    /**
+     * Package-private constructor accepting version flag for standalone connection.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param hostAndPort the host and port configuration
+     * @param clientConfig the comprehensive client configuration
+     */
+    AbstractUnifiedJedis(boolean jedis5, HostAndPort hostAndPort, JedisClientConfig clientConfig) {
+        this.jedis5CompatibilityMode = jedis5;
         this.config = clientConfig;
         this.isClusterMode = false;
         this.glideClusterClient = null;
@@ -217,10 +246,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         // Map Jedis config to GLIDE config for standalone
         GlideClientConfiguration glideConfig =
                 ConfigurationMapper.mapToGlideConfig(
-                        hostAndPort.getHost(),
-                        hostAndPort.getPort(),
-                        clientConfig,
-                        isJedis5CompatibilityLayer());
+                        hostAndPort.getHost(), hostAndPort.getPort(), clientConfig, jedis5);
 
         try {
             this.glideClient = GlideClient.createClient(glideConfig).get();
@@ -286,14 +312,26 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
     /** Constructor for cluster with Set of nodes and config */
     protected AbstractUnifiedJedis(
             Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig) {
+        this(false, jedisClusterNodes, clientConfig); // Default to Jedis 4.x for backward compatibility
+    }
+
+    /**
+     * Package-private constructor accepting version flag for cluster connection.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param jedisClusterNodes the cluster node addresses
+     * @param clientConfig the client configuration
+     */
+    AbstractUnifiedJedis(
+            boolean jedis5, Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig) {
+        this.jedis5CompatibilityMode = jedis5;
         this.config = clientConfig;
         this.isClusterMode = true;
         this.glideClient = null;
 
         // Map Jedis config to GLIDE cluster config
         GlideClusterClientConfiguration glideConfig =
-                ClusterConfigurationMapper.mapToGlideClusterConfig(
-                        jedisClusterNodes, clientConfig, isJedis5CompatibilityLayer());
+                ClusterConfigurationMapper.mapToGlideClusterConfig(jedisClusterNodes, clientConfig, jedis5);
 
         try {
             this.glideClusterClient = GlideClusterClient.createClient(glideConfig).get();
@@ -330,6 +368,18 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     /** Constructor with ConnectionProvider (for compatibility) */
     protected AbstractUnifiedJedis(ConnectionProvider provider) {
+        this(false, provider); // Default to Jedis 4.x for backward compatibility
+    }
+
+    /**
+     * Package-private constructor accepting version flag with ConnectionProvider.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param provider the connection provider
+     */
+    AbstractUnifiedJedis(boolean jedis5, ConnectionProvider provider) {
+        this.jedis5CompatibilityMode = jedis5;
+
         // Extract connection info from provider and delegate to appropriate constructor
         if (provider instanceof ClusterNodesConnectionProvider) {
             ClusterNodesConnectionProvider clusterProvider = (ClusterNodesConnectionProvider) provider;
@@ -341,8 +391,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
             this.glideClient = null;
 
             GlideClusterClientConfiguration glideConfig =
-                    ClusterConfigurationMapper.mapToGlideClusterConfig(
-                            nodes, config, isJedis5CompatibilityLayer());
+                    ClusterConfigurationMapper.mapToGlideClusterConfig(nodes, config, jedis5);
             try {
                 this.glideClusterClient = GlideClusterClient.createClient(glideConfig).get();
                 this.baseClient = this.glideClusterClient; // Set BaseClient reference
@@ -353,7 +402,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
         } else {
             // Assume standalone provider
             final HostAndPort hostAndPort;
-            if (isJedis5CompatibilityLayer()) {
+            if (jedis5) {
                 hostAndPort = provider.getConnection().getHostAndPort();
             } else {
                 try (Connection c = provider.getConnection()) {
@@ -368,7 +417,7 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
             GlideClientConfiguration glideConfig =
                     ConfigurationMapper.mapToGlideConfig(
-                            hostAndPort.getHost(), hostAndPort.getPort(), config, isJedis5CompatibilityLayer());
+                            hostAndPort.getHost(), hostAndPort.getPort(), config, jedis5);
             try {
                 this.glideClient = GlideClient.createClient(glideConfig).get();
                 this.baseClient = this.glideClient; // Set BaseClient reference
@@ -389,6 +438,18 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
     /** Protected constructor for internal use with standalone client */
     protected AbstractUnifiedJedis(GlideClient glideClient, JedisClientConfig jedisConfig) {
+        this(false, glideClient, jedisConfig); // Default to Jedis 4.x for backward compatibility
+    }
+
+    /**
+     * Package-private constructor accepting version flag with standalone client.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param glideClient the standalone GLIDE client
+     * @param jedisConfig the client configuration
+     */
+    AbstractUnifiedJedis(boolean jedis5, GlideClient glideClient, JedisClientConfig jedisConfig) {
+        this.jedis5CompatibilityMode = jedis5;
         this.glideClient = glideClient;
         this.glideClusterClient = null;
         this.baseClient = glideClient; // Set BaseClient reference
@@ -400,6 +461,19 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
     /** Protected constructor for internal use with cluster client */
     protected AbstractUnifiedJedis(
             GlideClusterClient glideClusterClient, JedisClientConfig jedisConfig) {
+        this(false, glideClusterClient, jedisConfig); // Default to Jedis 4.x for backward compatibility
+    }
+
+    /**
+     * Package-private constructor accepting version flag with cluster client.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param glideClusterClient the cluster GLIDE client
+     * @param jedisConfig the client configuration
+     */
+    AbstractUnifiedJedis(
+            boolean jedis5, GlideClusterClient glideClusterClient, JedisClientConfig jedisConfig) {
+        this.jedis5CompatibilityMode = jedis5;
         this.glideClient = null;
         this.glideClusterClient = glideClusterClient;
         this.baseClient = glideClusterClient; // Set BaseClient reference

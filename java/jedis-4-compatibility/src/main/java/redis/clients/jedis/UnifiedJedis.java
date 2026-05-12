@@ -21,68 +21,68 @@ import redis.clients.jedis.resps.ScanResult;
  *
  * <p>Shares the {@link JedisCommon} umbrella type with {@link Jedis}.
  */
-public class UnifiedJedis extends AbstractUnifiedJedis {
+public class UnifiedJedis extends BaseUnifiedJedis {
 
     public UnifiedJedis() {
-        super();
+        super(false);
     }
 
     public UnifiedJedis(String host, int port) {
-        super(host, port);
+        super(false, host, port);
     }
 
     public UnifiedJedis(HostAndPort hostAndPort) {
-        super(hostAndPort);
+        super(false, hostAndPort);
     }
 
     public UnifiedJedis(String url) {
-        super(url);
+        super(false, url);
     }
 
     public UnifiedJedis(URI uri) {
-        super(uri);
+        super(false, uri);
     }
 
     public UnifiedJedis(URI uri, JedisClientConfig config) {
-        super(uri, config);
+        super(false, uri, config);
     }
 
     public UnifiedJedis(HostAndPort hostAndPort, JedisClientConfig clientConfig) {
-        super(hostAndPort, clientConfig);
+        super(false, hostAndPort, clientConfig);
     }
 
     public UnifiedJedis(String host, int port, JedisClientConfig clientConfig) {
-        super(host, port, clientConfig);
+        super(false, host, port, clientConfig);
     }
 
     public UnifiedJedis(String host, int port, int timeout, String password) {
-        super(host, port, timeout, password);
+        super(false, host, port, timeout, password);
     }
 
     public UnifiedJedis(String host, int port, int timeout) {
-        super(host, port, timeout);
+        super(false, host, port, timeout);
     }
 
     public UnifiedJedis(String host, int port, int timeout, String password, int database) {
-        super(host, port, timeout, password, database);
+        super(false, host, port, timeout, password, database);
     }
 
     public UnifiedJedis(
             String host, int port, int timeout, String password, int database, String clientName) {
-        super(host, port, timeout, password, database, clientName);
+        super(false, host, port, timeout, password, database, clientName);
     }
 
     public UnifiedJedis(Set<HostAndPort> jedisClusterNodes) {
-        super(jedisClusterNodes);
+        super(false, jedisClusterNodes);
     }
 
     public UnifiedJedis(Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig) {
-        super(jedisClusterNodes, clientConfig);
+        super(false, jedisClusterNodes, clientConfig);
     }
 
     public UnifiedJedis(
             Set<HostAndPort> jedisClusterNodes, JedisClientConfig clientConfig, int maxAttempts) {
-        super(jedisClusterNodes, clientConfig, maxAttempts);
+        super(false, jedisClusterNodes, clientConfig, maxAttempts);
     }
 
     public UnifiedJedis(
@@ -90,29 +90,24 @@ public class UnifiedJedis extends AbstractUnifiedJedis {
             JedisClientConfig clientConfig,
             int maxAttempts,
             Duration maxTotalRetriesDuration) {
-        super(jedisClusterNodes, clientConfig, maxAttempts, maxTotalRetriesDuration);
+        super(false, jedisClusterNodes, clientConfig, maxAttempts, maxTotalRetriesDuration);
     }
 
     public UnifiedJedis(ConnectionProvider provider) {
-        super(provider);
+        super(false, provider);
     }
 
     public UnifiedJedis(
             ConnectionProvider provider, int maxAttempts, Duration maxTotalRetriesDuration) {
-        super(provider, maxAttempts, maxTotalRetriesDuration);
+        super(false, provider, maxAttempts, maxTotalRetriesDuration);
     }
 
     protected UnifiedJedis(GlideClient glideClient, JedisClientConfig jedisConfig) {
-        super(glideClient, jedisConfig);
+        super(false, glideClient, jedisConfig);
     }
 
     protected UnifiedJedis(GlideClusterClient glideClusterClient, JedisClientConfig jedisConfig) {
-        super(glideClusterClient, jedisConfig);
-    }
-
-    @Override
-    protected boolean isJedis5CompatibilityLayer() {
-        return false;
+        super(false, glideClusterClient, jedisConfig);
     }
 
     // Stock Jedis parameter types for reflection / linkage; delegate to Abstract* implementations.

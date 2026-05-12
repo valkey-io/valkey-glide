@@ -202,6 +202,23 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     private final String host;
     private final int port;
 
+    /**
+     * Version compatibility flag: {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x
+     * semantics. This controls charset encoding, SELECT behavior, and protocol mapping.
+     */
+    protected final boolean jedis5CompatibilityMode;
+
+    /**
+     * Returns whether this instance uses Jedis 5.x compatibility semantics. Concrete implementation
+     * reads from the {@link #jedis5CompatibilityMode} field set during construction.
+     *
+     * @return {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     */
+    @Override
+    protected boolean isJedis5CompatibilityLayer() {
+        return jedis5CompatibilityMode;
+    }
+
     /** Create a new Jedis instance with default localhost:6379 connection. */
     protected AbstractGlideJedis() {
         this("localhost", 6379);
@@ -236,6 +253,20 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param config the jedis client configuration
      */
     protected AbstractGlideJedis(String host, int port, JedisClientConfig config) {
+        this(false, host, port, config); // Default to Jedis 4.x for backward compatibility
+    }
+
+    /**
+     * Package-private constructor accepting version flag. Used by {@link BaseJedis} to control Jedis
+     * 4.x vs 5.x behavior.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param host the Valkey server host
+     * @param port the Valkey server port
+     * @param config the jedis client configuration
+     */
+    AbstractGlideJedis(boolean jedis5, String host, int port, JedisClientConfig config) {
+        this.jedis5CompatibilityMode = jedis5;
         this.host = host;
         this.port = port;
         this.isPooled = false;
@@ -323,6 +354,38 @@ public abstract class AbstractGlideJedis extends JedisCommon {
             SSLParameters sslParameters,
             HostnameVerifier hostnameVerifier) {
         this(
+                false, // Default to Jedis 4.x for backward compatibility
+                host,
+                port,
+                DefaultJedisClientConfig.builder()
+                        .ssl(ssl)
+                        .sslSocketFactory(sslSocketFactory)
+                        .sslParameters(sslParameters)
+                        .hostnameVerifier(hostnameVerifier)
+                        .build());
+    }
+
+    /**
+     * Package-private constructor accepting version flag with SSL configuration.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param host the Valkey server host
+     * @param port the Valkey server port
+     * @param ssl whether to use SSL/TLS encryption
+     * @param sslSocketFactory custom SSL socket factory
+     * @param sslParameters SSL parameters
+     * @param hostnameVerifier hostname verifier
+     */
+    AbstractGlideJedis(
+            boolean jedis5,
+            String host,
+            int port,
+            boolean ssl,
+            SSLSocketFactory sslSocketFactory,
+            SSLParameters sslParameters,
+            HostnameVerifier hostnameVerifier) {
+        this(
+                jedis5,
                 host,
                 port,
                 DefaultJedisClientConfig.builder()
@@ -368,6 +431,18 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      * @param config the client configuration
      */
     protected AbstractGlideJedis(GlideClient glideClient, JedisClientConfig config) {
+        this(false, glideClient, config); // Default to Jedis 4.x for backward compatibility
+    }
+
+    /**
+     * Package-private constructor for pooled connections accepting version flag.
+     *
+     * @param jedis5 {@code true} for Jedis 5.x semantics, {@code false} for Jedis 4.x semantics
+     * @param glideClient the underlying GLIDE client
+     * @param config the client configuration
+     */
+    AbstractGlideJedis(boolean jedis5, GlideClient glideClient, JedisClientConfig config) {
+        this.jedis5CompatibilityMode = jedis5;
         this.host = null; // Not needed for pooled connections
         this.port = 0; // Not needed for pooled connections
         this.glideClient = glideClient;
