@@ -80,7 +80,8 @@ Visit our official Valkey GLIDE's documentation [site](https://glide.valkey.io/o
 - [Modules API](https://glide.valkey.io/concepts/client-features/modules/)
 - [Batching (Pipeline and Transaction)](https://glide.valkey.io/concepts/client-features/batch-commands/)
 - [OpenTelemetry](https://glide.valkey.io/concepts/client-features/open-telemetry/)
-- [Compression (EXPERIMENTAL)](https://glide.valkey.io/concepts/client-features/compression)
+- [Compression (EXPERIMENTAL)](https://glide.valkey.io/concepts/client-features/compression/)
+- [Client-Side Caching](https://glide.valkey.io/concepts/client-features/client-side-caching/)
 
 **Migration Guides**
 - [go-redis](https://glide.valkey.io/migration/go/go-redis/)
