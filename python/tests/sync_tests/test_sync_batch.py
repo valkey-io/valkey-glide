@@ -1272,3 +1272,12 @@ class TestSyncBatch:
         # Verify expiration was removed using HTTL
         ttl_result = glide_sync_client.httl(key2, [field1, field2])
         assert ttl_result == [-1, -1]  # Both fields should now be persistent
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_reset_batch(self, glide_sync_client: GlideClient):
+        batch = Batch(is_atomic=False)
+        batch.reset()
+        result = exec_batch(glide_sync_client, batch, raise_on_error=True)
+        assert result is not None
+        assert result[0] == b"RESET"

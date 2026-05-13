@@ -5789,6 +5789,10 @@ class Batch(BaseBatch):
         """
         return self.append_command(RequestType.Select, [str(index)])
 
+    def reset(self: TBatch) -> TBatch:
+        """Reset the connection state. Command response: str."""
+        return self.append_command(RequestType.Reset, [])
+
     def copy(
         self,
         source: TEncodable,

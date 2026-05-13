@@ -2411,6 +2411,10 @@ class CoreCommands(Protocol):
         """
         return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
 
+    async def reset(self) -> str:
+        """Reset the connection state. See https://valkey.io/commands/reset/"""
+        return cast(str, await self._execute_command(RequestType.Reset, []))
+
     async def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """
         Remove specified members from the set stored at `key`.
