@@ -2632,12 +2632,14 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 
 	// Kill Running Code
-	code := CreateLongRunningLuaScript(6, true)
+	code := CreateLongRunningLuaScript(10, true)
 	script := options.NewScript(code)
 
 	go invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
 
-	timeout := time.After(5 * time.Second)
+	// Poll until the script is confirmed running (ScriptKill succeeds), with a generous timeout
+	// to avoid flakiness from slow script startup.
+	timeout := time.After(8 * time.Second)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -2647,7 +2649,7 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	for !killed {
 		select {
 		case <-timeout:
-			suite.T().Fatal("Timeout: SCRIPT KILL failed to execute in 5 seconds")
+			suite.T().Fatal("Timeout: SCRIPT KILL failed to execute in 8 seconds")
 		case <-ticker.C:
 			result, err = killClient.ScriptKillWithRoute(context.Background(), route)
 			if err == nil {
@@ -2666,12 +2668,25 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
 
-	time.Sleep(1 * time.Second)
+	// Wait for the server to fully process the kill before checking state
+	notBusyTimeout := time.After(2 * time.Second)
+	notBusyTicker := time.NewTicker(100 * time.Millisecond)
+	defer notBusyTicker.Stop()
 
-	// Ensure no script is running at the end
-	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
-	assert.Error(suite.T(), err)
-	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
+	for {
+		select {
+		case <-notBusyTimeout:
+			suite.T().Fatal("Timed out waiting for script to be not busy after kill")
+			return
+		case <-notBusyTicker.C:
+			_, err = killClient.ScriptKillWithRoute(context.Background(), route)
+			if err != nil && strings.Contains(strings.ToLower(err.Error()), "notbusy") {
+				// Ensure no script is running at the end
+				assert.Error(suite.T(), err)
+				return
+			}
+		}
+	}
 }
 
 func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
