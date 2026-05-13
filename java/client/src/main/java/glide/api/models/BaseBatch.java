@@ -127,6 +127,7 @@ import static command_request.CommandRequestOuterClass.RequestType.RPushX;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Rename;
 import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.Restore;
 import static command_request.CommandRequestOuterClass.RequestType.SAdd;
 import static command_request.CommandRequestOuterClass.RequestType.SCard;
@@ -417,6 +418,17 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T ping() {
         protobufBatch.addCommands(buildCommand(Ping));
+        return getThis();
+    }
+
+    /**
+     * Resets the connection state.
+     *
+     * @see <a href="https://valkey.io/commands/reset/">valkey.io</a> for details.
+     * @return Command Response - A response from the server with a <code>String</code>.
+     */
+    public T reset() {
+        protobufBatch.addCommands(buildCommand(Reset));
         return getThis();
     }
 
