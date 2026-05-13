@@ -425,11 +425,11 @@ fn process_callback_job_with_env(
     binary_mode: bool,
 ) {
     if take_timed_out_callback(callback_id) {
-        logger_core::log_warn_rate_limited!(
+        logger_core::log_debug_rate_limited!(
             "jni_callback",
             5,
             format!(
-                "Rust task completed for callback_id={} but Java already timed out. Task was leaked.",
+                "Rust task completed for callback_id={} after Java timeout — result discarded.",
                 callback_id
             )
         );
@@ -1050,6 +1050,7 @@ pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, messa
             callback_id,
             e
         );
+        let _ = env.exception_clear();
     }
 }
 

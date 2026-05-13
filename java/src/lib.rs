@@ -1565,6 +1565,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
                     );
                     return Some(());
                 }
+
             }
         }
 
@@ -1942,6 +1943,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
                     );
                     return Some(());
                 }
+
             }
         }
 
