@@ -558,6 +558,17 @@ export function runBaseTests(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `reset test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                expect(await client.reset()).toEqual("RESET");
+                expect(await client.ping()).toEqual("PONG");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `clientId test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {

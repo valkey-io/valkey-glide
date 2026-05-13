@@ -195,6 +195,7 @@ import {
     createRPushX,
     createRename,
     createRenameNX,
+    createReset,
     createRestore,
     createSAdd,
     createSCard,
@@ -8892,6 +8893,23 @@ export class BaseClient {
      */
     public async wait(numreplicas: number, timeout: number): Promise<number> {
         return this.createWritePromise(createWait(numreplicas, timeout));
+    }
+
+    /**
+     * Resets the connection state.
+     *
+     * @see {@link https://valkey.io/commands/reset/|valkey.io} for more details.
+     *
+     * @returns "RESET" when the connection state is successfully reset.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.reset();
+     * console.log(result); // Output: "RESET"
+     * ```
+     */
+    public async reset(): Promise<string> {
+        return this.createWritePromise(createReset());
     }
 
     /**

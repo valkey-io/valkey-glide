@@ -352,6 +352,13 @@ export function createClientGetName(): command_request.Command {
 /**
  * @internal
  */
+export function createReset(): command_request.Command {
+    return createCommand(RequestType.Reset, []);
+}
+
+/**
+ * @internal
+ */
 export function createConfigRewrite(): command_request.Command {
     return createCommand(RequestType.ConfigRewrite, []);
 }

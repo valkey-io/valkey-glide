@@ -201,6 +201,7 @@ import {
     createRandomKey,
     createRename,
     createRenameNX,
+    createReset,
     createRestore,
     createSAdd,
     createSCard,
@@ -3611,6 +3612,17 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public wait(numreplicas: number, timeout: number): T {
         return this.addAndReturn(createWait(numreplicas, timeout));
+    }
+
+    /**
+     * Resets the connection state.
+     *
+     * @see {@link https://valkey.io/commands/reset/|valkey.io} for more details.
+     *
+     * Command Response - "RESET" when the connection state is successfully reset.
+     */
+    public reset(): T {
+        return this.addAndReturn(createReset());
     }
 
     /**
