@@ -11792,3 +11792,33 @@ func (suite *GlideTestSuite) TestRegisterClientNameAndVersion() {
 		assert.Regexp(suite.T(), "lib-ver=unknown|lib-ver=v", infoStr, "lib-ver not found or incorrect")
 	})
 }
+
+func (suite *GlideTestSuite) TestReset() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		t := suite.T()
+		switch c := client.(type) {
+		case interfaces.GlideClientCommands:
+			result, err := c.Reset(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "RESET", result)
+			// Verify client recovers after reset
+			pong, err := c.Ping(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "PONG", pong)
+		case interfaces.GlideClusterClientCommands:
+			res := sendWithCustomCommand(suite, client, []string{"RESET"}, "Can't send RESET as a custom command")
+			var resetStr string
+			switch v := res.(type) {
+			case string:
+				resetStr = v
+			case models.ClusterValue[any]:
+				resetStr = v.SingleValue().(string)
+			}
+			assert.Equal(t, "RESET", resetStr)
+			// Verify client recovers after reset
+			pong, err := c.Ping(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "PONG", pong)
+		}
+	})
+}
