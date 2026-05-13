@@ -735,37 +735,6 @@ public class TestUtilities {
     }
 
     /**
-     * Poll until a script/function is confirmed running on the server. This avoids the race
-     * condition where SCRIPT KILL is called before the script has started executing.
-     *
-     * @param killCommand A supplier that calls scriptKill (or functionKill) and returns its future.
-     * @param timeoutMs Maximum time to wait for the script to start running.
-     */
-    @SneakyThrows
-    public static void waitForScriptRunning(
-            Supplier<CompletableFuture<String>> killCommand, long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (System.currentTimeMillis() < deadline) {
-            try {
-                killCommand.get().get();
-                // scriptKill returned OK — script was running and got killed, which means it started.
-                // Re-invoke the script before returning if needed by the caller.
-                return;
-            } catch (Exception e) {
-                String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-                if (msg.contains("notbusy") || msg.contains("no scripts in execution")) {
-                    // Script hasn't started yet — keep polling
-                    Thread.sleep(50);
-                } else {
-                    // Got a different error (e.g. "unkillable") — script IS running
-                    return;
-                }
-            }
-        }
-        throw new AssertionError("Timed out waiting for script to start running");
-    }
-
-    /**
      * Creates a test IAM authentication configuration.
      *
      * @param refreshIntervalSeconds The refresh interval in seconds for IAM token refresh
