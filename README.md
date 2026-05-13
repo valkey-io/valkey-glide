@@ -40,12 +40,13 @@ The client currently supports Python, Java, Node.js, Go, C#, and PHP. C# and PHP
 
 ### v2.4.0 (May 2026)
 
-The following are major changes planned for 2.4.0 release:
+The following are some of the changes planned for 2.4.0 release:
 - Client-Side Caching: for Java, Node, Go.
 - Complete support for Valkey Search 1.2 and JSON module.
-- Added NodeDiscoveryMode option for all languages
+- Add NodeDiscoveryMode option for all languages
+- Further improvements and fixes.
 
-For the detailed list of changes, see the release [page](https://github.com/valkey-io/valkey-glide/releases).
+For the detailed list of changes, see the release [page](https://github.com/valkey-io/valkey-glide/releases/tag/v2.4.0).
 
 ### Other Releases
 
