@@ -70,17 +70,17 @@ Visit our official Valkey GLIDE's documentation [site](https://glide.valkey.io/o
 - [Ruby](https://github.com/valkey-io/valkey-glide-ruby)
 
 **General Concepts:**
-- [Custom Command](https://glide.valkey.io/concepts/client-features/custom-command/)
+- [Custom Command](https://glide.valkey.io/concepts/client-features/custom-commands/)
 - [Connection Management](https://glide.valkey.io/how-to/connection-management/)
 - [Multi-Slot Command Handling](https://glide.valkey.io/concepts/client-features/multi-slot-command-handling/)
 - [Inflight Request Limit](https://glide.valkey.io/how-to/connections/limit-inflight-requests/)
 - [PubSub Support](https://glide.valkey.io/concepts/client-features/pubsub-model/)
 - [Cluster Scan](https://glide.valkey.io/concepts/client-features/cluster-scan/)
 - [Dynamic Password Management](https://glide.valkey.io/how-to/security/dynamic-authentication/)
-- [Modules API](https://glide.valkey.io/concepts/client-features/modules-api/)
+- [Modules API](https://glide.valkey.io/concepts/client-features/modules/)
 - [Batching (Pipeline and Transaction)](https://glide.valkey.io/concepts/client-features/batch-commands/)
 - [OpenTelemetry](https://glide.valkey.io/concepts/client-features/open-telemetry/)
-- [Compression (EXPERIMENTAL)](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#compression)
+- [Compression (EXPERIMENTAL)](https://glide.valkey.io/concepts/client-features/compression)
 
 **Migration Guides**
 - [go-redis](https://glide.valkey.io/migration/go/go-redis/)
