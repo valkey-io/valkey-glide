@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
 
 /// Handle to the watchdog thread. Register deadlines and receive timeout signals.
+/// A single watchdog thread is shared across all client instances.
 #[derive(Clone)]
 pub struct TimeoutWatchdog {
     state: Arc<WatchdogState>,
@@ -19,8 +20,30 @@ struct WatchdogState {
     condvar: Condvar,
 }
 
+/// Global singleton watchdog instance.
+static GLOBAL_WATCHDOG: std::sync::OnceLock<TimeoutWatchdog> = std::sync::OnceLock::new();
+
 impl TimeoutWatchdog {
-    /// Start the watchdog background thread.
+    /// Get or initialize the global shared watchdog instance.
+    /// One OS thread serves all clients in the process.
+    pub fn global() -> &'static Self {
+        GLOBAL_WATCHDOG.get_or_init(|| {
+            let state = Arc::new(WatchdogState {
+                deadlines: Mutex::new(BTreeMap::new()),
+                condvar: Condvar::new(),
+            });
+
+            let state_clone = Arc::clone(&state);
+            std::thread::Builder::new()
+                .name("glide-timeout-watchdog".into())
+                .spawn(move || Self::run_global(state_clone))
+                .expect("Failed to spawn timeout watchdog thread");
+
+            Self { state }
+        })
+    }
+
+    /// Start a per-instance watchdog (for backward compatibility / testing).
     pub fn start() -> Self {
         let state = Arc::new(WatchdogState {
             deadlines: Mutex::new(BTreeMap::new()),
@@ -59,6 +82,37 @@ impl TimeoutWatchdog {
                 None => return, // All clients dropped, exit thread
             };
 
+            let sleep_duration = {
+                let mut deadlines = state.deadlines.lock().unwrap();
+                let now = Instant::now();
+
+                // Fire all expired deadlines
+                let expired_keys: Vec<_> = deadlines.range(..=now).map(|(k, _)| *k).collect();
+                for key in expired_keys {
+                    if let Some(senders) = deadlines.remove(&key) {
+                        for sender in senders {
+                            let _ = sender.send(());
+                        }
+                    }
+                }
+
+                // Sleep until next deadline or 1s (idle poll)
+                deadlines
+                    .keys()
+                    .next()
+                    .map(|next| next.saturating_duration_since(now))
+                    .unwrap_or(Duration::from_secs(1))
+            };
+
+            // Wait, waking early if a new deadline is registered
+            let guard = state.deadlines.lock().unwrap();
+            let _ = state.condvar.wait_timeout(guard, sleep_duration);
+        }
+    }
+
+    /// Global watchdog loop — never exits (the Arc keeps it alive).
+    fn run_global(state: Arc<WatchdogState>) {
+        loop {
             let sleep_duration = {
                 let mut deadlines = state.deadlines.lock().unwrap();
                 let now = Instant::now();

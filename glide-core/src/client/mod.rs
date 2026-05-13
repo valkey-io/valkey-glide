@@ -291,8 +291,8 @@ pub struct Client {
     otel_metadata: types::OTelMetadata,
     // Optional client-side cache
     client_side_cache: Option<Arc<dyn GlideCache>>,
-    // Timeout watchdog — fires timeouts from a dedicated OS thread
-    timeout_watchdog: crate::timeout_watchdog::TimeoutWatchdog,
+    // Timeout watchdog — uses global shared OS thread
+    // (no per-client field needed)
 }
 
 async fn run_with_timeout<T>(
@@ -1023,7 +1023,7 @@ impl Client {
 
             match request_timeout {
                 Some(duration) => {
-                    let timeout_rx = self.timeout_watchdog.register(duration);
+                    let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global().register(duration);
                     tokio::pin!(execute);
                     tokio::select! {
                         result = &mut execute => result,
@@ -2133,7 +2133,6 @@ impl Client {
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
                 otel_metadata,
                 client_side_cache,
-                timeout_watchdog: crate::timeout_watchdog::TimeoutWatchdog::start(),
             };
 
             let client_arc = Arc::new(RwLock::new(client));
