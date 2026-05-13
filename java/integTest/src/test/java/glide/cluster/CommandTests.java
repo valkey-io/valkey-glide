@@ -20,6 +20,7 @@ import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForNotBusy;
+import static glide.TestUtilities.waitForScriptRunning;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -3610,20 +3611,23 @@ public class CommandTests {
             try {
                 testClient.invokeScript(script, route);
 
-                Thread.sleep(1000);
+                // Poll until the script is confirmed running instead of using Thread.sleep
+                waitForScriptRunning(() -> clusterClient.scriptKill(route), 5000);
 
-                // Run script kill until it returns OK
+                // The script was either killed by waitForScriptRunning or is unkillable.
+                // Re-invoke and kill it cleanly to verify scriptKill works.
+                testClient.invokeScript(script, route);
+
                 boolean scriptKilled = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
+                long deadline = System.currentTimeMillis() + 5000;
+                while (System.currentTimeMillis() < deadline) {
                     try {
                         assertEquals(OK, clusterClient.scriptKill(route).get());
                         scriptKilled = true;
                         break;
-                    } catch (RequestException ignored) {
+                    } catch (ExecutionException ignored) {
                     }
-                    Thread.sleep(500);
-                    timeout -= 500;
+                    Thread.sleep(100);
                 }
 
                 assertTrue(scriptKilled);
@@ -3672,13 +3676,14 @@ public class CommandTests {
             CompletableFuture<Object> scriptFuture =
                     testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
 
-            // Wait for the script to start executing on the server
-            Thread.sleep(1000);
-
             try {
-                // Try to kill the script - it should fail with "unkillable" since it has writes
+                // Poll until the script is confirmed running instead of using Thread.sleep
+                waitForScriptRunning(() -> clusterClient.scriptKill(route), 5000);
+
+                // Now the script is confirmed running. Since it does writes, it should be unkillable.
                 boolean foundUnkillable = false;
-                for (int i = 0; i < 25 && !foundUnkillable; i++) {
+                long deadline = System.currentTimeMillis() + 5000;
+                while (System.currentTimeMillis() < deadline && !foundUnkillable) {
                     try {
                         clusterClient.scriptKill(route).get();
                     } catch (ExecutionException e) {
@@ -3686,10 +3691,11 @@ public class CommandTests {
                             String msg = e.getMessage().toLowerCase();
                             if (msg.contains("unkillable")) {
                                 foundUnkillable = true;
-                            } else if (msg.contains("no scripts in execution")) {
-                                Thread.sleep(200);
                             }
                         }
+                    }
+                    if (!foundUnkillable) {
+                        Thread.sleep(100);
                     }
                 }
 
