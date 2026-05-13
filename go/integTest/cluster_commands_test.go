@@ -2616,9 +2616,12 @@ func (suite *GlideTestSuite) TestScriptKillWithoutRoute() {
 }
 
 func (suite *GlideTestSuite) TestScriptKillWithRoute() {
-	invokeClient, err := suite.clusterClient(suite.defaultClusterClientConfig())
-	require.NoError(suite.T(), err)
 	killClient := suite.defaultClusterClient()
+
+	// Use a longer request timeout so InvokeScript blocks until killed
+	invokeConfig := suite.defaultClusterClientConfig().WithRequestTimeout(12 * time.Second)
+	invokeClient, err := suite.clusterClient(invokeConfig)
+	require.NoError(suite.T(), err)
 
 	// key for routing to a primary node
 	randomKey := uuid.NewString()
@@ -2635,58 +2638,40 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	code := CreateLongRunningLuaScript(10, true)
 	script := options.NewScript(code)
 
-	go invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
-
-	// Poll until the script is confirmed running (ScriptKill succeeds), with a generous timeout
-	// to avoid flakiness from slow script startup.
-	timeout := time.After(8 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
+	// Kill in a goroutine - polls until the script is running, matching testFunctionKillNoWrite pattern
+	var killErr error
 	var result string
-	killed := false
+	go func() {
+		timeout := time.After(8 * time.Second)
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
 
-	for !killed {
-		select {
-		case <-timeout:
-			suite.T().Fatal("Timeout: SCRIPT KILL failed to execute in 8 seconds")
-		case <-ticker.C:
-			result, err = killClient.ScriptKillWithRoute(context.Background(), route)
-			if err == nil {
-				killed = true
-				continue
-			}
-
-			if !strings.Contains(strings.ToLower(err.Error()), "notbusy") {
-				assert.NoError(suite.T(), err)
-				killed = true
+		for {
+			select {
+			case <-timeout:
+				return
+			case <-ticker.C:
+				result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
+				if killErr == nil {
+					return
+				}
 			}
 		}
-	}
+	}()
 
-	assert.NoError(suite.T(), err)
+	// Block until script is killed (returns error) - guarantees script is running on server
+	_, err = invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+
+	assert.NoError(suite.T(), killErr)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
 
-	// Wait for the server to fully process the kill before checking state
-	notBusyTimeout := time.After(2 * time.Second)
-	notBusyTicker := time.NewTicker(100 * time.Millisecond)
-	defer notBusyTicker.Stop()
-
-	for {
-		select {
-		case <-notBusyTimeout:
-			suite.T().Fatal("Timed out waiting for script to be not busy after kill")
-			return
-		case <-notBusyTicker.C:
-			_, err = killClient.ScriptKillWithRoute(context.Background(), route)
-			if err != nil && strings.Contains(strings.ToLower(err.Error()), "notbusy") {
-				// Ensure no script is running at the end
-				assert.Error(suite.T(), err)
-				return
-			}
-		}
-	}
+	// Ensure no script is running at the end
+	_, err = killClient.ScriptKillWithRoute(context.Background(), route)
+	assert.Error(suite.T(), err)
+	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
 
 func (suite *GlideTestSuite) TestScriptKillUnkillableWithoutRoute() {
