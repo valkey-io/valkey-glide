@@ -478,3 +478,33 @@ type LCSPosition struct {
 	// End is the ending index of the match.
 	End int64
 }
+
+// LatencyHistoryEntry represents a single timestamp/latency pair returned by the
+// `LATENCY HISTORY` command for a specific event.
+type LatencyHistoryEntry struct {
+	// Timestamp is the unix timestamp (in seconds) of the recorded latency spike.
+	Timestamp int64
+	// LatencyMs is the latency in milliseconds for the spike.
+	LatencyMs int64
+}
+
+// LatencyLatestEntry represents the latest latency information for a single event,
+// as returned by the `LATENCY LATEST` command.
+//
+// Note: Valkey 8.1+ returns two additional fields (sum and count of recorded latencies);
+// they are intentionally not surfaced here so the public type stays stable across server
+// versions. Consumers needing those fields can use `CustomCommand([]string{"LATENCY",
+// "LATEST"})` and parse the array directly.
+type LatencyLatestEntry struct {
+	// EventName is the name of the latency event (e.g. "command", "fork").
+	EventName string
+	// Timestamp is the unix timestamp (in seconds) of the latest latency spike for the event.
+	Timestamp int64
+	// LatestMs is the latest event latency in milliseconds.
+	LatestMs int64
+	// MaxMs is the all-time maximum latency for this event in milliseconds. "All-time" means since
+	// the server was started or `LATENCY RESET` was last executed for this event. In a standalone
+	// deployment with replicas the standalone client merges per-node responses; in that case MaxMs
+	// is the cross-node maximum (see [glide.Client.LatencyLatest]).
+	MaxMs int64
+}

@@ -5,6 +5,7 @@ package interfaces
 import (
 	"context"
 
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -229,4 +230,50 @@ type ServerManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/acl-whoami/
 	AclWhoAmI(ctx context.Context) (string, error)
+
+	// LatencyHistory returns the raw `[timestamp, latency_ms]` pairs for the given event.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   event - The latency event to fetch (e.g. "command", "fork").
+	//
+	// Return value:
+	//   A slice of [models.LatencyHistoryEntry] sorted by ascending timestamp.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-history/
+	LatencyHistory(ctx context.Context, event string) ([]models.LatencyHistoryEntry, error)
+
+	// LatencyLatest reports the latest latency event recorded for every known event.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A slice of [models.LatencyLatestEntry], one per recorded event.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-latest/
+	LatencyLatest(ctx context.Context) ([]models.LatencyLatestEntry, error)
+
+	// LatencyReset resets the latency time series for all events.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   The number of event time series that were reset.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-reset/
+	LatencyReset(ctx context.Context) (int64, error)
+
+	// LatencyResetWithEvents resets the latency time series for the supplied events.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   events - The latency events to reset (e.g. "command", "fork").
+	//
+	// Return value:
+	//   The number of event time series that were reset.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-reset/
+	LatencyResetWithEvents(ctx context.Context, events []string) (int64, error)
 }

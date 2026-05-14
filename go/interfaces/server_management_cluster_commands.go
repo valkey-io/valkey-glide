@@ -244,4 +244,94 @@ type ServerManagementClusterCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/acl-whoami/
 	AclWhoAmI(ctx context.Context) (string, error)
+
+	// LatencyHistory returns the raw `[timestamp, latency_ms]` pairs for the given event.
+	// In cluster mode the command is dispatched to all nodes by default and the response is
+	// returned as a multi-value [models.ClusterValue] keyed by node address.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   event - The latency event to fetch (e.g. "command", "fork").
+	//
+	// Return value:
+	//   A [models.ClusterValue] containing the latency history per node.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-history/
+	LatencyHistory(ctx context.Context, event string) (models.ClusterValue[[]models.LatencyHistoryEntry], error)
+
+	// LatencyHistoryWithOptions is the routing-aware variant of LatencyHistory.
+	//
+	// See [valkey.io] for details.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-history/
+	LatencyHistoryWithOptions(
+		ctx context.Context,
+		event string,
+		opts options.RouteOption,
+	) (models.ClusterValue[[]models.LatencyHistoryEntry], error)
+
+	// LatencyLatest reports the latest latency event recorded for every known event on each
+	// cluster node.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A [models.ClusterValue] containing the per-node latency entries.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-latest/
+	LatencyLatest(ctx context.Context) (models.ClusterValue[[]models.LatencyLatestEntry], error)
+
+	// LatencyLatestWithOptions is the routing-aware variant of LatencyLatest.
+	//
+	// See [valkey.io] for details.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-latest/
+	LatencyLatestWithOptions(
+		ctx context.Context,
+		opts options.RouteOption,
+	) (models.ClusterValue[[]models.LatencyLatestEntry], error)
+
+	// LatencyReset resets every event's latency time series across the cluster. Per-node
+	// counts are summed by the core (Valkey response policy `Aggregate(Sum)`).
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   The total number of event time series that were reset.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-reset/
+	LatencyReset(ctx context.Context) (int64, error)
+
+	// LatencyResetWithOptions is the routing-aware variant of LatencyReset.
+	//
+	// See [valkey.io] for details.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-reset/
+	LatencyResetWithOptions(ctx context.Context, opts options.RouteOption) (int64, error)
+
+	// LatencyResetWithEvents resets the latency time series only for the supplied events.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   events - The latency events to reset.
+	//
+	// Return value:
+	//   The total number of event time series that were reset across the cluster.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-reset/
+	LatencyResetWithEvents(ctx context.Context, events []string) (int64, error)
+
+	// LatencyResetWithEventsAndOptions is the routing-aware variant of
+	// LatencyResetWithEvents.
+	//
+	// See [valkey.io] for details.
+	//
+	// [valkey.io]: https://valkey.io/commands/latency-reset/
+	LatencyResetWithEventsAndOptions(
+		ctx context.Context,
+		events []string,
+		opts options.RouteOption,
+	) (int64, error)
 }
