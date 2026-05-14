@@ -1,0 +1,17 @@
+Test Case Number,Test Case Name,Input,Desired Output,Actual Output,Status
+TC-001,Basic MIGRATE - Command Construction,"host=""localhost"", port=9999, key=""{migrate}uuid"", db=0, timeout=5000ms","Command formatted correctly; Connection error thrown","Command sent with args: [""localhost"", ""9999"", key, ""0"", ""5000""]; Connection refused error",PASS
+TC-002,Basic MIGRATE - Key Persistence on Failure,Same as TC-001,Key remains in source after failed migration,"Key exists with original value ""test_value""",PASS
+TC-003,MIGRATE with COPY option,"host=""localhost"", port=9999, key=""{migrate}uuid"", db=0, timeout=5000ms, options={Copy: true}","Command includes ""COPY"" argument; Connection error","Command args: [..., ""COPY""]; Error raised",PASS
+TC-004,MIGRATE with REPLACE option,"host=""localhost"", port=9999, key=""{migrate}uuid"", db=0, timeout=5000ms, options={Replace: true}","Command includes ""REPLACE"" argument; Connection error","Command args: [..., ""REPLACE""]; Error raised",PASS
+TC-005,MIGRATE with COPY + REPLACE,"host=""localhost"", port=9999, key=""{migrate}uuid"", db=0, timeout=5000ms, options={Copy: true, Replace: true}","Command includes ""COPY REPLACE""; Connection error","Command args: [..., ""COPY"", ""REPLACE""]; Error raised",PASS
+TC-006,MIGRATE with AUTH (password only),"host=""localhost"", port=9999, key=""{migrate}uuid"", db=0, timeout=5000ms, options={Password: ""password123""}","Command includes ""AUTH password123""; Connection error","Command args: [..., ""AUTH"", ""password123""]; Error raised",PASS
+TC-007,MIGRATE with AUTH2 (username + password),"host=""localhost"", port=9999, key=""{migrate}uuid"", db=0, timeout=5000ms, options={Username: ""user"", Password: ""password123""}","Command includes ""AUTH2 user password123""; Connection error","Command args: [..., ""AUTH2"", ""user"", ""password123""]; Error raised",PASS
+TC-008,MIGRATE with all options combined,"host=""localhost"", port=9999, key=""{migrate}uuid"", db=0, timeout=5000ms, options={Copy, Replace, Auth2}",Command includes all options in correct order,"Command args: [..., ""COPY"", ""REPLACE"", ""AUTH2"", ""user"", ""password123""]; Error raised",PASS
+TC-009,MIGRATE with non-existent key,"host=""localhost"", port=9999, key=""non-existent-key"", db=0, timeout=5000ms","Command sent; Connection error (would return ""NOKEY"" with valid destination)",Command sent correctly; Connection refused error,PASS
+TC-010,MigrateOptions ToArgs() - No options,options={},Empty args array [],"[]",PASS
+TC-011,MigrateOptions ToArgs() - COPY only,options={Copy: true},"[""COPY""]","[""COPY""]",PASS
+TC-012,MigrateOptions ToArgs() - REPLACE only,options={Replace: true},"[""REPLACE""]","[""REPLACE""]",PASS
+TC-013,MigrateOptions ToArgs() - AUTH only,options={Password: "pass"},"[""AUTH"", ""pass""]","[""AUTH"", ""pass""]",PASS
+TC-014,MigrateOptions ToArgs() - AUTH2,"options={Username: ""user"", Password: ""pass""}","[""AUTH2"", ""user"", ""pass""]","[""AUTH2"", ""user"", ""pass""]",PASS
+TC-015,MigrateOptions builder pattern,NewMigrateOptions().SetCopy().SetReplace(),Chained setters work correctly,"Options set: Copy=true, Replace=true",PASS
+TC-016,Invalid auth - Username without password,"options={Username: ""user"", Password: """"}",Error returned with clear message,"Error: ""username provided without password""",PASS

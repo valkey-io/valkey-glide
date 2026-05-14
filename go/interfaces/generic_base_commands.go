@@ -91,6 +91,25 @@ type GenericBaseCommands interface {
 
 	Dump(ctx context.Context, key string) (models.Result[string], error)
 
+	Migrate(
+		ctx context.Context,
+		destinationHost string,
+		destinationPort int64,
+		key string,
+		destinationDB int64,
+		timeout time.Duration,
+	) (string, error)
+
+	MigrateWithOptions(
+		ctx context.Context,
+		destinationHost string,
+		destinationPort int64,
+		key string,
+		destinationDB int64,
+		timeout time.Duration,
+		migrateOptions options.MigrateOptions,
+	) (string, error)
+
 	ObjectFreq(ctx context.Context, key string) (models.Result[int64], error)
 
 	ObjectIdleTime(ctx context.Context, key string) (models.Result[int64], error)

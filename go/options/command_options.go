@@ -375,6 +375,75 @@ func (restoreOption *CopyOptions) SetReplace() *CopyOptions {
 	return restoreOption
 }
 
+// Optional arguments for Migrate command.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+type MigrateOptions struct {
+	// If set, do not remove the key from the source instance.
+	Copy bool
+	// If set, replace existing key on the destination instance.
+	Replace bool
+	// Password for authentication to the destination instance.
+	Password string
+	// Username for authentication to the destination instance (requires password).
+	Username string
+}
+
+func NewMigrateOptions() *MigrateOptions {
+	return &MigrateOptions{}
+}
+
+// Do not remove the key from the source instance.
+func (migrateOptions *MigrateOptions) SetCopy() *MigrateOptions {
+	migrateOptions.Copy = true
+	return migrateOptions
+}
+
+// Replace existing key on the destination instance.
+func (migrateOptions *MigrateOptions) SetReplace() *MigrateOptions {
+	migrateOptions.Replace = true
+	return migrateOptions
+}
+
+// Set password for authentication to the destination instance.
+func (migrateOptions *MigrateOptions) SetPassword(password string) *MigrateOptions {
+	migrateOptions.Password = password
+	return migrateOptions
+}
+
+// Set username and password for authentication to the destination instance.
+// AUTH2 option requires both username and password.
+func (migrateOptions *MigrateOptions) SetAuth(username, password string) *MigrateOptions {
+	migrateOptions.Username = username
+	migrateOptions.Password = password
+	return migrateOptions
+}
+
+func (opts *MigrateOptions) ToArgs() ([]string, error) {
+	args := []string{}
+
+	if opts.Copy {
+		args = append(args, "COPY")
+	}
+
+	if opts.Replace {
+		args = append(args, "REPLACE")
+	}
+
+	// Validate authentication options
+	if opts.Username != "" && opts.Password == "" {
+		return nil, errors.New("username provided without password; use SetAuth(username, password) or SetPassword(password)")
+	}
+
+	if opts.Username != "" && opts.Password != "" {
+		args = append(args, "AUTH2", opts.Username, opts.Password)
+	} else if opts.Password != "" {
+		args = append(args, "AUTH", opts.Password)
+	}
+
+	return args, nil
+}
+
 // Custom setter methods to allows specifying an alternative logical database index for the destination key.
 func (copyOption *CopyOptions) SetDBDestination(destinationDB int64) *CopyOptions {
 	copyOption.DbDestination = destinationDB

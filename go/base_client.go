@@ -6510,6 +6510,103 @@ func (client *baseClient) Dump(ctx context.Context, key string) (models.Result[s
 	return handleStringOrNilResponse(result)
 }
 
+// Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+// Once the key is successfully transferred, it is deleted from the source instance and is
+// guaranteed to exist in the destination instance.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	destinationHost - The destination host.
+//	destinationPort - The destination port.
+//	key - The key to migrate.
+//	destinationDB - The destination database index.
+//	timeout - The timeout in milliseconds.
+//
+// Return value:
+//
+//	Returns "OK" on success, or "NOKEY" if no keys were found in the source instance.
+//
+// Example:
+//
+//	client.Set(context.Background(), "key", "value")
+//	result, err := client.Migrate(context.Background(), "destination.example.com", 6379, "key", 0, 5000*time.Millisecond)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(result) // "OK"
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) Migrate(
+	ctx context.Context,
+	destinationHost string,
+	destinationPort int64,
+	key string,
+	destinationDB int64,
+	timeout time.Duration,
+) (string, error) {
+	return client.MigrateWithOptions(ctx, destinationHost, destinationPort, key, destinationDB, timeout, *options.NewMigrateOptions())
+}
+
+// Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+// Once the key is successfully transferred, it is deleted from the source instance (unless COPY
+// is specified) and is guaranteed to exist in the destination instance.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	destinationHost - The destination host.
+//	destinationPort - The destination port.
+//	key - The key to migrate.
+//	destinationDB - The destination database index.
+//	timeout - The timeout in milliseconds.
+//	migrateOptions - Additional options for the MIGRATE command.
+//
+// Return value:
+//
+//	Returns "OK" on success, or "NOKEY" if no keys were found in the source instance.
+//
+// Example:
+//
+//	client.Set(context.Background(), "key", "value")
+//	opts := options.NewMigrateOptions().SetCopy().SetReplace()
+//	result, err := client.MigrateWithOptions(context.Background(), "destination.example.com", 6379, "key", 0, 5000*time.Millisecond, *opts)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(result) // "OK"
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) MigrateWithOptions(
+	ctx context.Context,
+	destinationHost string,
+	destinationPort int64,
+	key string,
+	destinationDB int64,
+	timeout time.Duration,
+	migrateOptions options.MigrateOptions,
+) (string, error) {
+	optionArgs, err := migrateOptions.ToArgs()
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+
+	args := []string{
+		destinationHost,
+		utils.IntToString(destinationPort),
+		key,
+		utils.IntToString(destinationDB),
+		utils.IntToString(timeout.Milliseconds()),
+	}
+	args = append(args, optionArgs...)
+
+	result, err := client.executeCommand(ctx, C.Migrate, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Returns the internal encoding for the Valkey object stored at key.
 //
 // Parameters:

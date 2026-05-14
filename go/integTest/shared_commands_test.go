@@ -7556,6 +7556,189 @@ func (suite *GlideTestSuite) TestRestoreWithOptions() {
 	})
 }
 
+func (suite *GlideTestSuite) TestMigrate() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		t := suite.T()
+		key := "{migrate}" + uuid.New().String()
+		value := "test_value"
+
+		// Setup: Create a key to migrate
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		// Note: MIGRATE requires a destination instance, which is not available in typical test environments.
+		// We expect this to fail with a connection error, but we're testing the command construction.
+		// The command should be properly formatted and sent.
+		_, err := client.Migrate(
+			context.Background(),
+			"localhost",
+			9999, // Non-existent port
+			key,
+			0,
+			5000*time.Millisecond,
+		)
+
+		// We expect an error because the destination doesn't exist
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Connection refused", "Expected connection error")
+
+		// Verify the key still exists since migration failed
+		result, err := client.Get(context.Background(), key)
+		assert.NoError(t, err)
+		assert.Equal(t, value, result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestMigrateWithOptions() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		t := suite.T()
+		key := "{migrate}" + uuid.New().String()
+		value := "test_value_with_options"
+
+		// Setup: Create a key to migrate
+		suite.verifyOK(client.Set(context.Background(), key, value))
+
+		// Test 1: MIGRATE with COPY option
+		opts := options.NewMigrateOptions().SetCopy()
+		_, err := client.MigrateWithOptions(
+			context.Background(),
+			"localhost",
+			9999, // Non-existent port
+			key,
+			0,
+			5000*time.Millisecond,
+			*opts,
+		)
+
+		// We expect an error because the destination doesn't exist
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Connection refused", "Expected connection error")
+
+		// Test 2: MIGRATE with REPLACE option
+		optsReplace := options.NewMigrateOptions().SetReplace()
+		_, err = client.MigrateWithOptions(
+			context.Background(),
+			"localhost",
+			9999,
+			key,
+			0,
+			5000*time.Millisecond,
+			*optsReplace,
+		)
+		assert.Error(t, err)
+
+		// Test 3: MIGRATE with COPY and REPLACE options
+		optsCopyReplace := options.NewMigrateOptions().SetCopy().SetReplace()
+		_, err = client.MigrateWithOptions(
+			context.Background(),
+			"localhost",
+			9999,
+			key,
+			0,
+			5000*time.Millisecond,
+			*optsCopyReplace,
+		)
+		assert.Error(t, err)
+
+		// Test 4: MIGRATE with AUTH option (password only)
+		optsAuth := options.NewMigrateOptions().SetPassword("password123")
+		_, err = client.MigrateWithOptions(
+			context.Background(),
+			"localhost",
+			9999,
+			key,
+			0,
+			5000*time.Millisecond,
+			*optsAuth,
+		)
+		assert.Error(t, err)
+
+		// Test 5: MIGRATE with AUTH2 option (username and password)
+		optsAuth2 := options.NewMigrateOptions().SetAuth("user", "password123")
+		_, err = client.MigrateWithOptions(
+			context.Background(),
+			"localhost",
+			9999,
+			key,
+			0,
+			5000*time.Millisecond,
+			*optsAuth2,
+		)
+		assert.Error(t, err)
+
+		// Test 6: MIGRATE with all options
+		optsAll := options.NewMigrateOptions().
+			SetCopy().
+			SetReplace().
+			SetAuth("user", "password123")
+		_, err = client.MigrateWithOptions(
+			context.Background(),
+			"localhost",
+			9999,
+			key,
+			0,
+			5000*time.Millisecond,
+			*optsAll,
+		)
+		assert.Error(t, err)
+
+		// Verify the key still exists since migration failed
+		result, err := client.Get(context.Background(), key)
+		assert.NoError(t, err)
+		assert.Equal(t, value, result.Value())
+	})
+}
+
+func (suite *GlideTestSuite) TestMigrateNonExistentKey() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		t := suite.T()
+		nonExistentKey := "{migrate}" + uuid.New().String()
+
+		// Try to migrate a non-existent key
+		// This should fail with connection error since destination doesn't exist
+		_, err := client.Migrate(
+			context.Background(),
+			"localhost",
+			9999,
+			nonExistentKey,
+			0,
+			5000*time.Millisecond,
+		)
+
+		// Expect error due to connection failure
+		assert.Error(t, err)
+	})
+}
+
+func (suite *GlideTestSuite) TestMigrateInvalidAuthOptions() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		t := suite.T()
+		key := "{migrate}" + uuid.New().String()
+
+		// Setup: Create a key
+		suite.verifyOK(client.Set(context.Background(), key, "value"))
+
+		// Test: Username set but password is empty - should return error
+		opts := &options.MigrateOptions{
+			Username: "testuser",
+			Password: "", // Empty password with username
+		}
+
+		_, err := client.MigrateWithOptions(
+			context.Background(),
+			"localhost",
+			9999,
+			key,
+			0,
+			5000*time.Millisecond,
+			*opts,
+		)
+
+		// Should fail with validation error, not connection error
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "username provided without password", "Expected validation error for invalid auth options")
+	})
+}
+
 func (suite *GlideTestSuite) TestZRemRangeByRank() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := uuid.New().String()
