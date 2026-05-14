@@ -786,6 +786,57 @@ impl Client {
         }
     }
 
+    fn is_reset_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"RESET")
+    }
+
+    async fn handle_reset_command(&mut self) -> RedisResult<()> {
+        // RESET resets the connection to its initial state per the Valkey spec.
+        // https://valkey.io/commands/reset/
+        //
+        // TRACKED - glide-core updates these so reconnections restore the post-RESET state:
+        //   SELECTs database 0                       -> update_stored_database_id(0)
+        //   Clears client name                       -> update_stored_client_name(None)
+        //   Sets protocol to RESP2                   -> update_stored_protocol(RESP2)
+        //   Aborts Pub/Sub subscription state        -> remove_desired_subscriptions(all kinds)
+        //     (prevents synchronizer from resubscribing on reconnect)
+        //
+        // NOT TRACKED - no glide-core state to update:
+        //   Deauthenticates the connection           -> auth credentials kept for reconnect;
+        //     (requires AUTH to reauthenticate)         live connection is deauthed until
+        //                                               reconnect or manual AUTH call
+        //   Discards current MULTI transaction       -> glide sends MULTI+cmds+EXEC as a
+        //                                               single pipeline; no persistent state
+        //   Unwatches all WATCHed keys               -> WATCH state is per-connection,
+        //                                               not tracked by glide-core
+        //   Disables CLIENT TRACKING                 -> not tracked; gap exists if
+        //                                               client-side caching is active
+        //   Sets connection to READWRITE mode         -> not tracked; glide does not
+        //                                               persist read/write mode per connection
+        //   Cancels ASKING mode (cluster)             -> one-shot flag sent inline,
+        //                                               not persisted by glide-core
+        //   Sets CLIENT REPLY to ON                  -> not tracked; CLIENT REPLY not
+        //                                               yet supported by glide
+        //   Exits MONITOR mode                       -> not tracked; MONITOR not yet
+        //                                               supported by glide
+        //   Turns off NO-EVICT mode                  -> not tracked; per-connection hint
+        //   Turns off NO-TOUCH mode                  -> not tracked; per-connection hint
+        self.update_stored_database_id(0).await?;
+        self.update_stored_client_name(None).await?;
+        self.update_stored_protocol(redis::ProtocolVersion::RESP2)
+            .await?;
+        self.otel_metadata.db_namespace = "0".to_string();
+        for kind in [
+            redis::PubSubSubscriptionKind::Exact,
+            redis::PubSubSubscriptionKind::Pattern,
+            redis::PubSubSubscriptionKind::Sharded,
+        ] {
+            self.pubsub_synchronizer
+                .remove_desired_subscriptions(None, kind);
+        }
+        Ok(())
+    }
+
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -955,6 +1006,9 @@ impl Client {
         }
         if self_clone.is_hello_command(&cmd) {
             self_clone.handle_hello_command(&cmd).await?;
+        }
+        if self_clone.is_reset_command(&cmd) {
+            self_clone.handle_reset_command().await?;
         }
         Ok(value)
     }
@@ -2942,5 +2996,18 @@ mod tests {
                 "{cmd_name} should be detected as blocking"
             );
         }
+    }
+
+    #[test]
+    fn test_is_reset_command() {
+        let client = create_test_client();
+
+        let mut cmd = Cmd::new();
+        cmd.arg("RESET");
+        assert!(client.is_reset_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("PING");
+        assert!(!client.is_reset_command(&cmd));
     }
 }

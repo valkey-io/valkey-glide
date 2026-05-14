@@ -338,7 +338,8 @@ pub async fn create_cluster_client(
         get_shared_cluster_addresses(configuration.use_tls)
     };
 
-    if let Some(redis_connection_info) = &configuration.connection_info
+    if !configuration.skip_acl_setup
+        && let Some(redis_connection_info) = &configuration.connection_info
         && redis_connection_info.password.is_some()
     {
         assert!(!configuration.shared_server);

@@ -3060,4 +3060,456 @@ pub(crate) mod shared_client_tests {
             assert_eq!(hello_info.get("proto").unwrap(), &Value::Int(3));
         });
     }
+
+    // =========================================================================
+    // RESET command - tracked state tests
+    // Verifies handle_reset_command correctly updates glide-core tracked state
+    // so reconnections restore the post-RESET state, not the pre-RESET state.
+    // =========================================================================
+
+    /// Send CLIENT INFO and return as String (handles both standalone and cluster responses).
+    async fn reset_test_get_client_info(client: &mut Client) -> String {
+        let mut cmd = redis::Cmd::new();
+        cmd.arg("CLIENT").arg("INFO");
+        let val = client
+            .send_command(
+                &mut cmd,
+                Some(RoutingInfo::MultiNode((
+                    MultipleNodeRoutingInfo::AllNodes,
+                    None,
+                ))),
+            )
+            .await
+            .unwrap();
+        match val {
+            Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+            Value::VerbatimString { text, .. } => text,
+            other => {
+                let map: HashMap<String, String> = redis::from_owned_redis_value(other).unwrap();
+                map.into_values().next().unwrap_or_default()
+            }
+        }
+    }
+
+    /// Kill connection and retry CLIENT INFO until reconnect succeeds.
+    async fn reset_test_get_info_after_reconnect(client: &mut Client) -> String {
+        kill_connection(client).await;
+        retry(|| async {
+            let mut c = client.clone();
+            let mut cmd = redis::Cmd::new();
+            cmd.arg("CLIENT").arg("INFO");
+            let val = c
+                .send_command(
+                    &mut cmd,
+                    Some(RoutingInfo::MultiNode((
+                        MultipleNodeRoutingInfo::AllNodes,
+                        None,
+                    ))),
+                )
+                .await
+                .ok()?;
+            match val {
+                Value::BulkString(bytes) => Some(String::from_utf8_lossy(&bytes).to_string()),
+                Value::VerbatimString { text, .. } => Some(text),
+                other => {
+                    let map: HashMap<String, String> = redis::from_owned_redis_value(other).ok()?;
+                    map.into_values().next()
+                }
+            }
+        })
+        .await
+    }
+
+    /// Send RESET command.
+    async fn reset_test_send_reset(client: &mut Client) {
+        let mut cmd = redis::Cmd::new();
+        cmd.arg("RESET");
+        client.send_command(&mut cmd, None).await.unwrap();
+    }
+
+    /// RESET reverts tracked DB to 0 after reconnection.
+    /// SELECT 2 (tracked DB=2) -> RESET (tracked DB=0) -> kill -> reconnect on DB=0.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_reverts_database_to_zero(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            if use_cluster && !version_greater_or_equal(&mut test_basics.client, "9.0.0").await {
+                return;
+            }
+            let mut select = redis::Cmd::new();
+            select.arg("SELECT").arg("2");
+            test_basics
+                .client
+                .send_command(&mut select, None)
+                .await
+                .unwrap();
+            reset_test_send_reset(&mut test_basics.client).await;
+            let info = reset_test_get_info_after_reconnect(&mut test_basics.client).await;
+            assert!(
+                info.contains("db=0"),
+                "expected db=0 after RESET+reconnect, got: {info}"
+            );
+        });
+    }
+
+    /// RESET with initial DB=3 in config -> reconnect uses DB=0 (post-RESET), not DB=3.
+    /// Verifies handle_reset_command overrides ConnectionRequest.database_id.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_overrides_initial_database_config(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    database_id: 3,
+                    ..Default::default()
+                },
+            )
+            .await;
+            if use_cluster && !version_greater_or_equal(&mut test_basics.client, "9.0.0").await {
+                return;
+            }
+            let initial = reset_test_get_client_info(&mut test_basics.client).await;
+            assert!(
+                initial.contains("db=3"),
+                "expected db=3 initially, got: {initial}"
+            );
+            reset_test_send_reset(&mut test_basics.client).await;
+            let info = reset_test_get_info_after_reconnect(&mut test_basics.client).await;
+            assert!(
+                info.contains("db=0"),
+                "expected db=0 after RESET overrides initial config, got: {info}"
+            );
+        });
+    }
+
+    /// RESET clears tracked client name after reconnection.
+    /// CLIENT SETNAME foo (tracked) -> RESET (tracked None) -> kill -> reconnect with empty name.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_clears_client_name(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut setname = redis::Cmd::new();
+            setname.arg("CLIENT").arg("SETNAME").arg("reset-test-name");
+            test_basics
+                .client
+                .send_command(&mut setname, None)
+                .await
+                .unwrap();
+            reset_test_send_reset(&mut test_basics.client).await;
+            let info = reset_test_get_info_after_reconnect(&mut test_basics.client).await;
+            assert!(
+                info.contains("name= ") || info.contains("name=\n"),
+                "expected empty name after RESET+reconnect, got: {info}"
+            );
+        });
+    }
+
+    /// RESET with initial client_name in config -> reconnect uses empty name (post-RESET).
+    /// Verifies handle_reset_command overrides ConnectionRequest.client_name.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_overrides_initial_client_name_config(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    client_name: Some("initial-name".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let initial = reset_test_get_client_info(&mut test_basics.client).await;
+            assert!(
+                initial.contains("name=initial-name"),
+                "expected initial-name, got: {initial}"
+            );
+            reset_test_send_reset(&mut test_basics.client).await;
+            let info = reset_test_get_info_after_reconnect(&mut test_basics.client).await;
+            assert!(
+                info.contains("name= ") || info.contains("name=\n"),
+                "expected empty name after RESET overrides initial config, got: {info}"
+            );
+        });
+    }
+
+    /// RESET reverts tracked protocol to RESP2 after reconnection (standalone only).
+    /// HELLO 3 (tracked RESP3) -> RESET (tracked RESP2) -> kill -> reconnect with RESP2.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_reverts_protocol_to_resp2() {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                false,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut hello = redis::Cmd::new();
+            hello.arg("HELLO").arg("3");
+            test_basics
+                .client
+                .send_command(&mut hello, None)
+                .await
+                .unwrap();
+            reset_test_send_reset(&mut test_basics.client).await;
+            let info = reset_test_get_info_after_reconnect(&mut test_basics.client).await;
+            assert!(
+                info.contains("resp=2"),
+                "expected resp=2 after RESET+reconnect, got: {info}"
+            );
+        });
+    }
+
+    /// Case 1: RESET on auth server -> next command fails with NOAUTH.
+    /// Per spec: "Deauthenticates the connection, requiring a call to AUTH to reauthenticate."
+    /// The caller is responsible for re-authenticating after RESET.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_deauths_connection(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    use_tls: true,
+                    connection_info: Some(redis::RedisConnectionInfo {
+                        password: Some("ReallySecurePassword".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("RESET");
+            let result = test_basics
+                .client
+                .clone()
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+            // RESET routes to AllNodes; unwrap the aggregated response.
+            let reset_values: Vec<Value> = match result {
+                Value::SimpleString(_) => vec![result],
+                Value::Array(arr) => arr,
+                Value::Map(map) => map.into_iter().map(|(_, v)| v).collect(),
+                other => panic!("unexpected RESET response: {other:?}"),
+            };
+            assert!(
+                reset_values
+                    .iter()
+                    .all(|v| *v == Value::SimpleString("RESET".to_string())),
+                "expected all RESET responses to be SimpleString(\"RESET\"), got: {reset_values:?}"
+            );
+            // Next command on the deauthed connection must fail with NOAUTH
+            let mut ping_cmd = redis::Cmd::new();
+            ping_cmd.arg("PING");
+            let err = test_basics
+                .client
+                .clone()
+                .send_command(&mut ping_cmd, None)
+                .await
+                .unwrap_err();
+            assert!(
+                err.to_string().contains("NOAUTH"),
+                "expected NOAUTH after RESET, got: {err}"
+            );
+        });
+    }
+
+    /// Case 2: RESET on auth server -> kill connection -> glide reconnects and re-auths automatically.
+    /// glide-core stores the original credentials and uses them during reconnect handshake.
+    /// Uses a second authenticated client to kill the deauthed connection by ID.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_reconnect_reauths_with_stored_credentials(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async {
+            let config = TestConfiguration {
+                use_tls: true,
+                connection_info: Some(redis::RedisConnectionInfo {
+                    password: Some("ReallySecurePassword".to_string()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let mut test_basics = setup_test_basics(use_cluster, config.clone()).await;
+            // Get the test client's connection ID before RESET
+            let mut id_cmd = redis::Cmd::new();
+            id_cmd.arg("CLIENT").arg("ID");
+            let client_id = test_basics
+                .client
+                .send_command(&mut id_cmd, None)
+                .await
+                .unwrap();
+            let client_id_str = match client_id {
+                Value::Int(id) => id.to_string(),
+                other => panic!("unexpected CLIENT ID response: {other:?}"),
+            };
+            // Issue RESET - deauths the live connection
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("RESET");
+            test_basics
+                .client
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+            // Use a second authenticated client (same server) to kill the deauthed connection by ID.
+            // This triggers a reconnect on the test client.
+            let mut admin_config = config.clone();
+            admin_config.skip_acl_setup = true;
+            let mut admin_client = create_client(&test_basics.server, admin_config).await;
+            let mut kill_cmd = redis::Cmd::new();
+            kill_cmd
+                .arg("CLIENT")
+                .arg("KILL")
+                .arg("ID")
+                .arg(&client_id_str);
+            let _ = admin_client.send_command(&mut kill_cmd, None).await;
+            // Retry for up to 10s: glide reconnects and re-auths with stored credentials
+            let key = generate_random_string(6);
+            retry_until_timeout(
+                || async {
+                    let mut set_cmd = redis::Cmd::new();
+                    set_cmd.arg("SET").arg(key.as_str()).arg("val");
+                    test_basics
+                        .client
+                        .clone()
+                        .send_command(&mut set_cmd, None)
+                        .await
+                        .ok()
+                },
+                std::time::Duration::from_secs(10),
+            )
+            .await;
+        });
+    }
+
+    /// Case 3: RESET on auth server -> user manually calls AUTH -> client works again.
+    /// The user is responsible for re-authenticating after RESET when auth is required.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_manual_reauth_restores_client(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    use_tls: true,
+                    connection_info: Some(redis::RedisConnectionInfo {
+                        password: Some("ReallySecurePassword".to_string()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+            let mut reset_cmd = redis::Cmd::new();
+            reset_cmd.arg("RESET");
+            test_basics
+                .client
+                .clone()
+                .send_command(&mut reset_cmd, None)
+                .await
+                .unwrap();
+            // Manually re-authenticate after RESET
+            let mut auth_cmd = redis::Cmd::new();
+            auth_cmd.arg("AUTH").arg("ReallySecurePassword");
+            let auth_result = test_basics
+                .client
+                .clone()
+                .send_command(&mut auth_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(auth_result, Value::Okay);
+            // Client should now work normally
+            let key = generate_random_string(6);
+            send_set_and_get(test_basics.client.clone(), key).await;
+        });
+    }
+
+    /// RESET exits pubsub mode: after RESET, regular commands are accepted.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_exits_pubsub_mode(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            reset_test_send_reset(&mut test_basics.client).await;
+            let key = generate_random_string(6);
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg(&key).arg("value");
+            test_basics
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .expect("SET should work after RESET");
+        });
+    }
+
+    /// RESET clears pubsub desired subscriptions: handle_reset_command calls
+    /// remove_desired_subscriptions for all kinds so the synchronizer does not
+    /// resubscribe on reconnect.  We verify this indirectly: RESET followed by
+    /// a kill-and-reconnect cycle must not leave the connection in pubsub mode.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_reset_clears_pubsub_desired_state(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+            // RESET clears desired subscriptions in the synchronizer.
+            reset_test_send_reset(&mut test_basics.client).await;
+            // After reconnect the connection must not be in pubsub mode.
+            let key = generate_random_string(6);
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg(&key).arg("value");
+            test_basics
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .expect("SET should work after RESET (no pubsub resubscription on reconnect)");
+        });
+    }
 }

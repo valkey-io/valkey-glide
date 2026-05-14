@@ -677,6 +677,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"PUBSUB NUMSUB"
         | b"PUBSUB SHARDCHANNELS"
         | b"PUBSUB SHARDNUMSUB"
+        | b"RESET"
         | b"SCRIPT KILL"
         | b"FUNCTION KILL"
         | b"FUNCTION STATS" => RouteBy::AllNodes,
@@ -1153,7 +1154,6 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"PUBSUB SHARDNUMSUB"
             | b"RANDOMKEY"
             | b"REPLICAOF"
-            | b"RESET"
             | b"ROLE"
             | b"SAVE"
             | b"SCAN"

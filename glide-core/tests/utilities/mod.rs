@@ -783,6 +783,8 @@ pub struct TestConfiguration {
     pub protocol: ProtocolVersion,
     pub lazy_connect: bool,
     pub client_side_cache: Option<connection_request::ClientSideCache>,
+    /// Skip ACL setup when creating a cluster client (use when ACL is already configured).
+    pub skip_acl_setup: bool,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -832,7 +834,10 @@ pub(crate) struct TestClientBasics {
     pub(crate) server: BackingServer,
     pub(crate) client: Client,
 }
-async fn create_client(server: &BackingServer, configuration: TestConfiguration) -> Client {
+pub(crate) async fn create_client(
+    server: &BackingServer,
+    configuration: TestConfiguration,
+) -> Client {
     match server {
         BackingServer::Standalone(server) => {
             let connection_addr = server
