@@ -739,8 +739,8 @@ struct Message<C: Sized> {
 
 enum RecoverFuture {
     RefreshingSlots(JoinHandle<RedisResult<()>>),
-    ReconnectToInitialNodes(BoxFuture<'static, ()>),
-    Reconnect(BoxFuture<'static, ()>),
+    ReconnectToInitialNodes(JoinHandle<()>),
+    Reconnect(JoinHandle<()>),
 }
 
 enum ConnectionState {
@@ -1451,7 +1451,7 @@ where
     // Reconnect to the initial nodes provided by the user in the creation of the client,
     // and try to refresh the slots based on the initial connections.
     // Being used when all cluster connections are unavailable.
-    fn reconnect_to_initial_nodes(inner: Arc<InnerCore<C>>) -> impl Future<Output = ()> {
+    fn reconnect_to_initial_nodes(inner: Arc<InnerCore<C>>) -> impl Future<Output = ()> + Send {
         let inner = inner.clone();
         let cluster_params = match inner.get_cluster_param(|params| params.clone()) {
             Ok(params) => params,
@@ -3272,6 +3272,21 @@ where
         Ok((address, conn))
     }
 
+    /// Fail all pending requests immediately with ClientError.
+    /// Called when entering recovery to prevent requests from waiting for slow
+    /// reconnection cycles.
+    fn fail_pending_requests(inner: &Core<C>) {
+        let mut guard = inner.pending_requests.lock().unwrap();
+        let requests: Vec<_> = std::mem::take(&mut *guard);
+        drop(guard);
+        for request in requests {
+            let _ = request.sender.send(Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Connection in recovery",
+            ))));
+        }
+    }
+
     fn poll_recover(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), RedisError>> {
         log_trace_lazy!("cluster", "entered poll_recover");
 
@@ -3282,9 +3297,11 @@ where
 
         match recover_future {
             RecoverFuture::RefreshingSlots(handle) => {
-                // Check if the task has completed
-                match handle.now_or_never() {
-                    Some(Ok(Ok(()))) => {
+                // Use poll() instead of now_or_never() to properly register the waker.
+                // now_or_never() returns None without waking, causing poll_flush to busy-spin.
+                match Pin::new(handle).poll(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(Ok(Ok(()))) => {
                         // Task succeeded
                         log_info_rate_limited!(
                             "slot_refresh",
@@ -3292,20 +3309,21 @@ where
                             "poll_recover: slot refresh completed successfully, recovery complete"
                         );
                         self.state = ConnectionState::PollComplete;
-                        return Poll::Ready(Ok(()));
+                        Poll::Ready(Ok(()))
                     }
-                    Some(Ok(Err(e))) => {
+                    Poll::Ready(Ok(Err(e))) => {
                         // Task completed but returned an engine error
                         log_trace_lazy!("cluster", format!("Slot refresh failed: {:?}", e));
 
                         if e.kind() == ErrorKind::AllConnectionsUnavailable {
                             // If all connections unavailable, try reconnect
-                            self.state =
-                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
-                                        self.inner.clone(),
-                                    )),
-                                ));
+                            let inner = self.inner.clone();
+                            let handle = tokio::spawn(async move {
+                                ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                            });
+                            self.state = ConnectionState::Recover(
+                                RecoverFuture::ReconnectToInitialNodes(handle),
+                            );
                             return Poll::Ready(Err(e));
                         } else {
                             // Retry refresh
@@ -3316,15 +3334,15 @@ where
                             self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(
                                 new_handle,
                             ));
-                            return Poll::Ready(Ok(()));
+                            Poll::Ready(Ok(()))
                         }
                     }
-                    Some(Err(join_err)) => {
+                    Poll::Ready(Err(join_err)) => {
                         if join_err.is_cancelled() {
                             // Task was intentionally aborted - don't treat as an error
                             log_trace_lazy!("cluster", "Slot refresh task was aborted");
                             self.state = ConnectionState::PollComplete;
-                            return Poll::Ready(Ok(()));
+                            Poll::Ready(Ok(()))
                         } else {
                             // Task panicked - try reconnecting to initial nodes as a recovery strategy
                             log_warn_lazy!("cluster", format!("Slot refresh task panicked: {:?} - attempting recovery by reconnecting to initial nodes", join_err));
@@ -3333,11 +3351,12 @@ where
                             // Since a panic indicates a bug in the refresh logic,
                             // it might be safer to close the client entirely
                             self.state =
-                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(
-                                    Box::pin(ClusterConnInner::reconnect_to_initial_nodes(
-                                        self.inner.clone(),
-                                    )),
-                                ));
+                                ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes({
+                                    let inner = self.inner.clone();
+                                    tokio::spawn(async move {
+                                        ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                                    })
+                                }));
 
                             // Report this critical error to clients
                             let err = RedisError::from((
@@ -3345,35 +3364,53 @@ where
                                 "Slot refresh task panicked",
                                 format!("{join_err:?}"),
                             ));
-                            return Poll::Ready(Err(err));
+                            Poll::Ready(Err(err))
                         }
                     }
-                    None => {
-                        // Task is still running
-                        // Just continue and return Ok to not block poll_flush
-                        // NOTE: now_or_never() does not register a waker, so the task
-                        // completion will not wake this future. The next poll_flush call
-                        // (triggered by a new request or cx.waker()) will re-check.
-                        log_debug_lazy!("cluster", "poll_recover: RefreshingSlots task still running (now_or_never returned None, no waker registered)");
+                }
+            }
+            RecoverFuture::ReconnectToInitialNodes(ref mut handle) => {
+                match Pin::new(handle).poll(cx) {
+                    Poll::Pending => Poll::Pending,
+                    Poll::Ready(Ok(())) => {
+                        log_trace_lazy!("cluster", "Reconnected to initial nodes");
+                        self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
+                    }
+                    Poll::Ready(Err(join_err)) => {
+                        if join_err.is_cancelled() {
+                            log_trace_lazy!("cluster", "Reconnect to initial nodes task was aborted");
+                        } else {
+                            logger_core::log_warn(
+                                "cluster",
+                                format!("Reconnect to initial nodes task panicked: {:?} - marking recovery as complete", join_err),
+                            );
+                        }
+                        self.state = ConnectionState::PollComplete;
+                        Poll::Ready(Ok(()))
                     }
                 }
-
-                // Always return Ready to not block poll_flush
-                Poll::Ready(Ok(()))
             }
-            // Other cases remain unchanged
-            RecoverFuture::ReconnectToInitialNodes(ref mut future) => {
-                ready!(future.as_mut().poll(cx));
-                log_trace_lazy!("cluster", "Reconnected to initial nodes");
-                self.state = ConnectionState::PollComplete;
-                Poll::Ready(Ok(()))
-            }
-            RecoverFuture::Reconnect(ref mut future) => {
-                ready!(future.as_mut().poll(cx));
-                log_trace_lazy!("cluster", "Reconnected connections");
-                self.state = ConnectionState::PollComplete;
-                Poll::Ready(Ok(()))
-            }
+            RecoverFuture::Reconnect(ref mut handle) => match Pin::new(handle).poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(Ok(())) => {
+                    log_trace_lazy!("cluster", "Reconnected connections");
+                    self.state = ConnectionState::PollComplete;
+                    Poll::Ready(Ok(()))
+                }
+                Poll::Ready(Err(join_err)) => {
+                    if join_err.is_cancelled() {
+                        log_trace_lazy!("cluster", "Reconnect task was aborted");
+                    } else {
+                        logger_core::log_warn(
+                            "cluster",
+                            format!("Reconnect task panicked: {:?} - marking recovery as complete", join_err),
+                        );
+                    }
+                    self.state = ConnectionState::PollComplete;
+                    Poll::Ready(Ok(()))
+                }
+            },
         }
     }
 
@@ -3622,108 +3659,60 @@ where
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
         log_trace_lazy!("cluster", format!("poll_flush: {:?}", self.state));
-        // Busy-spin detection: count loop iterations per call
-        let mut loop_iterations: u64 = 0;
-        // Adaptive health snapshot: healthy=5min, recovery=10s
-        static LAST_HEALTH_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        loop {
-            loop_iterations += 1;
-            self.send_refresh_error();
+        self.send_refresh_error();
 
-            if let Err(err) = ready!(self.as_mut().poll_recover(cx)) {
-                // We failed to reconnect, while we will try again we will report the
-                // error if we can to avoid getting trapped in an infinite loop of
-                // trying to reconnect
+        match self.as_mut().poll_recover(cx) {
+            Poll::Pending => {
+                // Fail any requests queued while in recovery
+                ClusterConnInner::fail_pending_requests(&self.inner);
+                return Poll::Pending;
+            }
+            Poll::Ready(Err(err)) => {
                 self.refresh_error = Some(err);
-
-                // Give other tasks a chance to progress before we try to recover
-                // again. Since the future may not have registered a wake up we do so
-                // now so the task is not forgotten
                 cx.waker().wake_by_ref();
                 return Poll::Pending;
             }
+            Poll::Ready(Ok(())) => {}
+        }
 
-            match ready!(self.poll_complete(cx)) {
-                PollFlushAction::None => {
-                    if loop_iterations > 100 {
-                        log_warn_rate_limited!(
-                            "cluster",
-                            5,
-                            format!(
-                                "poll_flush busy-spin detected: {} loop iterations in single call",
-                                loop_iterations
-                            )
-                        );
-                    }
-                    // Adaptive health snapshot
-                    let now_secs = SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    let last_health = LAST_HEALTH_LOG.load(Ordering::Relaxed);
-                    let in_recovery = matches!(self.state, ConnectionState::Recover(_));
-                    let interval = if in_recovery { 10 } else { 300 };
-                    if now_secs >= last_health + interval {
-                        LAST_HEALTH_LOG.store(now_secs, Ordering::Relaxed);
-                        let in_flight = self.in_flight_requests.len();
-                        let pending = self.inner.pending_requests.lock().unwrap().len();
-                        if in_recovery {
-                            log_info_lazy!("cluster", format!(
-                                "poll_flush health (recovery): in_flight_requests={}, pending_requests={}, loop_iterations={}",
-                                in_flight, pending, loop_iterations));
-                        } else {
-                            log_debug_lazy!("cluster", format!(
-                                "poll_flush health (healthy): in_flight_requests={}, pending_requests={}, loop_iterations={}",
-                                in_flight, pending, loop_iterations));
-                        }
-                    }
-                    return Poll::Ready(Ok(()));
-                }
-                PollFlushAction::RebuildSlots => {
-                    let in_flight = self.in_flight_requests.len();
-                    log_info_rate_limited!(
-                        "cluster",
-                        10,
-                        format!(
-                            "poll_flush: transitioning to RebuildSlots, in_flight_requests={}",
-                            in_flight
-                        )
-                    );
-                    // Spawn refresh task
-                    let task_handle = ClusterConnInner::spawn_refresh_slots_task(
-                        self.inner.clone(),
-                        &RefreshPolicy::Throttable,
-                    );
-
-                    // Update state
-                    self.state =
-                        ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
-                }
-                PollFlushAction::ReconnectFromInitialConnections => {
-                    let in_flight = self.in_flight_requests.len();
-                    log_info_rate_limited!("cluster", 10, format!(
-                        "poll_flush: transitioning to ReconnectFromInitialConnections, in_flight_requests={}",
-                        in_flight));
-                    self.state =
-                        ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(Box::pin(
-                            ClusterConnInner::reconnect_to_initial_nodes(self.inner.clone()),
-                        )));
-                }
-                PollFlushAction::Reconnect(addresses) => {
-                    let in_flight = self.in_flight_requests.len();
-                    log_info_rate_limited!("cluster", 10, format!(
-                        "poll_flush: transitioning to Reconnect(addresses={:?}), in_flight_requests={}",
-                        addresses, in_flight));
-                    self.state = ConnectionState::Recover(RecoverFuture::Reconnect(Box::pin(
-                        ClusterConnInner::trigger_refresh_connection_tasks(
-                            self.inner.clone(),
-                            addresses,
-                            RefreshConnectionType::OnlyUserConnection,
-                            true,
-                        )
-                        .map(|_| ()), // Convert Vec<Arc<Notify>> to () as it's not needed here
-                    )));
-                }
+        match ready!(self.poll_complete(cx)) {
+            PollFlushAction::None => Poll::Ready(Ok(())),
+            PollFlushAction::RebuildSlots => {
+                let task_handle = ClusterConnInner::spawn_refresh_slots_task(
+                    self.inner.clone(),
+                    &RefreshPolicy::Throttable,
+                );
+                self.state = ConnectionState::Recover(RecoverFuture::RefreshingSlots(task_handle));
+                ClusterConnInner::fail_pending_requests(&self.inner);
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+            PollFlushAction::ReconnectFromInitialConnections => {
+                let inner = self.inner.clone();
+                let handle = tokio::spawn(async move {
+                    ClusterConnInner::reconnect_to_initial_nodes(inner).await
+                });
+                self.state =
+                    ConnectionState::Recover(RecoverFuture::ReconnectToInitialNodes(handle));
+                ClusterConnInner::fail_pending_requests(&self.inner);
+                cx.waker().wake_by_ref();
+                Poll::Pending
+            }
+            PollFlushAction::Reconnect(addresses) => {
+                let inner = self.inner.clone();
+                let handle = tokio::spawn(async move {
+                    ClusterConnInner::trigger_refresh_connection_tasks(
+                        inner,
+                        addresses,
+                        RefreshConnectionType::OnlyUserConnection,
+                        true,
+                    )
+                    .await;
+                });
+                self.state = ConnectionState::Recover(RecoverFuture::Reconnect(handle));
+                ClusterConnInner::fail_pending_requests(&self.inner);
+                cx.waker().wake_by_ref();
+                Poll::Pending
             }
         }
     }
