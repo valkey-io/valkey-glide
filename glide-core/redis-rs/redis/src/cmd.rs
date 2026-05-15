@@ -35,6 +35,10 @@ pub struct Cmd {
     span: Option<GlideSpan>,
     //  A flag indicating whether this is a fenced command  (will have PING appended to ensure ordering)
     is_fenced: bool,
+    /// Per-command response timeout. When set, overrides the connection-level
+    /// response_timeout for this specific command. Used to propagate the
+    /// caller's request_timeout into the multiplexed connection layer.
+    response_timeout: Option<std::time::Duration>,
     /// Inflight slot tracker. When set, the slot is released when the last
     /// clone of this Cmd (or its Arc) is dropped. Used to decouple user-facing
     /// timeout from internal pipeline cleanup.
@@ -360,6 +364,7 @@ impl Cmd {
             no_response: false,
             span: None,
             is_fenced: false,
+            response_timeout: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
         }
@@ -373,9 +378,10 @@ impl Cmd {
             cursor: None,
             no_response: false,
             span: None,
+            is_fenced: false,
+            response_timeout: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
-            is_fenced: false,
         }
     }
 
@@ -669,6 +675,18 @@ impl Cmd {
         self.is_fenced
     }
 
+    /// Set a per-command response timeout that overrides the connection default.
+    #[inline]
+    pub fn set_response_timeout(&mut self, timeout: Option<std::time::Duration>) {
+        self.response_timeout = timeout;
+    }
+
+    /// Get the per-command response timeout, if set.
+    #[inline]
+    pub fn response_timeout(&self) -> Option<std::time::Duration> {
+        self.response_timeout
+    }
+
     /// Attach an inflight slot tracker. The slot is released when the last
     /// clone of this Cmd (or its `Arc<Cmd>`) is dropped.
     #[cfg(feature = "cluster-async")]
@@ -750,6 +768,7 @@ pub fn pipe() -> Pipeline {
 #[cfg(feature = "cluster")]
 mod tests {
     use super::Cmd;
+    use std::time::Duration;
 
     #[test]
     fn test_cmd_arg_idx() {
@@ -765,5 +784,23 @@ mod tests {
         assert_eq!(c.arg_idx(2), Some(&b"42"[..]));
         assert_eq!(c.arg_idx(3), None);
         assert_eq!(c.arg_idx(4), None);
+    }
+
+    #[test]
+    fn test_response_timeout_defaults_to_none() {
+        let cmd = Cmd::new();
+        assert_eq!(cmd.response_timeout(), None);
+    }
+
+    #[test]
+    fn test_response_timeout_override() {
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg("key");
+
+        cmd.set_response_timeout(Some(Duration::from_millis(100)));
+        assert_eq!(cmd.response_timeout(), Some(Duration::from_millis(100)));
+
+        cmd.set_response_timeout(None);
+        assert_eq!(cmd.response_timeout(), None);
     }
 }
