@@ -2065,7 +2065,7 @@ The following copyrights and licenses were found in the source code of this pack
 
 ----
 
-Package: aws-lc-rs:1.16.3
+Package: aws-lc-rs:1.17.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2287,7 +2287,7 @@ THIS SOFTWARE.
 
 ----
 
-Package: aws-lc-sys:0.40.0
+Package: aws-lc-sys:0.41.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -16916,7 +16916,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hashbrown:0.17.0
+Package: hashbrown:0.17.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28245,7 +28245,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project:1.1.12
+Package: pin-project:1.1.13
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -28474,7 +28474,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: pin-project-internal:1.1.12
+Package: pin-project-internal:1.1.13
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -43012,7 +43012,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: tokio:1.52.2
+Package: tokio:1.52.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -59321,7 +59321,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerofrom:0.1.7
+Package: zerofrom:0.1.8
 
 The following copyrights and licenses were found in the source code of this package:
 
