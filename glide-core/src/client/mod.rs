@@ -203,6 +203,12 @@ pub async fn get_valkey_connection_info(
             )
         });
 
+    let server_assisted_cache = connection_request
+        .client_side_cache
+        .as_ref()
+        .map(|c| c.server_assisted)
+        .unwrap_or(false);
+
     match &connection_request.authentication_info {
         Some(info) => {
             // If we have IAM configuration and a token manager, use the IAM token as password
@@ -222,6 +228,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     cache,
+                    server_assisted_cache,
                 }
             } else {
                 // Regular password-based authentication
@@ -233,6 +240,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     cache,
+                    server_assisted_cache,
                 }
             }
         }
@@ -242,6 +250,7 @@ pub async fn get_valkey_connection_info(
             client_name,
             lib_name,
             cache,
+            server_assisted_cache,
             ..Default::default()
         },
     }
@@ -1804,6 +1813,7 @@ async fn create_cluster_client(
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
     builder = builder.database_id(valkey_connection_info.db);
     builder = builder.cache(valkey_connection_info.cache);
+    builder = builder.server_assisted_cache(valkey_connection_info.server_assisted_cache);
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }

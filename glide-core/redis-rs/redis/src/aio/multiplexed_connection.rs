@@ -113,6 +113,7 @@ pin_project! {
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
         is_stream_closed: Arc<AtomicBool>,
         response_sync_lost: bool,
+        cache: Option<Arc<dyn GlideCache>>,
     }
 
         impl<T> PinnedDrop for PipelineSink<T> {
@@ -140,6 +141,7 @@ where
         push_manager: Arc<ArcSwap<PushManager>>,
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
         is_stream_closed: Arc<AtomicBool>,
+        cache: Option<Arc<dyn GlideCache>>,
     ) -> Self
     where
         T: Sink<SinkItem, Error = RedisError> + Stream<Item = RedisResult<Value>> + 'static,
@@ -152,6 +154,7 @@ where
             disconnect_notifier,
             is_stream_closed,
             response_sync_lost: false,
+            cache,
         }
     }
 
@@ -194,6 +197,26 @@ where
         if let Ok(res) = &result {
             if let Value::Push { kind, data: _data } = res {
                 self_.push_manager.load().try_send_raw(res);
+                if kind == &PushKind::Invalidate {
+                    if let Some(cache) = self_.cache {
+                        match _data.first() {
+                            Some(Value::Array(keys)) => {
+                                for key in keys {
+                                    if let Value::BulkString(k) = key {
+                                        cache.invalidate(k);
+                                    } else if let Value::VerbatimString { text, .. } = key {
+                                        cache.invalidate(text.as_bytes());
+                                    }
+                                }
+                            }
+                            Some(Value::Nil) => {
+                                cache.flush_all();
+                            }
+                            None => { /* malformed push, ignore */ }
+                            _ => {}
+                        }
+                    }
+                }
                 if !kind.has_reply() {
                     return;
                 }
@@ -503,6 +526,7 @@ where
     fn new<T>(
         sink_stream: T,
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
+        cache: Option<Arc<dyn GlideCache>>,
     ) -> (Self, impl Future<Output = ()>)
     where
         T: Sink<SinkItem, Error = RedisError> + Stream<Item = RedisResult<Value>> + 'static,
@@ -521,6 +545,7 @@ where
             push_manager.clone(),
             disconnect_notifier,
             is_stream_closed.clone(),
+            cache,
         );
         let f = stream::poll_fn(move |cx| receiver.poll_recv(cx))
             .map(Ok)
@@ -702,8 +727,11 @@ impl MultiplexedConnection {
         let codec = ValueCodec::default()
             .framed(stream)
             .and_then(|msg| async move { msg });
-        let (mut pipeline, driver) =
-            Pipeline::new(codec, glide_connection_options.disconnect_notifier);
+        let (mut pipeline, driver) = Pipeline::new(
+            codec,
+            glide_connection_options.disconnect_notifier,
+            connection_info.redis.cache.clone(),
+        );
         let driver = Box::pin(driver);
         let pm = PushManager::new(
             glide_connection_options.push_sender,
@@ -1157,7 +1185,7 @@ mod tests {
         };
 
         // Create pipeline but don't drive it, the channel will fill and send() will block
-        let (mut pipeline, driver) = Pipeline::new(stalling_sink, None);
+        let (mut pipeline, driver) = Pipeline::new(stalling_sink, None, None);
         std::mem::forget(driver);
 
         // Fill the 50-slot pipeline channel
@@ -1296,7 +1324,7 @@ mod tests {
             waker: None,
         };
 
-        let (pipeline, driver) = Pipeline::new(stream, None);
+        let (pipeline, driver) = Pipeline::new(stream, None, None);
         let driver_handle = tokio::spawn(driver);
 
         // Send first command — this should go through fine
