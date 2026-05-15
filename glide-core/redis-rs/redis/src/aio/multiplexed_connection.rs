@@ -764,13 +764,10 @@ impl MultiplexedConnection {
                 return Ok(value);
             }
         }
+        let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
-            .send_single(
-                cmd.get_packed_command(),
-                self.response_timeout,
-                cmd.is_fenced(),
-            )
+            .send_single(cmd.get_packed_command(), timeout, cmd.is_fenced())
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
