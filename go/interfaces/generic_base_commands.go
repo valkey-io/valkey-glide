@@ -130,4 +130,6 @@ type GenericBaseCommands interface {
 	UpdateConnectionPassword(ctx context.Context, password string, immediateAuth bool) (string, error)
 
 	ResetConnectionPassword(ctx context.Context) (string, error)
+
+	ClientTrackingInfo(ctx context.Context) (map[string]interface{}, error)
 }

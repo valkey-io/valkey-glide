@@ -41,4 +41,9 @@ type ConnectionManagementClusterCommands interface {
 		ctx context.Context,
 		routeOptions options.RouteOption,
 	) (models.ClusterValue[models.Result[string]], error)
+
+	ClientTrackingInfoWithOptions(
+		ctx context.Context,
+		opts options.RouteOption,
+	) (models.ClusterValue[map[string]interface{}], error)
 }

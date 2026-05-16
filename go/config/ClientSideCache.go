@@ -42,10 +42,9 @@ func (e EvictionPolicy) String() string {
 // removed after a specified duration.
 //
 // Important:
-//   - Glide currently supports TTL-based caching only. Invalidation-based
-//     client-side caching (where the server notifies clients of key changes) is not
-//     currently supported. This means cached values may become stale if updated on
-//     the server before the TTL expires.
+//   - Supports both TTL-based expiration and server-assisted invalidation via CLIENT TRACKING
+//     (when ServerAssisted is true). When server-assisted invalidation is not enabled, cached
+//     values may become stale if updated on the server before the TTL expires.
 //   - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
 //     are removed only when accessed after their TTL has expired. There is no proactive
 //     background cleanup of expired entries.
@@ -73,6 +72,10 @@ type ClientSideCache struct {
 
 	// EnableMetrics enables collection of cache metrics such as hit/miss rates.
 	EnableMetrics bool
+
+	// ServerAssisted enables server-assisted client-side caching, where the server
+	// sends invalidation messages to the client when cached keys are modified.
+	ServerAssisted bool
 }
 
 // NewClientSideCache creates a new ClientSideCache configuration with an auto-generated unique ID.
@@ -83,10 +86,9 @@ type ClientSideCache struct {
 // removed after a specified duration.
 //
 // Important:
-//   - Glide currently supports TTL-based caching only. Invalidation-based
-//     client-side caching (where the server notifies clients of key changes) is not
-//     currently supported. This means cached values may become stale if updated on
-//     the server before the TTL expires.
+//   - Supports both TTL-based expiration and server-assisted invalidation via CLIENT TRACKING
+//     (when ServerAssisted is true). When server-assisted invalidation is not enabled, cached
+//     values may become stale if updated on the server before the TTL expires.
 //   - Currently, Glide's client-side cache supports lazy eviction only. Expired entries
 //     are removed only when accessed after their TTL has expired. There is no proactive
 //     background cleanup of expired entries.
@@ -142,15 +144,23 @@ func (c *ClientSideCache) WithMetrics(enable bool) *ClientSideCache {
 	return c
 }
 
+// WithServerAssisted enables or disables server-assisted client-side caching.
+// Returns the same ClientSideCache instance for method chaining.
+func (c *ClientSideCache) WithServerAssisted(enabled bool) *ClientSideCache {
+	c.ServerAssisted = enabled
+	return c
+}
+
 // toProtobuf converts the ClientSideCache configuration to protobuf format.
 // This method is used internally to serialize the cache configuration for
 // communication with the Rust core.
 func (c *ClientSideCache) toProtobuf() *protobuf.ClientSideCache {
 	protoCache := &protobuf.ClientSideCache{
-		CacheId:       c.cacheId,
-		MaxCacheKb:    c.MaxCacheKb,
-		EntryTtlMs:    c.EntryTtlMs,
-		EnableMetrics: c.EnableMetrics,
+		CacheId:        c.cacheId,
+		MaxCacheKb:     c.MaxCacheKb,
+		EntryTtlMs:     c.EntryTtlMs,
+		EnableMetrics:  c.EnableMetrics,
+		ServerAssisted: c.ServerAssisted,
 	}
 
 	if c.EvictionPolicy != nil {

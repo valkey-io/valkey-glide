@@ -10867,3 +10867,24 @@ func (client *baseClient) AclWhoAmI(ctx context.Context) (string, error) {
 	}
 	return handleStringResponse(result)
 }
+
+// ClientTrackingInfo returns information about the current client connection's tracking state.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A map of tracking info.
+//
+// [valkey.io]: https://valkey.io/commands/client-trackinginfo/
+func (client *baseClient) ClientTrackingInfo(ctx context.Context) (map[string]interface{}, error) {
+	result, err := client.executeCommand(ctx, C.ClientTrackingInfo, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToAnyMapResponse(result)
+}

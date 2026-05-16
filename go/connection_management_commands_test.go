@@ -80,3 +80,15 @@ func ExampleClient_ClientGetName() {
 
 	// Output: true
 }
+
+func ExampleClient_ClientTrackingInfo() {
+	var client *Client = getExampleClient() // example helper function
+	result, err := client.ClientTrackingInfo(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	_, ok := result["flags"]
+	fmt.Println(ok)
+
+	// Output: true
+}

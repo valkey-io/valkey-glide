@@ -138,3 +138,27 @@ func ExampleClusterClient_ClientGetNameWithOptions() {
 
 	// Output: true
 }
+
+func ExampleClusterClient_ClientTrackingInfo() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	result, err := client.ClientTrackingInfo(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	_, ok := result["flags"]
+	fmt.Println(ok)
+
+	// Output: true
+}
+
+func ExampleClusterClient_ClientTrackingInfoWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	opts := options.RouteOption{Route: nil}
+	result, err := client.ClientTrackingInfoWithOptions(context.Background(), opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result.IsSingleValue())
+
+	// Output: true
+}

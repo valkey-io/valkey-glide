@@ -1412,6 +1412,33 @@ func handleRawStringArrayMapResponse(response *C.struct_CommandResponse) (map[st
 	return mapResult, nil
 }
 
+func handleMapOfStringAnyMapResponse(response *C.struct_CommandResponse) (map[string]map[string]any, error) {
+	defer C.free_command_response(response)
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	data, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	outer, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type received: %T", data)
+	}
+	result := make(map[string]map[string]any, len(outer))
+	for k, v := range outer {
+		inner, ok := v.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected value type for key %s: %T", k, v)
+		}
+		result[k] = inner
+	}
+	return result, nil
+}
+
 func handleMapOfStringMapResponse(response *C.struct_CommandResponse) (map[string]map[string]string, error) {
 	defer C.free_command_response(response)
 	typeErr := checkResponseType(response, C.Map, false)

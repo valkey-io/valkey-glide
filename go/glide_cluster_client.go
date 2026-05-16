@@ -1295,6 +1295,40 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 	return models.CreateClusterSingleValue[models.Result[string]](data), nil
 }
 
+// Returns information about the current client connection's tracking state.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A ClusterValue containing the tracking info map.
+//
+// [valkey.io]: https://valkey.io/commands/client-trackinginfo/
+func (client *ClusterClient) ClientTrackingInfoWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[map[string]interface{}], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.ClientTrackingInfo, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]interface{}](), err
+	}
+	if opts.Route != nil && (opts.Route).IsMultiNode() {
+		data, err := handleMapOfStringAnyMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[map[string]interface{}](), err
+		}
+		return models.CreateClusterMultiValue[map[string]interface{}](data), nil
+	}
+	data, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]interface{}](), err
+	}
+	return models.CreateClusterSingleValue[map[string]interface{}](data), nil
+}
+
 // Rewrites the configuration file with the current configuration.
 // The command will be routed a random node.
 //

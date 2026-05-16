@@ -7307,6 +7307,19 @@ func (b *BaseBatch[T]) ClientGetName() *T {
 	return b.addCmdAndTypeChecker(C.ClientGetName, []string{}, reflect.String, true)
 }
 
+// Returns information about the current client connection's tracking state.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A map of tracking info.
+//
+// [valkey.io]: https://valkey.io/commands/client-trackinginfo/
+func (b *BaseBatch[T]) ClientTrackingInfo() *T {
+	return b.addCmdAndTypeChecker(C.ClientTrackingInfo, []string{}, reflect.Map, false)
+}
+
 // Sets the name of the current connection.
 //
 // See [valkey.io] for details.
