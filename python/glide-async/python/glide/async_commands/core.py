@@ -8218,3 +8218,9 @@ class CoreCommands(Protocol):
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = (list(patterns) if patterns else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.PUnsubscribeBlocking, list(args))
+
+    async def client_trackinginfo(self) -> dict:
+        """Return info about server-assisted client-side caching. See https://valkey.io/commands/client-trackinginfo/"""
+        return cast(
+            dict, await self._execute_command(RequestType.ClientTrackingInfo, [])
+        )

@@ -904,6 +904,9 @@ class BaseClientConfiguration:
             request.client_side_cache.eviction_policy = (
                 self.client_side_cache.eviction_policy.value
             )
+        request.client_side_cache.server_assisted = (
+            self.client_side_cache.server_assisted
+        )
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False

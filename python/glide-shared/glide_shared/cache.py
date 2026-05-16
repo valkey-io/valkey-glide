@@ -53,6 +53,7 @@ class ClientSideCache:
     entry_ttl_ms: int
     eviction_policy: Optional[EvictionPolicy] = None
     enable_metrics: bool = False
+    server_assisted: bool = False
 
     @classmethod
     def create(

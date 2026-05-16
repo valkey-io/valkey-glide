@@ -1606,3 +1606,12 @@ class ClusterCommands(CoreCommands):
             raise ValueError(f"Timeout must be non-negative, got: {timeout_ms}")
         args = (list(channels) if channels else []) + [str(timeout_ms)]
         await self._execute_command(RequestType.SUnsubscribeBlocking, list(args))
+
+    async def client_trackinginfo(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[dict]:
+        """Return info about server-assisted client-side caching. See https://valkey.io/commands/client-trackinginfo/"""
+        return cast(
+            TClusterResponse[dict],
+            await self._execute_command(RequestType.ClientTrackingInfo, [], route),
+        )

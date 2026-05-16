@@ -8059,3 +8059,7 @@ class CoreCommands(Protocol):
             (list(patterns) if patterns else []) + [str(timeout_ms)],
         )
         self._execute_command(RequestType.PUnsubscribeBlocking, args)
+
+    def client_trackinginfo(self) -> dict:
+        """Return info about server-assisted client-side caching. See https://valkey.io/commands/client-trackinginfo/"""
+        return cast(dict, self._execute_command(RequestType.ClientTrackingInfo, []))

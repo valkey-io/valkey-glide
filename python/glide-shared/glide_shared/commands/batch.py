@@ -819,6 +819,16 @@ class BaseBatch:
         """
         return self.append_command(RequestType.ClientGetName, [])
 
+    def client_trackinginfo(self: TBatch) -> TBatch:
+        """
+        Return info about server-assisted client-side caching.
+        See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
+
+        Command response:
+            dict: A dictionary of tracking info.
+        """
+        return self.append_command(RequestType.ClientTrackingInfo, [])
+
     def hgetall(self: TBatch, key: TEncodable) -> TBatch:
         """
         Returns all fields and values of the hash stored at `key`.

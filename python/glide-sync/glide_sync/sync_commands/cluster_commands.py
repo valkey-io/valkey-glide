@@ -1547,3 +1547,12 @@ class ClusterCommands(CoreCommands):
             (list(channels) if channels else []) + [str(timeout_ms)],
         )
         self._execute_command(RequestType.SUnsubscribeBlocking, args)
+
+    def client_trackinginfo(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[dict]:
+        """Return info about server-assisted client-side caching. See https://valkey.io/commands/client-trackinginfo/"""
+        return cast(
+            TClusterResponse[dict],
+            self._execute_command(RequestType.ClientTrackingInfo, [], route),
+        )
