@@ -5,6 +5,7 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -373,4 +374,30 @@ public interface ConnectionManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> reset();
+
+    /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
+     * @return A map of tracking info.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object> info = client.clientTrackingInfo().get();
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> clientTrackingInfo();
+
+    /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command.
+     * @return A {@link ClusterValue} which holds a single value if single node route is used or a
+     *     dictionary where each address is the key and its corresponding node response is the value.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>> info = client.clientTrackingInfo(ALL_NODES).get();
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Object>>> clientTrackingInfo(Route route);
 }

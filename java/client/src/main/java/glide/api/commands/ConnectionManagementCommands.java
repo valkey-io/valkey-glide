@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.ClientPauseMode;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -193,4 +194,16 @@ public interface ConnectionManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> reset();
+
+    /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
+     * @return A map of tracking info.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object> info = client.clientTrackingInfo().get();
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> clientTrackingInfo();
 }

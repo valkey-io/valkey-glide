@@ -27,6 +27,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitField;
 import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.Copy;
 import static command_request.CommandRequestOuterClass.RequestType.Decr;
 import static command_request.CommandRequestOuterClass.RequestType.DecrBy;
@@ -1241,6 +1242,21 @@ public abstract class BaseClient
      */
     public CompletableFuture<Long> getCacheTotalLookups() {
         return getCacheMetrics(CacheMetricsType.TotalLookups).thenApply(result -> (Long) result);
+    }
+
+    /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
+     * @return A map of tracking info.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object> info = client.clientTrackingInfo().get();
+     * }</pre>
+     */
+    public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, new String[0], this::handleMapResponse);
     }
 
     @Override

@@ -469,6 +469,7 @@ public class ConnectionManager {
                             cacheBuilder.setCacheId(clientSideCache.getCacheId());
                             cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
                             cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+                            cacheBuilder.setServerAssisted(clientSideCache.isServerAssisted());
 
                             // Set TTL (0 = no expiration)
                             cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
