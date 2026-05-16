@@ -29,6 +29,21 @@ const TIMEOUT = 50000;
 const CLEANUP_TIMEOUT = 10000;
 
 describe("ClientSideCache", () => {
+    it("ClientSideCache with serverAssisted", () => {
+        const cache = new ClientSideCache({
+            maxCacheKb: 1024,
+            entryTtlMs: 0,
+            serverAssisted: true,
+        });
+        expect(cache.serverAssisted).toBe(true);
+
+        const cacheDefault = new ClientSideCache({
+            maxCacheKb: 1024,
+            entryTtlMs: 0,
+        });
+        expect(cacheDefault.serverAssisted).toBe(false);
+    });
+
     let standaloneCluster: ValkeyCluster;
     let clusterCluster: ValkeyCluster;
 

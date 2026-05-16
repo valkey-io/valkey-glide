@@ -431,6 +431,13 @@ export function createClientId(): command_request.Command {
 /**
  * @internal
  */
+export function createClientTrackingInfo(): command_request.Command {
+    return createCommand(RequestType.ClientTrackingInfo, []);
+}
+
+/**
+ * @internal
+ */
 export function createConfigGet(parameters: string[]): command_request.Command {
     return createCommand(RequestType.ConfigGet, parameters);
 }

@@ -33,6 +33,12 @@ export interface ClientSideCacheConfig {
      * Defaults to false if not specified.
      */
     enableMetrics?: boolean;
+
+    /**
+     * Whether to use server-assisted (invalidation-based) caching mode.
+     * Defaults to false if not specified.
+     */
+    serverAssisted?: boolean;
 }
 
 /**
@@ -48,6 +54,11 @@ export interface ClientSideCacheOptions {
      * Whether to enable metrics collection for this cache.
      */
     enableMetrics?: boolean;
+
+    /**
+     * Whether to use server-assisted (invalidation-based) caching mode.
+     */
+    serverAssisted?: boolean;
 }
 
 /**
@@ -100,6 +111,11 @@ export class ClientSideCache {
     readonly enableMetrics: boolean;
 
     /**
+     * Whether server-assisted caching mode is enabled.
+     */
+    readonly serverAssisted: boolean;
+
+    /**
      * Creates a new ClientSideCache instance.
      *
      * @param config - Configuration options for the cache
@@ -122,6 +138,7 @@ export class ClientSideCache {
         this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;
         this.enableMetrics = config.enableMetrics ?? false;
+        this.serverAssisted = config.serverAssisted ?? false;
     }
 
     /**
@@ -156,6 +173,7 @@ export class ClientSideCache {
             entryTtlMs,
             evictionPolicy: options?.evictionPolicy,
             enableMetrics: options?.enableMetrics,
+            serverAssisted: options?.serverAssisted,
         });
     }
 }

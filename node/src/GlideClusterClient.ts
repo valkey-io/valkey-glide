@@ -34,6 +34,7 @@ import {
     LolwutOptions,
     createClientGetName,
     createClientId,
+    createClientTrackingInfo,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -1061,6 +1062,26 @@ export class GlideClusterClient extends BaseClient {
             createClientGetName(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+    }
+
+    /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     *
+     * @returns A map of tracking info. When specifying a route other than a single node,
+     *     it returns a dictionary where each address is the key and its corresponding node response is the value.
+     */
+    public async clientTrackingInfo(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<Record<string, unknown>>> {
+        return this.createWritePromise<
+            ClusterGlideRecord<Record<string, unknown>>
+        >(createClientTrackingInfo(), options).then((res) =>
+            convertClusterGlideRecord(res, true, options?.route),
+        );
     }
 
     /**

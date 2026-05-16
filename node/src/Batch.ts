@@ -89,6 +89,7 @@ import {
     createBitPos,
     createClientGetName,
     createClientId,
+    createClientTrackingInfo,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -556,6 +557,15 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public clientGetName(): T {
         return this.addAndReturn(createClientGetName());
+    }
+
+    /** Returns information about the current client connection's tracking state.
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * Command Response - A map of tracking info.
+     */
+    public clientTrackingInfo(): T {
+        return this.addAndReturn(createClientTrackingInfo());
     }
 
     /**

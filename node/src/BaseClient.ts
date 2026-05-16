@@ -99,6 +99,7 @@ import {
     createBitField,
     createBitOp,
     createBitPos,
+    createClientTrackingInfo,
     createCopy,
     createDecr,
     createDecrBy,
@@ -9320,6 +9321,17 @@ export class BaseClient {
     }
 
     /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * @returns A map of tracking info.
+     */
+    public async clientTrackingInfo(): Promise<Record<string, unknown>> {
+        return this.createWritePromise(createClientTrackingInfo());
+    }
+
+    /**
      * @internal
      */
     protected createClientRequest(
@@ -9402,6 +9414,7 @@ export class BaseClient {
                 entryTtlMs: cache.entryTtlMs,
                 evictionPolicy: cache.evictionPolicy,
                 enableMetrics: cache.enableMetrics,
+                serverAssisted: cache.serverAssisted,
             });
         }
 
