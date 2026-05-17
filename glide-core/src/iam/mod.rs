@@ -113,10 +113,20 @@ async fn get_signing_identity(
     region: &str,
     service_type: ServiceType,
 ) -> Result<aws_credential_types::Credentials, GlideIAMError> {
-    let config = aws_config::defaults(BehaviorVersion::latest())
-        .region(aws_config::Region::new(region.to_string()))
-        .load()
-        .await;
+    let mut loader = aws_config::defaults(BehaviorVersion::latest())
+        .region(aws_config::Region::new(region.to_string()));
+
+    // Honor AWS_ENDPOINT_URL_STS for credential acquisition (matches boto3).
+    // `.use_fips(false)` is also required because under AWS_USE_FIPS_ENDPOINT=true
+    // the SDK endpoint resolver rejects user URLs not on its FIPS list. Scoped
+    // to this loader; SigV4 presigning is unaffected. See valkey-io/valkey-glide#5967.
+    if let Ok(sts_endpoint) = std::env::var("AWS_ENDPOINT_URL_STS")
+        && !sts_endpoint.is_empty()
+    {
+        loader = loader.use_fips(false).endpoint_url(sts_endpoint);
+    }
+
+    let config = loader.load().await;
 
     let provider = config.credentials_provider().ok_or_else(|| {
         GlideIAMError::CredentialsError("No AWS credentials provider found".into())
@@ -1004,5 +1014,67 @@ mod tests {
         }
 
         // Stop the refresh task
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_get_signing_identity_honors_aws_endpoint_url_sts() {
+        initialize_test_environment();
+        setup_test_credentials();
+
+        let cluster_name = "test-cluster".to_string();
+        let username = "test-user".to_string();
+        let region = "us-gov-west-1".to_string();
+
+        // A populated AWS_ENDPOINT_URL_STS override must not break credential
+        // acquisition when static credentials are available.
+        unsafe {
+            env::set_var(
+                "AWS_ENDPOINT_URL_STS",
+                "https://sts.us-gov-west-1.amazonaws.com",
+            );
+        }
+
+        let with_override = IAMTokenManager::new(
+            cluster_name.clone(),
+            username.clone(),
+            region.clone(),
+            ServiceType::ElastiCache,
+            None,
+        )
+        .await;
+        assert!(
+            with_override.is_ok(),
+            "IAMTokenManager creation should succeed when AWS_ENDPOINT_URL_STS is set: {:?}",
+            with_override.err(),
+        );
+        let token = with_override.unwrap().get_token().await;
+        assert!(
+            token.starts_with(&format!("{}/", cluster_name)),
+            "token should be generated with override set"
+        );
+
+        // An empty AWS_ENDPOINT_URL_STS must be treated as unset (the override
+        // is guarded by `!sts_endpoint.is_empty()`).
+        unsafe {
+            env::set_var("AWS_ENDPOINT_URL_STS", "");
+        }
+        let with_empty = IAMTokenManager::new(
+            cluster_name.clone(),
+            username.clone(),
+            region.clone(),
+            ServiceType::ElastiCache,
+            None,
+        )
+        .await;
+        assert!(
+            with_empty.is_ok(),
+            "IAMTokenManager creation should succeed when AWS_ENDPOINT_URL_STS is empty: {:?}",
+            with_empty.err(),
+        );
+
+        unsafe {
+            env::remove_var("AWS_ENDPOINT_URL_STS");
+        }
     }
 }
