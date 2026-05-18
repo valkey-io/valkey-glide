@@ -95,7 +95,7 @@
         "lint-staged": "16",
         "jest": "29",
         "jest-html-reporter": "4",
-        "protobufjs-cli": "1",
+        "protobufjs-cli": "2",
         "replace": "1",
         "semver": "7",
         "ts-jest": "29",
