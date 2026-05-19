@@ -2,5 +2,5 @@
 # Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, this file can be removed.
 anyio>=4.9.0
 typing-extensions>=4.8.0
-protobuf>=3.20
+protobuf>=6.33.6
 sniffio
