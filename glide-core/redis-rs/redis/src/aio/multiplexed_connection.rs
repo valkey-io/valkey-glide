@@ -1,6 +1,7 @@
 use super::{ConnectionLike, Runtime};
 use crate::aio::setup_connection;
 use crate::aio::DisconnectNotifier;
+use crate::cache::glide_cache::GlideCache;
 use crate::client::GlideConnectionOptions;
 use crate::cmd::Cmd;
 #[cfg(feature = "tokio-comp")]
@@ -366,11 +367,27 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
-        match ready!(self.as_mut().project().sink_stream.poll_ready(cx)) {
-            Ok(()) => Ok(()).into(),
-            Err(err) => {
+        match self.as_mut().project().sink_stream.poll_ready(cx) {
+            Poll::Ready(Ok(())) => Ok(()).into(),
+            Poll::Ready(Err(err)) => {
                 *self.project().error = Some(err);
                 Ok(()).into()
+            }
+            Poll::Pending => {
+                // Write side is blocked (TCP send buffer full). Drain incoming
+                // responses so the server can free its send buffer and unblock
+                // our writes. Without this, a TCP deadlock occurs with large
+                // payloads. See https://github.com/redis-rs/redis-rs/issues/1955.
+                //
+                // Note: upstream redis-rs calls poll_read unconditionally at the
+                // top (before checking poll_ready). We only call it in the Pending
+                // path because unconditional poll_read registers the read waker,
+                // causing spurious wakeups that starve concurrent request
+                // processing and exhaust the inflight request limit.
+                if matches!(self.as_mut().poll_read(cx), Poll::Ready(Err(()))) {
+                    return Poll::Ready(Err(()));
+                }
+                Poll::Pending
             }
         }
     }
@@ -433,15 +450,34 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut task::Context,
     ) -> Poll<Result<(), Self::Error>> {
-        ready!(self
+        let flush_result = self
             .as_mut()
             .project()
             .sink_stream
             .poll_flush(cx)
             .map_err(|err| {
                 self.as_mut().send_result(Err(err));
-            }))?;
-        self.poll_read(cx)
+            })?;
+        if flush_result.is_ready() {
+            self.poll_read(cx)
+        } else {
+            // Flush is blocked (TCP send buffer full). Drain incoming responses
+            // so the server can free its send buffer and unblock our writes.
+            // Without this, a TCP deadlock occurs with large payloads.
+            // See https://github.com/redis-rs/redis-rs/issues/1955.
+            //
+            // Note: upstream redis-rs calls poll_read unconditionally at the top
+            // and removes the ready!/poll_read-after-flush pattern. We keep
+            // poll_read only in the Pending path (and retain the post-flush
+            // poll_read for throughput) because unconditional poll_read registers
+            // the read waker on every call, causing spurious wakeups that starve
+            // concurrent request processing and exhaust the inflight request
+            // limit unique to valkey-glide.
+            if matches!(self.as_mut().poll_read(cx), Poll::Ready(Err(()))) {
+                return Poll::Ready(Err(()));
+            }
+            Poll::Pending
+        }
     }
 
     fn poll_close(
@@ -521,26 +557,68 @@ where
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
-        self.sender
-            .send(PipelineMessage {
+        // Timeout on pipeline send to detect dead connections. The pipeline channel
+        // is bounded (50 slots). Under normal operation, a slot frees in microseconds.
+        // Defaults to 100ms unless request_timeout is shorter, with a minimum of 1ms.
+        let send_timeout = std::cmp::max(
+            std::cmp::min(timeout, std::time::Duration::from_millis(100)),
+            std::time::Duration::from_millis(1),
+        );
+        let send_start = std::time::Instant::now();
+        match tokio::time::timeout(
+            send_timeout,
+            self.sender.send(PipelineMessage {
                 input,
                 pipeline_response_count,
                 output: sender,
                 is_transaction: is_atomic,
                 is_fenced,
-            })
-            .await
-            .map_err(|err| {
-                // If an error occurs here, it means the request never reached the server, as guaranteed
-                // by the 'send' function. Since the server did not receive the data, it is safe to retry
-                // the request.
-                RedisError::from((
+            }),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                return Err(RedisError::from((
                     crate::ErrorKind::FatalSendError,
                     "Failed to send the request to the server",
                     err.to_string(),
-                ))
-            })?;
-        match Runtime::locate().timeout(timeout, receiver).await {
+                )));
+            }
+            Err(_elapsed) => {
+                return Err(RedisError::from((
+                    crate::ErrorKind::FatalSendError,
+                    "Pipeline channel full — connection likely dead",
+                )));
+            }
+        }
+        let send_elapsed = send_start.elapsed();
+        let send_warn_threshold = std::cmp::min(timeout / 4, std::time::Duration::from_millis(500));
+        if send_elapsed > send_warn_threshold {
+            logger_core::log_warn_rate_limited!(
+                "pipeline",
+                5,
+                format!(
+                    "pipeline.send() blocked for {:?} (threshold={:?}, response_timeout={:?}, channel capacity=50)",
+                    send_elapsed, send_warn_threshold, timeout
+                )
+            );
+        }
+        let recv_start = std::time::Instant::now();
+        let recv_result = Runtime::locate().timeout(timeout, receiver).await;
+        let recv_elapsed = recv_start.elapsed();
+        let recv_warn_threshold = std::cmp::min(timeout / 2, std::time::Duration::from_secs(5));
+        if recv_elapsed > recv_warn_threshold {
+            logger_core::log_warn_rate_limited!(
+                "pipeline",
+                5,
+                format!(
+                    "Response wait took {:?} (threshold={:?}, response_timeout={:?})",
+                    recv_elapsed, recv_warn_threshold, timeout
+                )
+            );
+        }
+        match recv_result {
             Ok(Ok(result)) => result,
             Ok(Err(err)) => {
                 // The `sender` was dropped, likely indicating a failure in the stream.
@@ -578,6 +656,7 @@ pub struct MultiplexedConnection {
     push_manager: PushManager,
     availability_zone: Option<String>,
     password: Option<String>,
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl Debug for MultiplexedConnection {
@@ -641,6 +720,7 @@ impl MultiplexedConnection {
             .with_protocol(connection_info.redis.protocol)
             .with_password(connection_info.redis.password.clone())
             .with_availability_zone(None)
+            .with_cache(connection_info.redis.cache.clone())
             .build()
             .await?;
 
@@ -678,13 +758,16 @@ impl MultiplexedConnection {
     /// Sends an already encoded (packed) command into the TCP socket and
     /// reads the single response from it.
     pub async fn send_packed_command(&mut self, cmd: &Cmd) -> RedisResult<Value> {
+        // First try to get from cache
+        if let Some(cache) = &self.cache {
+            if let Some(value) = cache.get_cached_cmd(cmd) {
+                return Ok(value);
+            }
+        }
+        let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
-            .send_single(
-                cmd.get_packed_command(),
-                self.response_timeout,
-                cmd.is_fenced(),
-            )
+            .send_single(cmd.get_packed_command(), timeout, cmd.is_fenced())
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
@@ -694,6 +777,15 @@ impl MultiplexedConnection {
                         kind: PushKind::Disconnection,
                         data: vec![],
                     });
+                }
+            }
+        }
+
+        // Store in cache if applicable
+        if let Some(cache) = &self.cache {
+            if let Ok(value) = &result {
+                if *value != Value::Nil {
+                    cache.set_cached_cmd(cmd, value.clone());
                 }
             }
         }
@@ -786,6 +878,8 @@ pub struct MultiplexedConnectionBuilder {
     password: Option<String>,
     /// Represents the node's availability zone
     availability_zone: Option<String>,
+    /// Client-side cache
+    cache: Option<Arc<dyn GlideCache>>,
 }
 
 impl MultiplexedConnectionBuilder {
@@ -799,6 +893,7 @@ impl MultiplexedConnectionBuilder {
             protocol: None,
             password: None,
             availability_zone: None,
+            cache: None,
         }
     }
 
@@ -838,6 +933,12 @@ impl MultiplexedConnectionBuilder {
         self
     }
 
+    /// Sets the cache for the `MultiplexedConnectionBuilder`.
+    pub fn with_cache(mut self, cache: Option<Arc<dyn GlideCache>>) -> Self {
+        self.cache = cache;
+        self
+    }
+
     /// Builds and returns a new `MultiplexedConnection` instance using the configured settings.
     pub async fn build(self) -> RedisResult<MultiplexedConnection> {
         let db = self.db.unwrap_or_default();
@@ -856,6 +957,7 @@ impl MultiplexedConnectionBuilder {
             protocol,
             password,
             availability_zone: self.availability_zone,
+            cache: self.cache,
         };
 
         Ok(con)
@@ -959,5 +1061,320 @@ impl MultiplexedConnection {
     /// Returns `PushManager` of Connection, this method is used to subscribe/unsubscribe from Push types
     pub fn get_push_manager(&self) -> PushManager {
         self.push_manager.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::channel::mpsc as futures_mpsc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::task::{Context, Poll};
+    use std::time::Duration;
+
+    /// A Sink+Stream where poll_ready/poll_flush return Pending when stall flag is set,
+    /// simulating a dead TCP connection where the send buffer is full.
+    struct StallingSink {
+        stall: Arc<AtomicBool>,
+        inner_tx: futures_mpsc::Sender<Vec<u8>>,
+        inner_rx: futures_mpsc::Receiver<RedisResult<Value>>,
+    }
+
+    impl Stream for StallingSink {
+        type Item = RedisResult<Value>;
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Pin::new(&mut self.inner_rx).poll_next(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for StallingSink {
+        type Error = RedisError;
+
+        fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            if self.stall.load(Ordering::Relaxed) {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.get_mut().inner_tx)
+                .poll_ready(cx)
+                .map_err(|e| {
+                    RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+                })
+        }
+
+        fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+            Pin::new(&mut self.inner_tx).start_send(item).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.stall.load(Ordering::Relaxed) {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.inner_tx).poll_flush(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_close(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Pin::new(&mut self.inner_tx).poll_close(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_pipeline_send_timeout_when_sink_stalls() {
+        // Test for #5715: Pipeline send blocks forever on dead shard
+        // See: https://github.com/valkey-io/valkey-glide/issues/5715
+        //
+        // When a TCP connection becomes half-open (e.g., network partition without RST),
+        // the send buffer fills and AsyncWrite::poll_write blocks indefinitely. This
+        // causes the pipeline's internal 50-slot channel to fill, and any subsequent
+        // send() call blocks forever waiting for a slot.
+        //
+        // The adaptive send timeout (min(timeout, 100ms), floor 1ms) wraps the channel
+        // send, so it fails with FatalSendError instead of hanging. This test verifies
+        // that behavior by creating a pipeline with no driver (never drains), filling
+        // the channel, and asserting the next send completes within the timeout.
+
+        let stall_flag = Arc::new(AtomicBool::new(false));
+        let (sink_tx, _sink_rx) = futures_mpsc::channel(100);
+        let (_resp_tx, resp_rx) = futures_mpsc::channel(100);
+
+        let stalling_sink = StallingSink {
+            stall: stall_flag.clone(),
+            inner_tx: sink_tx,
+            inner_rx: resp_rx,
+        };
+
+        // Create pipeline but don't drive it, the channel will fill and send() will block
+        let (mut pipeline, driver) = Pipeline::new(stalling_sink, None);
+        std::mem::forget(driver);
+
+        // Fill the 50-slot pipeline channel
+        for _ in 0..50 {
+            let mut pipeline_clone = pipeline.clone();
+            tokio::spawn(async move {
+                let _ = pipeline_clone
+                    .send_single(
+                        crate::cmd("PING").get_packed_command(),
+                        Duration::from_secs(60),
+                        false,
+                    )
+                    .await;
+            });
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Next send should hit the send timeout  instead of blocking forever
+        let timeout = Duration::from_millis(200);
+        let start = std::time::Instant::now();
+        let result = pipeline
+            .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+            .await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "Expected error when sink is stalled");
+        let err = result.unwrap_err();
+        assert!(
+            err.kind() == crate::ErrorKind::FatalSendError
+                || err.kind() == crate::ErrorKind::IoError,
+            "Expected FatalSendError or IoError, got: {:?}",
+            err.kind()
+        );
+        assert!(
+            elapsed < Duration::from_millis(200),
+            "Send took {:?}, expected < 200ms (send_timeout = 100ms). \
+             Without the fix, this hangs forever.",
+            elapsed,
+        );
+    }
+
+    /// A Sink+Stream that simulates the TCP deadlock condition:
+    /// - The write side (poll_ready/poll_flush) returns Pending (simulating full TCP send buffer)
+    /// - The read side (poll_next) has responses available that must be drained
+    ///
+    /// If poll_read is NOT called during poll_ready/poll_flush, the responses will never
+    /// be delivered to the caller, causing a deadlock.
+    struct DeadlockProneStream {
+        /// When true, poll_ready and poll_flush return Pending (simulating TCP backpressure)
+        write_blocked: Arc<AtomicBool>,
+        /// Channel for sending bytes (the write/sink side)
+        inner_tx: futures_mpsc::Sender<Vec<u8>>,
+        /// Channel for receiving responses (the read/stream side)
+        inner_rx: futures_mpsc::Receiver<RedisResult<Value>>,
+        /// Waker storage so we can wake the task when unblocking
+        waker: Option<task::Waker>,
+    }
+
+    impl Stream for DeadlockProneStream {
+        type Item = RedisResult<Value>;
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Pin::new(&mut self.inner_rx).poll_next(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for DeadlockProneStream {
+        type Error = RedisError;
+
+        fn poll_ready(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.write_blocked.load(Ordering::SeqCst) {
+                // Store waker so we can be woken when unblocked
+                self.waker = Some(cx.waker().clone());
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.get_mut().inner_tx)
+                .poll_ready(cx)
+                .map_err(|e| {
+                    RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+                })
+        }
+
+        fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+            Pin::new(&mut self.inner_tx).start_send(item).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_flush(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.write_blocked.load(Ordering::SeqCst) {
+                self.waker = Some(cx.waker().clone());
+                return Poll::Pending;
+            }
+            Pin::new(&mut self.inner_tx).poll_flush(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+
+        fn poll_close(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Pin::new(&mut self.inner_tx).poll_close(cx).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "sink error", e.to_string()))
+            })
+        }
+    }
+
+    /// Reproduces the TCP deadlock from https://github.com/redis-rs/redis-rs/issues/1955
+    ///
+    /// Scenario:
+    /// 1. Client sends command #1 (GET) — goes through fine
+    /// 2. Server queues response for command #1
+    /// 3. Client sends command #2 (large SET) — write side becomes blocked (TCP backpressure)
+    /// 4. BUG: poll_ready returns Pending without calling poll_read
+    ///    → response for command #1 is never delivered
+    ///    → command #1's caller hangs forever
+    ///
+    /// With the fix: poll_ready calls poll_read before blocking, so the response
+    /// for command #1 is delivered even while the write side is blocked.
+    #[tokio::test]
+    async fn test_tcp_deadlock_read_blocked_by_write() {
+        let write_blocked = Arc::new(AtomicBool::new(false));
+        let (sink_tx, _sink_rx) = futures_mpsc::channel::<Vec<u8>>(100);
+        let (mut resp_tx, resp_rx) = futures_mpsc::channel::<RedisResult<Value>>(100);
+
+        let stream = DeadlockProneStream {
+            write_blocked: write_blocked.clone(),
+            inner_tx: sink_tx,
+            inner_rx: resp_rx,
+            waker: None,
+        };
+
+        let (pipeline, driver) = Pipeline::new(stream, None);
+        let driver_handle = tokio::spawn(driver);
+
+        // Send first command — this should go through fine
+        let mut pipeline1 = pipeline.clone();
+        let cmd1_handle = tokio::spawn(async move {
+            pipeline1
+                .send_single(
+                    crate::cmd("GET").arg("key1").get_packed_command(),
+                    Duration::from_secs(5),
+                    false,
+                )
+                .await
+        });
+
+        // Give the driver time to process the send
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Now block the write side — simulating TCP send buffer full
+        write_blocked.store(true, Ordering::SeqCst);
+
+        // Send second command — this will block in poll_ready because write is blocked
+        let mut pipeline2 = pipeline.clone();
+        let cmd2_handle = tokio::spawn(async move {
+            pipeline2
+                .send_single(
+                    crate::cmd("SET")
+                        .arg("key2")
+                        .arg("value")
+                        .get_packed_command(),
+                    Duration::from_secs(5),
+                    false,
+                )
+                .await
+        });
+
+        // Give the driver time to attempt the second send and get blocked
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Now inject the response for command #1 on the read side.
+        // If poll_read is called during poll_ready (the fix), this response will be
+        // delivered to cmd1_handle. If not (the bug), cmd1_handle will hang.
+        resp_tx
+            .try_send(Ok(Value::BulkString(b"response1".to_vec())))
+            .expect("Failed to inject response");
+
+        // Wait for command #1 to complete — with the bug, this times out
+        let result = tokio::time::timeout(Duration::from_secs(2), cmd1_handle).await;
+
+        // Cleanup
+        write_blocked.store(false, Ordering::SeqCst);
+        driver_handle.abort();
+        cmd2_handle.abort();
+
+        match result {
+            Ok(Ok(Ok(value))) => {
+                assert_eq!(value, Value::BulkString(b"response1".to_vec()));
+            }
+            Ok(Ok(Err(e))) => {
+                panic!("Command 1 returned error: {:?}", e);
+            }
+            Ok(Err(e)) => {
+                panic!("Command 1 task panicked: {:?}", e);
+            }
+            Err(_) => {
+                panic!(
+                    "TEST FAILED: TCP deadlock detected!\n\
+                     Command #1's response was available on the read side, but the \
+                     multiplexer never delivered it because poll_ready/poll_flush blocked \
+                     on the write side without calling poll_read first.\n\
+                     \n\
+                     Fix: Call self.poll_read(cx) at the beginning of poll_ready() and \
+                     poll_flush() before checking the write side, so responses are always \
+                     drained even when writes are blocked.\n\
+                     \n\
+                     See: https://github.com/redis-rs/redis-rs/issues/1955\n\
+                     Fix: https://github.com/redis-rs/redis-rs/pull/2070"
+                );
+            }
+        }
     }
 }

@@ -4,6 +4,7 @@ package glide.managers;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.UnsafeByteOperations;
 import command_request.CommandRequestOuterClass;
+import command_request.CommandRequestOuterClass.CacheMetricsType;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.CommandRequest;
@@ -42,7 +43,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -50,7 +50,6 @@ import response.ResponseOuterClass.Response;
  * CommandManager that submits command requests directly to the Rust glide-core. Handles command
  * serialization, routing, and response processing for all client operations.
  */
-@RequiredArgsConstructor
 public class CommandManager {
 
     private static final Set<String> BLOCKING_COMMAND_NAMES =
@@ -71,6 +70,10 @@ public class CommandManager {
 
     /** Core client connection. */
     private final GlideCoreClient coreClient;
+
+    public CommandManager(GlideCoreClient coreClient) {
+        this.coreClient = coreClient;
+    }
 
     /**
      * Apply a response handler with cleanup on exception. If the handler throws, the stored object in
@@ -666,6 +669,26 @@ public class CommandManager {
                                 responseBuilder.setConstantResponse(ConstantResponse.OK);
                             }
                             return responseHandler.apply(responseBuilder.build());
+                        });
+    }
+
+    /** Submit a cache metrics request to GLIDE core. */
+    public <T> CompletableFuture<T> submitGetCacheMetrics(
+            CacheMetricsType metricsType, GlideExceptionCheckedFunction<Response, T> responseHandler) {
+
+        return coreClient
+                .getCacheMetrics(metricsType)
+                .thenApply(
+                        result -> {
+                            // Convert JNI result to protobuf Response format
+                            Response.Builder responseBuilder = Response.newBuilder();
+                            if (result != null) {
+                                long objectId = JniResponseRegistry.storeObject(result);
+                                responseBuilder.setRespPointer(objectId);
+                            } else {
+                                responseBuilder.setRespPointer(0L);
+                            }
+                            return applyHandlerWithCleanup(responseBuilder.build(), responseHandler);
                         });
     }
 

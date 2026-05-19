@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
 
+from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.exceptions import ConfigurationError
 from glide_shared.protobuf.connection_request_pb2 import (
@@ -16,6 +17,9 @@ from glide_shared.protobuf.connection_request_pb2 import (
 )
 from glide_shared.protobuf.connection_request_pb2 import (
     ConnectionRequest,
+)
+from glide_shared.protobuf.connection_request_pb2 import (
+    NodeDiscoveryMode as ProtobufNodeDiscoveryMode,
 )
 from glide_shared.protobuf.connection_request_pb2 import (
     ProtocolVersion as SentProtocolVersion,
@@ -38,6 +42,52 @@ class NodeAddress:
     def __init__(self, host: str = "localhost", port: int = 6379):
         self.host = host
         self.port = port
+
+
+class AddressResolver(Protocol):
+    """
+    A callback protocol for resolving server addresses before connection.
+
+    When provided to a client configuration, this callback is invoked for each
+    configured address during connection establishment and during cluster topology
+    refreshes. The callback receives the configured host and port, and should return
+    the actual host and port to use for the connection.
+
+    Use cases:
+        - Custom DNS resolution for service discovery
+        - Address translation for proxy setups
+        - Dynamic endpoint resolution for cloud environments
+
+    Note:
+        The resolver must be thread-safe and should avoid blocking operations,
+        as it may be called from multiple threads during connection and topology refresh.
+        If the resolver raises an exception, the original address will be used as a fallback.
+
+    Example::
+
+        def my_resolver(host: str, port: int) -> Tuple[str, int]:
+            # Custom resolution logic
+            resolved_host = my_dns_resolver.resolve(host)
+            return (resolved_host, port)
+
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("my-service", 6379)],
+            address_resolver=my_resolver,
+        )
+    """
+
+    def __call__(self, host: str, port: int) -> Tuple[str, int]:
+        """
+        Resolve the given host and port to the actual connection address.
+
+        Args:
+            host (str): The configured host name or IP address.
+            port (int): The configured port number.
+
+        Returns:
+            Tuple[str, int]: A tuple of (resolved_host, resolved_port) to use for connection.
+        """
+        ...
 
 
 class ReadFrom(Enum):
@@ -97,6 +147,30 @@ class CompressionBackend(Enum):
     LZ4 = ProtobufCompressionBackend.LZ4
     """
     Use lz4 compression backend.
+    """
+
+
+class NodeDiscoveryMode(Enum):
+    """
+    Controls how the client discovers node roles and topology in standalone mode.
+    """
+
+    STANDARD = ProtobufNodeDiscoveryMode.Standard
+    """
+    Default: verify node roles via INFO REPLICATION, use only provided addresses.
+    The client connects to all provided addresses and identifies which is the primary.
+    """
+    STATIC = ProtobufNodeDiscoveryMode.Static
+    """
+    Skip role detection entirely. Trust provided addresses as-is; first address is primary.
+    Use when connecting through a proxy (e.g., Envoy) or when the topology is known and static.
+
+    Note: Do not set ``client_name`` when using this mode with a proxy.
+    """
+    DISCOVER_ALL = ProtobufNodeDiscoveryMode.DiscoverAll
+    """
+    Discover full topology (primary + all replicas) from any starting node.
+    Provide any single node address and the client will find and connect to all other nodes.
     """
 
 
@@ -165,12 +239,16 @@ class CompressionConfiguration:
             ZSTD default is 3
             LZ4 default is 0
         min_compression_size (int): The minimum size in bytes for values to be compressed. Values smaller than this will not be compressed. Defaults to 64 bytes.
+        max_decompressed_size (Optional[int]): Maximum allowed size in bytes for decompressed data.
+            This limit prevents decompression bombs (maliciously crafted compressed data that expands to huge sizes).
+            If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
     """
 
     enabled: bool = False
     backend: CompressionBackend = CompressionBackend.ZSTD
     compression_level: Optional[int] = None
     min_compression_size: int = 64
+    max_decompressed_size: Optional[int] = None  # Use Rust default (512MB)
 
     def __post_init__(self) -> None:
         """Validate compression configuration parameters."""
@@ -188,6 +266,9 @@ class CompressionConfiguration:
             raise ConfigurationError(
                 f"min_compression_size should be at least {min_size} bytes"
             )
+
+        if self.max_decompressed_size is not None and self.max_decompressed_size <= 0:
+            raise ConfigurationError("max_decompressed_size must be positive if set")
 
         # Note: compression_level validation is performed by the Rust core,
         # which uses the actual compression library's valid ranges.
@@ -214,6 +295,12 @@ class CompressionConfiguration:
 
         if self.compression_level is not None:
             config.compression_level = self.compression_level
+
+        # Handle max_decompressed_size:
+        # - None = don't set field, let Rust use its default (512MB)
+        # - int > 0 = use that value
+        if self.max_decompressed_size is not None:
+            config.max_decompressed_size = self.max_decompressed_size
 
         return config
 
@@ -653,6 +740,41 @@ class BaseClientConfiguration:
             values for get-type commands. This can reduce bandwidth usage and storage requirements.
             Compression is NOT compatible with server-side string manipulation commands (APPEND, GETRANGE, etc.).
             If not set, compression is disabled.
+
+        client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
+            See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
+
+            In order for 2 clients to share the same cache, they must be
+            created with the same ``ClientSideCache`` instance.
+
+            - Clients with different ``ClientSideCache`` instances will have separate caches,
+              even if the configurations are identical.
+            - Clients using different DBs cannot share the same cache.
+            - Clients using different ACL users cannot share the same cache.
+
+        address_resolver (Optional[AddressResolver]): Optional callback for resolving server addresses
+            before connection. When provided, this callback will be invoked for each configured address
+            during connection establishment and during cluster topology refreshes.
+            The callback receives the configured host and port, and should return the actual
+            host and port to use for the connection.
+
+            This is useful for:
+                - Custom DNS resolution for service discovery
+                - Address translation for proxy setups
+                - Dynamic endpoint resolution for cloud environments
+
+            If not set, addresses are used as configured without modification.
+
+            Example::
+
+                def my_resolver(host: str, port: int) -> Tuple[str, int]:
+                    resolved_host = my_dns_resolver.resolve(host)
+                    return (resolved_host, port)
+
+                config = GlideClientConfiguration(
+                    addresses=[NodeAddress("my-service", 6379)],
+                    address_resolver=my_resolver,
+                )
     """
 
     def __init__(
@@ -671,6 +793,8 @@ class BaseClientConfiguration:
         advanced_config: Optional[AdvancedBaseClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
+        client_side_cache: Optional[ClientSideCache] = None,
+        address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -686,6 +810,8 @@ class BaseClientConfiguration:
         self.advanced_config = advanced_config
         self.lazy_connect = lazy_connect
         self.compression = compression
+        self.client_side_cache = client_side_cache
+        self.address_resolver = address_resolver
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -764,6 +890,21 @@ class BaseClientConfiguration:
                     iam_config.refresh_interval_seconds
                 )
 
+    def _set_client_side_cache_in_request(self, request: ConnectionRequest) -> None:
+        """Set client-side cache in the protobuf request."""
+        if not self.client_side_cache:
+            return
+
+        request.client_side_cache.cache_id = self.client_side_cache.cache_id
+        request.client_side_cache.max_cache_kb = self.client_side_cache.max_cache_kb
+
+        request.client_side_cache.entry_ttl_ms = self.client_side_cache.entry_ttl_ms
+        request.client_side_cache.enable_metrics = self.client_side_cache.enable_metrics
+        if self.client_side_cache.eviction_policy:
+            request.client_side_cache.eviction_policy = (
+                self.client_side_cache.eviction_policy.value
+            )
+
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
     ) -> ConnectionRequest:
@@ -791,6 +932,7 @@ class BaseClientConfiguration:
 
         self._set_reconnect_strategy_in_request(request)
         self._set_credentials_in_request(request)
+        self._set_client_side_cache_in_request(request)
 
         if self.client_name:
             request.client_name = self.client_name
@@ -893,6 +1035,18 @@ class GlideClientConfiguration(BaseClientConfiguration):
             Note: read_only mode is not compatible with AZAffinity or AZAffinityReplicasAndPrimary
             read strategies.
             Defaults to False.
+        client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
+            See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
+
+            In order for 2 clients to share the same cache, they must be
+            created with the same ``ClientSideCache`` instance.
+
+            - Clients with different ``ClientSideCache`` instances will have separate caches,
+              even if the configurations are identical.
+            - Clients using different DBs cannot share the same cache.
+            - Clients using different ACL users cannot share the same cache.
+        node_discovery_mode (NodeDiscoveryMode): Controls how the client discovers node roles
+            and topology in standalone mode. If not set, `STANDARD` will be used.
     """
 
     class PubSubChannelModes(IntEnum):
@@ -952,6 +1106,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
         read_only: bool = False,
+        client_side_cache: Optional[ClientSideCache] = None,
+        node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
+        address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -968,9 +1125,12 @@ class GlideClientConfiguration(BaseClientConfiguration):
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
             compression=compression,
+            client_side_cache=client_side_cache,
+            address_resolver=address_resolver,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
         self.read_only = read_only
+        self.node_discovery_mode = node_discovery_mode
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -980,6 +1140,9 @@ class GlideClientConfiguration(BaseClientConfiguration):
 
         # Set read_only mode
         request.read_only = self.read_only
+
+        # Set node discovery mode
+        request.node_discovery_mode = self.node_discovery_mode.value
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
@@ -1110,7 +1273,16 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             When enabled, the client will automatically compress values for set-type commands and decompress
             values for get-type commands. This can reduce bandwidth usage and storage requirements.
             If not set, compression is disabled.
+        client_side_cache (Optional[ClientSideCache]): Configuration for client-side caching.
+            See `ClientSideCache` for caching behavior details, supported commands, and expiration semantics.
 
+            In order for 2 clients to share the same cache, they must be
+            created with the same ``ClientSideCache`` instance.
+
+            - Clients with different ``ClientSideCache`` instances will have separate caches,
+              even if the configurations are identical.
+            - Clients using different DBs cannot share the same cache.
+            - Clients using different ACL users cannot share the same cache.
 
     Note:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
@@ -1178,6 +1350,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         advanced_config: Optional[AdvancedGlideClusterClientConfiguration] = None,
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
+        client_side_cache: Optional[ClientSideCache] = None,
+        address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1194,6 +1368,8 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             advanced_config=advanced_config,
             lazy_connect=lazy_connect,
             compression=compression,
+            client_side_cache=client_side_cache,
+            address_resolver=address_resolver,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

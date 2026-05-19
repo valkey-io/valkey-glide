@@ -13,20 +13,26 @@ import (
 	"github.com/stretchr/testify/require"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 )
 
 func startDedicatedValkeyServer(suite *GlideTestSuite, clusterMode bool) (string, error) {
-	// Build command arguments
+	return startDedicatedValkeyServerWithReplicas(suite, clusterMode, 0)
+}
+
+func startDedicatedValkeyServerWithReplicas(
+	suite *GlideTestSuite,
+	clusterMode bool,
+	replicaCount int,
+) (string, error) {
 	args := []string{}
 	args = append(args, "start")
 	if clusterMode {
 		args = append(args, "--cluster-mode")
 	}
 
-	args = append(args, fmt.Sprintf("-r %d", 0))
+	args = append(args, fmt.Sprintf("-r %d", replicaCount))
 
-	// Execute cluster manager script
 	output := runClusterManager(suite, args, false)
 
 	return output, nil

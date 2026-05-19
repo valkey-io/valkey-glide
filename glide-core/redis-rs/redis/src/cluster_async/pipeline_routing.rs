@@ -395,7 +395,7 @@ where
     }
 
     // Wait for all receivers to complete and collect the responses
-    let responses: Vec<_> = futures::future::join_all(receivers.into_iter())
+    let responses: Vec<_> = futures::future::join_all(receivers)
         .await
         .into_iter()
         .collect();
@@ -1144,10 +1144,11 @@ where
             }
         })?;
 
+    let resolved_address = ClusterConnInner::resolve_address(&core, &redirect_node.address);
     ClusterConnInner::update_upon_moved_error(
         core.clone(),
         redirect_node.slot,
-        redirect_node.address.into(),
+        resolved_address.into(),
     )
     .await
     .map_err(Into::into)

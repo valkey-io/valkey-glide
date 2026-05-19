@@ -321,7 +321,6 @@ import glide.api.models.configuration.ReadFrom;
 import glide.managers.CommandManager;
 import glide.utils.ArgsBuilder;
 import java.util.Map;
-import lombok.Getter;
 import lombok.NonNull;
 
 /**
@@ -339,15 +338,8 @@ import lombok.NonNull;
  *
  * @param <T> child typing for chaining method calls.
  */
-@Getter
 public abstract class BaseBatch<T extends BaseBatch<T>> {
     /** Command class to send a single request to Valkey. */
-    @Getter(
-            onMethod_ = {
-                @SuppressFBWarnings(
-                        value = "EI_EXPOSE_REP",
-                        justification = "Batch builder is intentionally mutable for command assembly")
-            })
     protected final Batch.Builder protobufBatch;
 
     /**
@@ -356,6 +348,22 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * {@link String}.
      */
     protected boolean binaryOutput = false;
+
+    /**
+     * Returns the protobuf batch builder. Batch builder is intentionally mutable for command
+     * assembly.
+     */
+    @SuppressFBWarnings(
+            value = "EI_EXPOSE_REP",
+            justification = "Batch builder is intentionally mutable for command assembly")
+    public Batch.Builder getProtobufBatch() {
+        return protobufBatch;
+    }
+
+    /** Returns whether batch commands may return binary data. */
+    public boolean isBinaryOutput() {
+        return binaryOutput;
+    }
 
     /** Sets {@link #binaryOutput} to <code>true</code>. */
     public T withBinaryOutput() {

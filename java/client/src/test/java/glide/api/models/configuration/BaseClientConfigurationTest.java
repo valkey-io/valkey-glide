@@ -31,6 +31,11 @@ public class BaseClientConfigurationTest {
             return null;
         }
 
+        @Override
+        public ClientSideCache getClientSideCache() {
+            return null;
+        }
+
         public static class TestClientConfigurationBuilder
                 extends BaseClientConfigurationBuilder<
                         TestClientConfiguration, TestClientConfigurationBuilder> {
@@ -122,5 +127,27 @@ public class BaseClientConfigurationTest {
                         IllegalArgumentException.class, () -> builder.pubsubReconciliationIntervalMs(-1));
         assertEquals(
                 "pubsubReconciliationIntervalMs must be positive, got: -1", exception.getMessage());
+    }
+
+    @Test
+    public void testNodeDiscoveryModeDefault() {
+        GlideClientConfiguration config = GlideClientConfiguration.builder().build();
+        assertEquals(NodeDiscoveryMode.STANDARD, config.getNodeDiscoveryMode());
+    }
+
+    @Test
+    public void testNodeDiscoveryModeStatic() {
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder().nodeDiscoveryMode(NodeDiscoveryMode.STATIC).build();
+        assertEquals(NodeDiscoveryMode.STATIC, config.getNodeDiscoveryMode());
+    }
+
+    @Test
+    public void testNodeDiscoveryModeDiscoverAll() {
+        GlideClientConfiguration config =
+                GlideClientConfiguration.builder()
+                        .nodeDiscoveryMode(NodeDiscoveryMode.DISCOVER_ALL)
+                        .build();
+        assertEquals(NodeDiscoveryMode.DISCOVER_ALL, config.getNodeDiscoveryMode());
     }
 }
