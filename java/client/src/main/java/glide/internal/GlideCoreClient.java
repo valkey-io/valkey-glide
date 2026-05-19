@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.internal;
 
+import command_request.CommandRequestOuterClass.CacheMetricsType;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.BaseClient;
 import glide.api.logging.Logger;
@@ -406,6 +407,31 @@ public class GlideCoreClient implements AutoCloseable {
         }
 
         GlideNativeBridge.refreshIamToken(handle, correlationId);
+        return future;
+    }
+
+    /** Get cache metrics */
+    public CompletableFuture<Object> getCacheMetrics(CacheMetricsType metricsType) {
+        CompletableFuture<Object> future = new CompletableFuture<>();
+
+        long handle = nativeClientHandle.get();
+        if (handle == 0) {
+            future.completeExceptionally(
+                    new glide.api.models.exceptions.ClosingException("Client is closed"));
+            return future;
+        }
+
+        long correlationId;
+        try {
+            correlationId =
+                    AsyncRegistry.register(
+                            future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
+        } catch (glide.api.models.exceptions.RequestException e) {
+            future.completeExceptionally(e);
+            return future;
+        }
+
+        GlideNativeBridge.getCacheMetrics(handle, correlationId, metricsType.getNumber());
         return future;
     }
 

@@ -255,6 +255,23 @@ jobs:
               env:
                   JEST_HTML_REPORTER_OUTPUT_PATH: test-report-ecma.html
 
+            # Test pnpm pubsub pointer handling
+            - name: Install pnpm
+              run: npm install -g pnpm
+
+            - name: Test pointer handling with npm (util.Long=null simulation)
+              run: |
+                  npm install
+                  npm run test
+              working-directory: ./node/hybrid-node-tests/pnpm-pubsub-test
+
+            - name: Test pointer handling with pnpm (util.Long=null simulation)
+              run: |
+                  rm -rf node_modules
+                  pnpm install
+                  pnpm run test
+              working-directory: ./node/hybrid-node-tests/pnpm-pubsub-test
+
             - name: Run benchmarks
               uses: ./.github/workflows/test-benchmark
               with:

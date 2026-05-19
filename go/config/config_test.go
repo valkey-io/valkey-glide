@@ -1098,6 +1098,71 @@ func TestCompressionConfiguration_WithEnabledFalse(t *testing.T) {
 	assert.Equal(t, uint32(64), pb.MinCompressionSize)
 }
 
+// ============================================================================
+// Max Decompressed Size Tests
+// ============================================================================
+
+func TestCompressionConfiguration_DefaultMaxDecompressedSize(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration()
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	// Default is nil, which means "use Rust default" - protobuf field is not set
+	assert.Nil(t, pb.MaxDecompressedSize)
+}
+
+func TestCompressionConfiguration_WithCustomMaxDecompressedSize(t *testing.T) {
+	var customSize uint64 = 100 * 1024 * 1024 // 100MB
+	compressionConfig := NewCompressionConfiguration().
+		WithMaxDecompressedSize(&customSize)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.NotNil(t, pb.MaxDecompressedSize)
+	assert.Equal(t, customSize, *pb.MaxDecompressedSize)
+}
+
+func TestCompressionConfiguration_WithNilMaxDecompressedSizeUsesRustDefault(t *testing.T) {
+	compressionConfig := NewCompressionConfiguration().
+		WithMaxDecompressedSize(nil)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	// When nil, the protobuf field is not set, Rust will use its default
+	assert.Nil(t, pb.MaxDecompressedSize)
+}
+
+func TestCompressionConfiguration_WithZeroMaxDecompressedSizeReturnsError(t *testing.T) {
+	var zeroSize uint64 = 0
+	compressionConfig := NewCompressionConfiguration().
+		WithMaxDecompressedSize(&zeroSize)
+
+	// Zero is invalid - must be positive if set
+	err := compressionConfig.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "max_decompressed_size must be positive")
+}
+
+func TestCompressionConfiguration_AllFieldsSetWithMaxDecompressedSize(t *testing.T) {
+	var level int32 = 5
+	var maxSize uint64 = 100 * 1024 * 1024 // 100MB
+	compressionConfig := NewCompressionConfiguration().
+		WithBackend(ZSTD).
+		WithCompressionLevel(level).
+		WithMinCompressionSize(256).
+		WithMaxDecompressedSize(&maxSize)
+
+	pb, err := compressionConfig.toProtobuf()
+	assert.NoError(t, err)
+	assert.True(t, pb.Enabled)
+	assert.Equal(t, protobuf.CompressionBackend_ZSTD, pb.Backend)
+	assert.NotNil(t, pb.CompressionLevel)
+	assert.Equal(t, level, *pb.CompressionLevel)
+	assert.Equal(t, uint32(256), pb.MinCompressionSize)
+	assert.NotNil(t, pb.MaxDecompressedSize)
+	assert.Equal(t, maxSize, *pb.MaxDecompressedSize)
+}
+
 func TestCompressionConfiguration_WithEnabledToggle(t *testing.T) {
 	// Start enabled, disable, re-enable
 	compressionConfig := NewCompressionConfiguration().
@@ -1313,4 +1378,87 @@ func TestConfig_ReadOnly_FluentAPI(t *testing.T) {
 	assert.Equal(t, 1, len(result.Addresses))
 	assert.Equal(t, "localhost", result.Addresses[0].Host)
 	assert.Equal(t, uint32(6379), result.Addresses[0].Port)
+}
+
+// ============================================================================
+// NodeDiscoveryMode Tests
+// ============================================================================
+
+func TestConfig_NodeDiscoveryMode_Default(t *testing.T) {
+	config := NewClientConfiguration()
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	// Default is STANDARD (0), which is the zero value
+	assert.Equal(t, protobuf.NodeDiscoveryMode_Standard, result.NodeDiscoveryMode)
+}
+
+func TestConfig_NodeDiscoveryMode_Static(t *testing.T) {
+	config := NewClientConfiguration().
+		WithNodeDiscoveryMode(NodeDiscoveryModeStatic)
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, protobuf.NodeDiscoveryMode_Static, result.NodeDiscoveryMode)
+}
+
+func TestConfig_NodeDiscoveryMode_DiscoverAll(t *testing.T) {
+	config := NewClientConfiguration().
+		WithNodeDiscoveryMode(NodeDiscoveryModeDiscoverAll)
+	result, err := config.ToProtobuf()
+	assert.NoError(t, err)
+	assert.Equal(t, protobuf.NodeDiscoveryMode_DiscoverAll, result.NodeDiscoveryMode)
+}
+
+func TestClusterConfig_PeriodicChecks_DefaultNotSet(t *testing.T) {
+	// When no periodic checks config is set, the protobuf field should be nil (server uses default).
+	config := NewClusterClientConfiguration()
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert default cluster config to protobuf: %v", err)
+	}
+	assert.Nil(t, result.PeriodicChecks)
+}
+
+func TestClusterConfig_PeriodicChecks_Enabled(t *testing.T) {
+	// Explicitly setting PeriodicChecksEnabled should not set any protobuf field (default behavior).
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithPeriodicChecks(PeriodicChecksEnabled{}),
+		)
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.Nil(t, result.PeriodicChecks)
+}
+
+func TestClusterConfig_PeriodicChecks_Disabled(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithPeriodicChecks(PeriodicChecksDisabled{}),
+		)
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.NotNil(t, result.PeriodicChecks)
+	_, ok := result.PeriodicChecks.(*protobuf.ConnectionRequest_PeriodicChecksDisabled)
+	assert.True(t, ok, "expected PeriodicChecksDisabled protobuf type")
+}
+
+func TestClusterConfig_PeriodicChecks_ManualInterval(t *testing.T) {
+	config := NewClusterClientConfiguration().
+		WithAdvancedConfiguration(
+			NewAdvancedClusterClientConfiguration().
+				WithPeriodicChecks(PeriodicChecksManualInterval{DurationInSec: 30}),
+		)
+	result, err := config.ToProtobuf()
+	if err != nil {
+		t.Fatalf("Failed to convert cluster config to protobuf: %v", err)
+	}
+	assert.NotNil(t, result.PeriodicChecks)
+	manual, ok := result.PeriodicChecks.(*protobuf.ConnectionRequest_PeriodicChecksManualInterval)
+	assert.True(t, ok, "expected PeriodicChecksManualInterval protobuf type")
+	assert.Equal(t, uint32(30), manual.PeriodicChecksManualInterval.DurationInSec)
 }

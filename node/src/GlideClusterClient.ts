@@ -222,6 +222,7 @@ export interface ClusterPubSubState {
  *   - `"enabledDefaultConfigs"`: Enables periodic checks with default configurations.
  *   - `"disabled"`: Disables periodic topology checks.
  *   - `{ duration_in_sec: number }`: Manually configure the interval for periodic checks.
+ * - **Client-Side Caching**: Use `clientSideCache` (inherited from BaseClientConfiguration) to enable local caching for improved performance.
  * - **Pub/Sub Subscriptions**: Predefine Pub/Sub channels and patterns to subscribe to upon connection establishment.
  *   - Supports exact channels, patterns, and sharded channels (available since Valkey version 7.0).
  *
@@ -233,6 +234,7 @@ export interface ClusterPubSubState {
  *     { host: 'cluster-node-2.example.com', port: 6379 },
  *   ],
  *   databaseId: 5, // Connect to database 5 (requires Valkey 9.0+ with multi-database cluster mode)
+ *   clientSideCache: ClientSideCache.create(2048, 0), // Enable 2MB client-side cache, no TTL
  *   periodicChecks: {
  *     duration_in_sec: 30, // Perform periodic checks every 30 seconds
  *   },

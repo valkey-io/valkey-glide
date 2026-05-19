@@ -384,7 +384,8 @@ pub use crate::types::{
     Value,
     PushKind,
     VerbatimFormat,
-    ProtocolVersion
+    ProtocolVersion,
+    AddressResolver,
 };
 
 #[cfg(feature = "aio")]
@@ -451,6 +452,8 @@ mod tls;
 
 pub use crate::tls::{retrieve_tls_certificates, ClientTlsConfig, TlsCertificates, TlsConnParams};
 
+/// Cache module
+pub mod cache;
 mod client;
 mod cmd;
 mod commands;

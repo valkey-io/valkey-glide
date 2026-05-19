@@ -15,6 +15,7 @@ glide-core = { path = "../glide-core", features = [ "proto"] }
 protobuf = "3.7"
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = { path = "../logger_core" }
+tracing = "0.1"
 tracing-subscriber = "0.3.16"
 jni = "0.21.1"
 log = "0.4.20"
