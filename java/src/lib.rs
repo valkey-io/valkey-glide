@@ -1347,6 +1347,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
 ) {
     handle_panics(
         move || {
+            let mut env = env;
             let raw_bytes = match env.convert_byte_array(&request_bytes) {
                 Ok(b) => b,
                 Err(e) => {
@@ -1370,6 +1371,23 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
             };
 
             let handle_id = client_ptr as u64;
+
+            // Synchronous inflight check: reject immediately if at capacity.
+            // This prevents Java threads from parking on futures that would be
+            // rejected asynchronously, avoiding thread explosion under memory pressure.
+            {
+                let handle_table = jni_client::get_handle_table();
+                if let Some(client_ref) = handle_table.get(&handle_id)
+                    && client_ref.available_inflight_count() <= 0
+                {
+                    jni_client::complete_error_sync(
+                        &mut env,
+                        callback_id,
+                        "Client reached maximum inflight requests",
+                    );
+                    return Some(());
+                }
+            }
 
             // Get JVM for callback completion
             let jvm = match env.get_java_vm() {
@@ -1710,6 +1728,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
 ) {
     handle_panics(
         move || {
+            let mut env = env;
             let raw_bytes = match env.convert_byte_array(&request_bytes) {
                 Ok(b) => b,
                 Err(e) => {
@@ -1733,6 +1752,22 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
             };
 
             let handle_id = client_ptr as u64;
+
+            // Synchronous inflight check (same as executeCommandAsync)
+            {
+                let handle_table = jni_client::get_handle_table();
+                if let Some(client_ref) = handle_table.get(&handle_id)
+                    && client_ref.available_inflight_count() <= 0
+                {
+                    jni_client::complete_error_sync(
+                        &mut env,
+                        callback_id,
+                        "Client reached maximum inflight requests",
+                    );
+                    return Some(());
+                }
+            }
+
             let jvm = match env.get_java_vm() {
                 Ok(jvm) => Arc::new(jvm),
                 Err(_) => {
