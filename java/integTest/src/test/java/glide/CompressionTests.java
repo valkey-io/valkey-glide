@@ -5,6 +5,7 @@ import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -875,6 +876,463 @@ public class CompressionTests {
             // BITCOUNT
             assertTrue(client.bitcount(key).get() >= 0);
 
+            client.del(new String[] {key}).get();
+        }
+    }
+
+    // ============================================================================
+    // Batch/Pipeline Compression Tests
+    // ============================================================================
+
+    @SneakyThrows
+    @Test
+    public void compression_batch_set_get() {
+        try (GlideClient client = compressionClient()) {
+            int numKeys = 100;
+            String keyPrefix = randomKey("batch_test");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with SET commands (non-atomic pipeline)
+            glide.api.models.Batch batch = new glide.api.models.Batch(false);
+            String[] keys = new String[numKeys];
+            for (int i = 0; i < numKeys; i++) {
+                keys[i] = keyPrefix + "_" + i;
+                batch.set(keys[i], value);
+            }
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(numKeys, results.length);
+            for (Object result : results) {
+                assertEquals(OK, result);
+            }
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= numKeys,
+                    "All " + numKeys + " values should be compressed in batch, got " + compressedCount);
+
+            // Build batch with GET commands
+            glide.api.models.Batch getBatch = new glide.api.models.Batch(false);
+            for (String key : keys) {
+                getBatch.get(key);
+            }
+
+            // Execute GET batch
+            Object[] getResults = client.exec(getBatch, true).get();
+            assertEquals(numKeys, getResults.length);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= numKeys,
+                    "All " + numKeys + " values should be decompressed in batch, got " + decompressedCount);
+
+            // Verify all values are correct
+            for (Object result : getResults) {
+                assertEquals(value, result);
+            }
+
+            // Cleanup
+            client.del(keys).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_batch_mixed_commands() {
+        try (GlideClient client = compressionClient()) {
+            String key1 = randomKey("batch_mixed_1");
+            String key2 = randomKey("batch_mixed_2");
+            String key3 = randomKey("batch_mixed_3");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with mixed SET and GET commands (non-atomic pipeline)
+            glide.api.models.Batch batch = new glide.api.models.Batch(false);
+            batch.set(key1, value);
+            batch.set(key2, value);
+            batch.set(key3, value);
+            batch.get(key1);
+            batch.get(key2);
+            batch.get(key3);
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(6, results.length);
+
+            // Verify SET results
+            assertEquals(OK, results[0]);
+            assertEquals(OK, results[1]);
+            assertEquals(OK, results[2]);
+
+            // Verify GET results (decompressed)
+            assertEquals(value, results[3]);
+            assertEquals(value, results[4]);
+            assertEquals(value, results[5]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3, "All 3 SET values should be compressed, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "All 3 GET values should be decompressed, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_cluster_batch_set_get() {
+        try (GlideClusterClient client = compressionClusterClient()) {
+            int numKeys = 50;
+            String keyPrefix = randomKey("{cluster_batch_test}");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with SET commands (non-atomic pipeline, using hash tag for same slot)
+            glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(false);
+            String[] keys = new String[numKeys];
+            for (int i = 0; i < numKeys; i++) {
+                keys[i] = keyPrefix + "_" + i;
+                batch.set(keys[i], value);
+            }
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(numKeys, results.length);
+            for (Object result : results) {
+                assertEquals(OK, result);
+            }
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= numKeys,
+                    "Cluster: All "
+                            + numKeys
+                            + " values should be compressed in batch, got "
+                            + compressedCount);
+
+            // Build batch with GET commands
+            glide.api.models.ClusterBatch getBatch = new glide.api.models.ClusterBatch(false);
+            for (String key : keys) {
+                getBatch.get(key);
+            }
+
+            // Execute GET batch
+            Object[] getResults = client.exec(getBatch, true).get();
+            assertEquals(numKeys, getResults.length);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= numKeys,
+                    "Cluster: All "
+                            + numKeys
+                            + " values should be decompressed in batch, got "
+                            + decompressedCount);
+
+            // Verify all values are correct
+            for (Object result : getResults) {
+                assertEquals(value, result);
+            }
+
+            // Cleanup
+            client.del(keys).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_transaction_set_get() {
+        try (GlideClient client = compressionClient()) {
+            String key1 = randomKey("tx_test_1");
+            String key2 = randomKey("tx_test_2");
+            String key3 = randomKey("tx_test_3");
+            String value = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build atomic batch (transaction) with SET commands
+            glide.api.models.Batch tx = new glide.api.models.Batch(true);
+            tx.set(key1, value);
+            tx.set(key2, value);
+            tx.set(key3, value);
+            tx.get(key1);
+            tx.get(key2);
+            tx.get(key3);
+
+            // Execute transaction
+            Object[] results = client.exec(tx, true).get();
+            assertEquals(6, results.length);
+
+            // Verify SET results
+            assertEquals(OK, results[0]);
+            assertEquals(OK, results[1]);
+            assertEquals(OK, results[2]);
+
+            // Verify GET results (decompressed)
+            assertEquals(value, results[3]);
+            assertEquals(value, results[4]);
+            assertEquals(value, results[5]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3,
+                    "Transaction: All 3 SET values should be compressed, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Transaction: All 3 GET values should be decompressed, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_batch_mset_mget() {
+        try (GlideClient client = compressionClient()) {
+            String keyPrefix = randomKey("{batch_mset_mget}");
+            String key1 = keyPrefix + "_1";
+            String key2 = keyPrefix + "_2";
+            String key3 = keyPrefix + "_3";
+            String value1 = generateCompressibleText(1024);
+            String value2 = generateCompressibleText(1024);
+            String value3 = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build batch with MSET and MGET commands
+            glide.api.models.Batch batch = new glide.api.models.Batch(false);
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value1);
+            keyValueMap.put(key2, value2);
+            keyValueMap.put(key3, value3);
+            batch.mset(keyValueMap);
+            batch.mget(new String[] {key1, key2, key3});
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(2, results.length);
+
+            // Verify MSET result
+            assertEquals(OK, results[0]);
+
+            // Verify MGET results (decompressed)
+            Object[] mgetResults = (Object[]) results[1];
+            assertEquals(3, mgetResults.length);
+            assertEquals(value1, mgetResults[0]);
+            assertEquals(value2, mgetResults[1]);
+            assertEquals(value3, mgetResults[2]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3, "Batch MSET should compress all 3 values, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Batch MGET should decompress all 3 values, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_cluster_batch_mset_mget() {
+        try (GlideClusterClient client = compressionClusterClient()) {
+            String keyPrefix = randomKey("{cluster_batch_mset_mget}");
+            String key1 = keyPrefix + "_1";
+            String key2 = keyPrefix + "_2";
+            String key3 = keyPrefix + "_3";
+            String value1 = generateCompressibleText(1024);
+            String value2 = generateCompressibleText(1024);
+            String value3 = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build cluster batch with MSET and MGET commands (using hash tag for same slot)
+            glide.api.models.ClusterBatch batch = new glide.api.models.ClusterBatch(false);
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value1);
+            keyValueMap.put(key2, value2);
+            keyValueMap.put(key3, value3);
+            batch.mset(keyValueMap);
+            batch.mget(new String[] {key1, key2, key3});
+
+            // Execute batch
+            Object[] results = client.exec(batch, true).get();
+            assertEquals(2, results.length);
+
+            // Verify MSET result
+            assertEquals(OK, results[0]);
+
+            // Verify MGET results (decompressed)
+            Object[] mgetResults = (Object[]) results[1];
+            assertEquals(3, mgetResults.length);
+            assertEquals(value1, mgetResults[0]);
+            assertEquals(value2, mgetResults[1]);
+            assertEquals(value3, mgetResults[2]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3,
+                    "Cluster batch MSET should compress all 3 values, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Cluster batch MGET should decompress all 3 values, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void compression_transaction_mset_mget() {
+        try (GlideClient client = compressionClient()) {
+            String keyPrefix = randomKey("{tx_mset_mget}");
+            String key1 = keyPrefix + "_1";
+            String key2 = keyPrefix + "_2";
+            String key3 = keyPrefix + "_3";
+            String value1 = generateCompressibleText(1024);
+            String value2 = generateCompressibleText(1024);
+            String value3 = generateCompressibleText(1024);
+
+            long initialCompressed = getStat(client, "total_values_compressed");
+            long initialDecompressed = getStat(client, "total_values_decompressed");
+
+            // Build atomic batch (transaction) with MSET and MGET commands
+            glide.api.models.Batch tx = new glide.api.models.Batch(true);
+            Map<String, String> keyValueMap = new LinkedHashMap<>();
+            keyValueMap.put(key1, value1);
+            keyValueMap.put(key2, value2);
+            keyValueMap.put(key3, value3);
+            tx.mset(keyValueMap);
+            tx.mget(new String[] {key1, key2, key3});
+
+            // Execute transaction
+            Object[] results = client.exec(tx, true).get();
+            assertEquals(2, results.length);
+
+            // Verify MSET result
+            assertEquals(OK, results[0]);
+
+            // Verify MGET results (decompressed)
+            Object[] mgetResults = (Object[]) results[1];
+            assertEquals(3, mgetResults.length);
+            assertEquals(value1, mgetResults[0]);
+            assertEquals(value2, mgetResults[1]);
+            assertEquals(value3, mgetResults[2]);
+
+            // Verify compression happened
+            long compressedCount = getStat(client, "total_values_compressed") - initialCompressed;
+            assertTrue(
+                    compressedCount >= 3,
+                    "Transaction MSET should compress all 3 values, got " + compressedCount);
+
+            // Verify decompression happened
+            long decompressedCount = getStat(client, "total_values_decompressed") - initialDecompressed;
+            assertTrue(
+                    decompressedCount >= 3,
+                    "Transaction MGET should decompress all 3 values, got " + decompressedCount);
+
+            // Cleanup
+            client.del(new String[] {key1, key2, key3}).get();
+        }
+    }
+
+    // --- Max Decompressed Size Tests ---
+
+    @Test
+    public void test_compression_config_default_max_decompressed_size() {
+        CompressionConfiguration config = CompressionConfiguration.builder().build();
+        // Default is null (use Rust default of 512MB)
+        assertNull(config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_custom_max_decompressed_size() {
+        long customSize = 100L * 1024 * 1024; // 100MB
+        CompressionConfiguration config =
+                CompressionConfiguration.builder().maxDecompressedSize(customSize).build();
+        assertEquals(customSize, config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_null_max_decompressed_size_uses_rust_default() {
+        CompressionConfiguration config =
+                CompressionConfiguration.builder().maxDecompressedSize(null).build();
+        assertNull(config.getMaxDecompressedSize());
+    }
+
+    @Test
+    public void test_compression_config_max_decompressed_size_zero_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(0L).build());
+    }
+
+    @Test
+    public void test_compression_config_max_decompressed_size_negative_throws() {
+        assertThrows(
+                ConfigurationError.class,
+                () -> CompressionConfiguration.builder().maxDecompressedSize(-1L).build());
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_client_with_custom_max_decompressed_size() {
+        // Test that client can be created with custom max_decompressed_size
+        try (GlideClient client =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .compressionConfiguration(
+                                                CompressionConfiguration.builder()
+                                                        .enabled(true)
+                                                        .maxDecompressedSize(100L * 1024 * 1024) // 100MB
+                                                        .build())
+                                        .build())
+                        .get()) {
+            String key = randomKey("max_decomp_test");
+            String value = generateCompressibleText(200);
+
+            // Basic set/get should work
+            assertEquals(OK, client.set(key, value).get());
+            assertEquals(value, client.get(key).get());
+
+            // Cleanup
             client.del(new String[] {key}).get();
         }
     }

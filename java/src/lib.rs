@@ -2,6 +2,7 @@
 
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
+use logger_core::log_warn_lazy;
 
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
@@ -27,6 +28,7 @@ use redis::Value;
 use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
 
+mod address_resolver;
 mod errors;
 mod jni_client;
 mod linked_hashmap;
@@ -36,6 +38,7 @@ use errors::{FFIError, handle_errors, run_ffi};
 use jni_client::*;
 use protobuf_bridge::*;
 
+use crate::address_resolver::JavaAddressResolver;
 /// Process command arguments for compression, matching the socket_listener pattern.
 /// Extracts args from the command, applies compression if applicable, and rebuilds the command.
 fn process_command_for_compression(
@@ -262,8 +265,9 @@ async fn execute_command_request_and_complete(
                             )));
                         }
                         // For other compression errors, log and continue
-                        log::warn!(
-                            "Compression processing failed: {e}, continuing with original command"
+                        log_warn_lazy!(
+                            "compression",
+                            format!("Compression processing failed: {e}, continuing with original command")
                         );
                     }
                 }
@@ -282,7 +286,19 @@ async fn execute_command_request_and_complete(
                     None
                 };
 
+                let send_start = std::time::Instant::now();
                 let exec = client.send_command(&mut cmd, routing).await;
+                let send_elapsed = send_start.elapsed();
+                if send_elapsed > std::time::Duration::from_secs(1) {
+                    logger_core::log_warn_rate_limited!(
+                        "jni_command",
+                        5,
+                        format!(
+                            "send_command took {:?} for callback_id={}",
+                            send_elapsed, callback_id
+                        )
+                    );
+                }
 
                 if let Some(root_span_ptr) = root_span_ptr_opt
                     && root_span_ptr != 0
@@ -299,10 +315,9 @@ async fn execute_command_request_and_complete(
                             }
                         }
                         Err(err) => {
-                            log::warn!(
-                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                root_span_ptr,
-                                err
+                            log_warn_lazy!(
+                                "otel",
+                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                             );
                         }
                     }
@@ -337,7 +352,7 @@ async fn execute_command_request_and_complete(
                                 )));
                             }
                             // For other compression errors, log and continue
-                            log::warn!("Compression processing failed for batch command: {e}, continuing with original");
+                            log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
                         }
                     }
                     pipeline.add_command(valkey_cmd);
@@ -412,15 +427,23 @@ async fn execute_command_request_and_complete(
                             }
                         }
                         Err(err) => {
-                            log::warn!(
-                                "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                root_span_ptr,
-                                err
+                            log_warn_lazy!(
+                                "otel",
+                                format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                             );
                         }
                     }
                 }
-                exec_res
+
+                // Process batch response for decompression if compression is enabled
+                match exec_res {
+                    Ok(value) => glide_core::compression::try_decompress_batch_response(
+                        value,
+                        client.compression_manager().as_deref(),
+                    )
+                    .map_err(|e| redis::RedisError::from((redis::ErrorKind::IoError, "Decompression error", e.to_string()))),
+                    Err(e) => Err(e),
+                }
             }
             _ => Err(redis::RedisError::from((
                 redis::ErrorKind::ClientError,
@@ -1413,11 +1436,15 @@ fn safe_create_jstring<'local>(mut env: JNIEnv<'local>, input: &str) -> JString<
 // ==================== JNI CLIENT MANAGEMENT FUNCTIONS ====================
 
 /// Create Valkey client and store handle.
+/// If address_resolver is not null, it will be stored as a global reference and used
+/// for address resolution callbacks. The global reference ensures the resolver is not
+/// garbage collected while the client is alive.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
-    env: JNIEnv,
+    mut env: JNIEnv,
     _class: JClass,
     connection_request_bytes: JByteArray,
+    address_resolver: JObject,
 ) -> jlong {
     run_ffi(|| {
         // Convert Java byte array to Rust bytes
@@ -1441,11 +1468,26 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createClient(
         };
 
         // Convert protobuf to glide_core ConnectionRequest
-        let connection_request = glide_core::client::ConnectionRequest::from(request);
+        let mut connection_request = glide_core::client::ConnectionRequest::from(request);
 
         // Cache JVM for push callbacks
         if let Ok(jvm) = env.get_java_vm() {
             let _ = jni_client::JVM.set(Arc::new(jvm));
+        }
+
+        // If an address resolver is provided, create a global reference and set up the callback
+        // The global reference ensures the Java object is not garbage collected while in use
+        if !address_resolver.is_null()
+            && let Some(jvm) = jni_client::JVM.get().cloned()
+        {
+            match JavaAddressResolver::new(&mut env, jvm, &address_resolver) {
+                Some(resolver) => {
+                    connection_request.address_resolver = Some(Arc::new(resolver));
+                }
+                None => {
+                    return Some(0);
+                }
+            }
         }
 
         // Direct client creation (no lazy loading for simplified implementation)
@@ -1701,8 +1743,8 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
 
                             // Add commands to pipeline using existing bridge logic
                             for cmd in &batch.commands {
-                                match protobuf_bridge::create_valkey_command(cmd) {
-                                    Ok(valkey_cmd) => pipeline.add_command(valkey_cmd),
+                                let mut valkey_cmd = match protobuf_bridge::create_valkey_command(cmd) {
+                                    Ok(cmd) => cmd,
                                     Err(e) => {
                                         return Err(redis::RedisError::from((
                                             redis::ErrorKind::ClientError,
@@ -1711,6 +1753,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         )));
                                     }
                                 };
+                                // Apply compression to each command in the batch
+                                // This also validates that the command is compatible with compression
+                                #[allow(clippy::collapsible_if)]
+                                if client.is_compression_enabled() {
+                                    if let Err(e) = process_command_for_compression(&mut valkey_cmd, &client) {
+                                        // Incompatible command errors should be returned to the user
+                                        if e.is_incompatible_command() {
+                                            return Err(redis::RedisError::from((
+                                                redis::ErrorKind::ClientError,
+                                                "Incompatible command with compression",
+                                                e.to_string(),
+                                            )));
+                                        }
+                                        // For other compression errors, log and continue
+                                        log_warn_lazy!("compression", format!("Compression processing failed for batch command: {e}, continuing with original"));
+                                    }
+                                }
+                                pipeline.add_command(valkey_cmd);
                             }
 
                             // Get routing using FFI approach
@@ -1772,15 +1832,41 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBatchAsync(
                                         }
                                     }
                                     Err(err) => {
-                                        log::warn!(
-                                            "Failed to finalize OpenTelemetry span: pointer={}, error={}",
-                                            root_span_ptr,
-                                            err
+                                        log_warn_lazy!(
+                                            "otel",
+                                            format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", root_span_ptr, err)
                                         );
                                     }
                                 }
                             }
-                            exec_res
+
+                            // Process batch response for decompression if compression is enabled
+                            match exec_res {
+                                Ok(value) => {
+                                    if client.is_compression_enabled() {
+                                        if let Some(manager) = client.compression_manager() {
+                                            match glide_core::compression::decompress_batch_response(
+                                                value.clone(),
+                                                manager.as_ref(),
+                                            ) {
+                                                Ok(decompressed) => Ok(decompressed),
+                                                Err(e) => {
+                                                    log_warn_lazy!(
+                                                        "compression",
+                                                        format!("Failed to decompress batch response: {}, returning original", e)
+                                                    );
+                                                    Ok(value)
+                                                }
+                                            }
+                                        } else {
+                                            Ok(value)
+                                        }
+                                    } else {
+                                        Ok(value)
+                                    }
+                                }
+                                Err(e) => Err(e),
+                            }
                         }
                         .await;
 

@@ -40,3 +40,39 @@ pub fn log<Message: AsRef<str>, Identifier: AsRef<str>>(
 ) {
     // No-op for Miri tests
 }
+
+// Lazy logging macros — no-ops for miri tests, matching the real logger_core API.
+#[macro_export]
+macro_rules! log_error_lazy {
+    ($identifier:expr, $message:expr) => {
+        // No-op for miri tests
+    };
+}
+
+#[macro_export]
+macro_rules! log_warn_lazy {
+    ($identifier:expr, $message:expr) => {
+        // No-op for miri tests
+    };
+}
+
+#[macro_export]
+macro_rules! log_debug_lazy {
+    ($identifier:expr, $message:expr) => {
+        // No-op for miri tests
+    };
+}
+
+#[macro_export]
+macro_rules! log_info_lazy {
+    ($identifier:expr, $message:expr) => {
+        // No-op for miri tests
+    };
+}
+
+#[macro_export]
+macro_rules! log_trace_lazy {
+    ($identifier:expr, $message:expr) => {
+        // No-op for miri tests
+    };
+}

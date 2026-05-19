@@ -289,7 +289,7 @@ for !cursor.IsFinished() {
 
 ### Vector Search (FT commands)
 
-Valkey GLIDE supports vector search and full-text search via the `FT` command group, available on both standalone and cluster clients. You need a Valkey server with the search module enabled.
+Valkey GLIDE supports vector search and full-text search via the `glideft` server module package, available for both standalone and cluster clients. You need a Valkey server with the [search module](https://github.com/valkey-io/valkey-search/) enabled.
 
 ```go
 package main
@@ -303,6 +303,7 @@ import (
     "github.com/valkey-io/valkey-glide/go/v2/config"
     "github.com/valkey-io/valkey-glide/go/v2/constants"
     "github.com/valkey-io/valkey-glide/go/v2/options"
+    "github.com/valkey-io/valkey-glide/go/v2/servermodules/glideft"
 )
 
 func main() {
@@ -316,11 +317,10 @@ func main() {
     }
     defer client.Close()
 
-    ft := client.FT()
     ctx := context.Background()
 
     // Create an index on hash keys with prefix "doc:"
-    _, err = ft.Create(ctx, "my_index",
+    _, err = glideft.ClusterFtCreate(ctx, client, "my_index",
         []options.Field{
             options.NewTextField("title"),
             options.NewNumericField("score"),
@@ -342,16 +342,18 @@ func main() {
     time.Sleep(time.Second) // allow index to sync
 
     // Search
-    result, err := ft.Search(ctx, "my_index", "@score:[10 10]", nil)
+    result, err := glideft.ClusterFtSearch(ctx, client, "my_index", "@score:[10 10]", nil)
     if err != nil {
         fmt.Println("Error searching:", err)
         return
     }
     fmt.Printf("Found %d result(s)\n", result.TotalResults)
 
-    ft.DropIndex(ctx, "my_index")
+    glideft.ClusterFtDropIndex(ctx, client, "my_index")
 }
 ```
+
+For standalone clients, use the non-cluster variants (`glideft.FtCreate`, `glideft.FtSearch`, `glideft.FtDropIndex`, etc.).
 
 For more FT command examples see [ft_commands_test.go](ft_commands_test.go).
 

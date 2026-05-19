@@ -9,7 +9,7 @@ use crate::compression::zstd_backend::ZstdBackend;
 use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn, log_warn_rate_limited};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
 use redis::cache::{get_or_create_cache, glide_cache::GlideCache};
@@ -19,8 +19,8 @@ use redis::cluster_routing::{
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
-    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
-    RedisResult, RetryStrategy, ScanStateRC, Value,
+    AddressResolver, ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy,
+    PushInfo, RedisError, RedisResult, RetryStrategy, ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -84,6 +84,24 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
         "GETEX" => Some(RequestType::GetEx),
         "GETDEL" => Some(RequestType::GetDel),
         "GETSET" => Some(RequestType::GetSet),
+        "SET" => {
+            // SET with GET option returns the old value, which needs decompression
+            // Check if the command has the GET option by looking for "GET" in the arguments
+            // SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time | PXAT unix-time | KEEPTTL]
+            let has_get_option = cmd.args_iter().skip(3).any(|arg| {
+                if let redis::Arg::Simple(bytes) = arg {
+                    bytes.eq_ignore_ascii_case(b"GET")
+                } else {
+                    false
+                }
+            });
+            if has_get_option {
+                // Treat SET with GET option like GETSET for decompression purposes
+                Some(RequestType::GetSet)
+            } else {
+                None
+            }
+        }
         _ => None, // Unknown command or write command, no decompression needed
     }
 }
@@ -238,16 +256,23 @@ pub(super) fn get_connection_info(
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
     tls_params: Option<redis::TlsConnParams>,
+    address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> redis::ConnectionInfo {
+    let (resolved_host, resolved_port) = if let Some(resolver) = address_resolver {
+        resolver.resolve(&address.host, get_port(address))
+    } else {
+        (address.host.to_string(), get_port(address))
+    };
+
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
-            host: address.host.to_string(),
-            port: get_port(address),
+            host: resolved_host,
+            port: resolved_port,
             insecure: tls_mode == TlsMode::InsecureTls,
             tls_params,
         }
     } else {
-        redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
+        redis::ConnectionAddr::Tcp(resolved_host, resolved_port)
     };
     redis::ConnectionInfo {
         addr,
@@ -884,6 +909,15 @@ impl Client {
                 ) {
                     Ok(decompressed_value) => decompressed_value,
                     Err(e) => {
+                        // Propagate critical errors (size limit exceeded, incompatible command)
+                        // to the user instead of silently falling back to raw value
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
                         log_warn(
                             "send_command_decompression",
                             format!("Failed to decompress response: {}", e),
@@ -957,6 +991,15 @@ impl Client {
             let tracker = match self.reserve_inflight_request() {
                 Some(t) => t,
                 None => {
+                    let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
+                    log_warn_rate_limited!(
+                        "inflight",
+                        10,
+                        format!(
+                            "Inflight request limit exhausted. limit={}, available={}",
+                            self.inflight_requests_limit, available
+                        )
+                    );
                     return Err(RedisError::from((
                         ErrorKind::ClientError,
                         "Reached maximum inflight requests",
@@ -985,6 +1028,7 @@ impl Client {
             }
 
             cmd.set_inflight_tracker(tracker);
+            cmd.set_response_timeout(request_timeout);
 
             // Clone compression_manager reference only if compression is enabled
             let compression_manager = if self.is_compression_enabled() {
@@ -1720,6 +1764,7 @@ async fn create_cluster_client(
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
     let connection_timeout = request.get_connection_timeout();
+    let address_resolver = &request.address_resolver;
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1729,6 +1774,7 @@ async fn create_cluster_client(
                 tls_mode,
                 valkey_connection_info.clone(),
                 tls_params.clone(),
+                address_resolver.as_ref(),
             )
         })
         .collect();
@@ -1785,6 +1831,11 @@ async fn create_cluster_client(
         builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
 
     builder = builder.tcp_nodelay(request.tcp_nodelay);
+
+    // Pass the address resolver to the builder for use during topology refresh
+    if let Some(resolver) = address_resolver.clone() {
+        builder = builder.address_resolver(resolver);
+    }
 
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));

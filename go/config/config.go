@@ -618,6 +618,24 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 	}
 	request.RefreshTopologyFromInitialNodes = config.AdvancedClusterClientConfiguration.refreshTopologyFromInitialNodes
 
+	// Handle periodic topology checks configuration
+	if config.AdvancedClusterClientConfiguration.periodicChecks != nil {
+		switch v := config.AdvancedClusterClientConfiguration.periodicChecks.(type) {
+		case PeriodicChecksDisabled:
+			request.PeriodicChecks = &protobuf.ConnectionRequest_PeriodicChecksDisabled{
+				PeriodicChecksDisabled: &protobuf.PeriodicChecksDisabled{},
+			}
+		case PeriodicChecksManualInterval:
+			request.PeriodicChecks = &protobuf.ConnectionRequest_PeriodicChecksManualInterval{
+				PeriodicChecksManualInterval: &protobuf.PeriodicChecksManualInterval{
+					DurationInSec: v.DurationInSec,
+				},
+			}
+		case PeriodicChecksEnabled:
+			// Default behavior - no need to set anything in protobuf
+		}
+	}
+
 	// Handle TCP_NODELAY configuration
 	if config.AdvancedClusterClientConfiguration.tcpNoDelay != nil {
 		request.TcpNodelay = config.AdvancedClusterClientConfiguration.tcpNoDelay
@@ -935,11 +953,38 @@ func (config *AdvancedClientConfiguration) WithPubSubReconciliationIntervalMs(
 	return config
 }
 
+// PeriodicChecksConfig is an interface implemented by [PeriodicChecksEnabled],
+// [PeriodicChecksDisabled], and [PeriodicChecksManualInterval] to configure
+// periodic topology checks for cluster clients.
+type PeriodicChecksConfig interface {
+	isPeriodicChecksConfig()
+}
+
+// PeriodicChecksEnabled enables periodic topology checks with the default interval.
+// This is the default behavior when no periodic checks configuration is set.
+type PeriodicChecksEnabled struct{}
+
+func (PeriodicChecksEnabled) isPeriodicChecksConfig() {}
+
+// PeriodicChecksDisabled disables periodic topology checks.
+type PeriodicChecksDisabled struct{}
+
+func (PeriodicChecksDisabled) isPeriodicChecksConfig() {}
+
+// PeriodicChecksManualInterval configures periodic topology checks with a custom interval.
+type PeriodicChecksManualInterval struct {
+	// DurationInSec is the interval in seconds between periodic topology checks.
+	DurationInSec uint32
+}
+
+func (PeriodicChecksManualInterval) isPeriodicChecksConfig() {}
+
 // Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
 	connectionTimeout               time.Duration
 	refreshTopologyFromInitialNodes bool
+	periodicChecks                  PeriodicChecksConfig
 	tlsConfig                       *TlsConfiguration
 	tcpNoDelay                      *bool
 	pubsubReconciliationIntervalMs  *int
@@ -972,6 +1017,23 @@ func (config *AdvancedClusterClientConfiguration) WithRefreshTopologyFromInitial
 	refreshTopologyFromInitialNodes bool,
 ) *AdvancedClusterClientConfiguration {
 	config.refreshTopologyFromInitialNodes = refreshTopologyFromInitialNodes
+	return config
+}
+
+// WithPeriodicChecks configures the periodic topology checks for the cluster client.
+// These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
+// Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
+//
+// Accepted values:
+//   - [PeriodicChecksEnabled]: Enables periodic checks with the default interval (this is the default).
+//   - [PeriodicChecksDisabled]: Disables periodic topology checks.
+//   - [PeriodicChecksManualInterval]: Enables periodic checks with a custom interval in seconds.
+//
+// If not set, defaults to enabled with the default interval.
+func (config *AdvancedClusterClientConfiguration) WithPeriodicChecks(
+	periodicChecks PeriodicChecksConfig,
+) *AdvancedClusterClientConfiguration {
+	config.periodicChecks = periodicChecks
 	return config
 }
 

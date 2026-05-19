@@ -1,0 +1,16 @@
+{
+    "name": "pnpm-pubsub-test",
+    "version": "1.0.0",
+    "description": "Test that command responses and pubsub work when protobufjs util.Long is null",
+    "main": "pnpm-pubsub-test.cjs",
+    "type": "commonjs",
+    "scripts": {
+        "test": "node pnpm-pubsub-test.cjs"
+    },
+    "author": "Amazon Web Services",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@valkey/valkey-glide": "file:../..",
+        "find-free-port": "^2.0.0"
+    }
+}

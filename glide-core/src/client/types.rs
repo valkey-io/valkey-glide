@@ -2,9 +2,11 @@
 
 #[allow(unused_imports)]
 use logger_core::log_warn;
+use redis::AddressResolver;
 use redis::cache::EvictionPolicy;
 #[allow(unused_imports)]
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(feature = "proto")]
@@ -45,6 +47,7 @@ pub struct ConnectionRequest {
     pub read_only: bool,
     pub client_side_cache: Option<ClientSideCache>,
     pub node_discovery_mode: NodeDiscoveryMode,
+    pub address_resolver: Option<Arc<dyn AddressResolver>>,
 }
 
 /// Default connection timeout used when not specified in the request.
@@ -388,6 +391,13 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                 backend,
                 compression_level: proto_config.compression_level,
                 min_compression_size: proto_config.min_compression_size as usize,
+                // Handle optional max_decompressed_size:
+                // - None (not set) = use default (512MB)
+                // - Some(n) = use n as the limit
+                max_decompressed_size: proto_config
+                    .max_decompressed_size
+                    .map(|size| size as usize)
+                    .or(Some(crate::compression::DEFAULT_MAX_DECOMPRESSED_SIZE)),
             }
         });
 
@@ -434,12 +444,13 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             pubsub_reconciliation_interval_ms,
             read_only,
             node_discovery_mode,
+            // Address resolver is not set from protobuf - it's set programmatically
+            address_resolver: None,
         }
     }
 }
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "proto")]
     mod protobuf_conversion_tests {
         use crate::ConnectionRequest;
         use crate::compression::CompressionBackendType;

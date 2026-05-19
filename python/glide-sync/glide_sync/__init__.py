@@ -6,6 +6,7 @@ from glide_shared import (
     ALL_SHARDED_CHANNELS,
     OK,
     TOK,
+    AddressResolver,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     AggregationType,
@@ -28,6 +29,7 @@ from glide_shared import (
     BitOverflowControl,
     BitwiseOperation,
     ByAddressRoute,
+    ClientSideCache,
     ClosingError,
     ClusterBatch,
     ClusterBatchOptions,
@@ -40,6 +42,7 @@ from glide_shared import (
     ConsistencyMode,
     DataType,
     DistanceMetricType,
+    EvictionPolicy,
     ExclusiveIdBound,
     ExecAbortError,
     ExpireOptions,
@@ -191,6 +194,7 @@ __all__ = [
     "BatchRetryStrategy",
     "ClusterBatchOptions",
     # Config
+    "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
     "GlideClientConfiguration",
@@ -360,4 +364,7 @@ __all__ = [
     "Script",
     # Cluster scan
     "ClusterScanCursor",
+    # Cache
+    "ClientSideCache",
+    "EvictionPolicy",
 ]
