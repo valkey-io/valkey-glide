@@ -1,5 +1,5 @@
 maturin==1.13.3
-anyio[trio]>=4.9.0
+anyio[trio]>=4.12.1
 uvloop
 pytest
 pytest-html
