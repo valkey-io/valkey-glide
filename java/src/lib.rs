@@ -1556,16 +1556,15 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
         // rejected asynchronously, avoiding thread explosion under memory pressure.
         {
             let handle_table = jni_client::get_handle_table();
-            if let Some(client_ref) = handle_table.get(&handle_id) {
-                if client_ref.available_inflight_count() <= 0 {
-                    jni_client::complete_error_sync(
-                        &mut env,
-                        callback_id,
-                        "Client reached maximum inflight requests",
-                    );
-                    return Some(());
-                }
-
+            if let Some(client_ref) = handle_table.get(&handle_id)
+                && client_ref.available_inflight_count() <= 0
+            {
+                jni_client::complete_error_sync(
+                    &mut env,
+                    callback_id,
+                    "Client reached maximum inflight requests",
+                );
+                return Some(());
             }
         }
 
@@ -1934,16 +1933,15 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
         // Synchronous inflight check (same as executeCommandAsync)
         {
             let handle_table = jni_client::get_handle_table();
-            if let Some(client_ref) = handle_table.get(&handle_id) {
-                if client_ref.available_inflight_count() <= 0 {
-                    jni_client::complete_error_sync(
-                        &mut env,
-                        callback_id,
-                        "Client reached maximum inflight requests",
-                    );
-                    return Some(());
-                }
-
+            if let Some(client_ref) = handle_table.get(&handle_id)
+                && client_ref.available_inflight_count() <= 0
+            {
+                jni_client::complete_error_sync(
+                    &mut env,
+                    callback_id,
+                    "Client reached maximum inflight requests",
+                );
+                return Some(());
             }
         }
 
