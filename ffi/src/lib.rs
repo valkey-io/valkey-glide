@@ -4648,3 +4648,166 @@ pub unsafe extern "C" fn unregister_pubsub_callback(
             .into_raw(),
     }
 }
+
+// ─── MonitorClient FFI ────────────────────────────────────────────────────────
+
+use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback};
+
+/// Callback invoked for each parsed MONITOR line.
+/// `client_ptr` is the opaque pointer returned in `ConnectionResponse.conn_ptr`.
+/// String fields are UTF-8, not null-terminated. `args_json` is a JSON array string.
+pub type MonitorCallback = unsafe extern "C-unwind" fn(
+    client_ptr: usize,
+    timestamp: f64,
+    db: i64,
+    client_addr: *const u8,
+    client_addr_len: i64,
+    command: *const u8,
+    command_len: i64,
+    args_json: *const u8,
+    args_json_len: i64,
+);
+
+struct MonitorAdapter {
+    client: std::mem::ManuallyDrop<MonitorClient>,
+    runtime: Runtime,
+}
+
+impl Drop for MonitorAdapter {
+    fn drop(&mut self) {
+        // SAFETY: we are in drop; client will not be used again.
+        let client = unsafe { std::mem::ManuallyDrop::take(&mut self.client) };
+        self.runtime.block_on(client.stop_async());
+    }
+}
+
+/// Create a MonitorClient connected to the first address in `connection_request_bytes`.
+///
+/// # Safety
+/// - `connection_request_bytes` must point to `connection_request_len` valid bytes
+///   containing a serialized `ConnectionRequest` protobuf.
+/// - `monitor_callback` must be a valid function pointer that remains valid for the
+///   lifetime of the returned client.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn create_monitor_client(
+    connection_request_bytes: *const u8,
+    connection_request_len: usize,
+    monitor_callback: MonitorCallback,
+) -> *const ConnectionResponse {
+    let request_bytes =
+        unsafe { std::slice::from_raw_parts(connection_request_bytes, connection_request_len) };
+    let connection_request =
+        match glide_core::connection_request::ConnectionRequest::parse_from_bytes(request_bytes) {
+            Ok(r) => r,
+            Err(e) => {
+                let err_msg = CString::new(format!("Failed to parse connection request: {e}"))
+                    .unwrap_or_default();
+                return Box::into_raw(Box::new(ConnectionResponse {
+                    conn_ptr: std::ptr::null(),
+                    connection_error_message: err_msg.into_raw(),
+                }));
+            }
+        };
+    let connection_request: ConnectionRequest = connection_request.into();
+
+    let Some(address) = connection_request.addresses.first() else {
+        let err_msg = CString::new("No addresses provided").unwrap_or_default();
+        return Box::into_raw(Box::new(ConnectionResponse {
+            conn_ptr: std::ptr::null(),
+            connection_error_message: err_msg.into_raw(),
+        }));
+    };
+    let address = address.clone();
+    let tls_mode = connection_request
+        .tls_mode
+        .unwrap_or(glide_core::client::TlsMode::NoTls);
+
+    let runtime = match Builder::new_multi_thread().enable_all().build() {
+        Ok(r) => r,
+        Err(e) => {
+            let err_msg =
+                CString::new(format!("Failed to create runtime: {e}")).unwrap_or_default();
+            return Box::into_raw(Box::new(ConnectionResponse {
+                conn_ptr: std::ptr::null(),
+                connection_error_message: err_msg.into_raw(),
+            }));
+        }
+    };
+
+    // ptr_cell is written once (Release) after Box::into_raw, before any real
+    // monitor lines can arrive. The closure reads it with Acquire. Safe because
+    // close_monitor_client blocks (via stop_async) until the task exits before
+    // freeing the adapter.
+    let ptr_cell = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let ptr_cell_clone = ptr_cell.clone();
+
+    let on_line: MonitorLineCallback = std::sync::Arc::new(move |line: MonitorLine| {
+        let ptr = ptr_cell_clone.load(std::sync::atomic::Ordering::Acquire);
+        if ptr == 0 {
+            return;
+        }
+        let client_addr_bytes = line.client_addr.as_bytes();
+        let command_bytes = line.command.as_bytes();
+        let args_json = serde_json::to_string(&line.args).unwrap_or_else(|_| "[]".to_string());
+        let args_bytes = args_json.as_bytes();
+        unsafe {
+            monitor_callback(
+                ptr,
+                line.timestamp,
+                line.db,
+                client_addr_bytes.as_ptr(),
+                client_addr_bytes.len() as i64,
+                command_bytes.as_ptr(),
+                command_bytes.len() as i64,
+                args_bytes.as_ptr(),
+                args_bytes.len() as i64,
+            );
+        }
+    });
+
+    let redis_conn_info = runtime.block_on(async {
+        glide_core::client::get_valkey_connection_info(&connection_request, None).await
+    });
+
+    let monitor_client = match runtime
+        .block_on(async { MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await })
+    {
+        Ok(c) => c,
+        Err(e) => {
+            let err_msg =
+                CString::new(format!("Failed to create monitor client: {e}")).unwrap_or_default();
+            return Box::into_raw(Box::new(ConnectionResponse {
+                conn_ptr: std::ptr::null(),
+                connection_error_message: err_msg.into_raw(),
+            }));
+        }
+    };
+
+    let adapter = Box::new(MonitorAdapter {
+        client: std::mem::ManuallyDrop::new(monitor_client),
+        runtime,
+    });
+    let conn_ptr = Box::into_raw(adapter) as *const c_void;
+    // Store ptr before any real lines can arrive (MonitorClient::new returns after
+    // MONITOR +OK; the server only sends lines for subsequent commands).
+    ptr_cell.store(conn_ptr as usize, std::sync::atomic::Ordering::Release);
+
+    Box::into_raw(Box::new(ConnectionResponse {
+        conn_ptr,
+        connection_error_message: std::ptr::null(),
+    }))
+}
+
+/// Stop and free a MonitorClient created by `create_monitor_client`.
+///
+/// # Safety
+/// - `client_ptr` must be a `conn_ptr` returned by `create_monitor_client`.
+/// - Must not be called more than once for the same pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn close_monitor_client(client_ptr: *const c_void) {
+    if !client_ptr.is_null() {
+        // Drop calls runtime.block_on(client.stop_async()), ensuring the task
+        // has fully exited before the adapter memory is freed.
+        let _ = unsafe { Box::from_raw(client_ptr as *mut MonitorAdapter) };
+    }
+}
