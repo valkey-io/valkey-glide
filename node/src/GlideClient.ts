@@ -5,6 +5,11 @@
 import * as net from "net";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import {
+    startMonitor as _startMonitor,
+    MonitorHandle,
+    MonitorLine,
+} from "../build-ts/native";
+import {
     AdvancedBaseClientConfiguration,
     BaseClient,
     BaseClientConfiguration,
@@ -226,6 +231,31 @@ export type AdvancedGlideClientConfiguration =
  * @see For full documentation refer to {@link https://glide.valkey.io/how-to/client-initialization/#standalone | Valkey GLIDE Documentation}.
  */
 export class GlideClient extends BaseClient {
+    private _addresses: { host: string; port: number }[];
+
+    protected constructor(
+        socket: net.Socket,
+        options?: GlideClientConfiguration,
+    ) {
+        super(socket, options);
+        this._addresses = (options?.addresses ?? []).map((a) => ({
+            host: a.host,
+            port: a.port ?? 6379,
+        }));
+    }
+
+    /**
+     * Starts a MONITOR session and invokes `callback` for each command line received.
+     * @param callback - Called with a {@link MonitorLine} for every command observed.
+     * @returns A {@link MonitorHandle} whose `stop()` method ends monitoring.
+     */
+    public startMonitor(callback: (line: MonitorLine) => void): MonitorHandle {
+        const addr = this._addresses[0] ?? { host: "localhost", port: 6379 };
+        return _startMonitor(addr.host, addr.port, (_err, line) =>
+            callback(line),
+        );
+    }
+
     /**
      * @internal
      */

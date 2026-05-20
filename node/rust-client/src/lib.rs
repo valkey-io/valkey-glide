@@ -1,5 +1,6 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_core::client::{MonitorClient, MonitorLine as CoreMonitorLine, MonitorLineCallback, NodeAddress, TlsMode};
 use glide_core::errors::error_message;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
@@ -710,6 +711,73 @@ impl Drop for ClusterScanCursor {
     fn drop(&mut self) {
         glide_core::cluster_scan_container::remove_scan_state_cursor(self.cursor.clone());
     }
+}
+
+#[napi(object)]
+pub struct MonitorLine {
+    pub timestamp: f64,
+    pub db: i64,
+    pub client_addr: String,
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+#[napi]
+pub struct MonitorHandle {
+    inner: Option<MonitorClient>,
+    runtime: Arc<tokio::runtime::Runtime>,
+}
+
+#[napi]
+impl MonitorHandle {
+    #[napi]
+    pub fn stop(&mut self) {
+        if let Some(client) = self.inner.take() {
+            self.runtime.block_on(client.stop_async());
+        }
+    }
+}
+
+#[napi]
+pub fn start_monitor(
+    host: String,
+    port: u16,
+    callback: napi::threadsafe_function::ThreadsafeFunction<MonitorLine>,
+) -> napi::Result<MonitorHandle> {
+    let runtime = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?,
+    );
+    let address = NodeAddress { host: host.into(), port };
+    let cb = Arc::new(callback);
+    let on_line: MonitorLineCallback = Arc::new(move |line: CoreMonitorLine| {
+        let ml = MonitorLine {
+            timestamp: line.timestamp,
+            db: line.db,
+            client_addr: line.client_addr,
+            command: line.command,
+            args: line.args,
+        };
+        let _ = cb.call(
+            Ok(ml),
+            napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+        );
+    });
+    let redis_conn_info = redis::RedisConnectionInfo {
+        db: 0,
+        username: None,
+        password: None,
+        protocol: redis::ProtocolVersion::RESP2,
+        client_name: None,
+        lib_name: None,
+        cache: None,
+    };
+    let client = runtime
+        .block_on(MonitorClient::new(&address, redis_conn_info, TlsMode::NoTls, on_line))
+        .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    Ok(MonitorHandle { inner: Some(client), runtime })
 }
 
 #[napi]
