@@ -1550,6 +1550,24 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
         };
 
         let handle_id = client_ptr as u64;
+
+        // Synchronous inflight check: reject immediately if at capacity.
+        // This prevents Java threads from parking on futures that would be
+        // rejected asynchronously, avoiding thread explosion under memory pressure.
+        {
+            let handle_table = jni_client::get_handle_table();
+            if let Some(client_ref) = handle_table.get(&handle_id)
+                && client_ref.available_inflight_count() <= 0
+            {
+                jni_client::complete_error_sync(
+                    &mut env,
+                    callback_id,
+                    "Client reached maximum inflight requests",
+                );
+                return Some(());
+            }
+        }
+
         get_runtime().spawn(execute_command_request_and_complete(
             handle_id,
             command_request,
@@ -1911,6 +1929,22 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
         };
 
         let handle_id = client_ptr as u64;
+
+        // Synchronous inflight check (same as executeCommandAsync)
+        {
+            let handle_table = jni_client::get_handle_table();
+            if let Some(client_ref) = handle_table.get(&handle_id)
+                && client_ref.available_inflight_count() <= 0
+            {
+                jni_client::complete_error_sync(
+                    &mut env,
+                    callback_id,
+                    "Client reached maximum inflight requests",
+                );
+                return Some(());
+            }
+        }
+
         get_runtime().spawn(execute_command_request_and_complete(
             handle_id,
             command_request,

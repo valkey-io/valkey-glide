@@ -425,11 +425,11 @@ fn process_callback_job_with_env(
     binary_mode: bool,
 ) {
     if take_timed_out_callback(callback_id) {
-        logger_core::log_warn_rate_limited!(
+        logger_core::log_debug_rate_limited!(
             "jni_callback",
             5,
             format!(
-                "Rust task completed for callback_id={} but Java already timed out. Task was leaked.",
+                "Rust task completed for callback_id={} after Java timeout — result discarded.",
                 callback_id
             )
         );
@@ -1001,6 +1001,57 @@ fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientC
     }
 
     Ok(guard.as_ref().cloned().unwrap())
+}
+
+/// Complete a callback with an error synchronously from the JNI calling thread.
+/// This bypasses the async callback channel entirely — used for immediate rejection
+/// (e.g., inflight limit exceeded) where the Java thread must not park.
+///
+/// Requires the calling thread to already have a JNIEnv (which JNI entry points always do).
+pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, message: &str) {
+    let Ok(method_cache) = get_method_cache(env) else {
+        log::error!(
+            "complete_error_sync: method cache not initialized for callback_id={}",
+            callback_id
+        );
+        return;
+    };
+
+    // Create the error message string — a small Java heap allocation,
+    // not affected by native memory pressure.
+    let Ok(error_msg) = env.new_string(message) else {
+        log::error!(
+            "complete_error_sync: failed to create error string for callback_id={}",
+            callback_id
+        );
+        return;
+    };
+
+    // Call AsyncRegistry.completeCallbackWithErrorCode(callbackId, errorCode, errorMessage)
+    // Error code 4 = RequestException (matches the existing inflight error path)
+    let result = unsafe {
+        env.call_static_method_unchecked(
+            &method_cache.async_handle_table_class,
+            method_cache.complete_error_with_code_method,
+            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
+            &[
+                jni::sys::jvalue { j: callback_id },
+                jni::sys::jvalue { i: 4 }, // RequestException error code
+                jni::sys::jvalue {
+                    l: error_msg.into_raw(),
+                },
+            ],
+        )
+    };
+
+    if let Err(e) = result {
+        log::error!(
+            "complete_error_sync: JNI call failed for callback_id={}: {:?}",
+            callback_id,
+            e
+        );
+        let _ = env.exception_clear();
+    }
 }
 
 #[cfg(test)]
