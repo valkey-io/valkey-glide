@@ -4651,7 +4651,7 @@ pub unsafe extern "C" fn unregister_pubsub_callback(
 
 // ─── MonitorClient FFI ────────────────────────────────────────────────────────
 
-use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback};
+use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAddress};
 
 /// Callback invoked for each parsed MONITOR line.
 /// `client_ptr` is the opaque pointer returned in `ConnectionResponse.conn_ptr`.
@@ -4708,19 +4708,65 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
                 }));
             }
         };
-    let connection_request: ConnectionRequest = connection_request.into();
-
-    let Some(address) = connection_request.addresses.first() else {
+    // Extract address, tls, and auth from the protobuf ConnectionRequest BEFORE .into(),
+    // so this compiles against the mock-glide-core stub (which lacks these fields).
+    let Some(proto_addr) = connection_request.addresses.first() else {
         let err_msg = CString::new("No addresses provided").unwrap_or_default();
         return Box::into_raw(Box::new(ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: err_msg.into_raw(),
         }));
     };
-    let address = address.clone();
-    let tls_mode = connection_request
-        .tls_mode
-        .unwrap_or(glide_core::client::TlsMode::NoTls);
+    let address = NodeAddress {
+        host: proto_addr.host.to_string(),
+        port: proto_addr.port as u16,
+    };
+    let tls_mode = match connection_request.tls_mode.enum_value_or_default() {
+        glide_core::connection_request::TlsMode::NoTls => glide_core::client::TlsMode::NoTls,
+        glide_core::connection_request::TlsMode::SecureTls => {
+            glide_core::client::TlsMode::SecureTls
+        }
+        glide_core::connection_request::TlsMode::InsecureTls => {
+            glide_core::client::TlsMode::InsecureTls
+        }
+    };
+    let redis_conn_info = redis::RedisConnectionInfo {
+        db: connection_request.database_id as i64,
+        username: connection_request
+            .authentication_info
+            .as_ref()
+            .and_then(|a| {
+                if a.username.is_empty() {
+                    None
+                } else {
+                    Some(a.username.to_string())
+                }
+            }),
+        password: connection_request
+            .authentication_info
+            .as_ref()
+            .and_then(|a| {
+                if a.password.is_empty() {
+                    None
+                } else {
+                    Some(a.password.to_string())
+                }
+            }),
+        protocol: redis::ProtocolVersion::RESP2,
+        client_name: if connection_request.client_name.is_empty() {
+            None
+        } else {
+            Some(connection_request.client_name.to_string())
+        },
+        lib_name: if connection_request.lib_name.is_empty() {
+            None
+        } else {
+            Some(connection_request.lib_name.to_string())
+        },
+        cache: None,
+    };
+    // Convert to internal ConnectionRequest (needed for the runtime type alias only).
+    let _connection_request: ConnectionRequest = connection_request.into();
 
     let runtime = match Builder::new_multi_thread().enable_all().build() {
         Ok(r) => r,
@@ -4763,10 +4809,6 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
                 args_bytes.len() as i64,
             );
         }
-    });
-
-    let redis_conn_info = runtime.block_on(async {
-        glide_core::client::get_valkey_connection_info(&connection_request, None).await
     });
 
     let monitor_client = match runtime
