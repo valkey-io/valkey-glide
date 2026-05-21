@@ -1059,7 +1059,8 @@ where
     // Separate circular MOVED redirects from normal redirects
     // Circular MOVED needs reconnect handling, not normal redirect handling
     let mut circular_moved_entries: Vec<((usize, Option<usize>), String, ServerError)> = Vec::new();
-    let mut normal_redirect_entries: Vec<((usize, Option<usize>), String, ServerError)> = Vec::new();
+    let mut normal_redirect_entries: Vec<((usize, Option<usize>), String, ServerError)> =
+        Vec::new();
 
     for (indices, address, error) in indices_addresses_and_error {
         let redis_error: RedisError = error.clone().into();
