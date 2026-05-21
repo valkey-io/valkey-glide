@@ -2388,9 +2388,16 @@ class CoreCommands(Protocol):
         """
         return cast(TOK, self._execute_command(RequestType.Select, [str(index)]))
 
-    def reset(self) -> str:
-        """Reset the connection state. See https://valkey.io/commands/reset/"""
-        return cast(str, self._execute_command(RequestType.Reset, []))
+    def reset(self) -> bytes:
+        """
+        Reset the connection state.
+
+        See [valkey.io](https://valkey.io/commands/reset/) for details.
+
+        Returns:
+            bytes: The string "RESET".
+        """
+        return cast(bytes, self._execute_command(RequestType.Reset, []))
 
     def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """

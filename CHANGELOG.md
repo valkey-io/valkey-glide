@@ -1,3 +1,8 @@
+## 2.5
+
+#### Changes
+* Python: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
+
 ## Pending 2.4
 
 #### Fixes
