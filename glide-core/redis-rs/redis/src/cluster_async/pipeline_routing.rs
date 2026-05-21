@@ -1065,8 +1065,11 @@ where
         let redis_error: RedisError = error.clone().into();
 
         // Check for circular MOVED redirect
+        // Use resolve_address to handle hostname vs IP mismatches
         if matches!(retry_method, RetryMethod::MovedRedirect)
-            && is_circular_moved_redirect(redis_error.redirect_node(), &address)
+            && is_circular_moved_redirect(redis_error.redirect_node(), &address, |addr| {
+                ClusterConnInner::resolve_address(&core, addr)
+            })
         {
             circular_moved_entries.push((indices, address, error));
         } else {

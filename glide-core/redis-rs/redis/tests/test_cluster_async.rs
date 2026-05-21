@@ -6970,33 +6970,6 @@ mod cluster_async {
         );
     }
 
-    /// Test for circular MOVED detection in pipeline path.
-    ///
-    /// This test verifies that when a MOVED response in a pipeline points to the same address
-    /// (circular MOVED), the client should trigger a reconnect before retrying.
-    ///
-    /// Currently, the pipeline path does NOT have this fix applied, so this test is expected
-    /// to FAIL (no reconnect happens). Once the fix is applied to the pipeline path, this
-    /// test should pass.
-    ///
-    /// The test tracks:
-    /// 1. Connection attempts (via PING count) - to verify reconnect happened
-    /// 2. Pipeline SET requests - to verify the retry flow
-    ///
-    /// Expected flow WITH the fix:
-    /// - Initial connection: PING (connection 1)
-    /// - Pipeline SET request 0: returns MOVED to same address (circular)
-    /// - Fix detects circular MOVED, triggers reconnect
-    /// - Reconnect: PING (connection 2)
-    /// - Pipeline SET request 1: returns success (on new connection)
-    ///
-    /// Current behavior WITHOUT the fix:
-    /// - Initial connection: PING (connection 1)
-    /// - Pipeline SET request 0: returns MOVED to same address (circular)
-    /// - No reconnect triggered (bug!)
-    /// - Pipeline SET request 1: may fail or succeed on stale connection
-    ///
-    /// To run: cargo test --test test_cluster_async -- test_async_cluster_circular_moved_pipeline_triggers_reconnect --nocapture
     #[test]
     #[serial_test::serial]
     fn test_async_cluster_circular_moved_pipeline_triggers_reconnect() {
