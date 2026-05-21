@@ -14,6 +14,7 @@ pub mod address_resolver_registry;
 pub mod compression;
 pub mod errors;
 pub mod scripts_container;
+pub mod timeout_watchdog;
 pub use client::ConnectionRequest;
 pub mod cluster_scan_container;
 pub mod iam;
