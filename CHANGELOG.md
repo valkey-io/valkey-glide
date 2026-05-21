@@ -11,6 +11,7 @@
 * Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))
 * Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
+* Go: Add RESET command support — standalone client only; RESET resets connection state and is intentionally not exposed on the cluster client interface to avoid partial-reset inconsistency across nodes ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
 
 ## 2.4
 

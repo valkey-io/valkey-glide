@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -11806,15 +11807,10 @@ func (suite *GlideTestSuite) TestReset() {
 			assert.Nil(t, err)
 			assert.Equal(t, "PONG", pong)
 		case interfaces.GlideClusterClientCommands:
-			res := sendWithCustomCommand(suite, client, []string{"RESET"}, "Can't send RESET as a custom command")
-			var resetStr string
-			switch v := res.(type) {
-			case string:
-				resetStr = v
-			case models.ClusterValue[any]:
-				resetStr = v.SingleValue().(string)
-			}
-			assert.Equal(t, "RESET", resetStr)
+			clusterClient := client.(*glide.ClusterClient)
+			result, err := clusterClient.Reset(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "RESET", result)
 			// Verify client recovers after reset
 			pong, err := c.Ping(context.Background())
 			assert.Nil(t, err)
