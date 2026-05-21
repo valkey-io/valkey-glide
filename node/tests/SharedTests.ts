@@ -568,7 +568,10 @@ export function runBaseTests(config: {
                 const batchResponse =
                     client instanceof GlideClient
                         ? await client.exec(new Batch(false).reset(), false)
-                        : await client.exec(new ClusterBatch(false).reset(), false);
+                        : await client.exec(
+                              new ClusterBatch(false).reset(),
+                              false,
+                          );
                 expect(batchResponse?.[0]).toEqual("RESET");
             }, protocol);
         },
