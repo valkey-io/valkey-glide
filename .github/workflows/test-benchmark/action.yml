@@ -13,7 +13,7 @@ runs:
         # SH ephemeral runner is a VM which created anew every time and it doesn't have some required software
         - name: Install Node on self-hosted runner
           if: ${{ runner.environment == 'self-hosted' }}
-          uses: actions/setup-node@v4
+          uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
           with:
               node-version: 23
 
