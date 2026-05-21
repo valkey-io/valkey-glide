@@ -7709,7 +7709,7 @@ func (client *baseClient) CopyWithOptions(
 //	port          - The port of the destination Valkey instance.
 //	key           - The key to migrate.
 //	destinationDB - The database index on the destination instance.
-//	timeout       - The timeout in milliseconds.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
 //
 // Return value:
 //
@@ -7748,7 +7748,7 @@ func (client *baseClient) Migrate(
 //	port           - The port of the destination Valkey instance.
 //	key            - The key to migrate.
 //	destinationDB  - The database index on the destination instance.
-//	timeout        - The timeout in milliseconds.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
 //	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
 //
 // Return value:

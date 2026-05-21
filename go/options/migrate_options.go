@@ -3,6 +3,8 @@
 package options
 
 import (
+	"fmt"
+
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 )
 
@@ -61,6 +63,9 @@ func (o *MigrateOptions) ToArgs() ([]string, error) {
 	}
 	if o.Replace {
 		args = append(args, constants.ReplaceKeyword)
+	}
+	if o.Username != "" && o.Password == "" {
+		return nil, fmt.Errorf("username requires a password")
 	}
 	if o.Username != "" && o.Password != "" {
 		args = append(args, constants.Auth2Keyword, o.Username, o.Password)
