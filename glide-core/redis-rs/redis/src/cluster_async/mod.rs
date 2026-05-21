@@ -140,6 +140,38 @@ fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
     }
 }
 
+/// Checks if a MOVED redirect is circular (points to the same address we're already connected to).
+///
+/// A circular MOVED can happen when:
+/// 1. Client connects through a DNS endpoint (e.g., cluster.example.com)
+/// 2. MOVED response points back to the same DNS endpoint
+/// 3. The connection may be closed, causing retry to fail on read
+///
+/// In this case, we need to reconnect before retrying to ensure we get
+/// a fresh connection. Without this, the retry write may succeed (to buffer)
+/// but the read will fail with FatalReceiveError, which doesn't trigger retry.
+///
+/// Returns `true` if the redirect is circular and a reconnect should be triggered.
+pub(crate) fn is_circular_moved_redirect(
+    redirect_node: Option<(&str, u16)>,
+    current_address: &str,
+) -> bool {
+    if let Some((redirect_addr, _slot)) = redirect_node {
+        if redirect_addr == current_address {
+            log_debug_lazy!(
+                "cluster",
+                format!(
+                    "Detected circular MOVED redirect to same address: {}. \
+                     Reconnecting before retry to avoid potential connection issues.",
+                    current_address
+                )
+            );
+            return true;
+        }
+    }
+    false
+}
+
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
@@ -1344,34 +1376,15 @@ impl<C> Future for Request<C> {
                         let mut request = this.request.take().unwrap();
                         let redirect_node = err.redirect_node();
 
-                        // Check for circular MOVED: when the redirect points to the same address
-                        // we're already connected to. This can happen when:
-                        // 1. Client connects through a DNS endpoint (e.g., cluster.example.com)
-                        // 2. MOVED response points back to the same DNS endpoint
-                        // 3. The connection may be closed, causing retry to fail on read
-                        //
-                        // In this case, we need to reconnect before retrying to ensure we get
-                        // a fresh connection. Without this, the retry write may succeed (to buffer)
-                        // but the read will fail with FatalReceiveError, which doesn't trigger retry.
-                        if let Some((redirect_addr, _slot)) = redirect_node {
-                            let is_circular = redirect_addr == address;
-                            if is_circular {
-                                log_debug_lazy!(
-                                    "cluster",
-                                    format!(
-                                        "Detected circular MOVED redirect to same address: {}. \
-                                         Reconnecting before retry to avoid potential connection issues.",
-                                        address
-                                    )
-                                );
-                                // Reset routing and reconnect with retry
-                                request.info.reset_routing();
-                                return Next::Reconnect {
-                                    request: Some(request),
-                                    target: address,
-                                }
-                                .into();
+                        // Check for circular MOVED and trigger reconnect if detected
+                        if is_circular_moved_redirect(redirect_node, &address) {
+                            // Reset routing and reconnect with retry
+                            request.info.reset_routing();
+                            return Next::Reconnect {
+                                request: Some(request),
+                                target: address,
                             }
+                            .into();
                         }
 
                         // Normal MOVED handling: set redirect and refresh slots
