@@ -41,7 +41,7 @@ func (o *MigrateOptions) SetReplace() *MigrateOptions {
 	return o
 }
 
-// SetPassword sets the AUTH password.
+// SetPassword sets the AUTH password. Clears any previously set username.
 func (o *MigrateOptions) SetPassword(password string) *MigrateOptions {
 	o.Password = password
 	o.Username = "" // clear username to avoid ambiguous AUTH2 state
