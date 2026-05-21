@@ -563,6 +563,13 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 expect(await client.reset()).toEqual("RESET");
                 expect(await client.ping()).toEqual("PONG");
+
+                // Batch test (non-atomic only — RESET cannot be used inside MULTI/EXEC)
+                const batchResponse =
+                    client instanceof GlideClient
+                        ? await client.exec(new Batch(false).reset(), false)
+                        : await client.exec(new ClusterBatch(false).reset(), false);
+                expect(batchResponse?.[0]).toEqual("RESET");
             }, protocol);
         },
         config.timeout,
