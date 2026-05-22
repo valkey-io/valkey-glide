@@ -1,11 +1,11 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::errors::error_message;
-use logger_core::log_warn_lazy;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
+use logger_core::log_warn_lazy;
 use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
