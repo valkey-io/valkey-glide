@@ -123,6 +123,9 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
+    private static final int SCRIPT_POLL_TIMEOUT_MS = 8000;
+    private static final int SCRIPT_POLL_INTERVAL_MS = 500;
+
     private static final List<Arguments> clients = new ArrayList<>();
 
     public static final List<String> DEFAULT_INFO_SECTIONS =
@@ -3685,24 +3688,37 @@ public class CommandTests {
         Thread thread =
                 new Thread(
                         () -> {
-                            long deadline = System.currentTimeMillis() + 8000;
+                            long deadline = System.currentTimeMillis() + SCRIPT_POLL_TIMEOUT_MS;
                             while (System.currentTimeMillis() < deadline) {
                                 try {
                                     String res = killCommand.get().get();
                                     result.complete(res);
                                     return;
                                 } catch (Exception e) {
-                                    // NotBusy means script hasn't started yet, keep polling
+                                    String msg =
+                                            e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                    if (!msg.contains("no scripts in execution")) {
+                                        // Unexpected error - fail fast
+                                        result.completeExceptionally(e);
+                                        return;
+                                    }
+                                    // Expected - script hasn't started yet, keep polling
                                 }
                                 try {
-                                    Thread.sleep(500);
+                                    Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
                                 } catch (InterruptedException ie) {
+                                    result.completeExceptionally(ie);
+                                    Thread.currentThread().interrupt();
                                     return;
                                 }
                             }
                             result.completeExceptionally(
-                                    new AssertionError("Timed out waiting to kill script"));
+                                    new AssertionError(
+                                            "Timed out waiting to kill script after "
+                                                    + SCRIPT_POLL_TIMEOUT_MS
+                                                    + "ms"));
                         });
+        thread.setDaemon(true);
         thread.start();
         return result;
     }
@@ -3717,7 +3733,7 @@ public class CommandTests {
         Thread thread =
                 new Thread(
                         () -> {
-                            long deadline = System.currentTimeMillis() + 8000;
+                            long deadline = System.currentTimeMillis() + SCRIPT_POLL_TIMEOUT_MS;
                             while (System.currentTimeMillis() < deadline) {
                                 try {
                                     killCommand.get().get();
@@ -3728,15 +3744,27 @@ public class CommandTests {
                                         result.complete(true);
                                         return;
                                     }
+                                    if (!msg.contains("no scripts in execution")) {
+                                        // Unexpected error - fail fast
+                                        result.completeExceptionally(e);
+                                        return;
+                                    }
                                 }
                                 try {
-                                    Thread.sleep(500);
+                                    Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
                                 } catch (InterruptedException ie) {
+                                    result.completeExceptionally(ie);
+                                    Thread.currentThread().interrupt();
                                     return;
                                 }
                             }
-                            result.complete(false);
+                            result.completeExceptionally(
+                                    new AssertionError(
+                                            "Timed out waiting for 'unkillable' error after "
+                                                    + SCRIPT_POLL_TIMEOUT_MS
+                                                    + "ms"));
                         });
+        thread.setDaemon(true);
         thread.start();
         return result;
     }
