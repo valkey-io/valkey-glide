@@ -2385,12 +2385,12 @@ impl GlideClientForTests for ClusterConnection {
     }
 }
 
-#[cfg(test)]
 impl Client {
     /// Create a Client wrapping an existing internal_client Arc and synchronizer.
     /// Used in tests to build a Client that shares state with an existing connection.
+    #[doc(hidden)]
     #[allow(dead_code)]
-    pub(crate) fn new_for_test(
+    pub fn new_for_test(
         internal_client: Arc<RwLock<ClientWrapper>>,
         pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
     ) -> Self {
