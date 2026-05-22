@@ -428,12 +428,13 @@ CLUSTER_NODES=127.0.0.1:39163,127.0.0.1:23178,127.0.0.1:25186,127.0.0.1:52500,12
 }
 
 /// Holds all components needed for pubsub topology test setup.
-/// The `_client_holder` keeps the Arc alive so the weak reference in the synchronizer remains valid.
+/// The `client_holder` keeps the Arc alive so the weak reference in the synchronizer remains valid.
 #[cfg(not(feature = "mock-pubsub"))]
 pub struct PubSubTestSetup {
     pub connection: ClusterConnection,
     pub synchronizer: Arc<dyn PubSubSynchronizer>,
-    pub _client_holder: Arc<TokioRwLock<ClientWrapper>>,
+    pub client_holder: Arc<TokioRwLock<ClientWrapper>>,
+    pub glide_client: Client,
 }
 
 #[cfg(not(feature = "mock-pubsub"))]
@@ -494,10 +495,25 @@ impl PubSubTestSetup {
             .expect("Expected GlidePubSubSynchronizer")
             .set_internal_client(Arc::downgrade(&client_arc));
 
+        // Create a glide Client for routing commands through Client::send_command
+        // (e.g. RESET, which calls handle_reset_command to clear desired subscriptions)
+        let glide_client = {
+            let configuration = TestConfiguration {
+                cluster_mode: ClusterMode::Enabled,
+                request_timeout: Some(10000),
+                ..Default::default()
+            };
+            let connection_request = create_connection_request(addresses, &configuration);
+            Client::new(connection_request.into(), None)
+                .await
+                .expect("Failed to create glide Client for PubSubTestSetup")
+        };
+
         Self {
             connection,
             synchronizer,
-            _client_holder: client_arc,
+            client_holder: client_arc,
+            glide_client,
         }
     }
 

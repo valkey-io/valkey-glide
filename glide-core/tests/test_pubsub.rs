@@ -703,10 +703,12 @@ fn test_reset_clears_pubsub_subscriptions() {
             "subscription should be established before RESET"
         );
 
-        // Issue RESET via the connection - triggers handle_reset_command which
-        // calls remove_desired_subscriptions for all kinds
-        let mut reset_cmd = redis::cmd("RESET");
-        let _ = setup.connection.send_command(&mut reset_cmd, None).await;
+        // Send RESET through the glide Client path so handle_reset_command runs,
+        // which calls remove_desired_subscriptions to clear the desired subscription state.
+        {
+            let mut reset_cmd = redis::cmd("RESET");
+            let _ = setup.glide_client.send_command(&mut reset_cmd, None).await;
+        }
 
         // Wait for synchronizer to reconcile the cleared desired state
         let cleared = wait_for_pubsub_state(
@@ -746,9 +748,12 @@ fn test_reset_does_not_resubscribe_after_reconnect() {
             "subscription should be established before RESET"
         );
 
-        // RESET clears desired subscriptions via handle_reset_command
-        let mut reset_cmd = redis::cmd("RESET");
-        let _ = setup.connection.send_command(&mut reset_cmd, None).await;
+        // Send RESET through the glide Client path so handle_reset_command runs,
+        // which calls remove_desired_subscriptions to clear the desired subscription state.
+        {
+            let mut reset_cmd = redis::cmd("RESET");
+            let _ = setup.glide_client.send_command(&mut reset_cmd, None).await;
+        }
 
         // Kill connection to trigger reconnect
         let mut kill_cmd = redis::cmd("CLIENT");

@@ -3067,6 +3067,18 @@ pub(crate) mod shared_client_tests {
     // so reconnections restore the post-RESET state, not the pre-RESET state.
     // =========================================================================
 
+    /// Parse a CLIENT INFO response Value into a String.
+    fn parse_client_info_value(val: Value) -> String {
+        match val {
+            Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+            Value::VerbatimString { text, .. } => text,
+            other => {
+                let map: HashMap<String, String> = redis::from_owned_redis_value(other).unwrap();
+                map.into_values().next().unwrap_or_default()
+            }
+        }
+    }
+
     /// Send CLIENT INFO and return as String (handles both standalone and cluster responses).
     async fn reset_test_get_client_info(client: &mut Client) -> String {
         let mut cmd = redis::Cmd::new();
@@ -3081,14 +3093,7 @@ pub(crate) mod shared_client_tests {
             )
             .await
             .unwrap();
-        match val {
-            Value::BulkString(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-            Value::VerbatimString { text, .. } => text,
-            other => {
-                let map: HashMap<String, String> = redis::from_owned_redis_value(other).unwrap();
-                map.into_values().next().unwrap_or_default()
-            }
-        }
+        parse_client_info_value(val)
     }
 
     /// Kill connection and retry CLIENT INFO until reconnect succeeds.
@@ -3108,14 +3113,7 @@ pub(crate) mod shared_client_tests {
                 )
                 .await
                 .ok()?;
-            match val {
-                Value::BulkString(bytes) => Some(String::from_utf8_lossy(&bytes).to_string()),
-                Value::VerbatimString { text, .. } => Some(text),
-                other => {
-                    let map: HashMap<String, String> = redis::from_owned_redis_value(other).ok()?;
-                    map.into_values().next()
-                }
-            }
+            Some(parse_client_info_value(val))
         })
         .await
     }
