@@ -1028,6 +1028,7 @@ impl Client {
             }
 
             cmd.set_inflight_tracker(tracker);
+            cmd.set_response_timeout(request_timeout);
 
             // Clone compression_manager reference only if compression is enabled
             let compression_manager = if self.is_compression_enabled() {
