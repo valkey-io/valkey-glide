@@ -72,6 +72,39 @@ function readAndParseSpanFile(path: string): {
     };
 }
 
+/**
+ * Polls for the span file to exist and contain at least one expected span name.
+ * Replaces fixed setTimeout waits which are unreliable in CI.
+ */
+async function waitForSpanFile(
+    path: string,
+    expectedSpanName: string,
+    timeoutMs: number = 10000,
+    intervalMs: number = 200,
+): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+        if (fs.existsSync(path)) {
+            try {
+                const { spanNames } = readAndParseSpanFile(path);
+
+                if (spanNames.includes(expectedSpanName)) {
+                    return;
+                }
+            } catch {
+                // File may be partially written; retry
+            }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error(
+        `Timed out waiting for span "${expectedSpanName}" in ${path}`,
+    );
+}
+
 const TIMEOUT = 50000;
 const VALID_ENDPOINT_TRACES = "/tmp/spans.json";
 const VALID_FILE_ENDPOINT_TRACES = "file://" + VALID_ENDPOINT_TRACES;
@@ -202,7 +235,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         };
         OpenTelemetry.init(openTelemetryConfig);
         await teardown_otel_test();
-    }, 40000);
+    }, 60000);
 
     async function teardown_otel_test() {
         // Clean up OpenTelemetry files
@@ -221,6 +254,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
     });
 
     afterAll(async () => {
+        if (!cluster) return;
+
         if (testsFailed === 0) {
             await cluster.close();
         } else {
@@ -330,7 +365,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             }
 
             // Wait for spans to be flushed to file
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await waitForSpanFile(VALID_ENDPOINT_TRACES, "Get");
 
             // Read the span file and check span name
             const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
@@ -366,7 +401,8 @@ describe("OpenTelemetry GlideClusterClient", () => {
                 "value",
             );
 
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            // Wait for spans to be flushed to file
+            await waitForSpanFile(VALID_ENDPOINT_TRACES, "Set");
 
             // Read the span file and check span name
             const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
@@ -437,7 +473,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             client2.get("test_key");
 
             // Wait for spans to be flushed to file
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await waitForSpanFile(VALID_ENDPOINT_TRACES, "Get");
 
             // Read and check span names from the file using the helper function
             const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
@@ -482,7 +518,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
             }
 
             // Wait for spans to be flushed to file
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await waitForSpanFile(VALID_ENDPOINT_TRACES, "Batch");
 
             // Read and check span names from the file using the helper function
             const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
@@ -529,6 +565,8 @@ describe("OpenTelemetry GlideClient", () => {
     });
 
     afterAll(async () => {
+        if (!cluster) return;
+
         if (testsFailed === 0) {
             await cluster.close();
         } else {
@@ -912,7 +950,7 @@ describe("OpenTelemetry parent span context propagation", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 40000);
+    }, 60000);
 
     afterEach(async () => {
         OpenTelemetry.setParentSpanContextProvider(null);
@@ -925,7 +963,7 @@ describe("OpenTelemetry parent span context propagation", () => {
     });
 
     afterAll(async () => {
-        await cluster.close();
+        if (cluster) await cluster.close();
     });
 
     it(
@@ -972,7 +1010,7 @@ describe("OpenTelemetry parent span context propagation", () => {
             await client.get("ctx_propagation_test_key");
 
             // Wait for spans to be flushed to file
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await waitForSpanFile(VALID_ENDPOINT_TRACES, "Get");
 
             const { spans, spanNames } = readAndParseSpanFile(
                 VALID_ENDPOINT_TRACES,
@@ -1041,7 +1079,7 @@ describe("OpenTelemetry parent span context propagation", () => {
             expect(result).toBe("fallback_test_value");
 
             // Wait for spans to be flushed to file
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+            await waitForSpanFile(VALID_ENDPOINT_TRACES, "Get");
 
             const { spans, spanNames } = readAndParseSpanFile(
                 VALID_ENDPOINT_TRACES,
