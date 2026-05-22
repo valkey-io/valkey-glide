@@ -1049,21 +1049,27 @@ impl Client {
 
             match request_timeout {
                 Some(duration) => {
+                    let timeout_rx =
+                        crate::timeout_watchdog::TimeoutWatchdog::global().register(duration);
                     tokio::pin!(execute);
                     tokio::select! {
                         result = &mut execute => result,
-                        _ = tokio::time::sleep(duration) => {
-                            // User timeout — execute future is dropped. The Cmd
-                            // was already moved into the event loop's PendingRequest,
-                            // so its tracker clone keeps the inflight slot held until
-                            // all sub-commands complete naturally.
-                            if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                                log_error(
-                                    "OpenTelemetry:timeout_error",
-                                    format!("Failed to record timeout error: {e}"),
-                                );
+                        recv_result = timeout_rx => {
+                            if recv_result.is_err() {
+                                // Watchdog thread died (sender dropped). Don't spuriously
+                                // timeout — fall through to let the command complete normally
+                                // via Tokio's timer wheel as a fallback.
+                                execute.await
+                            } else {
+                                // Watchdog fired the timeout
+                                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                                    log_error(
+                                        "OpenTelemetry:timeout_error",
+                                        format!("Failed to record timeout error: {e}"),
+                                    );
+                                }
+                                Err(io::Error::from(io::ErrorKind::TimedOut).into())
                             }
-                            Err(io::Error::from(io::ErrorKind::TimedOut).into())
                         }
                     }
                 }
