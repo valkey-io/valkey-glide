@@ -497,10 +497,8 @@ impl PubSubTestSetup {
 
         // Create a glide Client for routing commands through Client::send_command
         // (e.g. RESET, which calls handle_reset_command to clear desired subscriptions)
-        let glide_client = glide_core::client::Client::new_for_test(
-            client_arc.clone(),
-            synchronizer.clone(),
-        );
+        let glide_client =
+            glide_core::client::Client::new_for_test(client_arc.clone(), synchronizer.clone());
 
         Self {
             connection,
