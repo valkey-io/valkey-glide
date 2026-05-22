@@ -3679,8 +3679,8 @@ public class CommandTests {
     }
 
     /**
-     * Polls scriptKill in a background thread until it succeeds (returns OK). This ensures the
-     * script has started executing before the kill is attempted, avoiding NotBusy race conditions.
+     * Polls scriptKill in a background thread until it succeeds (returns OK). This ensures the script
+     * has started executing before the kill is attempted, avoiding NotBusy race conditions.
      */
     private CompletableFuture<String> pollScriptKillInBackground(
             Supplier<CompletableFuture<String>> killCommand) {
@@ -3695,8 +3695,7 @@ public class CommandTests {
                                     result.complete(res);
                                     return;
                                 } catch (Exception e) {
-                                    String msg =
-                                            e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
                                     if (!msg.contains("no scripts in execution")) {
                                         // Unexpected error - fail fast
                                         result.completeExceptionally(e);
@@ -3714,9 +3713,7 @@ public class CommandTests {
                             }
                             result.completeExceptionally(
                                     new AssertionError(
-                                            "Timed out waiting to kill script after "
-                                                    + SCRIPT_POLL_TIMEOUT_MS
-                                                    + "ms"));
+                                            "Timed out waiting to kill script after " + SCRIPT_POLL_TIMEOUT_MS + "ms"));
                         });
         thread.setDaemon(true);
         thread.start();
@@ -3738,8 +3735,7 @@ public class CommandTests {
                                 try {
                                     killCommand.get().get();
                                 } catch (Exception e) {
-                                    String msg =
-                                            e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
                                     if (msg.contains("unkillable")) {
                                         result.complete(true);
                                         return;
