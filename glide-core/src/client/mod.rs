@@ -2386,6 +2386,36 @@ impl GlideClientForTests for ClusterConnection {
 }
 
 #[cfg(test)]
+impl Client {
+    /// Create a Client wrapping an existing internal_client Arc and synchronizer.
+    /// Used in tests to build a Client that shares state with an existing connection.
+    pub(crate) fn new_for_test(
+        internal_client: Arc<RwLock<ClientWrapper>>,
+        pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    ) -> Self {
+        use crate::client::types::{NodeAddress, OTelMetadata};
+        Client {
+            internal_client,
+            request_timeout: Duration::from_millis(1000),
+            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
+            inflight_log_interval: 100,
+            iam_token_manager: None,
+            compression_manager: None,
+            pubsub_synchronizer,
+            otel_metadata: OTelMetadata {
+                address: NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                },
+                db_namespace: "0".to_string(),
+            },
+            client_side_cache: None,
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::time::Duration;
 

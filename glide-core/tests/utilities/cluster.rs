@@ -497,17 +497,10 @@ impl PubSubTestSetup {
 
         // Create a glide Client for routing commands through Client::send_command
         // (e.g. RESET, which calls handle_reset_command to clear desired subscriptions)
-        let glide_client = {
-            let configuration = TestConfiguration {
-                cluster_mode: ClusterMode::Enabled,
-                request_timeout: Some(10000),
-                ..Default::default()
-            };
-            let connection_request = create_connection_request(addresses, &configuration);
-            Client::new(connection_request.into(), None)
-                .await
-                .expect("Failed to create glide Client for PubSubTestSetup")
-        };
+        let glide_client = glide_core::client::Client::new_for_test(
+            client_arc.clone(),
+            synchronizer.clone(),
+        );
 
         Self {
             connection,
