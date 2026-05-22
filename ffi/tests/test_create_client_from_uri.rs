@@ -1549,13 +1549,17 @@ fn test_create_client_from_uri_client_side_cache_rejects_cache_id() {
 fn test_create_client_from_uri_client_side_cache_zero_max_cache_kb() {
     let server = Server::new();
     let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
-    let options = CString::new(
-        r#"{"client_side_cache": {"max_cache_kb": 0, "entry_ttl_ms": 1000}}"#,
-    )
-    .unwrap();
+    let options =
+        CString::new(r#"{"client_side_cache": {"max_cache_kb": 0, "entry_ttl_ms": 1000}}"#)
+            .unwrap();
     let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
     let response = unsafe {
-        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+        create_client_from_uri(
+            uri.as_ptr(),
+            options.as_ptr(),
+            client_type,
+            null_pubsub_callback(),
+        )
     };
     assert!(!response.is_null());
     let conn_response = unsafe { &*response };

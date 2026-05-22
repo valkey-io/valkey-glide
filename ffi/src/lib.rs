@@ -39,7 +39,6 @@ use std::slice::from_raw_parts;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
-use uuid::Uuid;
 use std::{
     ffi::{CString, c_void},
     mem,
@@ -47,6 +46,7 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+use uuid::Uuid;
 
 #[repr(C)]
 pub struct ScriptHashBuffer {
