@@ -1317,7 +1317,8 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     ),
                 },
                 Ok(bytes) => {
-                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None, 0) {
+                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None, 0)
+                    {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(
