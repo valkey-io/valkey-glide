@@ -1,9 +1,9 @@
-## 2.5
+## Pending 2.5
 
 #### Changes
 * Node: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5945](https://github.com/valkey-io/valkey-glide/pull/5945))
 
-## Pending 2.4
+## 2.4
 
 #### Fixes
 * CORE: Add dedicated timeout watchdog thread independent of the Tokio runtime. Under memory pressure or Tokio starvation, `tokio::time::sleep` may not fire on time. The watchdog uses a separate OS thread to guarantee timeout delivery, preventing commands from hanging indefinitely when the async runtime is overloaded. ([#5752](https://github.com/valkey-io/valkey-glide/issues/5752))
