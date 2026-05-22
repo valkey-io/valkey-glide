@@ -1,9 +1,9 @@
-## 2.5
+## Pending 2.5
 
 #### Changes
 * Python: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
 
-## Pending 2.4
+## 2.4
 
 #### Fixes
 * CORE: Fall back to existing cluster connections when initial nodes are unavailable during topology refresh. When `refreshTopologyFromInitialNodes=true` and the initial/seed node is unreachable (e.g., dead primary during failover), the topology refresh now queries healthy existing connections instead of failing silently. This complements #5812 to enable failover recovery when the seed node itself is the failed node. ([#5814](https://github.com/valkey-io/valkey-glide/pull/5814))
