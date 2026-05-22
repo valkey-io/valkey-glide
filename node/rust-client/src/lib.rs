@@ -1,6 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::errors::error_message;
+use logger_core::log_warn_lazy;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
@@ -811,11 +812,21 @@ impl redis::AddressResolver for NodeAddressResolver {
         );
 
         if status != napi::Status::Ok {
+            log_warn_lazy!(
+                "address_resolver",
+                format!("Address resolver failed, falling back to original address: {status:?}")
+            );
             return (host.to_string(), port);
         }
 
         // Wait for the JS callback to send back the resolved address
-        rx.recv().unwrap_or_else(|_| (host.to_string(), port))
+        rx.recv().unwrap_or_else(|e| {
+            log_warn_lazy!(
+                "address_resolver",
+                format!("Address resolver failed, falling back to original address: {e}")
+            );
+            (host.to_string(), port)
+        })
     }
 }
 
@@ -865,7 +876,13 @@ pub fn register_address_resolver(
                     Ok((h.into_utf8()?.into_owned()?, p.get_uint32()? as u16))
                 })()
                 .unwrap_or((request.host.clone(), request.port)),
-                Err(_) => (request.host.clone(), request.port),
+                Err(e) => {
+                    log_warn_lazy!(
+                        "address_resolver",
+                        format!("Address resolver failed, falling back to original address: {e}")
+                    );
+                    (request.host.clone(), request.port)
+                }
             };
 
             // Send the result back to the waiting Rust thread
