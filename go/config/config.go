@@ -217,10 +217,9 @@ const (
 //   - Address translation for proxy setups
 //   - Dynamic endpoint resolution for cloud environments
 //
-// Note: The resolver must be safe for concurrent use, as it may be called from multiple goroutines
-// during connection and topology refresh. If the resolver returns an error or panics, the original
-// address will be used as a fallback.
-type AddressResolver func(host string, port int) (resolvedHost string, resolvedPort int)
+// The resolver must be safe for concurrent use, as it may be called from multiple goroutines
+// during connection and topology refresh.
+type AddressResolver func(host string, port int) (string, int)
 
 type baseClientConfiguration struct {
 	addresses         []NodeAddress
@@ -587,19 +586,16 @@ func (config *ClientConfiguration) WithNodeDiscoveryMode(mode NodeDiscoveryMode)
 	return config
 }
 
-// WithAddressResolver sets an address resolver callback for resolving node addresses before connection.
-//
-// When set, the resolver will be called to resolve host:port pairs before establishing connections
-// to server nodes. This allows custom DNS resolution or address translation logic.
-//
-// If the resolver is nil, addresses are used as configured without modification.
-//
-// Note: Due to FFI constraints, only one resolver can be active globally at a time. If multiple
-// clients are created with different resolvers, the last one set will be used for all clients.
-// In most applications this is not an issue since a single resolver is shared across all clients.
+// WithAddressResolver sets a custom address resolver for the standalone client.
+// The resolver is called during connection establishment and topology refresh to translate
+// addresses before connecting. Return the original host and port to use them unchanged.
 func (config *ClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClientConfiguration {
 	config.addressResolver = resolver
 	return config
+}
+
+func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
+	return config.addressResolver
 }
 
 func (config *ClientConfiguration) HasSubscription() bool {
@@ -611,11 +607,6 @@ func (config *ClientConfiguration) GetSubscription() *StandaloneSubscriptionConf
 		return config.subscriptionConfig
 	}
 	return nil
-}
-
-// GetAddressResolver returns the configured address resolver, or nil if none is set.
-func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
-	return config.addressResolver
 }
 
 // ClusterClientConfiguration represents the configuration settings for a Cluster Glide client.
@@ -833,16 +824,9 @@ func (config *ClusterClientConfiguration) WithClientSideCache(
 	return config
 }
 
-// WithAddressResolver sets an address resolver callback for resolving node addresses before connection.
-//
-// When set, the resolver will be called to resolve host:port pairs before establishing connections
-// to cluster nodes. This allows custom DNS resolution or address translation logic.
-//
-// If the resolver is nil, addresses are used as configured without modification.
-//
-// Note: Due to FFI constraints, only one resolver can be active globally at a time. If multiple
-// clients are created with different resolvers, the last one set will be used for all clients.
-// In most applications this is not an issue since a single resolver is shared across all clients.
+// WithAddressResolver sets a custom address resolver for the cluster client.
+// The resolver is called during connection establishment and topology refresh to translate
+// addresses before connecting. Return the original host and port to use them unchanged.
 func (config *ClusterClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClusterClientConfiguration {
 	config.addressResolver = resolver
 	return config
@@ -852,16 +836,15 @@ func (config *ClusterClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }
 
+func (config *ClusterClientConfiguration) GetAddressResolver() AddressResolver {
+	return config.addressResolver
+}
+
 func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
 	if config.HasSubscription() {
 		return config.subscriptionConfig
 	}
 	return nil
-}
-
-// GetAddressResolver returns the configured address resolver, or nil if none is set.
-func (config *ClusterClientConfiguration) GetAddressResolver() AddressResolver {
-	return config.addressResolver
 }
 
 // TlsConfiguration represents TLS-specific configuration settings.

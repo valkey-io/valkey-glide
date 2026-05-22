@@ -33,6 +33,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -47,6 +48,8 @@ import (
 )
 
 const OK = "OK"
+
+var clientIDCounter atomic.Uintptr
 
 type payload struct {
 	value *C.struct_CommandResponse
@@ -63,6 +66,7 @@ type baseClient struct {
 	coreClient     unsafe.Pointer
 	mu             *sync.Mutex
 	messageHandler *MessageHandler
+	resolverID     uintptr
 }
 
 // setMessageHandler assigns a message handler to the client for processing pub/sub messages
@@ -161,11 +165,15 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	}
 	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
 
-	// Set up address resolver if configured
+	// Determine resolver callback and client ID
 	var resolverCallback C.AddressResolverCallback
-	if resolver := config.GetAddressResolver(); resolver != nil {
-		setGlobalResolver(resolver)
-		resolverCallback = (C.AddressResolverCallback)(unsafe.Pointer(C.addressResolverCallback))
+	var clientID uintptr
+	if cfg, ok := config.(interface{ GetAddressResolver() config.AddressResolver }); ok {
+		if resolver := cfg.GetAddressResolver(); resolver != nil {
+			clientID = uintptr(clientIDCounter.Add(1))
+			registerResolver(clientID, resolver)
+			resolverCallback = (C.AddressResolverCallback)(unsafe.Pointer(C.addressResolverCallback))
+		}
 	}
 
 	cResponse := (*C.struct_ConnectionResponse)(
@@ -175,6 +183,7 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 			&clientType,
 			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
 			resolverCallback,
+			C.uintptr_t(clientID),
 		),
 	)
 
@@ -182,10 +191,14 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
+		if clientID != 0 {
+			unregisterResolver(clientID)
+		}
 		return nil, NewConnectionError(message)
 	}
 
 	client.coreClient = cResponse.conn_ptr
+	client.resolverID = clientID
 
 	// Register the client in our registry using the pointer value from C
 	registerClient(client, uintptr(cResponse.conn_ptr))
@@ -206,6 +219,11 @@ func (client *baseClient) Close() {
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
+
+	if client.resolverID != 0 {
+		unregisterResolver(client.resolverID)
+		client.resolverID = 0
+	}
 
 	// iterating the channel map while holding the lock guarantees those unsafe.Pointers is still valid
 	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
