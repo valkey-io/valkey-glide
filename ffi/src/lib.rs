@@ -39,7 +39,7 @@ use std::slice::from_raw_parts;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use uuid::Uuid;
 use std::{
     ffi::{CString, c_void},
     mem,
@@ -47,9 +47,6 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
-
-/// Atomic counter for auto-generating unique `cache_id` values for client-side cache configurations.
-static CLIENT_SIDE_CACHE_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[repr(C)]
 pub struct ScriptHashBuffer {
@@ -1942,10 +1939,6 @@ fn apply_json_options(
 
         let mut config = connection_request::ClientSideCache::new();
 
-        // Auto-generate cache_id (not accepted from JSON input)
-        let id = CLIENT_SIDE_CACHE_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-        config.cache_id = id.to_string().into();
-
         // max_cache_kb (required)
         let max_cache_kb = cache_obj
             .get("max_cache_kb")
@@ -1953,6 +1946,9 @@ fn apply_json_options(
         config.max_cache_kb = max_cache_kb.as_u64().ok_or_else(|| {
             "client_side_cache.max_cache_kb must be a positive integer".to_string()
         })?;
+        if config.max_cache_kb == 0 {
+            return Err("client_side_cache.max_cache_kb must be greater than 0".to_string());
+        }
 
         // entry_ttl_ms (required)
         let entry_ttl_ms = cache_obj
@@ -1987,6 +1983,8 @@ fn apply_json_options(
                 .ok_or_else(|| "client_side_cache.enable_metrics must be a boolean".to_string())?;
         }
 
+        // Auto-generate cache_id after all validation passes (not accepted from JSON input)
+        config.cache_id = Uuid::new_v4().to_string().into();
         request.client_side_cache = ::protobuf::MessageField::some(config);
     }
 
