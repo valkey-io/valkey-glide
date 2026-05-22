@@ -1544,3 +1544,32 @@ fn test_create_client_from_uri_client_side_cache_rejects_cache_id() {
         drop(Box::from_raw(client_type));
     }
 }
+
+#[test]
+fn test_create_client_from_uri_client_side_cache_zero_max_cache_kb() {
+    let server = Server::new();
+    let uri = CString::new(format!("redis://127.0.0.1:{}", server.port)).unwrap();
+    let options = CString::new(
+        r#"{"client_side_cache": {"max_cache_kb": 0, "entry_ttl_ms": 1000}}"#,
+    )
+    .unwrap();
+    let client_type = Box::into_raw(Box::new(ClientType::SyncClient));
+    let response = unsafe {
+        create_client_from_uri(uri.as_ptr(), options.as_ptr(), client_type, null_pubsub_callback())
+    };
+    assert!(!response.is_null());
+    let conn_response = unsafe { &*response };
+    assert!(
+        !conn_response.connection_error_message.is_null(),
+        "Expected error for max_cache_kb=0"
+    );
+    let error = parse_error_msg(conn_response.connection_error_message);
+    assert!(
+        error.contains("max_cache_kb"),
+        "Expected max_cache_kb error, got: {error}"
+    );
+    unsafe {
+        free_connection_response(response as *mut ConnectionResponse);
+        drop(Box::from_raw(client_type));
+    }
+}
