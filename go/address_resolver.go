@@ -1,4 +1,4 @@
-// Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+// Copyright Valkey GLIDE Project Contributors - SPDX-Identifier: Apache-2.0
 
 package glide
 
@@ -13,36 +13,19 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 )
 
-// globalResolver holds the address resolver that is currently active.
-// Since the FFI callback signature does not carry a context pointer, only one
-// resolver can be active at a time. When multiple clients are created with
-// different resolvers, the last one set wins for all subsequent resolution calls.
-//
-// In practice this is acceptable because:
-//  1. Most applications use a single resolver for all clients.
-//  2. The resolver is called during client creation and topology refresh,
-//     both of which happen on the client's own runtime.
-var (
-	globalResolver   config.AddressResolver
-	globalResolverMu sync.RWMutex
-)
+var resolverRegistry sync.Map // map[uintptr]config.AddressResolver
 
-// setGlobalResolver sets the global address resolver.
-func setGlobalResolver(resolver config.AddressResolver) {
-	globalResolverMu.Lock()
-	defer globalResolverMu.Unlock()
-	globalResolver = resolver
+func registerResolver(clientID uintptr, resolver config.AddressResolver) {
+	resolverRegistry.Store(clientID, resolver)
 }
 
-// getGlobalResolver returns the current global address resolver.
-func getGlobalResolver() config.AddressResolver {
-	globalResolverMu.RLock()
-	defer globalResolverMu.RUnlock()
-	return globalResolver
+func unregisterResolver(clientID uintptr) {
+	resolverRegistry.Delete(clientID)
 }
 
 //export addressResolverCallback
 func addressResolverCallback(
+	clientID C.uintptr_t,
 	host *C.uint8_t,
 	hostLen C.uintptr_t,
 	port C.uint16_t,
@@ -50,23 +33,23 @@ func addressResolverCallback(
 	resolvedHostBufLen C.uintptr_t,
 	resolvedHostLen *C.uintptr_t,
 ) C.uint16_t {
-	resolver := getGlobalResolver()
-	if resolver == nil {
-		// No resolver configured, return 0 to signal fallback to original address
+	val, ok := resolverRegistry.Load(uintptr(clientID))
+	if !ok {
+		return 0
+	}
+	resolver, ok := val.(config.AddressResolver)
+	if !ok || resolver == nil {
 		return 0
 	}
 
-	// Convert C host to Go string
 	goHost := C.GoStringN((*C.char)(unsafe.Pointer(host)), C.int(hostLen))
 	goPort := int(port)
 
-	// Call the user's resolver (recover from panics)
 	var resolvedHost string
 	var resolvedPort int
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// On panic, signal fallback by leaving resolvedPort as 0
 				resolvedHost = ""
 				resolvedPort = 0
 			}
@@ -74,19 +57,15 @@ func addressResolverCallback(
 		resolvedHost, resolvedPort = resolver(goHost, goPort)
 	}()
 
-	// If resolver returned port 0 or empty host, signal fallback
-	if resolvedPort == 0 || resolvedHost == "" {
+	if resolvedPort < 1 || resolvedPort > 65535 || resolvedHost == "" {
 		return 0
 	}
 
-	// Write resolved host into the buffer
 	hostBytes := []byte(resolvedHost)
 	if len(hostBytes) > int(resolvedHostBufLen) {
-		// Host too long for buffer, signal fallback
 		return 0
 	}
 
-	// Copy resolved host into the C buffer
 	C.memcpy(
 		unsafe.Pointer(resolvedHostBuf),
 		unsafe.Pointer(&hostBytes[0]),
