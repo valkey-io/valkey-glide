@@ -142,8 +142,8 @@ func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallba
 // Passes the pointers to callback functions which will be invoked when the command succeeds or fails.
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
 // connection_response to avoid any memory leaks.
-func createClient(config clientConfiguration) (*baseClient, error) {
-	request, err := config.ToProtobuf()
+func createClient(cfg clientConfiguration) (*baseClient, error) {
+	request, err := cfg.ToProtobuf()
 	if err != nil {
 		return nil, err
 	}
@@ -168,8 +168,8 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	// Determine resolver callback and client ID
 	var resolverCallback C.AddressResolverCallback
 	var clientID uintptr
-	if cfg, ok := config.(interface{ GetAddressResolver() config.AddressResolver }); ok {
-		if resolver := cfg.GetAddressResolver(); resolver != nil {
+	if cfgWithResolver, ok := cfg.(interface{ GetAddressResolver() config.AddressResolver }); ok {
+		if resolver := cfgWithResolver.GetAddressResolver(); resolver != nil {
 			clientID = uintptr(clientIDCounter.Add(1))
 			registerResolver(clientID, resolver)
 			resolverCallback = (C.AddressResolverCallback)(unsafe.Pointer(C.addressResolverCallback))
