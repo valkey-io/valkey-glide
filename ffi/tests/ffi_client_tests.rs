@@ -272,6 +272,7 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
             std::mem::transmute::<
                 *mut c_void,
                 unsafe extern "C-unwind" fn(
+                    client_ptr: usize,
                     host: *const u8,
                     host_len: usize,
                     port: u16,
@@ -280,6 +281,7 @@ fn test_ffi_client_command_execution(#[values(false, true)] async_client: bool) 
                     resolved_host_len: *mut usize,
                 ) -> u16,
             >(std::ptr::null_mut()),
+            0,
         );
 
         assert!(!response_ptr.is_null(), "Failed to create client");
@@ -479,6 +481,7 @@ fn test_inflight_request_limit_sync_client() {
             std::mem::transmute::<
                 *mut c_void,
                 unsafe extern "C-unwind" fn(
+                    client_ptr: usize,
                     host: *const u8,
                     host_len: usize,
                     port: u16,
@@ -487,6 +490,7 @@ fn test_inflight_request_limit_sync_client() {
                     resolved_host_len: *mut usize,
                 ) -> u16,
             >(std::ptr::null_mut()),
+            0,
         );
 
         assert!(!response_ptr.is_null(), "Failed to create client");
