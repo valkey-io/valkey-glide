@@ -274,3 +274,195 @@ func TestSpanFromContext_ErrorRecovery(t *testing.T) {
 		_ = panicSpanFromContext(context.Background())
 	})
 }
+
+func TestSpanContextExtractor_SetReplaceClear(t *testing.T) {
+	otel := GetOtelInstance()
+	otel.SetSpanContextExtractor(nil)
+	t.Cleanup(func() {
+		otel.SetSpanContextExtractor(nil)
+	})
+
+	first := SpanContext{
+		TraceID:    "0af7651916cd43dd8448eb211c80319c",
+		SpanID:     "b7ad6b7169203331",
+		TraceFlags: 1,
+	}
+	second := SpanContext{
+		TraceID:    "4bf92f3577b34da6a3ce929d0e0e4736",
+		SpanID:     "00f067aa0ba902b7",
+		TraceFlags: 0,
+	}
+
+	otel.SetSpanContextExtractor(func(context.Context) (SpanContext, bool) {
+		return first, true
+	})
+	got, ok := otel.extractRemoteSpanContext(context.Background())
+	require.True(t, ok)
+	assert.Equal(t, first, got)
+
+	otel.SetSpanContextExtractor(func(context.Context) (SpanContext, bool) {
+		return second, true
+	})
+	got, ok = otel.extractRemoteSpanContext(context.Background())
+	require.True(t, ok)
+	assert.Equal(t, second, got)
+
+	otel.SetSpanContextExtractor(nil)
+	_, ok = otel.extractRemoteSpanContext(context.Background())
+	assert.False(t, ok)
+}
+
+func TestSpanContextExtractor_InvalidContextReturnsFalse(t *testing.T) {
+	otel := GetOtelInstance()
+	t.Cleanup(func() {
+		otel.SetSpanContextExtractor(nil)
+	})
+
+	testCases := []struct {
+		name string
+		ctx  SpanContext
+	}{
+		{
+			name: "invalid trace id length",
+			ctx:  SpanContext{TraceID: "abc", SpanID: "b7ad6b7169203331", TraceFlags: 1},
+		},
+		{
+			name: "zero trace id",
+			ctx: SpanContext{
+				TraceID:    "00000000000000000000000000000000",
+				SpanID:     "b7ad6b7169203331",
+				TraceFlags: 1,
+			},
+		},
+		{
+			name: "invalid span id length",
+			ctx:  SpanContext{TraceID: "0af7651916cd43dd8448eb211c80319c", SpanID: "abc", TraceFlags: 1},
+		},
+		{
+			name: "zero span id",
+			ctx: SpanContext{
+				TraceID:    "0af7651916cd43dd8448eb211c80319c",
+				SpanID:     "0000000000000000",
+				TraceFlags: 1,
+			},
+		},
+		{
+			name: "invalid hex",
+			ctx: SpanContext{
+				TraceID:    "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+				SpanID:     "b7ad6b7169203331",
+				TraceFlags: 1,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			otel.SetSpanContextExtractor(func(context.Context) (SpanContext, bool) {
+				return tc.ctx, true
+			})
+
+			_, ok := otel.extractRemoteSpanContext(context.Background())
+			assert.False(t, ok)
+		})
+	}
+}
+
+func TestSpanContextExtractor_NormalizesUppercaseHex(t *testing.T) {
+	otel := GetOtelInstance()
+	t.Cleanup(func() {
+		otel.SetSpanContextExtractor(nil)
+	})
+
+	otel.SetSpanContextExtractor(func(context.Context) (SpanContext, bool) {
+		return SpanContext{
+			TraceID:    "0AF7651916CD43DD8448EB211C80319C",
+			SpanID:     "B7AD6B7169203331",
+			TraceFlags: 1,
+		}, true
+	})
+
+	got, ok := otel.extractRemoteSpanContext(context.Background())
+	require.True(t, ok)
+	assert.Equal(t, "0af7651916cd43dd8448eb211c80319c", got.TraceID)
+	assert.Equal(t, "b7ad6b7169203331", got.SpanID)
+}
+
+func TestSpanContextExtractor_PanicRecovery(t *testing.T) {
+	otel := GetOtelInstance()
+	t.Cleanup(func() {
+		otel.SetSpanContextExtractor(nil)
+	})
+
+	otel.SetSpanContextExtractor(func(context.Context) (SpanContext, bool) {
+		panic("boom")
+	})
+
+	require.NotPanics(t, func() {
+		_, ok := otel.extractRemoteSpanContext(context.Background())
+		assert.False(t, ok)
+	})
+}
+
+func TestSpanCreationSelection_Precedence(t *testing.T) {
+	otel := GetOtelInstance()
+	t.Cleanup(func() {
+		otel.SetSpanContextExtractor(nil)
+		otelConfig = nil
+	})
+
+	otel.SetSpanContextExtractor(func(context.Context) (SpanContext, bool) {
+		return SpanContext{
+			TraceID:    "0af7651916cd43dd8448eb211c80319c",
+			SpanID:     "b7ad6b7169203331",
+			TraceFlags: 1,
+		}, true
+	})
+	otelConfig = &OpenTelemetryConfig{
+		SpanFromContext: func(context.Context) uint64 {
+			return 12345
+		},
+	}
+
+	source, spanContext, parentSpanPtr := otel.selectSpanParent(context.Background())
+	assert.Equal(t, spanParentRemoteContext, source)
+	assert.Equal(t, "0af7651916cd43dd8448eb211c80319c", spanContext.TraceID)
+	assert.Equal(t, uint64(0), parentSpanPtr)
+
+	otel.SetSpanContextExtractor(nil)
+	source, _, parentSpanPtr = otel.selectSpanParent(context.Background())
+	assert.Equal(t, spanParentPointer, source)
+	assert.Equal(t, uint64(12345), parentSpanPtr)
+
+	otelConfig = nil
+	source, _, parentSpanPtr = otel.selectSpanParent(context.Background())
+	assert.Equal(t, spanParentNone, source)
+	assert.Equal(t, uint64(0), parentSpanPtr)
+}
+
+func TestSpanCreationSelection_InvalidTraceStateFallsBackToPointer(t *testing.T) {
+	otel := GetOtelInstance()
+	const fallbackSpanPtr uint64 = 12345
+	t.Cleanup(func() {
+		otel.SetSpanContextExtractor(nil)
+		otelConfig = nil
+	})
+
+	otel.SetSpanContextExtractor(func(context.Context) (SpanContext, bool) {
+		return SpanContext{
+			TraceID:    "0af7651916cd43dd8448eb211c80319c",
+			SpanID:     "b7ad6b7169203331",
+			TraceFlags: 1,
+			TraceState: "bad,tracestate,entry",
+		}, true
+	})
+	otelConfig = &OpenTelemetryConfig{
+		SpanFromContext: func(context.Context) uint64 {
+			return fallbackSpanPtr
+		},
+	}
+
+	source, _, parentSpanPtr := otel.selectSpanParent(context.Background())
+	assert.Equal(t, spanParentPointer, source)
+	assert.Equal(t, fallbackSpanPtr, parentSpanPtr)
+}
