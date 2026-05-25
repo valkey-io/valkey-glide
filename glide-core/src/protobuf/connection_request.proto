@@ -138,6 +138,16 @@ message ConnectionRequest {
     optional ClientSideCache client_side_cache = 27;
     NodeDiscoveryMode node_discovery_mode = 28;
     optional string address_resolver_key = 29;
+    optional ClientCircuitBreakerConfig client_circuit_breaker = 30;
+}
+
+message ClientCircuitBreakerConfig {
+    uint32 window_size_ms = 1;          // Sliding window in milliseconds. Default: 10000
+    float failure_rate_threshold = 2;   // Error rate (0.0-1.0) to trip. Default: 0.5
+    uint32 min_errors = 3;              // Minimum errors before rate is evaluated. Default: 50
+    uint32 open_timeout_ms = 4;         // Time in Open before probe, in ms. Default: 5000
+    bool count_timeouts = 5;            // Whether timeouts count. Default: false
+    uint32 consecutive_successes = 6;   // Probes needed before closing. Default: 3
 }
 
 message ConnectionRetryStrategy {

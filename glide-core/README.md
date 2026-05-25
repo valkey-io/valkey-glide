@@ -59,6 +59,45 @@ To run [DNS tests](tests/test_dns.rs) locally:
 
 If the environment variable is not set, DNS tests will be skipped.
 
+
+## Client-Wide Circuit Breaker
+
+The circuit breaker detects sustained error rates across all connections and rejects requests at the FFI boundary before threads park. This prevents thread explosion under degraded conditions.
+
+### Enabling
+
+Disabled by default. Pass a `ClientCircuitBreakerConfiguration` to the client builder to enable. All fields have defaults and are optional.
+
+### State Machine
+
+```
+Closed → Open → HalfOpen → Closed
+                HalfOpen → Open (on probe failure)
+```
+
+- **Closed**: Normal operation. Errors tracked in a sliding window.
+- **Open**: Requests rejected immediately. Transitions to HalfOpen after `open_timeout`.
+- **HalfOpen**: All traffic allowed (optimistic). Closes after `consecutive_successes` successful commands. Reopens on any error.
+
+### Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `window_size_ms` | 10000 | Sliding window duration for error rate calculation |
+| `failure_rate_threshold` | 0.5 | Error rate (0.0-1.0) to trip the breaker |
+| `min_errors` | 50 | Minimum errors before rate is evaluated |
+| `open_timeout_ms` | 5000 | Time in Open state before allowing probes |
+| `count_timeouts` | false | Whether timeouts count toward tripping |
+| `consecutive_successes` | 3 | Successful probes needed before closing |
+
+### Error Classification
+
+Only transport-level errors count toward tripping: `IoError`, `FatalSendError`, `FatalReceiveError`, and connection drops. Server-side errors (WRONGTYPE, MOVED, etc.) do not count. Timeouts are opt-in via `count_timeouts`.
+
+### Exception Type
+
+When the breaker is open, requests are rejected with a dedicated exception type (`CircuitBreakerException` in Java, `CircuitBreakerError` in Python/Node/Go) so callers can distinguish CB rejections from server errors.
+
 ## Recommended VSCode extensions
 
 [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) - Rust language server.

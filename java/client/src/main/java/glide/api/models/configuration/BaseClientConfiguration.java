@@ -99,6 +99,14 @@ public abstract class BaseClientConfiguration {
     private final Integer inflightRequestsLimit;
 
     /**
+     * Configuration for the client-wide circuit breaker. When set, enables the circuit breaker which
+     * detects sustained error rates and rejects requests at the FFI boundary before threads park.
+     *
+     * <p>If null (default), the circuit breaker is disabled.
+     */
+    private final ClientCircuitBreakerConfiguration clientCircuitBreakerConfiguration;
+
+    /**
      * Availability Zone of the client. If ReadFrom strategy is AZAffinity or
      * AZAffinityReplicasAndPrimary, this setting ensures that readonly commands are directed to nodes
      * within the specified AZ if exits.

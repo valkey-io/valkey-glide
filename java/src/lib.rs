@@ -1556,15 +1556,28 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeCommandAsync
         // rejected asynchronously, avoiding thread explosion under memory pressure.
         {
             let handle_table = jni_client::get_handle_table();
-            if let Some(client_ref) = handle_table.get(&handle_id)
-                && client_ref.available_inflight_count() <= 0
-            {
-                jni_client::complete_error_sync(
-                    &mut env,
-                    callback_id,
-                    "Client reached maximum inflight requests",
-                );
-                return Some(());
+            if let Some(client_ref) = handle_table.get(&handle_id) {
+                if client_ref.available_inflight_count() <= 0 {
+                    drop(client_ref);
+                    jni_client::complete_error_sync(
+                        &mut env,
+                        callback_id,
+                        "Client reached maximum inflight requests",
+                        0,
+                    );
+                    return Some(());
+                }
+                // Synchronous circuit breaker check: reject immediately if core is unhealthy.
+                if !client_ref.is_circuit_breaker_healthy() {
+                    drop(client_ref);
+                    jni_client::complete_error_sync(
+                        &mut env,
+                        callback_id,
+                        "Client circuit breaker is open - core unhealthy",
+                        4,
+                    );
+                    return Some(());
+                }
             }
         }
 
@@ -1933,15 +1946,27 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
         // Synchronous inflight check (same as executeCommandAsync)
         {
             let handle_table = jni_client::get_handle_table();
-            if let Some(client_ref) = handle_table.get(&handle_id)
-                && client_ref.available_inflight_count() <= 0
-            {
-                jni_client::complete_error_sync(
-                    &mut env,
-                    callback_id,
-                    "Client reached maximum inflight requests",
-                );
-                return Some(());
+            if let Some(client_ref) = handle_table.get(&handle_id) {
+                if client_ref.available_inflight_count() <= 0 {
+                    drop(client_ref);
+                    jni_client::complete_error_sync(
+                        &mut env,
+                        callback_id,
+                        "Client reached maximum inflight requests",
+                        0,
+                    );
+                    return Some(());
+                }
+                if !client_ref.is_circuit_breaker_healthy() {
+                    drop(client_ref);
+                    jni_client::complete_error_sync(
+                        &mut env,
+                        callback_id,
+                        "Client circuit breaker is open - core unhealthy",
+                        4,
+                    );
+                    return Some(());
+                }
             }
         }
 
