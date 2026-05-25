@@ -199,11 +199,18 @@ class build_ext(build_ext_orig):
             glide_shared_rs = VENDORED_DEPENDENCIES["glide-shared-rs"].source
 
         print(f"[INFO] Building _fast_response extension in {glide_shared_rs}")
-        env["PYO3_PYTHON"] = sys.executable
+        pyo3_env = env.copy()
+        pyo3_env["PYO3_PYTHON"] = sys.executable
+        # On macOS, PyO3 extension modules need undefined dynamic_lookup linker flag
+        if sys.platform == "darwin":
+            pyo3_env["RUSTFLAGS"] = (
+                pyo3_env.get("RUSTFLAGS", "")
+                + " -C link-arg=-undefined -C link-arg=dynamic_lookup"
+            )
         subprocess.run(
             ["cargo", "build"] + (["--release"] if release else []),
             cwd=glide_shared_rs,
-            env=env,
+            env=pyo3_env,
             check=True,
         )
 
