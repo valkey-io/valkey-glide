@@ -104,6 +104,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -121,6 +122,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
+
+    private static final int SCRIPT_POLL_TIMEOUT_MS = 8000;
+    private static final int SCRIPT_POLL_INTERVAL_MS = 500;
 
     private static final List<Arguments> clients = new ArrayList<>();
 
@@ -3587,11 +3591,10 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill_with_route(GlideClusterClient clusterClient) {
-        // create and load a long-running script and a primary node route
-        Script script = new Script(createLongRunningLuaScript(5, true), true);
+        Script script = new Script(createLongRunningLuaScript(10, true), true);
         Route route = new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY);
 
-        // Verify that script_kill raises an error when no script is running
+        // Verify no script is running initially
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.scriptKill(route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -3601,39 +3604,29 @@ public class CommandTests {
                         .toLowerCase()
                         .contains("no scripts in execution right now"));
 
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
         try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(15000).build())
                         .get()) {
             try {
-                testClient.invokeScript(script, route);
+                // Poll scriptKill in background; block on script in foreground to guarantee execution
+                CompletableFuture<String> killResult =
+                        pollScriptKillInBackground(() -> clusterClient.scriptKill(route));
 
-                Thread.sleep(1000);
+                ExecutionException scriptErr =
+                        assertThrows(
+                                ExecutionException.class, () -> testClient.invokeScript(script, route).get());
+                assertTrue(
+                        scriptErr.getMessage().toLowerCase().contains("script killed"),
+                        "Expected 'script killed' but got: " + scriptErr.getMessage());
 
-                // Run script kill until it returns OK
-                boolean scriptKilled = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        assertEquals(OK, clusterClient.scriptKill(route).get());
-                        scriptKilled = true;
-                        break;
-                    } catch (RequestException ignored) {
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-
-                assertTrue(scriptKilled);
+                assertEquals(OK, killResult.get());
             } finally {
                 waitForNotBusy(clusterClient::scriptKill);
                 script.close();
             }
         }
 
-        // Verify that script_kill raises an error when no script is running
+        // Verify no script is running after kill
         executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.scriptKill(route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -3648,13 +3641,10 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void scriptKill_unkillable(GlideClusterClient clusterClient) {
-        // Ensure no script is blocking the cluster from a previous test
         waitForNotBusy(clusterClient::scriptKill);
 
         String key = UUID.randomUUID().toString();
-        // Route to the same node where the script will run (based on the key)
         Route route = new SlotKeyRoute(key, PRIMARY);
-        // Create a script that writes data (making it unkillable) and runs for 6 seconds
         String code = createLongRunningLuaScript(6, false);
 
         try (Script script = new Script(code, false);
@@ -3669,44 +3659,110 @@ public class CommandTests {
                                                 .build())
                                 .get()) {
 
+            // Poll scriptKill in background looking for "unkillable" error
+            CompletableFuture<Boolean> unkillableResult =
+                    pollForUnkillableInBackground(() -> clusterClient.scriptKill(route));
+
+            // Block on script execution to guarantee it's running on the server
             CompletableFuture<Object> scriptFuture =
                     testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
-
-            // Wait for the script to start executing on the server
-            Thread.sleep(1000);
-
             try {
-                // Try to kill the script - it should fail with "unkillable" since it has writes
-                boolean foundUnkillable = false;
-                for (int i = 0; i < 25 && !foundUnkillable; i++) {
-                    try {
-                        clusterClient.scriptKill(route).get();
-                    } catch (ExecutionException e) {
-                        if (e.getCause() instanceof RequestException) {
-                            String msg = e.getMessage().toLowerCase();
-                            if (msg.contains("unkillable")) {
-                                foundUnkillable = true;
-                            } else if (msg.contains("no scripts in execution")) {
-                                Thread.sleep(200);
-                            }
-                        }
-                    }
-                }
-
-                assertTrue(foundUnkillable, "Expected to find 'unkillable' error for write script");
-            } finally {
-                // Always wait for the unkillable script to finish before closing the client,
-                // even if the assertion above fails. Leaving a running script blocks the
-                // server and causes the next parameterized iteration to get connection errors.
-                try {
-                    scriptFuture.get();
-                } catch (Exception ignored) {
-                }
+                scriptFuture.get();
+            } catch (Exception ignored) {
+                // Write script completes normally after its duration
             }
+
+            assertTrue(unkillableResult.get(), "Expected to find 'unkillable' error for write script");
         }
-        // Confirm the cluster is healthy before the next iteration (RESP2 -> RESP3).
         waitForNotBusy(clusterClient::scriptKill);
         clusterClient.ping().get();
+    }
+
+    /**
+     * Polls scriptKill in a background thread until it succeeds (returns OK). This ensures the script
+     * has started executing before the kill is attempted, avoiding NotBusy race conditions.
+     */
+    private CompletableFuture<String> pollScriptKillInBackground(
+            Supplier<CompletableFuture<String>> killCommand) {
+        CompletableFuture<String> result = new CompletableFuture<>();
+        Thread thread =
+                new Thread(
+                        () -> {
+                            long deadline = System.currentTimeMillis() + SCRIPT_POLL_TIMEOUT_MS;
+                            while (System.currentTimeMillis() < deadline) {
+                                try {
+                                    String res = killCommand.get().get();
+                                    result.complete(res);
+                                    return;
+                                } catch (Exception e) {
+                                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                    if (!msg.contains("no scripts in execution")) {
+                                        // Unexpected error - fail fast
+                                        result.completeExceptionally(e);
+                                        return;
+                                    }
+                                    // Expected - script hasn't started yet, keep polling
+                                }
+                                try {
+                                    Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
+                                } catch (InterruptedException ie) {
+                                    result.completeExceptionally(ie);
+                                    Thread.currentThread().interrupt();
+                                    return;
+                                }
+                            }
+                            result.completeExceptionally(
+                                    new AssertionError(
+                                            "Timed out waiting to kill script after " + SCRIPT_POLL_TIMEOUT_MS + "ms"));
+                        });
+        thread.setDaemon(true);
+        thread.start();
+        return result;
+    }
+
+    /**
+     * Polls scriptKill in a background thread until it returns an "unkillable" error, confirming the
+     * write script is running but cannot be killed.
+     */
+    private CompletableFuture<Boolean> pollForUnkillableInBackground(
+            Supplier<CompletableFuture<String>> killCommand) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        Thread thread =
+                new Thread(
+                        () -> {
+                            long deadline = System.currentTimeMillis() + SCRIPT_POLL_TIMEOUT_MS;
+                            while (System.currentTimeMillis() < deadline) {
+                                try {
+                                    killCommand.get().get();
+                                } catch (Exception e) {
+                                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                    if (msg.contains("unkillable")) {
+                                        result.complete(true);
+                                        return;
+                                    }
+                                    if (!msg.contains("no scripts in execution")) {
+                                        // Unexpected error - fail fast
+                                        result.completeExceptionally(e);
+                                        return;
+                                    }
+                                }
+                                try {
+                                    Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
+                                } catch (InterruptedException ie) {
+                                    result.completeExceptionally(ie);
+                                    Thread.currentThread().interrupt();
+                                    return;
+                                }
+                            }
+                            result.completeExceptionally(
+                                    new AssertionError(
+                                            "Timed out waiting for 'unkillable' error after "
+                                                    + SCRIPT_POLL_TIMEOUT_MS
+                                                    + "ms"));
+                        });
+        thread.setDaemon(true);
+        thread.start();
+        return result;
     }
 
     /**
