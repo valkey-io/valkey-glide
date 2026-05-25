@@ -3380,8 +3380,21 @@ pub(crate) mod shared_client_tests {
                 .send_command(&mut reset_cmd, None)
                 .await
                 .unwrap();
-            // Kill all connections to trigger a reconnect on the test client.
-            kill_connection(&mut test_basics.client).await;
+            // Kill all connections via a direct authenticated connection, because the glide
+            // client connection is deauthed after RESET and cannot send CLIENT KILL itself.
+            let addrs: Vec<redis::ConnectionAddr> = match &test_basics.server {
+                BackingServer::Standalone(server) => vec![server
+                    .as_ref()
+                    .map(|s| s.get_client_addr())
+                    .unwrap_or(get_shared_server_address(true))],
+                BackingServer::Cluster(cluster) => cluster
+                    .as_ref()
+                    .map(|c| c.get_server_addresses())
+                    .unwrap_or_else(|| get_shared_cluster_addresses(true)),
+            };
+            for addr in &addrs {
+                kill_connection_via_addr(addr, Some("ReallySecurePassword")).await;
+            }
             // Retry for up to 10s: glide reconnects and re-auths with stored credentials
             let key = generate_random_string(6);
             retry_until_timeout(

@@ -925,6 +925,30 @@ pub async fn kill_connection_for_route(
         .unwrap();
 }
 
+/// Kill all connections on a server using a direct (non-glide) connection.
+/// Useful when the glide client connection is deauthed (e.g. after RESET) and
+/// cannot send commands itself.
+pub async fn kill_connection_via_addr(addr: &ConnectionAddr, password: Option<&str>) {
+    let client = redis::Client::open(redis::ConnectionInfo {
+        addr: addr.clone(),
+        redis: RedisConnectionInfo {
+            password: password.map(|p| p.to_string()),
+            ..Default::default()
+        },
+    })
+    .unwrap();
+    let mut conn = retry(|| async {
+        client
+            .get_multiplexed_async_connection(GlideConnectionOptions::default())
+            .await
+            .ok()
+    })
+    .await;
+    let mut cmd = redis::cmd("CLIENT");
+    cmd.arg("KILL").arg("SKIPME").arg("NO");
+    let _: redis::RedisResult<redis::Value> = conn.send_packed_command(&cmd).await;
+}
+
 pub enum BackingServer {
     Standalone(Option<RedisServer>),
     Cluster(Option<cluster::RedisCluster>),
