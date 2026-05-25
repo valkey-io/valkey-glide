@@ -3383,10 +3383,12 @@ pub(crate) mod shared_client_tests {
             // Kill all connections via a direct authenticated connection, because the glide
             // client connection is deauthed after RESET and cannot send CLIENT KILL itself.
             let addrs: Vec<redis::ConnectionAddr> = match &test_basics.server {
-                BackingServer::Standalone(server) => vec![server
-                    .as_ref()
-                    .map(|s| s.get_client_addr())
-                    .unwrap_or(get_shared_server_address(true))],
+                BackingServer::Standalone(server) => vec![
+                    server
+                        .as_ref()
+                        .map(|s| s.get_client_addr())
+                        .unwrap_or(get_shared_server_address(true)),
+                ],
                 BackingServer::Cluster(cluster) => cluster
                     .as_ref()
                     .map(|c| c.get_server_addresses())
