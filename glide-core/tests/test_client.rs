@@ -3161,14 +3161,26 @@ pub(crate) mod shared_client_tests {
 
     /// RESET with initial DB=3 in config -> reconnect uses DB=0 (post-RESET), not DB=3.
     /// Verifies handle_reset_command overrides ConnectionRequest.database_id.
+    /// Cluster variant requires Valkey 9.0+ (multi-DB cluster support).
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_reset_overrides_initial_database_config(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
-            // Cluster mode rejects SELECT for non-zero databases; skip cluster variant.
             if use_cluster {
-                return;
+                // Cluster multi-DB requires Valkey 9.0+. Check version with a db=0 client
+                // before attempting to create a db=3 client.
+                let mut version_check = setup_test_basics(
+                    true,
+                    TestConfiguration {
+                        shared_server: true,
+                        ..Default::default()
+                    },
+                )
+                .await;
+                if !version_greater_or_equal(&mut version_check.client, "9.0.0").await {
+                    return;
+                }
             }
             let mut test_basics = setup_test_basics(
                 use_cluster,
