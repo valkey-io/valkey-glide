@@ -153,7 +153,7 @@ class BaseClient(CoreCommands):
             client_type,
             pubsub_callback,
             address_resolver_callback,
-            0,
+            0,  # client_id is not used by the Python client
         )
 
         Logger.log(Level.INFO, "connection info", "new connection established")
