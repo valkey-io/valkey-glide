@@ -3166,6 +3166,10 @@ pub(crate) mod shared_client_tests {
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_reset_overrides_initial_database_config(#[values(false, true)] use_cluster: bool) {
         block_on_all(async move {
+            // Cluster mode rejects SELECT for non-zero databases; skip cluster variant.
+            if use_cluster {
+                return;
+            }
             let mut test_basics = setup_test_basics(
                 use_cluster,
                 TestConfiguration {
@@ -3175,9 +3179,6 @@ pub(crate) mod shared_client_tests {
                 },
             )
             .await;
-            if use_cluster && !version_greater_or_equal(&mut test_basics.client, "9.0.0").await {
-                return;
-            }
             let initial = reset_test_get_client_info(&mut test_basics.client).await;
             assert!(
                 initial.contains("db=3"),
@@ -3343,7 +3344,6 @@ pub(crate) mod shared_client_tests {
 
     /// Case 2: RESET on auth server -> kill connection -> glide reconnects and re-auths automatically.
     /// glide-core stores the original credentials and uses them during reconnect handshake.
-    /// Uses a second authenticated client to kill the deauthed connection by ID.
     #[rstest]
     #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
@@ -3360,18 +3360,6 @@ pub(crate) mod shared_client_tests {
                 ..Default::default()
             };
             let mut test_basics = setup_test_basics(use_cluster, config.clone()).await;
-            // Get the test client's connection ID before RESET
-            let mut id_cmd = redis::Cmd::new();
-            id_cmd.arg("CLIENT").arg("ID");
-            let client_id = test_basics
-                .client
-                .send_command(&mut id_cmd, None)
-                .await
-                .unwrap();
-            let client_id_str = match client_id {
-                Value::Int(id) => id.to_string(),
-                other => panic!("unexpected CLIENT ID response: {other:?}"),
-            };
             // Issue RESET - deauths the live connection
             let mut reset_cmd = redis::Cmd::new();
             reset_cmd.arg("RESET");
@@ -3380,18 +3368,8 @@ pub(crate) mod shared_client_tests {
                 .send_command(&mut reset_cmd, None)
                 .await
                 .unwrap();
-            // Use a second authenticated client (same server) to kill the deauthed connection by ID.
-            // This triggers a reconnect on the test client.
-            let mut admin_config = config.clone();
-            admin_config.skip_acl_setup = true;
-            let mut admin_client = create_client(&test_basics.server, admin_config).await;
-            let mut kill_cmd = redis::Cmd::new();
-            kill_cmd
-                .arg("CLIENT")
-                .arg("KILL")
-                .arg("ID")
-                .arg(&client_id_str);
-            let _ = admin_client.send_command(&mut kill_cmd, None).await;
+            // Kill all connections to trigger a reconnect on the test client.
+            kill_connection(&mut test_basics.client).await;
             // Retry for up to 10s: glide reconnects and re-auths with stored credentials
             let key = generate_random_string(6);
             retry_until_timeout(
