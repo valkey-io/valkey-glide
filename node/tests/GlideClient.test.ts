@@ -760,6 +760,49 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "migrate test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = getRandomKey();
+            const [serverHost, serverPort] = cluster.getAddresses()[0];
+
+            // NOKEY when key does not exist
+            expect(
+                await client.migrate(serverHost, serverPort, key, 0, 1000),
+            ).toEqual("NOKEY");
+
+            // Error when host is invalid
+            await client.set(key, "value");
+            await expect(
+                client.migrate("invalid-host", 6379, key, 0, 1000),
+            ).rejects.toThrow();
+
+            // Error with options (COPY, REPLACE, AUTH)
+            await expect(
+                client.migrate("invalid-host", 6379, key, 0, 1000, {
+                    copy: true,
+                    replace: true,
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
+
+            // Error with AUTH2 (username + password)
+            await expect(
+                client.migrate("invalid-host", 6379, key, 0, 1000, {
+                    username: "user",
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "move test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
