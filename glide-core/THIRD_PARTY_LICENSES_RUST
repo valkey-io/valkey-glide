@@ -19101,7 +19101,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: http:1.4.0
+Package: http:1.4.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -25585,7 +25585,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: log:0.4.29
+Package: log:0.4.30
 
 The following copyrights and licenses were found in the source code of this package:
 
