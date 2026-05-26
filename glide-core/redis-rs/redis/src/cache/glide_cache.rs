@@ -644,9 +644,9 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
         let mut store = self.store.write().unwrap();
         while let Some(entry) = store.evict_one() {
             self.core.uncharge(entry.size);
-        }
-        if let Some(stats) = self.core.stats() {
-            stats.record_invalidation();
+            if let Some(stats) = self.core.stats() {
+                stats.record_invalidation();
+            }
         }
         debug!(
             "cache_flush_all - [{}] Flushed all entries",
