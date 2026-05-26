@@ -4016,11 +4016,23 @@ class TestPubSub:
                 expected_channels={channel1, channel2},
             )
 
-            # Check that timestamp was updated
-            stats_after_first = await listening_client.get_statistics()
-            timestamp_after_first = int(
-                stats_after_first.get("subscription_last_sync_timestamp", "0")
-            )
+            # Poll until timestamp increases - the sync cycle may not have
+            # updated the timestamp yet or may complete within the same millisecond
+            timeout_sec = 5
+            poll_interval = 0.1
+            elapsed = 0.0
+            timestamp_after_first = initial_timestamp
+            while elapsed < timeout_sec:
+                stats_after_first = await listening_client.get_statistics()
+                timestamp_after_first = int(
+                    stats_after_first.get(
+                        "subscription_last_sync_timestamp", "0"
+                    )
+                )
+                if timestamp_after_first > initial_timestamp:
+                    break
+                await anyio.sleep(poll_interval)
+                elapsed += poll_interval
 
             assert (
                 timestamp_after_first > initial_timestamp
