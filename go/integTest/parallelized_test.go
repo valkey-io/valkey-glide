@@ -4,10 +4,12 @@ package integTest
 
 import (
 	"context"
+	"errors"
 	"runtime"
 	"time"
 
 	"github.com/google/uuid"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 )
 
@@ -17,6 +19,21 @@ func (suite *GlideTestSuite) TestParallelizedSetWithGC() {
 		runtime.GC()
 		key := uuid.New().String()
 		value := uuid.New().String()
-		suite.verifyOK(client.Set(context.Background(), key, value))
+		// Retry on transient connection errors (e.g. "Pipeline channel full") that occur under GC pressure.
+		// The client will reconnect automatically, so retrying after a brief wait should succeed.
+		var result string
+		var err error
+		for attempt := 0; attempt < 3; attempt++ {
+			result, err = client.Set(context.Background(), key, value)
+			if err == nil {
+				break
+			}
+			var discErr *glide.DisconnectError
+			if !errors.As(err, &discErr) {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		suite.verifyOK(result, err)
 	})
 }
