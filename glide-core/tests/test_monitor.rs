@@ -51,7 +51,7 @@ mod test_monitor {
         let node_addr = node_addr(&server_addr);
 
         let (on_line, lines) = make_collector();
-        let mut monitor =
+        let monitor =
             MonitorClient::new(&node_addr, monitor_conn_info(), TlsMode::NoTls, on_line)
                 .await
                 .expect("MonitorClient::new failed");
@@ -86,17 +86,26 @@ mod test_monitor {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
 
-        let found = lines.lock().unwrap();
-        let set_line = found
-            .iter()
-            .find(|l| {
-                l.command == "SET" && l.args.first().map(|s| s.as_str()) == Some("monitor_test_key")
-            })
-            .unwrap();
-        assert_eq!(set_line.args, vec!["monitor_test_key", "monitor_test_val"]);
-        assert!(set_line.db >= 0);
-        assert!(!set_line.client_addr.is_empty());
-        assert!(set_line.timestamp > 0.0);
+        let (args, db, client_addr, timestamp) = {
+            let found = lines.lock().unwrap();
+            let set_line = found
+                .iter()
+                .find(|l| {
+                    l.command == "SET"
+                        && l.args.first().map(|s| s.as_str()) == Some("monitor_test_key")
+                })
+                .unwrap();
+            (
+                set_line.args.clone(),
+                set_line.db,
+                set_line.client_addr.clone(),
+                set_line.timestamp,
+            )
+        };
+        assert_eq!(args, vec!["monitor_test_key", "monitor_test_val"]);
+        assert!(db >= 0);
+        assert!(!client_addr.is_empty());
+        assert!(timestamp > 0.0);
 
         monitor.stop_async().await;
     }
