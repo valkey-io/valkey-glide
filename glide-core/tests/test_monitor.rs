@@ -51,10 +51,9 @@ mod test_monitor {
         let node_addr = node_addr(&server_addr);
 
         let (on_line, lines) = make_collector();
-        let monitor =
-            MonitorClient::new(&node_addr, monitor_conn_info(), TlsMode::NoTls, on_line)
-                .await
-                .expect("MonitorClient::new failed");
+        let monitor = MonitorClient::new(&node_addr, monitor_conn_info(), TlsMode::NoTls, on_line)
+            .await
+            .expect("MonitorClient::new failed");
 
         let client = redis::Client::open(ConnectionInfo {
             addr: server_addr.clone(),
