@@ -98,7 +98,7 @@ mod test_monitor {
         assert!(!set_line.client_addr.is_empty());
         assert!(set_line.timestamp > 0.0);
 
-        monitor.stop();
+        monitor.stop_async().await;
     }
 
     #[tokio::test]
