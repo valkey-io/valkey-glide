@@ -1,3 +1,4 @@
+import random
 import time
 from typing import Generator, List, cast
 
@@ -63,12 +64,24 @@ def is_cluster_ready(client: GlideClusterClient, count: int) -> bool:
 def function_scoped_cluster():
     """
     Function-scoped fixture to create a new cluster for each test invocation.
+    Retries cluster creation to handle transient port conflicts when running
+    tests in parallel.
     """
-    cluster = ValkeyCluster(
-        tls=False, cluster_mode=True, shard_count=3, replica_count=0
-    )
-    yield cluster
-    del cluster
+    max_retries = 5
+    last_exception = None
+    for attempt in range(max_retries):
+        try:
+            cluster = ValkeyCluster(
+                tls=False, cluster_mode=True, shard_count=3, replica_count=0
+            )
+            yield cluster
+            del cluster
+            return
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                time.sleep(2 + random.uniform(0, 2))
+    raise last_exception
 
 
 # Since the cluster for slots covered is created separately, we need to create a client for the specific cluster
