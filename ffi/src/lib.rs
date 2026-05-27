@@ -4764,6 +4764,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
             Some(connection_request.lib_name.to_string())
         },
         cache: None,
+        server_assisted_cache: false,
     };
     // Convert to internal ConnectionRequest (needed for the runtime type alias only).
     let _connection_request: ConnectionRequest = connection_request.into();
