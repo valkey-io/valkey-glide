@@ -3281,6 +3281,9 @@ pub(crate) mod shared_client_tests {
                 },
             )
             .await;
+            if !version_greater_or_equal(&mut test_basics.client, "7.0.0").await {
+                return;
+            }
             let mut hello = redis::Cmd::new();
             hello.arg("HELLO").arg("3");
             test_basics
