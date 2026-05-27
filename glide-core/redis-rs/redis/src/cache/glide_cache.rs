@@ -456,6 +456,9 @@ pub trait GlideCache: Send + Sync + Debug {
     /// * `key` - The key to invalidate
     fn invalidate(&self, key: &[u8]);
 
+    /// Removes all entries from the cache
+    fn flush_all(&self);
+
     // ==================== Metrics ====================
 
     /// Returns current cache metrics (hits, misses, etc.)
@@ -635,6 +638,20 @@ impl<S: EvictionStrategy + 'static> GlideCache for GlideCacheImpl<S> {
                 self.core.current_memory()
             );
         }
+    }
+
+    fn flush_all(&self) {
+        let mut store = self.store.write().unwrap();
+        while let Some(entry) = store.evict_one() {
+            self.core.uncharge(entry.size);
+            if let Some(stats) = self.core.stats() {
+                stats.record_invalidation();
+            }
+        }
+        debug!(
+            "cache_flush_all - [{}] Flushed all entries",
+            store.policy_name()
+        );
     }
 
     fn entry_count(&self) -> u64 {

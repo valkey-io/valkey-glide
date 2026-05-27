@@ -237,6 +237,8 @@ pub struct RedisConnectionInfo {
     pub lib_name: Option<String>,
     /// Optionally a cache used for client-side caching
     pub cache: Option<Arc<dyn GlideCache>>,
+    /// Whether to enable server-assisted client tracking (CLIENT TRACKING ON BCAST)
+    pub server_assisted_cache: bool,
 }
 
 impl FromStr for ConnectionInfo {
@@ -396,6 +398,7 @@ fn url_to_tcp_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             client_name: None,
             lib_name: None,
             cache: None,
+            server_assisted_cache: false,
         },
     })
 }
@@ -430,6 +433,7 @@ fn url_to_unix_connection_info(url: url::Url) -> RedisResult<ConnectionInfo> {
             client_name: None,
             lib_name: None,
             cache: None,
+            server_assisted_cache: false,
         },
     })
 }
@@ -1878,6 +1882,7 @@ mod tests {
                         client_name: None,
                         lib_name: None,
                         cache: None,
+                        server_assisted_cache: false,
                     },
                 },
             ),
