@@ -763,7 +763,9 @@ describe("GlideClient", () => {
         "migrate test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 5000,
+                }),
             );
 
             const key = getRandomKey();
@@ -806,7 +808,9 @@ describe("GlideClient", () => {
         "move test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 5000,
+                }),
             );
 
             const key1 = "{key}-1" + getRandomKey();
