@@ -17,6 +17,7 @@ from glide_shared.commands.core_options import (
     ExpirySet,
     HashFieldConditionalChange,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     UpdateOptions,
     _build_sort_args,
@@ -6917,6 +6918,52 @@ class CoreCommands(Protocol):
         return cast(
             TOK,
             self._execute_command(RequestType.Restore, args),
+        )
+
+    def migrate(
+        self,
+        host: str,
+        port: int,
+        key: TEncodable,
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = None,
+    ) -> str:
+        """
+        Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+
+        See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        Args:
+            host (str): The host of the destination Valkey instance.
+            port (int): The port of the destination Valkey instance.
+            key (TEncodable): The key to migrate.
+            destination_db (int): The database index on the destination instance.
+            timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
+            options (Optional[MigrateOptions]): Optional migration options.
+
+        Returns:
+            str: "OK" on success, or "NOKEY" if the key does not exist.
+
+        Examples:
+            >>> client.set("mykey", "myvalue")
+            >>> client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
+                "OK"
+            >>> client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
+                "NOKEY"
+        """
+        args: List[TEncodable] = [
+            host,
+            str(port),
+            key,
+            str(destination_db),
+            str(timeout),
+        ]
+        if options:
+            args.extend(options.to_args())
+        return cast(
+            str,
+            self._execute_command(RequestType.Migrate, args),
         )
 
     def sscan(

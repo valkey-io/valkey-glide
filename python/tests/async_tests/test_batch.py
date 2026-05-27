@@ -34,6 +34,7 @@ from glide_shared.commands.core_options import (
     FunctionRestorePolicy,
     HashFieldConditionalChange,
     InfoSection,
+    MigrateOptions,
 )
 from glide_shared.commands.stream import StreamAddOptions
 from glide_shared.config import ProtocolVersion
@@ -1635,3 +1636,21 @@ class TestBatch:
         assert result[2] == [1, 1]  # both fields made persistent
         assert result[3] == [-1, -1, -1]  # all fields now persistent
         assert result[4] == [-1, -1]  # both fields now persistent
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pipeline_migrate(
+        self, glide_client: TGlideClient, cluster_mode, protocol
+    ):
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        batch = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        key = get_random_string(10)
+        await glide_client.set(key, "value")
+        batch.migrate("invalid-host", 6379, key, 0, 5000)
+        batch.migrate("invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True))
+        result = await exec_batch(glide_client, batch, raise_on_error=False)
+        assert result is not None
+        assert isinstance(result[0], RequestError)
+        assert isinstance(result[1], RequestError)
