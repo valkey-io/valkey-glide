@@ -715,7 +715,7 @@ fn test_reset_clears_pubsub_subscriptions() {
             &setup.synchronizer,
             PubSubSubscriptionKind::Exact,
             &HashSet::new(),
-            true,
+            false,
             RESUBSCRIPTION_TIMEOUT,
         )
         .await;
@@ -774,7 +774,7 @@ fn test_reset_does_not_resubscribe_after_reconnect() {
             &setup.synchronizer,
             PubSubSubscriptionKind::Exact,
             &HashSet::new(),
-            true,
+            false,
             RESUBSCRIPTION_TIMEOUT,
         )
         .await;

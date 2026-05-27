@@ -444,7 +444,6 @@ impl ReconnectingConnection {
             // Always re-read connection_info each iteration so that updates made via
             // update_connection_protocol / update_connection_password etc. are picked up
             // on the next reconnect attempt.
-            let static_client: Option<redis::Client> = None;
 
             let infinite_backoff_dur_iterator = connection_clone
                 .connection_options
@@ -480,10 +479,7 @@ impl ReconnectingConnection {
                     );
                 }
 
-                let client = if let Some(ref c) = static_client {
-                    c.clone()
-                } else {
-                    // IAM path: re-read from backend to pick up the token update above
+                let client = {
                     let guard = connection_clone.inner.backend.get_backend_client();
                     guard.clone()
                 };
