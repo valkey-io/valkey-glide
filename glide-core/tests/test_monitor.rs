@@ -22,6 +22,7 @@ mod test_monitor {
             client_name: None,
             lib_name: None,
             cache: None,
+            server_assisted_cache: false,
         }
     }
 

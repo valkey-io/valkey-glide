@@ -102,8 +102,10 @@ impl MonitorClient {
         monitor.monitor().await?;
 
         let (stop_tx, mut stop_rx) = oneshot::channel::<()>();
+        let (ready_tx, ready_rx) = oneshot::channel::<()>();
         let task = tokio::spawn(async move {
             let mut stream = monitor.into_on_message::<String>();
+            let _ = ready_tx.send(());
             loop {
                 tokio::select! {
                     biased;
@@ -119,6 +121,7 @@ impl MonitorClient {
                 }
             }
         });
+        let _ = ready_rx.await;
 
         Ok(Self {
             task: Some(task),
