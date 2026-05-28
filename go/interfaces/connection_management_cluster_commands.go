@@ -45,7 +45,11 @@ type ConnectionManagementClusterCommands interface {
 
 	ClientPause(ctx context.Context, timeout time.Duration) (string, error)
 
-	ClientPauseWithOptions(ctx context.Context, timeout time.Duration, options options.ClientPauseClusterOptions) (string, error)
+	ClientPauseWithOptions(
+		ctx context.Context,
+		timeout time.Duration,
+		options options.ClientPauseClusterOptions,
+	) (string, error)
 
 	ClientUnpause(ctx context.Context) (string, error)
 
