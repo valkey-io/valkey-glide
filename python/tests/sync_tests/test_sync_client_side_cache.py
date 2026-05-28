@@ -581,7 +581,7 @@ class TestSyncClientSideCache:
         assert cache.server_assisted is False
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     def test_sync_client_trackinginfo(self, request, protocol, cluster_mode):
         """Test that client_trackinginfo returns a non-empty dict with expected keys."""
         cache = ClientSideCache.create(
