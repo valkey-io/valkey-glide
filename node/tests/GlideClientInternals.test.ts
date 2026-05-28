@@ -11,6 +11,8 @@ import path from "path";
 import { Reader } from "protobufjs/minimal";
 import {
     BaseClientConfiguration,
+    ClientPauseMode,
+    ClientReplyMode,
     ClosingError,
     ClusterBatch,
     ClusterTransaction,
@@ -962,6 +964,64 @@ describe("SocketConnectionInternals", () => {
                 "bar",
                 "baz",
             ]),
+        });
+    });
+
+    it("should set arguments according to clientPause request without mode", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) => client.clientPause(1000),
+            expectedRequestType: RequestType.ClientPause,
+            expectedValue: convertStringArrayToBuffer(["1000"]),
+        });
+    });
+
+    it("should set arguments according to clientPause request with ALL mode", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) =>
+                client.clientPause(1000, ClientPauseMode.ALL),
+            expectedRequestType: RequestType.ClientPause,
+            expectedValue: convertStringArrayToBuffer(["1000", "ALL"]),
+        });
+    });
+
+    it("should set arguments according to clientPause request with WRITE mode", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) =>
+                client.clientPause(1000, ClientPauseMode.WRITE),
+            expectedRequestType: RequestType.ClientPause,
+            expectedValue: convertStringArrayToBuffer(["1000", "WRITE"]),
+        });
+    });
+
+    it("should set arguments according to clientUnpause request", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) => client.clientUnpause(),
+            expectedRequestType: RequestType.ClientUnpause,
+            expectedValue: convertStringArrayToBuffer([]),
+        });
+    });
+
+    it("should set arguments according to clientReply ON request", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) => client.clientReply(ClientReplyMode.ON),
+            expectedRequestType: RequestType.ClientReply,
+            expectedValue: convertStringArrayToBuffer(["ON"]),
+        });
+    });
+
+    it("should set arguments according to clientReply OFF request", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) => client.clientReply(ClientReplyMode.OFF),
+            expectedRequestType: RequestType.ClientReply,
+            expectedValue: convertStringArrayToBuffer(["OFF"]),
+        });
+    });
+
+    it("should set arguments according to clientReply SKIP request", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) => client.clientReply(ClientReplyMode.SKIP),
+            expectedRequestType: RequestType.ClientReply,
+            expectedValue: convertStringArrayToBuffer(["SKIP"]),
         });
     });
 });
