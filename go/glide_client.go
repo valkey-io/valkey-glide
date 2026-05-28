@@ -7,6 +7,8 @@ import "C"
 
 import (
 	"context"
+	"strconv"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 
@@ -606,11 +608,114 @@ func (client *Client) ClientGetName(ctx context.Context) (models.Result[string],
 //
 // Return value:
 //
-//	OK - when connection name is set
+//	`"OK"` - when connection name is set
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *Client) ClientSetName(ctx context.Context, connectionName string) (string, error) {
 	result, err := client.executeCommand(ctx, C.ClientSetName, []string{connectionName})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Suspends all clients for the given timeout.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The duration to pause clients. A timeout of 0 will immediately unpause.
+//
+// Return value:
+//
+//	`"OK"` when the pause is successfully applied.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientPause, []string{strconv.FormatInt(timeout.Milliseconds(), 10)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Suspends all clients for the given timeout with the specified pause mode.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The duration to pause clients.
+//	mode - The pause mode to use.
+//
+// Return value:
+//
+//	`"OK"` when the pause is successfully applied.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *Client) ClientPauseWithOptions(
+	ctx context.Context,
+	timeout time.Duration,
+	mode options.ClientPauseMode,
+) (string, error) {
+	result, err := client.executeCommand(
+		ctx,
+		C.ClientPause,
+		[]string{strconv.FormatInt(timeout.Milliseconds(), 10), string(mode)},
+	)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Resumes command processing for all clients.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` when the unpause is successfully applied.
+//
+// [valkey.io]: https://valkey.io/commands/client-unpause/
+func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientUnpause, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Controls the server reply behavior for the current connection.
+//
+// Warning: Because GLIDE uses a multiplexed connection that correlates
+// responses to in-flight requests by order, calling [ClientReply] with
+// [ClientReplyModeOff] or [ClientReplyModeSkip] will desynchronize the
+// connection and produce incorrect results for all subsequent commands
+// until the connection is closed and re-established. Only
+// [ClientReplyModeOn] is safe to use on a normal client.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	mode - The reply mode to set.
+//
+// Return value:
+//
+//	`"OK"` when the reply mode is successfully set.
+//
+// [valkey.io]: https://valkey.io/commands/client-reply/
+func (client *Client) ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientReply, []string{string(mode)})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
