@@ -4,6 +4,7 @@ package interfaces
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -26,4 +27,12 @@ type ConnectionManagementCommands interface {
 	ClientGetName(ctx context.Context) (models.Result[string], error)
 
 	ClientSetName(ctx context.Context, connectionName string) (string, error)
+
+	ClientPause(ctx context.Context, timeout time.Duration) (string, error)
+
+	ClientPauseWithOptions(ctx context.Context, timeout time.Duration, mode options.ClientPauseMode) (string, error)
+
+	ClientUnpause(ctx context.Context) (string, error)
+
+	ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error)
 }
