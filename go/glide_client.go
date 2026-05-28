@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -634,7 +633,8 @@ func (client *Client) ClientSetName(ctx context.Context, connectionName string) 
 //
 // [valkey.io]: https://valkey.io/commands/client-pause/
 func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
-	result, err := client.executeCommand(ctx, C.ClientPause, []string{strconv.FormatInt(timeout.Milliseconds(), 10)})
+	args := []string{utils.IntToString(timeout.Milliseconds())}
+	result, err := client.executeCommand(ctx, C.ClientPause, args)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -661,11 +661,8 @@ func (client *Client) ClientPauseWithOptions(
 	timeout time.Duration,
 	mode options.ClientPauseMode,
 ) (string, error) {
-	result, err := client.executeCommand(
-		ctx,
-		C.ClientPause,
-		[]string{strconv.FormatInt(timeout.Milliseconds(), 10), string(mode)},
-	)
+	args := append([]string{utils.IntToString(timeout.Milliseconds())}, string(mode))
+	result, err := client.executeCommand(ctx, C.ClientPause, args)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
