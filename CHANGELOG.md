@@ -7,6 +7,7 @@
 * Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))
 * Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
+* Go: Phase 2 client-side caching - `ServerAssisted` field and `ClientTrackingInfo` command ([#5966](https://github.com/valkey-io/valkey-glide/pull/5966))
 
 ## 2.4
 
