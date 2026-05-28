@@ -14,6 +14,8 @@ import { gte } from "semver";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
     BitwiseOperation,
+    ClientPauseMode,
+    ClientReplyMode,
     ClusterBatch,
     Decoder,
     FlushMode,
@@ -162,6 +164,99 @@ describe("GlideClusterClient", () => {
         },
         timeout: TIMEOUT,
     });
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPause returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.clientPause(10);
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPause with WRITE mode returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.clientPause(10, ClientPauseMode.WRITE);
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPause with allPrimaries route returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.clientPause(10, undefined, {
+                route: "allPrimaries",
+            });
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientUnpause returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // Pause first, then unpause
+            expect(await client.clientPause(1000)).toEqual("OK");
+            const result = await client.clientUnpause();
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientUnpause with allPrimaries route returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            expect(await client.clientPause(1000)).toEqual("OK");
+            const result = await client.clientUnpause({
+                route: "allPrimaries",
+            });
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientReply with ON mode returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.clientReply(ClientReplyMode.ON);
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientReply with randomNode route returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.clientReply(ClientReplyMode.ON, {
+                route: "randomNode",
+            });
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `info with server and replication_%p`,

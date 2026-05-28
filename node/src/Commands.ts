@@ -435,7 +435,6 @@ export function createClientId(): command_request.Command {
  * @see {@link https://valkey.io/commands/client-pause/|valkey.io} for details.
  */
 export enum ClientPauseMode {
-
     /** Pause all client commands. */
     ALL = "ALL",
 
@@ -450,7 +449,6 @@ export enum ClientPauseMode {
  * @see {@link https://valkey.io/commands/client-reply/|valkey.io} for details.
  */
 export enum ClientReplyMode {
-
     /** Resume normal reply behavior. */
     ON = "ON",
 
