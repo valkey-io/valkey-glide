@@ -1154,6 +1154,7 @@ pub fn is_readonly_cmd(cmd: &[u8]) -> bool {
             | b"PUBSUB SHARDNUMSUB"
             | b"RANDOMKEY"
             | b"REPLICAOF"
+            | b"RESET"
             | b"ROLE"
             | b"SAVE"
             | b"SCAN"
