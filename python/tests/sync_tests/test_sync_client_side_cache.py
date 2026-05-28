@@ -569,3 +569,38 @@ class TestSyncClientSideCache:
         # Negative should raise
         with pytest.raises(ValueError, match="entry_ttl_ms must be non-negative"):
             ClientSideCache.create(max_cache_kb=1, entry_ttl_ms=-1)
+
+    def test_sync_server_assisted_field(self):
+        """Test that server_assisted field is set correctly on ClientSideCache."""
+        cache = ClientSideCache.create(
+            max_cache_kb=1, entry_ttl_ms=60_000, server_assisted=True
+        )
+        assert cache.server_assisted is True
+
+        cache = ClientSideCache.create(max_cache_kb=1, entry_ttl_ms=60_000)
+        assert cache.server_assisted is False
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_client_trackinginfo(self, request, protocol, cluster_mode):
+        """Test that client_trackinginfo returns a non-empty dict with expected keys."""
+        cache = ClientSideCache.create(
+            max_cache_kb=1,
+            entry_ttl_ms=60_000,
+            server_assisted=True,
+        )
+
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            cache=cache,
+        )
+
+        result = client.client_trackinginfo()
+        assert isinstance(result, dict)
+        assert len(result) > 0
+        assert b"flags" in result
+        assert b"on" in result[b"flags"]
+
+        client.close()
