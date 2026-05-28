@@ -1192,4 +1192,49 @@ describe("Compression", () => {
         },
         TIMEOUT,
     );
+
+    it.each([false, true])(
+        "compression_set_with_get_returns_decompressed_value cluster_mode=%p",
+        async (clusterMode) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+            const key = uniqueKey("set_with_get_test");
+            const originalValue = TEXT_1K;
+            const newValue = TEXT_10K;
+
+            // First, set the original value
+            await setAndExpectCompression(client, key, originalValue);
+
+            // Now use SET with returnOldValue option to get the old value
+            const oldValue = await client.set(key, newValue, {
+                returnOldValue: true,
+            });
+
+            // The old value should be the decompressed original value, not compressed bytes
+            expect(oldValue).toBe(originalValue);
+
+            // Verify the new value was set correctly
+            expect(await client.get(key)).toBe(newValue);
+        },
+        TIMEOUT,
+    );
+
+    it.each([false, true])(
+        "compression_set_with_get_returns_null_for_nonexistent_key cluster_mode=%p",
+        async (clusterMode) => {
+            client = await createCompressedClient(clusterMode, {
+                enabled: true,
+            });
+            const key = uniqueKey("set_with_get_nonexistent");
+
+            // SET with returnOldValue on non-existent key should return null
+            const oldValue = await client.set(key, TEXT_1K, {
+                returnOldValue: true,
+            });
+
+            expect(oldValue).toBeNull();
+        },
+        TIMEOUT,
+    );
 });

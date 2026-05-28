@@ -38,33 +38,19 @@ Valkey GLIDE is API-compatible with the following engine versions:
 
 The client currently supports Python, Java, Node.js, Go, C#, and PHP. C# and PHP have preview releases, and have been moved to separate repositories to simplify development. Active development continues for C#, PHP, C++ and Ruby clients. Python, Java, Node.js and Go clients will be moved to separate repositories in the near future.
 
-#### v2.2 (Nov. 2025)
-- Windows Support for Java Client – Migrated the Java client to JNI-based communication
-- IAM authentication Support – Added automatic authentication token generation, enabling secure, password-free connections
-- Seed-Based Topology Refresh – Added topology refresh capability
-- Enhanced TLS Certificate Configuration – Added support for custom CA certificates in TLS connections
+### v2.4.0 (May 2026)
 
-### Previous Releases
+The following are some of the changes planned for 2.4.0 release:
+- Client-Side Caching: for Java, Node, Go.
+- Complete support for Valkey Search 1.2 and JSON module.
+- Add NodeDiscoveryMode option for all languages
+- Further improvements and fixes.
 
-#### v2.1 (Sep. 2025)
-- Valkey 9 Support – First-class support for Multi-DB and Hash Field Expiration (HFE)
-- Python Sync Support – Full synchronous API support for Python
-- Lazy Connection – Extended lazy connection support to Go and Java clients
-- Jedis Compatibility – Added Jedis compatibility layer for Java client
+For the detailed list of changes, see the release [page](https://github.com/valkey-io/valkey-glide/releases/tag/v2.4.0).
 
-#### v2.0 (June 2025)
+### Other Releases
 
-- Go GA – Official stable release for production environments
-- OpenTelemetry Integration – Enhanced observability and tracing
-- Batching Support – Improved performance through batch operations
-- Lazy Connection – Allows client creation even when the server is not active, deferring connection establishment.
-
-#### v1.3 (Feb. 2025)
-- Public preview release of Go client support
-
-#### v1.2 (Dec. 2024)
-- Vector Similarity Search and JSON module support
-- Availability zone-aware routing for read-from-replica operations
+See our releases [section](https://github.com/valkey-io/valkey-glide/releases)
 
 ## Getting Started
 
@@ -84,17 +70,18 @@ Visit our official Valkey GLIDE's documentation [site](https://glide.valkey.io/o
 - [Ruby](https://github.com/valkey-io/valkey-glide-ruby)
 
 **General Concepts:**
-- [Custom Command](https://glide.valkey.io/concepts/client-features/custom-command/)
+- [Custom Command](https://glide.valkey.io/concepts/client-features/custom-commands/)
 - [Connection Management](https://glide.valkey.io/how-to/connection-management/)
 - [Multi-Slot Command Handling](https://glide.valkey.io/concepts/client-features/multi-slot-command-handling/)
 - [Inflight Request Limit](https://glide.valkey.io/how-to/connections/limit-inflight-requests/)
 - [PubSub Support](https://glide.valkey.io/concepts/client-features/pubsub-model/)
 - [Cluster Scan](https://glide.valkey.io/concepts/client-features/cluster-scan/)
 - [Dynamic Password Management](https://glide.valkey.io/how-to/security/dynamic-authentication/)
-- [Modules API](https://glide.valkey.io/concepts/client-features/modules-api/)
+- [Modules API](https://glide.valkey.io/concepts/client-features/modules/)
 - [Batching (Pipeline and Transaction)](https://glide.valkey.io/concepts/client-features/batch-commands/)
 - [OpenTelemetry](https://glide.valkey.io/concepts/client-features/open-telemetry/)
-- [Compression (EXPERIMENTAL)](https://github.com/valkey-io/valkey-glide/wiki/General-Concepts#compression)
+- [Compression (EXPERIMENTAL)](https://glide.valkey.io/concepts/client-features/compression/)
+- [Client-Side Caching](https://glide.valkey.io/concepts/client-features/client-side-caching/)
 
 **Migration Guides**
 - [go-redis](https://glide.valkey.io/migration/go/go-redis/)

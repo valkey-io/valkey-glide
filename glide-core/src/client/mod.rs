@@ -84,6 +84,24 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
         "GETEX" => Some(RequestType::GetEx),
         "GETDEL" => Some(RequestType::GetDel),
         "GETSET" => Some(RequestType::GetSet),
+        "SET" => {
+            // SET with GET option returns the old value, which needs decompression
+            // Check if the command has the GET option by looking for "GET" in the arguments
+            // SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time | PXAT unix-time | KEEPTTL]
+            let has_get_option = cmd.args_iter().skip(3).any(|arg| {
+                if let redis::Arg::Simple(bytes) = arg {
+                    bytes.eq_ignore_ascii_case(b"GET")
+                } else {
+                    false
+                }
+            });
+            if has_get_option {
+                // Treat SET with GET option like GETSET for decompression purposes
+                Some(RequestType::GetSet)
+            } else {
+                None
+            }
+        }
         _ => None, // Unknown command or write command, no decompression needed
     }
 }
@@ -185,6 +203,12 @@ pub async fn get_valkey_connection_info(
             )
         });
 
+    let server_assisted_cache = connection_request
+        .client_side_cache
+        .as_ref()
+        .map(|c| c.server_assisted)
+        .unwrap_or(false);
+
     match &connection_request.authentication_info {
         Some(info) => {
             // If we have IAM configuration and a token manager, use the IAM token as password
@@ -204,6 +228,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     cache,
+                    server_assisted_cache,
                 }
             } else {
                 // Regular password-based authentication
@@ -215,6 +240,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     cache,
+                    server_assisted_cache,
                 }
             }
         }
@@ -224,6 +250,7 @@ pub async fn get_valkey_connection_info(
             client_name,
             lib_name,
             cache,
+            server_assisted_cache,
             ..Default::default()
         },
     }
@@ -759,6 +786,57 @@ impl Client {
         }
     }
 
+    fn is_reset_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"RESET")
+    }
+
+    async fn handle_reset_command(&mut self) -> RedisResult<()> {
+        // RESET resets the connection to its initial state per the Valkey spec.
+        // https://valkey.io/commands/reset/
+        //
+        // TRACKED - glide-core updates these so reconnections restore the post-RESET state:
+        //   SELECTs database 0                       -> update_stored_database_id(0)
+        //   Clears client name                       -> update_stored_client_name(None)
+        //   Sets protocol to RESP2                   -> update_stored_protocol(RESP2)
+        //   Aborts Pub/Sub subscription state        -> remove_desired_subscriptions(all kinds)
+        //     (prevents synchronizer from resubscribing on reconnect)
+        //
+        // NOT TRACKED - no glide-core state to update:
+        //   Deauthenticates the connection           -> auth credentials kept for reconnect;
+        //     (requires AUTH to reauthenticate)         live connection is deauthed until
+        //                                               reconnect or manual AUTH call
+        //   Discards current MULTI transaction       -> glide sends MULTI+cmds+EXEC as a
+        //                                               single pipeline; no persistent state
+        //   Unwatches all WATCHed keys               -> WATCH state is per-connection,
+        //                                               not tracked by glide-core
+        //   Disables CLIENT TRACKING                 -> not tracked; gap exists if
+        //                                               client-side caching is active
+        //   Sets connection to READWRITE mode         -> not tracked; glide does not
+        //                                               persist read/write mode per connection
+        //   Cancels ASKING mode (cluster)             -> one-shot flag sent inline,
+        //                                               not persisted by glide-core
+        //   Sets CLIENT REPLY to ON                  -> not tracked; CLIENT REPLY not
+        //                                               yet supported by glide
+        //   Exits MONITOR mode                       -> not tracked; MONITOR not yet
+        //                                               supported by glide
+        //   Turns off NO-EVICT mode                  -> not tracked; per-connection hint
+        //   Turns off NO-TOUCH mode                  -> not tracked; per-connection hint
+        self.update_stored_database_id(0).await?;
+        self.update_stored_client_name(None).await?;
+        self.update_stored_protocol(redis::ProtocolVersion::RESP2)
+            .await?;
+        self.otel_metadata.db_namespace = "0".to_string();
+        for kind in [
+            redis::PubSubSubscriptionKind::Exact,
+            redis::PubSubSubscriptionKind::Pattern,
+            redis::PubSubSubscriptionKind::Sharded,
+        ] {
+            self.pubsub_synchronizer
+                .remove_desired_subscriptions(None, kind);
+        }
+        Ok(())
+    }
+
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -891,6 +969,15 @@ impl Client {
                 ) {
                     Ok(decompressed_value) => decompressed_value,
                     Err(e) => {
+                        // Propagate critical errors (size limit exceeded, incompatible command)
+                        // to the user instead of silently falling back to raw value
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
                         log_warn(
                             "send_command_decompression",
                             format!("Failed to decompress response: {}", e),
@@ -919,6 +1006,9 @@ impl Client {
         }
         if self_clone.is_hello_command(&cmd) {
             self_clone.handle_hello_command(&cmd).await?;
+        }
+        if self_clone.is_reset_command(&cmd) {
+            self_clone.handle_reset_command().await?;
         }
         Ok(value)
     }
@@ -1001,6 +1091,7 @@ impl Client {
             }
 
             cmd.set_inflight_tracker(tracker);
+            cmd.set_response_timeout(request_timeout);
 
             // Clone compression_manager reference only if compression is enabled
             let compression_manager = if self.is_compression_enabled() {
@@ -1021,21 +1112,27 @@ impl Client {
 
             match request_timeout {
                 Some(duration) => {
+                    let timeout_rx =
+                        crate::timeout_watchdog::TimeoutWatchdog::global().register(duration);
                     tokio::pin!(execute);
                     tokio::select! {
                         result = &mut execute => result,
-                        _ = tokio::time::sleep(duration) => {
-                            // User timeout — execute future is dropped. The Cmd
-                            // was already moved into the event loop's PendingRequest,
-                            // so its tracker clone keeps the inflight slot held until
-                            // all sub-commands complete naturally.
-                            if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                                log_error(
-                                    "OpenTelemetry:timeout_error",
-                                    format!("Failed to record timeout error: {e}"),
-                                );
+                        recv_result = timeout_rx => {
+                            if recv_result.is_err() {
+                                // Watchdog thread died (sender dropped). Don't spuriously
+                                // timeout — fall through to let the command complete normally
+                                // via Tokio's timer wheel as a fallback.
+                                execute.await
+                            } else {
+                                // Watchdog fired the timeout
+                                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                                    log_error(
+                                        "OpenTelemetry:timeout_error",
+                                        format!("Failed to record timeout error: {e}"),
+                                    );
+                                }
+                                Err(io::Error::from(io::ErrorKind::TimedOut).into())
                             }
-                            Err(io::Error::from(io::ErrorKind::TimedOut).into())
                         }
                     }
                 }
@@ -1770,6 +1867,7 @@ async fn create_cluster_client(
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
     builder = builder.database_id(valkey_connection_info.db);
     builder = builder.cache(valkey_connection_info.cache);
+    builder = builder.server_assisted_cache(valkey_connection_info.server_assisted_cache);
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -2284,6 +2382,36 @@ impl GlideClientForTests for ClusterConnection {
             routing.unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
 
         async move { self.route_command(cmd, final_routing).await }.boxed()
+    }
+}
+
+impl Client {
+    /// Create a Client wrapping an existing internal_client Arc and synchronizer.
+    /// Used in tests to build a Client that shares state with an existing connection.
+    #[cfg(feature = "test-util")]
+    pub fn new_for_test(
+        internal_client: Arc<RwLock<ClientWrapper>>,
+        pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    ) -> Self {
+        use crate::client::types::{NodeAddress, OTelMetadata};
+        Client {
+            internal_client,
+            request_timeout: Duration::from_millis(1000),
+            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
+            inflight_log_interval: 100,
+            iam_token_manager: None,
+            compression_manager: None,
+            pubsub_synchronizer,
+            otel_metadata: OTelMetadata {
+                address: NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                },
+                db_namespace: "0".to_string(),
+            },
+            client_side_cache: None,
+        }
     }
 }
 
@@ -2898,5 +3026,18 @@ mod tests {
                 "{cmd_name} should be detected as blocking"
             );
         }
+    }
+
+    #[test]
+    fn test_is_reset_command() {
+        let client = create_test_client();
+
+        let mut cmd = Cmd::new();
+        cmd.arg("RESET");
+        assert!(client.is_reset_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("PING");
+        assert!(!client.is_reset_command(&cmd));
     }
 }

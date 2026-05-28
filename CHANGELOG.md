@@ -2,10 +2,19 @@
 
 #### Changes
 * Python: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
+* Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
+* CORE: Phase 2 client-side caching - server-assisted invalidation via CLIENT TRACKING ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
+* CORE: Add RESET command support — track and reset connection state (database index, client name, protocol, pubsub subscriptions) on RESET; route RESET to all nodes in cluster mode ([#5959](https://github.com/valkey-io/valkey-glide/pull/5959))
+* Node: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
+* Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))
+* Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
+* Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
 
 ## 2.4
 
 #### Fixes
+* CORE: Add dedicated timeout watchdog thread independent of the Tokio runtime. Under memory pressure or Tokio starvation, `tokio::time::sleep` may not fire on time. The watchdog uses a separate OS thread to guarantee timeout delivery, preventing commands from hanging indefinitely when the async runtime is overloaded. ([#5752](https://github.com/valkey-io/valkey-glide/issues/5752))
+* CORE: Propagate per-command response timeout to the multiplexed connection layer. The configured `request_timeout` (including blocking command timeouts) is now enforced at the connection level, ensuring commands time out reliably instead of waiting indefinitely with `Duration::MAX`. ([#5581](https://github.com/valkey-io/valkey-glide/issues/5581))
 * CORE: Fall back to existing cluster connections when initial nodes are unavailable during topology refresh. When `refreshTopologyFromInitialNodes=true` and the initial/seed node is unreachable (e.g., dead primary during failover), the topology refresh now queries healthy existing connections instead of failing silently. This complements #5812 to enable failover recovery when the seed node itself is the failed node. ([#5814](https://github.com/valkey-io/valkey-glide/pull/5814))
 * Node: Fix SIGSEGV in pubsub under pnpm strict hoisting — replace `value_from_split_pointer(high_u32, low_u32)` with `value_from_pointer(i64)` in the Node.js Rust client to accept response pointers as a single integer, eliminating the high/low split that caused upper 32-bit truncation when `protobufjs.util.Long` was null ([#5851](https://github.com/valkey-io/valkey-glide/issues/5851))
 
