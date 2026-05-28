@@ -3,6 +3,8 @@ package glide.api.commands;
 
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
+import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
@@ -263,4 +265,144 @@ public interface ConnectionManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> select(long index);
+
+    /**
+     * Suspends all clients for the specified timeout.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.clientPause(1000).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout);
+
+    /**
+     * Suspends all clients for the specified timeout with the given pause mode.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param mode The {@link ClientPauseMode} to use.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.clientPause(1000, ClientPauseMode.WRITE).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout, ClientPauseMode mode);
+
+    /**
+     * Suspends all clients for the specified timeout.<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.clientPause(1000, ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout, Route route);
+
+    /**
+     * Suspends all clients for the specified timeout with the given pause mode.<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param mode The {@link ClientPauseMode} to use.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.clientPause(1000, ClientPauseMode.WRITE, ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout, ClientPauseMode mode, Route route);
+
+    /**
+     * Resumes processing of commands on all clients that were paused by CLIENT PAUSE.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.clientUnpause().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientUnpause();
+
+    /**
+     * Resumes processing of commands on all clients that were paused by CLIENT PAUSE.<br>
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.clientUnpause(ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientUnpause(Route route);
+
+    /**
+     * Controls the server reply behavior for the current connection.<br>
+     * The command will be routed to a random node.
+     *
+     * <p><b>Warning:</b> Because GLIDE uses a multiplexed connection that correlates responses to
+     * in-flight requests by order, calling this method with {@link ClientReplyMode#OFF} or {@link
+     * ClientReplyMode#SKIP} will desynchronize the connection and produce incorrect results for all
+     * subsequent commands until the connection is closed and re-established. Only {@link
+     * ClientReplyMode#ON} is safe to use on a normal client.
+     *
+     * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
+     * @param mode The {@link ClientReplyMode} to use.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = clusterClient.clientReply(ClientReplyMode.ON).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientReply(ClientReplyMode mode);
+
+    /**
+     * Controls the server reply behavior for the current connection.
+     * The command will be routed to the nodes defined by <code>route</code>.
+     *
+     * <p><b>Warning:</b> Because GLIDE uses a multiplexed connection that correlates responses to
+     * in-flight requests by order, calling this method with {@link ClientReplyMode#OFF} or {@link
+     * ClientReplyMode#SKIP} will desynchronize the connection and produce incorrect results for all
+     * subsequent commands until the connection is closed and re-established. Only {@link
+     * ClientReplyMode#ON} is safe to use on a normal client.
+     *
+     * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
+     * @param mode The {@link ClientReplyMode} to use.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = clusterClient.clientReply(ClientReplyMode.ON, RANDOM).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientReply(ClientReplyMode mode, Route route);
 }
