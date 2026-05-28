@@ -716,7 +716,11 @@ func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool
 	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
 
 	batch.ClientTrackingInfo()
-	testData = append(testData, CommandTestData{ExpectedResponse: map[string]interface{}{}, CheckTypeOnly: true, TestName: "ClientTrackingInfo()"})
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: map[string]interface{}{},
+		CheckTypeOnly:    true,
+		TestName:         "ClientTrackingInfo()",
+	})
 
 	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
 }
