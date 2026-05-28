@@ -4656,6 +4656,11 @@ use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAd
 /// Callback invoked for each parsed MONITOR line.
 /// `client_ptr` is the opaque pointer returned in `ConnectionResponse.conn_ptr`.
 /// String fields are UTF-8, not null-terminated. `args_json` is a JSON array string.
+///
+/// # Safety
+/// The string pointers (`client_addr`, `command`, `args_json`) are only valid for
+/// the duration of the callback invocation. They must not be stored or accessed
+/// after the callback returns.
 pub type MonitorCallback = unsafe extern "C-unwind" fn(
     client_ptr: usize,
     timestamp: f64,
@@ -4683,11 +4688,17 @@ impl Drop for MonitorAdapter {
 
 /// Create a MonitorClient connected to the first address in `connection_request_bytes`.
 ///
+/// Returns a `ConnectionResponse`. On success, `conn_ptr` is the monitor client handle
+/// and `connection_error_message` is null. On failure, `conn_ptr` is null and
+/// `connection_error_message` contains the error. The caller must free the returned
+/// `ConnectionResponse` by calling `free_connection_response`.
+///
 /// # Safety
 /// - `connection_request_bytes` must point to `connection_request_len` valid bytes
 ///   containing a serialized `ConnectionRequest` protobuf.
 /// - `monitor_callback` must be a valid function pointer that remains valid for the
 ///   lifetime of the returned client.
+/// - The returned `ConnectionResponse` must be freed with `free_connection_response`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn create_monitor_client(
     connection_request_bytes: *const u8,
@@ -4766,8 +4777,6 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         server_assisted_cache: false,
         cache: None,
     };
-    // Convert to internal ConnectionRequest (needed for the runtime type alias only).
-    let _connection_request: ConnectionRequest = connection_request.into();
 
     let runtime = match Builder::new_multi_thread().enable_all().build() {
         Ok(r) => r,
@@ -4831,8 +4840,13 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         runtime,
     });
     let conn_ptr = Box::into_raw(adapter) as *const c_void;
-    // Store ptr before any real lines can arrive (MonitorClient::new returns after
-    // MONITOR +OK; the server only sends lines for subsequent commands).
+    // Store ptr after MonitorClient::new returns. There is a brief window between
+    // new() returning and this store where the background task could invoke the
+    // callback with ptr == 0, causing those lines to be silently dropped. In
+    // practice this is benign: new() returns only after MONITOR +OK, and the
+    // server sends lines only for commands issued after that point. However,
+    // callers should not rely on receiving lines issued concurrently with
+    // create_monitor_client returning.
     ptr_cell.store(conn_ptr as usize, std::sync::atomic::Ordering::Release);
 
     Box::into_raw(Box::new(ConnectionResponse {
@@ -4845,7 +4859,10 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
 ///
 /// # Safety
 /// - `client_ptr` must be a `conn_ptr` returned by `create_monitor_client`.
-/// - Must not be called more than once for the same pointer.
+/// - Must not be called more than once for the same pointer. Calling it twice
+///   is undefined behaviour (double-free). The caller is responsible for
+///   nulling or discarding the pointer after this call.
+/// - Must not be called concurrently with any active monitor callback.
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn close_monitor_client(client_ptr: *const c_void) {
     if !client_ptr.is_null() {

@@ -97,6 +97,9 @@ impl MonitorClient {
             },
         };
         let client = redis::Client::open(conn_info)?;
+        // `get_async_monitor` is the only available API for a dedicated non-pooled
+        // monitor connection. The deprecation warning originates from its internal
+        // use of `get_async_connection`, not from the method itself being removed.
         #[allow(deprecated)]
         let mut monitor = client.get_async_monitor().await?;
         monitor.monitor().await?;
@@ -148,5 +151,63 @@ impl MonitorClient {
 impl Drop for MonitorClient {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_basic_set() {
+        let raw = "+1678886400.123456 [0 127.0.0.1:12345] \"SET\" \"key\" \"value\"";
+        let line = MonitorLine::parse(raw).unwrap();
+        assert!((line.timestamp - 1678886400.123456).abs() < 1e-6);
+        assert_eq!(line.db, 0);
+        assert_eq!(line.client_addr, "127.0.0.1:12345");
+        assert_eq!(line.command, "SET");
+        assert_eq!(line.args, vec!["key", "value"]);
+    }
+
+    #[test]
+    fn test_parse_no_args_ping() {
+        let raw = "+1678886400.000000 [0 127.0.0.1:12345] \"PING\"";
+        let line = MonitorLine::parse(raw).unwrap();
+        assert_eq!(line.command, "PING");
+        assert!(line.args.is_empty());
+    }
+
+    #[test]
+    fn test_parse_without_plus_prefix() {
+        let raw = "1678886400.000000 [0 127.0.0.1:12345] \"GET\" \"mykey\"";
+        let line = MonitorLine::parse(raw).unwrap();
+        assert_eq!(line.command, "GET");
+        assert_eq!(line.args, vec!["mykey"]);
+    }
+
+    #[test]
+    fn test_parse_escaped_chars() {
+        let raw = "+1678886400.000000 [0 127.0.0.1:12345] \"SET\" \"key\" \"val\\\"quoted\\\"\"";
+        let line = MonitorLine::parse(raw).unwrap();
+        assert_eq!(line.args, vec!["key", "val\"quoted\""]);
+    }
+
+    #[test]
+    fn test_parse_malformed_returns_none() {
+        assert!(MonitorLine::parse("").is_none());
+        assert!(MonitorLine::parse("not a monitor line").is_none());
+        assert!(MonitorLine::parse("+notanumber [0 addr] \"CMD\"").is_none());
+    }
+
+    #[test]
+    fn test_parse_quoted_tokens_basic() {
+        let tokens = parse_quoted_tokens("\"SET\" \"key\" \"value\"");
+        assert_eq!(tokens, vec!["SET", "key", "value"]);
+    }
+
+    #[test]
+    fn test_parse_quoted_tokens_empty() {
+        let tokens = parse_quoted_tokens("");
+        assert!(tokens.is_empty());
     }
 }

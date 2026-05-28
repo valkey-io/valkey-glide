@@ -17,6 +17,7 @@ pub struct RedisConnectionInfo {
     pub protocol: ProtocolVersion,
     pub client_name: Option<String>,
     pub lib_name: Option<String>,
+    pub server_assisted_cache: bool,
     pub cache: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
 }
 use std::sync::Arc;
