@@ -441,9 +441,20 @@ impl ReconnectingConnection {
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
-            // Always re-read connection_info each iteration so that updates made via
-            // update_connection_protocol / update_connection_password etc. are picked up
-            // on the next reconnect attempt.
+            let has_iam = connection_clone.inner.backend.iam_token_handle.is_some();
+
+            // For non-IAM connections, clone the client once before the loop to preserve
+            // the original reconnection behavior (password is fixed at reconnect start).
+            // For IAM connections, the client is cloned inside the loop so each retry
+            // picks up the freshest token written by the IAM handle.
+            let static_client = if !has_iam {
+                Some({
+                    let guard = connection_clone.inner.backend.get_backend_client();
+                    guard.clone()
+                })
+            } else {
+                None
+            };
 
             let infinite_backoff_dur_iterator = connection_clone
                 .connection_options
@@ -479,7 +490,10 @@ impl ReconnectingConnection {
                     );
                 }
 
-                let client = {
+                let client = if let Some(ref c) = static_client {
+                    c.clone()
+                } else {
+                    // IAM path: re-read from backend to pick up the token update above
                     let guard = connection_clone.inner.backend.get_backend_client();
                     guard.clone()
                 };
