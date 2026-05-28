@@ -38,12 +38,17 @@ EXCLUDED_API_FUNCTIONS = {
         "start_socket_listener_external",
         "value_from_pointer",
         "aclose",
+        # cache metrics sync path (PyO3 only, sync client uses FFI)
+        "get_cache_metric_from_registry",
+        # address resolver registry (PyO3 only, sync client passes callback via FFI)
+        "register_address_resolver",
+        "remove_address_resolver",
     ],
     "sync_only": [],
 }
 
 EXCLUDED_API_FILENAMES = {
-    "async_only": [],
+    "async_only": ["cache.py"],
     "sync_only": ["_glide_ffi.py"],
 }
 
@@ -87,8 +92,11 @@ EXCLUDED_TESTS = {
 EXCLUDED_TESTS_FILENAMES = {
     "async_only": [
         "test_deprecation_warnings.py",
+        "test_client_side_cache.py",
     ],
-    "sync_only": [],
+    "sync_only": [
+        "test_sync_client_side_cache.py",
+    ],
 }
 
 

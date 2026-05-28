@@ -130,7 +130,13 @@ public final class Logger {
             @NonNull Level level,
             @NonNull String logIdentifier,
             @NonNull Supplier<String> messageSupplier) {
-        log(level, logIdentifier, messageSupplier.get());
+        if (loggerLevel == null) {
+            initLogger(Level.DEFAULT, null);
+        }
+        if (level == Level.OFF || !(level.getLevel() <= loggerLevel.getLevel())) {
+            return;
+        }
+        logInternal(level.getLevel(), logIdentifier, messageSupplier.get());
     }
 
     /**
@@ -186,7 +192,16 @@ public final class Logger {
             @NonNull String logIdentifier,
             @NonNull Supplier<String> messageSupplier,
             @NonNull Throwable throwable) {
-        log(level, logIdentifier, messageSupplier.get() + ": " + prettyPrintException(throwable));
+        if (loggerLevel == null) {
+            initLogger(Level.DEFAULT, null);
+        }
+        if (level == Level.OFF || !(level.getLevel() <= loggerLevel.getLevel())) {
+            return;
+        }
+        logInternal(
+                level.getLevel(),
+                logIdentifier,
+                messageSupplier.get() + ": " + prettyPrintException(throwable));
     }
 
     private static String prettyPrintException(@NonNull Throwable throwable) {

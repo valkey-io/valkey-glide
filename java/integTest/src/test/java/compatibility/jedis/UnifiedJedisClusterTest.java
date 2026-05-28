@@ -106,7 +106,7 @@ public class UnifiedJedisClusterTest {
 
         String info = unifiedJedis.clientInfo();
         assertTrue(info.contains("lib-name=GlideJedisAdapter"));
-        assertTrue(info.contains("lib-ver=unknown"));
+        assertTrue(info.contains("lib-ver=" + TestConfiguration.EXPECTED_GLIDE_VERSION));
     }
 
     @Test

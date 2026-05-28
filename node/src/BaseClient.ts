@@ -9,13 +9,7 @@
 
 import Long from "long";
 import * as net from "net";
-import {
-    Buffer,
-    BufferWriter,
-    Long as ProtoLong,
-    Reader,
-    Writer,
-} from "protobufjs/minimal";
+import { Buffer, BufferWriter, Reader, Writer } from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -30,6 +24,7 @@ import {
     BitOffsetOptions,
     BitwiseOperation,
     Boundary,
+    ClientSideCache,
     ClosingError,
     ClusterBatchOptions,
     CompressionConfiguration,
@@ -61,6 +56,7 @@ import {
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MigrateOptions,
     OpenTelemetry,
     RangeByIndex,
     RangeByLex,
@@ -75,6 +71,8 @@ import {
     SetOptions,
     SortOptions,
     StartSocketConnection,
+    registerAddressResolver,
+    removeAddressResolver,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -169,6 +167,7 @@ import {
     createLeakedOtelSpan,
     createOtelSpanWithTraceContext,
     createMGet,
+    createMigrate,
     createMSet,
     createMSetNX,
     createMove,
@@ -286,7 +285,7 @@ import {
     getStatistics,
     compressionConfigToProtobuf,
     validateCompressionConfiguration,
-    valueFromSplitPointer,
+    valueFromPointer,
 } from ".";
 import {
     command_request,
@@ -544,28 +543,6 @@ export function convertRecordToGlideRecord<T>(
     });
 }
 
-/**
- * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
- * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
- */
-class PointerResponse {
-    pointer: number | ProtoLong | null;
-    // As Javascript does not support 64-bit integers,
-    // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
-    high: number | undefined;
-    low: number | undefined;
-
-    constructor(
-        pointer: number | ProtoLong | null,
-        high?: number | undefined,
-        low?: number | undefined,
-    ) {
-        this.pointer = pointer;
-        this.high = high;
-        this.low = low;
-    }
-}
-
 /** Represents the types of services that can be used for IAM authentication. */
 export enum ServiceType {
     Elasticache = "Elasticache",
@@ -626,6 +603,21 @@ export type ReadFrom =
     | "AZAffinityReplicasAndPrimary"
     /** Spread the read requests between all nodes (primary and replicas) in a round robin manner.*/
     | "allNodes";
+
+/**
+ * Controls how the client discovers node roles and topology in standalone mode.
+ */
+export enum NodeDiscoveryMode {
+    /** Default: verify node roles via INFO REPLICATION, use only provided addresses. */
+    Standard = 0,
+    /** Skip role detection entirely. Trust provided addresses as-is; first address is primary.
+     *  Use when connecting through a proxy (e.g., Envoy) or when the topology is known and static.
+     *  Note: Do not set `clientName` when using this mode with a proxy. */
+    Static = 1,
+    /** Discover full topology (primary + all replicas) from any starting node.
+     *  Provide any single node address and the client will find and connect to all other nodes. */
+    DiscoverAll = 2,
+}
 
 /**
  * Configuration settings for creating a client. Shared settings for standalone and cluster clients.
@@ -893,6 +885,7 @@ export interface BaseClientConfiguration {
      * ```
      */
     lazyConnect?: boolean;
+
     /**
      * Configuration for automatic compression of values.
      * When enabled, values that meet the minimum size threshold will be
@@ -908,6 +901,71 @@ export interface BaseClientConfiguration {
      * ```
      */
     compression?: CompressionConfiguration;
+
+    /**
+     * Client-side cache configuration.
+     *
+     * @remarks
+     * When provided, enables client-side caching for cacheable commands (GET, HGETALL, SMEMBERS).
+     * The cache reduces network round-trips and server load by storing frequently accessed data locally.
+     *
+     * - **Memory Management**: The cache respects the configured memory limit and evicts entries based on the specified policy.
+     * - **TTL Support**: Entries can have optional time-to-live values for automatic expiration.
+     * - **Shared Caches**: Multiple clients can share the same cache instance using the same cache ID.
+     * - **Metrics**: Optional metrics collection provides insights into cache performance.
+     *
+     * @example
+     * ```typescript
+     * // Simple cache configuration
+     * const config: BaseClientConfiguration = {
+     *   addresses: [{ host: 'localhost', port: 6379 }],
+     *   clientSideCache: ClientSideCache.create(1024, 0), // 1MB cache, no TTL
+     * };
+     *
+     * // Advanced cache configuration
+     * const advancedConfig: BaseClientConfiguration = {
+     *   addresses: [{ host: 'localhost', port: 6379 }],
+     *   clientSideCache: new ClientSideCache({
+     *     maxCacheKb: 2048,
+     *     entryTtlMs: 300000,
+     *     evictionPolicy: EvictionPolicy.LFU,
+     *     enableMetrics: true,
+     *   }),
+     * };
+     * ```
+     */
+    clientSideCache?: ClientSideCache;
+
+    /**
+     * Optional callback for resolving server addresses before connection.
+     *
+     * When provided, this callback will be invoked for each configured address during connection
+     * establishment and during cluster topology refreshes. The callback receives the configured
+     * host and port, and should return a tuple `[resolvedHost, resolvedPort]` with the actual
+     * address to use for the connection.
+     *
+     * Use cases:
+     * - Custom DNS resolution for service discovery
+     * - Address translation for proxy setups
+     * - Dynamic endpoint resolution for cloud environments
+     *
+     * If the resolver throws an exception or returns an invalid value, the original address
+     * is used as a fallback.
+     *
+     * @example
+     * ```typescript
+     * const config: BaseClientConfiguration = {
+     *   addresses: [{ host: "internal-service", port: 9999 }],
+     *   addressResolver: (host, port) => {
+     *     if (host === "internal-service") {
+     *       return ["10.0.0.5", 6379];
+     *     }
+     *     return [host, port];
+     *   },
+     * };
+     * ```
+     */
+    addressResolver?: (host: string, port: number) => [string, number];
 }
 
 /**
@@ -1098,6 +1156,7 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
     private config: BaseClientConfiguration | undefined;
+    private addressResolverKey: string | undefined;
 
     protected configurePubsub(
         options: GlideClusterClientConfiguration | GlideClientConfiguration,
@@ -1275,33 +1334,13 @@ export class BaseClient {
             const errorType = getRequestErrorClass(message.requestError.type);
             reject(new errorType(message.requestError.message ?? undefined));
         } else if (message.respPointer != null) {
-            let pointer;
-
-            if (typeof message.respPointer === "number") {
-                // Response from type number
-                const long = Long.fromNumber(message.respPointer);
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    long.high,
-                    long.low,
-                );
-            } else {
-                // Response from type long
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    message.respPointer.high,
-                    message.respPointer.low,
-                );
-            }
+            const ptrNum =
+                typeof message.respPointer === "number"
+                    ? message.respPointer
+                    : message.respPointer.toNumber();
 
             try {
-                resolve(
-                    valueFromSplitPointer(
-                        pointer.high!,
-                        pointer.low!,
-                        decoder === Decoder.String,
-                    ),
-                );
+                resolve(valueFromPointer(ptrNum, decoder === Decoder.String));
             } catch (err: unknown) {
                 Logger.log("error", "Decoder", `Decoding error: '${err}'`);
                 reject(
@@ -1535,6 +1574,47 @@ export class BaseClient {
         });
     }
 
+    protected createGetCacheMetricsPromise(
+        command: command_request.GetCacheMetrics,
+    ) {
+        this.ensureClientIsOpen();
+
+        return new Promise<number>((resolve, reject) => {
+            const callbackIdx = this.getCallbackIndex();
+            this.promiseCallbackFunctions[callbackIdx] = [resolve, reject];
+
+            this.writeOrBufferRequest(
+                new command_request.CommandRequest({
+                    callbackIdx,
+                    getCacheMetrics: command,
+                }),
+                (message: command_request.CommandRequest, writer: Writer) => {
+                    command_request.CommandRequest.encodeDelimited(
+                        message,
+                        writer,
+                    );
+                },
+            );
+        });
+    }
+
+    /**
+     * @internal
+     * Get cache metrics.
+     *
+     * @param metricsType - Type of metric to retrieve (e.g., hit rate, miss rate).
+     * @returns The requested cache metric.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     */
+    private async getCacheMetrics(
+        metricsType: command_request.CacheMetricsType,
+    ): Promise<number> {
+        const getCacheMetrics = command_request.GetCacheMetrics.create({
+            metricsTypes: metricsType,
+        });
+        return await this.createGetCacheMetricsPromise(getCacheMetrics);
+    }
+
     protected createScriptInvocationPromise<T = GlideString>(
         command: command_request.ScriptInvocation,
         options: {
@@ -1761,19 +1841,14 @@ export class BaseClient {
             (decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (responsePointer) {
-            if (typeof responsePointer !== "number") {
-                nextPushNotificationValue = valueFromSplitPointer(
-                    responsePointer.high,
-                    responsePointer.low,
-                    isStringDecoder,
-                ) as Record<string, unknown>;
-            } else {
-                nextPushNotificationValue = valueFromSplitPointer(
-                    0,
-                    responsePointer,
-                    isStringDecoder,
-                ) as Record<string, unknown>;
-            }
+            const ptrNum =
+                typeof responsePointer === "number"
+                    ? responsePointer
+                    : responsePointer.toNumber();
+            nextPushNotificationValue = valueFromPointer(
+                ptrNum,
+                isStringDecoder,
+            ) as Record<string, unknown>;
 
             const messageKind = nextPushNotificationValue["kind"];
 
@@ -2368,6 +2443,43 @@ export class BaseClient {
     ): Promise<boolean> {
         return this.createWritePromise(
             createCopy(source, destination, options),
+        );
+    }
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+     * Once the key is successfully transferred, it is deleted from the source instance.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns "OK" on success, or "NOKEY" if the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
+     * ```
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // Output: "OK" - "mykey" was copied to the destination, replacing any existing key.
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString,
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
         );
     }
 
@@ -9279,6 +9391,20 @@ export class BaseClient {
             );
         }
 
+        // Configure client-side cache if provided
+        let clientSideCache: connection_request.IClientSideCache | undefined;
+
+        if (options.clientSideCache) {
+            const cache = options.clientSideCache;
+            clientSideCache = connection_request.ClientSideCache.create({
+                cacheId: cache.cacheId,
+                maxCacheKb: cache.maxCacheKb,
+                entryTtlMs: cache.entryTtlMs,
+                evictionPolicy: cache.evictionPolicy,
+                enableMetrics: cache.enableMetrics,
+            });
+        }
+
         const request: connection_request.IConnectionRequest = {
             protocol,
             clientName: options.clientName,
@@ -9295,6 +9421,7 @@ export class BaseClient {
             clientAz: options.clientAz ?? null,
             connectionRetryStrategy: options.connectionBackoff,
             lazyConnect: options.lazyConnect ?? false,
+            clientSideCache,
         };
 
         if (options.compression) {
@@ -9363,15 +9490,37 @@ export class BaseClient {
      */
     protected connectToServer(options: BaseClientConfiguration): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Register address resolver in the global registry before sending
+            // the connection request, so the socket listener can pick it up.
+            if (options.addressResolver) {
+                this.addressResolverKey = registerAddressResolver(
+                    options.addressResolver,
+                );
+            }
+
             this.promiseCallbackFunctions[0] = [
                 resolve,
-                reject,
+                (err: unknown) => {
+                    // Clean up the resolver from the registry if connection fails
+                    if (this.addressResolverKey) {
+                        removeAddressResolver(this.addressResolverKey);
+                        this.addressResolverKey = undefined;
+                    }
+
+                    reject(err);
+                },
                 options?.defaultDecoder,
             ];
 
-            const message = connection_request.ConnectionRequest.create(
-                this.createClientRequest(options),
-            );
+            const request = this.createClientRequest(options);
+
+            // Set the address resolver key in the protobuf request
+            if (this.addressResolverKey) {
+                request.addressResolverKey = this.addressResolverKey;
+            }
+
+            const message =
+                connection_request.ConnectionRequest.create(request);
 
             this.writeOrBufferRequest(
                 message,
@@ -9403,6 +9552,13 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Clean up address resolver from the global registry
+        if (this.addressResolverKey) {
+            removeAddressResolver(this.addressResolverKey);
+            this.addressResolverKey = undefined;
+        }
+
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
     }
@@ -9568,6 +9724,110 @@ export class BaseClient {
         const refresh = command_request.RefreshIamToken.create({});
         const response = await this.createRefreshIamTokenPromise(refresh);
         return response; // "OK"
+    }
+    /**
+     * Get the cache hit rate (hits / total requests).
+     *
+     * @returns The cache hit rate as a number between 0.0 and 1.0.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const hitRate = await client.getCacheHitRate();
+     * console.log(`Cache hit rate: ${(hitRate * 100).toFixed(2)}%`);
+     * // Output: Cache hit rate: 85.50%
+     * ```
+     */
+    public async getCacheHitRate(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.HitRate,
+        );
+    }
+    /**
+     * Get the cache miss rate (misses / total requests).
+     *
+     * @returns The cache miss rate as a number between 0.0 and 1.0.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const missRate = await client.getCacheMissRate();
+     * console.log(`Cache miss rate: ${(missRate * 100).toFixed(2)}%`);
+     * // Output: Cache miss rate: 14.50%
+     * ```
+     */
+    public async getCacheMissRate(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.MissRate,
+        );
+    }
+    /**
+     * Get the current number of entries in the client-side cache.
+     *
+     * @returns The number of entries in the cache.
+     * @throws RequestError if client-side caching is not enabled.
+     * @example
+     * ```typescript
+     * const entryCount = await client.getCacheEntryCount();
+     * console.log(`Cache entry count: ${entryCount}`);
+     * // Output: Cache entry count: 1500
+     * ```
+     */
+    public async getCacheEntryCount(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.EntryCount,
+        );
+    }
+    /**
+     * Get the total number of entries evicted from the client-side cache due to memory constraints.
+     *
+     * @returns The number of evictions.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const evictions = await client.getCacheEvictions();
+     * console.log(`Cache evictions: ${evictions}`);
+     * // Output: Cache evictions: 100
+     * ```
+     */
+    public async getCacheEvictions(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.Evictions,
+        );
+    }
+
+    /**
+     * Get the total number of entries expired from the client-side cache.
+     *
+     * @returns The number of expirations.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const expirations = await client.getCacheExpirations();
+     * console.log(`Cache expirations: ${expirations}`);
+     * // Output: Cache expirations: 250
+     * ```
+     */
+    public async getCacheExpirations(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.Expirations,
+        );
+    }
+
+    /**
+     * Get the total number of cache lookups (hits + misses).
+     *
+     * @returns The total number of cache lookups.
+     * @throws RequestError if client-side caching is not enabled or metrics tracking is disabled.
+     * @example
+     * ```typescript
+     * const totalLookups = await client.getCacheTotalLookups();
+     * console.log(`Total cache lookups: ${totalLookups}`);
+     * // Output: Total cache lookups: 5000
+     * ```
+     */
+    public async getCacheTotalLookups(): Promise<number> {
+        return await this.getCacheMetrics(
+            command_request.CacheMetricsType.TotalLookups,
+        );
     }
 
     /**

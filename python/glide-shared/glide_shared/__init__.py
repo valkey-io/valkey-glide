@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+from .cache import ClientSideCache, EvictionPolicy
 from .commands.batch import Batch, ClusterBatch, ClusterTransaction, TBatch, Transaction
 from .commands.batch_options import (
     BatchOptions,
@@ -36,6 +37,7 @@ from .commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
@@ -117,6 +119,7 @@ from .commands.stream import (
     TrimByMinId,
 )
 from .config import (
+    AddressResolver,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -126,6 +129,7 @@ from .config import (
     GlideClusterClientConfiguration,
     IamAuthConfig,
     NodeAddress,
+    NodeDiscoveryMode,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
     ProtocolVersion,
@@ -194,6 +198,7 @@ __all__ = [
     "BatchRetryStrategy",
     "ClusterBatchOptions",
     # Config
+    "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
     "CompressionBackend",
@@ -202,6 +207,7 @@ __all__ = [
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
     "ReadFrom",
+    "NodeDiscoveryMode",
     "ServerCredentials",
     "ServiceType",
     "IamAuthConfig",
@@ -263,6 +269,7 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
+    "MigrateOptions",
     "LexBoundary",
     "Limit",
     "ListDirection",
@@ -352,4 +359,7 @@ __all__ = [
     "OpenTelemetryConfig",
     "OpenTelemetryMetricsConfig",
     "OpenTelemetryTracesConfig",
+    # Cache
+    "ClientSideCache",
+    "EvictionPolicy",
 ]

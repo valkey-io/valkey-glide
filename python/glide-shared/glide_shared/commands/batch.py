@@ -23,6 +23,7 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
     UpdateOptions,
     _build_sort_args,
 )
@@ -2736,6 +2737,42 @@ class BaseBatch:
         if frequency is not None:
             args.extend(["FREQ", str(frequency)])
         return self.append_command(RequestType.Restore, args)
+
+    def migrate(
+        self: TBatch,
+        host: str,
+        port: int,
+        key: TEncodable,
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = None,
+    ) -> TBatch:
+        """
+        Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+
+        See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        Args:
+            host (str): The host of the destination Valkey instance.
+            port (int): The port of the destination Valkey instance.
+            key (TEncodable): The key to migrate.
+            destination_db (int): The database index on the destination instance.
+            timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
+            options (Optional[MigrateOptions]): Optional migration options.
+
+        Returns:
+            TBatch: The batch instance for chaining.
+        """
+        args: List[TEncodable] = [
+            host,
+            str(port),
+            key,
+            str(destination_db),
+            str(timeout),
+        ]
+        if options:
+            args.extend(options.to_args())
+        return self.append_command(RequestType.Migrate, args)
 
     def xadd(
         self: TBatch,

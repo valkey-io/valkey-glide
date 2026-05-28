@@ -62,11 +62,23 @@ enum CompressionBackend {
     LZ4 = 1;
 }
 
+// Controls how the client discovers node roles and topology in standalone mode.
+enum NodeDiscoveryMode {
+    Standard = 0;       // Default: verify node roles, use only provided addresses
+    Static = 1;         // Skip role detection, trust provided addresses as-is.
+                        // Suitable for proxies (e.g., Envoy) or known-static topologies.
+                        // Note: Do not set client_name when using this mode with a proxy.
+    DiscoverAll = 2;    // Discover full topology from any starting node
+}
+
 message CompressionConfig {
     bool enabled = 1;
     CompressionBackend backend = 2;
     optional int32 compression_level = 3;
     uint32 min_compression_size = 4;
+    // Maximum allowed size for decompressed data to prevent decompression bombs.
+    // If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
+    optional uint64 max_decompressed_size = 5;
 }
 
 message PubSubChannelsOrPatterns
@@ -77,6 +89,20 @@ message PubSubChannelsOrPatterns
 message PubSubSubscriptions
 {
     map<uint32, PubSubChannelsOrPatterns> channels_or_patterns_by_type = 1;
+}
+
+message ClientSideCache {
+    string cache_id = 1;
+    uint64 max_cache_kb = 2;
+    uint64 entry_ttl_ms = 3; // 0 = no expiration
+    optional EvictionPolicy eviction_policy = 4;
+    bool enable_metrics = 5;
+    bool server_assisted = 6;
+}
+
+enum EvictionPolicy {
+    LRU = 0;
+    LFU = 1;
 }
 
 // IMPORTANT - if you add fields here, you probably need to add them also in client/mod.rs:`sanitized_request_string`.
@@ -109,6 +135,9 @@ message ConnectionRequest {
     optional bool tcp_nodelay = 24;
     optional uint32 pubsub_reconciliation_interval_ms = 25;
     optional bool read_only = 26;
+    optional ClientSideCache client_side_cache = 27;
+    NodeDiscoveryMode node_discovery_mode = 28;
+    optional string address_resolver_key = 29;
 }
 
 message ConnectionRetryStrategy {

@@ -2,8 +2,11 @@
 
 #[allow(unused_imports)]
 use logger_core::log_warn;
+use redis::AddressResolver;
+use redis::cache::EvictionPolicy;
 #[allow(unused_imports)]
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(feature = "proto")]
@@ -42,6 +45,9 @@ pub struct ConnectionRequest {
     pub tcp_nodelay: bool,
     pub pubsub_reconciliation_interval_ms: Option<u32>,
     pub read_only: bool,
+    pub client_side_cache: Option<ClientSideCache>,
+    pub node_discovery_mode: NodeDiscoveryMode,
+    pub address_resolver: Option<Arc<dyn AddressResolver>>,
 }
 
 /// Default connection timeout used when not specified in the request.
@@ -56,6 +62,17 @@ impl ConnectionRequest {
             .map(|val| Duration::from_millis(val as u64))
             .unwrap_or(DEFAULT_CONNECTION_TIMEOUT)
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClientSideCache {
+    pub cache_id: String,
+    pub max_cache_kb: u64,
+    /// Time-to-live for cached entries in milliseconds (0 = no expiration).
+    pub entry_ttl_ms: u64,
+    pub eviction_policy: Option<EvictionPolicy>,
+    pub enable_metrics: bool,
+    pub server_assisted: bool,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -137,6 +154,20 @@ pub enum TlsMode {
     NoTls,
     InsecureTls,
     SecureTls,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Default, Debug)]
+/// Controls how the client discovers node roles and topology in standalone mode.
+pub enum NodeDiscoveryMode {
+    /// Default: verify node roles via INFO REPLICATION, use only provided addresses.
+    #[default]
+    Standard,
+    /// Skip role detection entirely. Trust provided addresses as-is; first address is primary.
+    /// Suitable for proxies (e.g., Envoy) or known-static topologies.
+    /// Note: Do not set `client_name` when using this mode with a proxy.
+    Static,
+    /// Discover full topology (primary + all replicas) from any starting node.
+    DiscoverAll,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -321,6 +352,25 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let client_cert = value.client_cert.to_vec();
         let client_key = value.client_key.to_vec();
 
+        // Convert protobuf client-side cache config to internal client-side cache config
+        let client_side_cache = value
+            .client_side_cache
+            .0
+            .map(|proto_cache| ClientSideCache {
+                cache_id: chars_to_string_option(&proto_cache.cache_id).unwrap_or_default(),
+                max_cache_kb: proto_cache.max_cache_kb,
+                entry_ttl_ms: proto_cache.entry_ttl_ms,
+                eviction_policy: proto_cache
+                    .eviction_policy
+                    .and_then(|enum_or_unknown| enum_or_unknown.enum_value().ok())
+                    .map(|val| match val {
+                        protobuf::EvictionPolicy::LRU => EvictionPolicy::Lru,
+                        protobuf::EvictionPolicy::LFU => EvictionPolicy::Lfu,
+                    }),
+                enable_metrics: proto_cache.enable_metrics,
+                server_assisted: proto_cache.server_assisted,
+            });
+
         // Convert protobuf compression config to internal compression config
         let compression_config = value.compression_config.as_ref().map(|proto_config| {
             let backend = match proto_config.backend.enum_value() {
@@ -343,6 +393,13 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                 backend,
                 compression_level: proto_config.compression_level,
                 min_compression_size: proto_config.min_compression_size as usize,
+                // Handle optional max_decompressed_size:
+                // - None (not set) = use default (512MB)
+                // - Some(n) = use n as the limit
+                max_decompressed_size: proto_config
+                    .max_decompressed_size
+                    .map(|size| size as usize)
+                    .or(Some(crate::compression::DEFAULT_MAX_DECOMPRESSED_SIZE)),
             }
         });
 
@@ -350,6 +407,17 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
         let pubsub_reconciliation_interval_ms =
             value.pubsub_reconciliation_interval_ms.filter(|&v| v != 0);
         let read_only = value.read_only.unwrap_or(false);
+
+        let node_discovery_mode = value
+            .node_discovery_mode
+            .enum_value()
+            .ok()
+            .map(|val| match val {
+                protobuf::NodeDiscoveryMode::Standard => NodeDiscoveryMode::Standard,
+                protobuf::NodeDiscoveryMode::Static => NodeDiscoveryMode::Static,
+                protobuf::NodeDiscoveryMode::DiscoverAll => NodeDiscoveryMode::DiscoverAll,
+            })
+            .unwrap_or_default();
 
         ConnectionRequest {
             read_from,
@@ -370,18 +438,21 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             lazy_connect,
             refresh_topology_from_initial_nodes,
             root_certs,
+            client_side_cache,
             client_cert,
             client_key,
             compression_config,
             tcp_nodelay,
             pubsub_reconciliation_interval_ms,
             read_only,
+            node_discovery_mode,
+            // Address resolver is not set from protobuf - it's set programmatically
+            address_resolver: None,
         }
     }
 }
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "proto")]
     mod protobuf_conversion_tests {
         use crate::ConnectionRequest;
         use crate::compression::CompressionBackendType;

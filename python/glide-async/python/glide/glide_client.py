@@ -26,7 +26,10 @@ from glide.glide import (
     create_leaked_bytes_vec,
     create_otel_span,
     drop_otel_span,
+    get_cache_metric_from_registry,
     get_statistics,
+    register_address_resolver,
+    remove_address_resolver,
     start_socket_listener_external,
     value_from_pointer,
 )
@@ -53,6 +56,7 @@ from glide_shared.exceptions import (
     get_request_error_class,
 )
 from glide_shared.protobuf.command_request_pb2 import (
+    CacheMetricsType,
     Command,
     CommandRequest,
     RefreshIamToken,
@@ -145,6 +149,8 @@ class BaseClient(CoreCommands):
 
         self._pending_tasks: Optional[Set[Awaitable[None]]] = None
         """asyncio-only to avoid gc on pending write tasks"""
+
+        self._address_resolver_key: Optional[str] = None
 
     def _create_task(self, task, *args, **kwargs):
         """framework agnostic free-floating task shim"""
@@ -273,8 +279,22 @@ class BaseClient(CoreCommands):
         # Start the reader loop as a background task
         self._reader_task = self._create_task(self._reader_loop)
 
-        # Set the client configurations
-        await self._set_connection_configurations()
+        # Register address resolver in the global registry before sending the
+        # connection request, so the socket listener can pick it up.
+        if self.config.address_resolver is not None:
+            self._address_resolver_key = register_address_resolver(
+                self.config.address_resolver
+            )
+
+        try:
+            # Set the client configurations
+            await self._set_connection_configurations()
+        except Exception:
+            # Clean up the resolver from the registry if connection fails
+            if self._address_resolver_key is not None:
+                remove_address_resolver(self._address_resolver_key)
+                self._address_resolver_key = None
+            raise
 
         return self
 
@@ -337,7 +357,10 @@ class BaseClient(CoreCommands):
         return response_future
 
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        return self.config._create_a_protobuf_conn_request()
+        request = self.config._create_a_protobuf_conn_request()
+        if self._address_resolver_key is not None:
+            request.address_resolver_key = self._address_resolver_key
+        return request
 
     async def _set_connection_configurations(self) -> None:
         conn_request = self._get_protobuf_conn_request()
@@ -862,6 +885,28 @@ class BaseClient(CoreCommands):
             actual_subscriptions=actual_subscriptions,
         )
 
+    def _get_cache_metrics(self, metrics_type: CacheMetricsType.ValueType) -> TResult:
+        """
+        Get cache metrics.
+
+        Args:
+            metrics_type: Type of metric to retrieve (e.g., hit rate, miss rate).
+
+        Returns:
+            The requested cache metric.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+        """
+        if not self.config.client_side_cache:
+            raise RequestError("Client-side caching is not enabled")
+        try:
+            return get_cache_metric_from_registry(
+                self.config.client_side_cache.cache_id, metrics_type
+            )
+        except Exception as e:
+            raise RequestError(str(e)) from e
+
 
 class GlideClusterClient(BaseClient, ClusterCommands):
     """
@@ -901,7 +946,10 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         return [ClusterScanCursor(bytes(response[0]).decode()), response[1]]
 
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        return self.config._create_a_protobuf_conn_request(cluster_mode=True)
+        request = self.config._create_a_protobuf_conn_request(cluster_mode=True)
+        if self._address_resolver_key is not None:
+            request.address_resolver_key = self._address_resolver_key
+        return request
 
     async def get_subscriptions(
         self,

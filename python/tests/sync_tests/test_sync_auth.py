@@ -306,7 +306,10 @@ class TestSyncAuthCommands:
                 assert result == OK
                 break
             except Exception as e:
-                if "AllConnectionsUnavailable" in str(e) and i < max_retries - 1:
+                if (
+                    "AllConnectionsUnavailable" in str(e)
+                    or "Connection in recovery" in str(e)
+                ) and i < max_retries - 1:
                     time.sleep(0.5)
                     continue
                 raise
@@ -317,7 +320,10 @@ class TestSyncAuthCommands:
                 assert acl_glide_sync_client.set("test_key", "test_value") == OK
                 break
             except Exception as e:
-                if "AllConnectionsUnavailable" in str(e) and i < max_retries - 1:
+                if (
+                    "AllConnectionsUnavailable" in str(e)
+                    or "Connection in recovery" in str(e)
+                ) and i < max_retries - 1:
                     time.sleep(0.5)
                     continue
                 raise

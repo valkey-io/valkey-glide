@@ -161,6 +161,12 @@ class _GlideFFI:
                 uintptr_t request_id
             );
 
+            CommandResult* get_cache_metrics(
+                const void* client_adapter_ptr,
+                uintptr_t request_id,
+                int metrics_type
+            );
+
             // ============== CLIENT MANAGEMENT ==============
             typedef enum {
                 Async = 0,
@@ -179,6 +185,16 @@ class _GlideFFI:
                 int64_t channel_len,
                 const uint8_t* pattern,
                 int64_t pattern_len
+            );
+
+            typedef uint16_t (*AddressResolverCallback)(
+                uintptr_t client_id,
+                const uint8_t* host,
+                size_t host_len,
+                uint16_t port,
+                uint8_t* resolved_host_buf,
+                size_t resolved_host_buf_len,
+                size_t* resolved_host_len
             );
 
             typedef struct {
@@ -201,7 +217,9 @@ class _GlideFFI:
                 const uint8_t* connection_request_bytes,
                 size_t connection_request_len,
                 const ClientType* client_type,
-                PubSubCallback pubsub_callback
+                PubSubCallback pubsub_callback,
+                AddressResolverCallback address_resolver,
+                uintptr_t client_id
             );
             void close_client(const void* client_adapter_ptr);
             void free_connection_response(ConnectionResponse* connection_response_ptr);

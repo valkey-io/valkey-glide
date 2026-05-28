@@ -20,6 +20,10 @@ package glide
 //                     const uint8_t *message, int64_t message_len,
 //                     const uint8_t *channel, int64_t channel_len,
 //                     const uint8_t *pattern, int64_t pattern_len);
+// uint16_t addressResolverCallback(uintptr_t client_id, const uint8_t *host, uintptr_t host_len,
+//                                  uint16_t port,
+//                                  uint8_t *resolved_host_buf, uintptr_t resolved_host_buf_len,
+//                                  uintptr_t *resolved_host_len);
 import "C"
 
 import (
@@ -29,6 +33,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -44,6 +49,8 @@ import (
 
 const OK = "OK"
 
+var clientIDCounter atomic.Uintptr
+
 type payload struct {
 	value *C.struct_CommandResponse
 	error error
@@ -51,6 +58,7 @@ type payload struct {
 
 type clientConfiguration interface {
 	ToProtobuf() (*protobuf.ConnectionRequest, error)
+	GetAddressResolver() config.AddressResolver
 }
 
 type baseClient struct {
@@ -58,6 +66,7 @@ type baseClient struct {
 	coreClient     unsafe.Pointer
 	mu             *sync.Mutex
 	messageHandler *MessageHandler
+	resolverID     uintptr
 }
 
 // setMessageHandler assigns a message handler to the client for processing pub/sub messages
@@ -133,8 +142,8 @@ func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallba
 // Passes the pointers to callback functions which will be invoked when the command succeeds or fails.
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
 // connection_response to avoid any memory leaks.
-func createClient(config clientConfiguration) (*baseClient, error) {
-	request, err := config.ToProtobuf()
+func createClient(cfg clientConfiguration) (*baseClient, error) {
+	request, err := cfg.ToProtobuf()
 	if err != nil {
 		return nil, err
 	}
@@ -156,22 +165,40 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	}
 	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
 
+	// Determine resolver callback and client ID
+	var resolverCallback C.AddressResolverCallback
+	var clientID uintptr
+	if cfgWithResolver, ok := cfg.(interface{ GetAddressResolver() config.AddressResolver }); ok {
+		if resolver := cfgWithResolver.GetAddressResolver(); resolver != nil {
+			clientID = uintptr(clientIDCounter.Add(1))
+			registerResolver(clientID, resolver)
+			resolverCallback = (C.AddressResolverCallback)(unsafe.Pointer(C.addressResolverCallback))
+		}
+	}
+
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
 			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
+			resolverCallback,
+			C.uintptr_t(clientID),
 		),
 	)
+
 	defer C.free_connection_response(cResponse)
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
+		if clientID != 0 {
+			unregisterResolver(clientID)
+		}
 		return nil, NewConnectionError(message)
 	}
 
 	client.coreClient = cResponse.conn_ptr
+	client.resolverID = clientID
 
 	// Register the client in our registry using the pointer value from C
 	registerClient(client, uintptr(cResponse.conn_ptr))
@@ -192,6 +219,11 @@ func (client *baseClient) Close() {
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
+
+	if client.resolverID != 0 {
+		unregisterResolver(client.resolverID)
+		client.resolverID = 0
+	}
 
 	// iterating the channel map while holding the lock guarantees those unsafe.Pointers is still valid
 	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
@@ -854,6 +886,317 @@ func (client *baseClient) submitRefreshIamToken(ctx context.Context) (string, er
 // See also: [IamAuthConfig], [ServerCredentials], [NewServerCredentialsWithIam]
 func (client *baseClient) RefreshIamToken(ctx context.Context) (string, error) {
 	return client.submitRefreshIamToken(ctx)
+}
+
+// submitGetCacheMetrics is the internal implementation for retrieving cache metrics.
+//
+// This method sends a cache metrics request to the core client to get the specified
+// metric value. It handles context cancellation and manages the asynchronous communication
+// with the underlying C client.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//	metricsType - The type of metrics to retrieve using protobuf.CacheMetricsType.
+//
+// Return value:
+//
+//	Returns the requested metric value, or an error if the operation fails.
+//
+// Note: This is an internal method. Use the specific cache metrics methods for the public API.
+func (client *baseClient) submitGetCacheMetrics(
+	ctx context.Context,
+	metricsType protobuf.CacheMetricsType,
+) (*C.struct_CommandResponse, error) {
+	// Check if context is already done
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		// Continue with execution
+	}
+
+	// Create a channel to receive the result
+	resultChannel := make(chan payload, 1)
+	resultChannelPtr := unsafe.Pointer(&resultChannel)
+
+	pinner := pinner{}
+	pinnedChannelPtr := uintptr(pinner.Pin(resultChannelPtr))
+	defer pinner.Unpin()
+
+	client.mu.Lock()
+	if client.coreClient == nil {
+		client.mu.Unlock()
+		return nil, NewClosingError("GetCacheMetrics failed. The client is closed.")
+	}
+	client.pending[resultChannelPtr] = struct{}{}
+
+	C.get_cache_metrics(
+		client.coreClient,
+		C.uintptr_t(pinnedChannelPtr),
+		C.int(metricsType),
+	)
+	client.mu.Unlock()
+
+	// Wait for result or context cancellation
+	var payload payload
+	select {
+	case <-ctx.Done():
+		client.mu.Lock()
+		if client.pending != nil {
+			delete(client.pending, resultChannelPtr)
+		}
+		client.mu.Unlock()
+		// Start cleanup goroutine
+		go func() {
+			// Wait for payload on separate channel
+			if payload := <-resultChannel; payload.value != nil {
+				C.free_command_response(payload.value)
+			}
+		}()
+		return nil, ctx.Err()
+	case payload = <-resultChannel:
+		// Continue with normal processing
+	}
+
+	client.mu.Lock()
+	if client.pending != nil {
+		delete(client.pending, resultChannelPtr)
+	}
+	client.mu.Unlock()
+
+	if payload.error != nil {
+		return nil, payload.error
+	}
+
+	return payload.value, nil
+}
+
+// GetCacheHitRate returns the cache hit rate as a percentage (0.0 to 1.0).
+//
+// This method retrieves the ratio of cache hits to total cache requests.
+// A higher hit rate indicates better cache performance.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the cache hit rate as a float64 (0.0 to 1.0).
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	hitRate, err := client.GetCacheHitRate(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache hit rate: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache hit rate: %.2f%%", hitRate*100)
+func (client *baseClient) GetCacheHitRate(ctx context.Context) (float64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_HitRate)
+	if err != nil {
+		return 0.0, err
+	}
+
+	return handleFloatResponse(result)
+}
+
+// GetCacheMissRate returns the cache miss rate as a percentage (0.0 to 1.0).
+//
+// This method retrieves the ratio of cache misses to total cache requests.
+// A lower miss rate indicates better cache performance.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the cache miss rate as a float64 (0.0 to 1.0).
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	missRate, err := client.GetCacheMissRate(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache miss rate: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache miss rate: %.2f%%", missRate*100)
+func (client *baseClient) GetCacheMissRate(ctx context.Context) (float64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_MissRate)
+	if err != nil {
+		return 0.0, err
+	}
+
+	return handleFloatResponse(result)
+}
+
+// GetCacheEntryCount returns the current number of entries in the cache.
+//
+// This method retrieves the total count of cached entries currently stored
+// in the client-side cache.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the number of cache entries as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	entryCount, err := client.GetCacheEntryCount(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache entry count: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache contains %d entries", entryCount)
+func (client *baseClient) GetCacheEntryCount(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_EntryCount)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// GetCacheEvictions returns the total number of cache evictions.
+//
+// This method retrieves the count of entries that have been evicted from
+// the cache due to memory pressure or eviction policy enforcement.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the number of cache evictions as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	evictions, err := client.GetCacheEvictions(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache evictions: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache has evicted %d entries", evictions)
+func (client *baseClient) GetCacheEvictions(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_Evictions)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// GetCacheExpirations returns the total number of cache expirations.
+//
+// This method retrieves the count of entries that have expired from
+// the cache due to TTL (Time-To-Live) expiration.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the number of cache expirations as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	expirations, err := client.GetCacheExpirations(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get cache expirations: %v", err)
+//	    return
+//	}
+//	log.Printf("Cache has expired %d entries", expirations)
+func (client *baseClient) GetCacheExpirations(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_Expirations)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
+}
+
+// GetCacheTotalLookups returns the total number of cache lookups (hits + misses).
+//
+// This method retrieves the sum of cache hits and misses, representing the
+// total number of cache lookup operations performed.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution and cancellation.
+//
+// Return value:
+//
+//	Returns the total number of cache lookups as an int64.
+//
+// Errors:
+//
+//	Returns an error if:
+//	  - Client-side caching is not enabled
+//	  - Metrics collection is disabled
+//	  - The context is cancelled
+//	  - The client is closed
+//
+// Example:
+//
+//	totalLookups, err := client.GetCacheTotalLookups(context.Background())
+//	if err != nil {
+//	    log.Printf("Failed to get total cache lookups: %v", err)
+//	    return
+//	}
+//	log.Printf("Total cache lookups: %d", totalLookups)
+func (client *baseClient) GetCacheTotalLookups(ctx context.Context) (int64, error) {
+	result, err := client.submitGetCacheMetrics(ctx, protobuf.CacheMetricsType_TotalLookups)
+	if err != nil {
+		return 0, err
+	}
+
+	return handleIntResponse(result)
 }
 
 // Set the given key with the given value. The return value is a response from Valkey containing the string "OK".
@@ -7353,6 +7696,91 @@ func (client *baseClient) CopyWithOptions(
 		return models.DefaultBoolResponse, err
 	}
 	return handleBoolResponse(result)
+}
+
+// Transfers a key from the current Valkey instance to a destination Valkey instance.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx           - The context for controlling the command execution.
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	key           - The key to migrate.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) Migrate(
+	ctx context.Context,
+	host string,
+	port int64,
+	key string,
+	destinationDB int64,
+	timeout int64,
+) (string, error) {
+	result, err := client.executeCommand(ctx, C.Migrate, []string{
+		host,
+		utils.IntToString(port),
+		key,
+		utils.IntToString(destinationDB),
+		utils.IntToString(timeout),
+	})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Transfers a key from the current Valkey instance to a destination Valkey instance with options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx            - The context for controlling the command execution.
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	key            - The key to migrate.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) MigrateWithOptions(
+	ctx context.Context,
+	host string,
+	port int64,
+	key string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) (string, error) {
+	optionArgs, err := migrateOptions.ToArgs()
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	args := []string{
+		host,
+		utils.IntToString(port),
+		key,
+		utils.IntToString(destinationDB),
+		utils.IntToString(timeout),
+	}
+	result, err := client.executeCommand(ctx, C.Migrate, append(args, optionArgs...))
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
 }
 
 // Returns stream entries matching a given range of IDs.

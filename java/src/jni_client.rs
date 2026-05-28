@@ -55,6 +55,22 @@ pub extern "system" fn JNI_OnUnload(_vm: *const JavaVM, _reserved: *const c_void
     crate::cleanup_global_caches();
 }
 
+/// Invalidate cached JNI method IDs so the next call re-initializes them.
+/// Called when callback completion fails — stale method IDs (e.g. from classloader
+/// changes) would cause every subsequent callback to fail permanently. Clearing the
+/// cache lets the fallback `find_class` path re-discover the correct method IDs.
+///
+/// Safe to call at any time: the Mutex<Option<...>> pattern means the next caller
+/// will re-populate the cache from the current JNIEnv.
+fn invalidate_jni_caches() {
+    if let Some(cache_mutex) = METHOD_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+    if let Some(cache_mutex) = GLIDE_CORE_CLIENT_CACHE.get() {
+        *cache_mutex.lock() = None;
+    }
+}
+
 // Type aliases for complex types
 type PushMessageTuple = (Vec<u8>, Vec<u8>, Option<Vec<u8>>);
 type CallbackResult = Result<ServerValue, ServerError>;
@@ -409,6 +425,14 @@ fn process_callback_job_with_env(
     binary_mode: bool,
 ) {
     if take_timed_out_callback(callback_id) {
+        logger_core::log_debug_rate_limited!(
+            "jni_callback",
+            5,
+            format!(
+                "Rust task completed for callback_id={} after Java timeout — result discarded.",
+                callback_id
+            )
+        );
         return;
     }
 
@@ -432,6 +456,11 @@ fn process_callback_job_with_env(
                     if let Err(e) = complete_java_callback(env, callback_id, &java_result) {
                         log::error!("JNI completion failed for callback {callback_id}: {e}");
                         let _ = env.exception_clear();
+                        invalidate_jni_caches();
+                        fail_all_pending_futures(
+                            env,
+                            "JNI callback completion failed — cached method IDs may be stale",
+                        );
                     }
                 }
                 Err(e) => {
@@ -445,6 +474,11 @@ fn process_callback_job_with_env(
                     ) {
                         log::error!("JNI error completion failed for callback {callback_id}: {e2}");
                         let _ = env.exception_clear();
+                        invalidate_jni_caches();
+                        fail_all_pending_futures(
+                            env,
+                            "JNI error callback completion failed — cached method IDs may be stale",
+                        );
                     }
                 }
             }
@@ -462,6 +496,11 @@ fn process_callback_job_with_env(
             {
                 log::error!("JNI error completion failed for callback {callback_id}: {e}");
                 let _ = env.exception_clear();
+                invalidate_jni_caches();
+                fail_all_pending_futures(
+                    env,
+                    "JNI error callback completion failed — cached method IDs may be stale",
+                );
             }
         }
     }
@@ -962,6 +1001,57 @@ fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientC
     }
 
     Ok(guard.as_ref().cloned().unwrap())
+}
+
+/// Complete a callback with an error synchronously from the JNI calling thread.
+/// This bypasses the async callback channel entirely — used for immediate rejection
+/// (e.g., inflight limit exceeded) where the Java thread must not park.
+///
+/// Requires the calling thread to already have a JNIEnv (which JNI entry points always do).
+pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, message: &str) {
+    let Ok(method_cache) = get_method_cache(env) else {
+        log::error!(
+            "complete_error_sync: method cache not initialized for callback_id={}",
+            callback_id
+        );
+        return;
+    };
+
+    // Create the error message string — a small Java heap allocation,
+    // not affected by native memory pressure.
+    let Ok(error_msg) = env.new_string(message) else {
+        log::error!(
+            "complete_error_sync: failed to create error string for callback_id={}",
+            callback_id
+        );
+        return;
+    };
+
+    // Call AsyncRegistry.completeCallbackWithErrorCode(callbackId, errorCode, errorMessage)
+    // Error code 4 = RequestException (matches the existing inflight error path)
+    let result = unsafe {
+        env.call_static_method_unchecked(
+            &method_cache.async_handle_table_class,
+            method_cache.complete_error_with_code_method,
+            jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
+            &[
+                jni::sys::jvalue { j: callback_id },
+                jni::sys::jvalue { i: 4 }, // RequestException error code
+                jni::sys::jvalue {
+                    l: error_msg.into_raw(),
+                },
+            ],
+        )
+    };
+
+    if let Err(e) = result {
+        log::error!(
+            "complete_error_sync: JNI call failed for callback_id={}: {:?}",
+            callback_id,
+            e
+        );
+        let _ = env.exception_clear();
+    }
 }
 
 #[cfg(test)]

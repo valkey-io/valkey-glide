@@ -4,7 +4,7 @@ use glide_core::ConnectionRequest;
 use glide_core::client::Client as GlideClient;
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::command_request::SimpleRoutes;
-use glide_core::command_request::{Routes, SlotTypes};
+use glide_core::command_request::{CacheMetricsType, Routes, SlotTypes};
 use glide_core::connection_request;
 use glide_core::errors::RequestErrorType;
 use glide_core::errors::{self, error_message};
@@ -17,11 +17,14 @@ use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
-use protobuf::Message;
+use protobuf::{Enum, Message};
 use redis::ErrorKind;
 use redis::ObjectType;
 use redis::ScanStateRC;
 use redis::cluster_routing::ResponsePolicy;
+// Routable trait provides the command() method used for response policy lookup.
+// In miri-tests with mock-redis, this may appear unused due to mock implementations.
+#[allow(unused_imports)]
 use redis::cluster_routing::Routable;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
@@ -301,6 +304,93 @@ pub type PubSubCallback = unsafe extern "C-unwind" fn(
     pattern: *const u8,
     pattern_len: i64,
 ) -> ();
+
+/// Address resolver callback that is called to resolve server addresses before connection.
+///
+/// The callback receives a host string and port, and should write the resolved host
+/// into the provided buffer and return the resolved port. If the callback returns 0
+/// for the port, the original address is used as a fallback.
+///
+/// # Parameters
+/// * `host`: A pointer to the host string bytes (not null-terminated).
+/// * `host_len`: The length of the host string in bytes.
+/// * `port`: The port number to resolve.
+/// * `resolved_host_buf`: A pointer to a buffer where the resolved host should be written.
+/// * `resolved_host_buf_len`: The length of the resolved host buffer.
+/// * `resolved_host_len`: A pointer where the actual length of the resolved host should be written.
+///
+/// # Returns
+/// The resolved port number. If 0 is returned, the original address is used as a fallback.
+///
+/// # Safety
+/// * `host` must point to `host_len` consecutive properly initialized bytes.
+/// * `resolved_host_buf` must point to `resolved_host_buf_len` consecutive writable bytes.
+/// * `resolved_host_len` must be a valid pointer to a writable `usize`.
+/// * The callback must write the resolved host into `resolved_host_buf` and set `resolved_host_len`.
+pub type AddressResolverCallback = unsafe extern "C-unwind" fn(
+    client_id: usize,
+    host: *const u8,
+    host_len: usize,
+    port: u16,
+    resolved_host_buf: *mut u8,
+    resolved_host_buf_len: usize,
+    resolved_host_len: *mut usize,
+) -> u16;
+
+/// A wrapper around an FFI address resolver callback that implements the `AddressResolver` trait.
+struct FFIAddressResolver {
+    callback: AddressResolverCallback,
+    client_id: usize,
+}
+
+// SAFETY: The callback is a C function pointer that is safe to send across threads.
+unsafe impl Send for FFIAddressResolver {}
+unsafe impl Sync for FFIAddressResolver {}
+
+impl std::fmt::Debug for FFIAddressResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FFIAddressResolver {{ callback: <C function pointer> }}")
+    }
+}
+
+impl redis::AddressResolver for FFIAddressResolver {
+    fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+        // Provide a buffer for the resolved host (1024 bytes should be more than enough for a hostname)
+        let mut resolved_host_buf = vec![0u8; 1024];
+        let mut resolved_host_len: usize = 0;
+
+        let resolved_port = unsafe {
+            (self.callback)(
+                self.client_id,
+                host.as_ptr(),
+                host.len(),
+                port,
+                resolved_host_buf.as_mut_ptr(),
+                resolved_host_buf.len(),
+                &mut resolved_host_len,
+            )
+        };
+
+        // If the callback returned port 0 or didn't write a host, fall back to original
+        if resolved_port == 0
+            || resolved_host_len == 0
+            || resolved_host_len > resolved_host_buf.len()
+        {
+            return (host.to_string(), port);
+        }
+
+        match std::str::from_utf8(&resolved_host_buf[..resolved_host_len]) {
+            Ok(resolved_host) => (resolved_host.to_string(), resolved_port),
+            Err(_) => {
+                logger_core::log_error_lazy!(
+                    "address_resolver",
+                    "Address resolver returned invalid UTF-8 for host, using original address"
+                );
+                (host.to_string(), port)
+            }
+        }
+    }
+}
 
 /// The connection response.
 ///
@@ -596,6 +686,18 @@ impl ClientAdapter {
                                     _ => unreachable!(),
                                 }
                                 unsafe { (success_callback)(request_id, &resp as *const _) };
+                                // Debug canary: poison the stack response after the
+                                // callback returns so that any binding that stashed the
+                                // pointer instead of copying will read obvious garbage
+                                // and trip sanitizers / debug assertions.
+                                #[cfg(debug_assertions)]
+                                unsafe {
+                                    std::ptr::write_bytes(
+                                        &mut resp as *mut CommandResponse as *mut u8,
+                                        0xDE,
+                                        std::mem::size_of::<CommandResponse>(),
+                                    );
+                                }
                                 return std::ptr::null_mut();
                             }
                             _ => {}
@@ -870,6 +972,8 @@ fn create_client_internal(
     connection_request_bytes: &[u8],
     client_type: ClientType,
     pubsub_callback: Option<PubSubCallback>,
+    address_resolver: Option<AddressResolverCallback>,
+    client_id: usize,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
@@ -928,11 +1032,18 @@ fn create_client_internal(
         // tasks (connection drivers, cluster manager) are registered there.
         // The current_thread runtime is only used for block_on in the command path.
         let create_rt = background_runtime.as_ref().unwrap_or(&runtime);
+        let mut connection_request = ConnectionRequest::from(request);
+
+        // Set the address resolver if provided
+        if let Some(resolver_callback) = address_resolver {
+            connection_request.address_resolver = Some(Arc::new(FFIAddressResolver {
+                callback: resolver_callback,
+                client_id,
+            }));
+        }
+
         create_rt
-            .block_on(GlideClient::new(
-                ConnectionRequest::from(request),
-                Some(push_tx),
-            ))
+            .block_on(GlideClient::new(connection_request, Some(push_tx)))
             .map_err(|err| err.to_string())?
     };
 
@@ -1000,6 +1111,8 @@ pub unsafe extern "C-unwind" fn create_client(
     connection_request_len: usize,
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
+    address_resolver: AddressResolverCallback,
+    client_id: usize,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
     let request_bytes =
@@ -1013,7 +1126,20 @@ pub unsafe extern "C-unwind" fn create_client(
         Some(pubsub_callback)
     };
 
-    let response = match create_client_internal(request_bytes, client_type.clone(), callback_opt) {
+    // Convert address resolver pointer to Option - 0 means no resolver
+    let resolver_opt = if address_resolver as usize == 0 {
+        None
+    } else {
+        Some(address_resolver)
+    };
+
+    let response = match create_client_internal(
+        request_bytes,
+        client_type.clone(),
+        callback_opt,
+        resolver_opt,
+        client_id,
+    ) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
             connection_error_message: CString::into_raw(
@@ -1191,7 +1317,8 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     ),
                 },
                 Ok(bytes) => {
-                    match create_client_internal(&bytes, client_type.clone(), callback_opt) {
+                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None, 0)
+                    {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(
@@ -1243,8 +1370,8 @@ fn create_client_from_uri_internal(
             .map_err(|e| format!("Invalid UTF-8 in URI: {}", e))?
     };
 
-    let url = parse_connection_url(uri_string)
-        .ok_or_else(|| format!("Invalid connection URI: {}", uri_string))?;
+    let url =
+        parse_connection_url(uri_string).ok_or_else(|| "Invalid connection URI".to_string())?;
 
     // Build base ConnectionRequest from URI
     let mut request = connection_request::ConnectionRequest::new();
@@ -1331,6 +1458,7 @@ fn is_known_connection_options_json_key(key: &str) -> bool {
             | "tcp_nodelay"
             | "lazy_connect"
             | "read_only"
+            | "node_discovery_mode"
             | "pubsub_reconciliation_interval_ms"
             | "compression_config"
             | "periodic_checks"
@@ -1362,8 +1490,14 @@ fn apply_json_options(
     request: &mut connection_request::ConnectionRequest,
     json_str: &str,
 ) -> Result<(), String> {
-    let json_value: serde_json::Value =
-        serde_json::from_str(json_str).map_err(|e| format!("Invalid JSON: {}", e))?;
+    let json_value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+        format!(
+            "Invalid JSON in connection options: {:?} at line {}, column {}",
+            e.classify(),
+            e.line(),
+            e.column()
+        )
+    })?;
 
     if !json_value.is_object() {
         return Err("JSON options must be an object".to_string());
@@ -1586,6 +1720,20 @@ fn apply_json_options(
             .as_bool()
             .ok_or_else(|| "read_only must be a boolean".to_string())?;
         request.read_only = Some(enabled);
+    }
+
+    // Handle node_discovery_mode
+    if let Some(mode) = obj.get("node_discovery_mode") {
+        let mode_str = mode
+            .as_str()
+            .ok_or_else(|| "node_discovery_mode must be a string".to_string())?;
+        let mode_enum = match mode_str {
+            "Standard" => connection_request::NodeDiscoveryMode::Standard,
+            "Static" => connection_request::NodeDiscoveryMode::Static,
+            "DiscoverAll" => connection_request::NodeDiscoveryMode::DiscoverAll,
+            _ => return Err(format!("Unknown node_discovery_mode value: {}", mode_str)),
+        };
+        request.node_discovery_mode = ::protobuf::EnumOrUnknown::new(mode_enum);
     }
 
     // Handle pubsub_reconciliation_interval_ms
@@ -1906,7 +2054,20 @@ unsafe fn free_command_response_elements(command_response: CommandResponse) {
     }
 }
 
-/// Converts a double pointer to a vec.
+/// Resolves the actual RequestType for a CustomCommand by parsing the command name from the first argument.
+/// This is needed for compression validation since CustomCommand doesn't carry the actual command type.
+fn resolve_custom_command_type(args: &[Vec<u8>]) -> RequestType {
+    if args.is_empty() {
+        return RequestType::CustomCommand;
+    }
+
+    let command_name = &args[0];
+    let command_str = String::from_utf8_lossy(command_name);
+
+    // Use the centralized from_command_name method in glide-core
+    RequestType::from_command_name(&command_str).unwrap_or(RequestType::CustomCommand)
+}
+
 ///
 /// # Safety
 ///
@@ -1978,6 +2139,14 @@ impl ResponseArena {
 
     /// Allocate a node in the arena, returning its index.
     fn alloc_node(&mut self) -> usize {
+        debug_assert!(
+            self.nodes.len() < self.nodes.capacity(),
+            "Arena node Vec would reallocate ({} nodes, capacity {}). \
+             This means count_nodes() underestimated — all previously handed-out \
+             pointers would be invalidated after finalize().",
+            self.nodes.len(),
+            self.nodes.capacity(),
+        );
         let idx = self.nodes.len();
         self.nodes.push(CommandResponse::default());
         idx
@@ -2506,10 +2675,26 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
         // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
         let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
 
+        // For CustomCommand, we need to determine the actual command type from the first argument
+        // and process compression on args[1..] since args[0] is the command name
+        let is_custom_command = matches!(command_type, RequestType::CustomCommand);
+        let effective_command_type = if is_custom_command {
+            resolve_custom_command_type(&owned_args)
+        } else {
+            command_type
+        };
+
         // Apply compression to command arguments
+        // For CustomCommand, skip the first argument (command name) when processing compression
+        let args_to_compress = if is_custom_command && !owned_args.is_empty() {
+            &mut owned_args[1..]
+        } else {
+            &mut owned_args[..]
+        };
+
         if let Err(err) = glide_core::compression::process_command_args_for_compression(
-            &mut owned_args,
-            command_type,
+            args_to_compress,
+            effective_command_type,
             compression_manager.as_deref(),
         ) {
             let err = RedisError::from((
@@ -3017,6 +3202,67 @@ pub unsafe extern "C-unwind" fn refresh_iam_token(
     })
 }
 
+/// Get cache metrics for the client.
+///
+/// This function retrieves cache performance metrics such as hit rate, miss rate,
+/// entry count, evictions, expirations and total lookups based on the specified metrics type.
+///
+/// # Parameters
+///
+/// * `client_adapter_ptr`: Pointer to a valid client returned from [`create_client`].
+/// * `request_id`: Unique identifier for a valid payload buffer created in the calling language.
+/// * `metrics_type`: Integer representing the type of cache metrics to retrieve:
+///   - 0: HitRate - Cache hit rate as a double (0.0 to 1.0)
+///   - 1: MissRate - Cache miss rate as a double (0.0 to 1.0)
+///   - 2: EntryCount - Number of entries in cache as an integer
+///   - 3: Evictions - Number of cache evictions as an integer
+///   - 4: Expirations - Number of cache expirations as an integer
+///   - 5: TotalLookups - Total cache lookups as an integer
+///
+/// # Returns
+///
+/// * A pointer to a [`CommandResult`] containing the requested metric value on success, or an error if:
+///   - Client-side caching is not enabled
+///   - Metrics tracking is disabled
+///   - Invalid metrics type is specified
+///   - Client is closed or invalid
+///
+/// # Safety
+///
+/// * `client_adapter_ptr` must not be `null` and must be obtained from the `ConnectionResponse` returned from [`create_client`].
+/// * `client_adapter_ptr` must be able to be safely casted to a valid [`Arc<ClientAdapter>`] via [`Arc::from_raw`].
+/// * `request_id` must be valid until it is passed in a call to [`free_command_response`].
+/// * This function should only be called with a `client_adapter_ptr` created by [`create_client`], before [`close_client`] was called with the pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C-unwind" fn get_cache_metrics(
+    client_adapter_ptr: *const c_void,
+    request_id: usize,
+    metrics_type: i32,
+) -> *mut CommandResult {
+    let client_adapter = unsafe {
+        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
+        Arc::increment_strong_count(client_adapter_ptr);
+        Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
+    };
+
+    let client = client_adapter.core.client.clone();
+    client_adapter.execute_request(request_id, async move {
+        match CacheMetricsType::from_i32(metrics_type) {
+            Some(CacheMetricsType::HitRate) => client.cache_hit_rate(),
+            Some(CacheMetricsType::MissRate) => client.cache_miss_rate(),
+            Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
+            Some(CacheMetricsType::Evictions) => client.cache_evictions(),
+            Some(CacheMetricsType::Expirations) => client.cache_expirations(),
+            Some(CacheMetricsType::TotalLookups) => client.cache_total_lookups(),
+            None => Err(RedisError::from((
+                ErrorKind::ClientError,
+                "Invalid cache metrics type",
+                format!("Unsupported metrics type: {}", metrics_type),
+            ))),
+        }
+    })
+}
+
 /// Executes a Lua script.
 ///
 /// # Parameters
@@ -3237,6 +3483,8 @@ pub unsafe extern "C" fn batch(
 
     // Get compression manager for batch operations
     let compression_manager = client_adapter.core.client.compression_manager();
+    // Clone for use in async block
+    let compression_manager_for_decompression = compression_manager.clone();
 
     // TODO handle panics
     let mut pipeline = match unsafe { create_pipeline(batch_ptr, compression_manager.as_ref()) } {
@@ -3262,7 +3510,7 @@ pub unsafe extern "C" fn batch(
     let (routing, timeout, pipeline_retry_strategy) = unsafe { get_pipeline_options(options_ptr) };
 
     client_adapter.execute_request(callback_index, async move {
-        if pipeline.is_atomic() {
+        let result = if pipeline.is_atomic() {
             client
                 .send_transaction(&pipeline, routing, timeout, raise_on_error)
                 .await
@@ -3276,6 +3524,22 @@ pub unsafe extern "C" fn batch(
                     pipeline_retry_strategy,
                 )
                 .await
+        };
+
+        // Process batch response for decompression if compression is enabled
+        match result {
+            Ok(value) => glide_core::compression::try_decompress_batch_response(
+                value,
+                compression_manager_for_decompression.as_deref(),
+            )
+            .map_err(|e| {
+                redis::RedisError::from((
+                    redis::ErrorKind::IoError,
+                    "Decompression error",
+                    e.to_string(),
+                ))
+            }),
+            Err(e) => Err(e),
         }
     })
 }
@@ -3370,10 +3634,26 @@ pub(crate) unsafe fn create_cmd(
         // Convert arg_vec to owned Vec<Vec<u8>> for compression processing
         let mut owned_args: Vec<Vec<u8>> = arg_vec.iter().map(|&arg| arg.to_vec()).collect();
 
+        // For CustomCommand, we need to determine the actual command type from the first argument
+        // and process compression on args[1..] since args[0] is the command name
+        let is_custom_command = matches!(info.request_type, RequestType::CustomCommand);
+        let effective_command_type = if is_custom_command {
+            resolve_custom_command_type(&owned_args)
+        } else {
+            info.request_type
+        };
+
         // Apply compression to command arguments
+        // For CustomCommand, skip the first argument (command name) when processing compression
+        let args_to_compress = if is_custom_command && !owned_args.is_empty() {
+            &mut owned_args[1..]
+        } else {
+            &mut owned_args[..]
+        };
+
         if let Err(err) = glide_core::compression::process_command_args_for_compression(
-            &mut owned_args,
-            info.request_type,
+            args_to_compress,
+            effective_command_type,
             compression_manager.map(|m| m.as_ref()),
         ) {
             return Err(format!("Compression failed: {}", err));

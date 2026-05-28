@@ -43,6 +43,7 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     UpdateOptions,
 )
@@ -9522,6 +9523,24 @@ class TestCommands:
                 )
         finally:
             assert await glide_client.custom_command(["SELECT", "0"]) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_migrate(self, glide_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(5)
+        await glide_client.set(key, value)
+
+        with pytest.raises(RequestError):
+            await glide_client.migrate("invalid-host", 6379, key, 0, 5000)
+
+        with pytest.raises(RequestError):
+            await glide_client.migrate(
+                "invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True)
+            )
+
+        with pytest.raises(ValueError):
+            MigrateOptions(username="user").to_args()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

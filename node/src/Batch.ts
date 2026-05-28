@@ -52,6 +52,7 @@ import {
     ListDirection,
     LolwutOptions,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MigrateOptions,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -173,6 +174,7 @@ import {
     createLastSave,
     createLolwut,
     createMGet,
+    createMigrate,
     createMSet,
     createMSetNX,
     createMove,
@@ -453,6 +455,32 @@ export class BaseBatch<T extends BaseBatch<T>> {
     ): T {
         return this.addAndReturn(createCopy(source, destination, options));
     }
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     */
+    public migrate(
+        host: string,
+        port: number,
+        key: GlideString,
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): T {
+        return this.addAndReturn(
+            createMigrate(host, port, key, destinationDB, timeout, options),
+        );
+    }
+
     /**
      * Gets information and statistics about the server.
      *

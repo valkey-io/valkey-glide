@@ -115,11 +115,45 @@ class BaseClient(CoreCommands):
         # Store reference to prevent garbage collection
         self._pubsub_callback_ref = pubsub_callback
 
+        # Create address resolver callback if configured
+        address_resolver_callback = self._ffi.NULL
+        if self._config.address_resolver is not None:
+            resolver_fn = self._config.address_resolver
+
+            def _address_resolver_callback(
+                client_id,
+                host_ptr,
+                host_len,
+                port,
+                resolved_host_buf,
+                resolved_host_buf_len,
+                resolved_host_len_ptr,
+            ):
+                try:
+                    host = self._ffi.buffer(host_ptr, host_len)[:].decode("utf-8")
+                    resolved_host, resolved_port = resolver_fn(host, port)
+                    encoded_host = resolved_host.encode("utf-8")
+                    write_len = min(len(encoded_host), resolved_host_buf_len)
+                    self._ffi.memmove(resolved_host_buf, encoded_host, write_len)
+                    resolved_host_len_ptr[0] = write_len
+                    return resolved_port
+                except Exception:
+                    # On error, return 0 to signal fallback to original address
+                    return 0
+
+            address_resolver_callback = self._ffi.callback(
+                "AddressResolverCallback", _address_resolver_callback
+            )
+            # Store reference to prevent garbage collection
+            self._address_resolver_callback_ref = address_resolver_callback
+
         client_response_ptr = self._lib.create_client(
             conn_req_bytes,
             len(conn_req_bytes),
             client_type,
             pubsub_callback,
+            address_resolver_callback,
+            0,  # client_id is not used by the Python client
         )
 
         Logger.log(Level.INFO, "connection info", "new connection established")
@@ -911,6 +945,32 @@ class BaseClient(CoreCommands):
             desired_subscriptions=desired_subscriptions,
             actual_subscriptions=actual_subscriptions,
         )
+
+    def _get_cache_metrics(self, metrics_type: int) -> TResult:
+        """
+        Get cache metrics.
+
+        Args:
+            metrics_type: Type of metric to retrieve (e.g., hit rate, miss rate).
+
+        Returns:
+            The requested cache metric.
+
+        Raises:
+            RequestError: If client-side caching is not enabled or metrics tracking is disabled.
+        """
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        client_adapter_ptr = self._core_client
+        if client_adapter_ptr == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        result = self._lib.get_cache_metrics(
+            client_adapter_ptr,
+            0,  # Request ID (0 for sync use)
+            metrics_type,
+        )
+        return self._handle_cmd_result(result)
 
     def close(self) -> None:
         if not self._is_closed:

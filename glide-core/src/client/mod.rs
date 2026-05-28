@@ -9,17 +9,18 @@ use crate::compression::zstd_backend::ZstdBackend;
 use crate::compression::{CompressionConfig, CompressionManager};
 use crate::scripts_container::get_script;
 use futures::FutureExt;
-use logger_core::{log_debug, log_error, log_info, log_warn};
+use logger_core::{log_debug, log_error, log_info, log_warn, log_warn_rate_limited};
 use once_cell::sync::OnceCell;
 use redis::aio::ConnectionLike;
+use redis::cache::{get_or_create_cache, glide_cache::GlideCache};
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, ResponsePolicy, Routable, RoutingInfo, SingleNodeRoutingInfo,
 };
 use redis::cluster_slotmap::ReadFromReplicaStrategy;
 use redis::{
-    ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy, PushInfo, RedisError,
-    RedisResult, RetryStrategy, ScanStateRC, Value,
+    AddressResolver, ClusterScanArgs, Cmd, ErrorKind, FromRedisValue, PipelineRetryStrategy,
+    PushInfo, RedisError, RedisResult, RetryStrategy, ScanStateRC, Value,
 };
 pub use standalone_client::StandaloneClient;
 use std::io;
@@ -83,6 +84,24 @@ fn extract_request_type_from_cmd(cmd: &Cmd) -> Option<RequestType> {
         "GETEX" => Some(RequestType::GetEx),
         "GETDEL" => Some(RequestType::GetDel),
         "GETSET" => Some(RequestType::GetSet),
+        "SET" => {
+            // SET with GET option returns the old value, which needs decompression
+            // Check if the command has the GET option by looking for "GET" in the arguments
+            // SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | EXAT unix-time | PXAT unix-time | KEEPTTL]
+            let has_get_option = cmd.args_iter().skip(3).any(|arg| {
+                if let redis::Arg::Simple(bytes) = arg {
+                    bytes.eq_ignore_ascii_case(b"GET")
+                } else {
+                    false
+                }
+            });
+            if has_get_option {
+                // Treat SET with GET option like GETSET for decompression purposes
+                Some(RequestType::GetSet)
+            } else {
+                None
+            }
+        }
         _ => None, // Unknown command or write command, no decompression needed
     }
 }
@@ -171,6 +190,24 @@ pub async fn get_valkey_connection_info(
     let db = connection_request.database_id;
     let client_name = connection_request.client_name.clone();
     let lib_name = connection_request.lib_name.clone();
+    let cache = connection_request
+        .client_side_cache
+        .clone()
+        .map(|client_side_cache| {
+            get_or_create_cache(
+                &client_side_cache.cache_id,
+                client_side_cache.max_cache_kb,
+                client_side_cache.entry_ttl_ms,
+                client_side_cache.eviction_policy,
+                client_side_cache.enable_metrics,
+            )
+        });
+
+    let server_assisted_cache = connection_request
+        .client_side_cache
+        .as_ref()
+        .map(|c| c.server_assisted)
+        .unwrap_or(false);
 
     match &connection_request.authentication_info {
         Some(info) => {
@@ -190,6 +227,8 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    cache,
+                    server_assisted_cache,
                 }
             } else {
                 // Regular password-based authentication
@@ -200,6 +239,8 @@ pub async fn get_valkey_connection_info(
                     protocol,
                     client_name,
                     lib_name,
+                    cache,
+                    server_assisted_cache,
                 }
             }
         }
@@ -208,6 +249,8 @@ pub async fn get_valkey_connection_info(
             protocol,
             client_name,
             lib_name,
+            cache,
+            server_assisted_cache,
             ..Default::default()
         },
     }
@@ -222,16 +265,23 @@ pub(super) fn get_connection_info(
     tls_mode: TlsMode,
     redis_connection_info: redis::RedisConnectionInfo,
     tls_params: Option<redis::TlsConnParams>,
+    address_resolver: Option<&Arc<dyn AddressResolver>>,
 ) -> redis::ConnectionInfo {
+    let (resolved_host, resolved_port) = if let Some(resolver) = address_resolver {
+        resolver.resolve(&address.host, get_port(address))
+    } else {
+        (address.host.to_string(), get_port(address))
+    };
+
     let addr = if tls_mode != TlsMode::NoTls {
         redis::ConnectionAddr::TcpTls {
-            host: address.host.to_string(),
-            port: get_port(address),
+            host: resolved_host,
+            port: resolved_port,
             insecure: tls_mode == TlsMode::InsecureTls,
             tls_params,
         }
     } else {
-        redis::ConnectionAddr::Tcp(address.host.to_string(), get_port(address))
+        redis::ConnectionAddr::Tcp(resolved_host, resolved_port)
     };
     redis::ConnectionInfo {
         addr,
@@ -266,6 +316,8 @@ pub struct Client {
     compression_manager: Option<Arc<CompressionManager>>,
     pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
     otel_metadata: types::OTelMetadata,
+    // Optional client-side cache
+    client_side_cache: Option<Arc<dyn GlideCache>>,
 }
 
 async fn run_with_timeout<T>(
@@ -866,6 +918,15 @@ impl Client {
                 ) {
                     Ok(decompressed_value) => decompressed_value,
                     Err(e) => {
+                        // Propagate critical errors (size limit exceeded, incompatible command)
+                        // to the user instead of silently falling back to raw value
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
                         log_warn(
                             "send_command_decompression",
                             format!("Failed to decompress response: {}", e),
@@ -939,6 +1000,15 @@ impl Client {
             let tracker = match self.reserve_inflight_request() {
                 Some(t) => t,
                 None => {
+                    let available = self.inflight_requests_allowed.load(Ordering::Relaxed);
+                    log_warn_rate_limited!(
+                        "inflight",
+                        10,
+                        format!(
+                            "Inflight request limit exhausted. limit={}, available={}",
+                            self.inflight_requests_limit, available
+                        )
+                    );
                     return Err(RedisError::from((
                         ErrorKind::ClientError,
                         "Reached maximum inflight requests",
@@ -967,6 +1037,7 @@ impl Client {
             }
 
             cmd.set_inflight_tracker(tracker);
+            cmd.set_response_timeout(request_timeout);
 
             // Clone compression_manager reference only if compression is enabled
             let compression_manager = if self.is_compression_enabled() {
@@ -987,27 +1058,117 @@ impl Client {
 
             match request_timeout {
                 Some(duration) => {
+                    let timeout_rx =
+                        crate::timeout_watchdog::TimeoutWatchdog::global().register(duration);
                     tokio::pin!(execute);
                     tokio::select! {
                         result = &mut execute => result,
-                        _ = tokio::time::sleep(duration) => {
-                            // User timeout — execute future is dropped. The Cmd
-                            // was already moved into the event loop's PendingRequest,
-                            // so its tracker clone keeps the inflight slot held until
-                            // all sub-commands complete naturally.
-                            if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                                log_error(
-                                    "OpenTelemetry:timeout_error",
-                                    format!("Failed to record timeout error: {e}"),
-                                );
+                        recv_result = timeout_rx => {
+                            if recv_result.is_err() {
+                                // Watchdog thread died (sender dropped). Don't spuriously
+                                // timeout — fall through to let the command complete normally
+                                // via Tokio's timer wheel as a fallback.
+                                execute.await
+                            } else {
+                                // Watchdog fired the timeout
+                                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                                    log_error(
+                                        "OpenTelemetry:timeout_error",
+                                        format!("Failed to record timeout error: {e}"),
+                                    );
+                                }
+                                Err(io::Error::from(io::ErrorKind::TimedOut).into())
                             }
-                            Err(io::Error::from(io::ErrorKind::TimedOut).into())
                         }
                     }
                 }
                 None => execute.await,
             }
         })
+    }
+
+    /// Returns the cache hit rate (hits / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_hit_rate(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+
+        Ok(Value::Double(metrics.hit_rate()))
+    }
+
+    /// Returns the cache miss rate (misses / total requests).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_miss_rate(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+
+        Ok(Value::Double(metrics.miss_rate()))
+    }
+
+    /// Returns the total number of cache entries.
+    /// Returns an error if caching is not enabled.
+    pub fn cache_entry_count(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+        Ok(Value::Int(cache.entry_count() as i64))
+    }
+
+    /// returns the total number of evictions that occurred in the cache.
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_evictions(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.evictions() as i64))
+    }
+
+    /// Returns the total number of cache lookups (hits + misses).
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_total_lookups(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.total_lookups() as i64))
+    }
+
+    /// Returns the total number of expired entries that were removed from the cache.
+    /// Returns an error if caching is not enabled or metrics are disabled.
+    pub fn cache_expirations(&self) -> RedisResult<Value> {
+        let cache = self.client_side_cache.as_ref().ok_or_else(|| {
+            RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "Client-side caching is not enabled",
+            ))
+        })?;
+
+        let metrics = cache.metrics()?;
+        Ok(Value::Int(metrics.expirations() as i64))
     }
 
     // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
@@ -1618,6 +1779,7 @@ async fn create_cluster_client(
         None => Some(DEFAULT_PERIODIC_TOPOLOGY_CHECKS_INTERVAL),
     };
     let connection_timeout = request.get_connection_timeout();
+    let address_resolver = &request.address_resolver;
     let initial_nodes: Vec<_> = request
         .addresses
         .into_iter()
@@ -1627,6 +1789,7 @@ async fn create_cluster_client(
                 tls_mode,
                 valkey_connection_info.clone(),
                 tls_params.clone(),
+                address_resolver.as_ref(),
             )
         })
         .collect();
@@ -1649,6 +1812,8 @@ async fn create_cluster_client(
     }
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
     builder = builder.database_id(valkey_connection_info.db);
+    builder = builder.cache(valkey_connection_info.cache);
+    builder = builder.server_assisted_cache(valkey_connection_info.server_assisted_cache);
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -1682,6 +1847,11 @@ async fn create_cluster_client(
         builder.refresh_topology_from_initial_nodes(request.refresh_topology_from_initial_nodes);
 
     builder = builder.tcp_nodelay(request.tcp_nodelay);
+
+    // Pass the address resolver to the builder for use during topology refresh
+    if let Some(resolver) = address_resolver.clone() {
+        builder = builder.address_resolver(resolver);
+    }
 
     // Always use with Glide
     builder = builder.periodic_connections_checks(Some(CONNECTION_CHECKS_INTERVAL));
@@ -1878,8 +2048,14 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         request.inflight_requests_limit,
     );
 
+    let node_discovery_mode = match request.node_discovery_mode {
+        NodeDiscoveryMode::Standard => "\nNode discovery mode: Standard",
+        NodeDiscoveryMode::Static => "\nNode discovery mode: Static",
+        NodeDiscoveryMode::DiscoverAll => "\nNode discovery mode: DiscoverAll",
+    };
+
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{node_discovery_mode}",
     )
 }
 
@@ -1936,6 +2112,16 @@ impl Client {
             _ => None,
         };
 
+        let client_side_cache = request.client_side_cache.as_ref().map(|config| {
+            get_or_create_cache(
+                &config.cache_id,
+                config.max_cache_kb,
+                config.entry_ttl_ms,
+                config.eviction_policy,
+                config.enable_metrics,
+            )
+        });
+
         tokio::time::timeout(client_creation_timeout, async move {
             // Create shared, thread-safe wrapper for the internal client that starts as lazy
             // Arc<RwLock<T>> enables multiple async tasks to safely share and modify the client state
@@ -1987,6 +2173,7 @@ impl Client {
                 iam_token_manager: None,
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
                 otel_metadata,
+                client_side_cache,
             };
 
             let client_arc = Arc::new(RwLock::new(client));
@@ -2436,6 +2623,7 @@ mod tests {
                 },
                 db_namespace: "0".to_string(),
             },
+            client_side_cache: None,
         }
     }
 
