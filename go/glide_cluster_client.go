@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -1293,6 +1294,176 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
 	return models.CreateClusterSingleValue[models.Result[string]](data), nil
+}
+
+// Suspends all clients for the given timeout.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The duration to pause clients.
+//
+// Return value:
+//
+//	`"OK"` when the pause is successfully applied.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *ClusterClient) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
+	args := []string{utils.IntToString(timeout.Milliseconds())}
+	result, err := client.executeCommandWithRoute(ctx, C.ClientPause, args, config.AllPrimaries)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Suspends all clients for the given timeout with additional options.
+// The command will be routed to the nodes defined by specified route, or to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The duration to pause clients.
+//	options - The options for the command.
+//
+// Return value:
+//
+//	`"OK"` when the pause is successfully applied.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *ClusterClient) ClientPauseWithOptions(
+	ctx context.Context,
+	timeout time.Duration,
+	options options.ClientPauseClusterOptions,
+) (string, error) {
+	args := []string{utils.IntToString(timeout.Milliseconds())}
+	if options.Mode != nil {
+		args = append(args, string(*options.Mode))
+	}
+	route := config.Route(config.AllPrimaries)
+	if options.RouteOption != nil && options.RouteOption.Route != nil {
+		route = options.RouteOption.Route
+	}
+	result, err := client.executeCommandWithRoute(ctx, C.ClientPause, args, route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Resumes command processing for all clients.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` when the unpause is successfully applied.
+//
+// [valkey.io]: https://valkey.io/commands/client-unpause/
+func (client *ClusterClient) ClientUnpause(ctx context.Context) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.ClientUnpause, []string{}, config.AllPrimaries)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Resumes command processing for all clients.
+// The command will be routed to the nodes defined by specified route, or to all primary nodes
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	options - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`"OK"` when the unpause is successfully applied.
+//
+// [valkey.io]: https://valkey.io/commands/client-unpause/
+func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, options options.RouteOption) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.ClientUnpause, []string{}, options.Route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Controls the server reply behavior for the current connection.
+// The command will be routed to a random node.
+//
+// Warning: Because GLIDE uses a multiplexed connection that correlates
+// responses to in-flight requests by order, calling [ClientReply] with
+// [ClientReplyModeOff] or [ClientReplyModeSkip] will desynchronize the
+// connection and produce incorrect results for all subsequent commands
+// until the connection is closed and re-established. Only
+// [ClientReplyModeOn] is safe to use on a normal client.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	mode - The reply mode to set.
+//
+// Return value:
+//
+//	`"OK"` when the reply mode is successfully set.
+//
+// [valkey.io]: https://valkey.io/commands/client-reply/
+func (client *ClusterClient) ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientReply, []string{string(mode)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Controls the server reply behavior for the current connection.
+// The command will be routed to the nodes defined by route.
+//
+// Warning: Because GLIDE uses a multiplexed connection that correlates
+// responses to in-flight requests by order, calling [ClientReply] with
+// [ClientReplyModeOff] or [ClientReplyModeSkip] will desynchronize the
+// connection and produce incorrect results for all subsequent commands
+// until the connection is closed and re-established. Only
+// [ClientReplyModeOn] is safe to use on a normal client.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	mode - The reply mode to set. ON resumes replies, OFF suppresses all replies, SKIP suppresses the next reply.
+//	options - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`"OK"` when the reply mode is successfully set.
+//
+// [valkey.io]: https://valkey.io/commands/client-reply/
+func (client *ClusterClient) ClientReplyWithOptions(
+	ctx context.Context,
+	mode options.ClientReplyMode,
+	options options.RouteOption,
+) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.ClientReply, []string{string(mode)}, options.Route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
 }
 
 // Rewrites the configuration file with the current configuration.
