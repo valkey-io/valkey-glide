@@ -175,7 +175,7 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 //
 // Return value:
 //
-//	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *Client) ConfigSet(ctx context.Context, parameters map[string]string) (string, error) {
@@ -237,7 +237,7 @@ func (client *Client) ConfigGet(ctx context.Context, args []string) (map[string]
 //
 // Return value:
 //
-//	A simple `"OK"` response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *Client) Select(ctx context.Context, index int64) (string, error) {
@@ -608,7 +608,7 @@ func (client *Client) ClientGetName(ctx context.Context) (models.Result[string],
 //
 // Return value:
 //
-//	`"OK"` - when connection name is set
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *Client) ClientSetName(ctx context.Context, connectionName string) (string, error) {
@@ -630,7 +630,7 @@ func (client *Client) ClientSetName(ctx context.Context, connectionName string) 
 //
 // Return value:
 //
-//	`"OK"` when the pause is successfully applied.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-pause/
 func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
@@ -653,7 +653,7 @@ func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (s
 //
 // Return value:
 //
-//	`"OK"` when the pause is successfully applied.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-pause/
 func (client *Client) ClientPauseWithOptions(
@@ -682,7 +682,7 @@ func (client *Client) ClientPauseWithOptions(
 //
 // Return value:
 //
-//	`"OK"` when the unpause is successfully applied.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-unpause/
 func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
@@ -711,7 +711,7 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	`"OK"` when the reply mode is successfully set.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-reply/
 func (client *Client) ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error) {
@@ -789,7 +789,7 @@ func (client *Client) ScanWithOptions(
 //
 // Return value:
 //
-//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *Client) ConfigRewrite(ctx context.Context) (string, error) {
@@ -898,7 +898,7 @@ func (client *Client) FunctionStats(ctx context.Context) (map[string]models.Func
 //
 // Return value:
 //
-//	"OK" if the library exists, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *Client) FunctionDelete(ctx context.Context, libName string) (string, error) {
@@ -1056,7 +1056,7 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 //
 // Return value:
 //
-//	A simple "OK" response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
