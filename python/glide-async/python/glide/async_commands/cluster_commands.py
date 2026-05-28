@@ -1610,7 +1610,23 @@ class ClusterCommands(CoreCommands):
     async def client_trackinginfo(
         self, route: Optional[Route] = None
     ) -> TClusterResponse[dict]:
-        """Return info about server-assisted client-side caching. See https://valkey.io/commands/client-trackinginfo/"""
+        """
+        Returns information about the current client's server-assisted client-side caching.
+
+        See https://valkey.io/commands/client-trackinginfo/ for more details.
+
+        Args:
+            route (Optional[Route]): The command will be sent to a random node, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[dict]: A dictionary of tracking info fields and their values.
+
+            If a single node route is requested, returns a dict with the tracking info.
+
+            Otherwise, returns a dict of [bytes, dict] where each key contains the address of
+            the queried node and the value contains the tracking info for that node.
+        """
         return cast(
             TClusterResponse[dict],
             await self._execute_command(RequestType.ClientTrackingInfo, [], route),

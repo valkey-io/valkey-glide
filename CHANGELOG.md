@@ -2,6 +2,7 @@
 
 #### Changes
 * Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
+* Python: Phase 2 client-side caching - `server_assisted` field and `client_trackinginfo` command ([#5963](https://github.com/valkey-io/valkey-glide/pull/5963))
 * CORE: Phase 2 client-side caching - server-assisted invalidation via CLIENT TRACKING ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
 * Node: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))

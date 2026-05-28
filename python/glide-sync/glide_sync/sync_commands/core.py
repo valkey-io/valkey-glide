@@ -8061,5 +8061,12 @@ class CoreCommands(Protocol):
         self._execute_command(RequestType.PUnsubscribeBlocking, args)
 
     def client_trackinginfo(self) -> dict:
-        """Return info about server-assisted client-side caching. See https://valkey.io/commands/client-trackinginfo/"""
+        """
+        Returns information about the current client's server-assisted client-side caching.
+
+        See https://valkey.io/commands/client-trackinginfo/ for more details.
+
+        Returns:
+            dict: A dictionary of tracking info fields and their values.
+        """
         return cast(dict, self._execute_command(RequestType.ClientTrackingInfo, []))

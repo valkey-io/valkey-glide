@@ -36,8 +36,10 @@ class ClientSideCache:
     uses Time-To-Live (TTL) based expiration, where entries are automatically
     removed after a specified duration.
 
-    Cached entries expire based on TTL. Server-side key changes are not propagated
-    to the cache, so values may become stale before TTL expires.
+    Cached entries expire based on TTL. By default, server-side key changes are not
+    propagated to the cache, so values may become stale before TTL expires. When
+    ``server_assisted=True``, the server sends invalidation messages to keep the
+    cache consistent with server-side changes.
     Expiration is lazy — entries are removed when accessed after their TTL, not
     proactively in the background.
     Supported read commands: GET, HGETALL, SMEMBERS.
@@ -62,6 +64,7 @@ class ClientSideCache:
         entry_ttl_ms: int,
         eviction_policy: Optional[EvictionPolicy] = None,
         enable_metrics: bool = False,
+        server_assisted: bool = False,
     ) -> "ClientSideCache":
         """
         Create a new client-side cache configuration with an auto-generated unique ID.
@@ -86,6 +89,8 @@ class ClientSideCache:
                 policy of LRU will be used.
                 See `EvictionPolicy` enum for available options.
             enable_metrics (bool): If True, enables collection of cache metrics such as hit/miss rates.
+            server_assisted (bool): If True, enables server-assisted invalidation, where the server
+                sends invalidation messages when tracked keys are modified.
 
         Returns:
             ClientSideCache: A new ClientSideCache instance.
@@ -114,4 +119,5 @@ class ClientSideCache:
             entry_ttl_ms=entry_ttl_ms,
             eviction_policy=eviction_policy,
             enable_metrics=enable_metrics,
+            server_assisted=server_assisted,
         )
