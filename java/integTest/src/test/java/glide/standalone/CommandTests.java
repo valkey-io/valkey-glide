@@ -342,6 +342,8 @@ public class CommandTests {
 
         assertNotNull(info);
         assertTrue(info.containsKey("flags"));
+        assertTrue(info.containsKey("redirect"));
+        assertTrue(info.containsKey("prefixes"));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

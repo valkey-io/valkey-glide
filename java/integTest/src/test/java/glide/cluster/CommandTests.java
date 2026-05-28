@@ -604,6 +604,32 @@ public class CommandTests {
 
         assertNotNull(info);
         assertTrue(info.containsKey("flags"));
+        assertTrue(info.containsKey("redirect"));
+        assertTrue(info.containsKey("prefixes"));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientTrackingInfo_with_route(GlideClusterClient clusterClient) {
+        ClusterValue<Map<String, Object>> singleData = clusterClient.clientTrackingInfo(RANDOM).get();
+        Map<String, Object> singleInfo = singleData.getSingleValue();
+        assertNotNull(singleInfo);
+        assertTrue(singleInfo.containsKey("flags"));
+        assertTrue(singleInfo.containsKey("redirect"));
+        assertTrue(singleInfo.containsKey("prefixes"));
+
+        ClusterValue<Map<String, Object>> multiData = clusterClient.clientTrackingInfo(ALL_NODES).get();
+        multiData
+                .getMultiValue()
+                .values()
+                .forEach(
+                        nodeInfo -> {
+                            assertNotNull(nodeInfo);
+                            assertTrue(nodeInfo.containsKey("flags"));
+                            assertTrue(nodeInfo.containsKey("redirect"));
+                            assertTrue(nodeInfo.containsKey("prefixes"));
+                        });
     }
 
     @ParameterizedTest(autoCloseArguments = false)
