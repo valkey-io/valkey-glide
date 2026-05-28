@@ -16,6 +16,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -5039,6 +5040,30 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals("TEST", response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientTrackingInfo_returns_success() {
+        // setup
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("flags", Collections.singletonList("off"));
+        info.put("redirect", -1L);
+        info.put("prefixes", Collections.emptyList());
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(info);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(ClientTrackingInfo), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(info, response.get());
     }
 
     @SneakyThrows

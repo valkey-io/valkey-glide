@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -331,6 +332,16 @@ public class CommandTests {
         String name = regularClient.clientGetName().get();
 
         assertEquals("clientGetName", name);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientTrackingInfo(GlideClient regularClient) {
+        Map<String, Object> info = regularClient.clientTrackingInfo().get();
+
+        assertNotNull(info);
+        assertTrue(info.containsKey("flags"));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
