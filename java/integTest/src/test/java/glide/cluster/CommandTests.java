@@ -655,6 +655,16 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void clientTrackingInfo(GlideClusterClient clusterClient) {
+        Map<String, Object> info = clusterClient.clientTrackingInfo().get();
+
+        assertNotNull(info);
+        assertTrue(info.containsKey("flags"));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void config_reset_stat(GlideClusterClient clusterClient) {
         // Ensure some network activity has occurred to guarantee valueBefore > 0
         clusterClient.info(new Section[] {STATS}).get();
