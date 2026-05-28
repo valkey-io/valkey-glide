@@ -429,6 +429,71 @@ export function createClientId(): command_request.Command {
 }
 
 /**
+ * Defines the pause mode for {@link GlideClient.clientPause} and
+ *      {@link GlideClusterClient.clientPause} commands.
+ *
+ * @see {@link https://valkey.io/commands/client-pause/|valkey.io} for details.
+ */
+export enum ClientPauseMode {
+
+    /** Pause all client commands. */
+    ALL = "ALL",
+
+    /** Pause only write commands. */
+    WRITE = "WRITE",
+}
+
+/**
+ * Defines the reply mode for {@link GlideClient.clientReply} and
+ *      {@link GlideClusterClient.clientReply} commands.
+ *
+ * @see {@link https://valkey.io/commands/client-reply/|valkey.io} for details.
+ */
+export enum ClientReplyMode {
+
+    /** Resume normal reply behavior. */
+    ON = "ON",
+
+    /** Suppress all replies until `CLIENT REPLY ON` is sent. */
+    OFF = "OFF",
+
+    /** Suppress the reply for the next command only. */
+    SKIP = "SKIP",
+}
+
+/**
+ * @internal
+ */
+export function createClientPause(
+    timeout: number,
+    mode?: ClientPauseMode,
+): command_request.Command {
+    const args: string[] = [timeout.toString()];
+
+    if (mode !== undefined) {
+        args.push(mode);
+    }
+
+    return createCommand(RequestType.ClientPause, args);
+}
+
+/**
+ * @internal
+ */
+export function createClientUnpause(): command_request.Command {
+    return createCommand(RequestType.ClientUnpause, []);
+}
+
+/**
+ * @internal
+ */
+export function createClientReply(
+    mode: ClientReplyMode,
+): command_request.Command {
+    return createCommand(RequestType.ClientReply, [mode]);
+}
+
+/**
  * @internal
  */
 export function createConfigGet(parameters: string[]): command_request.Command {

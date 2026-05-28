@@ -20,8 +20,13 @@ import {
 import { Batch } from "./Batch";
 import {
     BatchOptions,
+    ClientPauseMode,
+    ClientReplyMode,
     createClientGetName,
     createClientId,
+    createClientPause,
+    createClientReply,
+    createClientUnpause,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -1165,5 +1170,87 @@ export class GlideClient extends BaseClient {
         return this.parseGetSubscriptionsResponse<GlideClientConfiguration.PubSubChannelModes>(
             response,
         );
+    }
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see {@link https://valkey.io/commands/client-pause/|valkey.io} for details.
+     *
+     * @param timeout - The time in milliseconds to pause clients.
+     * @param mode - (Optional) The pause mode. See {@link ClientPauseMode}.
+     *   + If not provided, all commands are paused.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns `"OK"` response on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientPause(1000);
+     * console.log(result); // Output: 'OK'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientPause(1000, ClientPauseMode.WRITE);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async clientPause(
+        timeout: number,
+        mode?: ClientPauseMode,
+        options?: DecoderOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(
+            createClientPause(timeout, mode),
+            options,
+        );
+    }
+
+    /**
+     * Resumes processing commands on all clients.
+     *
+     * @see {@link https://valkey.io/commands/client-unpause/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns `"OK"` response on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientUnpause();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async clientUnpause(options?: DecoderOption): Promise<"OK"> {
+        return this.createWritePromise(createClientUnpause(), options);
+    }
+
+    /**
+     * Controls the server reply behavior for the current connection.
+     *
+     * @see {@link https://valkey.io/commands/client-reply/|valkey.io} for details.
+     *
+     * @param mode - The reply mode. See {@link ClientReplyMode}.
+     * @param options - (Optional) See {@link DecoderOption}.
+     * @returns `"OK"` response on success.
+     *
+     * @remarks
+     * **Warning:** Because GLIDE uses a multiplexed connection that correlates
+     * responses to in-flight requests by order, calling this method with
+     * {@link ClientReplyMode.OFF} or {@link ClientReplyMode.SKIP} will desynchronize
+     * the connection and produce incorrect results for all subsequent commands until
+     * the connection is closed and re-established. Only {@link ClientReplyMode.ON} is
+     * safe to use on a normal client.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientReply(ClientReplyMode.ON);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async clientReply(
+        mode: ClientReplyMode,
+        options?: DecoderOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createClientReply(mode), options);
     }
 }
