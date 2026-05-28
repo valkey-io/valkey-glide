@@ -10426,7 +10426,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: displaydoc:0.2.5
+Package: displaydoc:0.2.6
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18823,7 +18823,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: hyper:1.9.0
+Package: hyper:1.10.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24489,7 +24489,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: memchr:2.8.0
+Package: memchr:2.8.1
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -58817,7 +58817,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerocopy:0.8.48
+Package: zerocopy:0.8.49
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -59069,7 +59069,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.48
+Package: zerocopy-derive:0.8.49
 
 The following copyrights and licenses were found in the source code of this package:
 
