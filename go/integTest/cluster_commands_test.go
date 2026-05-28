@@ -3266,3 +3266,37 @@ func (suite *GlideTestSuite) TestClusterLinks() {
 	assert.NoError(t, err)
 	assert.NotNil(t, clusterResult.SingleValue())
 }
+
+func (suite *GlideTestSuite) TestClusterClientTrackingInfo() {
+	cache, err := config.NewClientSideCache(1024, 0)
+	require.NoError(suite.T(), err)
+	cache = cache.WithServerAssisted(true)
+	clientConfig := suite.defaultClusterClientConfig().WithClientSideCache(cache)
+	client, err := suite.clusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	t := suite.T()
+
+	result, err := client.ClientTrackingInfo(context.Background())
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	_, exists := result["flags"]
+	assert.True(t, exists)
+}
+
+func (suite *GlideTestSuite) TestClusterClientTrackingInfoWithOptions() {
+	cache, err := config.NewClientSideCache(1024, 0)
+	require.NoError(suite.T(), err)
+	cache = cache.WithServerAssisted(true)
+	clientConfig := suite.defaultClusterClientConfig().WithClientSideCache(cache)
+	client, err := suite.clusterClient(clientConfig)
+	require.NoError(suite.T(), err)
+	t := suite.T()
+
+	opts := options.RouteOption{Route: config.RandomRoute}
+	result, err := client.ClientTrackingInfoWithOptions(context.Background(), opts)
+	assert.NoError(t, err)
+	assert.True(t, result.IsSingleValue())
+	assert.NotNil(t, result.SingleValue())
+	_, exists := result.SingleValue()["flags"]
+	assert.True(t, exists)
+}

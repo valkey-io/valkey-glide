@@ -1297,6 +1297,8 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 
 // Returns information about the current client connection's tracking state.
 //
+// See [valkey.io] for details.
+//
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.

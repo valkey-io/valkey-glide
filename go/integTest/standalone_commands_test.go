@@ -1384,3 +1384,19 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
+
+func (suite *GlideTestSuite) TestClientTrackingInfo() {
+	cache, err := config.NewClientSideCache(1024, 0)
+	require.NoError(suite.T(), err)
+	cache = cache.WithServerAssisted(true)
+	clientConfig := suite.defaultClientConfig().WithClientSideCache(cache)
+	client, err := suite.client(clientConfig)
+	require.NoError(suite.T(), err)
+	t := suite.T()
+
+	result, err := client.ClientTrackingInfo(context.Background())
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	_, exists := result["flags"]
+	assert.True(t, exists)
+}

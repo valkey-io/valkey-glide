@@ -1330,7 +1330,11 @@ func handleStringToAnyMapResponse(response *C.struct_CommandResponse) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	return result.(map[string]any), nil
+	m, ok := result.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type received: %T", result)
+	}
+	return m, nil
 }
 
 func handleLCSMatchResponse(
