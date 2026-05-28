@@ -234,7 +234,7 @@ func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (
 //
 // Return value:
 //
-//	A simple `"OK"` response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *ClusterClient) Select(ctx context.Context, index int64) (string, error) {
@@ -1308,7 +1308,7 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 //
 // Return value:
 //
-//	`"OK"` when the pause is successfully applied.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-pause/
 func (client *ClusterClient) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
@@ -1333,7 +1333,7 @@ func (client *ClusterClient) ClientPause(ctx context.Context, timeout time.Durat
 //
 // Return value:
 //
-//	`"OK"` when the pause is successfully applied.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-pause/
 func (client *ClusterClient) ClientPauseWithOptions(
@@ -1367,7 +1367,7 @@ func (client *ClusterClient) ClientPauseWithOptions(
 //
 // Return value:
 //
-//	`"OK"` when the unpause is successfully applied.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-unpause/
 func (client *ClusterClient) ClientUnpause(ctx context.Context) (string, error) {
@@ -1390,7 +1390,7 @@ func (client *ClusterClient) ClientUnpause(ctx context.Context) (string, error) 
 //
 // Return value:
 //
-//	`"OK"` when the unpause is successfully applied.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-unpause/
 func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, options options.RouteOption) (string, error) {
@@ -1420,7 +1420,7 @@ func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, optio
 //
 // Return value:
 //
-//	`"OK"` when the reply mode is successfully set.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-reply/
 func (client *ClusterClient) ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error) {
@@ -1451,7 +1451,7 @@ func (client *ClusterClient) ClientReply(ctx context.Context, mode options.Clien
 //
 // Return value:
 //
-//	`"OK"` when the reply mode is successfully set.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-reply/
 func (client *ClusterClient) ClientReplyWithOptions(
@@ -1477,7 +1477,7 @@ func (client *ClusterClient) ClientReplyWithOptions(
 //
 // Return value:
 //
-//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *ClusterClient) ConfigRewrite(ctx context.Context) (string, error) {
@@ -1498,7 +1498,7 @@ func (client *ClusterClient) ConfigRewrite(ctx context.Context) (string, error) 
 //
 // Return value:
 //
-//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *ClusterClient) ConfigRewriteWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
@@ -2029,7 +2029,7 @@ func (client *ClusterClient) FunctionStatsWithRoute(ctx context.Context,
 //
 // Return value:
 //
-//	"OK" if the library exists, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *ClusterClient) FunctionDelete(ctx context.Context, libName string) (string, error) {
@@ -2053,7 +2053,7 @@ func (client *ClusterClient) FunctionDelete(ctx context.Context, libName string)
 //
 // Return value:
 //
-//	"OK" if the library exists, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *ClusterClient) FunctionDeleteWithRoute(
@@ -2769,7 +2769,7 @@ func (client *ClusterClient) ScriptKillWithRoute(ctx context.Context, route opti
 //
 // Return value:
 //
-//	A simple "OK" response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
@@ -2794,7 +2794,7 @@ func (client *ClusterClient) Unwatch(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A simple "OK" response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
