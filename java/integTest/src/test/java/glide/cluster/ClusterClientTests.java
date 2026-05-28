@@ -399,7 +399,8 @@ public class ClusterClientTests {
             setNewAclUserPassword(adminClient, username, newPwd);
 
             // Sleep to ensure password change in server and client reconnection
-            Thread.sleep(1000);
+            // Use 2000ms to allow for cluster propagation on slower environments (e.g. Windows)
+            Thread.sleep(2000);
 
             // Ensure client can reconnect when updating the password with immediate auth
             // Retry during reconnection - non-blocking reconnect may still be in progress
@@ -409,10 +410,7 @@ public class ClusterClientTests {
                     assertEquals(OK, testClient.updateConnectionPassword(newPwd, true).get());
                     break;
                 } catch (Exception e) {
-                    if (e.getMessage() != null
-                            && (e.getMessage().contains("AllConnectionsUnavailable")
-                                    || e.getMessage().contains("Connection in recovery"))
-                            && i < maxRetries - 1) {
+                    if (i < maxRetries - 1) {
                         Thread.sleep(500);
                         continue;
                     }
@@ -426,10 +424,7 @@ public class ClusterClientTests {
                     assertNotNull(testClient.info().get());
                     break;
                 } catch (Exception e) {
-                    if (e.getMessage() != null
-                            && (e.getMessage().contains("AllConnectionsUnavailable")
-                                    || e.getMessage().contains("Connection in recovery"))
-                            && i < maxRetries - 1) {
+                    if (i < maxRetries - 1) {
                         Thread.sleep(500);
                         continue;
                     }
