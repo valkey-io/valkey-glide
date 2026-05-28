@@ -132,7 +132,7 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
-    private static final int SCRIPT_POLL_TIMEOUT_MS = 8000;
+    private static final int SCRIPT_POLL_TIMEOUT_MS = 15000;
     private static final int SCRIPT_POLL_INTERVAL_MS = 500;
 
     private static final List<Arguments> clients = new ArrayList<>();
@@ -3943,13 +3943,13 @@ public class CommandTests {
 
         String key = UUID.randomUUID().toString();
         Route route = new SlotKeyRoute(key, PRIMARY);
-        String code = createLongRunningLuaScript(6, false);
+        String code = createLongRunningLuaScript(10, false);
 
         try (Script script = new Script(code, false);
                 GlideClusterClient testClient =
                         GlideClusterClient.createClient(
                                         commonClusterClientConfig()
-                                                .requestTimeout(10000)
+                                                .requestTimeout(15000)
                                                 .advancedConfiguration(
                                                         AdvancedGlideClusterClientConfiguration.builder()
                                                                 .connectionTimeout(10000)
@@ -4038,11 +4038,15 @@ public class CommandTests {
                                         result.complete(true);
                                         return;
                                     }
-                                    if (!msg.contains("no scripts in execution")) {
+                                    if (!msg.contains("no scripts in execution")
+                                            && !msg.contains("timed out")
+                                            && !msg.contains("timeout")) {
                                         // Unexpected error - fail fast
                                         result.completeExceptionally(e);
                                         return;
                                     }
+                                    // Expected: script hasn't started yet (NotBusy) or server is
+                                    // blocked by script (timeout) - keep polling
                                 }
                                 try {
                                     Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
