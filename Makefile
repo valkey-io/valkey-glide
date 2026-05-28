@@ -61,7 +61,7 @@ node-test: .build/node_deps check-valkey-server
 
 node-lint: .build/node_deps
 	@echo "$(GREEN)Running linters for NodeJS$(RESET)"
-	@cd node && npx run lint:fix
+	@cd node && npm run lint:fix
 
 ##
 ## Prettier targets
