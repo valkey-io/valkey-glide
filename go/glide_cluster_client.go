@@ -1406,7 +1406,7 @@ func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, optio
 // The command will be routed to a random node.
 //
 // Warning: Because GLIDE uses a multiplexed connection that correlates
-// responses to in-flight requests by order, calling [ClientReply] with
+// responses to in-flight requests by order, calling this method with
 // [ClientReplyModeOff] or [ClientReplyModeSkip] will desynchronize the
 // connection and produce incorrect results for all subsequent commands
 // until the connection is closed and re-established. Only
@@ -1436,7 +1436,7 @@ func (client *ClusterClient) ClientReply(ctx context.Context, mode options.Clien
 // The command will be routed to the nodes defined by route.
 //
 // Warning: Because GLIDE uses a multiplexed connection that correlates
-// responses to in-flight requests by order, calling [ClientReply] with
+// responses to in-flight requests by order, calling this method with
 // [ClientReplyModeOff] or [ClientReplyModeSkip] will desynchronize the
 // connection and produce incorrect results for all subsequent commands
 // until the connection is closed and re-established. Only
