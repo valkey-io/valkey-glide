@@ -4763,6 +4763,7 @@ pub unsafe extern "C-unwind" fn create_monitor_client(
         } else {
             Some(connection_request.lib_name.to_string())
         },
+        server_assisted_cache: false,
         cache: None,
     };
     // Convert to internal ConnectionRequest (needed for the runtime type alias only).
