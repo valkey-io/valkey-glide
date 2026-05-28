@@ -68,8 +68,8 @@ install-build-tools:
 
 install-dev-tools:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
-	go install mvdan.cc/gofumpt@v0.6.0
-	go install github.com/segmentio/golines@v0.12.2
+	go install mvdan.cc/gofumpt@v0.9.1
+	go install github.com/segmentio/golines@v0.13.0
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 
 install-tools: install-build-tools install-dev-tools
