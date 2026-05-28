@@ -5,6 +5,7 @@ package glide
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -137,4 +138,80 @@ func ExampleClusterClient_ClientGetNameWithOptions() {
 	fmt.Println(result.SingleValue().Value() == connectionName)
 
 	// Output: true
+}
+
+func ExampleClusterClient_ClientPause() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	result, err := client.ClientPause(context.Background(), 0)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientPauseWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	mode := options.ClientPauseModeWrite
+	opts := options.ClientPauseClusterOptions{
+		Mode:        &mode,
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	result, err := client.ClientPauseWithOptions(context.Background(), 0, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientUnpause() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	// Pause first, then unpause
+	client.ClientPause(context.Background(), 100000*time.Millisecond)
+	result, err := client.ClientUnpause(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientUnpauseWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	client.ClientPause(context.Background(), 100000*time.Millisecond)
+	opts := options.RouteOption{Route: config.AllPrimaries}
+	result, err := client.ClientUnpauseWithOptions(context.Background(), opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientReply() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientReplyWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	opts := options.RouteOption{Route: config.AllPrimaries}
+	result, err := client.ClientReplyWithOptions(context.Background(), options.ClientReplyModeOn, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
 }
