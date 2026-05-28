@@ -77,6 +77,7 @@ import static glide.utils.Java8Utils.createSet;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -865,6 +866,23 @@ public class GlideClusterClientTest {
         try (TestClient client = new TestClient(commandManager, info)) {
             ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(RANDOM).get();
             assertEquals(info, value.getSingleValue());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientTrackingInfo_with_single_node_route_resp2_returns_map() {
+        TestCommandManager commandManager = new TestCommandManager(null);
+
+        // RESP2 returns flat Object[] of alternating key-value pairs
+        Object[] resp2Response =
+                new Object[] {"flags", new Object[] {"off"}, "redirect", -1L, "prefixes", new Object[0]};
+        try (TestClient client = new TestClient(commandManager, resp2Response)) {
+            ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(RANDOM).get();
+            Map<String, Object> result = value.getSingleValue();
+            assertNotNull(result);
+            assertTrue(result.containsKey("flags"));
+            assertEquals(-1L, result.get("redirect"));
         }
     }
 

@@ -493,10 +493,18 @@ public class GlideClusterClient extends BaseClient
                 ClientTrackingInfo,
                 new String[0],
                 route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleMapResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+                response -> {
+                    if (route instanceof SingleNodeRoute) {
+                        return ClusterValue.ofSingleValue(parseTrackingInfoResponse(response));
+                    }
+                    // Multi-node: response is Map<nodeAddr, perNodeResponse>
+                    Map<String, Object> raw = handleMapResponse(response);
+                    Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+                    for (Map.Entry<String, Object> entry : raw.entrySet()) {
+                        result.put(entry.getKey(), parseTrackingInfoValue(entry.getValue()));
+                    }
+                    return ClusterValue.ofMultiValue(result);
+                });
     }
 
     @Override
