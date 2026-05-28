@@ -693,6 +693,26 @@ describe("ClientSideCache", () => {
                     },
                     TIMEOUT,
                 );
+
+                it(
+                    "test clientTrackingInfo returns tracking enabled",
+                    async () => {
+                        const cache = ClientSideCache.create(1, 60000, {
+                            serverAssisted: true,
+                        });
+
+                        client = await createStandaloneClientWithCache(
+                            protocol,
+                            cache,
+                        );
+
+                        const info = await client.clientTrackingInfo();
+                        expect(typeof info).toBe("object");
+                        expect(info).toHaveProperty("flags");
+                        expect(info["flags"]).toContain("on");
+                    },
+                    TIMEOUT,
+                );
             },
         );
     });
@@ -1333,6 +1353,30 @@ describe("ClientSideCache", () => {
                         expect(entryCount).toBe(3);
 
                         await client.flushall();
+                    },
+                    TIMEOUT,
+                );
+
+                it(
+                    "test clientTrackingInfo returns tracking enabled",
+                    async () => {
+                        const cache = ClientSideCache.create(1, 60000, {
+                            serverAssisted: true,
+                        });
+
+                        client = await createClusterClientWithCache(
+                            protocol,
+                            cache,
+                        );
+
+                        const info =
+                            (await client.clientTrackingInfo()) as Record<
+                                string,
+                                unknown
+                            >;
+                        expect(typeof info).toBe("object");
+                        expect(info).toHaveProperty("flags");
+                        expect(info["flags"]).toContain("on");
                     },
                     TIMEOUT,
                 );
