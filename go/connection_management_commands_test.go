@@ -13,7 +13,7 @@ import (
 )
 
 func ExampleClient_ClientPause() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.ClientPause(context.Background(), 0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -24,7 +24,7 @@ func ExampleClient_ClientPause() {
 }
 
 func ExampleClient_ClientPauseWithOptions() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.ClientPauseWithOptions(context.Background(), 0, options.ClientPauseModeWrite)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -35,7 +35,7 @@ func ExampleClient_ClientPauseWithOptions() {
 }
 
 func ExampleClient_ClientUnpause() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 
 	// Pause first, then unpause
 	client.ClientPause(context.Background(), 100000*time.Millisecond)
@@ -49,7 +49,7 @@ func ExampleClient_ClientUnpause() {
 }
 
 func ExampleClient_ClientReply() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -60,7 +60,7 @@ func ExampleClient_ClientReply() {
 }
 
 func ExampleClient_Ping() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.Ping(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -71,7 +71,7 @@ func ExampleClient_Ping() {
 }
 
 func ExampleClient_PingWithOptions() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	options := options.PingOptions{Message: "hello"}
 	result, err := client.PingWithOptions(context.Background(), options)
 	if err != nil {
@@ -83,7 +83,7 @@ func ExampleClient_PingWithOptions() {
 }
 
 func ExampleClient_Echo() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.Echo(context.Background(), "Hello World")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -94,7 +94,7 @@ func ExampleClient_Echo() {
 }
 
 func ExampleClient_ClientId() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.ClientId(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -106,7 +106,7 @@ func ExampleClient_ClientId() {
 }
 
 func ExampleClient_ClientSetName() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.ClientSetName(context.Background(), "ConnectionName")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -117,7 +117,7 @@ func ExampleClient_ClientSetName() {
 }
 
 func ExampleClient_ClientGetName() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	connectionName := "ConnectionName-" + uuid.NewString()
 	client.ClientSetName(context.Background(), connectionName)
 	result, err := client.ClientGetName(context.Background())

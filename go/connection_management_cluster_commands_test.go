@@ -14,7 +14,7 @@ import (
 )
 
 func ExampleClusterClient_Ping() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.Ping(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -25,7 +25,7 @@ func ExampleClusterClient_Ping() {
 }
 
 func ExampleClusterClient_PingWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	options := options.ClusterPingOptions{
 		PingOptions: &options.PingOptions{
 			Message: "hello",
@@ -42,7 +42,7 @@ func ExampleClusterClient_PingWithOptions() {
 }
 
 func ExampleClusterClient_Echo() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.Echo(context.Background(), "Hello")
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -53,7 +53,7 @@ func ExampleClusterClient_Echo() {
 }
 
 func ExampleClusterClient_EchoWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.EchoWithOptions(context.Background(), "Hello World", options.RouteOption{Route: config.RandomRoute})
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -64,7 +64,7 @@ func ExampleClusterClient_EchoWithOptions() {
 }
 
 func ExampleClusterClient_ClientId() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.ClientId(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -76,7 +76,7 @@ func ExampleClusterClient_ClientId() {
 }
 
 func ExampleClusterClient_ClientIdWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	opts := options.RouteOption{Route: nil}
 	result, err := client.ClientIdWithOptions(context.Background(), opts)
 	if err != nil {
@@ -89,7 +89,7 @@ func ExampleClusterClient_ClientIdWithOptions() {
 }
 
 func ExampleClusterClient_ClientSetName() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	connectionName := "ConnectionName-" + uuid.NewString()
 	result, err := client.ClientSetName(context.Background(), connectionName)
 	if err != nil {
@@ -101,7 +101,7 @@ func ExampleClusterClient_ClientSetName() {
 }
 
 func ExampleClusterClient_ClientGetName() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	connectionName := "ConnectionName-" + uuid.NewString()
 	client.ClientSetName(context.Background(), connectionName)
 	result, err := client.ClientGetName(context.Background())
@@ -114,7 +114,7 @@ func ExampleClusterClient_ClientGetName() {
 }
 
 func ExampleClusterClient_ClientSetNameWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	connectionName := "ConnectionName-" + uuid.NewString()
 	opts := options.RouteOption{Route: nil}
 	result, err := client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
@@ -127,7 +127,7 @@ func ExampleClusterClient_ClientSetNameWithOptions() {
 }
 
 func ExampleClusterClient_ClientGetNameWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	connectionName := "ConnectionName-" + uuid.NewString()
 	opts := options.RouteOption{Route: nil}
 	client.ClientSetNameWithOptions(context.Background(), connectionName, opts)
@@ -141,7 +141,7 @@ func ExampleClusterClient_ClientGetNameWithOptions() {
 }
 
 func ExampleClusterClient_ClientPause() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.ClientPause(context.Background(), 0)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -152,7 +152,7 @@ func ExampleClusterClient_ClientPause() {
 }
 
 func ExampleClusterClient_ClientPauseWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	mode := options.ClientPauseModeWrite
 	opts := options.ClientPauseClusterOptions{
 		Mode:        &mode,
@@ -168,7 +168,7 @@ func ExampleClusterClient_ClientPauseWithOptions() {
 }
 
 func ExampleClusterClient_ClientUnpause() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	// Pause first, then unpause
 	client.ClientPause(context.Background(), 100000*time.Millisecond)
 	result, err := client.ClientUnpause(context.Background())
@@ -181,7 +181,7 @@ func ExampleClusterClient_ClientUnpause() {
 }
 
 func ExampleClusterClient_ClientUnpauseWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	client.ClientPause(context.Background(), 100000*time.Millisecond)
 	opts := options.RouteOption{Route: config.AllPrimaries}
 	result, err := client.ClientUnpauseWithOptions(context.Background(), opts)
@@ -194,7 +194,7 @@ func ExampleClusterClient_ClientUnpauseWithOptions() {
 }
 
 func ExampleClusterClient_ClientReply() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -205,7 +205,7 @@ func ExampleClusterClient_ClientReply() {
 }
 
 func ExampleClusterClient_ClientReplyWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	opts := options.RouteOption{Route: config.AllPrimaries}
 	result, err := client.ClientReplyWithOptions(context.Background(), options.ClientReplyModeOn, opts)
 	if err != nil {
