@@ -5,7 +5,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import redis.clients.jedis.exceptions.JedisException;
 
 /** Connection provider for Valkey Cluster. This is part of the Jedis compatibility layer. */
 public class ClusterConnectionProvider implements ClusterNodesConnectionProvider {
@@ -14,7 +16,10 @@ public class ClusterConnectionProvider implements ClusterNodesConnectionProvider
     private final JedisClientConfig clientConfig;
 
     public ClusterConnectionProvider(Set<HostAndPort> nodes, JedisClientConfig clientConfig) {
-        this.nodes = nodes;
+        this.nodes = Objects.requireNonNull(nodes, "nodes");
+        if (this.nodes.isEmpty()) {
+            throw new JedisException("Cluster nodes must not be empty");
+        }
         this.clientConfig = clientConfig;
     }
 

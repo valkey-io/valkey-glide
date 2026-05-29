@@ -19,10 +19,9 @@ public class ConnectionPool extends Pool<Connection> {
      * When non-null, this instance is a lightweight per-node view used by {@link
      * ClusterConnectionProvider#getClusterNodes()}; it is not backed by Apache Commons Pool.
      */
-    private final HostAndPort clusterNodeStub;
+    private HostAndPort clusterNodeStub;
 
     public ConnectionPool() {
-        this.clusterNodeStub = null;
         throw new UnsupportedOperationException(
                 "ConnectionPool is not supported in GLIDE compatibility layer. GLIDE uses a different"
                         + " connection management architecture. Please use JedisPool for connection pooling"

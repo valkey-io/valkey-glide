@@ -8,7 +8,7 @@ import redis.clients.jedis.GeoCoordinate;
  */
 public final class GeoSearchParam extends AbstractGeoSearchParam<GeoSearchParam> {
 
-    public GeoSearchParam() {
+    private GeoSearchParam() {
         super();
     }
 

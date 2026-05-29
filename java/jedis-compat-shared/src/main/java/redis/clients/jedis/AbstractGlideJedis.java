@@ -83,6 +83,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import javax.net.ssl.HostnameVerifier;
@@ -176,11 +177,27 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     /** Keyword used in hash field expiration commands to specify the number of fields. */
     private static final String FIELDS_KEYWORD = "FIELDS";
 
+    private static final class InitializedState {
+        private final GlideClient glideClient;
+        private final String resourceId;
+
+        private InitializedState(GlideClient glideClient, String resourceId) {
+            this.glideClient = glideClient;
+            this.resourceId = resourceId;
+        }
+    }
+
     private volatile GlideClient glideClient; // Changed from final to volatile for lazy init
     private volatile boolean broken;
     private final boolean isPooled;
     private volatile String resourceId; // Changed from final to volatile for lazy init
     private final JedisClientConfig config;
+
+    /**
+     * Published after {@link #ensureInitialized()} completes; non-null means {@link #glideClient} and
+     * {@link #resourceId} are fully initialized and safe to read after {@code ensureInitialized()}.
+     */
+    private volatile InitializedState initializedState;
 
     @SuppressWarnings("rawtypes")
     private Pool
@@ -302,10 +319,13 @@ public abstract class AbstractGlideJedis extends JedisCommon {
             GlideClientConfiguration glideConfig =
                     ConfigurationMapper.mapToGlideConfig(host, port, config, isJedis5CompatibilityLayer());
             i++;
-            this.glideClient = GlideClient.createClient(glideConfig).get();
+            GlideClient client = GlideClient.createClient(glideConfig).get();
             i++;
-            this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
+            String id = ResourceLifecycleManager.getInstance().registerResource(this);
             i++;
+            this.glideClient = client;
+            this.resourceId = id;
+            this.initializedState = new InitializedState(client, id);
             this.lazyInitialized = true;
         } catch (ConfigurationMapper.JedisConfigurationException e) {
             // Enhanced error handling for configuration conversion issues
@@ -317,17 +337,15 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                     e);
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisConnectionException("Failed to create GLIDE client", e);
+        } catch (LinkageError e) {
+            throw new JedisConnectionException(
+                    "Native library loading failed - this may be due to environment restrictions (e.g.,"
+                            + " DataGrip). "
+                            + i
+                            + "Error: "
+                            + e.getMessage(),
+                    e);
         } catch (RuntimeException e) {
-            // Handle native library loading issues (like in DataGrip)
-            if (e.getMessage() != null && e.getMessage().contains("native")) {
-                throw new JedisConnectionException(
-                        "Native library loading failed - this may be due to environment restrictions (e.g.,"
-                                + " DataGrip). "
-                                + i
-                                + "Error: "
-                                + e.getMessage(),
-                        e);
-            }
             throw e;
         }
     }
@@ -450,6 +468,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         this.dataSource = null; // Will be set by setDataSource()
         this.config = config;
         this.resourceId = ResourceLifecycleManager.getInstance().registerResource(this);
+        this.initializedState = new InitializedState(glideClient, this.resourceId);
         this.lazyInitialized = true; // Already initialized for pooled connections
     }
 
@@ -853,9 +872,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
         ensureInitialized();
         try {
             glideClient.select((long) index).get();
-            if (isJedis5CompatibilityLayer()) {
-                selectedDb = index;
-            }
+            selectedDb = index;
             return "OK";
         } catch (InterruptedException | ExecutionException e) {
             throw new JedisException("SELECT failed", e);
@@ -1265,11 +1282,12 @@ public abstract class AbstractGlideJedis extends JedisCommon {
      */
     @Override
     public void close() {
-        if (closed) {
-            return;
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
         }
-
-        closed = true;
 
         // Only unregister if we were actually initialized
         if (resourceId != null) {
@@ -1299,8 +1317,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
             ConfigurationMapper.cleanupTempFiles();
         } catch (Exception e) {
             // Log warning but don't fail the close operation
-            System.err.println("Warning: Failed to cleanup temporary certificate files:");
-            e.printStackTrace();
+            logger.log(
+                    Level.WARNING,
+                    "Failed to cleanup temporary certificate files during close",
+                    e);
         }
     }
 
@@ -1410,6 +1430,9 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     private <T> T executeCommandWithGlide(String operationName, GlideOperation<T> operation) {
         checkNotClosed();
         ensureInitialized();
+        if (initializedState == null) {
+            throw new JedisConnectionException("GLIDE client not initialized");
+        }
         try {
             return operation.execute();
         } catch (InterruptedException e) {
@@ -7589,11 +7612,8 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     public int getDB() {
         checkNotClosed();
         ensureInitialized();
-        if (isJedis5CompatibilityLayer()) {
-            int db = selectedDb;
-            return db >= 0 ? db : config.getDatabase();
-        }
-        return config.getDatabase();
+        int db = selectedDb;
+        return db >= 0 ? db : config.getDatabase();
     }
 
     // ========== LIST COMMANDS ==========
@@ -14708,10 +14728,10 @@ public abstract class AbstractGlideJedis extends JedisCommon {
                                     try {
                                         ConfigurationMapper.cleanupTempFiles();
                                     } catch (Exception e) {
-                                        // Ignore exceptions during shutdown
-                                        System.err.println(
-                                                "Warning: Failed to cleanup temporary certificate files during shutdown:");
-                                        e.printStackTrace();
+                                        logger.log(
+                                                Level.WARNING,
+                                                "Failed to cleanup temporary certificate files during shutdown",
+                                                e);
                                     }
                                 },
                                 "Jedis-Certificate-Cleanup"));

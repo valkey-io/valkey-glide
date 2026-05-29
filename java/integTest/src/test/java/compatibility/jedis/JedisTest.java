@@ -3769,9 +3769,6 @@ public class JedisTest {
         jedis.xadd(key, createMap("a", "1"));
         jedis.xadd(key, createMap("b", "2"));
         jedis.xadd(key, createMap("c", "3"));
-        jedis.xadd(key, createMap("a", "1"));
-        jedis.xadd(key, createMap("b", "2"));
-        jedis.xadd(key, createMap("c", "3"));
 
         List<StreamEntry> range = jedis.xrange(key, "-", "+");
         assertNotNull(range);
@@ -3790,7 +3787,6 @@ public class JedisTest {
     void stream_xread() {
         String key = "stream:" + UUID.randomUUID();
         jedis.xadd(key, createMap("x", "1"));
-        jedis.xadd(key, createMap("x", "1"));
 
         Map<String, String> keysAndIds = new HashMap<>();
         keysAndIds.put(key, "0-0");
@@ -3806,7 +3802,6 @@ public class JedisTest {
         String key = "stream:" + UUID.randomUUID();
         for (int i = 0; i < 10; i++) {
             jedis.xadd(key, createMap("i", String.valueOf(i)));
-            jedis.xadd(key, createMap("i", String.valueOf(i)));
         }
         long lenBefore = jedis.xlen(key);
         assertTrue(lenBefore >= 10, "Stream should have at least 10 entries");
@@ -3821,7 +3816,6 @@ public class JedisTest {
     void stream_xgroup_create_destroy() {
         String key = "stream:" + UUID.randomUUID();
         jedis.xadd(key, createMap("init", "1"));
-        jedis.xadd(key, createMap("init", "1"));
 
         String group = "g1";
         String createResult = jedis.xgroupCreate(key, group, "0", true);
@@ -3834,7 +3828,6 @@ public class JedisTest {
     @Test
     void stream_xgroup_setid_createconsumer_delconsumer() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, createMap("a", "1"));
         jedis.xadd(key, createMap("a", "1"));
         String group = "g2";
         jedis.xgroupCreate(key, group, "0", true);
@@ -3852,8 +3845,6 @@ public class JedisTest {
     @Test
     void stream_xreadgroup_xack() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, createMap("m1", "v1"));
-        jedis.xadd(key, createMap("m2", "v2"));
         jedis.xadd(key, createMap("m1", "v1"));
         jedis.xadd(key, createMap("m2", "v2"));
         String group = "g3";
@@ -3878,7 +3869,6 @@ public class JedisTest {
     void stream_xpending() {
         String key = "stream:" + UUID.randomUUID();
         jedis.xadd(key, createMap("p", "1"));
-        jedis.xadd(key, createMap("p", "1"));
         String group = "g4";
         jedis.xgroupCreate(key, group, "0", true);
 
@@ -3893,7 +3883,6 @@ public class JedisTest {
     @Test
     void stream_xinfo_stream_and_groups() {
         String key = "stream:" + UUID.randomUUID();
-        jedis.xadd(key, createMap("i", "1"));
         jedis.xadd(key, createMap("i", "1"));
         jedis.xgroupCreate(key, "ginfo", "0", true);
 

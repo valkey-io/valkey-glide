@@ -31,7 +31,7 @@ public class RedisBloomProtocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone();
         }
     }
 
@@ -57,7 +57,7 @@ public class RedisBloomProtocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone();
         }
     }
 
@@ -77,7 +77,7 @@ public class RedisBloomProtocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone();
         }
     }
 
@@ -98,7 +98,7 @@ public class RedisBloomProtocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone();
         }
     }
 
@@ -126,7 +126,7 @@ public class RedisBloomProtocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone();
         }
     }
 
@@ -152,7 +152,7 @@ public class RedisBloomProtocol {
 
         @Override
         public byte[] getRaw() {
-            return raw.clone(); // ✅ Return defensive copy to prevent external modification
+            return raw.clone();
         }
     }
 }

@@ -6,10 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.MigrateParams;
 
@@ -65,5 +68,14 @@ public class Jedis4ParamBehaviorTest {
             assertEquals("127.0.0.1", c.getHost());
             assertEquals(7000, c.getPort());
         }
+    }
+
+    @Test
+    public void clusterConnectionProvider_rejectsEmptyNodes() {
+        assertThrows(
+                JedisException.class,
+                () ->
+                        new ClusterConnectionProvider(
+                                Collections.emptySet(), DefaultJedisClientConfig.builder().build()));
     }
 }

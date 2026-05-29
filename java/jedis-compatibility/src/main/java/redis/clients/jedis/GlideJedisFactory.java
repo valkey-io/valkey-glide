@@ -88,7 +88,6 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
                         "GlideJedisFactory",
                         "Error closing Jedis connection during destroy",
                         e);
-                e.printStackTrace();
             }
         }
     }

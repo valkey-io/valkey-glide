@@ -769,23 +769,6 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
     /** Close the connection. */
     @Override
     public void close() {
-        if (isJedis5CompatibilityLayer()) {
-            if (!closed) {
-                closed = true;
-                try {
-                    if (baseClient != null) {
-                        baseClient.close();
-                    }
-                } catch (ExecutionException e) {
-                    System.err.println("Error closing GLIDE client: " + e.getMessage());
-                } finally {
-                    if (resourceId != null) {
-                        ResourceLifecycleManager.getInstance().unregisterResource(resourceId);
-                    }
-                }
-            }
-            return;
-        }
         synchronized (this) {
             if (closed) {
                 return;

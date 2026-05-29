@@ -6,10 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-/** The only reason to have this is to be able to compatible with java 1.5 :( */
+/** UTF-8 string/byte[] conversions for Jedis-compatible types. */
 public final class SafeEncoder {
 
-    public static volatile Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
+    public static final Charset DEFAULT_CHARSET = StandardCharsets.UTF_8;
 
     private SafeEncoder() {
         throw new InstantiationError("Must not instantiate this class");
