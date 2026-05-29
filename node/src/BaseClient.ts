@@ -8973,6 +8973,8 @@ export class BaseClient {
      *
      * @see {@link https://valkey.io/commands/reset/|valkey.io} for more details.
      *
+     * @remarks Resets the database index, client name, protocol, and pubsub subscriptions.
+     *
      * @returns "RESET" when the connection state is successfully reset.
      *
      * @example
