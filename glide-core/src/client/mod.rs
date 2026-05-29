@@ -35,6 +35,8 @@ pub use types::*;
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
 pub use reconnecting_connection::IAMTokenHandle;
+pub mod monitor_client;
+pub use monitor_client::{MonitorClient, MonitorLine, MonitorLineCallback};
 mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
@@ -203,6 +205,12 @@ pub async fn get_valkey_connection_info(
             )
         });
 
+    let server_assisted_cache = connection_request
+        .client_side_cache
+        .as_ref()
+        .map(|c| c.server_assisted)
+        .unwrap_or(false);
+
     match &connection_request.authentication_info {
         Some(info) => {
             // If we have IAM configuration and a token manager, use the IAM token as password
@@ -222,6 +230,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     cache,
+                    server_assisted_cache,
                 }
             } else {
                 // Regular password-based authentication
@@ -233,6 +242,7 @@ pub async fn get_valkey_connection_info(
                     client_name,
                     lib_name,
                     cache,
+                    server_assisted_cache,
                 }
             }
         }
@@ -242,6 +252,7 @@ pub async fn get_valkey_connection_info(
             client_name,
             lib_name,
             cache,
+            server_assisted_cache,
             ..Default::default()
         },
     }
@@ -777,6 +788,57 @@ impl Client {
         }
     }
 
+    fn is_reset_command(&self, cmd: &Cmd) -> bool {
+        cmd.command().is_some_and(|bytes| bytes == b"RESET")
+    }
+
+    async fn handle_reset_command(&mut self) -> RedisResult<()> {
+        // RESET resets the connection to its initial state per the Valkey spec.
+        // https://valkey.io/commands/reset/
+        //
+        // TRACKED - glide-core updates these so reconnections restore the post-RESET state:
+        //   SELECTs database 0                       -> update_stored_database_id(0)
+        //   Clears client name                       -> update_stored_client_name(None)
+        //   Sets protocol to RESP2                   -> update_stored_protocol(RESP2)
+        //   Aborts Pub/Sub subscription state        -> remove_desired_subscriptions(all kinds)
+        //     (prevents synchronizer from resubscribing on reconnect)
+        //
+        // NOT TRACKED - no glide-core state to update:
+        //   Deauthenticates the connection           -> auth credentials kept for reconnect;
+        //     (requires AUTH to reauthenticate)         live connection is deauthed until
+        //                                               reconnect or manual AUTH call
+        //   Discards current MULTI transaction       -> glide sends MULTI+cmds+EXEC as a
+        //                                               single pipeline; no persistent state
+        //   Unwatches all WATCHed keys               -> WATCH state is per-connection,
+        //                                               not tracked by glide-core
+        //   Disables CLIENT TRACKING                 -> not tracked; gap exists if
+        //                                               client-side caching is active
+        //   Sets connection to READWRITE mode         -> not tracked; glide does not
+        //                                               persist read/write mode per connection
+        //   Cancels ASKING mode (cluster)             -> one-shot flag sent inline,
+        //                                               not persisted by glide-core
+        //   Sets CLIENT REPLY to ON                  -> not tracked; CLIENT REPLY not
+        //                                               yet supported by glide
+        //   Exits MONITOR mode                       -> not tracked; MONITOR not yet
+        //                                               supported by glide
+        //   Turns off NO-EVICT mode                  -> not tracked; per-connection hint
+        //   Turns off NO-TOUCH mode                  -> not tracked; per-connection hint
+        self.update_stored_database_id(0).await?;
+        self.update_stored_client_name(None).await?;
+        self.update_stored_protocol(redis::ProtocolVersion::RESP2)
+            .await?;
+        self.otel_metadata.db_namespace = "0".to_string();
+        for kind in [
+            redis::PubSubSubscriptionKind::Exact,
+            redis::PubSubSubscriptionKind::Pattern,
+            redis::PubSubSubscriptionKind::Sharded,
+        ] {
+            self.pubsub_synchronizer
+                .remove_desired_subscriptions(None, kind);
+        }
+        Ok(())
+    }
+
     async fn get_or_initialize_client(&self) -> RedisResult<ClientWrapper> {
         {
             let guard = self.internal_client.read().await;
@@ -946,6 +1008,9 @@ impl Client {
         }
         if self_clone.is_hello_command(&cmd) {
             self_clone.handle_hello_command(&cmd).await?;
+        }
+        if self_clone.is_reset_command(&cmd) {
+            self_clone.handle_reset_command().await?;
         }
         Ok(value)
     }
@@ -1804,6 +1869,7 @@ async fn create_cluster_client(
     builder = builder.use_protocol(request.protocol.unwrap_or_default());
     builder = builder.database_id(valkey_connection_info.db);
     builder = builder.cache(valkey_connection_info.cache);
+    builder = builder.server_assisted_cache(valkey_connection_info.server_assisted_cache);
     if let Some(client_name) = valkey_connection_info.client_name {
         builder = builder.client_name(client_name);
     }
@@ -2318,6 +2384,36 @@ impl GlideClientForTests for ClusterConnection {
             routing.unwrap_or(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random));
 
         async move { self.route_command(cmd, final_routing).await }.boxed()
+    }
+}
+
+impl Client {
+    /// Create a Client wrapping an existing internal_client Arc and synchronizer.
+    /// Used in tests to build a Client that shares state with an existing connection.
+    #[cfg(feature = "test-util")]
+    pub fn new_for_test(
+        internal_client: Arc<RwLock<ClientWrapper>>,
+        pubsub_synchronizer: Arc<dyn PubSubSynchronizer>,
+    ) -> Self {
+        use crate::client::types::{NodeAddress, OTelMetadata};
+        Client {
+            internal_client,
+            request_timeout: Duration::from_millis(1000),
+            inflight_requests_allowed: Arc::new(AtomicIsize::new(1000)),
+            inflight_requests_limit: 1000,
+            inflight_log_interval: 100,
+            iam_token_manager: None,
+            compression_manager: None,
+            pubsub_synchronizer,
+            otel_metadata: OTelMetadata {
+                address: NodeAddress {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                },
+                db_namespace: "0".to_string(),
+            },
+            client_side_cache: None,
+        }
     }
 }
 
@@ -2932,5 +3028,18 @@ mod tests {
                 "{cmd_name} should be detected as blocking"
             );
         }
+    }
+
+    #[test]
+    fn test_is_reset_command() {
+        let client = create_test_client();
+
+        let mut cmd = Cmd::new();
+        cmd.arg("RESET");
+        assert!(client.is_reset_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("PING");
+        assert!(!client.is_reset_command(&cmd));
     }
 }

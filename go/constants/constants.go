@@ -20,8 +20,11 @@ const (
 	WeightsKeyword    string = "WEIGHTS"    // Valkey API keyword for the weights option for multiple commands.
 	RankKeyword       string = "RANK"       // Valkey API keyword use to determine the rank of the match to return.
 	MaxLenKeyword     string = "MAXLEN"     // Valkey API keyword used to determine the maximum number of list items to compare.
+	CopyKeyword       string = "COPY"       // Valkey API keyword used to indicate the copy flag.
 	ReplaceKeyword    string = "REPLACE"    // Subcommand string to replace existing key.
 	ABSTTLKeyword     string = "ABSTTL"     // Subcommand string to represent absolute timestamp (in milliseconds) for TTL.
+	AuthKeyword       string = "AUTH"       // Valkey API keyword for authentication.
+	Auth2Keyword      string = "AUTH2"      // Valkey API keyword for authentication with username and password.
 	StoreKeyword      string = "STORE"
 	DbKeyword         string = "DB"
 	TypeKeyword       string = "TYPE"

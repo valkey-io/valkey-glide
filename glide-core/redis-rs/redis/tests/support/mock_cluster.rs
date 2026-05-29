@@ -358,12 +358,43 @@ impl aio::ConnectionLike for MockConnection {
 
     fn req_packed_commands<'a>(
         &'a mut self,
-        _pipeline: &'a redis::Pipeline,
-        _offset: usize,
-        _count: usize,
+        pipeline: &'a redis::Pipeline,
+        offset: usize,
+        count: usize,
         _pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisFuture<'a, Vec<Value>> {
-        Box::pin(future::ok(vec![]))
+        // Process each command in the pipeline through the handler
+        let handler = self.handler.clone();
+        let port = self.port;
+
+        Box::pin(future::ready({
+            // For atomic pipelines, we need to handle the MULTI/EXEC wrapper
+            // The packed pipeline contains all commands concatenated
+            // We'll process each command individually and collect results
+            let mut results = Vec::new();
+
+            // Iterate through commands in the pipeline
+            for cmd in pipeline.cmd_iter().skip(offset).take(count) {
+                let packed_cmd = cmd.get_packed_command();
+                match (handler)(&packed_cmd, port) {
+                    Ok(()) => {
+                        // Handler didn't specify a response, use default
+                        results.push(Value::Nil);
+                    }
+                    Err(result) => {
+                        match result {
+                            Ok(value) => results.push(value),
+                            Err(err) => {
+                                // Convert error to ServerError value
+                                results.push(Value::ServerError(err.into()));
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(results)
+        }))
     }
 
     fn get_db(&self) -> i64 {

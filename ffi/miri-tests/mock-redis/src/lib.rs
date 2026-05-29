@@ -1,7 +1,25 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-pub use redis::{ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value};
 pub use redis::AddressResolver;
+pub use redis::{ErrorKind, ObjectType, PushKind, RedisError, RedisFuture, RedisResult, Value};
+
+#[derive(Clone, Default, PartialEq)]
+pub enum ProtocolVersion {
+    RESP2,
+    #[default]
+    RESP3,
+}
+
+pub struct RedisConnectionInfo {
+    pub db: i64,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub protocol: ProtocolVersion,
+    pub client_name: Option<String>,
+    pub lib_name: Option<String>,
+    pub server_assisted_cache: bool,
+    pub cache: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
+}
 use std::sync::Arc;
 use telemetrylib::GlideSpan;
 
@@ -119,7 +137,6 @@ impl ClusterScanArgsBuilder {
     pub fn allow_non_covered_slots(self, _allow: bool) -> Self {
         self
     }
-
 }
 
 pub struct PushInfo {

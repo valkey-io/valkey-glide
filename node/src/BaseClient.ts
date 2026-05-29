@@ -56,6 +56,7 @@ import {
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MigrateOptions,
     OpenTelemetry,
     RangeByIndex,
     RangeByLex,
@@ -166,6 +167,7 @@ import {
     createLeakedOtelSpan,
     createOtelSpanWithTraceContext,
     createMGet,
+    createMigrate,
     createMSet,
     createMSetNX,
     createMove,
@@ -197,6 +199,7 @@ import {
     createRPushX,
     createRename,
     createRenameNX,
+    createReset,
     createRestore,
     createSAdd,
     createSCard,
@@ -2441,6 +2444,43 @@ export class BaseClient {
     ): Promise<boolean> {
         return this.createWritePromise(
             createCopy(source, destination, options),
+        );
+    }
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+     * Once the key is successfully transferred, it is deleted from the source instance.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns "OK" on success, or "NOKEY" if the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
+     * ```
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // Output: "OK" - "mykey" was copied to the destination, replacing any existing key.
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString,
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
         );
     }
 
@@ -8926,6 +8966,27 @@ export class BaseClient {
      */
     public async wait(numreplicas: number, timeout: number): Promise<number> {
         return this.createWritePromise(createWait(numreplicas, timeout));
+    }
+
+    /**
+     * Resets the connection state.
+     *
+     * @see {@link https://valkey.io/commands/reset/|valkey.io} for more details.
+     *
+     * @remarks Resets the database index, client name, protocol, and pubsub subscriptions.
+     *
+     * @returns "RESET" when the connection state is successfully reset.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.reset();
+     * console.log(result); // Output: "RESET"
+     * ```
+     */
+    public async reset(): Promise<"RESET"> {
+        return this.createWritePromise(createReset(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
