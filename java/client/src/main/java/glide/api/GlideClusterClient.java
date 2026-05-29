@@ -58,6 +58,7 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNu
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
+import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.SSubscribe;
 import static command_request.CommandRequestOuterClass.RequestType.SSubscribeBlocking;
@@ -384,6 +385,11 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> select(long index) {
         return commandManager.submitNewCommand(
                 Select, new String[] {Long.toString(index)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> reset() {
+        return commandManager.submitNewCommand(Reset, new String[0], this::handleStringResponse);
     }
 
     @Override

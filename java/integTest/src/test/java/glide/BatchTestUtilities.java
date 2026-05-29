@@ -1024,11 +1024,20 @@ public class BatchTestUtilities {
         // clientId
         // clientGetName
 
-        return new Object[] {
-            "PONG", // ping()
-            value1, // ping(value1)
-            value2, // echo(value2)
-        };
+        Object[] results =
+                new Object[] {
+                    "PONG", // ping()
+                    value1, // ping(value1)
+                    value2, // echo(value2)
+                };
+
+        if (!isAtomic) {
+            // RESET cannot be used inside MULTI/EXEC (atomic batch)
+            batch.reset();
+            results = concatenateArrays(results, new Object[] {"RESET"});
+        }
+
+        return results;
     }
 
     private static Object[] hyperLogLogCommands(BaseBatch<?> batch, boolean isAtomic) {
