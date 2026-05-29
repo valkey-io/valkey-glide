@@ -1,6 +1,8 @@
 ## Pending 2.5
 
 #### Changes
+* Go: Add RESET command support — standalone client only; RESET resets connection state and is intentionally not exposed on the cluster client interface to avoid partial-reset inconsistency across nodes ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
+* Java: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5947](https://github.com/valkey-io/valkey-glide/pull/5947))
 * CORE/FFI: Add `MonitorClient` for the MONITOR command — dedicated non-pooled connection streaming parsed `MonitorLine { timestamp, db, client_addr, command, args }` structs via callback; FFI exports `create_monitor_client()` and `close_monitor_client()` with clean async shutdown; standalone-only (cluster mode not supported) ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
 * Node: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5945](https://github.com/valkey-io/valkey-glide/pull/5945))
 * Python: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
