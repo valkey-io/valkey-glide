@@ -5826,6 +5826,17 @@ class Batch(BaseBatch):
         """
         return self.append_command(RequestType.Select, [str(index)])
 
+    def reset(self) -> "Batch":
+        """
+        Reset the connection state.
+
+        See [valkey.io](https://valkey.io/commands/reset/) for details.
+
+        Command response:
+            bytes: The string "RESET".
+        """
+        return self.append_command(RequestType.Reset, [])
+
     def copy(
         self,
         source: TEncodable,

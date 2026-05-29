@@ -1027,6 +1027,15 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_reset(self, glide_sync_client: TGlideClient):
+        result = glide_sync_client.reset()
+        assert result == b"RESET"
+        # Verify client recovers after reset
+        pong = glide_sync_client.ping()
+        assert pong == b"PONG"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_config_get_set(self, glide_sync_client: TGlideClient):
         previous_timeout = glide_sync_client.config_get(["timeout"])
         assert glide_sync_client.config_set({"timeout": "1000"}) == OK
