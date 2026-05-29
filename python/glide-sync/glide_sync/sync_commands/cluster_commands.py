@@ -1613,9 +1613,10 @@ class ClusterCommands(CoreCommands):
 
         Warning:
             Because GLIDE uses a multiplexed connection that correlates responses to in-flight
-            requests by order, calling this method with `OFF` or `SKIP` will desynchronize the
-            connection and produce incorrect results for all subsequent commands until the
-            connection is closed and re-established. Only `ON` is safe to use on a normal client.
+            requests by order, calling this method with ``ClientReplyMode.OFF`` or
+            ``ClientReplyMode.SKIP`` will desynchronize the connection and produce incorrect
+            results for all subsequent commands until the connection is closed and re-established.
+            Only ``ClientReplyMode.ON`` is safe to use on a normal client.
 
         Examples:
             >>> client.client_reply(ClientReplyMode.ON)

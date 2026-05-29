@@ -694,10 +694,10 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 //
 // Warning: Because GLIDE uses a multiplexed connection that correlates
 // responses to in-flight requests by order, calling this method with
-// [ClientReplyModeOff] or [ClientReplyModeSkip] will desynchronize the
-// connection and produce incorrect results for all subsequent commands
-// until the connection is closed and re-established. Only
-// [ClientReplyModeOn] is safe to use on a normal client.
+// [options.ClientReplyModeOff] or [options.ClientReplyModeSkip] will
+// desynchronize the connection and produce incorrect results for all
+// subsequent commands until the connection is closed and re-established.
+// Only [options.ClientReplyModeOn] is safe to use on a normal client.
 //
 // See [valkey.io] for details.
 //
