@@ -42,6 +42,7 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     UpdateOptions,
 )
@@ -1025,6 +1026,15 @@ class TestCommands:
     def test_sync_ping(self, glide_sync_client: TGlideClient):
         assert glide_sync_client.ping() == b"PONG"
         assert glide_sync_client.ping("HELLO") == b"HELLO"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_reset(self, glide_sync_client: TGlideClient):
+        result = glide_sync_client.reset()
+        assert result == b"RESET"
+        # Verify client recovers after reset
+        pong = glide_sync_client.ping()
+        assert pong == b"PONG"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9376,6 +9386,24 @@ class TestCommands:
                 )
         finally:
             assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_migrate(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(5)
+        glide_sync_client.set(key, value)
+
+        with pytest.raises(RequestError):
+            glide_sync_client.migrate("invalid-host", 6379, key, 0, 5000)
+
+        with pytest.raises(RequestError):
+            glide_sync_client.migrate(
+                "invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True)
+            )
+
+        with pytest.raises(ValueError):
+            MigrateOptions(username="user").to_args()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

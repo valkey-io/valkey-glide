@@ -618,6 +618,7 @@ impl ResponsePolicy {
             | b"MEMORY PURGE"
             | b"MSET"
             | b"PING"
+            | b"RESET"
             | b"SCRIPT FLUSH"
             | b"SCRIPT LOAD"
             | b"SELECT"
@@ -700,6 +701,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"PUBSUB NUMSUB"
         | b"PUBSUB SHARDCHANNELS"
         | b"PUBSUB SHARDNUMSUB"
+        | b"RESET"
         | b"SCRIPT KILL"
         | b"FUNCTION KILL"
         | b"FUNCTION STATS" => RouteBy::AllNodes,
