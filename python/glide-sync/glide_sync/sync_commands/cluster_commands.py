@@ -1551,7 +1551,10 @@ class ClusterCommands(CoreCommands):
         self._execute_command(RequestType.SUnsubscribeBlocking, args)
 
     def client_pause(
-        self, timeout: int, mode: Optional[ClientPauseMode] = None, route: Optional[Route] = None
+        self,
+        timeout: int,
+        mode: Optional[ClientPauseMode] = None,
+        route: Optional[Route] = None,
     ) -> TOK:
         """
         Suspends all clients for the specified timeout.
@@ -1618,4 +1621,6 @@ class ClusterCommands(CoreCommands):
             >>> client.client_reply(ClientReplyMode.ON)
                 OK
         """
-        return cast(TOK, self._execute_command(RequestType.ClientReply, [mode.value], route))
+        return cast(
+            TOK, self._execute_command(RequestType.ClientReply, [mode.value], route)
+        )

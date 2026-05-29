@@ -1002,7 +1002,9 @@ class StandaloneCommands(CoreCommands):
         """
         return await self._execute_script(script.get_hash(), keys, args)
 
-    async def client_pause(self, timeout: int, mode: Optional[ClientPauseMode] = None) -> TOK:
+    async def client_pause(
+        self, timeout: int, mode: Optional[ClientPauseMode] = None
+    ) -> TOK:
         """
         Suspends all clients for the specified timeout.
 
@@ -1063,4 +1065,6 @@ class StandaloneCommands(CoreCommands):
             >>> await client.client_reply(ClientReplyMode.ON)
                 OK
         """
-        return cast(TOK, await self._execute_command(RequestType.ClientReply, [mode.value]))
+        return cast(
+            TOK, await self._execute_command(RequestType.ClientReply, [mode.value])
+        )

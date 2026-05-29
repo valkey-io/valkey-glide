@@ -1610,7 +1610,10 @@ class ClusterCommands(CoreCommands):
         await self._execute_command(RequestType.SUnsubscribeBlocking, list(args))
 
     async def client_pause(
-        self, timeout: int, mode: Optional[ClientPauseMode] = None, route: Optional[Route] = None
+        self,
+        timeout: int,
+        mode: Optional[ClientPauseMode] = None,
+        route: Optional[Route] = None,
     ) -> TOK:
         """
         Suspends all clients for the specified timeout.
@@ -1634,7 +1637,9 @@ class ClusterCommands(CoreCommands):
         args: List[TEncodable] = [str(timeout)]
         if mode is not None:
             args.append(mode.value)
-        return cast(TOK, await self._execute_command(RequestType.ClientPause, args, route))
+        return cast(
+            TOK, await self._execute_command(RequestType.ClientPause, args, route)
+        )
 
     async def client_unpause(self, route: Optional[Route] = None) -> TOK:
         """
@@ -1652,9 +1657,13 @@ class ClusterCommands(CoreCommands):
             >>> await client.client_unpause()
                 OK
         """
-        return cast(TOK, await self._execute_command(RequestType.ClientUnpause, [], route))
+        return cast(
+            TOK, await self._execute_command(RequestType.ClientUnpause, [], route)
+        )
 
-    async def client_reply(self, mode: ClientReplyMode, route: Optional[Route] = None) -> TOK:
+    async def client_reply(
+        self, mode: ClientReplyMode, route: Optional[Route] = None
+    ) -> TOK:
         """
         Control the server reply behavior for the current connection.
 
@@ -1677,4 +1686,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.client_reply(ClientReplyMode.ON)
                 OK
         """
-        return cast(TOK, await self._execute_command(RequestType.ClientReply, [mode.value], route))
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.ClientReply, [mode.value], route),
+        )

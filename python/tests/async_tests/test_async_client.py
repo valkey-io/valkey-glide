@@ -32,6 +32,8 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
+    ClientReplyMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -9985,6 +9987,55 @@ class TestCommands:
         await glide_client.set(non_list_key, "non_list_value")
         with pytest.raises(RequestError):
             await glide_client.lpos(non_list_key, "a")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_pause(self, glide_client: TGlideClient):
+        # Test CLIENT PAUSE with timeout only
+        result = await glide_client.client_pause(0)
+        assert result == OK
+
+        # Test CLIENT PAUSE with WRITE mode
+        result = await glide_client.client_pause(0, ClientPauseMode.WRITE)
+        assert result == OK
+
+        # Test cluster-specific routing
+        if isinstance(glide_client, GlideClusterClient):
+            result = await glide_client.client_pause(0, route=AllPrimaries())
+            assert result == OK
+
+            result = await glide_client.client_pause(
+                0, ClientPauseMode.WRITE, route=AllPrimaries()
+            )
+            assert result == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_unpause(self, glide_client: TGlideClient):
+        result = await glide_client.client_unpause()
+        assert result == OK
+
+        # Test cluster-specific routing
+        if isinstance(glide_client, GlideClusterClient):
+            result = await glide_client.client_unpause(route=AllPrimaries())
+            assert result == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_reply(self, glide_client: TGlideClient):
+        # Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
+        result = await glide_client.client_reply(ClientReplyMode.ON)
+        assert result == OK
+        # Sanity-check that the connection is still functional after CLIENT REPLY ON.
+        assert await glide_client.ping() == b"PONG"
+
+        # Test cluster-specific routing
+        if isinstance(glide_client, GlideClusterClient):
+            result = await glide_client.client_reply(
+                ClientReplyMode.ON, route=AllPrimaries()
+            )
+            assert result == OK
+            assert await glide_client.ping() == b"PONG"
 
 
 @pytest.mark.anyio
