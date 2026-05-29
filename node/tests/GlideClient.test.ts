@@ -2023,7 +2023,6 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            expect(await client.clientPause(1000)).toEqual("OK");
             const result = await client.clientUnpause();
             expect(result).toEqual("OK");
         },

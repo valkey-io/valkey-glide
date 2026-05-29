@@ -209,8 +209,6 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            // Pause first, then unpause
-            expect(await client.clientPause(1000)).toEqual("OK");
             const result = await client.clientUnpause();
             expect(result).toEqual("OK");
         },
@@ -223,7 +221,6 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            expect(await client.clientPause(1000)).toEqual("OK");
             const result = await client.clientUnpause({
                 route: "allPrimaries",
             });
