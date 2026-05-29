@@ -2,11 +2,7 @@
 
 ### Changes
 
-* Java: Add `CLIENT PAUSE`, `CLIENT UNPAUSE`, and `CLIENT REPLY` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
-* Python: Add `CLIENT PAUSE`, `CLIENT UNPAUSE`, and `CLIENT REPLY` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
-* Node: Add `CLIENT PAUSE`, `CLIENT UNPAUSE`, and `CLIENT REPLY` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
-* Go: Add `CLIENT PAUSE`, `CLIENT UNPAUSE`, and `CLIENT REPLY` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
-* CORE: Phase 2 client-side caching - server-assisted invalidation via CLIENT TRACKING ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
+* Core, Python, Java, Node, Go:: Add `CLIENT PAUSE`, `CLIENT UNPAUSE`, and `CLIENT REPLY` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
 * Node: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))
 * Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
@@ -16,15 +12,15 @@
 
 ### Fixes
 
-* CORE: Add dedicated timeout watchdog thread independent of the Tokio runtime. Under memory pressure or Tokio starvation, `tokio::time::sleep` may not fire on time. The watchdog uses a separate OS thread to guarantee timeout delivery, preventing commands from hanging indefinitely when the async runtime is overloaded. ([#5752](https://github.com/valkey-io/valkey-glide/issues/5752))
-* CORE: Propagate per-command response timeout to the multiplexed connection layer. The configured `request_timeout` (including blocking command timeouts) is now enforced at the connection level, ensuring commands time out reliably instead of waiting indefinitely with `Duration::MAX`. ([#5581](https://github.com/valkey-io/valkey-glide/issues/5581))
-* CORE: Fall back to existing cluster connections when initial nodes are unavailable during topology refresh. When `refreshTopologyFromInitialNodes=true` and the initial/seed node is unreachable (e.g., dead primary during failover), the topology refresh now queries healthy existing connections instead of failing silently. This complements #5812 to enable failover recovery when the seed node itself is the failed node. ([#5814](https://github.com/valkey-io/valkey-glide/pull/5814))
+* Core: Add dedicated timeout watchdog thread independent of the Tokio runtime. Under memory pressure or Tokio starvation, `tokio::time::sleep` may not fire on time. The watchdog uses a separate OS thread to guarantee timeout delivery, preventing commands from hanging indefinitely when the async runtime is overloaded. ([#5752](https://github.com/valkey-io/valkey-glide/issues/5752))
+* Core: Propagate per-command response timeout to the multiplexed connection layer. The configured `request_timeout` (including blocking command timeouts) is now enforced at the connection level, ensuring commands time out reliably instead of waiting indefinitely with `Duration::MAX`. ([#5581](https://github.com/valkey-io/valkey-glide/issues/5581))
+* Core: Fall back to existing cluster connections when initial nodes are unavailable during topology refresh. When `refreshTopologyFromInitialNodes=true` and the initial/seed node is unreachable (e.g., dead primary during failover), the topology refresh now queries healthy existing connections instead of failing silently. This complements #5812 to enable failover recovery when the seed node itself is the failed node. ([#5814](https://github.com/valkey-io/valkey-glide/pull/5814))
 * Node: Fix SIGSEGV in pubsub under pnpm strict hoisting — replace `value_from_split_pointer(high_u32, low_u32)` with `value_from_pointer(i64)` in the Node.js Rust client to accept response pointers as a single integer, eliminating the high/low split that caused upper 32-bit truncation when `protobufjs.util.Long` was null ([#5851](https://github.com/valkey-io/valkey-glide/issues/5851))
 
 ### Changes
 
 * Go: Expose client interfaces (`BaseClientCommands`, `GlideClientCommands`, `GlideClusterClientCommands`, etc.) as a public package for testing and abstraction ([#4900](https://github.com/valkey-io/valkey-glide/issues/4900))
-* CORE, Python, Java, Node, Go: Add `NodeDiscoveryMode` configuration for standalone clients — `STATIC` mode skips role detection for proxy compatibility (e.g., Envoy), `DISCOVER_ALL` mode discovers full topology (primary + all replicas) from any starting node ([#5724](https://github.com/valkey-io/valkey-glide/pull/5724))
+* Core, Python, Java, Node, Go: Add `NodeDiscoveryMode` configuration for standalone clients — `STATIC` mode skips role detection for proxy compatibility (e.g., Envoy), `DISCOVER_ALL` mode discovers full topology (primary + all replicas) from any starting node ([#5724](https://github.com/valkey-io/valkey-glide/pull/5724))
 * Go: Add Valkey Search (FT) command support — FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.DROPINDEX, FT.LIST, FT.INFO, FT.EXPLAIN, FT.EXPLAINCLI, FT.ALIASADD, FT.ALIASDEL, FT.ALIASUPDATE, FT.ALIASLIST with full Valkey Search 1.2 options for both standalone and cluster clients ([#5590](https://github.com/valkey-io/valkey-glide/pull/5590))
 * FFI: Add URI-based client creation API with full ConnectionRequest support ([#5620](https://github.com/valkey-io/valkey-glide/pull/5620))
   * New `create_client_from_uri` FFI function accepts Redis/Valkey URI strings and optional JSON configuration
@@ -33,36 +29,36 @@
 * Python, Java, Node, CORE: Add valkey-search 1.2 support — FT.CREATE index options (SCORE, LANGUAGE, SKIPINITIALSCAN, MINSTEMSIZE, WITHOFFSETS/NOOFFSETS, NOSTOPWORDS/STOPWORDS, PUNCTUATION) and field options (NOSTEM, WEIGHT, WITHSUFFIXTRIE/NOSUFFIXTRIE, SORTABLE); FT.SEARCH options (VERBATIM, INORDER, SLOP, SORTBY, WITHSORTKEYS, NOCONTENT, DIALECT, shard scope, consistency mode); FT.AGGREGATE options (VERBATIM, INORDER, SLOP, DIALECT); FT.INFO scope options (LOCAL, PRIMARY, CLUSTER, shard scope, consistency mode); WITHSORTKEYS and NOCONTENT response conversion in glide-core. Python `options` parameter for `ft.search()` and `ft.aggregate()` is now optional. ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
 * Node: Fix HNSW vector field serialization to use correct property names (`numberOfEdges`, `vectorsExaminedOnConstruction`, `vectorsExaminedOnRuntime`) matching the TypeScript type definitions ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
 * Node: Fix missing `break` for NUMERIC field case in FT.CREATE serialization, preventing fall-through to VECTOR case ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
-* CORE, Python, Java, Node: Add missing NOCONTENT and DIALECT options for FT.SEARCH ([#5550](https://github.com/valkey-io/valkey-glide/pull/5550))
+* Core, Python, Java, Node: Add missing NOCONTENT and DIALECT options for FT.SEARCH ([#5550](https://github.com/valkey-io/valkey-glide/pull/5550))
 * Go: Add JSON.SET and JSON.GET commands ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
 * Go: Add JSON module commands - DEL, FORGET, CLEAR, MGET, TYPE, and array operations ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
 * Go: Add JSON TOGGLE, RESP, DEBUG, numeric, string and object commands ([#5589](https://github.com/valkey-io/valkey-glide/issues/5589))
-* CORE: Fix Tokio runtime blocking in cluster async code by replacing std::sync locks with async-safe alternatives ([#5450](https://github.com/valkey-io/valkey-glide/issues/5450))
+* Core: Fix Tokio runtime blocking in cluster async code by replacing std::sync locks with async-safe alternatives ([#5450](https://github.com/valkey-io/valkey-glide/issues/5450))
 * Core: Maintain throughput during cluster failover by making reconnection non-blocking ([#4990](https://github.com/valkey-io/valkey-glide/issues/4990))
 * FFI: Add OpenTelemetry DB semantic convention attributes to FFI path ([#5596](https://github.com/valkey-io/valkey-glide/issues/5596))
-* JAVA: Add cluster management commands (CLUSTER MEET, CLUSTER FORGET, CLUSTER REPLICATE, CLUSTER REPLICAS, CLUSTER COUNT-FAILURE-REPORTS, CLUSTER FAILOVER, CLUSTER SETSLOT, CLUSTER BUMPEPOCH, CLUSTER SET-CONFIG-EPOCH, CLUSTER FLUSHSLOTS, CLUSTER RESET, READONLY, READWRITE, ASKING, CLUSTER SAVECONFIG, CLUSTER GETKEYSINSLOT) ([#5503](https://github.com/valkey-io/valkey-glide/pull/5503))
+* Java: Add cluster management commands (CLUSTER MEET, CLUSTER FORGET, CLUSTER REPLICATE, CLUSTER REPLICAS, CLUSTER COUNT-FAILURE-REPORTS, CLUSTER FAILOVER, CLUSTER SETSLOT, CLUSTER BUMPEPOCH, CLUSTER SET-CONFIG-EPOCH, CLUSTER FLUSHSLOTS, CLUSTER RESET, READONLY, READWRITE, ASKING, CLUSTER SAVECONFIG, CLUSTER GETKEYSINSLOT) ([#5503](https://github.com/valkey-io/valkey-glide/pull/5503))
 * Go: Client-Side Caching Support ([#5721](https://github.com/valkey-io/valkey-glide/pull/5721))
 * Go: Add `PeriodicChecks` configuration to `AdvancedClusterClientConfiguration` — supports `PeriodicChecksEnabled`, `PeriodicChecksDisabled`, and `PeriodicChecksManualInterval` modes for controlling cluster topology check intervals ([#5842](https://github.com/valkey-io/valkey-glide/issues/5842))
-* JAVA: Client-Side Caching Support ([#5172](https://github.com/valkey-io/valkey-glide/pull/5172))
+* Java: Client-Side Caching Support ([#5172](https://github.com/valkey-io/valkey-glide/pull/5172))
 * Node: Client-Side Caching Support ([#5720](https://github.com/valkey-io/valkey-glide/pull/5720))
-* JAVA: Support custom socket address resolution when connecting to valkey ([#4396](https://github.com/valkey-io/valkey-glide/issues/4396))
+* Java: Support custom socket address resolution when connecting to valkey ([#4396](https://github.com/valkey-io/valkey-glide/issues/4396))
 * Python: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 
 ### Fixes
 
 * Java: Populate actual `lib-ver` instead of `unknown` in `CLIENT INFO` responses ([#5634](https://github.com/valkey-io/valkey-glide/issues/5634))
-* CORE: Add adaptive timeout on pipeline send to detect dead connections during half-open TCP scenarios, replace `now_or_never()` with proper `poll()` in recovery to fix busy-spin, remove `loop{}` from `poll_flush`, and fail pending requests immediately during recovery to prevent OOM under sustained partition ([#5715](https://github.com/valkey-io/valkey-glide/issues/5715), [#5716](https://github.com/valkey-io/valkey-glide/issues/5716))
-* CORE, Java: Add diagnostic logging for failover, topology refresh, and pipeline issues — lazy and rate-limited logging macros in logger_core, MOVED error scenario identification, topology refresh throttle/overwrite tracking, pipeline send/response timing, inflight slot exhaustion, recovery state transitions, adaptive health snapshots, and Java-side timeout elapsed time. Fix Java Logger Supplier overloads to check level before evaluating ([#5756](https://github.com/valkey-io/valkey-glide/pull/5756), [#5791](https://github.com/valkey-io/valkey-glide/pull/5791))
-* CORE: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
-* CORE: Fixed standalone client read strategy AZAffinity including the primary in the read list when it is in the same az as the client.
-* CORE: Fixed standalone client read strategy AZAffinityAndPrimary not falling back to primary when there are no local replicas.
+* Core: Add adaptive timeout on pipeline send to detect dead connections during half-open TCP scenarios, replace `now_or_never()` with proper `poll()` in recovery to fix busy-spin, remove `loop{}` from `poll_flush`, and fail pending requests immediately during recovery to prevent OOM under sustained partition ([#5715](https://github.com/valkey-io/valkey-glide/issues/5715), [#5716](https://github.com/valkey-io/valkey-glide/issues/5716))
+* Core, Java: Add diagnostic logging for failover, topology refresh, and pipeline issues — lazy and rate-limited logging macros in logger_core, MOVED error scenario identification, topology refresh throttle/overwrite tracking, pipeline send/response timing, inflight slot exhaustion, recovery state transitions, adaptive health snapshots, and Java-side timeout elapsed time. Fix Java Logger Supplier overloads to check level before evaluating ([#5756](https://github.com/valkey-io/valkey-glide/pull/5756), [#5791](https://github.com/valkey-io/valkey-glide/pull/5791))
+* Core: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
+* Core: Fixed standalone client read strategy AZAffinity including the primary in the read list when it is in the same az as the client.
+* Core: Fixed standalone client read strategy AZAffinityAndPrimary not falling back to primary when there are no local replicas.
 
 ## 2.3.1
 
 ### Fixes
 
-* CORE: Add IAM token cache support for cluster reconnections — switch from push to pull model for IAM token refresh, add `IAMTokenProvider` trait so the cluster reconnection loop fetches a fresh IAM token before each connection attempt, preventing AUTH failures when tokens expire during node downtime ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
-* CORE: Refresh IAM token before slot refresh and initial node reconnection — ensure `cluster_params.password` has a valid IAM token in `refresh_slots_inner` and `reconnect_to_initial_nodes`, not just the per-node reconnection loop ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
+* Core: Add IAM token cache support for cluster reconnections — switch from push to pull model for IAM token refresh, add `IAMTokenProvider` trait so the cluster reconnection loop fetches a fresh IAM token before each connection attempt, preventing AUTH failures when tokens expire during node downtime ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
+* Core: Refresh IAM token before slot refresh and initial node reconnection — ensure `cluster_params.password` has a valid IAM token in `refresh_slots_inner` and `reconnect_to_initial_nodes`, not just the per-node reconnection loop ([#5663](https://github.com/valkey-io/valkey-glide/pull/5663))
 
 ### Operational Enhancements
 
@@ -75,29 +71,29 @@
 
 * Node: add dynamic PubSub support ([#5295](https://github.com/valkey-io/valkey-glide/pull/5295))
 * Java: Add uber JAR support for multi-platform builds ([5484](https://github.com/valkey-io/valkey-glide/issues/5484))
-* JAVA: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
-* CORE: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
+* Java: Add EVAL_RO, EVALSHA_RO, and SCRIPT DEBUG commands ([#5125](https://github.com/valkey-io/valkey-glide/pull/5125))
+* Core: Add client certificate and private key support for mTLS ([#5092](https://github.com/valkey-io/valkey-glide/issues/5092))
 * Python: Add client certificate and private key support for mTLS ([5123](https://github.com/valkey-io/valkey-glide/issues/5123))
-* JAVA: Add KEYS, MIGRATE and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
+* Java: Add KEYS, MIGRATE and WAITAOF command support ([#5017](https://github.com/valkey-io/valkey-glide/pull/5107))
 * Python Sync: Add dynamic PubSub methods (subscribe, psubscribe, unsubscribe, punsubscribe, ssubscribe, sunsubscribe with timeout support), get_subscriptions(), and pubsub_reconciliation_interval configuration support. Unified configuration classes with async client by importing from glide_shared ([#5270](https://github.com/valkey-io/valkey-glide/pull/5270))
 * Go: Add dynamic PubSub methods (Subscribe, PSubscribe, SSubscribe, Unsubscribe, PUnsubscribe, SUnsubscribe with blocking variants and timeout support), GetSubscriptions(), and helper functions (UnsubscribeAll, PUnsubscribeAll, SUnsubscribeAll). Export pubsub constants (AllChannels, AllPatterns, AllShardedChannels)
-* JAVA: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
+* Java: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
 * Go: Add ACL server management commands (ACL CAT, ACL DELUSER, ACL DRYRUN, ACL GENPASS, ACL GETUSER, ACL LIST, ACL LOAD, ACL LOG, ACL LOGRESET, ACL SAVE, ACL SETUSER, ACL USERS, ACL WHOAMI)
-* CORE: Fix typo in ACL SETUSER command mapping (AclSetSser → AclSetUser)
+* Core: Fix typo in ACL SETUSER command mapping (AclSetSser → AclSetUser)
 * Python: Add inflight request limit support to sync client
 * Python Sync: Add OpenTelemetry support with traces and metrics configuration
 * Python: Move OpenTelemetry config classes to glide_shared for code reuse between async and sync clients
-* JAVA: Add dynamic PubSub methods (subscribe, psubscribe, ssubscribe, unsubscribe, punsubscribe, sunsubscribe and their non-blocking "Lazy" variants), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
+* Java: Add dynamic PubSub methods (subscribe, psubscribe, ssubscribe, unsubscribe, punsubscribe, sunsubscribe and their non-blocking "Lazy" variants), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
 * Go: Add ALLOW_NON_COVERED_SLOTS flag support for cluster scan ([#4895](https://github.com/valkey-io/valkey-glide/issues/4895))
-* CORE: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
-* CORE: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
-* Go: Add CLUSTER management commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER MYSHARDID, CLUSTER GETKEYSINSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER LINKS) ([#5206](https://github.com/valkey-io/valkey-glide/issues/5206))
+* Core: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
+* Core: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
+* Go: Add CLUSTER management commands (CLUSTER INFO, CLUSTER NodeS, CLUSTER SHARDS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER MYSHARDID, CLUSTER GETKEYSINSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER LINKS) ([#5206](https://github.com/valkey-io/valkey-glide/issues/5206))
 * Java: Make client java 8 compatible
 * Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
-* JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
-* CORE: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
-* JAVA: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) and cluster slot commands (CLUSTER KEYSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER GETKEYSINSLOT, CLUSTER ADDSLOTS, CLUSTER ADDSLOTSRANGE, CLUSTER DELSLOTS, CLUSTER DELSLOTSRANGE) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
-* CORE: Add OpenTelemetry DB semantic convention attributes to command spans ([#5416](https://github.com/valkey-io/valkey-glide/issues/5416))
+* Java: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NodeS, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
+* Core: Add read only flag, enforcing no write commands and allowing for connecting without a primary ([#5411](https://github.com/valkey-io/valkey-glide/issues/5411))
+* Java: Add cluster information and topology commands (CLUSTER INFO, CLUSTER NodeS, CLUSTER SHARDS, CLUSTER LINKS, CLUSTER MYID, CLUSTER MYSHARDID) and cluster slot commands (CLUSTER KEYSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER GETKEYSINSLOT, CLUSTER ADDSLOTS, CLUSTER ADDSLOTSRANGE, CLUSTER DELSLOTS, CLUSTER DELSLOTSRANGE) with batch support ([#5106](https://github.com/valkey-io/valkey-glide/issues/5106))
+* Core: Add OpenTelemetry DB semantic convention attributes to command spans ([#5416](https://github.com/valkey-io/valkey-glide/issues/5416))
 * Python Sync: Accept `bytearray` and `memoryview` as command argument types to improve performance by reducing copies ([#5492](https://github.com/valkey-io/valkey-glide/pull/5492))
 * Python Sync: Add response buffer support to get() to improve performance by reducing copies ([#5493](https://github.com/valkey-io/valkey-glide/pull/5493))
 
@@ -105,13 +101,13 @@
 
 * Java: Fix thread safety issue in NativeClusterScanCursor causing potential JVM crash ([#5527](https://github.com/valkey-io/valkey-glide/issues/5527))
 * Java: optimize `convertMapToKeyValueStringArray` and `convertMapToKeyValueGlideStringArray` to fix performance bottleneck and ArrayStoreException ([#5602](https://github.com/valkey-io/valkey-glide/issues/5602))
-* CORE: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.
+* Core: Fix empty hostname in CLUSTER SLOTS metadata causing AllConnectionsUnavailable ([#5367](https://github.com/valkey-io/valkey-glide/issues/5367)). AWS ElastiCache (plaintext, cluster mode) returns `hostname: ""` in node metadata, which was used as the connection address instead of falling back to the IP.
 * Node: Fix to handle non-string types in toBuffersArray ([#4842](https://github.com/valkey-io/valkey-glide/issues/4842))
-* CORE: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
+* Core: Enforce connection_timeout for initial standalone connection failures  ([#4991](https://github.com/valkey-io/valkey-glide/issues/4991))
 * Node: Fixed `Failed to convert napi value Undefined into rust type u32` error  ([#5128](https://github.com/valkey-io/valkey-glide/pull/5128))
 * Python: Fix Sphinx docs build failure with duplicate object warnings  ([#5163](https://github.com/valkey-io/valkey-glide/issues/5163))
 * Java: Restore shading and relocation of protobuf ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
-* CORE: Remove DEFAULT_CLIENT_CREATION_TIMEOUT and honor user-provided connection timeout by centralizing timeout logic in ConnectionRequest ([#5183](https://github.com/valkey-io/valkey-glide/issues/5183))
+* Core: Remove DEFAULT_CLIENT_CREATION_TIMEOUT and honor user-provided connection timeout by centralizing timeout logic in ConnectionRequest ([#5183](https://github.com/valkey-io/valkey-glide/issues/5183))
 * Java: Fix mget large binary data issue and add test case ([#5341](https://github.com/valkey-io/valkey-glide/pull/5341))
 * Java: Fix resource leak in integration tests where clients created via @MethodSource were never closed ([#5347](https://github.com/valkey-io/valkey-glide/issues/5347))
 * Java: Fix hanging issue in AWS Lambda when response exceeds 16KB ([#5081](https://github.com/valkey-io/valkey-glide/issues/5081))
@@ -145,57 +141,57 @@
 
 ### Changes
 
-* JAVA: Unshadow Apache Commons Lang3 to avoid failures due to dependency conflicts ([#5074](https://github.com/valkey-io/valkey-glide/pull/5074))
+* Java: Unshadow Apache Commons Lang3 to avoid failures due to dependency conflicts ([#5074](https://github.com/valkey-io/valkey-glide/pull/5074))
 
 ### Fixes
 
-* CORE: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
+* Core: Rust Lint is failing due to unmaintained advisory detected (RUSTSEC-2025-0141)  ([#5136](https://github.com/valkey-io/valkey-glide/issues/5136))
 
 ## 2.2.2
 
 ### Security Fixes
 
-* JAVA: Update Apache Commons Lang3 from 3.13.0 to 3.20.0 to address CVE-2025-48924 ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
+* Java: Update Apache Commons Lang3 from 3.13.0 to 3.20.0 to address CVE-2025-48924 ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
 
 ### Fixes
 
-* JAVA: Add protobuf shading to prevent version conflicts with user dependencies ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
-* JAVA: Fix classloader issues in JNI method caching ([#5029](https://github.com/valkey-io/valkey-glide/pull/5029))
-* PYTHON: Update sniffio dependency ([#5044](https://github.com/valkey-io/valkey-glide/pull/5044))
+* Java: Add protobuf shading to prevent version conflicts with user dependencies ([#5031](https://github.com/valkey-io/valkey-glide/pull/5031))
+* Java: Fix classloader issues in JNI method caching ([#5029](https://github.com/valkey-io/valkey-glide/pull/5029))
+* Python: Update sniffio dependency ([#5044](https://github.com/valkey-io/valkey-glide/pull/5044))
 
 ## 2.2.1
 
 ### Changes
 
-* JAVA: Windows Java binaries are now available ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
+* Java: Windows Java binaries are now available ([#5049](https://github.com/valkey-io/valkey-glide/pull/5049))
 
 ## 2.2
 
 ### Changes
 
 * Added in documentation to how to use Lua scripts with Glide
-* JAVA: Add refreshTopologyFromInitialNodes Configuration Option ([#4870](https://github.com/valkey-io/valkey-glide/pull/4870))
-* GO: add RefreshTopologyFromInitialNodes configuration option ([#4871](https://github.com/valkey-io/valkey-glide/pull/4871))
+* Java: Add refreshTopologyFromInitialNodes Configuration Option ([#4870](https://github.com/valkey-io/valkey-glide/pull/4870))
+* Go: add RefreshTopologyFromInitialNodes configuration option ([#4871](https://github.com/valkey-io/valkey-glide/pull/4871))
 * Node: add refreshTopologyFromInitialNodes configuration option ([#4872](https://github.com/valkey-io/valkey-glide/pull/4872))
-* PYTHON: Add IAM authentication support with manual token refresh ([#4890](https://github.com/valkey-io/valkey-glide/pull/4890))
-* JAVA: Add IAM authentication support for ElastiCache/MemoryDB ([#4891](https://github.com/valkey-io/valkey-glide/pull/4891/))
-* FFI/GO: Add IAM authentication support with automatic token refresh ([#4892](https://github.com/valkey-io/valkey-glide/pull/4892))
-* GO: Add TLS Custom Root Certificate Support for Go Client ([#4921](https://github.com/valkey-io/valkey-glide/pull/4921))
-* GO: Enable `go mod vendor` support via CI-generated marker files ([#4721](https://github.com/valkey-io/valkey-glide/issues/4721))
+* Python: Add IAM authentication support with manual token refresh ([#4890](https://github.com/valkey-io/valkey-glide/pull/4890))
+* Java: Add IAM authentication support for ElastiCache/MemoryDB ([#4891](https://github.com/valkey-io/valkey-glide/pull/4891/))
+* FFI/Go: Add IAM authentication support with automatic token refresh ([#4892](https://github.com/valkey-io/valkey-glide/pull/4892))
+* Go: Add TLS Custom Root Certificate Support for Go Client ([#4921](https://github.com/valkey-io/valkey-glide/pull/4921))
+* Go: Enable `go mod vendor` support via CI-generated marker files ([#4721](https://github.com/valkey-io/valkey-glide/issues/4721))
 * Python: Add Custom Root Certificate Support for Python TLS Connections ([#4930](https://github.com/valkey-io/valkey-glide/pull/4930))
 * Python: Add Python 3.14 support ([#4897](https://github.com/valkey-io/valkey-glide/pull/4897))
-* JAVA: Implement TLS support for Java client ([#4905](https://github.com/valkey-io/valkey-glide/pull/4905))
+* Java: Implement TLS support for Java client ([#4905](https://github.com/valkey-io/valkey-glide/pull/4905))
 * Node: Implement TLS support for Node client ([#4911](https://github.com/valkey-io/valkey-glide/pull/4911))
 
 ### Fixes
 
 * Node: Resolved circular import dependency between `BaseClient.ts`, `GlideClient.ts`, and `GlideClusterClient.ts.` ([#4607](https://github.com/valkey-io/valkey-glide/issues/4607))
-* JAVA: Add Windows support and prevent double-loading in NativeUtils library loader
-* JAVA: Add cross-platform compatibility fixes for builds and tests - UTF-8 encoding, platform-native line endings, and system temp directory usage
+* Java: Add Windows support and prevent double-loading in NativeUtils library loader
+* Java: Add cross-platform compatibility fixes for builds and tests - UTF-8 encoding, platform-native line endings, and system temp directory usage
 * Java: Make shutdown hook optional ([#4935](https://github.com/valkey-io/valkey-glide/pull/4935))
 * Core/Java/Node: Fix default connection timeout value for clients ([#4966](https://github.com/valkey-io/valkey-glide/pull/4966))
-* JAVA: Fix java applications from hanging after logic completion ([#4984](https://github.com/valkey-io/valkey-glide/pull/4984))
-* JAVA: Fix Gradle toolchain provisioning conflicts on Windows self-hosted runners
+* Java: Fix java applications from hanging after logic completion ([#4984](https://github.com/valkey-io/valkey-glide/pull/4984))
+* Java: Fix Gradle toolchain provisioning conflicts on Windows self-hosted runners
 
 ### Operational Enhancements
 
@@ -206,31 +202,31 @@
 ### Changes
 
 * Node: Move SELECT command from GlideClient to BaseClient ([#4849](https://github.com/valkey-io/valkey-glide/pull/4849))
-* JAVA: Add SELECT command support for cluster mode ([#4846](https://github.com/valkey-io/valkey-glide/pull/4846))
+* Java: Add SELECT command support for cluster mode ([#4846](https://github.com/valkey-io/valkey-glide/pull/4846))
 * Go: Add Select command support for ClusterClient ([#4850](https://github.com/valkey-io/valkey-glide/pull/4850))
-* PYTHON: Move SELECT command from StandaloneCommands to CoreCommands([#4851](https://github.com/valkey-io/valkey-glide/pull/4851))
-* PYTHON: Consolidate COPY command implementation to CoreCommands ([#4806](https://github.com/valkey-io/valkey-glide/pull/4659))
-* NODE: move COPY command to BaseClient and add comprehensive tests([#4805](https://github.com/valkey-io/valkey-glide/pull/4805))
-* GO: Add DBDestination option tests to CopyWithOptions command ([#4802](https://github.com/valkey-io/valkey-glide/pull/4802))
-* JAVA: Move COPY command with database ID from standalone to base client ([#4804](https://github.com/valkey-io/valkey-glide/pull/4804))
-* GO: Add cluster support for Move command ([#4748](https://github.com/valkey-io/valkey-glide/pull/4748))
-* NODE: add MOVE command support for cluster clients ([#4750](https://github.com/valkey-io/valkey-glide/pull/4750))
-* PYTHON: Add MOVE command support for cluster clients ([#4751](https://github.com/valkey-io/valkey-glide/pull/4751))
-* JAVA: Add cluster support for Move command ([#4749])(https://github.com/valkey-io/valkey-glide/pull/4749)
+* Python: Move SELECT command from StandaloneCommands to CoreCommands([#4851](https://github.com/valkey-io/valkey-glide/pull/4851))
+* Python: Consolidate COPY command implementation to CoreCommands ([#4806](https://github.com/valkey-io/valkey-glide/pull/4659))
+* Node: move COPY command to BaseClient and add comprehensive tests([#4805](https://github.com/valkey-io/valkey-glide/pull/4805))
+* Go: Add DBDestination option tests to CopyWithOptions command ([#4802](https://github.com/valkey-io/valkey-glide/pull/4802))
+* Java: Move COPY command with database ID from standalone to base client ([#4804](https://github.com/valkey-io/valkey-glide/pull/4804))
+* Go: Add cluster support for Move command ([#4748](https://github.com/valkey-io/valkey-glide/pull/4748))
+* Node: add MOVE command support for cluster clients ([#4750](https://github.com/valkey-io/valkey-glide/pull/4750))
+* Python: Add MOVE command support for cluster clients ([#4751](https://github.com/valkey-io/valkey-glide/pull/4751))
+* Java: Add cluster support for Move command ([#4749])(https://github.com/valkey-io/valkey-glide/pull/4749)
 
 ### Fixes
 
-* CORE: Fix SELECT Command Database Persistence Across Reconnections ([#4764](https://github.com/valkey-io/valkey-glide/issues/4764))
+* Core: Fix SELECT Command Database Persistence Across Reconnections ([#4764](https://github.com/valkey-io/valkey-glide/issues/4764))
 * Rust: Updates the `install-rust-and-protoc` action to explicitly include the `rustfmt` and `clippy` components. ([#4816](https://github.com/valkey-io/valkey-glide/issues/4816))
-* CORE: Persist Client Name Across Reconnections for CLIENT SETNAME Command. ([#4841](https://github.com/valkey-io/valkey-glide/pull/4841))
+* Core: Persist Client Name Across Reconnections for CLIENT SETNAME Command. ([#4841](https://github.com/valkey-io/valkey-glide/pull/4841))
 
 ## 2.1
 
 ### Changes
 
-* GO: Hash Field Expiration commands for Valkey 9 ([#4554](https://github.com/valkey-io/valkey-glide/pull/4554))
-* JAVA: Valkey 9 new commands HASH items expiration ([#4556](https://github.com/valkey-io/valkey-glide/pull/4556))
-* NODE: Valkey 9 support - Add Hash Field Expiration Commands Support ([#4598](https://github.com/valkey-io/valkey-glide/pull/4598))
+* Go: Hash Field Expiration commands for Valkey 9 ([#4554](https://github.com/valkey-io/valkey-glide/pull/4554))
+* Java: Valkey 9 new commands HASH items expiration ([#4556](https://github.com/valkey-io/valkey-glide/pull/4556))
+* Node: Valkey 9 support - Add Hash Field Expiration Commands Support ([#4598](https://github.com/valkey-io/valkey-glide/pull/4598))
 * Python: Valkey 9 new hash field expiration commands ([#4610](https://github.com/valkey-io/valkey-glide/pull/4610))
 * Node: Add Multi-Database Support for Cluster Mode (Valkey 9.0) ([#4657](https://github.com/valkey-io/valkey-glide/pull/4657))
 * Java: Multi-Database Support for Cluster Mode Valkey 9.0 ([#4658](https://github.com/valkey-io/valkey-glide/pull/4658))
@@ -248,7 +244,7 @@
 ### Operational Enhancements
 
 * FFI: Add MIRI tests to CI ([#4506](https://github.com/valkey-io/valkey-glide/pull/4506))
-* CORE/FFI/GO - SpanFromContext implementation ([#4507](https://github.com/valkey-io/valkey-glide/pull/4507))
+* Core/FFI/Go - SpanFromContext implementation ([#4507](https://github.com/valkey-io/valkey-glide/pull/4507))
 
 ## 2.0 (2025-06-18)
 
