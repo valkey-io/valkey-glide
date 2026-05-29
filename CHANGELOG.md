@@ -1,6 +1,7 @@
 ## Pending 2.5
 
 #### Changes
+* Python: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
 * Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
 * CORE: Phase 2 client-side caching - server-assisted invalidation via CLIENT TRACKING ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
 * CORE: Add RESET command support — track and reset connection state (database index, client name, protocol, pubsub subscriptions) on RESET; route RESET to all nodes in cluster mode ([#5959](https://github.com/valkey-io/valkey-glide/pull/5959))
