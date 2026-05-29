@@ -1178,7 +1178,7 @@ export class GlideClient extends BaseClient {
      * @see {@link https://valkey.io/commands/client-pause/|valkey.io} for details.
      *
      * @param timeout - The time in milliseconds to pause clients.
-     * @param mode - (Optional) The pause mode. See {@link ClientPauseMode}.
+     * @param mode - (Optional) The pause mode to use.
      *   + If not provided, all commands are paused.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns `"OK"` response on success.
@@ -1229,7 +1229,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/client-reply/|valkey.io} for details.
      *
-     * @param mode - The reply mode. See {@link ClientReplyMode}.
+     * @param mode - The reply mode to use.
      * @param options - (Optional) See {@link DecoderOption}.
      * @returns `"OK"` response on success.
      *

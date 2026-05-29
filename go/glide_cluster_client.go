@@ -1296,7 +1296,7 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 	return models.CreateClusterSingleValue[models.Result[string]](data), nil
 }
 
-// Suspends all clients for the given timeout.
+// Suspends all clients for the specified timeout.
 // The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
@@ -1304,7 +1304,7 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	timeout - The duration to pause clients.
+//	timeout - The time to pause clients.
 //
 // Return value:
 //
@@ -1320,7 +1320,7 @@ func (client *ClusterClient) ClientPause(ctx context.Context, timeout time.Durat
 	return handleOkResponse(result)
 }
 
-// Suspends all clients for the given timeout with additional options.
+// Suspends all clients for the specified timeout.
 // The command will be routed to the nodes defined by specified route, or to all primary nodes.
 //
 // See [valkey.io] for details.
@@ -1328,7 +1328,7 @@ func (client *ClusterClient) ClientPause(ctx context.Context, timeout time.Durat
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	timeout - The duration to pause clients.
+//	timeout - The time to pause clients.
 //	options - The options for the command.
 //
 // Return value:
@@ -1356,7 +1356,7 @@ func (client *ClusterClient) ClientPauseWithOptions(
 	return handleOkResponse(result)
 }
 
-// Resumes command processing for all clients.
+// Resumes processing commands on all clients.
 // The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
@@ -1378,7 +1378,7 @@ func (client *ClusterClient) ClientUnpause(ctx context.Context) (string, error) 
 	return handleOkResponse(result)
 }
 
-// Resumes command processing for all clients.
+// Resumes processing commands on all clients.
 // The command will be routed to the nodes defined by specified route, or to all primary nodes
 //
 // See [valkey.io] for details.
@@ -1417,7 +1417,7 @@ func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, optio
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	mode - The reply mode to set.
+//	mode - The reply mode to use.
 //
 // Return value:
 //
@@ -1447,7 +1447,7 @@ func (client *ClusterClient) ClientReply(ctx context.Context, mode options.Clien
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	mode - The reply mode to set. ON resumes replies, OFF suppresses all replies, SKIP suppresses the next reply.
+//	mode - The reply mode to use.
 //	options - Specifies the routing configuration for the command. The client will route the
 //	          command to the nodes defined by `options`.
 //

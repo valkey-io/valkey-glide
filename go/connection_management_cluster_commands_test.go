@@ -168,7 +168,6 @@ func ExampleClusterClient_ClientPauseWithOptions() {
 
 func ExampleClusterClient_ClientUnpause() {
 	var client *ClusterClient = getExampleClusterClient()
-	// Issue an immediate unpause (no prior pause to restore from).
 	result, err := client.ClientUnpause(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -180,7 +179,6 @@ func ExampleClusterClient_ClientUnpause() {
 
 func ExampleClusterClient_ClientUnpauseWithOptions() {
 	var client *ClusterClient = getExampleClusterClient()
-	// Issue an immediate unpause (no prior pause to restore from).
 	opts := options.RouteOption{Route: config.AllPrimaries}
 	result, err := client.ClientUnpauseWithOptions(context.Background(), opts)
 	if err != nil {

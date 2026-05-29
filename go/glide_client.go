@@ -618,14 +618,14 @@ func (client *Client) ClientSetName(ctx context.Context, connectionName string) 
 	return handleOkResponse(result)
 }
 
-// Suspends all clients for the given timeout.
+// Suspends all clients for the specified timeout.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	timeout - The duration to pause clients. A timeout of 0 will immediately unpause.
+//	timeout - The time to pause clients.
 //
 // Return value:
 //
@@ -641,14 +641,14 @@ func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (s
 	return handleOkResponse(result)
 }
 
-// Suspends all clients for the given timeout with the specified pause mode.
+// Suspends all clients for the specified timeout.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	timeout - The duration to pause clients.
+//	timeout - The time to pause clients.
 //	mode - The pause mode to use.
 //
 // Return value:
@@ -669,7 +669,7 @@ func (client *Client) ClientPauseWithOptions(
 	return handleOkResponse(result)
 }
 
-// Resumes command processing for all clients.
+// Resumes processing commands on all clients.
 //
 // See [valkey.io] for details.
 //
@@ -704,7 +704,7 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	mode - The reply mode to set.
+//	mode - The reply mode to use.
 //
 // Return value:
 //

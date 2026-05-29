@@ -998,12 +998,12 @@ class StandaloneCommands(CoreCommands):
 
     def client_pause(self, timeout: int, mode: Optional[ClientPauseMode] = None) -> TOK:
         """
-        Pause all clients for the specified timeout.
+        Suspends all clients for the specified timeout.
 
         See [valkey.io](https://valkey.io/commands/client-pause/) for more details.
 
         Args:
-            timeout (int): The timeout in milliseconds to pause clients.
+            timeout (int): The time in milliseconds to pause clients.
             mode (Optional[ClientPauseMode]): The pause mode to use.
 
         Returns:
@@ -1022,7 +1022,7 @@ class StandaloneCommands(CoreCommands):
 
     def client_unpause(self) -> TOK:
         """
-        Unpause clients that were previously paused by CLIENT PAUSE.
+        Resumes processing commands on all clients.
 
         See [valkey.io](https://valkey.io/commands/client-unpause/) for more details.
 
@@ -1042,7 +1042,7 @@ class StandaloneCommands(CoreCommands):
         See [valkey.io](https://valkey.io/commands/client-reply/) for more details.
 
         Args:
-            mode (ClientReplyMode): The reply mode.
+            mode (ClientReplyMode): The reply mode to use.
 
         Returns:
             TOK: A simple OK response.

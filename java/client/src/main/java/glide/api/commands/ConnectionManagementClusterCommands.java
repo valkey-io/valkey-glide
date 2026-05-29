@@ -282,12 +282,12 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> clientPause(long timeout);
 
     /**
-     * Suspends all clients for the specified timeout with the given pause mode.<br>
+     * Suspends all clients for the specified timeout.<br>
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
      * @param timeout The time in milliseconds to pause clients.
-     * @param mode The {@link ClientPauseMode} to use.
+     * @param mode The pause mode to use.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -315,12 +315,12 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> clientPause(long timeout, Route route);
 
     /**
-     * Suspends all clients for the specified timeout with the given pause mode.<br>
+     * Suspends all clients for the specified timeout.<br>
      * The command will be routed to the nodes defined by <code>route</code>.
      *
      * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
      * @param timeout The time in milliseconds to pause clients.
-     * @param mode The {@link ClientPauseMode} to use.
+     * @param mode The pause mode to use.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
@@ -333,7 +333,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> clientPause(long timeout, ClientPauseMode mode, Route route);
 
     /**
-     * Resumes processing of commands on all clients that were paused by CLIENT PAUSE.<br>
+     * Resumes processing commands on all clients.<br>
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
@@ -347,7 +347,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> clientUnpause();
 
     /**
-     * Resumes processing of commands on all clients that were paused by CLIENT PAUSE.<br>
+     * Resumes processing commands on all clients.<br>
      * The command will be routed to the nodes defined by <code>route</code>.
      *
      * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
@@ -373,7 +373,7 @@ public interface ConnectionManagementClusterCommands {
      * ClientReplyMode#ON} is safe to use on a normal client.
      *
      * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
-     * @param mode The {@link ClientReplyMode} to use.
+     * @param mode The reply mode to use.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -394,7 +394,7 @@ public interface ConnectionManagementClusterCommands {
      * ClientReplyMode#ON} is safe to use on a normal client.
      *
      * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
-     * @param mode The {@link ClientReplyMode} to use.
+     * @param mode The reply mode to use.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.

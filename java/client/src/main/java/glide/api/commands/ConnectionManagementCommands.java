@@ -155,11 +155,11 @@ public interface ConnectionManagementCommands {
     CompletableFuture<String> clientPause(long timeout);
 
     /**
-     * Suspends all clients for the specified timeout with the given pause mode.
+     * Suspends all clients for the specified timeout.
      *
      * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
-     * @param timeout The time in milliseconds to suspend clients.
-     * @param mode The {@link ClientPauseMode} to use.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param mode The pause mode to use.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -170,7 +170,7 @@ public interface ConnectionManagementCommands {
     CompletableFuture<String> clientPause(long timeout, ClientPauseMode mode);
 
     /**
-     * Resumes command processing for all clients.
+     * Resumes processing commands on all clients.
      *
      * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
      * @return <code>"OK"</code> response on success.
@@ -192,7 +192,7 @@ public interface ConnectionManagementCommands {
      * ClientReplyMode#ON} is safe to use on a normal client.
      *
      * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
-     * @param mode The {@link ClientReplyMode} to use.
+     * @param mode The reply mode to use.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
