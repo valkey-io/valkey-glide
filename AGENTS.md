@@ -101,7 +101,7 @@ python3 dev.py lint
 
 ```bash
 cd node
-npm install
+npm ci
 npm run build:release
 npm test
 npx run lint:fix

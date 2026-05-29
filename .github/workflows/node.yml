@@ -135,7 +135,7 @@ jobs:
             - name: Install and Build
               working-directory: ./node
               run: |
-                  npm install
+                  npm ci
                   npm run build:release
 
             - name: Configure DNS for tests
@@ -208,7 +208,7 @@ jobs:
             - name: Install and Build
               working-directory: ./node
               run: |
-                  npm install
+                  npm ci
                   npm run build:release
 
             - name: Install Yarn
@@ -241,7 +241,7 @@ jobs:
             # Test hybrid node modules - commonjs
             - name: Test hybrid node modules - commonjs
               run: |
-                  npm install
+                  npm ci
                   npm run test
               working-directory: ./node/hybrid-node-tests/commonjs-test
               env:
@@ -249,7 +249,7 @@ jobs:
 
             - name: Test hybrid node modules - ecma
               run: |
-                  npm install
+                  npm ci
                   npm run test
               working-directory: ./node/hybrid-node-tests/ecmascript-test
               env:

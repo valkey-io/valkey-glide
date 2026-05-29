@@ -75,11 +75,11 @@
         "repl": "ts-node --project tsconfig.json",
         "lint": "npm run install-linting && eslint -c ../eslint.config.mjs && npm run prettier:check",
         "lint:fix": "npm run install-linting && eslint -c ../eslint.config.mjs --fix && npm run prettier:format",
-        "install-linting": "(cd ../ && npm install)",
+        "install-linting": "(cd ../ && npm ci)",
         "prettier:check": "prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "prettier --write . --ignore-unknown '!**/*.{js,d.ts}'",
         "staged": "lint-staged",
-        "prereq": "npm install",
+        "prereq": "npm ci",
         "artifacts": "napi artifacts",
         "prepublishOnly": "cd ../.. && napi prepublish --config npm/glide/package.json -t npm --skip-gh-release",
         "docs": "npm run build && ./docs/build-docs"
