@@ -35,6 +35,8 @@ pub use types::*;
 use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
 pub use reconnecting_connection::IAMTokenHandle;
+pub mod monitor_client;
+pub use monitor_client::{MonitorClient, MonitorLine, MonitorLineCallback};
 mod standalone_client;
 mod value_conversion;
 use crate::pubsub::{PubSubSynchronizer, create_pubsub_synchronizer};
