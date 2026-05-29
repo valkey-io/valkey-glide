@@ -5,7 +5,6 @@ package glide
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -37,8 +36,7 @@ func ExampleClient_ClientPauseWithOptions() {
 func ExampleClient_ClientUnpause() {
 	var client *Client = getExampleClient()
 
-	// Pause first, then unpause
-	client.ClientPause(context.Background(), 100000*time.Millisecond)
+	// Issue an immediate unpause (no prior pause to restore from).
 	result, err := client.ClientUnpause(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
