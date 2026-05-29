@@ -9499,6 +9499,10 @@ class TestCommands:
         with pytest.raises(ValueError):
             MigrateOptions(keys=[]).to_args()
 
+        # Empty key without keys option raises ValueError
+        with pytest.raises(ValueError):
+            glide_sync_client.migrate("invalid-host", 6379, "", 0, 5000)
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_wait(self, glide_sync_client: TGlideClient):

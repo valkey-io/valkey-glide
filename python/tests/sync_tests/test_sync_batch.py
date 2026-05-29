@@ -1292,6 +1292,28 @@ class TestSyncBatch:
         assert isinstance(result[0], RequestError)
         assert isinstance(result[1], RequestError)
 
+        # Multi-key: non-empty key with keys option raises ValueError
+        batch2 = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        with pytest.raises(ValueError):
+            batch2.migrate(
+                "invalid-host", 6379, key, 0, 5000, MigrateOptions(keys=[key])
+            )
+
+        # Empty key without keys option raises ValueError
+        batch3 = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        with pytest.raises(ValueError):
+            batch3.migrate("invalid-host", 6379, "", 0, 5000)
+
+        # Empty keys list raises ValueError
+        with pytest.raises(ValueError):
+            batch3.migrate(
+                "invalid-host", 6379, "", 0, 5000, MigrateOptions(keys=[])
+            )
+
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_reset_batch(self, glide_sync_client: GlideClient):

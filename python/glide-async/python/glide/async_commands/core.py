@@ -7010,7 +7010,8 @@ class CoreCommands(Protocol):
                 ``MigrateOptions.keys``.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
-            options (Optional[MigrateOptions]): Optional migration options.
+            options (Optional[MigrateOptions]): Additional migration options, including
+                optional ``keys`` for multi-key migration.
 
         Returns:
             str: "OK" on success, or "NOKEY" if no keys were found.
@@ -7022,6 +7023,10 @@ class CoreCommands(Protocol):
             >>> await client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
                 "NOKEY"
         """
+        if (options is None or options.keys is None) and (key == "" or key == b""):
+            raise ValueError(
+                "migrate: 'key' must not be empty when 'options.keys' is not provided"
+            )
         if (
             options is not None
             and options.keys is not None

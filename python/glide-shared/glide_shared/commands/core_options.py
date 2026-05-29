@@ -427,6 +427,10 @@ class MigrateOptions:
     Optional arguments for the `migrate` command.
 
     See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+    When ``keys`` is provided, the multi-key MIGRATE form is used
+    (``MIGRATE host port "" db timeout [options] KEYS key1 key2 ...``).
+    In this case, the ``key`` argument of ``migrate()`` must be ``""``.
     """
 
     copy: bool = False
