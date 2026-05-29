@@ -1395,7 +1395,11 @@ func (client *ClusterClient) ClientUnpause(ctx context.Context) (string, error) 
 //
 // [valkey.io]: https://valkey.io/commands/client-unpause/
 func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, options options.RouteOption) (string, error) {
-	result, err := client.executeCommandWithRoute(ctx, C.ClientUnpause, []string{}, options.Route)
+	route := config.Route(config.AllPrimaries)
+	if options.Route != nil {
+		route = options.Route
+	}
+	result, err := client.executeCommandWithRoute(ctx, C.ClientUnpause, []string{}, route)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
