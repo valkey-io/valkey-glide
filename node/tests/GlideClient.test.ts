@@ -2036,6 +2036,7 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
+            // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
             const result = await client.clientReply(ClientReplyMode.ON);
             expect(result).toEqual("OK");
         },

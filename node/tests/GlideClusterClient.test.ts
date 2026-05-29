@@ -238,6 +238,7 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
+            // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
             const result = await client.clientReply(ClientReplyMode.ON);
             expect(result).toEqual("OK");
         },
@@ -250,6 +251,7 @@ describe("GlideClusterClient", () => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
+            // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
             const result = await client.clientReply(ClientReplyMode.ON, {
                 route: "randomNode",
             });
