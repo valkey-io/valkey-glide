@@ -92,6 +92,16 @@ public abstract class Pool<T> implements Closeable {
     }
 
     /**
+     * Returns a broken resource to the pool so it is destroyed instead of reused. Matches core Jedis
+     * {@code Pool#returnBrokenResource} behavior (delegates to Commons Pool invalidate).
+     *
+     * @param resource the pooled resource that must not be reused
+     */
+    public void returnBrokenResource(T resource) {
+        invalidateObject(resource);
+    }
+
+    /**
      * Invalidate a resource in the pool.
      *
      * @param resource the resource to invalidate
