@@ -5181,6 +5181,9 @@ func (b *BaseBatch[T]) MigrateKeys(
 	destinationDB int64,
 	timeout int64,
 ) *T {
+	if len(keys) == 0 {
+		return b.addError("MigrateKeys", errors.New("MigrateKeys: keys must not be empty"))
+	}
 	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout), constants.KeysKeyword}
 	args = append(args, keys...)
 	return b.addCmdAndTypeChecker(C.Migrate, args, reflect.String, false)
@@ -5200,6 +5203,9 @@ func (b *BaseBatch[T]) MigrateKeysWithOptions(
 	timeout int64,
 	migrateOptions options.MigrateOptions,
 ) *T {
+	if len(keys) == 0 {
+		return b.addError("MigrateKeysWithOptions", errors.New("MigrateKeysWithOptions: keys must not be empty"))
+	}
 	optionArgs, err := migrateOptions.ToArgs()
 	if err != nil {
 		return b.addError("MigrateKeysWithOptions", err)

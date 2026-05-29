@@ -9568,6 +9568,11 @@ func (suite *GlideTestSuite) TestMigrateKeys() {
 		client.Set(ctx, key2, "value2")
 		_, err = client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
 		suite.Error(err)
+
+		// Empty keys returns error
+		_, err = client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{}, 0, 1000)
+		suite.Error(err)
+		suite.Contains(err.Error(), "keys must not be empty")
 	})
 }
 
@@ -9590,6 +9595,11 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 		client.Set(ctx, key2, "value2")
 		_, err = client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts)
 		suite.Error(err)
+
+		// Empty keys returns error
+		_, err = client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{}, 0, 1000, *migrateOpts)
+		suite.Error(err)
+		suite.Contains(err.Error(), "keys must not be empty")
 	})
 }
 
