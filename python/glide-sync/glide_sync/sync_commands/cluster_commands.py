@@ -8,6 +8,8 @@ from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
+    ClientReplyMode,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
@@ -1547,3 +1549,73 @@ class ClusterCommands(CoreCommands):
             (list(channels) if channels else []) + [str(timeout_ms)],
         )
         self._execute_command(RequestType.SUnsubscribeBlocking, args)
+
+    def client_pause(
+        self, timeout: int, mode: Optional[ClientPauseMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Pause all clients for the specified timeout.
+
+        See [valkey.io](https://valkey.io/commands/client-pause/) for more details.
+
+        Args:
+            timeout (int): The timeout in milliseconds to pause clients.
+            mode (Optional[ClientPauseMode]): The pause mode to use.
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.client_pause(1000)
+                OK
+            >>> client.client_pause(5000, ClientPauseMode.WRITE)
+                OK
+        """
+        args: List[TEncodable] = [str(timeout)]
+        if mode is not None:
+            args.append(mode.value)
+        return cast(TOK, self._execute_command(RequestType.ClientPause, args, route))
+
+    def client_unpause(self, route: Optional[Route] = None) -> TOK:
+        """
+        Unpause clients that were previously paused by CLIENT PAUSE.
+
+        See [valkey.io](https://valkey.io/commands/client-unpause/) for more details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.client_unpause()
+                OK
+        """
+        return cast(TOK, self._execute_command(RequestType.ClientUnpause, [], route))
+
+    def client_reply(self, mode: ClientReplyMode, route: Optional[Route] = None) -> TOK:
+        """
+        Control the server reply behavior for the current connection.
+
+        See [valkey.io](https://valkey.io/commands/client-reply/) for more details.
+
+        Args:
+            mode (ClientReplyMode): The reply mode.
+            route (Optional[Route]): Routing for the command. Defaults to a random node.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Warning:
+            Because GLIDE uses a multiplexed connection that correlates responses to in-flight
+            requests by order, calling this method with `OFF` or `SKIP` will desynchronize the
+            connection and produce incorrect results for all subsequent commands until the
+            connection is closed and re-established. Only `ON` is safe to use on a normal client.
+
+        Examples:
+            >>> client.client_reply(ClientReplyMode.ON)
+                OK
+        """
+        return cast(TOK, self._execute_command(RequestType.ClientReply, [mode.value], route))
