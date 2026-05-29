@@ -346,7 +346,7 @@ class FlushMode(Enum):
 
     `FLUSHALL` command and `FUNCTION FLUSH` command.
 
-    See [FLUSHAL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
+    See [FLUSHALL](https://valkey.io/commands/flushall/) and [FUNCTION-FLUSH](https://valkey.io/commands/function-flush/)
     for details
 
     SYNC was introduced in version 6.2.0.
@@ -372,6 +372,37 @@ class FunctionRestorePolicy(Enum):
     Appends the restored libraries to the existing libraries, replacing any existing ones in case
     of name collisions. Note that this policy doesn't prevent function name collisions, only libraries.
     """
+
+
+class ClientPauseMode(Enum):
+    """
+    Mode option for the `CLIENT PAUSE` command.
+
+    See [CLIENT PAUSE](https://valkey.io/commands/client-pause/) for details.
+    """
+
+    ALL = "ALL"
+    """ Pause all client commands. """
+
+    WRITE = "WRITE"
+    """ Pause client write commands. """
+
+
+class ClientReplyMode(Enum):
+    """
+    Mode option for the `CLIENT REPLY` command.
+
+    See [CLIENT REPLY](https://valkey.io/commands/client-reply/) for details.
+    """
+
+    ON = "ON"
+    """ Resume normal reply behavior. """
+
+    OFF = "OFF"
+    """ Suppress all replies until `CLIENT REPLY ON` is sent. """
+
+    SKIP = "SKIP"
+    """ Suppress the reply for the next command only. """
 
 
 def _build_sort_args(

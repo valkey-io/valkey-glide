@@ -13,7 +13,7 @@ const (
 	// ClientPauseModeAll pauses all client commands.
 	ClientPauseModeAll ClientPauseMode = "ALL"
 
-	// ClientPauseModeWrite pauses only write commands.
+	// ClientPauseModeWrite pauses client write commands.
 	ClientPauseModeWrite ClientPauseMode = "WRITE"
 )
 

@@ -22,7 +22,7 @@ public enum ClientPauseMode {
     /** Pause all client commands. */
     ALL("ALL"),
 
-    /** Pause only write commands. */
+    /** Pause client write commands. */
     WRITE("WRITE");
 
     private final String valkeyApi;

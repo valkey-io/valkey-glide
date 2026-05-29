@@ -384,7 +384,7 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<String> clientReply(ClientReplyMode mode);
 
     /**
-     * Controls the server reply behavior for the current connection.
+     * Controls the server reply behavior for the current connection.<br>
      * The command will be routed to the nodes defined by <code>route</code>.
      *
      * <p><b>Warning:</b> Because GLIDE uses a multiplexed connection that correlates responses to
