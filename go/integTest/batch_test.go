@@ -715,6 +715,11 @@ func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool
 	batch.ClientGetName()
 	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
 
+	if !isAtomic {
+		batch.Reset()
+		testData = append(testData, CommandTestData{ExpectedResponse: "RESET", TestName: "Reset()"})
+	}
+
 	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
 }
 

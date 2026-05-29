@@ -7307,6 +7307,19 @@ func (b *BaseBatch[T]) ClientGetName() *T {
 	return b.addCmdAndTypeChecker(C.ClientGetName, []string{}, reflect.String, true)
 }
 
+// Resets the connection state.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	Returns "RESET" on success.
+//
+// [valkey.io]: https://valkey.io/commands/reset/
+func (b *BaseBatch[T]) Reset() *T {
+	return b.addCmdAndTypeChecker(C.Reset, []string{}, reflect.String, false)
+}
+
 // Sets the name of the current connection.
 //
 // See [valkey.io] for details.
