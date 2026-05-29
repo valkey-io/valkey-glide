@@ -50,6 +50,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptOptions;
@@ -331,6 +333,47 @@ public class CommandTests {
         String name = regularClient.clientGetName().get();
 
         assertEquals("clientGetName", name);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause(GlideClient regularClient) {
+        String result = regularClient.clientPause(0).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause_with_write_mode(GlideClient regularClient) {
+        String result = regularClient.clientPause(0, ClientPauseMode.WRITE).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause_with_all_mode(GlideClient regularClient) {
+        String result = regularClient.clientPause(0, ClientPauseMode.ALL).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientUnpause(GlideClient regularClient) {
+        String result = regularClient.clientUnpause().get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientReply(GlideClient regularClient) {
+        // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
+        String result = regularClient.clientReply(ClientReplyMode.ON).get();
+        assertEquals(OK, result);
     }
 
     @ParameterizedTest(autoCloseArguments = false)

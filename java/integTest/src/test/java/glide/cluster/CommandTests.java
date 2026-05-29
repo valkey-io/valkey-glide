@@ -61,6 +61,8 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ListDirection;
@@ -594,6 +596,89 @@ public class CommandTests {
         ClusterValue<String> name = clusterClient.clientGetName(ALL_NODES).get();
 
         assertEquals("clientGetName_with_multi_node_route", getFirstEntryFromMultiValue(name));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientPause(0).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause_with_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientPause(0, ALL_PRIMARIES).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause_with_write_mode_no_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientPause(0, ClientPauseMode.WRITE).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause_with_write_mode_and_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientPause(0, ClientPauseMode.WRITE, ALL_PRIMARIES).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause_with_all_mode(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientPause(0, ClientPauseMode.ALL, ALL_PRIMARIES).get();
+        assertEquals(OK, result);
+    }
+
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPause_with_all_mode_and_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientPause(0, ClientPauseMode.ALL, ALL_PRIMARIES).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientUnpause(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientUnpause().get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientUnpause_with_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.clientUnpause(ALL_PRIMARIES).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientReply(GlideClusterClient clusterClient) {
+        // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
+        String result = clusterClient.clientReply(ClientReplyMode.ON).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientReply_with_route(GlideClusterClient clusterClient) {
+        // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
+        String result = clusterClient.clientReply(ClientReplyMode.ON, ALL_PRIMARIES).get();
+        assertEquals(OK, result);
     }
 
     @ParameterizedTest(autoCloseArguments = false)
