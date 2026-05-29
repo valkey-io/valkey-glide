@@ -8981,8 +8981,10 @@ export class BaseClient {
      * console.log(result); // Output: "RESET"
      * ```
      */
-    public async reset(): Promise<string> {
-        return this.createWritePromise(createReset());
+    public async reset(): Promise<"RESET"> {
+        return this.createWritePromise(createReset(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
