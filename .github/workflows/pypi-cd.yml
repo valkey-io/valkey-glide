@@ -445,6 +445,11 @@ jobs:
                   CIBW_ENABLE: ${{ steps.cibw_config.outputs.enable_flags }}
                   MACOSX_DEPLOYMENT_TARGET: "10.12"
 
+            - name: Smoke test wheels
+              run: |
+                  python3 -m venv /tmp/smoke-async && /tmp/smoke-async/bin/pip install --find-links python/glide-async/wheels valkey-glide && /tmp/smoke-async/bin/python -c "from glide import GlideClient"
+                  python3 -m venv /tmp/smoke-sync && /tmp/smoke-sync/bin/pip install --find-links python/glide-sync/wheels valkey-glide-sync && /tmp/smoke-sync/bin/python -c "from glide_sync import GlideClient"
+
             ### UPLOAD WHEELS ###
 
             - name: Upload Python Async client wheels

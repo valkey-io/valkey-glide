@@ -205,6 +205,11 @@ jobs:
                   cd -
                   cp $jedis_src_folder/jedis-bundle.jar jedis-bundle-${{ matrix.host.TARGET }}.jar
 
+            - name: Smoke test native library
+              shell: bash
+              run: |
+                  find java/client/build/resources/main/natives -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -q .
+
             - name: Upload artifacts to publish
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -354,6 +359,13 @@ jobs:
                   ls -ltr
                   cd -
                   cp $src_folder/jedis-bundle.jar jedis-bundle-no-classifier.jar
+
+            - name: Smoke test uber JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  jar xf bundle-uber-jar.jar
+                  jar tf valkey-glide-*.jar | grep -q "natives/.*\.\(so\|dylib\|dll\)"
 
             - name: Upload uber JAR artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

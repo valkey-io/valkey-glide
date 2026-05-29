@@ -130,6 +130,9 @@ jobs:
               run: |
                   mkdir -p $GITHUB_WORKSPACE/ffi/target/release
                   cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
+            - name: Smoke test binary
+              run: |
+                  file ffi/target/release/libglide_ffi.a | grep -q "archive"
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
