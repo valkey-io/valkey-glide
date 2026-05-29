@@ -460,14 +460,17 @@ export class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
      *
+     * Supports multi-key migration via `options.keys`: when provided, `key` is ignored and
+     * the wire format becomes `MIGRATE host port "" db timeout [options] KEYS key1 key2 ...`.
+     *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param key - The key to migrate.
+     * @param key - The key to migrate. Pass `""` when using `options.keys`.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
-     * @param options - Optional migration options.
+     * @param options - Optional migration options. Use `options.keys` for multi-key migration.
      */
     public migrate(
         host: string,

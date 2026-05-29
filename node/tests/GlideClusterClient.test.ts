@@ -1020,6 +1020,20 @@ describe("GlideClusterClient", () => {
                 5000,
             );
             expect(result).toEqual("NOKEY");
+
+            // Multi-key: NOKEY when keys do not exist
+            const key2 = `{migrate}-${getRandomKey()}`;
+            const key3 = `{migrate}-${getRandomKey()}`;
+            const multiResult = await client.migrate(
+                "localhost",
+                cluster.getAddresses()[0][1],
+                "",
+                0,
+                5000,
+                { keys: [key2, key3] },
+            );
+            expect(multiResult).toEqual("NOKEY");
+
             client.close();
         },
         TIMEOUT,
