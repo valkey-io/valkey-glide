@@ -916,6 +916,27 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "migrate test_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const key = getRandomKey();
+            // Non-existent key returns NOKEY
+            const result = await client.migrate(
+                "localhost",
+                cluster.getAddresses()[0][1],
+                key,
+                0,
+                5000,
+            );
+            expect(result).toEqual("NOKEY");
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "select test %p",
         async (protocol) => {
             if (cluster.checkIfServerVersionLessThan("9.0.0")) return;

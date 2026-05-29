@@ -783,6 +783,8 @@ pub struct TestConfiguration {
     pub protocol: ProtocolVersion,
     pub lazy_connect: bool,
     pub client_side_cache: Option<connection_request::ClientSideCache>,
+    /// Skip ACL setup when creating a cluster client (use when ACL is already configured).
+    pub skip_acl_setup: bool,
 }
 
 pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration) -> TestBasics {
@@ -832,7 +834,10 @@ pub(crate) struct TestClientBasics {
     pub(crate) server: BackingServer,
     pub(crate) client: Client,
 }
-async fn create_client(server: &BackingServer, configuration: TestConfiguration) -> Client {
+pub(crate) async fn create_client(
+    server: &BackingServer,
+    configuration: TestConfiguration,
+) -> Client {
     match server {
         BackingServer::Standalone(server) => {
             let connection_addr = server
@@ -918,6 +923,30 @@ pub async fn kill_connection_for_route(
         .send_command(&mut client_kill_cmd, Some(route))
         .await
         .unwrap();
+}
+
+/// Kill all connections on a server using a direct (non-glide) connection.
+/// Useful when the glide client connection is deauthed (e.g. after RESET) and
+/// cannot send commands itself.
+pub async fn kill_connection_via_addr(addr: &ConnectionAddr, password: Option<&str>) {
+    let client = redis::Client::open(redis::ConnectionInfo {
+        addr: addr.clone(),
+        redis: RedisConnectionInfo {
+            password: password.map(|p| p.to_string()),
+            ..Default::default()
+        },
+    })
+    .unwrap();
+    let mut conn = retry(|| async {
+        client
+            .get_multiplexed_async_connection(GlideConnectionOptions::default())
+            .await
+            .ok()
+    })
+    .await;
+    let mut cmd = redis::cmd("CLIENT");
+    cmd.arg("KILL").arg("SKIPME").arg("NO");
+    let _: redis::RedisResult<redis::Value> = conn.send_packed_command(&cmd).await;
 }
 
 pub enum BackingServer {

@@ -3379,6 +3379,58 @@ export function createCopy(
 }
 
 /**
+ * Optional arguments for the {@link BaseClient.migrate} command.
+ */
+export interface MigrateOptions {
+    /** If true, do not remove the key from the source instance. */
+    copy?: boolean;
+    /** If true, replace the existing key on the destination instance. */
+    replace?: boolean;
+    /** Authentication password for the destination instance. */
+    password?: string;
+    /** Authentication username for the destination instance (requires password). */
+    username?: string;
+}
+
+/** @internal */
+export function createMigrate(
+    host: string,
+    port: number,
+    key: GlideString,
+    destinationDB: number,
+    timeout: number,
+    options?: MigrateOptions,
+): command_request.Command {
+    const args: GlideString[] = [
+        host,
+        port.toString(),
+        key,
+        destinationDB.toString(),
+        timeout.toString(),
+    ];
+
+    if (options) {
+        if (options.username !== undefined && options.password === undefined) {
+            throw new Error(
+                "MigrateOptions: 'username' requires 'password' to be set",
+            );
+        }
+
+        if (options.copy) args.push("COPY");
+
+        if (options.replace) args.push("REPLACE");
+
+        if (options.username !== undefined && options.password !== undefined) {
+            args.push("AUTH2", options.username, options.password);
+        } else if (options.password !== undefined) {
+            args.push("AUTH", options.password);
+        }
+    }
+
+    return createCommand(RequestType.Migrate, args);
+}
+
+/**
  * @internal
  */
 export function createMove(
