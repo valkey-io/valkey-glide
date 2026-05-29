@@ -638,7 +638,6 @@ public class CommandTests {
         assertEquals(OK, result);
     }
 
-
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows

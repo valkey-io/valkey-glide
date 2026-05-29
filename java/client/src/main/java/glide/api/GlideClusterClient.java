@@ -406,10 +406,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<String> clientPause(long timeout, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                ClientPause,
-                new String[] {Long.toString(timeout)},
-                route,
-                this::handleStringResponse);
+                ClientPause, new String[] {Long.toString(timeout)}, route, this::handleStringResponse);
     }
 
     @Override
@@ -430,10 +427,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<String> clientUnpause(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                ClientUnpause,
-                new String[0],
-                route,
-                this::handleStringResponse);
+                ClientUnpause, new String[0], route, this::handleStringResponse);
     }
 
     @Override
@@ -445,10 +439,7 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> clientReply(
             @NonNull ClientReplyMode mode, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                ClientReply,
-                new String[] {mode.getValkeyApi()},
-                route,
-                this::handleStringResponse);
+                ClientReply, new String[] {mode.getValkeyApi()}, route, this::handleStringResponse);
     }
 
     @Override

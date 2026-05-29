@@ -225,9 +225,7 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> clientPause(long timeout) {
         return commandManager.submitNewCommand(
-                ClientPause,
-                new String[] {Long.toString(timeout)},
-                this::handleStringResponse);
+                ClientPause, new String[] {Long.toString(timeout)}, this::handleStringResponse);
     }
 
     @Override
@@ -241,17 +239,13 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> clientUnpause() {
         return commandManager.submitNewCommand(
-                ClientUnpause,
-                new String[0],
-                this::handleStringResponse);
+                ClientUnpause, new String[0], this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> clientReply(@NonNull ClientReplyMode mode) {
         return commandManager.submitNewCommand(
-                ClientReply,
-                new String[] {mode.getValkeyApi()},
-                this::handleStringResponse);
+                ClientReply, new String[] {mode.getValkeyApi()}, this::handleStringResponse);
     }
 
     @Override
