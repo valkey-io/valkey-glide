@@ -27,7 +27,6 @@ import {
     RequestError,
     Script,
     convertGlideRecordToRecord,
-    createMigrate,
 } from "../build-ts";
 import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
@@ -828,9 +827,36 @@ describe("GlideClient", () => {
             ).rejects.toThrow();
 
             // Multi-key: empty keys array throws
-            expect(() =>
-                createMigrate("invalid-host", 6379, "", 0, 1000, { keys: [] }),
-            ).toThrow("MigrateOptions: 'keys' must not be empty");
+            await expect(
+                client.migrate(serverHost, serverPort, "", 0, 1000, {
+                    keys: [],
+                }),
+            ).rejects.toThrow("MigrateOptions: 'keys' must not be empty");
+
+            // Non-empty key with keys option throws
+            await expect(
+                client.migrate(serverHost, serverPort, key, 0, 1000, {
+                    keys: [key2],
+                }),
+            ).rejects.toThrow(
+                "MigrateOptions: 'key' must be empty string when 'options.keys' is provided",
+            );
+
+            // Multi-key with single key: NOKEY when key does not exist
+            const key4 = getRandomKey();
+            expect(
+                await client.migrate(serverHost, serverPort, "", 0, 1000, {
+                    keys: [key4],
+                }),
+            ).toEqual("NOKEY");
+
+            // Multi-key with AUTH: error on invalid host
+            await expect(
+                client.migrate("invalid-host", 6379, "", 0, 1000, {
+                    keys: [key2, key3],
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
 
             client.close();
         },

@@ -3455,11 +3455,20 @@ export function createMigrate(
         throw new Error("MigrateOptions: 'keys' must not be empty");
     }
 
-    const keyArg: GlideString = options?.keys !== undefined ? "" : key;
+    if (
+        options?.keys !== undefined &&
+        key !== "" &&
+        (key as Buffer).length !== 0
+    ) {
+        throw new Error(
+            "MigrateOptions: 'key' must be empty string when 'options.keys' is provided",
+        );
+    }
+
     const args: GlideString[] = [
         host,
         port.toString(),
-        keyArg,
+        options?.keys !== undefined ? "" : key,
         destinationDB.toString(),
         timeout.toString(),
     ];
