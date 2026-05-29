@@ -405,3 +405,31 @@ def _build_sort_args(
         args.extend(["STORE", store])
 
     return args
+
+
+@dataclass
+class MigrateOptions:
+    """
+    Optional arguments for the `migrate` command.
+
+    See [valkey.io](https://valkey.io/commands/migrate/) for details.
+    """
+
+    copy: bool = False
+    replace: bool = False
+    password: Optional[str] = None
+    username: Optional[str] = None
+
+    def to_args(self) -> List[TEncodable]:
+        if self.username is not None and self.password is None:
+            raise ValueError("MigrateOptions: 'username' requires 'password' to be set")
+        args: List[TEncodable] = []
+        if self.copy:
+            args.append("COPY")
+        if self.replace:
+            args.append("REPLACE")
+        if self.username is not None and self.password is not None:
+            args.extend(["AUTH2", self.username, self.password])
+        elif self.password is not None:
+            args.extend(["AUTH", self.password])
+        return args

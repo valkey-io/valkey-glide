@@ -600,7 +600,7 @@ impl ResponsePolicy {
             | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
             | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
             | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
-            | b"UNWATCH" | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
+            | b"UNWATCH" | b"WATCH" | b"RESET" => Some(ResponsePolicy::AllSucceeded),
 
             b"KEYS"
             | b"FT._ALIASLIST"
@@ -677,6 +677,7 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"PUBSUB NUMSUB"
         | b"PUBSUB SHARDCHANNELS"
         | b"PUBSUB SHARDNUMSUB"
+        | b"RESET"
         | b"SCRIPT KILL"
         | b"FUNCTION KILL"
         | b"FUNCTION STATS" => RouteBy::AllNodes,
