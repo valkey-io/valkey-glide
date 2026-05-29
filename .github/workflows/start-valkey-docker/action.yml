@@ -9,7 +9,7 @@ description: >
 inputs:
     engine-version:
         description: >
-            Valkey engine version (e.g. 9.1, 8.1).
+            Valkey engine version (e.g. 9.1).
         required: true
 
 runs:
