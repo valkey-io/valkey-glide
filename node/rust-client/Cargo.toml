@@ -19,6 +19,8 @@ napi-derive = "2"
 logger_core = { path = "../../logger_core" }
 bytes = "1"
 num-traits = "0.2"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = { version = "0.6", features = ["disable_initial_exec_tls"] }

@@ -140,6 +140,51 @@ fn set_routed_node_on_span(span: &GlideSpan, address: &str) {
     }
 }
 
+/// Checks if a MOVED redirect is circular (points to the same address we're already connected to).
+///
+/// A circular MOVED can happen when:
+/// 1. Client connects through a DNS endpoint (e.g., cluster.example.com)
+/// 2. MOVED response points back to the same DNS endpoint
+/// 3. The connection may be closed, causing retry to fail on read
+///
+/// In this case, we need to reconnect before retrying to ensure we get
+/// a fresh connection. Without this, the retry write may succeed (to buffer)
+/// but the read will fail with FatalReceiveError, which doesn't trigger retry.
+///
+/// The `resolve_address` parameter allows resolving IP addresses to their canonical
+/// hostname form using the slot map's IP→address table. This handles cases where:
+/// - Connected via hostname but MOVED returns an IP
+/// - Different IP representations of the same machine
+///
+/// Returns `true` if the redirect is circular and a reconnect should be triggered.
+pub(crate) fn is_circular_moved_redirect<F>(
+    redirect_node: Option<(&str, u16)>,
+    current_address: &str,
+    resolve_address: F,
+) -> bool
+where
+    F: Fn(&str) -> String,
+{
+    if let Some((redirect_addr, _slot)) = redirect_node {
+        // Resolve both addresses to canonical form for comparison
+        let resolved_redirect = resolve_address(redirect_addr);
+        let resolved_current = resolve_address(current_address);
+
+        if resolved_redirect == resolved_current {
+            log_debug_lazy!(
+                "cluster",
+                format!(
+                    "Detected circular MOVED redirect: {} -> {} (resolved: {} == {}). \
+                     Reconnecting before retry to avoid potential connection issues.",
+                    current_address, redirect_addr, resolved_current, resolved_redirect
+                )
+            );
+            return true;
+        }
+    }
+    false
+}
+
 /// This represents an async Cluster connection. It stores the
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
@@ -1152,6 +1197,7 @@ pin_project! {
     struct Request<C> {
         retry_params: RetryParams,
         request: Option<PendingRequest<C>>,
+        core: Arc<InnerCore<C>>,
         #[pin]
         future: RequestState<BoxFuture<'static, OperationResult>>,
     }
@@ -1184,7 +1230,10 @@ enum Next<C> {
     Done,
 }
 
-impl<C> Future for Request<C> {
+impl<C> Future for Request<C>
+where
+    C: ConnectionLike + Connect + Clone + Send + Sync + 'static,
+{
     type Output = Next<C>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
@@ -1343,9 +1392,25 @@ impl<C> Future for Request<C> {
                     RetryMethod::MovedRedirect => {
                         let mut request = this.request.take().unwrap();
                         let redirect_node = err.redirect_node();
+                        let core = this.core.clone();
+
+                        // Check for circular MOVED and trigger reconnect if detected
+                        // Use resolve_address to handle hostname vs IP mismatches
+                        if is_circular_moved_redirect(redirect_node, &address, |addr| {
+                            ClusterConnInner::resolve_address(&core, addr)
+                        }) {
+                            // Reset routing and reconnect with retry
+                            request.info.reset_routing();
+                            return Next::Reconnect {
+                                request: Some(request),
+                                target: address,
+                            }
+                            .into();
+                        }
+
+                        // Normal MOVED handling: set redirect and refresh slots
                         request.info.set_redirect(
-                            err.redirect_node()
-                                .map(|(node, _slot)| Redirect::Moved(node.to_string())),
+                            redirect_node.map(|(node, _slot)| Redirect::Moved(node.to_string())),
                         );
                         Next::RefreshSlots {
                             request: Some(request),
@@ -2740,14 +2805,20 @@ where
     /// Resolution order:
     /// 1. Reverse IP lookup: parse the host as an IP and look it up in the slot map's
     ///    IP→address table (built from DNS resolution during CLUSTER SLOTS refresh).
+    ///    If found, replace only the host portion, preserving the original port.
     /// 2. Raw address fallback: return the original address unchanged.
     pub(crate) fn resolve_address(inner: &Arc<InnerCore<C>>, address: &str) -> String {
         let conn_lock = inner.conn_lock.read();
 
         // Step 1: Reverse IP lookup via slot map.
-        if let Some((host, _port)) = address.rsplit_once(':') {
+        if let Some((host, port)) = address.rsplit_once(':') {
             if let Ok(ip) = host.parse::<IpAddr>() {
                 if let Some(node_addr) = conn_lock.slot_map.node_address_for_ip(ip) {
+                    // Extract just the hostname from the resolved address and combine with original port
+                    if let Some((resolved_host, _resolved_port)) = node_addr.rsplit_once(':') {
+                        return format!("{}:{}", resolved_host, port);
+                    }
+                    // Fallback: if resolved address has no port (shouldn't happen), return as-is
                     return (*node_addr).clone();
                 }
             }
@@ -3650,6 +3721,7 @@ where
             self.in_flight_requests.push(Box::pin(Request {
                 retry_params: retry_params.clone(),
                 request: Some(request),
+                core: self.inner.clone(),
                 future: RequestState::Future { future },
             }));
         }
@@ -3667,6 +3739,7 @@ where
                     self.in_flight_requests.push(Box::pin(Request {
                         retry_params: retry_params.clone(),
                         request: Some(request),
+                        core: self.inner.clone(),
                         future: RequestState::Future {
                             future: Box::pin(future),
                         },
@@ -3684,6 +3757,7 @@ where
                     self.in_flight_requests.push(Box::pin(Request {
                         retry_params: retry_params.clone(),
                         request: Some(request),
+                        core: self.inner.clone(),
                         future: RequestState::Future {
                             future: Box::pin(future),
                         },
@@ -3729,6 +3803,7 @@ where
                         self.in_flight_requests.push(Box::pin(Request {
                             retry_params,
                             request,
+                            core: self.inner.clone(),
                             future,
                         }));
                     }
@@ -4774,5 +4849,89 @@ mod parse_node_address_tests {
     fn port_only() {
         // ":6379" → host="", port=6379
         assert_eq!(parse_node_address(":6379"), Some(("", 6379)));
+    }
+}
+
+#[cfg(test)]
+mod is_circular_moved_redirect_tests {
+    use super::is_circular_moved_redirect;
+
+    // Identity resolver for simple tests (no address translation)
+    fn identity_resolver(addr: &str) -> String {
+        addr.to_string()
+    }
+
+    #[test]
+    fn exact_match_is_circular() {
+        assert!(is_circular_moved_redirect(
+            Some(("127.0.0.1:6379", 5000)),
+            "127.0.0.1:6379",
+            identity_resolver
+        ));
+    }
+
+    #[test]
+    fn different_port_is_not_circular() {
+        assert!(!is_circular_moved_redirect(
+            Some(("127.0.0.1:6379", 5000)),
+            "127.0.0.1:6380",
+            identity_resolver
+        ));
+    }
+
+    #[test]
+    fn different_host_is_not_circular() {
+        assert!(!is_circular_moved_redirect(
+            Some(("10.0.0.1:6379", 5000)),
+            "10.0.0.2:6379",
+            identity_resolver
+        ));
+    }
+
+    #[test]
+    fn none_redirect_is_not_circular() {
+        assert!(!is_circular_moved_redirect(
+            None,
+            "127.0.0.1:6379",
+            identity_resolver
+        ));
+    }
+
+    #[test]
+    fn ip_vs_hostname_should_detect_circular() {
+        // Simulate a resolver that maps 127.0.0.1:6379 to localhost:6379
+        // This is what the slot map's IP→address table would do
+        fn localhost_resolver(addr: &str) -> String {
+            if addr == "127.0.0.1:6379" {
+                "localhost:6379".to_string()
+            } else {
+                addr.to_string()
+            }
+        }
+
+        // Connected via "localhost:6379" but MOVED returns "127.0.0.1:6379"
+        // With the resolver, both should resolve to "localhost:6379"
+        assert!(
+            is_circular_moved_redirect(
+                Some(("127.0.0.1:6379", 5000)),
+                "localhost:6379",
+                localhost_resolver
+            ),
+            "Should detect circular redirect when MOVED returns IP but connected via hostname"
+        );
+    }
+
+    #[test]
+    fn ip_vs_hostname_without_resolver_does_not_detect() {
+        // Without a proper resolver, IP vs hostname won't match
+        // This demonstrates the limitation when no IP mapping is available
+        assert!(
+            !is_circular_moved_redirect(
+                Some(("127.0.0.1:6379", 5000)),
+                "localhost:6379",
+                identity_resolver
+            ),
+            "Without resolver, IP vs hostname won't be detected as circular"
+        );
     }
 }

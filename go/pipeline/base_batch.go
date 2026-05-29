@@ -5122,6 +5122,53 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 	}, optionArgs...), reflect.Bool, false)
 }
 
+// Migrate atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *BaseBatch[T]) Migrate(
+	host string,
+	port int64,
+	key string,
+	destinationDB int64,
+	timeout int64,
+) *T {
+	return b.addCmdAndTypeChecker(
+		C.Migrate,
+		[]string{host, utils.IntToString(port), key, utils.IntToString(destinationDB), utils.IntToString(timeout)},
+		reflect.String,
+		false,
+	)
+}
+
+// MigrateWithOptions atomically transfers a key from a source Valkey instance to a destination Valkey instance
+// with additional options.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *BaseBatch[T]) MigrateWithOptions(
+	host string,
+	port int64,
+	key string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) *T {
+	optionArgs, err := migrateOptions.ToArgs()
+	if err != nil {
+		return b.addError("MigrateWithOptions", err)
+	}
+	args := []string{host, utils.IntToString(port), key, utils.IntToString(destinationDB), utils.IntToString(timeout)}
+	return b.addCmdAndTypeChecker(
+		C.Migrate,
+		append(args, optionArgs...),
+		reflect.String,
+		false,
+	)
+}
+
 // Returns stream entries matching a given range of IDs.
 //
 // See [valkey.io] for details.

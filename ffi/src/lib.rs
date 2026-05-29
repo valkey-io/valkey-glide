@@ -328,6 +328,7 @@ pub type PubSubCallback = unsafe extern "C-unwind" fn(
 /// * `resolved_host_len` must be a valid pointer to a writable `usize`.
 /// * The callback must write the resolved host into `resolved_host_buf` and set `resolved_host_len`.
 pub type AddressResolverCallback = unsafe extern "C-unwind" fn(
+    client_id: usize,
     host: *const u8,
     host_len: usize,
     port: u16,
@@ -339,6 +340,7 @@ pub type AddressResolverCallback = unsafe extern "C-unwind" fn(
 /// A wrapper around an FFI address resolver callback that implements the `AddressResolver` trait.
 struct FFIAddressResolver {
     callback: AddressResolverCallback,
+    client_id: usize,
 }
 
 // SAFETY: The callback is a C function pointer that is safe to send across threads.
@@ -359,6 +361,7 @@ impl redis::AddressResolver for FFIAddressResolver {
 
         let resolved_port = unsafe {
             (self.callback)(
+                self.client_id,
                 host.as_ptr(),
                 host.len(),
                 port,
@@ -970,6 +973,7 @@ fn create_client_internal(
     client_type: ClientType,
     pubsub_callback: Option<PubSubCallback>,
     address_resolver: Option<AddressResolverCallback>,
+    client_id: usize,
 ) -> Result<*const ClientAdapter, String> {
     let request = connection_request::ConnectionRequest::parse_from_bytes(connection_request_bytes)
         .map_err(|err| err.to_string())?;
@@ -1034,6 +1038,7 @@ fn create_client_internal(
         if let Some(resolver_callback) = address_resolver {
             connection_request.address_resolver = Some(Arc::new(FFIAddressResolver {
                 callback: resolver_callback,
+                client_id,
             }));
         }
 
@@ -1107,6 +1112,7 @@ pub unsafe extern "C-unwind" fn create_client(
     client_type: *const ClientType,
     pubsub_callback: PubSubCallback,
     address_resolver: AddressResolverCallback,
+    client_id: usize,
 ) -> *const ConnectionResponse {
     assert!(!connection_request_bytes.is_null());
     let request_bytes =
@@ -1132,6 +1138,7 @@ pub unsafe extern "C-unwind" fn create_client(
         client_type.clone(),
         callback_opt,
         resolver_opt,
+        client_id,
     ) {
         Err(err) => ConnectionResponse {
             conn_ptr: std::ptr::null(),
@@ -1310,7 +1317,8 @@ pub unsafe extern "C-unwind" fn create_client_from_uri(
                     ),
                 },
                 Ok(bytes) => {
-                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None) {
+                    match create_client_internal(&bytes, client_type.clone(), callback_opt, None, 0)
+                    {
                         Err(err) => ConnectionResponse {
                             conn_ptr: std::ptr::null(),
                             connection_error_message: CString::into_raw(

@@ -214,6 +214,21 @@ public class OpenTelemetryTests {
         teardownOtelTest();
     }
 
+    /** Runs GC repeatedly until memory usage stabilizes (less than 5% change between iterations). */
+    private static long getStableMemory() throws InterruptedException {
+        long prev = Long.MAX_VALUE;
+        for (int i = 0; i < 10; i++) {
+            System.gc();
+            Thread.sleep(10);
+            long current = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+            if (Math.abs(prev - current) < prev * 0.05) {
+                return current;
+            }
+            prev = current;
+        }
+        return prev;
+    }
+
     private static void teardownOtelTest() {
         // Clean up OpenTelemetry files
         File tracesFile = new File(VALID_ENDPOINT_TRACES);
@@ -231,14 +246,12 @@ public class OpenTelemetryTests {
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanMemoryLeak(ProtocolVersion protocol) {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
+        // Create client before measuring memory so one-time initialization cost is excluded
         client =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
                         .get();
+
+        long startMemory = getStableMemory();
 
         // Execute a series of commands sequentially
         for (int i = 0; i < 100; i++) {
@@ -247,9 +260,7 @@ public class OpenTelemetryTests {
             client.get(key).get();
         }
 
-        // Force GC and check memory
-        System.gc();
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long endMemory = getStableMemory();
 
         // Allow 10% growth
         assertTrue(
@@ -354,14 +365,12 @@ public class OpenTelemetryTests {
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
+        // Create client before measuring memory so one-time initialization cost is excluded
         client =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
                         .get();
+
+        long startMemory = getStableMemory();
 
         ClusterBatch batch = new ClusterBatch(true);
 
@@ -374,10 +383,7 @@ public class OpenTelemetryTests {
         assertEquals("OK", response[0]);
         assertTrue((Long) response[1] >= 1);
 
-        // Force GC and check memory
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long endMemory = getStableMemory();
 
         // Allow 10% growth
         assertTrue(
@@ -418,13 +424,12 @@ public class OpenTelemetryTests {
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanBatchFile(ProtocolVersion protocol) {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        // Create client before measuring memory so one-time initialization cost is excluded
         client =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
                         .get();
+
+        long startMemory = getStableMemory();
 
         ClusterBatch batch = new ClusterBatch(true);
 
@@ -447,10 +452,7 @@ public class OpenTelemetryTests {
         assertTrue(spanData.spanNames.contains("Batch"));
         assertTrue(spanData.spanNames.contains("send_batch"));
 
-        // Force GC and check memory
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long endMemory = getStableMemory();
 
         // Allow 10% growth
         assertTrue(
@@ -461,15 +463,13 @@ public class OpenTelemetryTests {
     @Test
     @SneakyThrows
     public void testAutomaticSpanLifecycle() {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
+        // Create client before measuring memory so one-time initialization cost is excluded
         client =
                 GlideClusterClient.createClient(
                                 commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
                         .get();
+
+        long startMemory = getStableMemory();
 
         // Execute multiple commands - each should automatically create and clean up its span
         client.set("test_key1", "value1").get();
@@ -477,10 +477,7 @@ public class OpenTelemetryTests {
         client.set("test_key2", "value2").get();
         client.get("test_key2").get();
 
-        // Force GC again to clean up
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long endMemory = getStableMemory();
 
         // Allow small fluctuations
         assertTrue(
@@ -491,15 +488,13 @@ public class OpenTelemetryTests {
     @Test
     @SneakyThrows
     public void testConcurrentCommandsSpanLifecycle() {
-        // Force garbage collection if available
-        System.gc();
-
-        long startMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-
+        // Create client before measuring memory so one-time initialization cost is excluded
         client =
                 GlideClusterClient.createClient(
                                 commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
                         .get();
+
+        long startMemory = getStableMemory();
 
         // Execute multiple concurrent commands
         List<java.util.concurrent.CompletableFuture<?>> commands =
@@ -516,10 +511,7 @@ public class OpenTelemetryTests {
             command.get();
         }
 
-        // Force GC again to clean up
-        System.gc();
-
-        long endMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long endMemory = getStableMemory();
 
         // Allow small fluctuations
         assertTrue(
