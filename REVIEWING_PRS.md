@@ -57,6 +57,8 @@ The original commenter is responsible for resolving their own review comments. T
 
 This practice keeps the review process accountable and prevents feedback from being dismissed without acknowledgment.
 
+**Exception — stale threads:** If the original commenter has not responded after a reasonable period of time, a maintainer or the PR author may resolve the thread to keep the review moving forward.
+
 ## Stale PR Policy
 
 The repository uses an automated [stale bot](.github/workflows/stale.yml) to manage inactive pull requests:
