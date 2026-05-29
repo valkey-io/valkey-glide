@@ -7791,6 +7791,92 @@ func (client *baseClient) MigrateWithOptions(
 	return handleStringResponse(result)
 }
 
+// Atomically transfers the specified keys from a source Valkey instance to a destination Valkey instance.
+// On success, the keys are deleted from the source.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx           - The context for controlling the command execution.
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	keys          - The keys to migrate. Must not be empty.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) MigrateKeys(
+	ctx context.Context,
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+) (string, error) {
+	if len(keys) == 0 {
+		return models.DefaultStringResponse, errors.New("MigrateKeys: keys must not be empty")
+	}
+	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout), constants.KeysKeyword}
+	args = append(args, keys...)
+	result, err := client.executeCommand(ctx, C.Migrate, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Atomically transfers the specified keys from a source Valkey instance to a destination Valkey instance
+// with additional options. On success, the keys are deleted from the source unless COPY is set.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx            - The context for controlling the command execution.
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	keys           - The keys to migrate. Must not be empty.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) MigrateKeysWithOptions(
+	ctx context.Context,
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) (string, error) {
+	if len(keys) == 0 {
+		return models.DefaultStringResponse, errors.New("MigrateKeysWithOptions: keys must not be empty")
+	}
+	optionArgs, err := migrateOptions.ToArgs()
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
+	args = append(args, optionArgs...)
+	args = append(args, constants.KeysKeyword)
+	args = append(args, keys...)
+	result, err := client.executeCommand(ctx, C.Migrate, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Returns stream entries matching a given range of IDs.
 //
 // See [valkey.io] for details.
