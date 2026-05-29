@@ -204,6 +204,34 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPause with WRITE mode and allPrimaries route returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.clientPause(10, ClientPauseMode.WRITE, {
+                route: "allPrimaries",
+            });
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPause with ALL mode and allPrimaries route returns OK_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const result = await client.clientPause(10, ClientPauseMode.ALL, {
+                route: "allPrimaries",
+            });
+            expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clientUnpause returns OK_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
