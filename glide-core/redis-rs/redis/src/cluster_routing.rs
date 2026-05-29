@@ -595,12 +595,35 @@ impl ResponsePolicy {
 
             b"WAITAOF" => Some(ResponsePolicy::AggregateArray(ArrayAggregateOp::Min)),
 
-            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT SETNAME"
-            | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
-            | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
-            | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
-            | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
-            | b"UNWATCH" | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
+            #[rustfmt::skip]
+            b"ACL DELUSER"
+            | b"ACL SAVE"
+            | b"ACL SETUSER"
+            | b"AUTH"
+            | b"CLIENT PAUSE"
+            | b"CLIENT REPLY"
+            | b"CLIENT SETINFO"
+            | b"CLIENT SETNAME"
+            | b"CLIENT UNPAUSE"
+            | b"CONFIG RESETSTAT"
+            | b"CONFIG REWRITE"
+            | b"CONFIG SET"
+            | b"FLUSHALL"
+            | b"FLUSHDB"
+            | b"FUNCTION DELETE"
+            | b"FUNCTION FLUSH"
+            | b"FUNCTION LOAD"
+            | b"FUNCTION RESTORE"
+            | b"JSON.MSET"
+            | b"MEMORY PURGE"
+            | b"MSET"
+            | b"PING"
+            | b"SCRIPT FLUSH"
+            | b"SCRIPT LOAD"
+            | b"SELECT"
+            | b"SLOWLOG RESET"
+            | b"UNWATCH"
+            | b"WATCH" => Some(ResponsePolicy::AllSucceeded),
 
             b"KEYS"
             | b"FT._ALIASLIST"
