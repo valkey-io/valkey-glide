@@ -47,6 +47,16 @@ The repository uses two merge strategies depending on the branch context:
 
 Most contributor PRs target `main` from a feature branch, so squash and merge is the typical path. The maintainer merging the PR will select the appropriate strategy.
 
+## Resolving Review Comments
+
+The original commenter is responsible for resolving their own review comments. This ensures the person who raised the feedback can verify that it has been adequately addressed or responded to before the conversation is marked as resolved.
+
+- **Do not resolve someone else's comment.** Only the person who left the feedback should mark it as resolved.
+- **If the feedback has been addressed,** the original commenter should verify the change and resolve the thread.
+- **If the contributor disagrees,** the original commenter should resolve the thread once the discussion has reached a conclusion — whether that means the suggestion was adopted, an alternative was agreed upon, or the commenter is satisfied with the explanation provided.
+
+This practice keeps the review process accountable and prevents feedback from being dismissed without acknowledgment.
+
 ## Stale PR Policy
 
 The repository uses an automated [stale bot](.github/workflows/stale.yml) to manage inactive pull requests:
