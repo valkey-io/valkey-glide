@@ -46,6 +46,7 @@ func ExampleClient_ClientUnpause() {
 
 func ExampleClient_ClientReply() {
 	var client *Client = getExampleClient()
+	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
 	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)

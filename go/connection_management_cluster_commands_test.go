@@ -191,6 +191,7 @@ func ExampleClusterClient_ClientUnpauseWithOptions() {
 
 func ExampleClusterClient_ClientReply() {
 	var client *ClusterClient = getExampleClusterClient()
+	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
 	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -202,6 +203,7 @@ func ExampleClusterClient_ClientReply() {
 
 func ExampleClusterClient_ClientReplyWithOptions() {
 	var client *ClusterClient = getExampleClusterClient()
+	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
 	opts := options.RouteOption{Route: config.AllPrimaries}
 	result, err := client.ClientReplyWithOptions(context.Background(), options.ClientReplyModeOn, opts)
 	if err != nil {

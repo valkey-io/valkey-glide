@@ -1045,7 +1045,7 @@ class StandaloneCommands(CoreCommands):
 
     async def client_reply(self, mode: ClientReplyMode) -> TOK:
         """
-        Control the server reply behavior for the current connection.
+        Controls the server reply behavior for the current connection.
 
         See [valkey.io](https://valkey.io/commands/client-reply/) for more details.
 

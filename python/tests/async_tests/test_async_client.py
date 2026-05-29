@@ -9999,6 +9999,10 @@ class TestCommands:
         result = await glide_client.client_pause(0, ClientPauseMode.WRITE)
         assert result == OK
 
+        # Test CLIENT PAUSE with ALL mode
+        result = await glide_client.client_pause(0, ClientPauseMode.ALL)
+        assert result == OK
+
         # Test cluster-specific routing
         if isinstance(glide_client, GlideClusterClient):
             result = await glide_client.client_pause(0, route=AllPrimaries())
@@ -10006,6 +10010,11 @@ class TestCommands:
 
             result = await glide_client.client_pause(
                 0, ClientPauseMode.WRITE, route=AllPrimaries()
+            )
+            assert result == OK
+
+            result = await glide_client.client_pause(
+                0, ClientPauseMode.ALL, route=AllPrimaries()
             )
             assert result == OK
 
