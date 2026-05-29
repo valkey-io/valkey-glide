@@ -6995,20 +6995,25 @@ class CoreCommands(Protocol):
         options: Optional[MigrateOptions] = None,
     ) -> str:
         """
-        Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+        Atomically transfers a key or multiple keys from a source Valkey instance to a destination
+        Valkey instance.
 
         See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        When migrating multiple keys, set ``key`` to ``""`` and provide the keys via
+        ``MigrateOptions.keys``.
 
         Args:
             host (str): The host of the destination Valkey instance.
             port (int): The port of the destination Valkey instance.
-            key (TEncodable): The key to migrate.
+            key (TEncodable): The key to migrate. Use ``""`` when migrating multiple keys via
+                ``MigrateOptions.keys``.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
             options (Optional[MigrateOptions]): Optional migration options.
 
         Returns:
-            str: "OK" on success, or "NOKEY" if the key does not exist.
+            str: "OK" on success, or "NOKEY" if no keys were found.
 
         Examples:
             >>> await client.set("mykey", "myvalue")
@@ -7017,6 +7022,15 @@ class CoreCommands(Protocol):
             >>> await client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
                 "NOKEY"
         """
+        if (
+            options is not None
+            and options.keys is not None
+            and key != ""
+            and key != b""
+        ):
+            raise ValueError(
+                "migrate: 'key' must be empty string when 'options.keys' is provided"
+            )
         args: List[TEncodable] = [
             host,
             str(port),

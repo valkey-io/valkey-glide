@@ -9479,6 +9479,26 @@ class TestCommands:
         with pytest.raises(ValueError):
             MigrateOptions(username="user").to_args()
 
+        # Multi-key: error on invalid host with existing keys
+        key2 = get_random_string(10)
+        key3 = get_random_string(10)
+        glide_sync_client.set(key2, "value2")
+        glide_sync_client.set(key3, "value3")
+        with pytest.raises(RequestError):
+            glide_sync_client.migrate(
+                "invalid-host", 6379, "", 0, 5000, MigrateOptions(keys=[key2, key3])
+            )
+
+        # Multi-key: error when key is non-empty with keys option
+        with pytest.raises(ValueError):
+            glide_sync_client.migrate(
+                "invalid-host", 6379, key, 0, 5000, MigrateOptions(keys=[key2])
+            )
+
+        # Multi-key: empty keys list raises ValueError
+        with pytest.raises(ValueError):
+            MigrateOptions(keys=[]).to_args()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_wait(self, glide_sync_client: TGlideClient):

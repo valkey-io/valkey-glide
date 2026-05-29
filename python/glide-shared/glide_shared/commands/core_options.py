@@ -433,10 +433,13 @@ class MigrateOptions:
     replace: bool = False
     password: Optional[str] = None
     username: Optional[str] = None
+    keys: Optional[List[TEncodable]] = None
 
     def to_args(self) -> List[TEncodable]:
         if self.username is not None and self.password is None:
             raise ValueError("MigrateOptions: 'username' requires 'password' to be set")
+        if self.keys is not None and len(self.keys) == 0:
+            raise ValueError("MigrateOptions: 'keys' must not be empty")
         args: List[TEncodable] = []
         if self.copy:
             args.append("COPY")
@@ -446,4 +449,7 @@ class MigrateOptions:
             args.extend(["AUTH2", self.username, self.password])
         elif self.password is not None:
             args.extend(["AUTH", self.password])
+        if self.keys is not None:
+            args.append("KEYS")
+            args.extend(self.keys)
         return args

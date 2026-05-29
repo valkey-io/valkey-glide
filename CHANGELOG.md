@@ -23,6 +23,7 @@
 * Core/FFI: Add `MonitorClient` for the MONITOR command ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
 * Node: Add RESET command support ([#5945](https://github.com/valkey-io/valkey-glide/pull/5945))
 * Python: Add RESET command support ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
+* Python: Add `MIGRATE KEYS` (multi-key) variant — supports migrating multiple keys atomically via `keys` field in `MigrateOptions`; uses `KEYS key [key ...]` syntax ([#XXXX](https://github.com/valkey-io/valkey-glide/pull/XXXX))
 * Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
 * Core: Phase 2 client-side caching ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
 * Core: Add RESET command support ([#5959](https://github.com/valkey-io/valkey-glide/pull/5959))
