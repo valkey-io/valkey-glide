@@ -22,6 +22,7 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 
 use super::boxed_sleep;
+use super::is_circular_moved_redirect;
 use super::testing::RefreshConnectionType;
 use super::CmdArg;
 use super::PendingRequest;
@@ -363,9 +364,9 @@ where
 /// * `pipeline_map` - A map of node pipelines where the commands are grouped by their corresponding nodes.
 /// * `core` - The core object that provides access to connection locks and other resources.
 /// * `retry` - The retry counter.
-/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
 ///
 /// # Returns
 ///
@@ -563,9 +564,9 @@ type RetryMap = HashMap<RetryMethod, Vec<RetryEntry>>;
 ///   `RedisResult<Response>` or a `RecvError`.
 /// - `addresses_and_indices`: A collection of pairs where each pair associates a node address with the indices
 ///   of commands in the pipeline that were sent to that node.
-/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
 ///
 /// # Returns
 ///
@@ -751,9 +752,9 @@ fn update_retry_map(
 /// * `pipeline` - A reference to the original pipeline containing the commands.
 /// * `core` - The core object that provides access to connection locks and other resources.
 /// * `response_policies` - A HashMap of routing info and response policies to the pipeline commands.
-/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
 pub(crate) async fn process_and_retry_pipeline_responses<C>(
     mut responses: Vec<Result<RedisResult<Response>, RecvError>>,
     mut addresses_and_indices: AddressAndIndices,
@@ -833,9 +834,9 @@ where
 /// * `retry` - The retry counter.
 /// * `pipeline_responses` - A mutable reference to the collection of pipeline responses.
 /// * `response_policies` - A HashMap of routing info and response policies to the pipeline commands.
-/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.  
-///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).  
-///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).  
+/// - `pipeline_retry_strategy`: Configures retry behavior for pipeline commands.
+///   - `retry_server_error`: If `true`, retries commands on server errors (may cause reordering).
+///   - `retry_connection_error`: If `true`, retries on connection errors (may lead to duplicate executions).
 ///
 /// # Returns
 ///
@@ -1040,6 +1041,9 @@ where
 /// This function processes the retry map entries that indicate a redirection error (e.g., MOVED or ASK).
 /// It attempts to obtain a new connection based on the redirection information and reassigns the command
 /// to the appropriate node pipeline for execution.
+///
+/// For circular MOVED redirects (where the redirect points to the same address), this function
+/// triggers a reconnect to get a fresh connection before retrying.
 async fn handle_redirect_logic<C>(
     retry_method: RetryMethod,
     core: Core<C>,
@@ -1052,7 +1056,44 @@ async fn handle_redirect_logic<C>(
 where
     C: Clone + ConnectionLike + Connect + Send + Sync + 'static,
 {
-    for (indices, address, mut error) in indices_addresses_and_error {
+    // Separate circular MOVED redirects from normal redirects
+    // Circular MOVED needs reconnect handling, not normal redirect handling
+    let mut circular_moved_entries: Vec<((usize, Option<usize>), String, ServerError)> = Vec::new();
+    let mut normal_redirect_entries: Vec<((usize, Option<usize>), String, ServerError)> =
+        Vec::new();
+
+    for (indices, address, error) in indices_addresses_and_error {
+        let redis_error: RedisError = error.clone().into();
+
+        // Check for circular MOVED redirect
+        // Use resolve_address to handle hostname vs IP mismatches
+        if matches!(retry_method, RetryMethod::MovedRedirect)
+            && is_circular_moved_redirect(redis_error.redirect_node(), &address, |addr| {
+                ClusterConnInner::resolve_address(&core, addr)
+            })
+        {
+            circular_moved_entries.push((indices, address, error));
+        } else {
+            normal_redirect_entries.push((indices, address, error));
+        }
+    }
+
+    // Handle circular MOVED redirects by triggering reconnect
+    if !circular_moved_entries.is_empty() {
+        handle_reconnect_logic(
+            circular_moved_entries,
+            core.clone(),
+            pipeline,
+            pipeline_responses,
+            true, // should_retry = true, we want to retry after reconnect
+            pipeline_map,
+            response_policies,
+        )
+        .await?;
+    }
+
+    // Handle normal redirects
+    for (indices, address, mut error) in normal_redirect_entries {
         // Convert the ServerError to a RedisError and try to extract redirect info.
         let redis_error: RedisError = error.clone().into();
         let (index, inner_index) = indices;

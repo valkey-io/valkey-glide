@@ -188,6 +188,7 @@ class _GlideFFI:
             );
 
             typedef uint16_t (*AddressResolverCallback)(
+                uintptr_t client_id,
                 const uint8_t* host,
                 size_t host_len,
                 uint16_t port,
@@ -217,7 +218,8 @@ class _GlideFFI:
                 size_t connection_request_len,
                 const ClientType* client_type,
                 PubSubCallback pubsub_callback,
-                AddressResolverCallback address_resolver
+                AddressResolverCallback address_resolver,
+                uintptr_t client_id
             );
             void close_client(const void* client_adapter_ptr);
             void free_connection_response(ConnectionResponse* connection_response_ptr);

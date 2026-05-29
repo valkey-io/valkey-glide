@@ -56,6 +56,7 @@ import {
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MigrateOptions,
     OpenTelemetry,
     RangeByIndex,
     RangeByLex,
@@ -70,6 +71,8 @@ import {
     SetOptions,
     SortOptions,
     StartSocketConnection,
+    registerAddressResolver,
+    removeAddressResolver,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -164,6 +167,7 @@ import {
     createLeakedOtelSpan,
     createOtelSpanWithTraceContext,
     createMGet,
+    createMigrate,
     createMSet,
     createMSetNX,
     createMove,
@@ -932,6 +936,37 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientSideCache?: ClientSideCache;
+
+    /**
+     * Optional callback for resolving server addresses before connection.
+     *
+     * When provided, this callback will be invoked for each configured address during connection
+     * establishment and during cluster topology refreshes. The callback receives the configured
+     * host and port, and should return a tuple `[resolvedHost, resolvedPort]` with the actual
+     * address to use for the connection.
+     *
+     * Use cases:
+     * - Custom DNS resolution for service discovery
+     * - Address translation for proxy setups
+     * - Dynamic endpoint resolution for cloud environments
+     *
+     * If the resolver throws an exception or returns an invalid value, the original address
+     * is used as a fallback.
+     *
+     * @example
+     * ```typescript
+     * const config: BaseClientConfiguration = {
+     *   addresses: [{ host: "internal-service", port: 9999 }],
+     *   addressResolver: (host, port) => {
+     *     if (host === "internal-service") {
+     *       return ["10.0.0.5", 6379];
+     *     }
+     *     return [host, port];
+     *   },
+     * };
+     * ```
+     */
+    addressResolver?: (host: string, port: number) => [string, number];
 }
 
 /**
@@ -1122,6 +1157,7 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
     private config: BaseClientConfiguration | undefined;
+    private addressResolverKey: string | undefined;
 
     protected configurePubsub(
         options: GlideClusterClientConfiguration | GlideClientConfiguration,
@@ -2408,6 +2444,43 @@ export class BaseClient {
     ): Promise<boolean> {
         return this.createWritePromise(
             createCopy(source, destination, options),
+        );
+    }
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+     * Once the key is successfully transferred, it is deleted from the source instance.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns "OK" on success, or "NOKEY" if the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
+     * ```
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // Output: "OK" - "mykey" was copied to the destination, replacing any existing key.
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString,
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
         );
     }
 
@@ -9435,15 +9508,37 @@ export class BaseClient {
      */
     protected connectToServer(options: BaseClientConfiguration): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Register address resolver in the global registry before sending
+            // the connection request, so the socket listener can pick it up.
+            if (options.addressResolver) {
+                this.addressResolverKey = registerAddressResolver(
+                    options.addressResolver,
+                );
+            }
+
             this.promiseCallbackFunctions[0] = [
                 resolve,
-                reject,
+                (err: unknown) => {
+                    // Clean up the resolver from the registry if connection fails
+                    if (this.addressResolverKey) {
+                        removeAddressResolver(this.addressResolverKey);
+                        this.addressResolverKey = undefined;
+                    }
+
+                    reject(err);
+                },
                 options?.defaultDecoder,
             ];
 
-            const message = connection_request.ConnectionRequest.create(
-                this.createClientRequest(options),
-            );
+            const request = this.createClientRequest(options);
+
+            // Set the address resolver key in the protobuf request
+            if (this.addressResolverKey) {
+                request.addressResolverKey = this.addressResolverKey;
+            }
+
+            const message =
+                connection_request.ConnectionRequest.create(request);
 
             this.writeOrBufferRequest(
                 message,
@@ -9475,6 +9570,13 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Clean up address resolver from the global registry
+        if (this.addressResolverKey) {
+            removeAddressResolver(this.addressResolverKey);
+            this.addressResolverKey = undefined;
+        }
+
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
     }

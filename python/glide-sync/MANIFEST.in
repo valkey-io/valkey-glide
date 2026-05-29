@@ -4,7 +4,7 @@ recursive-include ffi *
 recursive-include glide-core *
 recursive-include logger_core *
 recursive-include glide_shared *
-recursive-include glide-shared *
+recursive-include glide-shared-rs *
 prune **/target
 prune **/tests
 prune **/benches/

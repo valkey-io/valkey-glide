@@ -5,6 +5,7 @@ use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
+use logger_core::log_warn_lazy;
 use redis::GlideConnectionOptions;
 
 #[cfg(not(target_env = "msvc"))]
@@ -745,4 +746,164 @@ pub fn get_statistics(env: Env) -> Result<JsObject> {
     )?;
 
     Ok(stats)
+}
+
+/// A Node.js address resolver wrapper that implements the `AddressResolver` trait.
+/// It holds a `ThreadsafeFunction` reference to a wrapper JavaScript function that
+/// calls the user's resolver and sends the result through a channel.
+struct NodeAddressResolver {
+    tsfn: napi::threadsafe_function::ThreadsafeFunction<
+        ResolveRequest,
+        napi::threadsafe_function::ErrorStrategy::Fatal,
+    >,
+}
+
+/// Internal request type that carries both the input and a channel sender for the response.
+struct ResolveRequest {
+    host: String,
+    port: u16,
+    tx: std::sync::mpsc::SyncSender<(String, u16)>,
+}
+
+/// A Send+Sync wrapper around napi::Ref<()> for use in TSFN closures.
+/// napi::Ref<()> is !Send, but we only access it from the JS thread via the TSFN resolve closure.
+/// On drop, we use std::mem::forget to avoid napi-rs's assertion that ref count == 0.
+/// The reference is cleaned up when removeAddressResolver is called (which drops the TSFN,
+/// causing N-API to release the closure and its captured data).
+struct CallbackRef(Option<napi::Ref<()>>);
+
+unsafe impl Send for CallbackRef {}
+unsafe impl Sync for CallbackRef {}
+
+impl Drop for CallbackRef {
+    fn drop(&mut self) {
+        // Use mem::forget to avoid napi-rs's panic assertion on Ref drop.
+        // The N-API reference will be cleaned up by the runtime at process exit.
+        if let Some(r) = self.0.take() {
+            std::mem::forget(r);
+        }
+    }
+}
+
+impl std::fmt::Debug for NodeAddressResolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NodeAddressResolver {{ callback: <JS function> }}")
+    }
+}
+
+// SAFETY: ThreadsafeFunction is designed to be called from any thread.
+unsafe impl Send for NodeAddressResolver {}
+unsafe impl Sync for NodeAddressResolver {}
+
+impl redis::AddressResolver for NodeAddressResolver {
+    fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+        let (tx, rx) = std::sync::mpsc::sync_channel(1);
+
+        let request = ResolveRequest {
+            host: host.to_string(),
+            port,
+            tx,
+        };
+
+        // Schedule the JS callback on the main thread and block until it completes
+        let status = self.tsfn.call(
+            request,
+            napi::threadsafe_function::ThreadsafeFunctionCallMode::Blocking,
+        );
+
+        if status != napi::Status::Ok {
+            log_warn_lazy!(
+                "address_resolver",
+                format!("Address resolver failed, falling back to original address: {status:?}")
+            );
+            return (host.to_string(), port);
+        }
+
+        // Wait for the JS callback to send back the resolved address
+        rx.recv().unwrap_or_else(|e| {
+            log_warn_lazy!(
+                "address_resolver",
+                format!("Address resolver failed, falling back to original address: {e}")
+            );
+            (host.to_string(), port)
+        })
+    }
+}
+
+/// Register a JavaScript address resolver callback in the global registry.
+/// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+/// `address_resolver_key` field so the socket listener can look it up.
+///
+/// The JS callback signature is: `(host: string, port: number) => [string, number]`
+#[napi(js_name = "registerAddressResolver")]
+pub fn register_address_resolver(
+    env: Env,
+    #[napi(ts_arg_type = "(host: string, port: number) => [string, number]")]
+    callback: napi::JsFunction,
+) -> Result<String> {
+    // Create a persistent reference to the user's callback so it won't be GC'd.
+    // Wrap it in CallbackRef (which is Send+Sync) for use in the TSFN closure.
+    let callback_ref = CallbackRef(Some(env.create_reference(&callback)?));
+
+    // Create a no-op JS function as the "original" function for the TSFN.
+    // All actual work happens in the resolve closure below.
+    let noop_fn = env.create_function_from_closure("noop", |_ctx| Ok(()))?;
+
+    let mut tsfn = noop_fn.create_threadsafe_function(
+        0,
+        move |ctx: napi::threadsafe_function::ThreadSafeCallContext<ResolveRequest>| {
+            let request = ctx.value;
+
+            // Get the user's callback from the reference
+            let user_callback: napi::JsFunction = ctx
+                .env
+                .get_reference_value(callback_ref.0.as_ref().unwrap())?;
+
+            // Create JS arguments for the user's callback
+            let js_host = ctx.env.create_string(&request.host)?;
+            let js_port = ctx.env.create_uint32(request.port as u32)?;
+
+            // Call the user's resolver function
+            let result =
+                user_callback.call(None, &[js_host.into_unknown(), js_port.into_unknown()]);
+
+            // Extract the resolved address from the return value
+            let resolved = match result {
+                Ok(value) => (|| -> napi::Result<(String, u16)> {
+                    let obj = value.coerce_to_object()?;
+                    let h: napi::JsString = obj.get_element(0)?;
+                    let p: napi::JsNumber = obj.get_element(1)?;
+                    Ok((h.into_utf8()?.into_owned()?, p.get_uint32()? as u16))
+                })()
+                .unwrap_or((request.host.clone(), request.port)),
+                Err(e) => {
+                    log_warn_lazy!(
+                        "address_resolver",
+                        format!("Address resolver failed, falling back to original address: {e}")
+                    );
+                    (request.host.clone(), request.port)
+                }
+            };
+
+            // Send the result back to the waiting Rust thread
+            let _ = request.tx.send(resolved);
+
+            // Return empty args for the no-op function (it does nothing)
+            Ok(Vec::<napi::JsUnknown>::new())
+        },
+    )?;
+
+    // Unref the TSFN so it doesn't prevent the Node.js event loop from exiting.
+    tsfn.unref(&env)?;
+
+    let key = uuid::Uuid::new_v4().to_string();
+    let resolver = Arc::new(NodeAddressResolver { tsfn });
+    glide_core::address_resolver_registry::register(key.clone(), resolver);
+    Ok(key)
+}
+
+/// Remove an address resolver from the global registry by key.
+#[napi(js_name = "removeAddressResolver")]
+pub fn remove_address_resolver(key: String) {
+    glide_core::address_resolver_registry::remove(&key);
 }

@@ -8,6 +8,7 @@ pub(crate) mod test_cache {
     use super::*;
     use glide_core::connection_request::ClientSideCache;
     use glide_core::connection_request::EvictionPolicy;
+    use glide_core::connection_request::ProtocolVersion;
     use redis::Value;
     use redis::cache::glide_cache::CachedKeyType;
     use rstest::rstest;
@@ -1173,6 +1174,227 @@ pub(crate) mod test_cache {
                 .await
                 .unwrap();
             assert_command_count(&mut test_basics.client, "GET", 2, use_cluster).await;
+        });
+    }
+
+    /// Test that server-assisted caching invalidates a key when it is updated by another client.
+    /// Flow: client1 (server_assisted=true) GETs key (cached), client2 SETs key,
+    /// server sends invalidation push, client1 GETs key again -> cache miss -> fresh value.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_cache_invalidation(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            // Client 1: server-assisted cache enabled
+            let mut cached_client = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "server_assisted_invalidation_test".to_string().into(),
+                        max_cache_kb: 1024,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        server_assisted: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Client 2: plain client for writing (triggers invalidation); no cache so SET goes to server
+            let mut writer = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let key = generate_random_string(10);
+            let value1 = "original";
+            let value2 = "updated";
+
+            // Set initial value via writer
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg(&key).arg(value1);
+            writer
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .unwrap();
+
+            // GET via cached client -> populates cache
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg(&key);
+            let result1 = cached_client
+                .client
+                .send_command(&mut get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result1,
+                Value::BulkString(value1.as_bytes().to_vec()),
+                "first GET should return original value"
+            );
+
+            // GET again -> should be a cache hit
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg(&key);
+            let result2 = cached_client
+                .client
+                .send_command(&mut get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result2,
+                Value::BulkString(value1.as_bytes().to_vec()),
+                "second GET should return cached value"
+            );
+
+            // Writer updates the key -> server sends invalidation push to cached_client
+            let mut set_cmd2 = redis::Cmd::new();
+            set_cmd2.arg("SET").arg(&key).arg(value2);
+            writer
+                .client
+                .send_command(&mut set_cmd2, None)
+                .await
+                .unwrap();
+
+            // Allow time for invalidation push to be processed
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            // GET via cached client -> cache miss -> fresh value from server
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg(&key);
+            let result3 = cached_client
+                .client
+                .send_command(&mut get_cmd, None)
+                .await
+                .unwrap();
+            assert_eq!(
+                result3,
+                Value::BulkString(value2.as_bytes().to_vec()),
+                "GET after invalidation should return updated value"
+            );
+        });
+    }
+
+    /// Test that a nil invalidation (FLUSHDB in BCAST mode) flushes the entire cache.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_nil_invalidation_flushes_cache(
+        #[values(false, true)] use_cluster: bool,
+    ) {
+        block_on_all(async move {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    shared_server: false,
+                    protocol: ProtocolVersion::RESP3,
+                    client_side_cache: Some(ClientSideCache {
+                        cache_id: "nil_invalidation_test".to_string().into(),
+                        max_cache_kb: 1024,
+                        entry_ttl_ms: 0,
+                        eviction_policy: None,
+                        enable_metrics: true,
+                        server_assisted: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            let key = generate_random_string(10);
+
+            let mut set_cmd = redis::Cmd::new();
+            set_cmd.arg("SET").arg(&key).arg("value");
+            test_basics
+                .client
+                .send_command(&mut set_cmd, None)
+                .await
+                .unwrap();
+
+            // Populate cache
+            let mut get_cmd = redis::Cmd::new();
+            get_cmd.arg("GET").arg(&key);
+            test_basics
+                .client
+                .send_command(&mut get_cmd, None)
+                .await
+                .unwrap();
+
+            // Verify cache has the entry
+            let entry_count_before = test_basics.client.cache_entry_count().unwrap();
+            assert_eq!(
+                entry_count_before,
+                Value::Int(1),
+                "cache should have entries before flush"
+            );
+
+            // FLUSHDB triggers a nil invalidation push in BCAST mode, flushing the entire cache
+            let mut flushdb = redis::Cmd::new();
+            flushdb.arg("FLUSHDB");
+            let _ = test_basics.client.send_command(&mut flushdb, None).await;
+
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+            // Cache should be empty after nil invalidation (triggered by FLUSHDB)
+            let entry_count_after = test_basics.client.cache_entry_count().unwrap();
+            assert_eq!(
+                entry_count_after,
+                Value::Int(0),
+                "cache should be empty after nil invalidation"
+            );
+        });
+    }
+
+    /// Test that server_assisted=true with RESP2 returns an error at connection time.
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
+    fn test_server_assisted_requires_resp3(#[values(false, true)] use_cluster: bool) {
+        block_on_all(async move {
+            let configuration = TestConfiguration {
+                shared_server: false,
+                protocol: ProtocolVersion::RESP2,
+                client_side_cache: Some(ClientSideCache {
+                    cache_id: "resp2_server_assisted_test".to_string().into(),
+                    max_cache_kb: 1024,
+                    entry_ttl_ms: 0,
+                    eviction_policy: None,
+                    enable_metrics: false,
+                    server_assisted: true,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+
+            // Spin up a standalone server or use shared cluster address
+            let _server;
+            let addr = if use_cluster {
+                cluster::get_shared_cluster_addresses(false)
+                    .into_iter()
+                    .next()
+                    .expect("cluster address")
+            } else {
+                _server = RedisServer::new(ServerType::Tcp { tls: false });
+                _server.get_client_addr()
+            };
+
+            let connection_request =
+                create_connection_request(std::slice::from_ref(&addr), &configuration);
+            let result = glide_core::client::Client::new(connection_request.into(), None).await;
+            assert!(
+                result.is_err(),
+                "server_assisted=true with RESP2 should fail at connection time"
+            );
         });
     }
 }
