@@ -665,10 +665,10 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientPause_then_clientUnpause_round_trip(GlideClusterClient clusterClient) {
+    public void clientPause_then_clientUnpause(GlideClusterClient clusterClient) {
         assertEquals(OK, clusterClient.clientPause(5000, ClientPauseMode.ALL).get());
 
-        CompletableFuture<String> set = clusterClient.set("clientPause_round_trip_key", "value");
+        CompletableFuture<String> set = clusterClient.set("clientPause_clientUnpause_key", "value");
 
         // Verify that SET has not completed because server is paused.
         Thread.sleep(300);

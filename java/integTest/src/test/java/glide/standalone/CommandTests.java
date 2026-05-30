@@ -370,10 +370,10 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientPause_then_clientUnpause_round_trip(GlideClient regularClient) {
+    public void clientPause_then_clientUnpause(GlideClient regularClient) {
         assertEquals(OK, regularClient.clientPause(5000, ClientPauseMode.ALL).get());
 
-        CompletableFuture<String> set = regularClient.set("clientPause_round_trip_key", "value");
+        CompletableFuture<String> set = regularClient.set("clientPause_clientUnpause_key", "value");
 
         // Verify that SET has not completed because server is paused.
         Thread.sleep(300);
