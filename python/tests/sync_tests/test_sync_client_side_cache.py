@@ -610,9 +610,10 @@ class TestSyncClientSideCache:
         assert b"prefixes" in result
         # Tracking is on with server_assisted=True
         assert b"on" in result[b"flags"]
+        assert b"bcast" in result[b"flags"]  # server_assisted=True uses BCAST mode
         # No redirect client configured
         assert result[b"redirect"] == -1
-        # No broadcast prefixes in default (non-bcast) mode
+        # BCAST mode with no PREFIX args → empty prefixes list
         assert result[b"prefixes"] == []
 
         client.close()
