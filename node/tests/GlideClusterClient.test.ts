@@ -240,7 +240,7 @@ describe("GlideClusterClient", () => {
             expect(setDone).toBe(false);
             expect(unpauseDone).toBe(false);
 
-            // Verify that all commands complete once the pause expires naturally.
+            // Verify that all commands complete once pause expires naturally.
             expect(await get).toEqual("before");
             expect(await set).toEqual("OK");
             expect(await unpause).toEqual("OK");
@@ -284,7 +284,7 @@ describe("GlideClusterClient", () => {
                 await client.clientUnpause({ route: "allPrimaries" }),
             ).toEqual("OK");
 
-            // Verify that SET completes once server unpauses, and the new value
+            // Verify that SET completes once pause expires, and the new value
             // is visible.
             expect(await set).toEqual("OK");
             expect(await client.get(key)).toEqual("after");
