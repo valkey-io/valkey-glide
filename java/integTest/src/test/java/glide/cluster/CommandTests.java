@@ -665,6 +665,24 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void clientPause_then_clientUnpause_round_trip(GlideClusterClient clusterClient) {
+        assertEquals(OK, clusterClient.clientPause(5000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> set = clusterClient.set("clientPause_round_trip_key", "value");
+
+        // Verify that SET has not completed because server is paused.
+        Thread.sleep(300);
+        assertFalse(set.isDone());
+
+        assertEquals(OK, clusterClient.clientUnpause().get());
+
+        // Verify that SET completes once server unpauses.
+        assertEquals(OK, set.get(2, java.util.concurrent.TimeUnit.SECONDS));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void clientReply(GlideClusterClient clusterClient) {
         // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
         String result = clusterClient.clientReply(ClientReplyMode.ON).get();
