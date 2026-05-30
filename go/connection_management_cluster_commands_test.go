@@ -141,6 +141,56 @@ func ExampleClusterClient_ClientGetNameWithOptions() {
 	// Output: true
 }
 
+func ExampleClusterClient_ClientPause() {
+	var client *ClusterClient = getExampleClusterClient()
+	result, err := client.ClientPause(context.Background(), 0)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientPauseWithOptions() {
+	var client *ClusterClient = getExampleClusterClient()
+	mode := options.ClientPauseModeWrite
+	opts := options.ClientPauseClusterOptions{
+		Mode:        &mode,
+		RouteOption: &options.RouteOption{Route: config.AllPrimaries},
+	}
+	result, err := client.ClientPauseWithOptions(context.Background(), 0, opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientUnpause() {
+	var client *ClusterClient = getExampleClusterClient()
+	result, err := client.ClientUnpause(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ClientUnpauseWithOptions() {
+	var client *ClusterClient = getExampleClusterClient()
+	opts := options.RouteOption{Route: config.AllPrimaries}
+	result, err := client.ClientUnpauseWithOptions(context.Background(), opts)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
 func ExampleClusterClient_ClientReply() {
 	var client *ClusterClient = getExampleClusterClient()
 	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.

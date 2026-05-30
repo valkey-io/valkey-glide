@@ -14,6 +14,39 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
+func ExampleClient_ClientPause() {
+	var client *Client = getExampleClient()
+	result, err := client.ClientPause(context.Background(), 0)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClient_ClientPauseWithOptions() {
+	var client *Client = getExampleClient()
+	result, err := client.ClientPauseWithOptions(context.Background(), 0, options.ClientPauseModeWrite)
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClient_ClientUnpause() {
+	var client *Client = getExampleClient()
+	result, err := client.ClientUnpause(context.Background())
+	if err != nil {
+		fmt.Println("Glide example failed with an error: ", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
 func ExampleClient_ClientReply() {
 	var client *Client = getExampleClient()
 	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
