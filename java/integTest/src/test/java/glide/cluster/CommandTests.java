@@ -601,90 +601,63 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientPause(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientPause(0).get();
-        assertEquals(OK, result);
+    public void clientPauseAll_then_clientUnpause(GlideClusterClient clusterClient) {
+        String key = "clientPauseAll_then_clientUnpause_key";
+        assertEquals(OK, clusterClient.set(key, "before").get());
+
+        assertEquals(OK, clusterClient.clientPause(2000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> get = clusterClient.get(key);
+        CompletableFuture<String> set = clusterClient.set(key, "after");
+        CompletableFuture<String> unpause = clusterClient.clientUnpause();
+
+        Thread.sleep(300);
+
+        // Verify that none of the commands completes.
+        assertFalse(get.isDone());
+        assertFalse(set.isDone());
+        assertFalse(unpause.isDone());
+
+        // Verify that all commands complete once pause expires.
+        assertEquals("before", get.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", clusterClient.get(key).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientPause_with_route(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientPause(0, ALL_PRIMARIES).get();
-        assertEquals(OK, result);
-    }
+    public void clientPauseWrite_then_clientUnpause(GlideClusterClient clusterClient) {
+        String key = "clientPauseWrite_then_clientUnpause_key";
+        assertEquals(OK, clusterClient.set(key, "before").get());
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientPause_with_write_mode_no_route(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientPause(0, ClientPauseMode.WRITE).get();
-        assertEquals(OK, result);
-    }
+        assertEquals(OK, clusterClient.clientPause(2000, ClientPauseMode.WRITE).get());
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientPause_with_write_mode_and_route(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientPause(0, ClientPauseMode.WRITE, ALL_PRIMARIES).get();
-        assertEquals(OK, result);
-    }
+        // Reads are not blocked by PAUSE WRITE.
+        assertEquals("before", clusterClient.get(key).get());
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientPause_with_all_mode(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientPause(0, ClientPauseMode.ALL, ALL_PRIMARIES).get();
-        assertEquals(OK, result);
-    }
+        CompletableFuture<String> set = clusterClient.set(key, "after");
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientPause_with_all_mode_and_route(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientPause(0, ClientPauseMode.ALL, ALL_PRIMARIES).get();
-        assertEquals(OK, result);
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientUnpause(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientUnpause().get();
-        assertEquals(OK, result);
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientUnpause_with_route(GlideClusterClient clusterClient) {
-        String result = clusterClient.clientUnpause(ALL_PRIMARIES).get();
-        assertEquals(OK, result);
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientPause_then_clientUnpause(GlideClusterClient clusterClient) {
-        assertEquals(OK, clusterClient.clientPause(5000, ClientPauseMode.ALL).get());
-
-        CompletableFuture<String> set = clusterClient.set("clientPause_clientUnpause_key", "value");
+        Thread.sleep(300);
 
         // Verify that SET has not completed because server is paused.
-        Thread.sleep(300);
         assertFalse(set.isDone());
 
         assertEquals(OK, clusterClient.clientUnpause().get());
 
-        // Verify that SET completes once server unpauses.
-        assertEquals(OK, set.get(2, java.util.concurrent.TimeUnit.SECONDS));
+        // Verify that SET completes once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", clusterClient.get(key).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientReply(GlideClusterClient clusterClient) {
-        // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
+        // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+        // replies, which would desync GLIDE's multiplexed connection because
+        // responses are matched to in-flight requests by order.
         String result = clusterClient.clientReply(ClientReplyMode.ON).get();
         assertEquals(OK, result);
     }
@@ -693,7 +666,9 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientReply_with_route(GlideClusterClient clusterClient) {
-        // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
+        // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+        // replies, which would desync GLIDE's multiplexed connection because
+        // responses are matched to in-flight requests by order.
         String result = clusterClient.clientReply(ClientReplyMode.ON, ALL_PRIMARIES).get();
         assertEquals(OK, result);
     }

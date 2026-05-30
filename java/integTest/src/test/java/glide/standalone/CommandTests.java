@@ -338,58 +338,63 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientPause(GlideClient regularClient) {
-        String result = regularClient.clientPause(0).get();
-        assertEquals(OK, result);
+    public void clientPauseAll_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseAll_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
+
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> get = regularClient.get(key);
+        CompletableFuture<String> set = regularClient.set(key, "after");
+        CompletableFuture<String> unpause = regularClient.clientUnpause();
+
+        Thread.sleep(300);
+
+        // Verify that none of the commands completes.
+        assertFalse(get.isDone());
+        assertFalse(set.isDone());
+        assertFalse(unpause.isDone());
+
+        // Verify that all commands complete once pause expires.
+        assertEquals("before", get.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientPause_with_write_mode(GlideClient regularClient) {
-        String result = regularClient.clientPause(0, ClientPauseMode.WRITE).get();
-        assertEquals(OK, result);
-    }
+    public void clientPauseWrite_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseWrite_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientPause_with_all_mode(GlideClient regularClient) {
-        String result = regularClient.clientPause(0, ClientPauseMode.ALL).get();
-        assertEquals(OK, result);
-    }
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.WRITE).get());
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientUnpause(GlideClient regularClient) {
-        String result = regularClient.clientUnpause().get();
-        assertEquals(OK, result);
-    }
+        // Reads are not blocked by PAUSE WRITE.
+        assertEquals("before", regularClient.get(key).get());
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientPause_then_clientUnpause(GlideClient regularClient) {
-        assertEquals(OK, regularClient.clientPause(5000, ClientPauseMode.ALL).get());
+        CompletableFuture<String> set = regularClient.set(key, "after");
 
-        CompletableFuture<String> set = regularClient.set("clientPause_clientUnpause_key", "value");
+        Thread.sleep(300);
 
         // Verify that SET has not completed because server is paused.
-        Thread.sleep(300);
         assertFalse(set.isDone());
 
         assertEquals(OK, regularClient.clientUnpause().get());
 
-        // Verify that SET completes once server unpauses.
-        assertEquals(OK, set.get(2, java.util.concurrent.TimeUnit.SECONDS));
+        // Verify that SET completes once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientReply(GlideClient regularClient) {
-        // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
+        // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+        // replies, which would desync GLIDE's multiplexed connection because
+        // responses are matched to in-flight requests by order.
         String result = regularClient.clientReply(ClientReplyMode.ON).get();
         assertEquals(OK, result);
     }
