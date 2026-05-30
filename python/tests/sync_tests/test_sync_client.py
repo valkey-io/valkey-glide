@@ -9872,7 +9872,9 @@ class TestCommands:
 
         # Test cluster-specific routing
         if isinstance(glide_sync_client, GlideClusterClient):
-            result = glide_sync_client.client_reply(ClientReplyMode.ON, route=AllPrimaries())
+            result = glide_sync_client.client_reply(
+                ClientReplyMode.ON, route=AllPrimaries()
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -9889,7 +9891,9 @@ class TestCommands:
 
             if isinstance(glide_sync_client, GlideClusterClient):
                 assert (
-                    glide_sync_client.client_pause(2000, ClientPauseMode.ALL, route=AllPrimaries())
+                    glide_sync_client.client_pause(
+                        2000, ClientPauseMode.ALL, route=AllPrimaries()
+                    )
                     == OK
                 )
             else:
@@ -9912,7 +9916,9 @@ class TestCommands:
 
             def run_unpause() -> None:
                 if isinstance(glide_sync_client, GlideClusterClient):
-                    unpause_result[0] = glide_sync_client.client_unpause(route=AllPrimaries())
+                    unpause_result[0] = glide_sync_client.client_unpause(
+                        route=AllPrimaries()
+                    )
                 else:
                     unpause_result[0] = glide_sync_client.client_unpause()
                 unpause_done.set()
@@ -9949,7 +9955,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_client_pause_write_then_unpause(self, request, cluster_mode, protocol):
+    def test_sync_client_pause_write_then_unpause(
+        self, request, cluster_mode, protocol
+    ):
         glide_sync_client = create_sync_client(
             request,
             cluster_mode=cluster_mode,

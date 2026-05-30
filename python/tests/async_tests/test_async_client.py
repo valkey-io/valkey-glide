@@ -10027,7 +10027,9 @@ class TestCommands:
 
         # Test cluster-specific routing
         if isinstance(glide_client, GlideClusterClient):
-            result = await glide_client.client_reply(ClientReplyMode.ON, route=AllPrimaries())
+            result = await glide_client.client_reply(
+                ClientReplyMode.ON, route=AllPrimaries()
+            )
             assert result == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -10045,7 +10047,9 @@ class TestCommands:
 
             if isinstance(glide_client, GlideClusterClient):
                 assert (
-                    await glide_client.client_pause(2000, ClientPauseMode.ALL, route=AllPrimaries())
+                    await glide_client.client_pause(
+                        2000, ClientPauseMode.ALL, route=AllPrimaries()
+                    )
                     == OK
                 )
             else:
@@ -10068,7 +10072,9 @@ class TestCommands:
 
             async def run_unpause() -> None:
                 if isinstance(glide_client, GlideClusterClient):
-                    unpause_result[0] = await glide_client.client_unpause(route=AllPrimaries())
+                    unpause_result[0] = await glide_client.client_unpause(
+                        route=AllPrimaries()
+                    )
                 else:
                     unpause_result[0] = await glide_client.client_unpause()
                 unpause_done.set()
@@ -10100,7 +10106,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_client_pause_write_then_unpause(self, request, cluster_mode, protocol):
+    async def test_client_pause_write_then_unpause(
+        self, request, cluster_mode, protocol
+    ):
         glide_client = await create_client(
             request,
             cluster_mode=cluster_mode,
@@ -10119,7 +10127,9 @@ class TestCommands:
                     == OK
                 )
             else:
-                assert await glide_client.client_pause(2000, ClientPauseMode.WRITE) == OK
+                assert (
+                    await glide_client.client_pause(2000, ClientPauseMode.WRITE) == OK
+                )
 
             # Reads are not blocked by PAUSE WRITE.
             assert await glide_client.get(key) == b"before"
