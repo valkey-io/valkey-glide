@@ -10,6 +10,7 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { setTimeout as sleep } from "node:timers/promises";
 import { gte } from "semver";
 import { ValkeyCluster } from "../../utils/TestUtils";
 import {
@@ -166,104 +167,14 @@ describe("GlideClusterClient", () => {
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientPause returns OK_%p",
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientPause(10);
-            expect(result).toEqual("OK");
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientPause with WRITE mode returns OK_%p",
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientPause(10, ClientPauseMode.WRITE);
-            expect(result).toEqual("OK");
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientPause with allPrimaries route returns OK_%p",
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientPause(10, undefined, {
-                route: "allPrimaries",
-            });
-            expect(result).toEqual("OK");
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientPause with WRITE mode and allPrimaries route returns OK_%p",
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientPause(10, ClientPauseMode.WRITE, {
-                route: "allPrimaries",
-            });
-            expect(result).toEqual("OK");
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientPause with ALL mode and allPrimaries route returns OK_%p",
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientPause(10, ClientPauseMode.ALL, {
-                route: "allPrimaries",
-            });
-            expect(result).toEqual("OK");
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientUnpause returns OK_%p",
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientUnpause();
-            expect(result).toEqual("OK");
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientUnpause with allPrimaries route returns OK_%p",
-        async (protocol) => {
-            client = await GlideClusterClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientUnpause({
-                route: "allPrimaries",
-            });
-            expect(result).toEqual("OK");
-        },
-        TIMEOUT,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clientReply with ON mode returns OK_%p",
         async (protocol) => {
+            // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+            // replies, which would desync GLIDE's multiplexed connection because
+            // responses are matched to in-flight requests by order.
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
             const result = await client.clientReply(ClientReplyMode.ON);
             expect(result).toEqual("OK");
         },
@@ -273,14 +184,110 @@ describe("GlideClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clientReply with randomNode route returns OK_%p",
         async (protocol) => {
+            // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+            // replies, which would desync GLIDE's multiplexed connection because
+            // responses are matched to in-flight requests by order.
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            // Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
             const result = await client.clientReply(ClientReplyMode.ON, {
                 route: "randomNode",
             });
             expect(result).toEqual("OK");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPauseAll then clientUnpause_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 10000,
+                }),
+            );
+            const key = "clientPauseAll_then_clientUnpause_key";
+            expect(await client.set(key, "before")).toEqual("OK");
+
+            expect(
+                await client.clientPause(2000, ClientPauseMode.ALL, {
+                    route: "allPrimaries",
+                }),
+            ).toEqual("OK");
+
+            let getDone = false;
+            const get = client.get(key).then((r) => {
+                getDone = true;
+                return r;
+            });
+            let setDone = false;
+            const set = client.set(key, "after").then((r) => {
+                setDone = true;
+                return r;
+            });
+            let unpauseDone = false;
+            const unpause = client
+                .clientUnpause({ route: "allPrimaries" })
+                .then((r) => {
+                    unpauseDone = true;
+                    return r;
+                });
+
+            await sleep(300);
+
+            // Verify that none of the commands completes during the pause window.
+            expect(getDone).toBe(false);
+            expect(setDone).toBe(false);
+            expect(unpauseDone).toBe(false);
+
+            // Verify that all commands complete once the pause expires naturally.
+            expect(await get).toEqual("before");
+            expect(await set).toEqual("OK");
+            expect(await unpause).toEqual("OK");
+            expect(await client.get(key)).toEqual("after");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPauseWrite then clientUnpause_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 10000,
+                }),
+            );
+            const key = "clientPauseWrite_then_clientUnpause_key";
+            expect(await client.set(key, "before")).toEqual("OK");
+
+            expect(
+                await client.clientPause(2000, ClientPauseMode.WRITE, {
+                    route: "allPrimaries",
+                }),
+            ).toEqual("OK");
+
+            // Reads are not blocked by PAUSE WRITE.
+            expect(await client.get(key)).toEqual("before");
+
+            let setDone = false;
+            const set = client.set(key, "after").then((r) => {
+                setDone = true;
+                return r;
+            });
+
+            await sleep(300);
+
+            // Verify that SET has not completed because server is paused.
+            expect(setDone).toBe(false);
+
+            expect(
+                await client.clientUnpause({ route: "allPrimaries" }),
+            ).toEqual("OK");
+
+            // Verify that SET completes once server unpauses, and the new value
+            // is visible.
+            expect(await set).toEqual("OK");
+            expect(await client.get(key)).toEqual("after");
         },
         TIMEOUT,
     );
