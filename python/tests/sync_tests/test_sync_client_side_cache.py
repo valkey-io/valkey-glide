@@ -599,8 +599,15 @@ class TestSyncClientSideCache:
 
         result = client.client_trackinginfo()
         assert isinstance(result, dict)
-        assert len(result) > 0
+        # All three top-level keys must be present
         assert b"flags" in result
+        assert b"redirect" in result
+        assert b"prefixes" in result
+        # Tracking is enabled (server_assisted=True)
         assert b"on" in result[b"flags"]
+        # redirect is an integer (-1 means no redirect)
+        assert isinstance(result[b"redirect"], int)
+        # prefixes is a list
+        assert isinstance(result[b"prefixes"], list)
 
         client.close()
