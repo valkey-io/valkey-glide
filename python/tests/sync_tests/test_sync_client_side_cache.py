@@ -583,7 +583,7 @@ class TestSyncClientSideCache:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     def test_sync_client_trackinginfo(self, request, protocol, cluster_mode):
-        """Test that client_trackinginfo returns a non-empty dict with expected keys."""
+        """Test that client_trackinginfo reflects active tracking state after cache use."""
         cache = ClientSideCache.create(
             max_cache_kb=1,
             entry_ttl_ms=60_000,
@@ -597,17 +597,22 @@ class TestSyncClientSideCache:
             cache=cache,
         )
 
+        # Exercise the cache: SET then GET to populate it
+        key = "trackinginfo_test_key"
+        assert client.set(key, "value") == "OK"
+        assert client.get(key) == b"value"  # cache miss, populates cache
+        assert client.get_cache_entry_count() == 1  # key is now tracked
+
         result = client.client_trackinginfo()
         assert isinstance(result, dict)
-        # All three top-level keys must be present
         assert b"flags" in result
         assert b"redirect" in result
         assert b"prefixes" in result
-        # Tracking is enabled (server_assisted=True)
+        # Tracking is on with server_assisted=True
         assert b"on" in result[b"flags"]
-        # redirect is an integer (-1 means no redirect)
-        assert isinstance(result[b"redirect"], int)
-        # prefixes is a list
-        assert isinstance(result[b"prefixes"], list)
+        # No redirect client configured
+        assert result[b"redirect"] == -1
+        # No broadcast prefixes in default (non-bcast) mode
+        assert result[b"prefixes"] == []
 
         client.close()
