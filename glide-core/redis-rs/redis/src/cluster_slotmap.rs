@@ -63,30 +63,34 @@ fn get_address_from_slot(
     if slot_addr == SlotAddr::Master || addrs.replicas().is_empty() {
         return addrs.primary();
     }
+    let round_robin_replica = || {
+        let index = slot
+            .last_used_replica
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            % addrs.replicas().len();
+        addrs.replicas()[index].clone()
+    };
+    let round_robin_all_nodes = || {
+        // Round-robin across all nodes: primary + all replicas
+        let total_nodes = addrs.replicas().len() + 1;
+        let index = slot
+            .last_used_replica // named for replica-based strategy, but index 0 refers to primary
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            % total_nodes;
+        if index == 0 {
+            addrs.primary()
+        } else {
+            addrs.replicas()[index - 1].clone()
+        }
+    };
     match read_from_replica {
         ReadFromReplicaStrategy::AlwaysFromPrimary => addrs.primary(),
-        ReadFromReplicaStrategy::RoundRobin => {
-            let index = slot
-                .last_used_replica
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                % addrs.replicas().len();
-            addrs.replicas()[index].clone()
-        }
-        ReadFromReplicaStrategy::AllNodes => {
-            // Round-robin across all nodes: primary + all replicas
-            let total_nodes = addrs.replicas().len() + 1;
-            let index = slot
-                .last_used_replica // named for replica-based strategy, but index 0 refers to primary
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                % total_nodes;
-            if index == 0 {
-                addrs.primary()
-            } else {
-                addrs.replicas()[index - 1].clone()
-            }
-        }
-        ReadFromReplicaStrategy::AZAffinity(_az) => todo!(), // Drop sync client
-        ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_az) => todo!(), // Drop sync client
+        ReadFromReplicaStrategy::RoundRobin => round_robin_replica(),
+        ReadFromReplicaStrategy::AllNodes => round_robin_all_nodes(),
+        // The slot map carries no AZ metadata, so fall back to the documented
+        // behavior of these strategies when no local node is known.
+        ReadFromReplicaStrategy::AZAffinity(_az) => round_robin_replica(),
+        ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(_az) => round_robin_all_nodes(),
     }
 }
 
@@ -856,6 +860,52 @@ mod tests_cluster_slotmap {
         let slot_map = get_slot_map(ReadFromReplicaStrategy::AllNodes);
         let route = Route::new(2001, SlotAddr::ReplicaOptional);
         // With 3 replicas + 1 primary = 4 nodes total, we should cycle through all
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec![
+                "node3:6379",
+                "replica4:6379",
+                "replica5:6379",
+                "replica6:6379"
+            ]
+            .into_iter()
+            .map(|s| Arc::new(s.to_string()))
+            .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_slot_map_az_affinity_falls_back_to_round_robin_replicas() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AZAffinity("zone-a".to_string()));
+        let route = Route::new(2001, SlotAddr::ReplicaOptional);
+        let mut addresses = vec![
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+            slot_map.slot_addr_for_route(&route).unwrap(),
+        ];
+        addresses.sort();
+        assert_eq!(
+            addresses,
+            vec!["replica4:6379", "replica5:6379", "replica6:6379"]
+                .into_iter()
+                .map(|s| Arc::new(s.to_string()))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_slot_map_az_affinity_replicas_and_primary_falls_back_to_all_nodes() {
+        let slot_map = get_slot_map(ReadFromReplicaStrategy::AZAffinityReplicasAndPrimary(
+            "zone-a".to_string(),
+        ));
+        let route = Route::new(2001, SlotAddr::ReplicaOptional);
         let mut addresses = vec![
             slot_map.slot_addr_for_route(&route).unwrap(),
             slot_map.slot_addr_for_route(&route).unwrap(),

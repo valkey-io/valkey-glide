@@ -45,7 +45,7 @@ jobs:
             - name: Install dependencies
               run: |
                   cd .github/dependabot-deps
-                  npm install
+                  npm ci
 
             - name: Create PR management script
               run: |

@@ -137,4 +137,17 @@ public interface ConnectionManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> select(long index);
+
+    /**
+     * Resets the connection state.
+     *
+     * @see <a href="https://valkey.io/commands/reset/">valkey.io</a> for details.
+     * @return <code>String</code> with <code>"RESET"</code>.
+     * @example
+     *     <pre>{@code
+     * String payload = client.reset().get();
+     * assert payload.equals("RESET");
+     * }</pre>
+     */
+    CompletableFuture<String> reset();
 }

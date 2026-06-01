@@ -19,7 +19,7 @@ runs:
           run: cp eslint.config.mjs "$PACKAGE_FOLDER"
 
         - run: |
-              npm install
+              npm ci
               npx eslint . --max-warnings=0
           working-directory: ${{ inputs.package-folder }}
           shell: bash

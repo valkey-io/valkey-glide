@@ -84,7 +84,7 @@ jobs:
             - name: Install and build
               working-directory: ./node
               run: |
-                  npm install
+                  npm ci
                   npm run build:benchmark
 
             - name: Run modules tests
@@ -134,7 +134,7 @@ jobs:
             - name: Install and build
               working-directory: ./node
               run: |
-                  npm install
+                  npm ci
                   npm run build
 
             - name: test

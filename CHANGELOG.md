@@ -1,6 +1,7 @@
 ## Pending 2.5
 
 #### Changes
+* CORE/FFI: Add `MonitorClient` for the MONITOR command — dedicated non-pooled connection streaming parsed `MonitorLine { timestamp, db, client_addr, command, args }` structs via callback; FFI exports `create_monitor_client()` and `close_monitor_client()` with clean async shutdown; standalone-only (cluster mode not supported) ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
 * Node: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5945](https://github.com/valkey-io/valkey-glide/pull/5945))
 * Python: Add RESET command support — resets connection state (database index, client name, protocol, pubsub subscriptions); available on both standalone and cluster clients ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
 * Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
@@ -10,6 +11,7 @@
 * Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))
 * Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
+* CORE: Avoid panic on cluster `SCAN` when a read-from-replica AZ affinity strategy is configured. The slot map carries no AZ metadata, so these strategies now fall back to their documented round-robin behavior (replicas for `AZAffinity`, replicas plus primary for `AZAffinityReplicasAndPrimary`) instead of hitting `todo!()` ([#5909](https://github.com/valkey-io/valkey-glide/issues/5909))
 
 ## 2.4
 
