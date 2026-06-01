@@ -10016,12 +10016,13 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.lpos(non_list_key, "a")
 
+    # TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+    # Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+    # replies, which would desync GLIDE's multiplexed connection because
+    # responses are matched to in-flight requests by order.
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_client_reply(self, glide_client: TGlideClient):
-        # Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-        # replies, which would desync GLIDE's multiplexed connection because
-        # responses are matched to in-flight requests by order.
         result = await glide_client.client_reply(ClientReplyMode.ON)
         assert result == OK
 

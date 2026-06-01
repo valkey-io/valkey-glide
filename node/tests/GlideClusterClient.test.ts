@@ -166,12 +166,13 @@ describe("GlideClusterClient", () => {
         timeout: TIMEOUT,
     });
 
+    // TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+    // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+    // replies, which would desync GLIDE's multiplexed connection because
+    // responses are matched to in-flight requests by order.
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clientReply with ON mode returns OK_%p",
         async (protocol) => {
-            // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-            // replies, which would desync GLIDE's multiplexed connection because
-            // responses are matched to in-flight requests by order.
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
@@ -181,12 +182,13 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
+    // TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+    // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+    // replies, which would desync GLIDE's multiplexed connection because
+    // responses are matched to in-flight requests by order.
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "clientReply with randomNode route returns OK_%p",
         async (protocol) => {
-            // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-            // replies, which would desync GLIDE's multiplexed connection because
-            // responses are matched to in-flight requests by order.
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );

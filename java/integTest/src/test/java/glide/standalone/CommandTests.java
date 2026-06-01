@@ -388,13 +388,14 @@ public class CommandTests {
         assertEquals("after", regularClient.get(key).get());
     }
 
+    // TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+    // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+    // replies, which would desync GLIDE's multiplexed connection because
+    // responses are matched to in-flight requests by order.
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientReply(GlideClient regularClient) {
-        // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-        // replies, which would desync GLIDE's multiplexed connection because
-        // responses are matched to in-flight requests by order.
         String result = regularClient.clientReply(ClientReplyMode.ON).get();
         assertEquals(OK, result);
     }

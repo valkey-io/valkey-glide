@@ -47,9 +47,12 @@ func ExampleClient_ClientUnpause() {
 	// Output: OK
 }
 
+// TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+// Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+// replies, which would desync GLIDE's multiplexed connection because
+// responses are matched to in-flight requests by order.
 func ExampleClient_ClientReply() {
 	var client *Client = getExampleClient()
-	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
 	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -144,7 +147,8 @@ func TestClientPauseAllThenUnpause(t *testing.T) {
 		t.Fatalf("SET before: %v", err)
 	}
 
-	if result, err := client.ClientPauseWithOptions(ctx, 2*time.Second, options.ClientPauseModeAll); err != nil || result != "OK" {
+	if result, err := client.ClientPauseWithOptions(ctx, 2*time.Second, options.ClientPauseModeAll); err != nil ||
+		result != "OK" {
 		t.Fatalf("ClientPauseWithOptions: result=%q err=%v", result, err)
 	}
 
@@ -223,7 +227,8 @@ func TestClientPauseWriteThenUnpause(t *testing.T) {
 		t.Fatalf("SET before: %v", err)
 	}
 
-	if result, err := client.ClientPauseWithOptions(ctx, 2*time.Second, options.ClientPauseModeWrite); err != nil || result != "OK" {
+	if result, err := client.ClientPauseWithOptions(ctx, 2*time.Second, options.ClientPauseModeWrite); err != nil ||
+		result != "OK" {
 		t.Fatalf("ClientPauseWithOptions: result=%q err=%v", result, err)
 	}
 

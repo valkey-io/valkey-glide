@@ -191,9 +191,12 @@ func ExampleClusterClient_ClientUnpauseWithOptions() {
 	// Output: OK
 }
 
+// TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+// Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+// replies, which would desync GLIDE's multiplexed connection because
+// responses are matched to in-flight requests by order.
 func ExampleClusterClient_ClientReply() {
 	var client *ClusterClient = getExampleClusterClient()
-	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
 	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -203,9 +206,12 @@ func ExampleClusterClient_ClientReply() {
 	// Output: OK
 }
 
+// TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+// Only ON is exercised end-to-end. OFF and SKIP suppress the server's
+// replies, which would desync GLIDE's multiplexed connection because
+// responses are matched to in-flight requests by order.
 func ExampleClusterClient_ClientReplyWithOptions() {
 	var client *ClusterClient = getExampleClusterClient()
-	// Only ON is exercised — OFF and SKIP would desync the multiplexed connection.
 	opts := options.RouteOption{Route: config.AllPrimaries}
 	result, err := client.ClientReplyWithOptions(context.Background(), options.ClientReplyModeOn, opts)
 	if err != nil {
