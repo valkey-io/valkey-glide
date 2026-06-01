@@ -52,7 +52,8 @@ func (suite *GlideTestSuite) TestRoutingWithAzAffinityStrategyTo1Replica() {
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Server, constants.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -140,7 +141,8 @@ func (suite *GlideTestSuite) TestRoutingBySlotToReplicaWithAzAffinityStrategyToA
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -186,7 +188,8 @@ func (suite *GlideTestSuite) TestAzAffinityNonExistingAz() {
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Commandstats}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -263,7 +266,8 @@ func (suite *GlideTestSuite) TestAzAffinityReplicasAndPrimaryRoutesToPrimary() {
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := clientForTestingAz.InfoWithOptions(context.Background(),
+	infoResult, err := clientForTestingAz.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
@@ -318,7 +322,8 @@ func (suite *GlideTestSuite) TestAllNodesRoutesToPrimaryAndReplicas() {
 		assert.NoError(suite.T(), err)
 	}
 
-	infoResult, err := client.InfoWithOptions(context.Background(),
+	infoResult, err := client.InfoWithOptions(
+		context.Background(),
 		options.ClusterInfoOptions{
 			InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.All}},
 			RouteOption: &options.RouteOption{Route: config.AllNodes},
