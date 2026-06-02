@@ -78,7 +78,11 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
     @Override
     public void destroyObject(PooledObject<Jedis> pooledObject) throws Exception {
         Jedis jedis = pooledObject.getObject();
-        if (jedis != null && !jedis.isClosed()) {
+        if (jedis == null) {
+            return;
+        }
+        jedis.detachFromPoolForDestroy();
+        if (!jedis.isClosed()) {
             try {
                 jedis.close();
             } catch (Exception e) {
@@ -96,7 +100,7 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
     @Override
     public boolean validateObject(PooledObject<Jedis> pooledObject) {
         Jedis jedis = pooledObject.getObject();
-        if (jedis == null || jedis.isClosed()) {
+        if (jedis == null || jedis.isClosed() || jedis.isBroken()) {
             return false;
         }
 

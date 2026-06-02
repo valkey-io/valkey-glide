@@ -61,6 +61,7 @@ import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNu
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.ReadOnly;
 import static command_request.CommandRequestOuterClass.RequestType.ReadWrite;
+import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.SPublish;
 import static command_request.CommandRequestOuterClass.RequestType.SSubscribe;
 import static command_request.CommandRequestOuterClass.RequestType.SSubscribeBlocking;
@@ -440,6 +441,10 @@ public class GlideClusterClient extends BaseClient
             @NonNull ClientReplyMode mode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 ClientReply, new String[] {mode.getValkeyApi()}, route, this::handleStringResponse);
+
+    @Override
+    public CompletableFuture<String> reset() {
+        return commandManager.submitNewCommand(Reset, new String[0], this::handleStringResponse);
     }
 
     @Override

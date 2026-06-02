@@ -61,6 +61,7 @@ class TestTls:
             protocol=protocol,
             use_tls=True,
             root_pem_cacerts=certificate,
+            request_timeout=5000,
         )
 
         await assert_connected(client)

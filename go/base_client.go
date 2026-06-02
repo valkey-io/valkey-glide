@@ -10867,3 +10867,24 @@ func (client *baseClient) AclWhoAmI(ctx context.Context) (string, error) {
 	}
 	return handleStringResponse(result)
 }
+
+// Reset resets the connection state.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	Returns "RESET" on success.
+//
+// [valkey.io]: https://valkey.io/commands/reset/
+func (client *baseClient) Reset(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.Reset, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
