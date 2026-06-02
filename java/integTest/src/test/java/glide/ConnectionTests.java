@@ -753,8 +753,16 @@ public class ConnectionTests {
             assertEquals("PONG", pingResponse, "PING response was not 'PONG': " + pingResponse);
 
             // 6. Check client count after the first command
+            // Poll with retries since connections may not be fully registered immediately
             int clientsAfterFirstCommand = getClientCount(monitoringClient);
             int expectedNewConnections = getExpectedNewConnections(monitoringClient);
+            int expectedCount = clientsBeforeLazyInit + expectedNewConnections;
+            long deadline = System.currentTimeMillis() + 2000;
+            while (clientsAfterFirstCommand != expectedCount
+                    && System.currentTimeMillis() < deadline) {
+                Thread.sleep(50);
+                clientsAfterFirstCommand = getClientCount(monitoringClient);
+            }
 
             assertEquals(
                     clientsBeforeLazyInit + expectedNewConnections,
