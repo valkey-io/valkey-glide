@@ -62,11 +62,23 @@ public class FailoverRecoveryTests {
             GlideClusterClient client = GlideClusterClient.createClient(config).get(30, TimeUnit.SECONDS);
 
             try {
-                // Populate keys across slots
-                for (int i = 0; i < 100; i++) {
-                    client.set("key:" + i, "value:" + i).get(5, TimeUnit.SECONDS);
+                // Populate keys across slots with retry for transient connection errors
+                // On Windows, cluster connections may not be fully stable immediately
+                // after client creation, causing ConnectionNotFoundForRoute errors.
+                long warmupDeadline = System.currentTimeMillis() + 30_000;
+                while (true) {
+                    try {
+                        for (int i = 0; i < 100; i++) {
+                            client.set("key:" + i, "value:" + i).get(5, TimeUnit.SECONDS);
+                        }
+                        client.del(new String[] {"key:0", "key:1", "key:2"}).get(5, TimeUnit.SECONDS);
+                        break;
+                    } catch (Exception e) {
+                        if (System.currentTimeMillis() >= warmupDeadline) {
+                            throw e;
+                        }
+                    }
                 }
-                client.del(new String[] {"key:0", "key:1", "key:2"}).get(5, TimeUnit.SECONDS);
 
                 // Get the primary's node ID and PID before killing it
                 String info =
