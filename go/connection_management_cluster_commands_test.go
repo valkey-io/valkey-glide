@@ -191,37 +191,6 @@ func ExampleClusterClient_ClientUnpauseWithOptions() {
 	// Output: OK
 }
 
-// TODO #6083: add end-to-end tests for OFF and SKIP once supported.
-// Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-// replies, which would desync GLIDE's multiplexed connection because
-// responses are matched to in-flight requests by order.
-func ExampleClusterClient_ClientReply() {
-	var client *ClusterClient = getExampleClusterClient()
-	result, err := client.ClientReply(context.Background(), options.ClientReplyModeOn)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// Output: OK
-}
-
-// TODO #6083: add end-to-end tests for OFF and SKIP once supported.
-// Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-// replies, which would desync GLIDE's multiplexed connection because
-// responses are matched to in-flight requests by order.
-func ExampleClusterClient_ClientReplyWithOptions() {
-	var client *ClusterClient = getExampleClusterClient()
-	opts := options.RouteOption{Route: config.AllPrimaries}
-	result, err := client.ClientReplyWithOptions(context.Background(), options.ClientReplyModeOn, opts)
-	if err != nil {
-		fmt.Println("Glide example failed with an error: ", err)
-	}
-	fmt.Println(result)
-
-	// Output: OK
-}
-
 func TestClientPauseAllThenUnpauseCluster(t *testing.T) {
 	client, err := NewClusterClient(config.NewClusterClientConfiguration().
 		WithAddress(&getClusterAddresses()[0]).

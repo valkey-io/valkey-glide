@@ -17,7 +17,6 @@ import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
-import static command_request.CommandRequestOuterClass.RequestType.ClientReply;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -302,7 +301,6 @@ import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
@@ -5121,66 +5119,6 @@ public class GlideClientTest {
 
         // exercise
         CompletableFuture<String> response = service.clientUnpause();
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_on_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(ClientReply), eq(new String[] {"ON"}), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.ON);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_off_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(ClientReply), eq(new String[] {"OFF"}), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.OFF);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_skip_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(ClientReply), eq(new String[] {"SKIP"}), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.SKIP);
         String payload = response.get();
 
         // verify

@@ -16,7 +16,6 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     Batch,
     ClientPauseMode,
-    ClientReplyMode,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
@@ -1990,22 +1989,6 @@ describe("GlideClient", () => {
             } finally {
                 lazyClient.close();
             }
-        },
-        TIMEOUT,
-    );
-
-    // TODO #6083: add end-to-end tests for OFF and SKIP once supported.
-    // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-    // replies, which would desync GLIDE's multiplexed connection because
-    // responses are matched to in-flight requests by order.
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientReply with ON mode returns OK_%p",
-        async (protocol) => {
-            client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
-            );
-            const result = await client.clientReply(ClientReplyMode.ON);
-            expect(result).toEqual("OK");
         },
         TIMEOUT,
     );

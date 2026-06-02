@@ -54,8 +54,4 @@ type ConnectionManagementClusterCommands interface {
 	ClientUnpause(ctx context.Context) (string, error)
 
 	ClientUnpauseWithOptions(ctx context.Context, options options.RouteOption) (string, error)
-
-	ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error)
-
-	ClientReplyWithOptions(ctx context.Context, mode options.ClientReplyMode, options options.RouteOption) (string, error)
 }

@@ -388,23 +388,6 @@ class ClientPauseMode(Enum):
     """ Pause client write commands. """
 
 
-class ClientReplyMode(Enum):
-    """
-    Mode option for the `CLIENT REPLY` command.
-
-    See [CLIENT REPLY](https://valkey.io/commands/client-reply/) for details.
-    """
-
-    ON = "ON"
-    """ Resume normal reply behavior. """
-
-    OFF = "OFF"
-    """ Suppress all replies until `CLIENT REPLY ON` is sent. """
-
-    SKIP = "SKIP"
-    """ Suppress the reply for the next command only. """
-
-
 def _build_sort_args(
     key: TEncodable,
     by_pattern: Optional[TEncodable] = None,

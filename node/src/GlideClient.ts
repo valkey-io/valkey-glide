@@ -21,11 +21,9 @@ import { Batch } from "./Batch";
 import {
     BatchOptions,
     ClientPauseMode,
-    ClientReplyMode,
     createClientGetName,
     createClientId,
     createClientPause,
-    createClientReply,
     createClientUnpause,
     createConfigGet,
     createConfigResetStat,
@@ -1222,35 +1220,5 @@ export class GlideClient extends BaseClient {
      */
     public async clientUnpause(options?: DecoderOption): Promise<"OK"> {
         return this.createWritePromise(createClientUnpause(), options);
-    }
-
-    /**
-     * Controls the server reply behavior for the current connection.
-     *
-     * @see {@link https://valkey.io/commands/client-reply/|valkey.io} for details.
-     *
-     * @param mode - The reply mode to use.
-     * @param options - (Optional) See {@link DecoderOption}.
-     * @returns `"OK"` response on success.
-     *
-     * @remarks
-     * **Warning:** Because GLIDE uses a multiplexed connection that correlates
-     * responses to in-flight requests by order, calling this method with
-     * {@link ClientReplyMode.OFF} or {@link ClientReplyMode.SKIP} will desynchronize
-     * the connection and produce incorrect results for all subsequent commands until
-     * the connection is closed and re-established. Only {@link ClientReplyMode.ON} is
-     * safe to use on a normal client.
-     *
-     * @example
-     * ```typescript
-     * const result = await client.clientReply(ClientReplyMode.ON);
-     * console.log(result); // Output: 'OK'
-     * ```
-     */
-    public async clientReply(
-        mode: ClientReplyMode,
-        options?: DecoderOption,
-    ): Promise<"OK"> {
-        return this.createWritePromise(createClientReply(mode), options);
     }
 }

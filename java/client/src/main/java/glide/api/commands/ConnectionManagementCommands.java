@@ -3,7 +3,6 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -181,26 +180,6 @@ public interface ConnectionManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> clientUnpause();
-
-    /**
-     * Controls the server reply behavior for the current connection.
-     *
-     * <p><b>Warning:</b> Because GLIDE uses a multiplexed connection that correlates responses to
-     * in-flight requests by order, calling this method with {@link ClientReplyMode#OFF} or {@link
-     * ClientReplyMode#SKIP} will desynchronize the connection and produce incorrect results for all
-     * subsequent commands until the connection is closed and re-established. Only {@link
-     * ClientReplyMode#ON} is safe to use on a normal client.
-     *
-     * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
-     * @param mode The reply mode to use.
-     * @return <code>"OK"</code> response on success.
-     * @example
-     *     <pre>{@code
-     * String result = client.clientReply(ClientReplyMode.ON).get();
-     * assert result.equals("OK");
-     * }</pre>
-     */
-    CompletableFuture<String> clientReply(ClientReplyMode mode);
 
     /**
      * Resets the connection state.

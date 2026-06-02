@@ -450,23 +450,6 @@ export enum ClientPauseMode {
 }
 
 /**
- * Defines the reply mode for {@link GlideClient.clientReply} and
- *      {@link GlideClusterClient.clientReply} commands.
- *
- * @see {@link https://valkey.io/commands/client-reply/|valkey.io} for details.
- */
-export enum ClientReplyMode {
-    /** Resume normal reply behavior. */
-    ON = "ON",
-
-    /** Suppress all replies until `CLIENT REPLY ON` is sent. */
-    OFF = "OFF",
-
-    /** Suppress the reply for the next command only. */
-    SKIP = "SKIP",
-}
-
-/**
  * @internal
  */
 export function createClientPause(
@@ -487,15 +470,6 @@ export function createClientPause(
  */
 export function createClientUnpause(): command_request.Command {
     return createCommand(RequestType.ClientUnpause, []);
-}
-
-/**
- * @internal
- */
-export function createClientReply(
-    mode: ClientReplyMode,
-): command_request.Command {
-    return createCommand(RequestType.ClientReply, [mode]);
 }
 
 /**

@@ -5,7 +5,6 @@ import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
-import static command_request.CommandRequestOuterClass.RequestType.ClientReply;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
@@ -105,7 +104,6 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptArgOptions;
@@ -429,18 +427,6 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> clientUnpause(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 ClientUnpause, new String[0], route, this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> clientReply(@NonNull ClientReplyMode mode) {
-        return clientReply(mode, RANDOM);
-    }
-
-    @Override
-    public CompletableFuture<String> clientReply(
-            @NonNull ClientReplyMode mode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                ClientReply, new String[] {mode.getValkeyApi()}, route, this::handleStringResponse);
     }
 
     @Override

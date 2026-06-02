@@ -24,7 +24,6 @@ import {
 import { ClusterBatch } from "./Batch";
 import {
     ClientPauseMode,
-    ClientReplyMode,
     ClusterBatchOptions,
     ClusterScanOptions,
     FlushMode,
@@ -37,7 +36,6 @@ import {
     createClientGetName,
     createClientId,
     createClientPause,
-    createClientReply,
     createClientUnpause,
     createConfigGet,
     createConfigResetStat,
@@ -1958,38 +1956,6 @@ export class GlideClusterClient extends BaseClient {
             route: "allPrimaries" as const,
             ...options,
         });
-    }
-
-    /**
-     * Controls the server reply behavior for the current connection.
-     *
-     * The command will be routed to a random node, unless `route` is provided.
-     *
-     * @see {@link https://valkey.io/commands/client-reply/|valkey.io} for details.
-     *
-     * @param mode - The reply mode to use.
-     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
-     * @returns `"OK"` response on success.
-     *
-     * @remarks
-     * **Warning:** Because GLIDE uses a multiplexed connection that correlates
-     * responses to in-flight requests by order, calling this method with
-     * {@link ClientReplyMode.OFF} or {@link ClientReplyMode.SKIP} will desynchronize
-     * the connection and produce incorrect results for all subsequent commands until
-     * the connection is closed and re-established. Only {@link ClientReplyMode.ON} is
-     * safe to use on a normal client.
-     *
-     * @example
-     * ```typescript
-     * const result = await client.clientReply(ClientReplyMode.ON);
-     * console.log(result); // Output: 'OK'
-     * ```
-     */
-    public async clientReply(
-        mode: ClientReplyMode,
-        options?: RouteOption & DecoderOption,
-    ): Promise<"OK"> {
-        return this.createWritePromise(createClientReply(mode), options);
     }
 
     /**

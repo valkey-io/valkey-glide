@@ -51,7 +51,6 @@ import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptOptions;
@@ -386,18 +385,6 @@ public class CommandTests {
         // Verify that SET completes once pause expires.
         assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals("after", regularClient.get(key).get());
-    }
-
-    // TODO #6083: add end-to-end tests for OFF and SKIP once supported.
-    // Only ON is exercised end-to-end. OFF and SKIP suppress the server's
-    // replies, which would desync GLIDE's multiplexed connection because
-    // responses are matched to in-flight requests by order.
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void clientReply(GlideClient regularClient) {
-        String result = regularClient.clientReply(ClientReplyMode.ON).get();
-        assertEquals(OK, result);
     }
 
     @ParameterizedTest(autoCloseArguments = false)

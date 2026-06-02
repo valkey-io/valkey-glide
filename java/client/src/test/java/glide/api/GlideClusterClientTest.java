@@ -5,7 +5,6 @@ import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
-import static command_request.CommandRequestOuterClass.RequestType.ClientReply;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
@@ -90,7 +89,6 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptArgOptions;
@@ -1337,132 +1335,6 @@ public class GlideClusterClientTest {
 
         // exercise
         CompletableFuture<String> response = service.clientUnpause(RANDOM);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_on_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(ClientReply), eq(new String[] {"ON"}), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.ON);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_off_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(ClientReply), eq(new String[] {"OFF"}), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.OFF);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_skip_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(ClientReply), eq(new String[] {"SKIP"}), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.SKIP);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_on_with_route_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(ClientReply), eq(new String[] {"ON"}), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.ON, RANDOM);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_off_with_route_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(ClientReply), eq(new String[] {"OFF"}), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.OFF, RANDOM);
-        String payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void clientReply_skip_with_route_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(ClientReply), eq(new String[] {"SKIP"}), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.clientReply(ClientReplyMode.SKIP, RANDOM);
         String payload = response.get();
 
         // verify

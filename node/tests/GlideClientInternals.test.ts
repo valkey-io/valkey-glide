@@ -12,7 +12,6 @@ import { Reader } from "protobufjs/minimal";
 import {
     BaseClientConfiguration,
     ClientPauseMode,
-    ClientReplyMode,
     ClosingError,
     ClusterBatch,
     ClusterTransaction,
@@ -998,30 +997,6 @@ describe("SocketConnectionInternals", () => {
             sendRequest: (client) => client.clientUnpause(),
             expectedRequestType: RequestType.ClientUnpause,
             expectedValue: convertStringArrayToBuffer([]),
-        });
-    });
-
-    it("should set arguments according to clientReply ON request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientReply(ClientReplyMode.ON),
-            expectedRequestType: RequestType.ClientReply,
-            expectedValue: convertStringArrayToBuffer(["ON"]),
-        });
-    });
-
-    it("should set arguments according to clientReply OFF request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientReply(ClientReplyMode.OFF),
-            expectedRequestType: RequestType.ClientReply,
-            expectedValue: convertStringArrayToBuffer(["OFF"]),
-        });
-    });
-
-    it("should set arguments according to clientReply SKIP request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientReply(ClientReplyMode.SKIP),
-            expectedRequestType: RequestType.ClientReply,
-            expectedValue: convertStringArrayToBuffer(["SKIP"]),
         });
     });
 });

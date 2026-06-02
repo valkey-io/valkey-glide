@@ -4,7 +4,6 @@ package glide.api;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
-import static command_request.CommandRequestOuterClass.RequestType.ClientReply;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -51,7 +50,6 @@ import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.batch.BatchOptions;
@@ -241,12 +239,6 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> clientUnpause() {
         return commandManager.submitNewCommand(
                 ClientUnpause, new String[0], this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> clientReply(@NonNull ClientReplyMode mode) {
-        return commandManager.submitNewCommand(
-                ClientReply, new String[] {mode.getValkeyApi()}, this::handleStringResponse);
     }
 
     @Override

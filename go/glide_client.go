@@ -690,35 +690,6 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 	return handleOkResponse(result)
 }
 
-// Controls the server reply behavior for the current connection.
-//
-// Warning: Because GLIDE uses a multiplexed connection that correlates
-// responses to in-flight requests by order, calling this method with
-// [options.ClientReplyModeOff] or [options.ClientReplyModeSkip] will
-// desynchronize the connection and produce incorrect results for all
-// subsequent commands until the connection is closed and re-established.
-// Only [options.ClientReplyModeOn] is safe to use on a normal client.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//	mode - The reply mode to use.
-//
-// Return value:
-//
-//	`"OK"` response on success.
-//
-// [valkey.io]: https://valkey.io/commands/client-reply/
-func (client *Client) ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error) {
-	result, err := client.executeCommand(ctx, C.ClientReply, []string{string(mode)})
-	if err != nil {
-		return models.DefaultStringResponse, err
-	}
-	return handleOkResponse(result)
-}
-
 // Iterates incrementally over a database for matching keys.
 //
 // See [valkey.io] for details.

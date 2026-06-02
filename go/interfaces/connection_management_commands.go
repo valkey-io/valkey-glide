@@ -34,7 +34,5 @@ type ConnectionManagementCommands interface {
 
 	ClientUnpause(ctx context.Context) (string, error)
 
-	ClientReply(ctx context.Context, mode options.ClientReplyMode) (string, error)
-
 	Reset(ctx context.Context) (string, error)
 }

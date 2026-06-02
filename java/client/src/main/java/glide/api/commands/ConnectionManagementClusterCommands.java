@@ -4,7 +4,6 @@ package glide.api.commands;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
@@ -361,50 +360,6 @@ public interface ConnectionManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> clientUnpause(Route route);
-
-    /**
-     * Controls the server reply behavior for the current connection.<br>
-     * The command will be routed to a random node.
-     *
-     * <p><b>Warning:</b> Because GLIDE uses a multiplexed connection that correlates responses to
-     * in-flight requests by order, calling this method with {@link ClientReplyMode#OFF} or {@link
-     * ClientReplyMode#SKIP} will desynchronize the connection and produce incorrect results for all
-     * subsequent commands until the connection is closed and re-established. Only {@link
-     * ClientReplyMode#ON} is safe to use on a normal client.
-     *
-     * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
-     * @param mode The reply mode to use.
-     * @return <code>"OK"</code> response on success.
-     * @example
-     *     <pre>{@code
-     * String result = clusterClient.clientReply(ClientReplyMode.ON).get();
-     * assert result.equals("OK");
-     * }</pre>
-     */
-    CompletableFuture<String> clientReply(ClientReplyMode mode);
-
-    /**
-     * Controls the server reply behavior for the current connection.<br>
-     * The command will be routed to the nodes defined by <code>route</code>.
-     *
-     * <p><b>Warning:</b> Because GLIDE uses a multiplexed connection that correlates responses to
-     * in-flight requests by order, calling this method with {@link ClientReplyMode#OFF} or {@link
-     * ClientReplyMode#SKIP} will desynchronize the connection and produce incorrect results for all
-     * subsequent commands until the connection is closed and re-established. Only {@link
-     * ClientReplyMode#ON} is safe to use on a normal client.
-     *
-     * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
-     * @param mode The reply mode to use.
-     * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
-     * @return <code>"OK"</code> response on success.
-     * @example
-     *     <pre>{@code
-     * String result = clusterClient.clientReply(ClientReplyMode.ON, RANDOM).get();
-     * assert result.equals("OK");
-     * }</pre>
-     */
-    CompletableFuture<String> clientReply(ClientReplyMode mode, Route route);
 
     /**
      * Resets the connection state.
