@@ -16,7 +16,7 @@ all: java java-test python python-test node node-test go go-test python-lint jav
 ##
 java:
 	@echo "$(GREEN)Building for Java (release)$(RESET)"
-	@cd java && ./gradlew :client:buildAllRelease
+	@cd java && ./gradlew :client:buildAll
 
 java-lint:
 	@echo "$(GREEN)Running spotlessApply$(RESET)"
