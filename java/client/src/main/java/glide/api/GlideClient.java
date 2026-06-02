@@ -247,6 +247,7 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> clientReply(@NonNull ClientReplyMode mode) {
         return commandManager.submitNewCommand(
                 ClientReply, new String[] {mode.getValkeyApi()}, this::handleStringResponse);
+    }
 
     @Override
     public CompletableFuture<String> reset() {

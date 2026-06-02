@@ -441,6 +441,7 @@ public class GlideClusterClient extends BaseClient
             @NonNull ClientReplyMode mode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 ClientReply, new String[] {mode.getValkeyApi()}, route, this::handleStringResponse);
+    }
 
     @Override
     public CompletableFuture<String> reset() {
