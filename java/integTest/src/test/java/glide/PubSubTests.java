@@ -176,10 +176,20 @@ public class PubSubTests {
 
     @SneakyThrows
     private GlideClusterClient createClusterClient() {
-        GlideClusterClient client =
-                GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
-        senders.add(client);
-        return client;
+        int maxRetries = 3;
+        for (int attempt = 1; ; attempt++) {
+            try {
+                GlideClusterClient client =
+                        GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+                senders.add(client);
+                return client;
+            } catch (ExecutionException e) {
+                if (attempt >= maxRetries || !e.getMessage().contains("Connection refused")) {
+                    throw e;
+                }
+                Thread.sleep(500 * attempt);
+            }
+        }
     }
 
     @SneakyThrows
