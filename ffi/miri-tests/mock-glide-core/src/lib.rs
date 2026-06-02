@@ -23,9 +23,9 @@ pub use scripts_container::*;
 // type defined below, matching the real glide-core's `pub use client::ConnectionRequest`.
 pub use connection_request::{
     AuthenticationInfo, CompressionBackend, CompressionConfig, ConnectionRetryStrategy,
-    IamCredentials, NodeAddress, NodeDiscoveryMode, PeriodicChecksDisabled,
-    PeriodicChecksManualInterval, ProtocolVersion, PubSubChannelType, PubSubChannelsOrPatterns,
-    PubSubSubscriptions, ReadFrom, ServiceType, TlsMode,
+    IamCredentials, NodeDiscoveryMode, PeriodicChecksDisabled, PeriodicChecksManualInterval,
+    ProtocolVersion, PubSubChannelType, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
+    ServiceType,
 };
 
 pub use telemetrylib::*;

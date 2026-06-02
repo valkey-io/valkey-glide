@@ -67,6 +67,7 @@ socket-layer = [
 standalone_heartbeat = []
 iam_tests = []
 mock-pubsub = []
+test-util = []
 
 [dev-dependencies]
 rsevents = "0.3.1"
@@ -83,10 +84,11 @@ iai-callgrind = "0.15"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 glide-core = { path = ".", features = [
     "socket-layer",
+    "test-util",
 ] } # always enable this feature in tests.
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(standalone_heartbeat)', 'cfg(feature, values("iam_tests", "test-util"))'] }
 
 [lints.clippy]
 # Prevent blocking the async runtime

@@ -26,4 +26,6 @@ type ConnectionManagementCommands interface {
 	ClientGetName(ctx context.Context) (models.Result[string], error)
 
 	ClientSetName(ctx context.Context, connectionName string) (string, error)
+
+	Reset(ctx context.Context) (string, error)
 }
