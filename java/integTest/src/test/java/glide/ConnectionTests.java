@@ -8,7 +8,6 @@ import static glide.TestUtilities.*;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,7 +22,6 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.*;
 import glide.api.models.exceptions.ClosingException;
@@ -1132,36 +1130,6 @@ public class ConnectionTests {
 
             // zero timeout + verify cluster still responsive
             assertEquals(OK, client.clientPause(0).get());
-            assertEquals("PONG", client.ping().get());
-        }
-    }
-
-    @ParameterizedTest
-    @EnumSource(ProtocolVersion.class)
-    @SneakyThrows
-    public void test_client_reply_standalone(ProtocolVersion protocol) {
-        try (GlideClient client =
-                GlideClient.createClient(commonClientConfig().protocol(protocol).build()).get()) {
-            // Only ClientReplyMode.ON is safe to test.
-            // OFF and SKIP desynchronize the multiplexed connection and MUST NOT be tested here.
-            assertEquals(OK, client.clientReply(ClientReplyMode.ON).get());
-            // Verify the connection remains fully functional after CLIENT REPLY ON
-            assertEquals("PONG", client.ping().get());
-        }
-    }
-
-    @ParameterizedTest
-    @EnumSource(ProtocolVersion.class)
-    @SneakyThrows
-    public void test_client_reply_cluster(ProtocolVersion protocol) {
-        try (GlideClusterClient client =
-                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-                        .get()) {
-            // Only ClientReplyMode.ON is safe — OFF/SKIP desynchronize the multiplexed connection.
-            assertEquals(OK, client.clientReply(ClientReplyMode.ON).get());
-            assertEquals("PONG", client.ping().get());
-            // with explicit RANDOM route
-            assertEquals(OK, client.clientReply(ClientReplyMode.ON, RANDOM).get());
             assertEquals("PONG", client.ping().get());
         }
     }

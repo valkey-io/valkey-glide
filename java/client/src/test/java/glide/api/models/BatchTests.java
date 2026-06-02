@@ -17,7 +17,6 @@ import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
-import static command_request.CommandRequestOuterClass.RequestType.ClientReply;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -263,7 +262,6 @@ import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.commands.ClientPauseMode;
-import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
@@ -717,15 +715,6 @@ public class BatchTests {
 
         batch.clientUnpause();
         results.add(Pair.of(ClientUnpause, buildArgs()));
-
-        batch.clientReply(ClientReplyMode.ON);
-        results.add(Pair.of(ClientReply, buildArgs("ON")));
-
-        batch.clientReply(ClientReplyMode.OFF);
-        results.add(Pair.of(ClientReply, buildArgs("OFF")));
-
-        batch.clientReply(ClientReplyMode.SKIP);
-        results.add(Pair.of(ClientReply, buildArgs("SKIP")));
 
         batch.configRewrite();
         results.add(Pair.of(ConfigRewrite, buildArgs()));
