@@ -4016,7 +4016,7 @@ class TestPubSub:
                 expected_channels={channel1, channel2},
             )
 
-            # Poll until timestamp increases - the sync cycle may not have
+            # Poll until timestamp increases - Wait for the sync timestamp to update. Although the subscription state is confirmed, the timestamp may update asynchronously.
             # updated the timestamp yet or may complete within the same millisecond
             timeout_sec = 5
             poll_interval = 0.1
