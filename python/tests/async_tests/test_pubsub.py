@@ -38,7 +38,6 @@ from tests.utils.pubsub_test_utils import (
     subscribe_by_method,
     sunsubscribe_by_method,
     unsubscribe_by_method,
-    wait_for_messages,
     wait_for_subscription_state,
     wait_for_subscription_state_if_needed,
 )
@@ -2347,8 +2346,8 @@ class TestPubSub:
                 == 1
             )
 
-            # Wait for message with polling
-            wait_for_messages(1, callback_messages, timeout=45.0)
+            # Wait for message to propagate with longer timeout
+            await anyio.sleep(30)
 
             assert len(callback_messages) == 1
 
