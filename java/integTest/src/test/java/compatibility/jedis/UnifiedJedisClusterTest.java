@@ -78,10 +78,26 @@ public class UnifiedJedisClusterTest {
 
     @BeforeEach
     void setup() {
-        // Create GLIDE UnifiedJedis compatibility layer instance for cluster
-        unifiedJedis = new UnifiedJedis(clusterNodes);
-        assertNotNull(
-                unifiedJedis, "GLIDE UnifiedJedis cluster instance should be created successfully");
+        int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                unifiedJedis = new UnifiedJedis(clusterNodes);
+                assertNotNull(
+                        unifiedJedis,
+                        "GLIDE UnifiedJedis cluster instance should be created successfully");
+                return;
+            } catch (Exception e) {
+                if (attempt == maxRetries) {
+                    throw e;
+                }
+                try {
+                    Thread.sleep(1000 * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(ie);
+                }
+            }
+        }
     }
 
     @Test

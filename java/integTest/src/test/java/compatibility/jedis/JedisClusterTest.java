@@ -50,8 +50,24 @@ public class JedisClusterTest {
 
     @BeforeEach
     void setup() {
-        jedisCluster = new JedisCluster(clusterNodes);
-        assertNotNull(jedisCluster, "JedisCluster instance should be created successfully");
+        int maxRetries = 3;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                jedisCluster = new JedisCluster(clusterNodes);
+                assertNotNull(jedisCluster, "JedisCluster instance should be created successfully");
+                return;
+            } catch (Exception e) {
+                if (attempt == maxRetries) {
+                    throw e;
+                }
+                try {
+                    Thread.sleep(1000 * attempt);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(ie);
+                }
+            }
+        }
     }
 
     @AfterEach
