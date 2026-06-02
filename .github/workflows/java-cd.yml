@@ -365,7 +365,9 @@ jobs:
               shell: bash
               run: |
                   jar xf bundle-uber-jar.jar
-                  jar tf valkey-glide-*.jar | grep -q "natives/.*\.\(so\|dylib\|dll\)"
+                  INNER_JAR=$(find . -maxdepth 1 -name 'valkey-glide-*.jar' ! -name '*sources*' ! -name '*javadoc*' | head -1)
+                  mkdir inner && (cd inner && jar xf "../$INNER_JAR")
+                  find inner/natives -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -q .
 
             - name: Upload uber JAR artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
