@@ -5,6 +5,7 @@ import static glide.Constants.IP_ADDRESS_V4;
 import static glide.Constants.IP_ADDRESS_V6;
 import static glide.TestUtilities.getCaCertificate;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TestUtilities;
 import glide.api.GlideClusterClient;
@@ -36,6 +37,9 @@ public class ClusterTlsCertificateTest {
     @BeforeAll
     static void setup() throws Exception {
         String clusterHosts = System.getProperty("test.server.cluster.tls", "");
+        assumeTrue(
+                clusterHosts != null && !clusterHosts.trim().isEmpty(),
+                "TLS cluster endpoints not configured, skipping TLS tests");
         String[] hosts = clusterHosts.split(",");
 
         clusterNodes = new ArrayList<>();
