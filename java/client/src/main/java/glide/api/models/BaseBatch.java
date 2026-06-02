@@ -16,6 +16,9 @@ import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientReply;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -244,6 +247,8 @@ import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.commands.StringBaseCommands;
+import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.ClientReplyMode;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -2493,6 +2498,63 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T clientGetName() {
         protobufBatch.addCommands(buildCommand(ClientGetName));
+        return getThis();
+    }
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T clientPause(long timeout) {
+        protobufBatch.addCommands(
+                buildCommand(ClientPause, newArgsBuilder().add(Long.toString(timeout))));
+        return getThis();
+    }
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param mode The pause mode to use.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T clientPause(long timeout, @NonNull ClientPauseMode mode) {
+        protobufBatch.addCommands(
+                buildCommand(
+                        ClientPause, newArgsBuilder().add(Long.toString(timeout)).add(mode.getValkeyApi())));
+        return getThis();
+    }
+
+    /**
+     * Resumes processing commands on all clients.
+     *
+     * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T clientUnpause() {
+        protobufBatch.addCommands(buildCommand(ClientUnpause));
+        return getThis();
+    }
+
+    /**
+     * Controls the server reply behavior for the current connection.
+     *
+     * <p><b>Warning:</b> Because GLIDE uses a multiplexed connection that correlates responses to
+     * in-flight requests by order, calling this method with {@link ClientReplyMode#OFF} or {@link
+     * ClientReplyMode#SKIP} will desynchronize the connection and produce incorrect results for all
+     * subsequent commands until the connection is closed and re-established. Only {@link
+     * ClientReplyMode#ON} is safe to use on a normal client.
+     *
+     * @see <a href="https://valkey.io/commands/client-reply/">valkey.io</a> for details.
+     * @param mode The reply mode to use.
+     * @return Command Response - <code>"OK"</code> on success when using {@link ClientReplyMode#ON}.
+     */
+    public T clientReply(@NonNull ClientReplyMode mode) {
+        protobufBatch.addCommands(buildCommand(ClientReply, newArgsBuilder().add(mode.getValkeyApi())));
         return getThis();
     }
 
