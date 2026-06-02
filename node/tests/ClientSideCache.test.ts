@@ -58,7 +58,7 @@ describe("ClientSideCache", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 30000);
+    }, TIMEOUT);
 
     afterAll(async () => {
         await standaloneCluster.close();
