@@ -1,6 +1,12 @@
 name: Go - Continuous Deployment
 
 on:
+    pull_request:
+        paths:
+            - .github/workflows/go-cd.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
     push:
         tags:
             - "v*.*"
