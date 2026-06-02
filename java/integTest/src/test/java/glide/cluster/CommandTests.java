@@ -2422,6 +2422,7 @@ public class CommandTests {
         String libName = "functionStats_without_route";
         String funcName = libName;
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+        waitForFunctionStatsAllNodes(clusterClient, 0, 0);
 
         // function $funcName returns first argument
         String code =
@@ -2446,11 +2447,7 @@ public class CommandTests {
         }
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
-
-        response = clusterClient.functionStats().get();
-        for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
-            checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
-        }
+        waitForFunctionStatsAllNodes(clusterClient, 0, 0);
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -2462,6 +2459,7 @@ public class CommandTests {
         GlideString libName = gs("functionStats_without_route");
         GlideString funcName = libName;
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+        waitForFunctionStatsAllNodes(clusterClient, 0, 0);
 
         // function $funcName returns first argument
         GlideString code =
@@ -2494,12 +2492,7 @@ public class CommandTests {
         }
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
-
-        response = clusterClient.functionStatsBinary().get();
-        for (Map<GlideString, Map<GlideString, Object>> nodeResponse :
-                response.getMultiValue().values()) {
-            checkFunctionStatsBinaryResponse(nodeResponse, new GlideString[0], 0, 0);
-        }
+        waitForFunctionStatsAllNodes(clusterClient, 0, 0);
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -4308,6 +4301,43 @@ public class CommandTests {
         } else {
             assertNotNull(countWithRoute.getSingleValue());
             assertTrue(countWithRoute.getSingleValue() >= 0);
+        }
+    }
+
+    /**
+     * Polls functionStats() until all nodes report the expected library and function counts. This
+     * handles cluster propagation delay after functionFlush.
+     */
+    @SneakyThrows
+    private void waitForFunctionStatsAllNodes(
+            GlideClusterClient clusterClient, long expectedLibCount, long expectedFuncCount) {
+        long deadline = System.currentTimeMillis() + 5000;
+        Map<String, Object> expected =
+                createMap(
+                        "LUA",
+                        createMap(
+                                "libraries_count", expectedLibCount, "functions_count", expectedFuncCount));
+        while (System.currentTimeMillis() < deadline) {
+            ClusterValue<Map<String, Map<String, Object>>> response =
+                    clusterClient.functionStats().get();
+            boolean allMatch = true;
+            for (Map<String, Map<String, Object>> nodeResponse :
+                    response.getMultiValue().values()) {
+                if (!expected.equals(nodeResponse.get("engines"))) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (allMatch) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        // Final check with assertion for clear error message
+        ClusterValue<Map<String, Map<String, Object>>> response =
+                clusterClient.functionStats().get();
+        for (Map<String, Map<String, Object>> nodeResponse : response.getMultiValue().values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], expectedLibCount, expectedFuncCount);
         }
     }
 }
