@@ -344,7 +344,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> ping(@NonNull Route route) {
-        return commandManager.submitNewCommand(Ping, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                Ping, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
     }
 
     @Override
@@ -539,7 +540,9 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<String[]> time() {
         return commandManager.submitNewCommand(
-                Time, EMPTY_STRING_ARRAY, response -> castArray(handleArrayResponse(response), String.class));
+                Time,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -579,7 +582,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> save(@NonNull Route route) {
-        return commandManager.submitNewCommand(Save, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                Save, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
     }
 
     @Override
@@ -619,7 +623,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> bgrewriteaof() {
-        return commandManager.submitNewCommand(BgRewriteAof, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                BgRewriteAof, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -630,7 +635,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> flushall() {
-        return commandManager.submitNewCommand(FlushAll, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                FlushAll, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -766,7 +772,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> dbsize(@NonNull Route route) {
-        return commandManager.submitNewCommand(DBSize, EMPTY_STRING_ARRAY, route, this::handleLongResponse);
+        return commandManager.submitNewCommand(
+                DBSize, EMPTY_STRING_ARRAY, route, this::handleLongResponse);
     }
 
     @Override
@@ -1159,7 +1166,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> functionKill() {
-        return commandManager.submitNewCommand(FunctionKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                FunctionKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -1236,7 +1244,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> scriptFlush() {
-        return commandManager.submitNewCommand(ScriptFlush, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ScriptFlush, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -1259,7 +1268,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> scriptKill() {
-        return commandManager.submitNewCommand(ScriptKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ScriptKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -1271,7 +1281,9 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats() {
         return commandManager.submitNewCommand(
-                FunctionStats, EMPTY_STRING_ARRAY, response -> handleFunctionStatsResponse(response, false));
+                FunctionStats,
+                EMPTY_STRING_ARRAY,
+                response -> handleFunctionStatsResponse(response, false));
     }
 
     @Override
@@ -1932,7 +1944,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> clusterReset() {
-        return commandManager.submitNewCommand(ClusterReset, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ClusterReset, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -1943,12 +1956,14 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> readonly() {
-        return commandManager.submitNewCommand(ReadOnly, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ReadOnly, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> readwrite() {
-        return commandManager.submitNewCommand(ReadWrite, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ReadWrite, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -1976,7 +1991,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> clusterInfo() {
-        return commandManager.submitNewCommand(ClusterInfo, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ClusterInfo, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -1993,7 +2009,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> clusterNodes() {
-        return commandManager.submitNewCommand(ClusterNodes, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ClusterNodes, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -2010,7 +2027,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> clusterShards() {
-        return commandManager.submitNewCommand(ClusterShards, EMPTY_STRING_ARRAY, this::handleArrayResponse);
+        return commandManager.submitNewCommand(
+                ClusterShards, EMPTY_STRING_ARRAY, this::handleArrayResponse);
     }
 
     @Override
@@ -2027,7 +2045,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> clusterLinks() {
-        return commandManager.submitNewCommand(ClusterLinks, EMPTY_STRING_ARRAY, this::handleArrayResponse);
+        return commandManager.submitNewCommand(
+                ClusterLinks, EMPTY_STRING_ARRAY, this::handleArrayResponse);
     }
 
     @Override
@@ -2044,7 +2063,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> clusterMyId() {
-        return commandManager.submitNewCommand(ClusterMyId, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                ClusterMyId, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override

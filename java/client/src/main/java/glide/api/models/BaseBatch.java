@@ -9,6 +9,8 @@ import static command_request.CommandRequestOuterClass.RequestType.BRPop;
 import static command_request.CommandRequestOuterClass.RequestType.BZMPop;
 import static command_request.CommandRequestOuterClass.RequestType.BZPopMax;
 import static command_request.CommandRequestOuterClass.RequestType.BZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.BgRewriteAof;
+import static command_request.CommandRequestOuterClass.RequestType.BgSave;
 import static command_request.CommandRequestOuterClass.RequestType.BitCount;
 import static command_request.CommandRequestOuterClass.RequestType.BitField;
 import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadOnly;
@@ -146,6 +148,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SRem;
 import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.Save;
 import static command_request.CommandRequestOuterClass.RequestType.Set;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
 import static command_request.CommandRequestOuterClass.RequestType.SetRange;
@@ -4974,6 +4977,62 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T lastsave() {
         protobufBatch.addCommands(buildCommand(LastSave));
+        return getThis();
+    }
+
+    /**
+     * Synchronously saves the dataset to disk.
+     *
+     * @see <a href="https://valkey.io/commands/save/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> response on success.
+     */
+    public T save() {
+        protobufBatch.addCommands(buildCommand(Save));
+        return getThis();
+    }
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return Command Response - A non-empty status string.
+     */
+    public T bgsave() {
+        protobufBatch.addCommands(buildCommand(BgSave));
+        return getThis();
+    }
+
+    /**
+     * Schedules a background save of the database.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return Command Response - A non-empty status string.
+     */
+    public T bgsaveSchedule() {
+        protobufBatch.addCommands(buildCommand(BgSave, newArgsBuilder().add("SCHEDULE")));
+        return getThis();
+    }
+
+    /**
+     * Aborts all in-progress and scheduled background saves.
+     *
+     * @since Valkey 8.1
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return Command Response - A non-empty status string.
+     */
+    public T bgsaveCancel() {
+        protobufBatch.addCommands(buildCommand(BgSave, newArgsBuilder().add("CANCEL")));
+        return getThis();
+    }
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).
+     *
+     * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
+     * @return Command Response - A non-empty status string.
+     */
+    public T bgrewriteaof() {
+        protobufBatch.addCommands(buildCommand(BgRewriteAof));
         return getThis();
     }
 

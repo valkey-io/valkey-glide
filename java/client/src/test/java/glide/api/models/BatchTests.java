@@ -9,6 +9,8 @@ import static command_request.CommandRequestOuterClass.RequestType.BRPop;
 import static command_request.CommandRequestOuterClass.RequestType.BZMPop;
 import static command_request.CommandRequestOuterClass.RequestType.BZPopMax;
 import static command_request.CommandRequestOuterClass.RequestType.BZPopMin;
+import static command_request.CommandRequestOuterClass.RequestType.BgRewriteAof;
+import static command_request.CommandRequestOuterClass.RequestType.BgSave;
 import static command_request.CommandRequestOuterClass.RequestType.BitCount;
 import static command_request.CommandRequestOuterClass.RequestType.BitField;
 import static command_request.CommandRequestOuterClass.RequestType.BitFieldReadOnly;
@@ -143,6 +145,7 @@ import static command_request.CommandRequestOuterClass.RequestType.SRem;
 import static command_request.CommandRequestOuterClass.RequestType.SScan;
 import static command_request.CommandRequestOuterClass.RequestType.SUnion;
 import static command_request.CommandRequestOuterClass.RequestType.SUnionStore;
+import static command_request.CommandRequestOuterClass.RequestType.Save;
 import static command_request.CommandRequestOuterClass.RequestType.Set;
 import static command_request.CommandRequestOuterClass.RequestType.SetBit;
 import static command_request.CommandRequestOuterClass.RequestType.SetRange;
@@ -1157,6 +1160,21 @@ public class BatchTests {
 
         batch.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
+
+        batch.save();
+        results.add(Pair.of(Save, buildArgs()));
+
+        batch.bgsave();
+        results.add(Pair.of(BgSave, buildArgs()));
+
+        batch.bgsaveSchedule();
+        results.add(Pair.of(BgSave, buildArgs("SCHEDULE")));
+
+        batch.bgsaveCancel();
+        results.add(Pair.of(BgSave, buildArgs("CANCEL")));
+
+        batch.bgrewriteaof();
+        results.add(Pair.of(BgRewriteAof, buildArgs()));
 
         batch.flushall().flushall(ASYNC);
         results.add(Pair.of(FlushAll, buildArgs()));

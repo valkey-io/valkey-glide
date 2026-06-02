@@ -275,7 +275,9 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String[]> time() {
         return commandManager.submitNewCommand(
-                Time, EMPTY_STRING_ARRAY, response -> castArray(handleArrayResponse(response), String.class));
+                Time,
+                EMPTY_STRING_ARRAY,
+                response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -295,22 +297,26 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> bgsaveSchedule() {
-        return commandManager.submitNewCommand(BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsaveCancel() {
-        return commandManager.submitNewCommand(BgSave, new String[] {CANCEL_VALKEY_API}, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                BgSave, new String[] {CANCEL_VALKEY_API}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgrewriteaof() {
-        return commandManager.submitNewCommand(BgRewriteAof, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                BgRewriteAof, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> flushall() {
-        return commandManager.submitNewCommand(FlushAll, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                FlushAll, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
@@ -491,7 +497,8 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<String> functionKill() {
-        return commandManager.submitNewCommand(FunctionKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return commandManager.submitNewCommand(
+                FunctionKill, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
