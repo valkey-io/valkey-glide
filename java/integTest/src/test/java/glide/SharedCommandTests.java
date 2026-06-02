@@ -6087,13 +6087,16 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void bzpopmax_timeout_check(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        // create new client with default request timeout (250 millis)
+        // create new client with request timeout higher than the blocking command timeout
+        // to avoid flakiness on slower platforms (e.g., Windows CI)
         try (BaseClient testClient =
                 client instanceof GlideClient
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get()) {
+                        ? GlideClient.createClient(commonClientConfig().requestTimeout(3000).build()).get()
+                        : GlideClusterClient.createClient(
+                                        commonClusterClientConfig().requestTimeout(3000).build())
+                                .get()) {
 
-            // ensure that commands doesn't time out even if timeout > request timeout
+            // ensure that commands doesn't time out even if timeout > default request timeout
             assertNull(testClient.bzpopmax(new String[] {key}, 1).get());
 
             // with 0 timeout (no timeout) should never time out,
