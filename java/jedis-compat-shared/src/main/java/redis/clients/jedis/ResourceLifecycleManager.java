@@ -41,7 +41,9 @@ public class ResourceLifecycleManager {
         cleanupExecutor.scheduleWithFixedDelay(this::cleanupDeadReferences, 30, 30, TimeUnit.SECONDS);
 
         // Register shutdown hook (static target avoids capturing instance reference)
-        Runtime.getRuntime().addShutdownHook(new Thread(ResourceLifecycleManager::shutdownHook, "jedis-resource-cleanup-hook"));
+        Runtime.getRuntime()
+                .addShutdownHook(
+                        new Thread(ResourceLifecycleManager::shutdownHook, "jedis-resource-cleanup-hook"));
     }
 
     private static void shutdownHook() {

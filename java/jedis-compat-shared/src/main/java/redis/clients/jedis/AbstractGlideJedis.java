@@ -1317,10 +1317,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
             ConfigurationMapper.cleanupTempFiles();
         } catch (Exception e) {
             // Log warning but don't fail the close operation
-            logger.log(
-                    Level.WARNING,
-                    "Failed to cleanup temporary certificate files during close",
-                    e);
+            logger.log(Level.WARNING, "Failed to cleanup temporary certificate files during close", e);
         }
     }
 
