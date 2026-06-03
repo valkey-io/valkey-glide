@@ -16,7 +16,7 @@ all: java java-test python python-test node node-test go go-test python-lint jav
 ##
 java:
 	@echo "$(GREEN)Building for Java (release)$(RESET)"
-	@cd java && ./gradlew :client:buildAll
+	@cd java && ./gradlew :client:buildAllRelease
 
 java-lint:
 	@echo "$(GREEN)Running spotlessApply$(RESET)"
@@ -61,7 +61,7 @@ node-test: .build/node_deps check-valkey-server
 
 node-lint: .build/node_deps
 	@echo "$(GREEN)Running linters for NodeJS$(RESET)"
-	@cd node && npm run lint:fix
+	@cd node && npx run lint:fix
 
 ##
 ## Prettier targets
