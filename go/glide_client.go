@@ -656,7 +656,7 @@ func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (s
 //	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-pause/
-func (client *Client) ClientPauseWithOptions(
+func (client *Client) ClientPauseWithMode(
 	ctx context.Context,
 	timeout time.Duration,
 	mode options.ClientPauseMode,

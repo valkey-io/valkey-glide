@@ -21,9 +21,9 @@ func ExampleClient_ClientPause() {
 	// Output: OK
 }
 
-func ExampleClient_ClientPauseWithOptions() {
+func ExampleClient_ClientPauseWithMode() {
 	var client *Client = getExampleClient()
-	result, err := client.ClientPauseWithOptions(context.Background(), 0, options.ClientPauseModeWrite)
+	result, err := client.ClientPauseWithMode(context.Background(), 0, options.ClientPauseModeWrite)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
 	}

@@ -30,7 +30,7 @@ type ConnectionManagementCommands interface {
 
 	ClientPause(ctx context.Context, timeout time.Duration) (string, error)
 
-	ClientPauseWithOptions(ctx context.Context, timeout time.Duration, mode options.ClientPauseMode) (string, error)
+	ClientPauseWithMode(ctx context.Context, timeout time.Duration, mode options.ClientPauseMode) (string, error)
 
 	ClientUnpause(ctx context.Context) (string, error)
 

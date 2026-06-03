@@ -111,7 +111,7 @@ func (suite *GlideTestSuite) TestClientPauseWriteThenUnpause() {
 	_, err := client.Set(ctx, key, "before")
 	suite.Require().NoError(err)
 
-	result, err := client.ClientPauseWithOptions(ctx, 2*time.Second, options.ClientPauseModeWrite)
+	result, err := client.ClientPauseWithMode(ctx, 2*time.Second, options.ClientPauseModeWrite)
 	suite.Require().NoError(err)
 	suite.Equal("OK", result)
 
