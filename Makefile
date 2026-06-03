@@ -15,7 +15,7 @@ all: java java-test python python-test node node-test go go-test python-lint jav
 ## Java targets
 ##
 java:
-	@echo "$(GREEN)Building for Java (release)$(RESET)"
+	@echo "$(GREEN)Building for Java$(RESET)"
 	@cd java && ./gradlew :client:buildAll
 
 java-lint:
