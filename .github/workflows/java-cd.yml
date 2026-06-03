@@ -1,6 +1,12 @@
 name: Java Prepare Deployment
 
 on:
+    pull_request:
+        paths:
+            - .github/workflows/java-cd.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
     push:
         tags:
             - "v*.*"
@@ -56,7 +62,9 @@ jobs:
               id: release-version
               shell: bash
               run: |
-                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                      R_VERSION="0.0.0"
+                  elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                       R_VERSION=${GITHUB_REF:11}

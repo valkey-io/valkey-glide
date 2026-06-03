@@ -41,6 +41,7 @@ permissions:
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
             TESTS_PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX }}
@@ -62,9 +63,9 @@ jobs:
                   # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
                       .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          if (.RUNNER | type == "array")
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
                           end
                       )
                   )' | jq -c .)
@@ -274,34 +275,34 @@ jobs:
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
                     PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
                     PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_arm64
-                    
+
                     echo "Downloading PyPy 3.9 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.10 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.11 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                   elif [[ "$ARCH" == "x86_64" ]]; then
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
                     PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
                     PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_x86_64
-                    
+
                     echo "Downloading PyPy 3.9 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.10 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.11 for x86_64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2" 
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                   fi
 
@@ -471,6 +472,7 @@ jobs:
     build-source-dist-and-publish-to-pypi:
         name: Publish the base PyPi package
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         needs: publish-binaries
         steps:
             - name: Checkout
@@ -608,7 +610,7 @@ jobs:
                       echo "Downloading PyPy 3.10 for x86_64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     elif [[ "$ARCH" == "aarch64" ]]; then
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
                       echo "Downloading PyPy 3.10 for aarch64"
@@ -624,7 +626,7 @@ jobs:
                       echo "Downloading PyPy 3.10 for arm64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     else
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
                       echo "Downloading PyPy 3.10 for x86_64"
