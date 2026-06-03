@@ -80,7 +80,6 @@ import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAM
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
-import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
