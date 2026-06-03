@@ -19,8 +19,8 @@ import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
-import static glide.TestUtilities.waitForNotBusy;
 import static glide.TestUtilities.waitForCondition;
+import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -909,8 +909,7 @@ public class CommandTests {
         long before = clusterClient.lastsave().get();
         assertTrue(clusterClient.bgsave().get().startsWith("Background saving"));
         waitForCondition(
-                () -> clusterClient.lastsave().get() > before,
-                "LASTSAVE did not update after BGSAVE");
+                () -> clusterClient.lastsave().get() > before, "LASTSAVE did not update after BGSAVE");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -966,14 +965,19 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof(GlideClusterClient clusterClient) {
-        assertTrue(clusterClient.bgrewriteaof().get().startsWith("Background append only file rewriting"));
+        assertTrue(
+                clusterClient.bgrewriteaof().get().startsWith("Background append only file rewriting"));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
-        assertTrue(clusterClient.bgrewriteaof(ALL_PRIMARIES).get().startsWith("Background append only file rewriting"));
+        assertTrue(
+                clusterClient
+                        .bgrewriteaof(ALL_PRIMARIES)
+                        .get()
+                        .startsWith("Background append only file rewriting"));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

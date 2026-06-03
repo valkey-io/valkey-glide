@@ -47,7 +47,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 import lombok.NonNull;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
@@ -577,8 +576,7 @@ public class TestUtilities {
         long timeout = 5000;
 
         while (timeout > 0) {
-            if (condition.call())
-            {
+            if (condition.call()) {
                 return;
             }
 

@@ -15,8 +15,8 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
-import static glide.TestUtilities.waitForNotBusy;
 import static glide.TestUtilities.waitForCondition;
+import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -489,8 +489,7 @@ public class CommandTests {
         long before = client.lastsave().get();
         assertTrue(client.bgsave().get().startsWith("Background saving"));
         waitForCondition(
-                () -> client.lastsave().get() > before,
-                "LASTSAVE did not update after BGSAVE");
+                () -> client.lastsave().get() > before, "LASTSAVE did not update after BGSAVE");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -500,8 +499,7 @@ public class CommandTests {
         long before = client.lastsave().get();
         assertTrue(client.bgsaveSchedule().get().startsWith("Background saving"));
         waitForCondition(
-                () -> client.lastsave().get() > before,
-                "LASTSAVE did not update after BGSAVE SCHEDULE");
+                () -> client.lastsave().get() > before, "LASTSAVE did not update after BGSAVE SCHEDULE");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
