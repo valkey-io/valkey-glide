@@ -125,7 +125,7 @@ jobs:
 
             - name: Run cargo machete
               run: |
-                  cargo install cargo-machete
+                  cargo install --locked cargo-machete
                   cargo machete | tee machete-results.txt
                   if grep -A1 "cargo-machete found the following unused dependencies in this directory:" machete-results.txt | sed -n '2p' | grep -v "^if" > /dev/null; then
                     echo "Machete results summary: Unused dependencies found" >> $GITHUB_STEP_SUMMARY

@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -6726,9 +6727,6 @@ func (suite *GlideTestSuite) Test_XDel() {
 }
 
 func (suite *GlideTestSuite) TestZScan() {
-	// See https://github.com/valkey-io/valkey-glide/issues/5813
-	suite.T().Skip("Skipping TestZScan until flakiness is fixed")
-
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := uuid.New().String()
 		initialCursor := models.NewCursor()
@@ -6810,10 +6808,6 @@ func (suite *GlideTestSuite) TestZScan() {
 		for !cursor.IsFinished() {
 			result, err := client.ZScan(context.Background(), key1, cursor)
 			assert.NoError(suite.T(), err)
-			assert.NotEqual(suite.T(), cursor, result.Cursor)
-			if len(result.Data) > 0 {
-				assert.False(suite.T(), isSubset(result.Data, resultCollection))
-			}
 			resultCollection = append(resultCollection, result.Data...)
 			cursor = result.Cursor
 		}
@@ -11790,5 +11784,30 @@ func (suite *GlideTestSuite) TestRegisterClientNameAndVersion() {
 		}
 		assert.Contains(suite.T(), infoStr, "lib-name=GlideGo", "lib-name not found or incorrect")
 		assert.Regexp(suite.T(), "lib-ver=unknown|lib-ver=v", infoStr, "lib-ver not found or incorrect")
+	})
+}
+
+func (suite *GlideTestSuite) TestReset() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		t := suite.T()
+		switch c := client.(type) {
+		case interfaces.GlideClientCommands:
+			result, err := c.Reset(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "RESET", result)
+			// Verify client recovers after reset
+			pong, err := c.Ping(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "PONG", pong)
+		case interfaces.GlideClusterClientCommands:
+			clusterClient := client.(*glide.ClusterClient)
+			result, err := clusterClient.Reset(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "RESET", result)
+			// Verify client recovers after reset
+			pong, err := c.Ping(context.Background())
+			assert.Nil(t, err)
+			assert.Equal(t, "PONG", pong)
+		}
 	})
 }

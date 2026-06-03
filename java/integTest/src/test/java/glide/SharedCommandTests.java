@@ -18674,6 +18674,23 @@ public class SharedCommandTests {
         assertEquals("OK", result);
     }
 
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void reset(BaseClient client) {
+        String result =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).reset().get()
+                        : ((GlideClient) client).reset().get();
+        assertEquals("RESET", result);
+        // Verify client recovers after reset
+        String pong =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).ping().get()
+                        : ((GlideClient) client).ping().get();
+        assertEquals("PONG", pong);
+    }
+
     /**
      * Helper method to check if ACL file is configured on the server. Attempts to call ACL LOAD and
      * returns true if successful, false if it fails with ACL file not configured error.
