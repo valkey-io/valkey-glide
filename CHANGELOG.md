@@ -60,6 +60,7 @@
 * Node: Client-Side Caching Support ([#5720](https://github.com/valkey-io/valkey-glide/pull/5720))
 * Java: Support custom socket address resolution when connecting to valkey ([#4396](https://github.com/valkey-io/valkey-glide/issues/4396))
 * Python: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
+* Go: Add MEMORY server management commands (MEMORY DOCTOR, MEMORY MALLOC-STATS, MEMORY PURGE, MEMORY STATS) with full cluster routing support ([#5957](https://github.com/valkey-io/valkey-glide/issues/5957))
 
 ### Fixes
 

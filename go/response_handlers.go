@@ -1799,3 +1799,45 @@ func handleStringToArrayOfMapsMapResponse(
 
 	return resultMap, nil
 }
+
+// handleStringToStringAnyMapMapResponse processes a multi-node map response where each node returns a map[string]any.
+// Used for MEMORY STATS in cluster mode with AllPrimaries routing.
+func handleStringToStringAnyMapMapResponse(
+	response *C.struct_CommandResponse,
+) (map[string]map[string]any, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+
+	result, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		return nil, nil
+	}
+
+	parsedMap, ok := result.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type: %T", result)
+	}
+
+	resultMap := make(map[string]map[string]any)
+	for key, value := range parsedMap {
+		if value == nil {
+			resultMap[key] = nil
+			continue
+		}
+		mapValue, ok := value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected value type for key %s: %T", key, value)
+		}
+		resultMap[key] = mapValue
+	}
+
+	return resultMap, nil
+}
