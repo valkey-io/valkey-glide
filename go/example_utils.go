@@ -70,6 +70,7 @@ func getExampleClient() *Client {
 	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	standaloneClients = append(standaloneClients, client)
@@ -94,6 +95,7 @@ func getExampleClusterClient() *ClusterClient {
 	client, err := NewClusterClient(cConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	clusterClients = append(clusterClients, client)
@@ -124,6 +126,7 @@ func getExampleClientWithSubscription(mode config.PubSubChannelMode, channelOrPa
 	client, err := NewClient(config)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	standaloneClients = append(standaloneClients, client)
@@ -154,6 +157,7 @@ func getExampleClusterClientWithSubscription(
 	client, err := NewClusterClient(ccConfig)
 	if err != nil {
 		fmt.Println("error connecting to server: ", err)
+		return nil
 	}
 
 	clusterClients = append(clusterClients, client)
