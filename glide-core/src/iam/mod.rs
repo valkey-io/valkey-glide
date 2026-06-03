@@ -116,14 +116,22 @@ async fn get_signing_identity(
     let mut loader = aws_config::defaults(BehaviorVersion::latest())
         .region(aws_config::Region::new(region.to_string()));
 
-    // Honor AWS_ENDPOINT_URL_STS for credential acquisition (matches boto3).
-    // `.use_fips(false)` is also required because under AWS_USE_FIPS_ENDPOINT=true
-    // the SDK endpoint resolver rejects user URLs not on its FIPS list. Scoped
-    // to this loader; SigV4 presigning is unaffected. See valkey-io/valkey-glide#5967.
-    if let Ok(sts_endpoint) = std::env::var("AWS_ENDPOINT_URL_STS")
-        && !sts_endpoint.is_empty()
-    {
-        loader = loader.use_fips(false).endpoint_url(sts_endpoint);
+    // Honor AWS_ENDPOINT_URL_STS like boto3 does, but require https to avoid
+    // leaking credentials in transit. `.use_fips(false)` is needed because the
+    // SDK endpoint resolver otherwise rejects URLs not on its FIPS list. Scoped
+    // to this loader; SigV4 presigning is unaffected. See #5967.
+    if let Ok(sts_endpoint) = std::env::var("AWS_ENDPOINT_URL_STS") {
+        let sts_endpoint = sts_endpoint.trim();
+        if !sts_endpoint.is_empty() {
+            if !sts_endpoint.starts_with("https://") {
+                return Err(GlideIAMError::CredentialsError(format!(
+                    "AWS_ENDPOINT_URL_STS must use https:// to protect credentials in transit, got: {sts_endpoint}"
+                )));
+            }
+            loader = loader
+                .use_fips(false)
+                .endpoint_url(sts_endpoint.to_string());
+        }
     }
 
     let config = loader.load().await;
@@ -1054,12 +1062,32 @@ mod tests {
             "token should be generated with override set"
         );
 
-        // An empty AWS_ENDPOINT_URL_STS must be treated as unset (the override
-        // is guarded by `!sts_endpoint.is_empty()`).
-        unsafe {
-            env::set_var("AWS_ENDPOINT_URL_STS", "");
+        // Empty and whitespace-only values are treated as unset.
+        for blank in ["", "   \t  "] {
+            unsafe {
+                env::set_var("AWS_ENDPOINT_URL_STS", blank);
+            }
+            let result = IAMTokenManager::new(
+                cluster_name.clone(),
+                username.clone(),
+                region.clone(),
+                ServiceType::ElastiCache,
+                None,
+            )
+            .await;
+            assert!(
+                result.is_ok(),
+                "IAMTokenManager creation should succeed when AWS_ENDPOINT_URL_STS is {:?}: {:?}",
+                blank,
+                result.err(),
+            );
         }
-        let with_empty = IAMTokenManager::new(
+
+        // Non-https overrides are rejected to prevent leaking credentials.
+        unsafe {
+            env::set_var("AWS_ENDPOINT_URL_STS", "http://sts.example.com");
+        }
+        let with_http = IAMTokenManager::new(
             cluster_name.clone(),
             username.clone(),
             region.clone(),
@@ -1068,9 +1096,12 @@ mod tests {
         )
         .await;
         assert!(
-            with_empty.is_ok(),
-            "IAMTokenManager creation should succeed when AWS_ENDPOINT_URL_STS is empty: {:?}",
-            with_empty.err(),
+            matches!(
+                with_http,
+                Err(GlideIAMError::CredentialsError(ref msg)) if msg.contains("https")
+            ),
+            "IAMTokenManager creation should fail with CredentialsError mentioning https when AWS_ENDPOINT_URL_STS uses http://, got: {:?}",
+            with_http.err(),
         );
 
         unsafe {
