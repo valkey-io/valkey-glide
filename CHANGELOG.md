@@ -4,17 +4,17 @@
 
 * Go: Add RESET command support ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
 * Java: Add RESET command support ([#5947](https://github.com/valkey-io/valkey-glide/pull/5947))
-* CORE/FFI: Add `MonitorClient` for the MONITOR command ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
+* Core/FFI: Add `MonitorClient` for the MONITOR command ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
 * Node: Add RESET command support ([#5945](https://github.com/valkey-io/valkey-glide/pull/5945))
 * Python: Add RESET command support ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
 * Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
-* CORE: Phase 2 client-side caching ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
-* CORE: Add RESET command support ([#5959](https://github.com/valkey-io/valkey-glide/pull/5959))
+* Core: Phase 2 client-side caching ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
+* Core: Add RESET command support ([#5959](https://github.com/valkey-io/valkey-glide/pull/5959))
 * Node: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))
 * Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
 * Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
-* CORE: Avoid panic on cluster `SCAN` when a read-from-replica AZ affinity strategy is configured. The slot map carries no AZ metadata, so these strategies now fall back to their documented round-robin behavior (replicas for `AZAffinity`, replicas plus primary for `AZAffinityReplicasAndPrimary`) instead of hitting `todo!()` ([#5909](https://github.com/valkey-io/valkey-glide/issues/5909))
+* Core: Avoid panic on cluster `SCAN` when a read-from-replica AZ affinity strategy is configured. The slot map carries no AZ metadata, so these strategies now fall back to their documented round-robin behavior (replicas for `AZAffinity`, replicas plus primary for `AZAffinityReplicasAndPrimary`) instead of hitting `todo!()` ([#5909](https://github.com/valkey-io/valkey-glide/issues/5909))
 
 ## 2.4
 
@@ -34,7 +34,7 @@
   * New `create_client_from_uri` FFI function accepts Redis/Valkey URI strings and optional JSON configuration
   * Supports all ConnectionRequest options including compression, periodic checks, IAM credentials, and pub/sub subscriptions
   * Simplifies language binding implementation by moving protobuf construction to Rust
-* Python, Java, Node, CORE: Add valkey-search 1.2 support — FT.CREATE index options (SCORE, LANGUAGE, SKIPINITIALSCAN, MINSTEMSIZE, WITHOFFSETS/NOOFFSETS, NOSTOPWORDS/STOPWORDS, PUNCTUATION) and field options (NOSTEM, WEIGHT, WITHSUFFIXTRIE/NOSUFFIXTRIE, SORTABLE); FT.SEARCH options (VERBATIM, INORDER, SLOP, SORTBY, WITHSORTKEYS, NOCONTENT, DIALECT, shard scope, consistency mode); FT.AGGREGATE options (VERBATIM, INORDER, SLOP, DIALECT); FT.INFO scope options (LOCAL, PRIMARY, CLUSTER, shard scope, consistency mode); WITHSORTKEYS and NOCONTENT response conversion in glide-core. Python `options` parameter for `ft.search()` and `ft.aggregate()` is now optional. ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
+* Python, Java, Node, Core: Add valkey-search 1.2 support — FT.CREATE index options (SCore, LANGUAGE, SKIPINITIALSCAN, MINSTEMSIZE, WITHOFFSETS/NOOFFSETS, NOSTOPWORDS/STOPWORDS, PUNCTUATION) and field options (NOSTEM, WEIGHT, WITHSUFFIXTRIE/NOSUFFIXTRIE, SORTABLE); FT.SEARCH options (VERBATIM, INORDER, SLOP, SORTBY, WITHSORTKEYS, NOCONTENT, DIALECT, shard scope, consistency mode); FT.AGGREGATE options (VERBATIM, INORDER, SLOP, DIALECT); FT.INFO scope options (LOCAL, PRIMARY, CLUSTER, shard scope, consistency mode); WITHSORTKEYS and NOCONTENT response conversion in glide-core. Python `options` parameter for `ft.search()` and `ft.aggregate()` is now optional. ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
 * Node: Fix HNSW vector field serialization to use correct property names (`numberOfEdges`, `vectorsExaminedOnConstruction`, `vectorsExaminedOnRuntime`) matching the TypeScript type definitions ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
 * Node: Fix missing `break` for NUMERIC field case in FT.CREATE serialization, preventing fall-through to VECTOR case ([#5571](https://github.com/valkey-io/valkey-glide/pull/5571))
 * Core, Python, Java, Node: Add missing NOCONTENT and DIALECT options for FT.SEARCH ([#5550](https://github.com/valkey-io/valkey-glide/pull/5550))
@@ -94,7 +94,7 @@
 * Java: Add dynamic PubSub methods (subscribe, psubscribe, ssubscribe, unsubscribe, punsubscribe, sunsubscribe and their non-blocking "Lazy" variants), getSubscriptions() for subscription state tracking, pubsubReconciliationIntervalMs configuration option, and subscription_out_of_sync_count and subscription_last_sync_timestamp metrics ([#5267](https://github.com/valkey-io/valkey-glide/issues/5267))
 * Go: Add ALLOW_NON_COVERED_SLOTS flag support for cluster scan ([#4895](https://github.com/valkey-io/valkey-glide/issues/4895))
 * Core: Track HELLO and AUTH state for reconnection ([#5145](https://github.com/valkey-io/valkey-glide/issues/5145))
-* Core: Add support for ZRANGEBYLEX, ZRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCORE commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
+* Core: Add support for ZRANGEBYLEX, ZRANGEBYSCore, ZREVRANGE, ZREVRANGEBYLEX, and ZREVRANGEBYSCore commands in request_type ([#5379](https://github.com/valkey-io/valkey-glide/pull/5379))
 * Go: Add CLUSTER management commands (CLUSTER INFO, CLUSTER NODES, CLUSTER SHARDS, CLUSTER KEYSLOT, CLUSTER MYID, CLUSTER MYSHARDID, CLUSTER GETKEYSINSLOT, CLUSTER COUNTKEYSINSLOT, CLUSTER LINKS) ([#5206](https://github.com/valkey-io/valkey-glide/issues/5206))
 * Java: Make client java 8 compatible
 * Node: Add OpenTelemetry parent span context propagation support ([#4655](https://github.com/valkey-io/valkey-glide/issues/4655))
