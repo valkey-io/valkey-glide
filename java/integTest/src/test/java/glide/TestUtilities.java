@@ -42,10 +42,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import lombok.NonNull;
 import lombok.SneakyThrows;
 import lombok.experimental.UtilityClass;
@@ -561,6 +563,30 @@ public class TestUtilities {
                 }
             }
         } while (isBusy);
+    }
+
+    /**
+     * Polls the given condition until it returns {@code true} or times out.
+     *
+     * @param condition A callable that returns {@code true} when the desired state is reached.
+     * @param failure Message to include in the assertion if the timeout is exceeded.
+     */
+    @SneakyThrows
+    public static void waitForCondition(Callable<Boolean> condition, String failure) {
+        long sleep = 100;
+        long timeout = 5000;
+
+        while (timeout > 0) {
+            if (condition.call())
+            {
+                return;
+            }
+
+            Thread.sleep(sleep);
+            timeout -= sleep;
+        }
+
+        fail(failure);
     }
 
     /**

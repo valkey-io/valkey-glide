@@ -16,6 +16,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForNotBusy;
+import static glide.TestUtilities.waitForCondition;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -470,6 +471,52 @@ public class CommandTests {
         long result = regularClient.lastsave().get();
         Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
         assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void save(GlideClient client) {
+        long before = client.lastsave().get();
+        assertEquals(OK, client.save().get());
+        assertTrue(client.lastsave().get() > before);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave(GlideClient client) {
+        long before = client.lastsave().get();
+        assertTrue(client.bgsave().get().startsWith("Background saving"));
+        waitForCondition(
+                () -> client.lastsave().get() > before,
+                "LASTSAVE did not update after BGSAVE");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule(GlideClient client) {
+        long before = client.lastsave().get();
+        assertTrue(client.bgsaveSchedule().get().startsWith("Background saving"));
+        waitForCondition(
+                () -> client.lastsave().get() > before,
+                "LASTSAVE did not update after BGSAVE SCHEDULE");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel(GlideClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        assertEquals(OK, client.bgsaveCancel().get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof(GlideClient client) {
+        assertTrue(client.bgrewriteaof().get().startsWith("Background append only file rewriting"));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

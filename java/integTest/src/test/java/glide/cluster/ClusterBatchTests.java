@@ -14,6 +14,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -240,6 +241,38 @@ public class ClusterBatchTests {
         Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
         Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).lastsave(), true).get();
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
+    public void save(GlideClusterClient clusterClient, boolean isAtomic) {
+        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).save(), true).get();
+        assertEquals(OK, response[0]);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
+    public void bgsave(GlideClusterClient clusterClient, boolean isAtomic) {
+        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).bgsave(), true).get();
+        assertTrue(((String) response[0]).startsWith("Background saving"));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
+    public void bgsaveSchedule(GlideClusterClient clusterClient, boolean isAtomic) {
+        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).bgsaveSchedule(), true).get();
+        assertTrue(((String) response[0]).startsWith("Background saving"));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
+    public void bgrewriteaof(GlideClusterClient clusterClient, boolean isAtomic) {
+        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).bgrewriteaof(), true).get();
+        assertTrue(((String) response[0]).startsWith("Background append only file rewriting"));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

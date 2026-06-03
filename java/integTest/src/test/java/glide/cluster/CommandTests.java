@@ -20,6 +20,7 @@ import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForNotBusy;
+import static glide.TestUtilities.waitForCondition;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -881,6 +882,98 @@ public class CommandTests {
         for (Long value : data.getMultiValue().values()) {
             assertTrue(Instant.ofEpochSecond(value).isAfter(yesterday));
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void save(GlideClusterClient clusterClient) {
+        long before = clusterClient.lastsave().get();
+        assertEquals(OK, clusterClient.save().get());
+        assertTrue(clusterClient.lastsave().get() > before);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void save_with_route(GlideClusterClient clusterClient) {
+        long before = clusterClient.lastsave().get();
+        assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
+        assertTrue(clusterClient.lastsave().get() > before);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave(GlideClusterClient clusterClient) {
+        long before = clusterClient.lastsave().get();
+        assertTrue(clusterClient.bgsave().get().startsWith("Background saving"));
+        waitForCondition(
+                () -> clusterClient.lastsave().get() > before,
+                "LASTSAVE did not update after BGSAVE");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave_with_route(GlideClusterClient clusterClient) {
+        long before = clusterClient.lastsave().get();
+        assertTrue(clusterClient.bgsave(ALL_PRIMARIES).get().startsWith("Background saving"));
+        waitForCondition(
+                () -> clusterClient.lastsave().get() > before,
+                "LASTSAVE did not update after BGSAVE with route");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule(GlideClusterClient clusterClient) {
+        long before = clusterClient.lastsave().get();
+        assertTrue(clusterClient.bgsaveSchedule().get().startsWith("Background saving"));
+        waitForCondition(
+                () -> clusterClient.lastsave().get() > before,
+                "LASTSAVE did not update after BGSAVE SCHEDULE");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
+        long before = clusterClient.lastsave().get();
+        assertTrue(clusterClient.bgsaveSchedule(ALL_PRIMARIES).get().startsWith("Background saving"));
+        waitForCondition(
+                () -> clusterClient.lastsave().get() > before,
+                "LASTSAVE did not update after BGSAVE SCHEDULE with route");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        assertEquals(OK, clusterClient.bgsaveCancel().get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel_with_route(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        assertEquals(OK, clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof(GlideClusterClient clusterClient) {
+        assertTrue(clusterClient.bgrewriteaof().get().startsWith("Background append only file rewriting"));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
+        assertTrue(clusterClient.bgrewriteaof(ALL_PRIMARIES).get().startsWith("Background append only file rewriting"));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
