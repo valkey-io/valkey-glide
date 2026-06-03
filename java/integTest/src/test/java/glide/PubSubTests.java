@@ -42,6 +42,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
+import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
@@ -159,12 +160,24 @@ public class PubSubTests {
 
     @SneakyThrows
     private BaseClient createClient(boolean standalone) {
-        BaseClient client =
-                standalone
-                        ? GlideClient.createClient(commonClientConfig().build()).get()
-                        : GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
-        senders.add(client);
-        return client;
+        int maxAttempts = 5;
+        for (int attempt = 1; ; attempt++) {
+            try {
+                BaseClient client =
+                        standalone
+                                ? GlideClient.createClient(commonClientConfig().build()).get()
+                                : GlideClusterClient.createClient(commonClusterClientConfig().build()).get();
+                senders.add(client);
+                return client;
+            } catch (ExecutionException e) {
+                if (attempt >= maxAttempts
+                        || !(e.getCause() instanceof ClosingException)
+                        || !e.getMessage().contains("Connection refused")) {
+                    throw e;
+                }
+                Thread.sleep(200);
+            }
+        }
     }
 
     @SneakyThrows
