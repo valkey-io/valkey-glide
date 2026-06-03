@@ -223,12 +223,16 @@ public class ClientSideCacheTests {
         BaseClient shortTtlClient;
         if (client instanceof GlideClient) {
             shortTtlClient =
-                    GlideClient.createClient(commonClientConfig().clientSideCache(shortTtlCache).build())
+                    GlideClient.createClient(
+                                    commonClientConfig().requestTimeout(10000).clientSideCache(shortTtlCache).build())
                             .get();
         } else {
             shortTtlClient =
                     GlideClusterClient.createClient(
-                                    commonClusterClientConfig().clientSideCache(shortTtlCache).build())
+                                    commonClusterClientConfig()
+                                            .requestTimeout(10000)
+                                            .clientSideCache(shortTtlCache)
+                                            .build())
                             .get();
         }
 
