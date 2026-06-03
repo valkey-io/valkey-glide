@@ -6,6 +6,7 @@
 mod constants;
 mod utilities;
 
+use glide_core::client::GlideClientForTests;
 use redis::PubSubSubscriptionKind;
 use rstest::rstest;
 use std::collections::HashSet;
@@ -672,6 +673,114 @@ fn test_all_subscription_types_survive_failover() {
         logger_core::log_info(
             LOG_PREFIX,
             "Test completed: all subscription types survived failover",
+        );
+    });
+}
+
+/// RESET clears pubsub subscriptions: after SUBSCRIBE + RESET, the synchronizer
+/// should see no active subscriptions. Uses wait_for_pubsub_state with timeout
+/// to allow reconciliation.
+#[rstest]
+#[serial_test::serial]
+#[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+fn test_reset_clears_pubsub_subscriptions() {
+    block_on_all(async {
+        let cluster = RedisCluster::new(false, &None, Some(3), Some(0));
+        let addresses = cluster.get_server_addresses();
+        let mut setup = PubSubTestSetup::new(&addresses).await;
+
+        let channels: Vec<Vec<u8>> = vec![b"reset-test-channel".to_vec()];
+
+        let subscribed = subscribe_and_wait(
+            &setup.synchronizer,
+            &channels,
+            PubSubSubscriptionKind::Exact,
+            SUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        assert!(
+            subscribed,
+            "subscription should be established before RESET"
+        );
+
+        // Send RESET through the glide Client path so handle_reset_command runs,
+        // which calls remove_desired_subscriptions to clear the desired subscription state.
+        {
+            let mut reset_cmd = redis::cmd("RESET");
+            let _ = setup.glide_client.send_command(&mut reset_cmd, None).await;
+        }
+
+        // Wait for synchronizer to reconcile the cleared desired state
+        let cleared = wait_for_pubsub_state(
+            &setup.synchronizer,
+            PubSubSubscriptionKind::Exact,
+            &HashSet::new(),
+            false,
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        assert!(cleared, "subscriptions should be cleared after RESET");
+    });
+}
+
+/// After RESET + reconnect, the synchronizer should NOT resubscribe because
+/// handle_reset_command cleared the desired subscription state.
+#[rstest]
+#[serial_test::serial]
+#[timeout(LONG_CLUSTER_TEST_TIMEOUT)]
+fn test_reset_does_not_resubscribe_after_reconnect() {
+    block_on_all(async {
+        let cluster = RedisCluster::new(false, &None, Some(3), Some(0));
+        let addresses = cluster.get_server_addresses();
+        let mut setup = PubSubTestSetup::new(&addresses).await;
+
+        let channels: Vec<Vec<u8>> = vec![b"reset-reconnect-channel".to_vec()];
+
+        let subscribed = subscribe_and_wait(
+            &setup.synchronizer,
+            &channels,
+            PubSubSubscriptionKind::Exact,
+            SUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        assert!(
+            subscribed,
+            "subscription should be established before RESET"
+        );
+
+        // Send RESET through the glide Client path so handle_reset_command runs,
+        // which calls remove_desired_subscriptions to clear the desired subscription state.
+        {
+            let mut reset_cmd = redis::cmd("RESET");
+            let _ = setup.glide_client.send_command(&mut reset_cmd, None).await;
+        }
+
+        // Kill connection to trigger reconnect
+        let mut kill_cmd = redis::cmd("CLIENT");
+        kill_cmd.arg("KILL").arg("SKIPME").arg("NO");
+        let _ = setup
+            .connection
+            .send_command(
+                &mut kill_cmd,
+                Some(redis::cluster_routing::RoutingInfo::MultiNode((
+                    redis::cluster_routing::MultipleNodeRoutingInfo::AllNodes,
+                    Some(redis::cluster_routing::ResponsePolicy::AllSucceeded),
+                ))),
+            )
+            .await;
+
+        // Desired state is empty, so synchronizer should NOT resubscribe after reconnect
+        let still_cleared = wait_for_pubsub_state(
+            &setup.synchronizer,
+            PubSubSubscriptionKind::Exact,
+            &HashSet::new(),
+            false,
+            RESUBSCRIPTION_TIMEOUT,
+        )
+        .await;
+        assert!(
+            still_cleared,
+            "subscriptions should NOT be restored after RESET+reconnect"
         );
     });
 }

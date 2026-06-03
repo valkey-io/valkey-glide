@@ -40,6 +40,7 @@ from glide_shared.commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     UpdateOptions,
 )
@@ -1026,6 +1027,15 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_reset(self, glide_sync_client: TGlideClient):
+        result = glide_sync_client.reset()
+        assert result == b"RESET"
+        # Verify client recovers after reset
+        pong = glide_sync_client.ping()
+        assert pong == b"PONG"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_config_get_set(self, glide_sync_client: TGlideClient):
         previous_timeout = glide_sync_client.config_get(["timeout"])
         assert glide_sync_client.config_set({"timeout": "1000"}) == OK
@@ -1526,9 +1536,9 @@ class TestCommands:
             glide_sync_client.blpop(["foo"], 0.001)
 
         def endless_blpop_call():
-            glide_sync_client.blpop(["non_existent_key"], 0)
+            glide_sync_client.blpop(["non_existent_key"], 10)
 
-        # blpop is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
+        # blpop is called against a non-existing key with a long timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -1608,10 +1618,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             glide_sync_client.blmpop([key4], ListDirection.LEFT, 0.1, 1)
 
-        # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in a timeout to
+        # BLMPOP is called against a non-existing key with a long timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         def endless_blmpop_call():
-            glide_sync_client.blmpop([key3], ListDirection.LEFT, 0, 1)
+            glide_sync_client.blmpop([key3], ListDirection.LEFT, 10, 1)
 
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -1705,9 +1715,9 @@ class TestCommands:
             glide_sync_client.brpop(["foo"], 0.001)
 
         def endless_brpop_call():
-            glide_sync_client.brpop(["non_existent_key"], 0)
+            glide_sync_client.brpop(["non_existent_key"], 10)
 
-        # brpop is called against a non-existing key with no timeout, but we wrap the call in the `run with timeout` function
+        # brpop is called against a non-existing key with a long timeout, but we wrap the call in the `run with timeout` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -1916,7 +1926,7 @@ class TestCommands:
                 key1, key3, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
 
-        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in a timeout to
+        # BLMOVE is called against a non-existing key with a long timeout, but we wrap the call in a timeout to
         # avoid having the test block forever
         def endless_blmove_call():
             glide_sync_client.blmove(
@@ -1924,7 +1934,7 @@ class TestCommands:
                 key2,
                 ListDirection.LEFT,
                 ListDirection.RIGHT,
-                0,
+                10,
             )
 
         with pytest.raises(TimeoutError):
@@ -4128,9 +4138,9 @@ class TestCommands:
             glide_sync_client.bzpopmin(["foo"], 0.5)
 
         def endless_bzpopmin_call():
-            glide_sync_client.bzpopmin(["non_existent_key"], 0)
+            glide_sync_client.bzpopmin(["non_existent_key"], 10)
 
-        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call the `run_sync_func_with_timeout_in_thread` function
+        # bzpopmin is called against a non-existing key with a long timeout, but we wrap the call the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -4189,9 +4199,9 @@ class TestCommands:
             glide_sync_client.bzpopmax(["foo"], 0.5)
 
         def endless_bzpopmax_call():
-            glide_sync_client.bzpopmax(["non_existent_key"], 0)
+            glide_sync_client.bzpopmax(["non_existent_key"], 10)
 
-        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
+        # bzpopmax is called against a non-existing key with a long timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -4866,9 +4876,9 @@ class TestCommands:
         assert compare_maps(entries, result_map) is True  # type: ignore
 
         def endless_bzmpop_call():
-            glide_sync_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
+            glide_sync_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 10)
 
-        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
+        # bzmpop is called against a non-existing key with a long timeout, but we wrap the call in the `run_sync_func_with_timeout_in_thread` function
         # to avoid having the test block forever
         with pytest.raises(TimeoutError):
             run_sync_func_with_timeout_in_thread(
@@ -9374,6 +9384,24 @@ class TestCommands:
                 )
         finally:
             assert glide_sync_client.custom_command(["SELECT", "0"]) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_migrate(self, glide_sync_client: TGlideClient):
+        key = get_random_string(10)
+        value = get_random_string(5)
+        glide_sync_client.set(key, value)
+
+        with pytest.raises(RequestError):
+            glide_sync_client.migrate("invalid-host", 6379, key, 0, 5000)
+
+        with pytest.raises(RequestError):
+            glide_sync_client.migrate(
+                "invalid-host", 6379, key, 0, 5000, MigrateOptions(copy=True)
+            )
+
+        with pytest.raises(ValueError):
+            MigrateOptions(username="user").to_args()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

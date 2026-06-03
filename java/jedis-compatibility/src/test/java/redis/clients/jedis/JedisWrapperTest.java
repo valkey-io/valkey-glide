@@ -150,6 +150,15 @@ public class JedisWrapperTest {
         assertNotNull(poolClass.getMethod("getMaxBorrowWaitTimeMillis"));
         assertNotNull(poolClass.getMethod("getNumActive"));
         assertNotNull(poolClass.getMethod("getNumIdle"));
+        assertNotNull(
+                redis.clients.jedis.util.Pool.class.getMethod("returnBrokenResource", Object.class));
+    }
+
+    @Test
+    public void testJedisBrokenApiExists() throws NoSuchMethodException {
+        Class<Jedis> jedisClass = Jedis.class;
+        assertNotNull(jedisClass.getMethod("isBroken"));
+        assertNotNull(jedisClass.getMethod("setBroken", boolean.class));
     }
 
     @Test

@@ -64,7 +64,7 @@ endif
 
 install-build-tools:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
-	cargo install cbindgen
+	cargo install --locked cbindgen
 
 install-dev-tools:
 	go install github.com/vakenbolt/go-test-report@v0.9.3
@@ -115,6 +115,9 @@ build-glide-ffi: libglide_ffi gen-c-bindings
 gen-c-bindings:
 	cd $(GLIDE_FFI_PATH) && \
 	cbindgen --config cbindgen.toml --crate glide-ffi --output $(GO_DIR)/lib.h --lang c
+	@# Add include guard to prevent multiple inclusion errors with CGo
+	@sed -i.bak '1 a\
+	#pragma once' $(GO_DIR)/lib.h && rm -f $(GO_DIR)/lib.h.bak
 
 generate-protobuf:
 	rm -rf internal/protobuf

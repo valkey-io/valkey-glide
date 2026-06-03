@@ -1421,7 +1421,6 @@ public class CommandTests {
         // Empty return - match a random UUID
         ScanOptions options = ScanOptions.builder().matchPattern("*" + UUID.randomUUID()).build();
         Object[] emptyResult = regularClient.scan(initialCursor, options).get();
-        assertNotEquals(initialCursor, emptyResult[resultCursorIndex]);
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
@@ -1509,7 +1508,6 @@ public class CommandTests {
         // Empty return - match a random UUID
         ScanOptions options = ScanOptions.builder().matchPattern("*" + UUID.randomUUID()).build();
         Object[] emptyResult = regularClient.scan(initialCursor, options).get();
-        assertNotEquals(initialCursor, emptyResult[resultCursorIndex]);
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor

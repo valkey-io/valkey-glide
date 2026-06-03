@@ -1,7 +1,27 @@
-## Pending 2.4
+## Pending 2.5
 
 #### Fixes
 * CORE: Honor `AWS_ENDPOINT_URL_STS` in the IAM credentials-provider loader so ElastiCache/MemoryDB IAM auth works in AWS partitions that do not publish a separate FIPS STS hostname (e.g. `us-gov-west-1`). Previously, setting `AWS_USE_FIPS_ENDPOINT=true` made the SDK construct a non-existent `sts-fips.<region>.amazonaws.com`, causing credential acquisition to hang. Matches `boto3` behavior. ([#5967](https://github.com/valkey-io/valkey-glide/issues/5967))
+
+#### Changes
+* Go: Add RESET command support ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
+* Java: Add RESET command support ([#5947](https://github.com/valkey-io/valkey-glide/pull/5947))
+* CORE/FFI: Add `MonitorClient` for the MONITOR command ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
+* Node: Add RESET command support ([#5945](https://github.com/valkey-io/valkey-glide/pull/5945))
+* Python: Add RESET command support ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
+* Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
+* CORE: Phase 2 client-side caching ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
+* CORE: Add RESET command support ([#5959](https://github.com/valkey-io/valkey-glide/pull/5959))
+* Node: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
+* Node: Add `MIGRATE` command support ([#5934](https://github.com/valkey-io/valkey-glide/pull/5934))
+* Go: Support custom socket address resolution when connecting to valkey ([#5873](https://github.com/valkey-io/valkey-glide/issues/5873))
+* Go: Add `MIGRATE` command support ([#5935](https://github.com/valkey-io/valkey-glide/pull/5935))
+* CORE: Avoid panic on cluster `SCAN` when a read-from-replica AZ affinity strategy is configured. The slot map carries no AZ metadata, so these strategies now fall back to their documented round-robin behavior (replicas for `AZAffinity`, replicas plus primary for `AZAffinityReplicasAndPrimary`) instead of hitting `todo!()` ([#5909](https://github.com/valkey-io/valkey-glide/issues/5909))
+
+## 2.4
+
+#### Fixes
+* CORE: Add dedicated timeout watchdog thread independent of the Tokio runtime. Under memory pressure or Tokio starvation, `tokio::time::sleep` may not fire on time. The watchdog uses a separate OS thread to guarantee timeout delivery, preventing commands from hanging indefinitely when the async runtime is overloaded. ([#5752](https://github.com/valkey-io/valkey-glide/issues/5752))
 * CORE: Propagate per-command response timeout to the multiplexed connection layer. The configured `request_timeout` (including blocking command timeouts) is now enforced at the connection level, ensuring commands time out reliably instead of waiting indefinitely with `Duration::MAX`. ([#5581](https://github.com/valkey-io/valkey-glide/issues/5581))
 * CORE: Fall back to existing cluster connections when initial nodes are unavailable during topology refresh. When `refreshTopologyFromInitialNodes=true` and the initial/seed node is unreachable (e.g., dead primary during failover), the topology refresh now queries healthy existing connections instead of failing silently. This complements #5812 to enable failover recovery when the seed node itself is the failed node. ([#5814](https://github.com/valkey-io/valkey-glide/pull/5814))
 * Node: Fix SIGSEGV in pubsub under pnpm strict hoisting — replace `value_from_split_pointer(high_u32, low_u32)` with `value_from_pointer(i64)` in the Node.js Rust client to accept response pointers as a single integer, eliminating the high/low split that caused upper 32-bit truncation when `protobufjs.util.Long` was null ([#5851](https://github.com/valkey-io/valkey-glide/issues/5851))

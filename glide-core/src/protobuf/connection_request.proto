@@ -97,6 +97,7 @@ message ClientSideCache {
     uint64 entry_ttl_ms = 3; // 0 = no expiration
     optional EvictionPolicy eviction_policy = 4;
     bool enable_metrics = 5;
+    bool server_assisted = 6;
 }
 
 enum EvictionPolicy {

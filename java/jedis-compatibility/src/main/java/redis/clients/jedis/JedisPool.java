@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
+import glide.api.logging.Logger;
 import java.net.URI;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
@@ -956,10 +957,27 @@ public class JedisPool extends Pool<Jedis> {
     }
 
     @Override
+    public Jedis getResource() {
+        Jedis jedis = super.getResource();
+        jedis.setDataSource(this);
+        return jedis;
+    }
+
+    @Override
     protected void returnResourceObject(Jedis resource) {
-        if (resource != null) {
+        if (resource == null) {
+            return;
+        }
+        if (resource.isBroken()) {
+            returnBrokenResource(resource);
+            return;
+        }
+        try {
             resource.resetForReuse();
             super.returnResourceObject(resource);
+        } catch (RuntimeException e) {
+            returnBrokenResource(resource);
+            Logger.log(Logger.Level.WARN, "JedisPool", "Resource is returned to the pool as broken", e);
         }
     }
 }
