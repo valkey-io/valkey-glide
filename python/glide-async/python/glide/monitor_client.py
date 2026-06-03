@@ -1,22 +1,11 @@
-# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX-Identifier: Apache-2.0
 
 import asyncio
-import json
 from typing import Callable, List, Optional
 
+from glide.glide import close_monitor_client_external, create_monitor_client_external
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
-
-# MonitorClient uses the CFFI layer from glide-sync for FFI-based monitor support.
-# glide-sync is not a declared dependency of glide-async (they are separate packages),
-# but it must be installed alongside glide-async to use MonitorClient.
-try:
-    from glide_sync._glide_ffi import GlideFFI
-except ImportError:
-    raise ImportError(
-        "MonitorClient requires the glide-sync package to be installed. "
-        "Install it with: pip install valkey-glide-sync"
-    )
 
 
 class MonitorClient:
@@ -25,17 +14,12 @@ class MonitorClient:
 
     Must be used with a standalone (non-cluster) configuration.
 
-    Note: Requires the valkey-glide-sync package to be installed.
-
     Warning: MONITOR is a debugging tool with performance implications.
     Do not use in production environments.
     """
 
     def __init__(self) -> None:
-        self._ffi = GlideFFI.ffi
-        self._lib = GlideFFI.lib
-        self._core_client = self._ffi.NULL
-        self._callback_ref = None
+        self._handle_id: Optional[int] = None
         self._queue: asyncio.Queue[MonitorMsg] = asyncio.Queue()
         self._is_closed = False
         self._stop_lock = asyncio.Lock()
@@ -69,62 +53,30 @@ class MonitorClient:
         conn_req = config._create_a_protobuf_conn_request(cluster_mode=False)
         conn_req_bytes = conn_req.SerializeToString()
 
-        @instance._ffi.callback("MonitorCallback")
-        def _monitor_callback(
-            client_ptr,
-            timestamp,
-            db,
-            client_addr_ptr,
-            client_addr_len,
-            command_ptr,
-            command_len,
-            args_json_ptr,
-            args_json_len,
-        ):
-            try:
-                client_addr = bytes(
-                    instance._ffi.buffer(client_addr_ptr, client_addr_len)
-                ).decode("utf-8", errors="replace")
-                command = bytes(instance._ffi.buffer(command_ptr, command_len)).decode(
-                    "utf-8", errors="replace"
-                )
-                args_json_str = bytes(
-                    instance._ffi.buffer(args_json_ptr, args_json_len)
-                ).decode("utf-8", errors="replace")
-                try:
-                    args: List[str] = (
-                        json.loads(args_json_str) if args_json_len > 0 else []
-                    )
-                except (json.JSONDecodeError, ValueError):
-                    args = []
-                msg = MonitorMsg(
-                    timestamp=timestamp,
-                    db=db,
-                    client_addr=client_addr,
-                    command=command,
-                    args=args,
-                )
-                if instance._user_callback is not None:
-                    instance._user_callback(msg)
-                elif instance._loop is not None and not instance._loop.is_closed():
-                    instance._loop.call_soon_threadsafe(instance._queue.put_nowait, msg)
-            except Exception:
-                pass  # Suppress callback errors to avoid crashing the Rust FFI layer
+        def _on_monitor_line(
+            timestamp: float,
+            db: int,
+            client_addr: str,
+            command: str,
+            args: List[str],
+        ) -> None:
+            msg = MonitorMsg(
+                timestamp=timestamp,
+                db=db,
+                client_addr=client_addr,
+                command=command,
+                args=args,
+            )
+            if instance._user_callback is not None:
+                instance._user_callback(msg)
+            elif instance._loop is not None and not instance._loop.is_closed():
+                instance._loop.call_soon_threadsafe(instance._queue.put_nowait, msg)
 
-        instance._callback_ref = _monitor_callback
-        client_response = instance._lib.create_monitor_client(
-            conn_req_bytes, len(conn_req_bytes), _monitor_callback
+        loop = asyncio.get_running_loop()
+        handle_id = await loop.run_in_executor(
+            None, create_monitor_client_external, conn_req_bytes, _on_monitor_line
         )
-        if client_response == instance._ffi.NULL:
-            raise RuntimeError("Failed to create monitor client: null response")
-        if client_response.connection_error_message != instance._ffi.NULL:
-            error = instance._ffi.string(
-                client_response.connection_error_message
-            ).decode()
-            instance._lib.free_connection_response(client_response)
-            raise RuntimeError(f"Failed to create monitor client: {error}")
-        instance._core_client = client_response.conn_ptr
-        instance._lib.free_connection_response(client_response)
+        instance._handle_id = handle_id
         return instance
 
     async def get_monitor_message(self) -> MonitorMsg:
@@ -144,12 +96,11 @@ class MonitorClient:
             if self._is_closed:
                 return
             self._is_closed = True
-        if self._core_client != self._ffi.NULL:
-            client = self._core_client
-            self._core_client = self._ffi.NULL
+        if self._handle_id is not None:
+            handle_id = self._handle_id
+            self._handle_id = None
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._lib.close_monitor_client, client)
-        self._callback_ref = None
+            await loop.run_in_executor(None, close_monitor_client_external, handle_id)
 
     async def aclose(self) -> None:
         """Alias for stop()."""

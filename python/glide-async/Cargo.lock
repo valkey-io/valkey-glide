@@ -3289,6 +3289,7 @@ dependencies = [
  "bytes",
  "glide-core",
  "logger_core",
+ "protobuf",
  "pyo3",
  "redis",
  "tracing",

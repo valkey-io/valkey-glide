@@ -5,12 +5,15 @@ use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use glide_core::Telemetry;
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::client::get_or_init_runtime;
+use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback};
+use glide_core::connection_request;
 use glide_core::errors::error_message;
 use glide_core::start_socket_listener;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
     GlideOpenTelemetrySignalsExporter, GlideSpan,
 };
+use protobuf::Message;
 use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -21,7 +24,7 @@ use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
@@ -231,6 +234,110 @@ impl Script {
 }
 
 /// A Python module implemented in Rust.
+static MONITOR_CLIENTS: OnceLock<Mutex<HashMap<u64, MonitorClient>>> = OnceLock::new();
+static NEXT_MONITOR_HANDLE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn monitor_store() -> &'static Mutex<HashMap<u64, MonitorClient>> {
+    MONITOR_CLIENTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[pyfunction]
+fn create_monitor_client_external(
+    connection_request_bytes: Vec<u8>,
+    callback: PyObject,
+) -> PyResult<u64> {
+    let conn_req =
+        connection_request::ConnectionRequest::parse_from_bytes(&connection_request_bytes)
+            .map_err(|e| {
+                pyo3::exceptions::PyValueError::new_err(format!("Invalid connection request: {e}"))
+            })?;
+    let proto_addr = conn_req.addresses.first().ok_or_else(|| {
+        pyo3::exceptions::PyValueError::new_err("No addresses in connection request")
+    })?;
+    let address = glide_core::client::NodeAddress {
+        host: proto_addr.host.to_string(),
+        port: proto_addr.port as u16,
+    };
+    let tls_mode = match conn_req.tls_mode.enum_value_or_default() {
+        connection_request::TlsMode::NoTls => glide_core::client::TlsMode::NoTls,
+        connection_request::TlsMode::SecureTls => glide_core::client::TlsMode::SecureTls,
+        connection_request::TlsMode::InsecureTls => glide_core::client::TlsMode::InsecureTls,
+    };
+    let redis_conn_info = redis::RedisConnectionInfo {
+        db: conn_req.database_id as i64,
+        username: conn_req.authentication_info.as_ref().and_then(|a| {
+            let u = a.username.to_string();
+            if u.is_empty() { None } else { Some(u) }
+        }),
+        password: conn_req.authentication_info.as_ref().and_then(|a| {
+            let p = a.password.to_string();
+            if p.is_empty() { None } else { Some(p) }
+        }),
+        protocol: redis::ProtocolVersion::RESP2,
+        ..Default::default()
+    };
+    let callback = Arc::new(callback);
+    let on_line: MonitorLineCallback = Arc::new(move |line: MonitorLine| {
+        let cb = Arc::clone(&callback);
+        Python::with_gil(|py| {
+            if let Err(err) = cb.call(
+                py,
+                (
+                    line.timestamp,
+                    line.db,
+                    line.client_addr.as_str(),
+                    line.command.as_str(),
+                    line.args.clone(),
+                ),
+                None,
+            ) {
+                logger_core::log_warn_lazy!(
+                    "monitor_callback",
+                    format!("Monitor callback raised an exception: {err}")
+                );
+            }
+        });
+    });
+    let glide_rt = get_or_init_runtime()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {e}")))?;
+    let client = glide_rt
+        .runtime
+        .block_on(MonitorClient::new(
+            &address,
+            redis_conn_info,
+            tls_mode,
+            on_line,
+        ))
+        .map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "Failed to create monitor client: {e}"
+            ))
+        })?;
+    let handle_id = NEXT_MONITOR_HANDLE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    monitor_store()
+        .lock()
+        .expect("monitor store lock poisoned")
+        .insert(handle_id, client);
+    Ok(handle_id)
+}
+
+#[pyfunction]
+fn close_monitor_client_external(handle_id: u64) -> PyResult<()> {
+    let client = {
+        let Ok(mut store) = monitor_store().lock() else {
+            return Ok(());
+        };
+        store.remove(&handle_id)
+    };
+    if let Some(client) = client {
+        let glide_rt = get_or_init_runtime().map_err(|e| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {e}"))
+        })?;
+        glide_rt.runtime.block_on(client.stop_async());
+    }
+    Ok(())
+}
+
 #[pymodule]
 fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Level>()?;
@@ -262,6 +369,8 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_cache_metric_from_registry, m)?)?;
     m.add_function(wrap_pyfunction!(register_address_resolver, m)?)?;
     m.add_function(wrap_pyfunction!(remove_address_resolver, m)?)?;
+    m.add_function(wrap_pyfunction!(create_monitor_client_external, m)?)?;
+    m.add_function(wrap_pyfunction!(close_monitor_client_external, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
