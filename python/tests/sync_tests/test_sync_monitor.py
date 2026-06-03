@@ -64,12 +64,12 @@ class TestMonitorSync:
         assert monitor._is_closed
 
     @pytest.mark.parametrize("cluster_mode", [False])
-    def test_monitor_close_idempotent(self, request, cluster_mode):
-        """Test that calling close() multiple times is safe."""
+    def test_monitor_stop_idempotent(self, request, cluster_mode):
+        """Test that calling stop() multiple times is safe."""
         config = create_sync_client_config(request, cluster_mode=False)
         monitor = MonitorClient.create(config)
-        monitor.close()
-        monitor.close()  # Should not raise
+        monitor.stop()
+        monitor.stop()  # Should not raise
 
     def test_monitor_rejects_cluster_config(self):
         """Test that MonitorClient raises TypeError for cluster config."""

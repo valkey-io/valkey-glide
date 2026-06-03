@@ -155,6 +155,10 @@ class MonitorClient:
             self._lib.close_monitor_client(client)
         self._callback_ref = None
 
+    def stop(self) -> None:
+        """Alias for close(). Stop monitoring and release resources."""
+        self.close()
+
     def __enter__(self) -> "MonitorClient":
         return self
 
