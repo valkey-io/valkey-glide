@@ -7,7 +7,7 @@ import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -35,7 +35,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -771,5 +773,70 @@ public class TestUtilities {
                 .region(IAM_TEST_REGION_US_EAST_1)
                 .refreshIntervalSeconds(refreshIntervalSeconds)
                 .build();
+    }
+
+    /**
+     * Returns {@code true} if a save is in progress.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    public static boolean isSaveInProgress(@NonNull final BaseClient client) {
+        for (String info : getInfo(client)) {
+            if (info.contains("rdb_bgsave_in_progress:1")) {
+                return true;
+            }
+        }
+
+        for (String info : getInfo(client)) {
+            if (info.contains("aof_rewrite_in_progress:1")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns the total number of successful RDB saves.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    public static long getRdbSaves(@NonNull final BaseClient client) {
+        long total = 0;
+        for (String info : getInfo(client)) {
+            total += getValueFromInfo(info, "rdb_saves");
+        }
+        return total;
+    }
+
+    /**
+     * Returns the total number of AOF rewrites.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    public static long getAofRewrites(@NonNull final BaseClient client) {
+        long total = 0;
+        for (String info : getInfo(client)) {
+            total += getValueFromInfo(info, "aof_rewrites");
+        }
+        return total;
+    }
+
+    /**
+     * Returns the results of `INFO` command.<br>
+     * Routes command to all primary nodes for cluster clients.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    private static List<String> getInfo(@NonNull final BaseClient client) {
+        if (client instanceof GlideClient) {
+            return Collections.singletonList(((GlideClient) client).info().get());
+        }
+        ClusterValue<String> clusterInfo = ((GlideClusterClient) client).info(ALL_PRIMARIES).get();
+        return new ArrayList<>(clusterInfo.getMultiValue().values());
     }
 }

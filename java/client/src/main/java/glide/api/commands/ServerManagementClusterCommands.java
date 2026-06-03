@@ -348,11 +348,11 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsave().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsave();
@@ -363,11 +363,11 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
      * @param route The routing configuration for the command.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsave(ALL_PRIMARIES).get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsave(@NonNull Route route);
@@ -377,11 +377,11 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveSchedule().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsaveSchedule();
@@ -392,11 +392,11 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
      * @param route The routing configuration for the command.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveSchedule(ALL_PRIMARIES).get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsaveSchedule(@NonNull Route route);
@@ -407,11 +407,11 @@ public interface ServerManagementClusterCommands {
      *
      * @since Valkey 8.1
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveCancel().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsaveCancel();
@@ -423,11 +423,11 @@ public interface ServerManagementClusterCommands {
      * @since Valkey 8.1
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
      * @param route The routing configuration for the command.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveCancel(ALL_PRIMARIES).get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsaveCancel(@NonNull Route route);
@@ -437,11 +437,11 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgrewriteaof().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgrewriteaof();
@@ -452,11 +452,11 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
      * @param route The routing configuration for the command.
-     * @return A non-empty status.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgrewriteaof(ALL_PRIMARIES).get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgrewriteaof(@NonNull Route route);

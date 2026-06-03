@@ -152,11 +152,11 @@ public interface ServerManagementCommands {
      * Asynchronously saves the dataset to disk in the background.
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsave().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsave();
@@ -165,11 +165,11 @@ public interface ServerManagementCommands {
      * Schedules a background save of the database.
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveSchedule().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsaveSchedule();
@@ -179,11 +179,11 @@ public interface ServerManagementCommands {
      *
      * @since Valkey 8.1
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveCancel().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgsaveCancel();
@@ -192,11 +192,11 @@ public interface ServerManagementCommands {
      * Initiates a background rewrite of the append-only file (AOF).
      *
      * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
-     * @return A non-empty status string.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.bgrewriteaof().get();
-     * assert !response.isEmpty();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> bgrewriteaof();
