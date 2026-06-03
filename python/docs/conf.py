@@ -45,8 +45,8 @@ suppress_warnings = ["autodoc"]
 
 
 def avoid_duplicate(app, what, name, obj, skip, options):
-    # We skip some special refs and PubSub duplicate warning messages that
-    # weren't captured in ignore-module-all. These PubSub attributes
+    # We skip some special refs and PubSub/MonitorMsg duplicate warning messages that
+    # weren't captured in ignore-module-all. These attributes
     # will still appear in the documentation.
     exclusions = (
         "__weakref__",
@@ -64,6 +64,11 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         "compression_level",
         "min_compression_size",
         "max_decompressed_size",
+        "args",
+        "client_addr",
+        "command",
+        "db",
+        "timestamp",
     )
     # Check if the attribute name itself is in exclusions
     if name in exclusions:
