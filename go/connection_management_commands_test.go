@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 )
 
@@ -118,32 +116,31 @@ func ExampleClient_ClientGetName() {
 }
 
 func TestClientPauseAllThenUnpause(t *testing.T) {
-	client, err := NewClient(config.NewClientConfiguration().
-		WithAddress(&getStandaloneAddresses()[0]).
-		WithRequestTimeout(10 * time.Second))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
+	client := getExampleClient()
 	ctx := context.Background()
+
+	// Send SET command.
 	key := "clientPauseAll_then_clientUnpause_key"
 	if _, err := client.Set(ctx, key, "before"); err != nil {
 		t.Fatalf("SET before: %v", err)
 	}
 
+	// Send PAUSE ALL command.
 	if result, err := client.ClientPauseWithOptions(ctx, 2*time.Second, options.ClientPauseModeAll); err != nil ||
 		result != "OK" {
 		t.Fatalf("ClientPauseWithOptions: result=%q err=%v", result, err)
 	}
 
+	// Send GET, SET, and CLIENT UNPAUSE commands.
 	type stringResult struct {
 		value string
 		err   error
 	}
+
 	getCh := make(chan stringResult, 1)
 	setCh := make(chan stringResult, 1)
 	unpauseCh := make(chan stringResult, 1)
+
 	go func() {
 		v, err := client.Get(ctx, key)
 		getCh <- stringResult{value: v.Value(), err: err}
@@ -157,7 +154,7 @@ func TestClientPauseAllThenUnpause(t *testing.T) {
 		unpauseCh <- stringResult{value: v, err: err}
 	}()
 
-	// Verify that none of the commands completes during the pause window.
+	// Verify that none of the commands completed while paused.
 	select {
 	case r := <-getCh:
 		t.Fatalf("GET completed while paused: value=%q err=%v", r.value, r.err)
@@ -168,7 +165,7 @@ func TestClientPauseAllThenUnpause(t *testing.T) {
 	case <-time.After(300 * time.Millisecond):
 	}
 
-	// Verify that all commands complete once pause expires naturally.
+	// Verify that all commands complete once pause expires.
 	collect := func(ch <-chan stringResult, name string) stringResult {
 		select {
 		case r := <-ch:
@@ -178,9 +175,11 @@ func TestClientPauseAllThenUnpause(t *testing.T) {
 			return stringResult{}
 		}
 	}
+
 	getRes := collect(getCh, "GET")
 	setRes := collect(setCh, "SET")
 	unpauseRes := collect(unpauseCh, "UNPAUSE")
+
 	if getRes.err != nil || getRes.value != "before" {
 		t.Errorf("GET: value=%q err=%v", getRes.value, getRes.err)
 	}
@@ -191,6 +190,7 @@ func TestClientPauseAllThenUnpause(t *testing.T) {
 		t.Errorf("UNPAUSE: value=%q err=%v", unpauseRes.value, unpauseRes.err)
 	}
 
+	// Verify final state.
 	after, err := client.Get(ctx, key)
 	if err != nil || after.Value() != "after" {
 		t.Errorf("GET after: value=%q err=%v", after.Value(), err)
@@ -198,55 +198,55 @@ func TestClientPauseAllThenUnpause(t *testing.T) {
 }
 
 func TestClientPauseWriteThenUnpause(t *testing.T) {
-	client, err := NewClient(config.NewClientConfiguration().
-		WithAddress(&getStandaloneAddresses()[0]).
-		WithRequestTimeout(10 * time.Second))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
+	client := getExampleClient()
 	ctx := context.Background()
+
+	// Send SET command.
 	key := "clientPauseWrite_then_clientUnpause_key"
 	if _, err := client.Set(ctx, key, "before"); err != nil {
 		t.Fatalf("SET before: %v", err)
 	}
 
+	// Send PAUSE WRITE command.
 	if result, err := client.ClientPauseWithOptions(ctx, 2*time.Second, options.ClientPauseModeWrite); err != nil ||
 		result != "OK" {
 		t.Fatalf("ClientPauseWithOptions: result=%q err=%v", result, err)
 	}
 
-	// Reads are not blocked by PAUSE WRITE.
+	// Verify that reads are not blocked by PAUSE WRITE.
 	before, err := client.Get(ctx, key)
 	if err != nil || before.Value() != "before" {
 		t.Fatalf("GET before: value=%q err=%v", before.Value(), err)
 	}
 
-	type setResult struct {
+	// Send SET command.
+	type stringResult struct {
 		value string
 		err   error
 	}
-	done := make(chan setResult, 1)
+
+	setCh := make(chan stringResult, 1)
+
 	go func() {
 		v, err := client.Set(ctx, key, "after")
-		done <- setResult{value: v, err: err}
+		setCh <- stringResult{value: v, err: err}
 	}()
 
-	// Verify that SET has not completed because server is paused.
+	// Verify that SET has not completed while paused.
 	select {
-	case r := <-done:
+	case r := <-setCh:
 		t.Fatalf("SET completed while paused: value=%q err=%v", r.value, r.err)
 	case <-time.After(300 * time.Millisecond):
 	}
 
+	// Send CLIENT UNPAUSE command.
 	if result, err := client.ClientUnpause(ctx); err != nil || result != "OK" {
 		t.Fatalf("ClientUnpause: result=%q err=%v", result, err)
 	}
 
-	// Verify that SET completes once pause expires.
+	// Verify that SET completes once unpaused.
 	select {
-	case r := <-done:
+	case r := <-setCh:
 		if r.err != nil || r.value != "OK" {
 			t.Errorf("SET after unpause: value=%q err=%v", r.value, r.err)
 		}
@@ -254,6 +254,7 @@ func TestClientPauseWriteThenUnpause(t *testing.T) {
 		t.Fatal("SET did not complete within 5s of CLIENT UNPAUSE")
 	}
 
+	// Verify final state.
 	after, err := client.Get(ctx, key)
 	if err != nil || after.Value() != "after" {
 		t.Errorf("GET after: value=%q err=%v", after.Value(), err)

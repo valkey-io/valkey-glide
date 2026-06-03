@@ -64,7 +64,8 @@ func getExampleClient() *Client {
 		initFlags()
 	})
 	config := config.NewClientConfiguration().
-		WithAddress(&standaloneAddresses[0])
+		WithAddress(&standaloneAddresses[0]).
+		WithRequestTimeout(5 * time.Second)
 
 	client, err := NewClient(config)
 	if err != nil {
