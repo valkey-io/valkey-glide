@@ -3,7 +3,7 @@ package glide.standalone;
 
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
-import static glide.TestUtilities.BGSAVE_CANCEL_RESPONSES;
+import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
@@ -554,14 +554,11 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel(GlideClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        try {
-            assertTrue(BGSAVE_CANCEL_RESPONSES.contains(client.bgsaveCancel().get()));
-        } catch (ExecutionException e) {
-            assertTrue(
-                    e.getCause()
-                            .getMessage()
-                            .contains("Background saving is currently not in progress or scheduled"));
-        }
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> client.bgsaveCancel().get());
+        assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

@@ -63,10 +63,9 @@ public class TestUtilities {
             new java.util.HashSet<>(
                     Arrays.asList("Background saving started", "Background saving scheduled"));
 
-    /** Expected server responses for BGSAVE CANCEL. */
-    public static final Set<String> BGSAVE_CANCEL_RESPONSES =
-            new java.util.HashSet<>(
-                    Arrays.asList("Background saving cancelled", "Scheduled background saving cancelled"));
+    /** Expected server error response for BGSAVE CANCEL when no save is in progress. */
+    public static final String BGSAVE_NOT_CANCELLED_RESPONSE =
+            "Background saving is currently not in progress or scheduled";
 
     /** Expected server responses for BGREWRITEAOF. */
     public static final Set<String> BGREWRITEAOF_RESPONSES =
