@@ -1,7 +1,9 @@
 ## Pending 2.5
 
 #### Changes
-* Java: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
+
+* Core, Java: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
+* Core, Python, Java, Node, Go: Add `CLIENT PAUSE` and `CLIENT UNPAUSE` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
 * Go: Add RESET command support ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
 * Java: Add RESET command support ([#5947](https://github.com/valkey-io/valkey-glide/pull/5947))
 * CORE/FFI: Add `MonitorClient` for the MONITOR command ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))

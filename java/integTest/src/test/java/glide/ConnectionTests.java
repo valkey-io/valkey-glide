@@ -7,6 +7,7 @@ import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.*;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,6 +21,7 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.*;
 import glide.api.models.exceptions.ClosingException;
@@ -1085,5 +1087,60 @@ public class ConnectionTests {
         assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
 
         client.close();
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void test_client_pause_and_unpause_standalone(ProtocolVersion protocol) {
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().protocol(protocol).build()).get()) {
+
+            // pause with default mode (ALL implied by server)
+            assertEquals(OK, client.clientPause(100).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // pause with explicit WRITE mode
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.WRITE).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // pause with explicit ALL mode
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.ALL).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // zero timeout: immediately unpauses, subsequent command must succeed
+            assertEquals(OK, client.clientPause(0).get());
+            assertEquals("PONG", client.ping().get());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void test_client_pause_and_unpause_cluster(ProtocolVersion protocol) {
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get()) {
+
+            // default route (ALL_PRIMARIES)
+            assertEquals(OK, client.clientPause(100).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // explicit ALL_PRIMARIES route
+            assertEquals(OK, client.clientPause(100, ALL_PRIMARIES).get());
+            assertEquals(OK, client.clientUnpause(ALL_PRIMARIES).get());
+
+            // with WRITE mode, default route
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.WRITE).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // with WRITE mode, explicit route
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.WRITE, ALL_PRIMARIES).get());
+            assertEquals(OK, client.clientUnpause(ALL_PRIMARIES).get());
+
+            // zero timeout + verify cluster still responsive
+            assertEquals(OK, client.clientPause(0).get());
+            assertEquals("PONG", client.ping().get());
+        }
     }
 }

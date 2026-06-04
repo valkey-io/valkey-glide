@@ -29,6 +29,7 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -9858,6 +9859,140 @@ class TestCommands:
         glide_sync_client.set(non_list_key, "non_list_value")
         with pytest.raises(RequestError):
             glide_sync_client.lpos(non_list_key, "a")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_client_pause_all_then_unpause(self, request, cluster_mode, protocol):
+        glide_sync_client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            request_timeout=10000,
+        )
+        try:
+            key = "sync_client_pause_all_then_unpause_key"
+            assert glide_sync_client.set(key, "before") == OK
+
+            if isinstance(glide_sync_client, GlideClusterClient):
+                assert (
+                    glide_sync_client.client_pause(
+                        2000, ClientPauseMode.ALL, route=AllPrimaries()
+                    )
+                    == OK
+                )
+            else:
+                assert glide_sync_client.client_pause(2000, ClientPauseMode.ALL) == OK
+
+            get_result: List[Optional[bytes]] = [None]
+            set_result: List[Optional[bytes]] = [None]
+            unpause_result: List[Optional[str]] = [None]
+            get_done = threading.Event()
+            set_done = threading.Event()
+            unpause_done = threading.Event()
+
+            def run_get() -> None:
+                get_result[0] = glide_sync_client.get(key)
+                get_done.set()
+
+            def run_set() -> None:
+                set_result[0] = glide_sync_client.set(key, "after")
+                set_done.set()
+
+            def run_unpause() -> None:
+                if isinstance(glide_sync_client, GlideClusterClient):
+                    unpause_result[0] = glide_sync_client.client_unpause(
+                        route=AllPrimaries()
+                    )
+                else:
+                    unpause_result[0] = glide_sync_client.client_unpause()
+                unpause_done.set()
+
+            threads = [
+                threading.Thread(target=run_get, daemon=True),
+                threading.Thread(target=run_set, daemon=True),
+                threading.Thread(target=run_unpause, daemon=True),
+            ]
+            for t in threads:
+                t.start()
+            try:
+                time.sleep(0.3)
+
+                # Verify that none of the commands completes.
+                assert not get_done.is_set()
+                assert not set_done.is_set()
+                assert not unpause_done.is_set()
+
+                # Verify that all commands complete once pause expires.
+                assert get_done.wait(timeout=5.0)
+                assert set_done.wait(timeout=5.0)
+                assert unpause_done.wait(timeout=5.0)
+
+                assert get_result[0] == b"before"
+                assert set_result[0] == OK
+                assert unpause_result[0] == OK
+                assert glide_sync_client.get(key) == b"after"
+            finally:
+                for t in threads:
+                    t.join(timeout=1.0)
+        finally:
+            glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_client_pause_write_then_unpause(
+        self, request, cluster_mode, protocol
+    ):
+        glide_sync_client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            request_timeout=10000,
+        )
+        try:
+            key = "sync_client_pause_write_then_unpause_key"
+            assert glide_sync_client.set(key, "before") == OK
+
+            if isinstance(glide_sync_client, GlideClusterClient):
+                assert (
+                    glide_sync_client.client_pause(
+                        2000, ClientPauseMode.WRITE, route=AllPrimaries()
+                    )
+                    == OK
+                )
+            else:
+                assert glide_sync_client.client_pause(2000, ClientPauseMode.WRITE) == OK
+
+            # Reads are not blocked by PAUSE WRITE.
+            assert glide_sync_client.get(key) == b"before"
+
+            set_result: List[Optional[bytes]] = [None]
+            set_done = threading.Event()
+
+            def run_set() -> None:
+                set_result[0] = glide_sync_client.set(key, "after")
+                set_done.set()
+
+            set_thread = threading.Thread(target=run_set, daemon=True)
+            set_thread.start()
+            try:
+                time.sleep(0.3)
+
+                # Verify that SET has not completed because server is paused.
+                assert not set_done.is_set()
+
+                if isinstance(glide_sync_client, GlideClusterClient):
+                    assert glide_sync_client.client_unpause(route=AllPrimaries()) == OK
+                else:
+                    assert glide_sync_client.client_unpause() == OK
+
+                # Verify that SET completes once pause expires.
+                assert set_done.wait(timeout=5.0)
+                assert set_result[0] == OK
+                assert glide_sync_client.get(key) == b"after"
+            finally:
+                set_thread.join(timeout=1.0)
+        finally:
+            glide_sync_client.close()
 
 
 class TestMultiKeyCommandCrossSlot:

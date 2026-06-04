@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.ClientPauseMode;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -137,6 +138,48 @@ public interface ConnectionManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> select(long index);
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to suspend clients.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.clientPause(1000).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout);
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param mode The pause mode to use.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.clientPause(1000, ClientPauseMode.WRITE).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientPause(long timeout, ClientPauseMode mode);
+
+    /**
+     * Resumes processing commands on all clients.
+     *
+     * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.clientUnpause().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> clientUnpause();
 
     /**
      * Resets the connection state.
