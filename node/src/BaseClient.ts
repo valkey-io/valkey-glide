@@ -72,7 +72,6 @@ import {
     CreateDirectClient,
     GlideClientHandle,
     createLeakedStringVec,
-    freeLeakedStringVec,
     registerAddressResolver,
     removeAddressResolver,
     StreamAddOptions,
@@ -1304,6 +1303,15 @@ export class BaseClient {
         }
     }
 
+    private encodeRouteBytes(
+        route: Routes | undefined,
+    ): Uint8Array | undefined {
+        const protoRoute = this.toProtobufRoute(route);
+        return protoRoute
+            ? command_request.Routes.encode(protoRoute).finish()
+            : undefined;
+    }
+
     /**
      * Creates an OTel span for a command and stores the span pointer keyed by
      * callbackIndex so it can be dropped when the response arrives.
@@ -1314,7 +1322,7 @@ export class BaseClient {
     private createOtelSpanForCallback(
         callbackIndex: number,
         commandName: string,
-    ): void {
+    ): bigint {
         const parentCtx = OpenTelemetry.getParentSpanContext();
         const [low, high] = parentCtx
             ? createOtelSpanWithTraceContext(
@@ -1329,6 +1337,7 @@ export class BaseClient {
         // using Long to match the pointer representation used elsewhere.
         const spanPtr = BigInt(new Long(low, high, true).toString());
         this.otelSpanPointers.set(callbackIndex, spanPtr);
+        return spanPtr;
     }
 
     /**
@@ -1530,17 +1539,6 @@ export class BaseClient {
     ): Promise<T> {
         // Validate: retry strategy is not supported for atomic batches (transactions)
         if (isAtomic && "retryStrategy" in options && options.retryStrategy) {
-            // Free any leaked arg pointers in the commands before rejecting
-            for (const cmd of commands) {
-                if (cmd.argsVecPointer) {
-                    const ptr =
-                        typeof cmd.argsVecPointer === "number"
-                            ? Long.fromNumber(cmd.argsVecPointer)
-                            : cmd.argsVecPointer;
-                    freeLeakedStringVec(ptr.high, ptr.low);
-                }
-            }
-
             return Promise.reject(
                 new RequestError(
                     "Retry strategy is not supported for atomic batches.",
@@ -1548,11 +1546,20 @@ export class BaseClient {
             ) as Promise<T>;
         }
 
+        let routeBytes: Uint8Array | undefined;
+
+        try {
+            routeBytes = this.encodeRouteBytes(options.route);
+        } catch (err) {
+            return Promise.reject(err) as Promise<T>;
+        }
+
         const callbackIndex = this.getCallbackIndex();
+        let spanPtr: bigint | undefined;
 
         // Create an OTel span for this batch if tracing is enabled
         if (OpenTelemetry.shouldSample()) {
-            this.createOtelSpanForCallback(callbackIndex, "Batch");
+            spanPtr = this.createOtelSpanForCallback(callbackIndex, "Batch");
         }
 
         return new Promise<T>((resolve, reject) => {
@@ -1563,12 +1570,15 @@ export class BaseClient {
             ];
 
             // Convert commands to BatchCommand format
+            const pointerBackedCommands: command_request.Command[] = [];
             const batchCommands = commands.map((cmd) => {
                 let argsPointerHigh = 0;
                 let argsPointerLow = 0;
 
                 if (cmd.argsVecPointer) {
                     // Already have a heap pointer
+                    pointerBackedCommands.push(cmd);
+
                     if (typeof cmd.argsVecPointer === "number") {
                         const long = Long.fromNumber(cmd.argsVecPointer);
                         argsPointerHigh = long.high;
@@ -1611,18 +1621,6 @@ export class BaseClient {
                     ? options.retryStrategy?.retryConnectionError
                     : undefined;
 
-            // Encode route to protobuf bytes if provided
-            let routeBytes: Uint8Array | undefined;
-
-            if (options.route) {
-                const protoRoute = this.toProtobufRoute(options.route);
-
-                if (protoRoute) {
-                    routeBytes =
-                        command_request.Routes.encode(protoRoute).finish();
-                }
-            }
-
             // Call the Rust sendBatch via NAPI
             const success = this.clientHandle!.sendBatch(
                 callbackIndex,
@@ -1632,8 +1630,13 @@ export class BaseClient {
                 timeout,
                 retryServerError,
                 retryConnectionError,
+                spanPtr,
                 routeBytes,
             );
+
+            for (const cmd of pointerBackedCommands) {
+                cmd.argsVecPointer = undefined;
+            }
 
             if (!success) {
                 // Inflight limit exceeded - drop span and clean up
@@ -1656,7 +1659,16 @@ export class BaseClient {
         command: command_request.Command,
         options: WritePromiseOptions = {},
     ): Promise<T> {
+        let routeBytes: Uint8Array | undefined;
+
+        try {
+            routeBytes = this.encodeRouteBytes(options.route);
+        } catch (err) {
+            return Promise.reject(err) as Promise<T>;
+        }
+
         const callbackIndex = this.getCallbackIndex();
+        let spanPtr: bigint | undefined;
 
         // Create an OTel span for this command if tracing is enabled.
         // Defer the command name lookup to avoid the string table access
@@ -1664,7 +1676,10 @@ export class BaseClient {
         if (OpenTelemetry.shouldSample()) {
             const commandName =
                 command_request.RequestType[command.requestType] ?? "Unknown";
-            this.createOtelSpanForCallback(callbackIndex, commandName);
+            spanPtr = this.createOtelSpanForCallback(
+                callbackIndex,
+                commandName,
+            );
         }
 
         return new Promise<T>((resolve, reject) => {
@@ -1701,26 +1716,19 @@ export class BaseClient {
                 argsPointerLow = low;
             }
 
-            // Encode route to protobuf bytes if provided
-            let routeBytes: Uint8Array | undefined;
-
-            if (options.route) {
-                const protoRoute = this.toProtobufRoute(options.route);
-
-                if (protoRoute) {
-                    routeBytes =
-                        command_request.Routes.encode(protoRoute).finish();
-                }
-            }
-
             // Call the Rust sendCommand via NAPI
             const success = this.clientHandle!.sendCommand(
                 callbackIndex,
                 command.requestType,
                 argsPointerHigh,
                 argsPointerLow,
+                spanPtr,
                 routeBytes,
             );
+
+            if (command.argsVecPointer) {
+                command.argsVecPointer = undefined;
+            }
 
             if (!success) {
                 // Inflight limit exceeded - drop span and clean up
@@ -1838,6 +1846,15 @@ export class BaseClient {
         options: DecoderOption & RouteOption = {},
     ): Promise<T> {
         this.ensureClientIsOpen();
+
+        let routeBytes: Uint8Array | undefined;
+
+        try {
+            routeBytes = this.encodeRouteBytes(options.route);
+        } catch (err) {
+            return Promise.reject(err) as Promise<T>;
+        }
+
         const callbackIndex = this.getCallbackIndex();
 
         return new Promise<T>((resolve, reject) => {
@@ -1880,18 +1897,6 @@ export class BaseClient {
                 argsPointerLow = low;
             }
             // else: keep default (0, 0) — Rust treats null pointer as empty vec
-
-            // Encode route to protobuf bytes if provided
-            let routeBytes: Uint8Array | undefined;
-
-            if (options.route) {
-                const protoRoute = this.toProtobufRoute(options.route);
-
-                if (protoRoute) {
-                    routeBytes =
-                        command_request.Routes.encode(protoRoute).finish();
-                }
-            }
 
             const success = this.clientHandle!.invokeScript(
                 callbackIndex,

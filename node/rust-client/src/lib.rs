@@ -1,14 +1,19 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 use glide_core::cluster_scan_container::get_cluster_scan_cursor;
+use glide_core::compression::process_command_args_for_compression;
 use glide_core::errors::{error_message, error_type};
+use glide_core::otel_db_semantics::{set_db_attributes, set_db_batch_attributes};
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
-use logger_core::log_warn_lazy;
+use logger_core::{log_warn, log_warn_lazy};
 use redis::cluster_routing::Routable;
-use redis::{ClusterScanArgs, PushInfo, ScanStateRC};
+use redis::{
+    Arg, ClusterScanArgs, Cmd, ErrorKind, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC,
+};
+use telemetrylib::GlideSpanStatus;
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -116,14 +121,14 @@ pub struct RequestErrorNapi {
 }
 
 // ============================================================================
-// Response Ring Buffer - Shared between Rust workers and JS callback
+// Response Buffer - Shared between Rust workers and JS callback
 // ============================================================================
 
 use parking_lot::Mutex as PLMutex;
 use std::sync::atomic::AtomicBool;
 
 /// Per-client response buffer with batched wake-up.
-/// Each client has its OWN buffer to avoid contention between workers.
+/// Each client owns its response buffer to avoid contention between clients.
 /// Responses are accumulated in the buffer, and JS is notified once per batch.
 /// Uses Vec instead of VecDeque for better cache locality (we only push/drain).
 struct ResponseBuffer {
@@ -159,8 +164,7 @@ impl ResponseBuffer {
     }
 
     /// Push a response to the buffer and return whether a wake-up is needed.
-    /// This is called from the worker thread that owns this client.
-    /// Since each client has its own buffer, there's no contention between clients.
+    /// Called from worker tasks and synchronous error paths.
     /// Returns false if the buffer is closed (no wake-up needed).
     #[inline]
     fn push(&self, response: CommandResponse) -> bool {
@@ -198,7 +202,6 @@ impl ResponseBuffer {
         guard.drain(..).collect()
     }
 
-    /// Free all leaked Value pointers in pending responses.
     /// Free a leaked Value pointer from a single CommandResponse, if present.
     /// Called when a response is dropped without being consumed by JS
     /// (e.g., push() finds the buffer already closed).
@@ -314,6 +317,7 @@ struct BatchCommandMessage {
     retry_server_error: bool,
     retry_connection_error: bool,
     routing: Option<RoutingInfo>,
+    command_span: Option<GlideSpan>,
 }
 
 /// Script invocation message (EVALSHA with auto-LOAD fallback)
@@ -358,9 +362,17 @@ struct GetCacheMetricsMessage {
 // ============================================================================
 
 /// Build a CommandResponse from a Redis result
-fn build_response(callback_idx: u32, result: redis::RedisResult<Value>) -> CommandResponse {
+fn build_response(
+    callback_idx: u32,
+    result: redis::RedisResult<Value>,
+    command_span: Option<GlideSpan>,
+) -> CommandResponse {
     match result {
         Ok(value) => {
+            if let Some(span) = &command_span {
+                span.set_status(GlideSpanStatus::Ok);
+            }
+
             if matches!(value, Value::Okay) {
                 CommandResponse {
                     callback_idx,
@@ -388,6 +400,9 @@ fn build_response(callback_idx: u32, result: redis::RedisResult<Value>) -> Comma
         Err(err) => {
             let err_type = error_type(&err);
             let err_msg = error_message(&err);
+            if let Some(span) = &command_span {
+                span.set_status(GlideSpanStatus::Error((&err_msg).into()));
+            }
             CommandResponse {
                 callback_idx,
                 resp_pointer_high: None,
@@ -401,6 +416,18 @@ fn build_response(callback_idx: u32, result: redis::RedisResult<Value>) -> Comma
                 is_push: false,
             }
         }
+    }
+}
+
+fn push_response_to_js(
+    response_buffer: &Arc<ResponseBuffer>,
+    wake_callback: &Option<Arc<ThreadsafeFunction<(), (), (), Status, false>>>,
+    response: CommandResponse,
+) {
+    if response_buffer.push(response)
+        && let Some(cb) = wake_callback
+    {
+        cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
     }
 }
 
@@ -419,24 +446,163 @@ fn get_cache_metrics(client: &Client, metrics_type: u32) -> redis::RedisResult<V
     }
 }
 
+fn compression_error_to_redis(err: glide_core::compression::CompressionError) -> RedisError {
+    RedisError::from((ErrorKind::ClientError, "Compression error", err.to_string()))
+}
+
+fn process_batch_response_for_decompression(
+    response: Value,
+    client: &Client,
+) -> std::result::Result<Value, glide_core::compression::CompressionError> {
+    let compression_manager = client.compression_manager();
+    let Some(manager) = compression_manager.as_deref() else {
+        return Ok(response);
+    };
+
+    glide_core::compression::decompress_batch_response(response, manager)
+}
+
+fn process_command_for_compression(
+    cmd: &mut Cmd,
+    client: &Client,
+) -> std::result::Result<(), glide_core::compression::CompressionError> {
+    let compression_manager = client.compression_manager();
+    let compression_manager_ref = compression_manager.as_deref();
+
+    if compression_manager_ref
+        .map(|m| !m.is_enabled())
+        .unwrap_or(true)
+    {
+        return Ok(());
+    }
+
+    let all_args: Vec<Vec<u8>> = cmd
+        .args_iter()
+        .filter_map(|arg| match arg {
+            Arg::Simple(bytes) => Some(bytes.to_vec()),
+            Arg::Cursor => None,
+        })
+        .collect();
+
+    if all_args.is_empty() {
+        return Ok(());
+    }
+
+    let command_name = &all_args[0];
+    let command_str = String::from_utf8_lossy(command_name).to_uppercase();
+    let request_type = match command_str.as_str() {
+        "SET" => RequestType::Set,
+        "MSET" => RequestType::MSet,
+        "MSETNX" => RequestType::MSetNX,
+        "SETEX" => RequestType::SetEx,
+        "PSETEX" => RequestType::PSetEx,
+        "SETNX" => RequestType::SetNX,
+        "APPEND" => RequestType::Append,
+        "GETRANGE" => RequestType::GetRange,
+        "SETRANGE" => RequestType::SetRange,
+        "STRLEN" => RequestType::Strlen,
+        "LCS" => RequestType::LCS,
+        "SUBSTR" => RequestType::Substr,
+        "INCR" => RequestType::Incr,
+        "INCRBY" => RequestType::IncrBy,
+        "INCRBYFLOAT" => RequestType::IncrByFloat,
+        "DECR" => RequestType::Decr,
+        "DECRBY" => RequestType::DecrBy,
+        "GETBIT" => RequestType::GetBit,
+        "SETBIT" => RequestType::SetBit,
+        "BITCOUNT" => RequestType::BitCount,
+        "BITPOS" => RequestType::BitPos,
+        "BITFIELD" => RequestType::BitField,
+        "BITFIELD_RO" => RequestType::BitFieldReadOnly,
+        "BITOP" => RequestType::BitOp,
+        _ => return Ok(()),
+    };
+
+    glide_core::compression::validate_command_compression_compatibility(
+        request_type,
+        compression_manager_ref,
+    )?;
+
+    let mut args: Vec<Vec<u8>> = all_args[1..].to_vec();
+    process_command_args_for_compression(&mut args, request_type, compression_manager_ref)?;
+
+    let command_span = cmd.span();
+    *cmd = Cmd::new();
+    cmd.arg(command_name);
+    for arg in args {
+        cmd.arg(arg);
+    }
+    cmd.set_span(command_span);
+
+    Ok(())
+}
+
+fn prepare_command_for_execution(
+    cmd: &mut Cmd,
+    client: &Client,
+    context: &str,
+) -> redis::RedisResult<()> {
+    if client.is_compression_enabled()
+        && let Err(err) = process_command_for_compression(cmd, client)
+    {
+        if err.is_incompatible_command() {
+            return Err(compression_error_to_redis(err));
+        }
+
+        log_warn(
+            context,
+            format!("Compression processing failed: {err}, continuing with original command"),
+        );
+    }
+
+    Ok(())
+}
+
+fn span_from_bigint(span_ptr: Option<BigInt>) -> Option<GlideSpan> {
+    let span_ptr = span_ptr?;
+    let (is_negative, span_ptr, lossless) = span_ptr.get_u64();
+    if is_negative || !lossless || span_ptr == 0 {
+        log_warn(
+            "OpenTelemetry",
+            "Invalid span pointer passed to direct NAPI command",
+        );
+        return None;
+    }
+
+    unsafe { GlideOpenTelemetry::span_from_pointer(span_ptr).ok() }
+}
+
+fn mark_span_error(command_span: &Option<GlideSpan>, message: &str) {
+    if let Some(span) = command_span {
+        span.set_status(GlideSpanStatus::Error(message.into()));
+    }
+}
+
+fn invalid_route_error(message: impl Into<String>) -> RedisError {
+    RedisError::from((ErrorKind::ClientError, "Invalid route", message.into()))
+}
+
 /// Convert SlotTypes enum to SlotAddr for routing
-fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> Option<SlotAddr> {
+fn get_slot_addr(slot_type: &protobuf::EnumOrUnknown<SlotTypes>) -> redis::RedisResult<SlotAddr> {
     match slot_type.enum_value() {
-        Ok(SlotTypes::Primary) => Some(SlotAddr::Master),
-        Ok(SlotTypes::Replica) => Some(SlotAddr::ReplicaRequired),
-        Err(_) => None,
+        Ok(SlotTypes::Primary) => Ok(SlotAddr::Master),
+        Ok(SlotTypes::Replica) => Ok(SlotAddr::ReplicaRequired),
+        Err(_) => Err(invalid_route_error("Unknown slot route type")),
     }
 }
 
 /// Parse protobuf route bytes into RoutingInfo for cluster routing.
 /// This mirrors the get_route function in socket_listener.rs.
-fn parse_route_bytes(route_bytes: &[u8], cmd: Option<&redis::Cmd>) -> Option<RoutingInfo> {
-    let routes: ProtobufRoutes = match ProtobufRoutes::parse_from_bytes(route_bytes) {
-        Ok(r) => r,
-        Err(_) => return None,
-    };
+fn parse_route_bytes(
+    route_bytes: &[u8],
+    cmd: Option<&redis::Cmd>,
+) -> redis::RedisResult<Option<RoutingInfo>> {
+    let routes: ProtobufRoutes = ProtobufRoutes::parse_from_bytes(route_bytes)
+        .map_err(|err| invalid_route_error(format!("Failed to parse route bytes: {err}")))?;
 
-    let route_value = routes.value?;
+    let route_value = routes
+        .value
+        .ok_or_else(|| invalid_route_error("Missing route value"))?;
 
     // Helper to get response policy for multi-node commands
     let get_response_policy = |cmd: Option<&redis::Cmd>| {
@@ -448,46 +614,48 @@ fn parse_route_bytes(route_bytes: &[u8], cmd: Option<&redis::Cmd>) -> Option<Rou
 
     match route_value {
         RoutesValue::SimpleRoutes(simple_route) => match simple_route.enum_value() {
-            Ok(SimpleRoutes::AllNodes) => Some(RoutingInfo::MultiNode((
+            Ok(SimpleRoutes::AllNodes) => Ok(Some(RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllNodes,
                 get_response_policy(cmd),
-            ))),
-            Ok(SimpleRoutes::AllPrimaries) => Some(RoutingInfo::MultiNode((
+            )))),
+            Ok(SimpleRoutes::AllPrimaries) => Ok(Some(RoutingInfo::MultiNode((
                 MultipleNodeRoutingInfo::AllMasters,
                 get_response_policy(cmd),
-            ))),
+            )))),
             Ok(SimpleRoutes::Random) => {
-                Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random))
+                Ok(Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::Random)))
             }
-            Err(_) => None,
+            Err(_) => Err(invalid_route_error("Unknown simple route type")),
         },
         RoutesValue::SlotKeyRoute(slot_key_route) => {
             let slot_addr = get_slot_addr(&slot_key_route.slot_type)?;
-            Some(RoutingInfo::SingleNode(
+            Ok(Some(RoutingInfo::SingleNode(
                 SingleNodeRoutingInfo::SpecificNode(Route::new(
                     redis::cluster_topology::get_slot(slot_key_route.slot_key.as_bytes()),
                     slot_addr,
                 )),
-            ))
+            )))
         }
         RoutesValue::SlotIdRoute(slot_id_route) => {
             let slot_addr = get_slot_addr(&slot_id_route.slot_type)?;
-            Some(RoutingInfo::SingleNode(
+            Ok(Some(RoutingInfo::SingleNode(
                 SingleNodeRoutingInfo::SpecificNode(Route::new(
                     slot_id_route.slot_id as u16,
                     slot_addr,
                 )),
-            ))
+            )))
         }
         RoutesValue::ByAddressRoute(by_address_route) => {
-            let port = u16::try_from(by_address_route.port).ok()?;
-            Some(RoutingInfo::SingleNode(SingleNodeRoutingInfo::ByAddress {
-                host: by_address_route.host.to_string(),
-                port,
-            }))
+            let port = u16::try_from(by_address_route.port)
+                .map_err(|_| invalid_route_error("Route port is out of range"))?;
+            Ok(Some(RoutingInfo::SingleNode(
+                SingleNodeRoutingInfo::ByAddress {
+                    host: by_address_route.host.to_string(),
+                    port,
+                },
+            )))
         }
-        // Handle any future route types gracefully
-        _ => None,
+        _ => Err(invalid_route_error("Unsupported route type")),
     }
 }
 
@@ -502,8 +670,9 @@ async fn execute_batch(
     retry_server_error: bool,
     retry_connection_error: bool,
     routing: Option<RoutingInfo>,
+    command_span: Option<GlideSpan>,
 ) -> redis::RedisResult<Value> {
-    use redis::{Pipeline, PipelineRetryStrategy};
+    use redis::Pipeline;
 
     // Build the pipeline from commands
     let mut pipeline = if is_atomic {
@@ -511,19 +680,30 @@ async fn execute_batch(
     } else {
         Pipeline::new()
     };
+    pipeline.set_pipeline_span(command_span);
 
     // Add MULTI for transactions
     if is_atomic {
         pipeline.atomic();
     }
 
+    let mut redis_cmds = Vec::with_capacity(commands.len());
+    for mut cmd in commands {
+        prepare_command_for_execution(&mut cmd, client, "batch_command_compression")?;
+        redis_cmds.push(cmd);
+    }
+
+    if let Some(ref span) = pipeline.span() {
+        set_db_batch_attributes(span, &redis_cmds, client);
+    }
+
     // Add all commands to the pipeline
-    for cmd in commands {
+    for cmd in redis_cmds {
         pipeline.add_command(cmd);
     }
 
     // Execute based on type
-    if is_atomic {
+    let result = if is_atomic {
         client
             .send_transaction(&pipeline, routing, timeout, raise_on_error)
             .await
@@ -535,6 +715,20 @@ async fn execute_batch(
         client
             .send_pipeline(&pipeline, routing, raise_on_error, timeout, retry_strategy)
             .await
+    };
+
+    match result {
+        Ok(value) => match process_batch_response_for_decompression(value.clone(), client) {
+            Ok(processed_value) => Ok(processed_value),
+            Err(err) => {
+                log_warn(
+                    "batch_response_decompression",
+                    format!("Failed to decompress batch response: {err}"),
+                );
+                Ok(value)
+            }
+        },
+        Err(err) => Err(err),
     }
 }
 
@@ -543,7 +737,7 @@ async fn execute_batch(
 // ============================================================================
 
 /// A handle to a Glide client that allows sending commands directly via NAPI.
-/// The client is pinned to a dedicated worker thread for lock-free concurrent execution.
+/// The client is pinned to a dedicated worker thread for thread-local command execution.
 /// Commands are sent via channel to the worker thread which executes them via spawn_local.
 ///
 /// Response Buffering Architecture:
@@ -733,8 +927,18 @@ pub fn create_direct_client<'a>(
 
                     // Spawn local task for this command
                     task::spawn_local(async move {
-                        let result = client_clone.send_command(&mut cmd, routing).await;
-                        let response = build_response(callback_idx, result);
+                        if let Some(ref span) = cmd.span() {
+                            set_db_attributes(span, &cmd, &client_clone);
+                        }
+                        let result = match prepare_command_for_execution(
+                            &mut cmd,
+                            &client_clone,
+                            "send_command",
+                        ) {
+                            Ok(()) => client_clone.send_command(&mut cmd, routing).await,
+                            Err(err) => Err(err),
+                        };
+                        let response = build_response(callback_idx, result, cmd.span());
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
                             && let Some(wake_callback) = wake.upgrade()
@@ -752,6 +956,7 @@ pub fn create_direct_client<'a>(
 
                     // Spawn local task for batch execution
                     task::spawn_local(async move {
+                        let command_span = batch_msg.command_span.clone();
                         let result = execute_batch(
                             &mut client_clone,
                             batch_msg.commands,
@@ -761,9 +966,10 @@ pub fn create_direct_client<'a>(
                             batch_msg.retry_server_error,
                             batch_msg.retry_connection_error,
                             batch_msg.routing,
+                            batch_msg.command_span,
                         )
                         .await;
-                        let response = build_response(callback_idx, result);
+                        let response = build_response(callback_idx, result, command_span);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
                             && let Some(wake_callback) = wake.upgrade()
@@ -785,7 +991,7 @@ pub fn create_direct_client<'a>(
                         let result = client_clone
                             .invoke_script(&script_msg.hash, &keys, &args, script_msg.routing)
                             .await;
-                        let response = build_response(callback_idx, result);
+                        let response = build_response(callback_idx, result, None);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
                             && let Some(wake_callback) = wake.upgrade()
@@ -829,7 +1035,7 @@ pub fn create_direct_client<'a>(
                             }
                             Err(e) => Err(e),
                         };
-                        let response = build_response(callback_idx, result);
+                        let response = build_response(callback_idx, result, None);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
                             && let Some(wake_callback) = wake.upgrade()
@@ -849,7 +1055,7 @@ pub fn create_direct_client<'a>(
                         let result = client_clone
                             .update_connection_password(pwd_msg.password, pwd_msg.immediate_auth)
                             .await;
-                        let response = build_response(callback_idx, result);
+                        let response = build_response(callback_idx, result, None);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
                             && let Some(wake_callback) = wake.upgrade()
@@ -867,7 +1073,7 @@ pub fn create_direct_client<'a>(
 
                     task::spawn_local(async move {
                         let result = client_clone.refresh_iam_token().await.map(|()| Value::Okay);
-                        let response = build_response(callback_idx, result);
+                        let response = build_response(callback_idx, result, None);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
                             && let Some(wake_callback) = wake.upgrade()
@@ -885,7 +1091,7 @@ pub fn create_direct_client<'a>(
 
                     task::spawn_local(async move {
                         let result = get_cache_metrics(&client_clone, metrics_msg.metrics_type);
-                        let response = build_response(callback_idx, result);
+                        let response = build_response(callback_idx, result, None);
                         inflight.fetch_add(1, Ordering::Release);
                         if buffer.push(response)
                             && let Some(wake_callback) = wake.upgrade()
@@ -920,8 +1126,9 @@ impl GlideClientHandle {
     /// # Arguments
     /// * `callback_idx` - Index to identify this request in JavaScript
     /// * `request_type` - The type of Redis command (maps to RequestType enum)
-    /// * `args_pointer_high` - High 32 bits of the args Vec<Bytes> pointer
-    /// * `args_pointer_low` - Low 32 bits of the args Vec<Bytes> pointer
+    /// * `args_pointer_high` - High 32 bits of the args `Vec<Bytes>` pointer
+    /// * `args_pointer_low` - Low 32 bits of the args `Vec<Bytes>` pointer
+    /// * `span_ptr` - Optional OpenTelemetry span pointer
     /// * `route_bytes` - Optional routing information for cluster mode
     ///
     /// # Returns
@@ -935,6 +1142,7 @@ impl GlideClientHandle {
         request_type: u32,
         args_pointer_high: u32,
         args_pointer_low: u32,
+        span_ptr: Option<BigInt>,
         route_bytes: Option<Uint8Array>,
     ) -> Result<bool> {
         // Reconstruct the args pointer from high/low bits (simple bit ops, no allocation)
@@ -966,6 +1174,7 @@ impl GlideClientHandle {
         let proto_request_type =
             protobuf::EnumOrUnknown::<ProtobufRequestType>::from_i32(request_type as i32);
         let request_type_enum: RequestType = proto_request_type.into();
+        let command_span = span_from_bigint(span_ptr);
 
         // Get the base command for this request type
         let mut cmd = match request_type_enum.get_command() {
@@ -973,23 +1182,21 @@ impl GlideClientHandle {
             None => {
                 // Invalid request type - push error to buffer
                 self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+                let error_message = format!("Invalid request type: {request_type}");
+                mark_span_error(&command_span, &error_message);
                 let response = CommandResponse {
                     callback_idx,
                     resp_pointer_high: None,
                     resp_pointer_low: None,
                     constant_response: None,
                     request_error: Some(RequestErrorNapi {
-                        message: format!("Invalid request type: {request_type}"),
+                        message: error_message,
                         error_type: 0, // Unspecified
                     }),
                     closing_error: None,
                     is_push: false,
                 };
-                if self.response_buffer.push(response)
-                    && let Some(cb) = &self.wake_callback
-                {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+                push_response_to_js(&self.response_buffer, &self.wake_callback, response);
                 return Ok(true);
             }
         };
@@ -999,8 +1206,22 @@ impl GlideClientHandle {
             cmd.arg(arg.as_ref());
         }
 
+        cmd.set_span(command_span);
+
         // Parse routing information if provided
-        let routing = route_bytes.and_then(|bytes| parse_route_bytes(&bytes, Some(&cmd)));
+        let routing = match route_bytes {
+            Some(bytes) => match parse_route_bytes(&bytes, Some(&cmd)) {
+                Ok(routing) => routing,
+                Err(err) => {
+                    self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+                    let response = build_response(callback_idx, Err(err), cmd.span());
+                    push_response_to_js(&self.response_buffer, &self.wake_callback, response);
+                    return Ok(true);
+                }
+            },
+            None => None,
+        };
+        let command_span_for_error = cmd.span();
 
         // Send command to the pinned worker thread via channel
         let msg = WorkerMessage::Command(SingleCommandMessage {
@@ -1017,6 +1238,7 @@ impl GlideClientHandle {
         if send_failed {
             // Channel closed - client was shut down
             self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+            mark_span_error(&command_span_for_error, "Client connection closed");
             let response = CommandResponse {
                 callback_idx,
                 resp_pointer_high: None,
@@ -1026,11 +1248,7 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response)
-                && let Some(cb) = &self.wake_callback
-            {
-                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-            }
+            push_response_to_js(&self.response_buffer, &self.wake_callback, response);
         }
 
         Ok(true)
@@ -1101,6 +1319,7 @@ impl GlideClientHandle {
         timeout: Option<u32>,
         retry_server_error: Option<bool>,
         retry_connection_error: Option<bool>,
+        span_ptr: Option<BigInt>,
         route_bytes: Option<Uint8Array>,
     ) -> Result<bool> {
         // Check inflight limit synchronously
@@ -1118,6 +1337,7 @@ impl GlideClientHandle {
         }
 
         // Convert BatchCommand array to Vec<redis::Cmd>
+        let command_span = span_from_bigint(span_ptr);
         let mut cmds = Vec::with_capacity(commands.len());
         let mut commands_iter = commands.into_iter();
         while let Some(batch_cmd) = commands_iter.next() {
@@ -1147,23 +1367,21 @@ impl GlideClientHandle {
                     }
                 }
                 self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+                let error_message = format!("Invalid request type: {}", batch_cmd.request_type);
+                mark_span_error(&command_span, &error_message);
                 let response = CommandResponse {
                     callback_idx,
                     resp_pointer_high: None,
                     resp_pointer_low: None,
                     constant_response: None,
                     request_error: Some(RequestErrorNapi {
-                        message: format!("Invalid request type: {}", batch_cmd.request_type),
+                        message: error_message,
                         error_type: 0,
                     }),
                     closing_error: None,
                     is_push: false,
                 };
-                if self.response_buffer.push(response)
-                    && let Some(cb) = &self.wake_callback
-                {
-                    cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-                }
+                push_response_to_js(&self.response_buffer, &self.wake_callback, response);
                 return Ok(true);
             };
 
@@ -1176,7 +1394,19 @@ impl GlideClientHandle {
         }
 
         // Parse routing information if provided
-        let routing = route_bytes.and_then(|bytes| parse_route_bytes(&bytes, None));
+        let routing = match route_bytes {
+            Some(bytes) => match parse_route_bytes(&bytes, None) {
+                Ok(routing) => routing,
+                Err(err) => {
+                    self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+                    let response = build_response(callback_idx, Err(err), command_span);
+                    push_response_to_js(&self.response_buffer, &self.wake_callback, response);
+                    return Ok(true);
+                }
+            },
+            None => None,
+        };
+        let command_span_for_error = command_span.clone();
 
         // Send batch message to worker
         let msg = WorkerMessage::Batch(BatchCommandMessage {
@@ -1188,6 +1418,7 @@ impl GlideClientHandle {
             retry_server_error: retry_server_error.unwrap_or(false),
             retry_connection_error: retry_connection_error.unwrap_or(false),
             routing,
+            command_span,
         });
 
         let send_failed = match &self.command_tx {
@@ -1196,6 +1427,7 @@ impl GlideClientHandle {
         };
         if send_failed {
             self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+            mark_span_error(&command_span_for_error, "Client connection closed");
             let response = CommandResponse {
                 callback_idx,
                 resp_pointer_high: None,
@@ -1205,11 +1437,7 @@ impl GlideClientHandle {
                 closing_error: Some("Client connection closed".to_string()),
                 is_push: false,
             };
-            if self.response_buffer.push(response)
-                && let Some(cb) = &self.wake_callback
-            {
-                cb.call((), ThreadsafeFunctionCallMode::NonBlocking);
-            }
+            push_response_to_js(&self.response_buffer, &self.wake_callback, response);
         }
 
         Ok(true)
@@ -1256,7 +1484,18 @@ impl GlideClientHandle {
         }
 
         // Parse routing information if provided
-        let routing = route_bytes.and_then(|bytes| parse_route_bytes(&bytes, None));
+        let routing = match route_bytes {
+            Some(bytes) => match parse_route_bytes(&bytes, None) {
+                Ok(routing) => routing,
+                Err(err) => {
+                    self.inflight_requests.fetch_add(1, Ordering::Relaxed);
+                    let response = build_response(callback_idx, Err(err), None);
+                    push_response_to_js(&self.response_buffer, &self.wake_callback, response);
+                    return Ok(true);
+                }
+            },
+            None => None,
+        };
 
         let msg = WorkerMessage::ScriptInvocation(ScriptInvocationMessage {
             callback_idx,
@@ -1706,7 +1945,7 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
             // because `Record` does not support `GlideString` as a key.
             // The result is in format `GlideRecord<T>`.
             let mut js_array = js_env.create_array(map.len() as u32)?;
-            for (idx, (key, value)) in (0_u32..).zip(map.into_iter()) {
+            for (idx, (key, value)) in (0_u32..).zip(map) {
                 let mut obj = Object::new(js_env)?;
                 obj.set_named_property("key", resp_value_to_js(key, js_env, string_decoder)?)?;
                 obj.set_named_property("value", resp_value_to_js(value, js_env, string_decoder)?)?;
@@ -2157,15 +2396,11 @@ pub fn get_statistics<'a>(env: &'a Env) -> Result<Object<'a>> {
 /// A Node.js address resolver wrapper that implements the `AddressResolver` trait.
 /// It holds a `ThreadsafeFunction` reference to a wrapper JavaScript function that
 /// calls the user's resolver and sends the result through a channel.
+type AddressResolverTsfn =
+    ThreadsafeFunction<ResolveRequest, (String, u32), FnArgs<(String, u32)>, Status, false, true>;
+
 struct NodeAddressResolver {
-    tsfn: ThreadsafeFunction<
-        ResolveRequest,
-        (String, u32),
-        FnArgs<(String, u32)>,
-        Status,
-        false,
-        true,
-    >,
+    tsfn: AddressResolverTsfn,
 }
 
 /// Internal request type passed to the JS address resolver callback.

@@ -41,7 +41,7 @@ Other NAPI entry points: `sendBatch`, `invokeScript`, `clusterScan`, `updateConn
 ### Worker Pool Architecture
 
 - A global `LocalPoolHandle` (from `tokio_util`) manages `num_cpus` worker threads
-- Each client is pinned to a single worker thread via `spawn_pinned` for lock-free concurrent execution
+- Each client is pinned to a single worker thread via `spawn_pinned` for thread-local command execution
 - Commands within a client run concurrently via `task::spawn_local` on that thread
 - The pool is reference-counted: created on first client, dropped when last client closes (enables clean Node.js exit)
 
@@ -61,7 +61,7 @@ Other NAPI entry points: `sendBatch`, `invokeScript`, `clusterScan`, `updateConn
 
 - Linux: glibc 2.17+, musl libc 1.2.3+ (Alpine)
 - macOS: 13.5+ (x86_64), 15.0+ (aarch64/Apple Silicon)
-- Node.js: 16+ (npm 11+ recommended for Linux)
+- Node.js: 20+ (npm 11+ recommended for Linux)
 
 **Package:** `@valkey/valkey-glide` on npm
 

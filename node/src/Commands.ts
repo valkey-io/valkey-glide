@@ -7,7 +7,6 @@
  * to suppress unused import errors for types referenced only in JSDoc.
  */
 
-import Long from "long";
 import {
     BaseClient, // eslint-disable-line @typescript-eslint/no-unused-vars
     BaseClientConfiguration, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -22,27 +21,9 @@ import {
 } from "./BaseClient";
 import { GlideClient } from "./GlideClient"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { GlideClusterClient, SingleNodeRoute } from "./GlideClusterClient"; // eslint-disable-line @typescript-eslint/no-unused-vars
-import {
-    createLeakedStringVec,
-    MAX_REQUEST_ARGS_LEN,
-} from "../build-ts/native";
 
 import { command_request } from "../build-ts/ProtobufMessage";
 import RequestType = command_request.RequestType;
-
-function isLargeCommand(args: GlideString[]) {
-    let lenSum = 0;
-
-    for (const arg of args) {
-        lenSum += arg.length;
-
-        if (lenSum >= MAX_REQUEST_ARGS_LEN) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 /**
  * Convert a string array into Uint8Array[]
@@ -92,16 +73,9 @@ function createCommand(
 
     const argsBytes = toBuffersArray(args);
 
-    if (isLargeCommand(args)) {
-        // pass as a pointer
-        const pointerArr = createLeakedStringVec(argsBytes);
-        const pointer = new Long(pointerArr[0], pointerArr[1]);
-        singleCommand.argsVecPointer = pointer;
-    } else {
-        singleCommand.argsArray = command_request.Command.ArgsArray.create({
-            args: argsBytes,
-        });
-    }
+    singleCommand.argsArray = command_request.Command.ArgsArray.create({
+        args: argsBytes,
+    });
 
     return singleCommand;
 }
