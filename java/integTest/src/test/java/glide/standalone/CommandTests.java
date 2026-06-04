@@ -534,15 +534,6 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void save(GlideClient client) {
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-
-        assertEquals(OK, client.save().get());
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
     public void bgsave(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 

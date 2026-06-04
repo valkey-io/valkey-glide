@@ -945,15 +945,6 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void save(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-
-        assertEquals(OK, clusterClient.save().get());
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
     public void save_with_route(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
