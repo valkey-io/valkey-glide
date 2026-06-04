@@ -303,9 +303,12 @@ fn create_monitor_client_external(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {e}")))?;
     let client = py
         .allow_threads(|| {
-            glide_rt
-                .runtime
-                .block_on(MonitorClient::new(&address, redis_conn_info, tls_mode, on_line))
+            glide_rt.runtime.block_on(MonitorClient::new(
+                &address,
+                redis_conn_info,
+                tls_mode,
+                on_line,
+            ))
         })
         .map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!(
