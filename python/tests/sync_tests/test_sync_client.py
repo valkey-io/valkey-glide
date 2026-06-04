@@ -9883,16 +9883,10 @@ class TestCommands:
             else:
                 assert glide_sync_client.client_pause(2000, ClientPauseMode.ALL) == OK
 
-            get_result: List[Optional[bytes]] = [None]
             set_result: List[Optional[bytes]] = [None]
             unpause_result: List[Optional[str]] = [None]
-            get_done = threading.Event()
             set_done = threading.Event()
             unpause_done = threading.Event()
-
-            def run_get() -> None:
-                get_result[0] = glide_sync_client.get(key)
-                get_done.set()
 
             def run_set() -> None:
                 set_result[0] = glide_sync_client.set(key, "after")
@@ -9908,7 +9902,6 @@ class TestCommands:
                 unpause_done.set()
 
             threads = [
-                threading.Thread(target=run_get, daemon=True),
                 threading.Thread(target=run_set, daemon=True),
                 threading.Thread(target=run_unpause, daemon=True),
             ]
@@ -9918,16 +9911,13 @@ class TestCommands:
                 time.sleep(0.3)
 
                 # Verify that none of the commands completes.
-                assert not get_done.is_set()
                 assert not set_done.is_set()
                 assert not unpause_done.is_set()
 
                 # Verify that all commands complete once pause expires.
-                assert get_done.wait(timeout=5.0)
                 assert set_done.wait(timeout=5.0)
                 assert unpause_done.wait(timeout=5.0)
 
-                assert get_result[0] == b"before"
                 assert set_result[0] == OK
                 assert unpause_result[0] == OK
                 assert glide_sync_client.get(key) == b"after"

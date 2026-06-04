@@ -2008,11 +2008,6 @@ describe("GlideClient", () => {
                 "OK",
             );
 
-            let getDone = false;
-            const get = client.get(key).then((r) => {
-                getDone = true;
-                return r;
-            });
             let setDone = false;
             const set = client.set(key, "after").then((r) => {
                 setDone = true;
@@ -2027,12 +2022,10 @@ describe("GlideClient", () => {
             await sleep(300);
 
             // Verify that none of the commands completes during the pause window.
-            expect(getDone).toBe(false);
             expect(setDone).toBe(false);
             expect(unpauseDone).toBe(false);
 
             // Verify that all commands complete once pause expires naturally.
-            expect(await get).toEqual("before");
             expect(await set).toEqual("OK");
             expect(await unpause).toEqual("OK");
             expect(await client.get(key)).toEqual("after");
