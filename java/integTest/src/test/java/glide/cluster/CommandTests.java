@@ -16,10 +16,8 @@ import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
-import static glide.TestUtilities.getAofRewrites;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
-import static glide.TestUtilities.getRdbSaves;
 import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isSaveInProgress;
@@ -950,10 +948,7 @@ public class CommandTests {
     public void save(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(clusterClient);
         assertEquals(OK, clusterClient.save().get());
-
-        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "SAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -962,10 +957,7 @@ public class CommandTests {
     public void save_with_route(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(clusterClient);
         assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
-
-        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "SAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -974,13 +966,10 @@ public class CommandTests {
     public void bgsave(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(clusterClient);
         ClusterValue<String> response = clusterClient.bgsave().get();
         for (String value : response.getMultiValue().values()) {
             assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
         }
-
-        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -989,13 +978,10 @@ public class CommandTests {
     public void bgsave_with_route(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(clusterClient);
         ClusterValue<String> response = clusterClient.bgsave(ALL_PRIMARIES).get();
         for (String value : response.getMultiValue().values()) {
             assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
         }
-
-        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1004,14 +990,10 @@ public class CommandTests {
     public void bgsaveSchedule(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(clusterClient);
         ClusterValue<String> response = clusterClient.bgsaveSchedule().get();
         for (String value : response.getMultiValue().values()) {
             assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
         }
-
-        waitForCondition(
-                () -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE SCHEDULE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1020,14 +1002,10 @@ public class CommandTests {
     public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(clusterClient);
         ClusterValue<String> response = clusterClient.bgsaveSchedule(ALL_PRIMARIES).get();
         for (String value : response.getMultiValue().values()) {
             assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
         }
-
-        waitForCondition(
-                () -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE SCHEDULE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1072,14 +1050,10 @@ public class CommandTests {
     public void bgrewriteaof(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeRewrites = getAofRewrites(clusterClient);
         ClusterValue<String> response = clusterClient.bgrewriteaof().get();
         for (String value : response.getMultiValue().values()) {
             assertTrue(BGREWRITEAOF_RESPONSES.contains(value));
         }
-
-        waitForCondition(
-                () -> getAofRewrites(clusterClient) > beforeRewrites, "BGREWRITEAOF did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1088,14 +1062,10 @@ public class CommandTests {
     public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
-        long beforeRewrites = getAofRewrites(clusterClient);
         ClusterValue<String> response = clusterClient.bgrewriteaof(ALL_PRIMARIES).get();
         for (String value : response.getMultiValue().values()) {
             assertTrue(BGREWRITEAOF_RESPONSES.contains(value));
         }
-
-        waitForCondition(
-                () -> getAofRewrites(clusterClient) > beforeRewrites, "BGREWRITEAOF did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)

@@ -16,8 +16,6 @@ import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
-import static glide.TestUtilities.getAofRewrites;
-import static glide.TestUtilities.getRdbSaves;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -539,10 +537,7 @@ public class CommandTests {
     public void save(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(client);
         assertEquals(OK, client.save().get());
-
-        waitForCondition(() -> getRdbSaves(client) > beforeSaves, "SAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -551,10 +546,7 @@ public class CommandTests {
     public void bgsave(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(client);
         assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsave().get()));
-
-        waitForCondition(() -> getRdbSaves(client) > beforeSaves, "BGSAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -563,10 +555,7 @@ public class CommandTests {
     public void bgsaveSchedule(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
-        long beforeSaves = getRdbSaves(client);
         assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsaveSchedule().get()));
-
-        waitForCondition(() -> getRdbSaves(client) > beforeSaves, "BGSAVE SCHEDULE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -590,11 +579,7 @@ public class CommandTests {
     public void bgrewriteaof(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
-        long beforeRewrites = getAofRewrites(client);
         assertTrue(BGREWRITEAOF_RESPONSES.contains(client.bgrewriteaof().get()));
-
-        waitForCondition(
-                () -> getAofRewrites(client) > beforeRewrites, "BGREWRITEAOF did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)

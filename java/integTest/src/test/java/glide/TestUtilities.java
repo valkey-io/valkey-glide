@@ -162,7 +162,7 @@ public class TestUtilities {
                 return Long.parseLong(line.split(":")[1]);
             }
         }
-        fail();
+        fail("Key '" + value + "' not found in INFO output");
         return 0;
     }
 
@@ -812,34 +812,6 @@ public class TestUtilities {
         }
 
         return false;
-    }
-
-    /**
-     * Returns the total number of successful RDB saves.
-     *
-     * @param client The client to query.
-     */
-    @SneakyThrows
-    public static long getRdbSaves(@NonNull final BaseClient client) {
-        long total = 0;
-        for (String info : getInfo(client)) {
-            total += getValueFromInfo(info, "rdb_saves");
-        }
-        return total;
-    }
-
-    /**
-     * Returns the total number of AOF rewrites.
-     *
-     * @param client The client to query.
-     */
-    @SneakyThrows
-    public static long getAofRewrites(@NonNull final BaseClient client) {
-        long total = 0;
-        for (String info : getInfo(client)) {
-            total += getValueFromInfo(info, "aof_rewrites");
-        }
-        return total;
     }
 
     /**
