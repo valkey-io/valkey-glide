@@ -470,6 +470,7 @@ jobs:
                   if-no-files-found: error
 
     build-source-dist-and-publish-to-pypi:
+        if: ${{ github.event_name == 'push' || inputs.publish_async == true || inputs.publish_sync == true }}
         name: Publish the base PyPi package
         runs-on: ubuntu-latest
         environment: AWS_ACTIONS
