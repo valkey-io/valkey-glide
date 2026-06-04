@@ -1567,6 +1567,7 @@ fn test_create_client_from_uri_client_side_cache_zero_max_cache_kb() {
         !conn_response.connection_error_message.is_null(),
         "Expected error for max_cache_kb=0"
     );
+    assert!(conn_response.conn_ptr.is_null());
     let error = parse_error_msg(conn_response.connection_error_message);
     assert!(
         error.contains("max_cache_kb"),
