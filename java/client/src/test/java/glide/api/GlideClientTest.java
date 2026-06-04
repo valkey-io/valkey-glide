@@ -94,6 +94,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
@@ -309,6 +310,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -16356,5 +16358,95 @@ public class GlideClientTest {
 
         // verify
         assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void migrate_keys_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        String host = "nonexistent.host";
+        long port = 6379L;
+        String[] keys = new String[] {"key1", "key2"};
+        long db = 0L;
+        long timeout = 5000L;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Migrate),
+                        eq(
+                                new GlideString[] {
+                                    gs(host),
+                                    gs(Long.toString(port)),
+                                    gs(""),
+                                    gs(Long.toString(db)),
+                                    gs(Long.toString(timeout)),
+                                    gs(MigrateOptions.KEYS_VALKEY_API),
+                                    gs("key1"),
+                                    gs("key2")
+                                }),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.migrate(host, port, keys, db, timeout);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void migrate_keys_with_options_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        String host = "nonexistent.host";
+        long port = 6379L;
+        String[] keys = new String[] {"key1", "key2"};
+        long db = 0L;
+        long timeout = 5000L;
+        MigrateOptions options = MigrateOptions.builder().replace(true).build();
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Migrate),
+                        eq(
+                                new GlideString[] {
+                                    gs(host),
+                                    gs(Long.toString(port)),
+                                    gs(""),
+                                    gs(Long.toString(db)),
+                                    gs(Long.toString(timeout)),
+                                    gs(MigrateOptions.REPLACE_VALKEY_API),
+                                    gs(MigrateOptions.KEYS_VALKEY_API),
+                                    gs("key1"),
+                                    gs("key2")
+                                }),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.migrate(host, port, keys, db, timeout, options);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+
+    @Test
+    public void migrate_keys_throws_on_empty_keys() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, new String[0], 0L, 5000L));
+    }
+
+    @Test
+    public void migrate_keys_binary_throws_on_null_keys() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (GlideString[]) null, 0L, 5000L));
     }
 }

@@ -53,6 +53,7 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.scan.ScanOptions;
@@ -2065,5 +2066,69 @@ public class CommandTests {
         assertTrue(
                 exception.getMessage().toUpperCase().contains("NOSCRIPT"),
                 "Expected NOSCRIPT error after script is fully released and flushed");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void migrate_multi_keys(GlideClient regularClient) {
+        String key1 = "{migrate}" + UUID.randomUUID();
+        String key2 = "{migrate}" + UUID.randomUUID();
+        regularClient.set(key1, "value1").get();
+        regularClient.set(key2, "value2").get();
+        try {
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    regularClient
+                                            .migrate("nonexistent.host", 6379, new String[] {key1, key2}, 0, 5000)
+                                            .get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(
+                    executionException.getCause().getMessage().contains("Connection refused")
+                            || executionException.getCause().getMessage().contains("Name or service not known")
+                            || executionException
+                                    .getCause()
+                                    .getMessage()
+                                    .contains("nodename nor servname provided")
+                            || executionException.getCause().getMessage().contains("Temporary failure")
+                            || executionException.getCause().getMessage().contains("IOERR"));
+        } finally {
+            regularClient.del(new String[] {key1, key2}).get();
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void migrate_multi_keys_with_options(GlideClient regularClient) {
+        String key1 = "{migrate}" + UUID.randomUUID();
+        String key2 = "{migrate}" + UUID.randomUUID();
+        regularClient.set(key1, "value1").get();
+        regularClient.set(key2, "value2").get();
+        MigrateOptions options = MigrateOptions.builder().replace(true).build();
+        try {
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    regularClient
+                                            .migrate(
+                                                    "nonexistent.host", 6379, new String[] {key1, key2}, 0, 5000, options)
+                                            .get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(
+                    executionException.getCause().getMessage().contains("Connection refused")
+                            || executionException.getCause().getMessage().contains("Name or service not known")
+                            || executionException
+                                    .getCause()
+                                    .getMessage()
+                                    .contains("nodename nor servname provided")
+                            || executionException.getCause().getMessage().contains("Temporary failure")
+                            || executionException.getCause().getMessage().contains("IOERR"));
+        } finally {
+            regularClient.del(new String[] {key1, key2}).get();
+        }
     }
 }
