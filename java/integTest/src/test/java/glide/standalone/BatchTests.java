@@ -330,6 +330,15 @@ public class BatchTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
+    public void bgsaveCancel(GlideClient client, boolean isAtomic) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        Object[] response = client.exec(new Batch(isAtomic).bgsaveCancel(), true).get();
+        assertEquals(OK, response[0]);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithAtomic")
+    @SneakyThrows
     public void bgrewriteaof(GlideClient client, boolean isAtomic) {
         Object[] response = client.exec(new Batch(isAtomic).bgrewriteaof(), true).get();
         assertTrue(((String) response[0]).startsWith("Background append only file rewriting"));

@@ -480,48 +480,36 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void save(GlideClient client) {
-        waitForCondition(
-            () -> !isSaveInProgress(client),
-            "Prior BGSAVE still in progress");
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(client);
         assertEquals(OK, client.save().get());
 
-        waitForCondition(
-            () -> getRdbSaves(client) > beforeSaves,
-            "SAVE did not complete");
+        waitForCondition(() -> getRdbSaves(client) > beforeSaves, "SAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave(GlideClient client) {
-        waitForCondition(
-            () -> !isSaveInProgress(client),
-            "Prior BGSAVE still in progress");
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(client);
-        assertEquals(OK, client.bgsave().get());
+        assertTrue(client.bgsave().get().contains("Background saving"));
 
-        waitForCondition(
-            () -> getRdbSaves(client) > beforeSaves,
-            "BGSAVE did not complete");
+        waitForCondition(() -> getRdbSaves(client) > beforeSaves, "BGSAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule(GlideClient client) {
-        waitForCondition(
-            () -> !isSaveInProgress(client),
-            "Prior BGSAVE still in progress");
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(client);
-        assertEquals(OK, client.bgsave().get());
+        assertTrue(client.bgsaveSchedule().get().contains("Background saving"));
 
-        waitForCondition(
-            () -> getRdbSaves(client) > beforeSaves,
-            "BGSAVE did not complete");
+        waitForCondition(() -> getRdbSaves(client) > beforeSaves, "BGSAVE SCHEDULE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -543,16 +531,13 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof(GlideClient client) {
-        waitForCondition(
-            () -> !isSaveInProgress(client),
-            "BGREWRITEAOF did not complete");
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
         long beforeRewrites = getAofRewrites(client);
-        assertEquals(OK, client.bgsave().get());
+        assertTrue(client.bgrewriteaof().get().contains("Background append only file rewriting"));
 
         waitForCondition(
-            () -> getAofRewrites(client) > beforeRewrites,
-            "BGREWRITEAOF did not complete");
+                () -> getAofRewrites(client) > beforeRewrites, "BGREWRITEAOF did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)

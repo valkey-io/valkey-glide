@@ -699,11 +699,6 @@ public abstract class BaseClient
         return handleValkeyResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected String handleOkResponse(Response response) throws GlideException {
-        handleValkeyResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
-        return OK;
-    }
-
     protected String handleStringOrNullResponse(Response response) throws GlideException {
         return handleValkeyResponse(
                 String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);

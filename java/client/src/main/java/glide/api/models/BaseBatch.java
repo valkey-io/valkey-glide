@@ -5015,7 +5015,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @since Valkey 8.1
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return Command Response - A non-empty status string.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T bgsaveCancel() {
         protobufBatch.addCommands(buildCommand(BgSave, newArgsBuilder().add("CANCEL")));

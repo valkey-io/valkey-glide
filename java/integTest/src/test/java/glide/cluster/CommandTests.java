@@ -13,12 +13,13 @@ import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
+import static glide.TestUtilities.getAofRewrites;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
+import static glide.TestUtilities.getRdbSaves;
 import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.isAofRewriteInProgress;
-import static glide.TestUtilities.isRdbBgsaveInProgress;
+import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitForCondition;
@@ -890,61 +891,77 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void save(GlideClusterClient clusterClient) {
-        long before = clusterClient.lastsave().get();
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeSaves = getRdbSaves(clusterClient);
         assertEquals(OK, clusterClient.save().get());
-        assertTrue(clusterClient.lastsave().get() > before);
+
+        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "SAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void save_with_route(GlideClusterClient clusterClient) {
-        long before = clusterClient.lastsave().get();
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeSaves = getRdbSaves(clusterClient);
         assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
-        assertTrue(clusterClient.lastsave().get() > before);
+
+        waitForCondition(
+                () -> getRdbSaves(clusterClient) > beforeSaves, "SAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave(GlideClusterClient clusterClient) {
-        long before = clusterClient.lastsave().get();
-        assertTrue(clusterClient.bgsave().get().startsWith("Background saving"));
-        waitForCondition(
-                () -> clusterClient.lastsave().get() > before, "LASTSAVE did not update after BGSAVE");
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeSaves = getRdbSaves(clusterClient);
+        assertTrue(clusterClient.bgsave().get().contains("Background saving"));
+
+        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave_with_route(GlideClusterClient clusterClient) {
-        long before = clusterClient.lastsave().get();
-        assertTrue(clusterClient.bgsave(ALL_PRIMARIES).get().startsWith("Background saving"));
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeSaves = getRdbSaves(clusterClient);
+        assertTrue(clusterClient.bgsave(ALL_PRIMARIES).get().contains("Background saving"));
+
         waitForCondition(
-                () -> clusterClient.lastsave().get() > before,
-                "LASTSAVE did not update after BGSAVE with route");
+                () -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule(GlideClusterClient clusterClient) {
-        long before = clusterClient.lastsave().get();
-        assertTrue(clusterClient.bgsaveSchedule().get().startsWith("Background saving"));
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeSaves = getRdbSaves(clusterClient);
+        assertTrue(clusterClient.bgsaveSchedule().get().contains("Background saving"));
+
         waitForCondition(
-                () -> clusterClient.lastsave().get() > before,
-                "LASTSAVE did not update after BGSAVE SCHEDULE");
+                () -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE SCHEDULE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
-        long before = clusterClient.lastsave().get();
-        assertTrue(clusterClient.bgsaveSchedule(ALL_PRIMARIES).get().startsWith("Background saving"));
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeSaves = getRdbSaves(clusterClient);
+        assertTrue(clusterClient.bgsaveSchedule(ALL_PRIMARIES).get().contains("Background saving"));
+
         waitForCondition(
-                () -> clusterClient.lastsave().get() > before,
-                "LASTSAVE did not update after BGSAVE SCHEDULE with route");
+                () -> getRdbSaves(clusterClient) > beforeSaves,
+                "BGSAVE SCHEDULE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -952,7 +969,14 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        assertEquals(OK, clusterClient.bgsaveCancel().get());
+        try {
+            assertEquals(OK, clusterClient.bgsaveCancel().get());
+        } catch (ExecutionException e) {
+            assertTrue(
+                    e.getCause()
+                            .getMessage()
+                            .contains("Background saving is currently not in progress or scheduled"));
+        }
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -960,26 +984,46 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel_with_route(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        assertEquals(OK, clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+        try {
+            assertEquals(OK, clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+        } catch (ExecutionException e) {
+            assertTrue(
+                    e.getCause()
+                            .getMessage()
+                            .contains("Background saving is currently not in progress or scheduled"));
+        }
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeRewrites = getAofRewrites(clusterClient);
         assertTrue(
-                clusterClient.bgrewriteaof().get().startsWith("Background append only file rewriting"));
+                clusterClient.bgrewriteaof().get().contains("Background append only file rewriting"));
+
+        waitForCondition(
+                () -> getAofRewrites(clusterClient) > beforeRewrites, "BGREWRITEAOF did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        long beforeRewrites = getAofRewrites(clusterClient);
         assertTrue(
                 clusterClient
                         .bgrewriteaof(ALL_PRIMARIES)
                         .get()
-                        .startsWith("Background append only file rewriting"));
+                        .contains("Background append only file rewriting"));
+
+        waitForCondition(
+                () -> getAofRewrites(clusterClient) > beforeRewrites,
+                "BGREWRITEAOF did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)

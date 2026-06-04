@@ -588,49 +588,49 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> bgsave() {
-        return commandManager.submitNewCommand(BgSave, EMPTY_STRING_ARRAY, this::handleOkResponse);
+        return commandManager.submitNewCommand(BgSave, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsave(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgSave, EMPTY_STRING_ARRAY, route, this::handleOkResponse);
+                BgSave, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsaveSchedule() {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleOkResponse);
+                BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsaveSchedule(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {SCHEDULE_VALKEY_API}, route, this::handleOkResponse);
+                BgSave, new String[] {SCHEDULE_VALKEY_API}, route, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsaveCancel() {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {CANCEL_VALKEY_API}, this::handleOkResponse);
+                BgSave, new String[] {CANCEL_VALKEY_API}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgsaveCancel(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {CANCEL_VALKEY_API}, route, this::handleOkResponse);
+                BgSave, new String[] {CANCEL_VALKEY_API}, route, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgrewriteaof() {
         return commandManager.submitNewCommand(
-                BgRewriteAof, EMPTY_STRING_ARRAY, this::handleOkResponse);
+                BgRewriteAof, EMPTY_STRING_ARRAY, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> bgrewriteaof(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgRewriteAof, EMPTY_STRING_ARRAY, route, this::handleOkResponse);
+                BgRewriteAof, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
     }
 
     @Override
