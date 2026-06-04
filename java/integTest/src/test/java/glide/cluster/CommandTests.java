@@ -2,6 +2,9 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
+import static glide.TestUtilities.BGSAVE_CANCEL_RESPONSES;
+import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -908,8 +911,7 @@ public class CommandTests {
         long beforeSaves = getRdbSaves(clusterClient);
         assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
 
-        waitForCondition(
-                () -> getRdbSaves(clusterClient) > beforeSaves, "SAVE did not complete");
+        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "SAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -919,7 +921,10 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(clusterClient);
-        assertTrue(clusterClient.bgsave().get().contains("Background saving"));
+        ClusterValue<String> response = clusterClient.bgsave().get();
+        for (String value : response.getMultiValue().values()) {
+            assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
+        }
 
         waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE did not complete");
     }
@@ -931,10 +936,12 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(clusterClient);
-        assertTrue(clusterClient.bgsave(ALL_PRIMARIES).get().contains("Background saving"));
+        ClusterValue<String> response = clusterClient.bgsave(ALL_PRIMARIES).get();
+        for (String value : response.getMultiValue().values()) {
+            assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
+        }
 
-        waitForCondition(
-                () -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE did not complete");
+        waitForCondition(() -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -944,7 +951,10 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(clusterClient);
-        assertTrue(clusterClient.bgsaveSchedule().get().contains("Background saving"));
+        ClusterValue<String> response = clusterClient.bgsaveSchedule().get();
+        for (String value : response.getMultiValue().values()) {
+            assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
+        }
 
         waitForCondition(
                 () -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE SCHEDULE did not complete");
@@ -957,11 +967,13 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(clusterClient);
-        assertTrue(clusterClient.bgsaveSchedule(ALL_PRIMARIES).get().contains("Background saving"));
+        ClusterValue<String> response = clusterClient.bgsaveSchedule(ALL_PRIMARIES).get();
+        for (String value : response.getMultiValue().values()) {
+            assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value));
+        }
 
         waitForCondition(
-                () -> getRdbSaves(clusterClient) > beforeSaves,
-                "BGSAVE SCHEDULE did not complete");
+                () -> getRdbSaves(clusterClient) > beforeSaves, "BGSAVE SCHEDULE did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -970,7 +982,10 @@ public class CommandTests {
     public void bgsaveCancel(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
         try {
-            assertEquals(OK, clusterClient.bgsaveCancel().get());
+            ClusterValue<String> response = clusterClient.bgsaveCancel().get();
+            for (String value : response.getMultiValue().values()) {
+                assertTrue(BGSAVE_CANCEL_RESPONSES.contains(value));
+            }
         } catch (ExecutionException e) {
             assertTrue(
                     e.getCause()
@@ -985,7 +1000,10 @@ public class CommandTests {
     public void bgsaveCancel_with_route(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
         try {
-            assertEquals(OK, clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+            ClusterValue<String> response = clusterClient.bgsaveCancel(ALL_PRIMARIES).get();
+            for (String value : response.getMultiValue().values()) {
+                assertTrue(BGSAVE_CANCEL_RESPONSES.contains(value));
+            }
         } catch (ExecutionException e) {
             assertTrue(
                     e.getCause()
@@ -1001,8 +1019,10 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
         long beforeRewrites = getAofRewrites(clusterClient);
-        assertTrue(
-                clusterClient.bgrewriteaof().get().contains("Background append only file rewriting"));
+        ClusterValue<String> response = clusterClient.bgrewriteaof().get();
+        for (String value : response.getMultiValue().values()) {
+            assertTrue(BGREWRITEAOF_RESPONSES.contains(value));
+        }
 
         waitForCondition(
                 () -> getAofRewrites(clusterClient) > beforeRewrites, "BGREWRITEAOF did not complete");
@@ -1015,15 +1035,13 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
 
         long beforeRewrites = getAofRewrites(clusterClient);
-        assertTrue(
-                clusterClient
-                        .bgrewriteaof(ALL_PRIMARIES)
-                        .get()
-                        .contains("Background append only file rewriting"));
+        ClusterValue<String> response = clusterClient.bgrewriteaof(ALL_PRIMARIES).get();
+        for (String value : response.getMultiValue().values()) {
+            assertTrue(BGREWRITEAOF_RESPONSES.contains(value));
+        }
 
         waitForCondition(
-                () -> getAofRewrites(clusterClient) > beforeRewrites,
-                "BGREWRITEAOF did not complete");
+                () -> getAofRewrites(clusterClient) > beforeRewrites, "BGREWRITEAOF did not complete");
     }
 
     @ParameterizedTest(autoCloseArguments = false)

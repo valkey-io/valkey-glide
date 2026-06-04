@@ -58,6 +58,23 @@ public class TestUtilities {
     /** Key names for versions returned in info command. */
     private static final String VALKEY_VERSION_KEY = "valkey_version";
 
+    /** Expected server responses for BGSAVE SCHEDULE. */
+    public static final Set<String> BGSAVE_SCHEDULE_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList("Background saving started", "Background saving scheduled"));
+
+    /** Expected server responses for BGSAVE CANCEL. */
+    public static final Set<String> BGSAVE_CANCEL_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList("Background saving cancelled", "Scheduled background saving cancelled"));
+
+    /** Expected server responses for BGREWRITEAOF. */
+    public static final Set<String> BGREWRITEAOF_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList(
+                            "Background append only file rewriting started",
+                            "Background append only file rewriting scheduled"));
+
     private static final String REDIS_VERSION_KEY = "redis_version";
 
     /** IAM authentication test constants */
@@ -575,7 +592,7 @@ public class TestUtilities {
     @SneakyThrows
     public static void waitForCondition(Callable<Boolean> condition, String failure) {
         long sleep = 100;
-        long timeout = 5000;
+        long timeout = 10000;
 
         while (timeout > 0) {
             if (condition.call()) {

@@ -119,6 +119,7 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.PubSubState;
 import glide.api.models.configuration.PubSubStateImpl;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.ServerCredentials;
@@ -577,7 +578,7 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<String> save() {
-        return commandManager.submitNewCommand(Save, EMPTY_STRING_ARRAY, this::handleStringResponse);
+        return save(SimpleMultiNodeRoute.ALL_PRIMARIES);
     }
 
     @Override
@@ -587,50 +588,71 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> bgsave() {
-        return commandManager.submitNewCommand(BgSave, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    public CompletableFuture<ClusterValue<String>> bgsave() {
+        return bgsave(SimpleMultiNodeRoute.ALL_PRIMARIES);
     }
 
     @Override
-    public CompletableFuture<String> bgsave(@NonNull Route route) {
+    public CompletableFuture<ClusterValue<String>> bgsave(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgSave, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
+                BgSave,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
-    public CompletableFuture<String> bgsaveSchedule() {
-        return commandManager.submitNewCommand(
-                BgSave, new String[] {SCHEDULE_VALKEY_API}, this::handleStringResponse);
+    public CompletableFuture<ClusterValue<String>> bgsaveSchedule() {
+        return bgsaveSchedule(SimpleMultiNodeRoute.ALL_PRIMARIES);
     }
 
     @Override
-    public CompletableFuture<String> bgsaveSchedule(@NonNull Route route) {
+    public CompletableFuture<ClusterValue<String>> bgsaveSchedule(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {SCHEDULE_VALKEY_API}, route, this::handleStringResponse);
+                BgSave,
+                new String[] {SCHEDULE_VALKEY_API},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
-    public CompletableFuture<String> bgsaveCancel() {
-        return commandManager.submitNewCommand(
-                BgSave, new String[] {CANCEL_VALKEY_API}, this::handleStringResponse);
+    public CompletableFuture<ClusterValue<String>> bgsaveCancel() {
+        return bgsaveCancel(SimpleMultiNodeRoute.ALL_PRIMARIES);
     }
 
     @Override
-    public CompletableFuture<String> bgsaveCancel(@NonNull Route route) {
+    public CompletableFuture<ClusterValue<String>> bgsaveCancel(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgSave, new String[] {CANCEL_VALKEY_API}, route, this::handleStringResponse);
+                BgSave,
+                new String[] {CANCEL_VALKEY_API},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
-    public CompletableFuture<String> bgrewriteaof() {
-        return commandManager.submitNewCommand(
-                BgRewriteAof, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    public CompletableFuture<ClusterValue<String>> bgrewriteaof() {
+        return bgrewriteaof(SimpleMultiNodeRoute.ALL_PRIMARIES);
     }
 
     @Override
-    public CompletableFuture<String> bgrewriteaof(@NonNull Route route) {
+    public CompletableFuture<ClusterValue<String>> bgrewriteaof(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                BgRewriteAof, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
+                BgRewriteAof,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.of(handleStringResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override

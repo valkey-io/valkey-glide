@@ -2,6 +2,9 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
+import static glide.TestUtilities.BGSAVE_CANCEL_RESPONSES;
+import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -495,7 +498,7 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(client);
-        assertTrue(client.bgsave().get().contains("Background saving"));
+        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsave().get()));
 
         waitForCondition(() -> getRdbSaves(client) > beforeSaves, "BGSAVE did not complete");
     }
@@ -507,7 +510,7 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
         long beforeSaves = getRdbSaves(client);
-        assertTrue(client.bgsaveSchedule().get().contains("Background saving"));
+        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsaveSchedule().get()));
 
         waitForCondition(() -> getRdbSaves(client) > beforeSaves, "BGSAVE SCHEDULE did not complete");
     }
@@ -518,7 +521,7 @@ public class CommandTests {
     public void bgsaveCancel(GlideClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
         try {
-            assertEquals(OK, client.bgsaveCancel().get());
+            assertTrue(BGSAVE_CANCEL_RESPONSES.contains(client.bgsaveCancel().get()));
         } catch (ExecutionException e) {
             assertTrue(
                     e.getCause()
@@ -534,7 +537,7 @@ public class CommandTests {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
 
         long beforeRewrites = getAofRewrites(client);
-        assertTrue(client.bgrewriteaof().get().contains("Background append only file rewriting"));
+        assertTrue(BGREWRITEAOF_RESPONSES.contains(client.bgrewriteaof().get()));
 
         waitForCondition(
                 () -> getAofRewrites(client) > beforeRewrites, "BGREWRITEAOF did not complete");

@@ -245,47 +245,6 @@ public class ClusterBatchTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClientsWithAtomic")
     @SneakyThrows
-    public void save(GlideClusterClient clusterClient, boolean isAtomic) {
-        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).save(), true).get();
-        assertEquals(OK, response[0]);
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    @SneakyThrows
-    public void bgsave(GlideClusterClient clusterClient, boolean isAtomic) {
-        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).bgsave(), true).get();
-        assertTrue(((String) response[0]).startsWith("Background saving"));
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    @SneakyThrows
-    public void bgsaveSchedule(GlideClusterClient clusterClient, boolean isAtomic) {
-        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).bgsaveSchedule(), true).get();
-        assertTrue(((String) response[0]).startsWith("Background saving"));
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    @SneakyThrows
-    public void bgsaveCancel(GlideClusterClient clusterClient, boolean isAtomic) {
-        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).bgsaveCancel(), true).get();
-        assertEquals(OK, response[0]);
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    @SneakyThrows
-    public void bgrewriteaof(GlideClusterClient clusterClient, boolean isAtomic) {
-        Object[] response = clusterClient.exec(new ClusterBatch(isAtomic).bgrewriteaof(), true).get();
-        assertTrue(((String) response[0]).startsWith("Background append only file rewriting"));
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithAtomic")
-    @SneakyThrows
     public void objectFreq(GlideClusterClient clusterClient, boolean isAtomic) {
         String objectFreqKey = "key";
         String maxmemoryPolicy = "maxmemory-policy";

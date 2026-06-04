@@ -179,11 +179,11 @@ public interface ServerManagementCommands {
      *
      * @since Valkey 8.1
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return <code>"OK"</code> response on success.
+     * @return A status string.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveCancel().get();
-     * assert response.equals("OK");
+     * assert response.contains("Background saving");
      * }</pre>
      */
     CompletableFuture<String> bgsaveCancel();
