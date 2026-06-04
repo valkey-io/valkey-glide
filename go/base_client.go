@@ -157,8 +157,8 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 	defer C.free(requestBytes)
 
 	clientType, err := buildAsyncClientType(
-		(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
-		(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+		C.SuccessCallback(unsafe.Pointer(C.successCallback)),
+		C.FailureCallback(unsafe.Pointer(C.failureCallback)),
 	)
 	if err != nil {
 		return nil, NewClosingError(err.Error())
@@ -172,7 +172,7 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 		if resolver := cfgWithResolver.GetAddressResolver(); resolver != nil {
 			clientID = uintptr(clientIDCounter.Add(1))
 			registerResolver(clientID, resolver)
-			resolverCallback = (C.AddressResolverCallback)(unsafe.Pointer(C.addressResolverCallback))
+			resolverCallback = C.AddressResolverCallback(unsafe.Pointer(C.addressResolverCallback))
 		}
 	}
 
@@ -181,7 +181,7 @@ func createClient(cfg clientConfiguration) (*baseClient, error) {
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
-			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
+			C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
 			resolverCallback,
 			C.uintptr_t(clientID),
 		),
@@ -570,12 +570,12 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 		routeInfo := C.RouteInfo{}
 		switch r := route.(type) {
 		case config.SimpleSingleNodeRoute:
-			routeInfo.route_type = (uint32)(r)
+			routeInfo.route_type = uint32(r)
 		case config.SimpleMultiNodeRoute:
-			routeInfo.route_type = (uint32)(r)
+			routeInfo.route_type = uint32(r)
 		case config.SimpleNodeRoute:
 			// enum variants have the same ordinals
-			routeInfo.route_type = (uint32)(r)
+			routeInfo.route_type = uint32(r)
 		case *config.SlotIdRoute:
 			routeInfo.route_type = C.SlotId
 			routeInfo.slot_id = C.int(r.SlotID)
@@ -627,7 +627,7 @@ func createCmdInfo(pinner pinner, cmd internal.Cmd) C.CmdInfo {
 	for i, str := range cmd.Args {
 		// TODO do we need to pin there too?
 		// cArgsPtr[i] = (*C.uchar)(pinner.Pin(unsafe.Pointer(unsafe.StringData((str)))))
-		cArgsPtr[i] = (*C.uchar)(unsafe.Pointer(unsafe.StringData((str))))
+		cArgsPtr[i] = (*C.uchar)(unsafe.Pointer(unsafe.StringData(str)))
 		argLengthsPtr[i] = C.size_t(len(str))
 	}
 	info.arg_count = C.ulong(numArgs)
@@ -1535,7 +1535,8 @@ func (client *baseClient) IncrBy(ctx context.Context, key string, amount int64) 
 //
 // [valkey.io]: https://valkey.io/commands/incrbyfloat/
 func (client *baseClient) IncrByFloat(ctx context.Context, key string, amount float64) (float64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.IncrByFloat,
 		[]string{key, utils.FloatToString(amount)},
 	)
@@ -2975,7 +2976,8 @@ func (client *baseClient) LPosCountWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.LPos,
 		append([]string{key, element, constants.CountKeyword, utils.IntToString(count)}, optionArgs...),
 	)
@@ -3815,7 +3817,8 @@ func (client *baseClient) LInsert(
 		return models.DefaultIntResponse, err
 	}
 
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.LInsert,
 		[]string{key, insertPositionStr, pivot, element},
 	)
@@ -4282,7 +4285,8 @@ func (client *baseClient) BLMove(
 		return models.CreateNilStringResult(), err
 	}
 
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.BLMove,
 		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout.Seconds())},
 	)
@@ -4494,7 +4498,8 @@ func (client *baseClient) ExpireAtWithOptions(
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ExpireAt,
 		[]string{key, utils.IntToString(expireTime.Unix()), expireConditionStr},
 	)
@@ -4631,7 +4636,8 @@ func (client *baseClient) PExpireAtWithOptions(
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.PExpireAt,
 		[]string{key, utils.IntToString(expireTime.UnixMilli()), expireConditionStr},
 	)
@@ -5185,7 +5191,8 @@ func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
 ) (int64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ZAdd,
 		append([]string{key}, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
@@ -5223,7 +5230,8 @@ func (client *baseClient) ZAddWithOptions(
 		return models.DefaultIntResponse, err
 	}
 	commandArgs := append([]string{key}, optionArgs...)
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ZAdd,
 		append(commandArgs, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
@@ -8414,7 +8422,8 @@ func (client *baseClient) ZDiffWithScores(ctx context.Context, keys []string) ([
 //
 // [valkey.io]: https://valkey.io/commands/zdiffstore/
 func (client *baseClient) ZDiffStore(ctx context.Context, destination string, keys []string) (int64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ZDiffStore,
 		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
 	)
@@ -8841,7 +8850,8 @@ func (client *baseClient) GeoAdd(
 	key string,
 	membersToGeospatialData map[string]options.GeospatialData,
 ) (int64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoAdd,
 		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
 	)
@@ -8908,7 +8918,8 @@ func (client *baseClient) GeoAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
 func (client *baseClient) GeoHash(ctx context.Context, key string, members []string) ([]models.Result[string], error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoHash,
 		append([]string{key}, members...),
 	)
@@ -8969,7 +8980,8 @@ func (client *baseClient) GeoDist(
 	member1 string,
 	member2 string,
 ) (models.Result[float64], error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoDist,
 		[]string{key, member1, member2},
 	)
@@ -9005,7 +9017,8 @@ func (client *baseClient) GeoDistWithUnit(
 	member2 string,
 	unit constants.GeoUnit,
 ) (models.Result[float64], error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoDist,
 		[]string{key, member1, member2, string(unit)},
 	)

@@ -627,7 +627,7 @@ func (client *ClusterClient) EchoWithOptions(
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	if (opts.Route).IsMultiNode() {
+	if opts.Route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[string](), err
@@ -938,7 +938,7 @@ func (client *ClusterClient) ClientIdWithOptions(
 		return models.CreateEmptyClusterValue[int64](), err
 	}
 	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
+		opts.Route.IsMultiNode() {
 		data, err := handleStringIntMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[int64](), err
@@ -1000,7 +1000,7 @@ func (client *ClusterClient) LastSaveWithOptions(
 		return models.CreateEmptyClusterValue[int64](), err
 	}
 	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
+		opts.Route.IsMultiNode() {
 		data, err := handleStringIntMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[int64](), err
@@ -1282,7 +1282,7 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
 	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
+		opts.Route.IsMultiNode() {
 		data, err := handleStringToStringOrNilMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[models.Result[string]](), err
@@ -1647,7 +1647,7 @@ func (client *ClusterClient) FCallWithRoute(
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
@@ -1695,7 +1695,7 @@ func (client *ClusterClient) FCallReadOnlyWithRoute(ctx context.Context,
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
@@ -1774,7 +1774,7 @@ func (client *ClusterClient) FCallWithArgsWithRoute(ctx context.Context,
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
@@ -1825,7 +1825,7 @@ func (client *ClusterClient) FCallReadOnlyWithArgsWithRoute(ctx context.Context,
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
