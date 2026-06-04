@@ -243,6 +243,7 @@ fn monitor_store() -> &'static Mutex<HashMap<u64, MonitorClient>> {
 
 #[pyfunction]
 fn create_monitor_client_external(
+    py: Python<'_>,
     connection_request_bytes: Vec<u8>,
     callback: PyObject,
 ) -> PyResult<u64> {
@@ -300,14 +301,12 @@ fn create_monitor_client_external(
     });
     let glide_rt = get_or_init_runtime()
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {e}")))?;
-    let client = glide_rt
-        .runtime
-        .block_on(MonitorClient::new(
-            &address,
-            redis_conn_info,
-            tls_mode,
-            on_line,
-        ))
+    let client = py
+        .allow_threads(|| {
+            glide_rt
+                .runtime
+                .block_on(MonitorClient::new(&address, redis_conn_info, tls_mode, on_line))
+        })
         .map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!(
                 "Failed to create monitor client: {e}"
@@ -322,7 +321,7 @@ fn create_monitor_client_external(
 }
 
 #[pyfunction]
-fn close_monitor_client_external(handle_id: u64) -> PyResult<()> {
+fn close_monitor_client_external(py: Python<'_>, handle_id: u64) -> PyResult<()> {
     let client = {
         let Ok(mut store) = monitor_store().lock() else {
             return Ok(());
@@ -333,7 +332,7 @@ fn close_monitor_client_external(handle_id: u64) -> PyResult<()> {
         let glide_rt = get_or_init_runtime().map_err(|e| {
             pyo3::exceptions::PyRuntimeError::new_err(format!("Runtime error: {e}"))
         })?;
-        glide_rt.runtime.block_on(client.stop_async());
+        py.allow_threads(|| glide_rt.runtime.block_on(client.stop_async()));
     }
     Ok(())
 }
