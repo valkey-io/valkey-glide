@@ -8,6 +8,7 @@ from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
@@ -1547,3 +1548,51 @@ class ClusterCommands(CoreCommands):
             (list(channels) if channels else []) + [str(timeout_ms)],
         )
         self._execute_command(RequestType.SUnsubscribeBlocking, args)
+
+    def client_pause(
+        self,
+        timeout: int,
+        mode: Optional[ClientPauseMode] = None,
+        route: Optional[Route] = None,
+    ) -> TOK:
+        """
+        Suspends all clients for the specified timeout.
+
+        See [valkey.io](https://valkey.io/commands/client-pause/) for more details.
+
+        Args:
+            timeout (int): The time in milliseconds to pause clients.
+            mode (Optional[ClientPauseMode]): The pause mode to use.
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.client_pause(1000)
+                OK
+            >>> client.client_pause(5000, ClientPauseMode.WRITE)
+                OK
+        """
+        args: List[TEncodable] = [str(timeout)]
+        if mode is not None:
+            args.append(mode.value)
+        return cast(TOK, self._execute_command(RequestType.ClientPause, args, route))
+
+    def client_unpause(self, route: Optional[Route] = None) -> TOK:
+        """
+        Resumes processing commands on all clients.
+
+        See [valkey.io](https://valkey.io/commands/client-unpause/) for more details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.client_unpause()
+                OK
+        """
+        return cast(TOK, self._execute_command(RequestType.ClientUnpause, [], route))

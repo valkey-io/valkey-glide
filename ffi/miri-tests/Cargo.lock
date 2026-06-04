@@ -1659,6 +1659,7 @@ dependencies = [
  "protobuf",
  "serde_json",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -1668,6 +1669,7 @@ dependencies = [
  "glide-core",
  "mock-redis",
  "mock-telemetry",
+ "protobuf",
  "tokio",
 ]
 

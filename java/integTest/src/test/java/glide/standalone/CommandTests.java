@@ -50,6 +50,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptOptions;
@@ -331,6 +332,59 @@ public class CommandTests {
         String name = regularClient.clientGetName().get();
 
         assertEquals("clientGetName", name);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPauseAll_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseAll_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
+
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> get = regularClient.get(key);
+        CompletableFuture<String> set = regularClient.set(key, "after");
+        CompletableFuture<String> unpause = regularClient.clientUnpause();
+
+        Thread.sleep(300);
+
+        // Verify that none of the commands completes.
+        assertFalse(get.isDone());
+        assertFalse(set.isDone());
+        assertFalse(unpause.isDone());
+
+        // Verify that all commands complete once pause expires.
+        assertEquals("before", get.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPauseWrite_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseWrite_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
+
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.WRITE).get());
+
+        // Reads are not blocked by PAUSE WRITE.
+        assertEquals("before", regularClient.get(key).get());
+
+        CompletableFuture<String> set = regularClient.set(key, "after");
+
+        Thread.sleep(300);
+
+        // Verify that SET has not completed because server is paused.
+        assertFalse(set.isDone());
+
+        assertEquals(OK, regularClient.clientUnpause().get());
+
+        // Verify that SET completes once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
