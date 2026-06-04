@@ -536,7 +536,6 @@ public class CommandTests {
     @SneakyThrows
     public void bgsave(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-
         assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsave().get()));
     }
 
@@ -545,7 +544,6 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveSchedule(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-
         assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsaveSchedule().get()));
     }
 
@@ -566,7 +564,6 @@ public class CommandTests {
     @SneakyThrows
     public void bgrewriteaof(GlideClient client) {
         waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-
         assertTrue(BGREWRITEAOF_RESPONSES.contains(client.bgrewriteaof().get()));
     }
 
