@@ -595,12 +595,13 @@ impl ResponsePolicy {
 
             b"WAITAOF" => Some(ResponsePolicy::AggregateArray(ArrayAggregateOp::Min)),
 
-            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT SETNAME"
-            | b"CLIENT SETINFO" | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE"
-            | b"FLUSHALL" | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH"
-            | b"FUNCTION LOAD" | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET"
-            | b"PING" | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET"
-            | b"UNWATCH" | b"WATCH" | b"RESET" => Some(ResponsePolicy::AllSucceeded),
+            b"ACL SETUSER" | b"ACL DELUSER" | b"ACL SAVE" | b"AUTH" | b"CLIENT PAUSE"
+            | b"CLIENT REPLY" | b"CLIENT SETNAME" | b"CLIENT SETINFO" | b"CLIENT UNPAUSE"
+            | b"CONFIG SET" | b"CONFIG RESETSTAT" | b"CONFIG REWRITE" | b"FLUSHALL"
+            | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH" | b"FUNCTION LOAD"
+            | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET" | b"PING"
+            | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET" | b"UNWATCH"
+            | b"WATCH" | b"RESET" => Some(ResponsePolicy::AllSucceeded),
 
             b"KEYS"
             | b"FT._ALIASLIST"
@@ -699,6 +700,8 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"MEMORY PURGE"
         | b"MEMORY STATS"
         | b"PING"
+        | b"CLIENT PAUSE"
+        | b"CLIENT UNPAUSE"
         | b"SCRIPT EXISTS"
         | b"UNWATCH"
         | b"WAIT"
@@ -759,11 +762,9 @@ fn base_routing(cmd: &[u8]) -> RouteBy {
         | b"CLIENT INFO"
         | b"CLIENT KILL"
         | b"CLIENT LIST"
-        | b"CLIENT PAUSE"
         | b"CLIENT REPLY"
         | b"CLIENT TRACKINGINFO"
         | b"CLIENT UNBLOCK"
-        | b"CLIENT UNPAUSE"
         | b"CLUSTER COUNT-FAILURE-REPORTS"
         | b"CLUSTER INFO"
         | b"CLUSTER KEYSLOT"

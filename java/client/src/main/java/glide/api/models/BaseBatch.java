@@ -16,6 +16,8 @@ import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -244,6 +246,7 @@ import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.commands.StringBaseCommands;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
@@ -2493,6 +2496,45 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T clientGetName() {
         protobufBatch.addCommands(buildCommand(ClientGetName));
+        return getThis();
+    }
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T clientPause(long timeout) {
+        protobufBatch.addCommands(
+                buildCommand(ClientPause, newArgsBuilder().add(Long.toString(timeout))));
+        return getThis();
+    }
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * @see <a href="https://valkey.io/commands/client-pause/">valkey.io</a> for details.
+     * @param timeout The time in milliseconds to pause clients.
+     * @param mode The pause mode to use.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T clientPause(long timeout, @NonNull ClientPauseMode mode) {
+        protobufBatch.addCommands(
+                buildCommand(
+                        ClientPause, newArgsBuilder().add(Long.toString(timeout)).add(mode.getValkeyApi())));
+        return getThis();
+    }
+
+    /**
+     * Resumes processing commands on all clients.
+     *
+     * @see <a href="https://valkey.io/commands/client-unpause/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T clientUnpause() {
+        protobufBatch.addCommands(buildCommand(ClientUnpause));
         return getThis();
     }
 
