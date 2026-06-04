@@ -275,7 +275,7 @@ jobs:
             - name: Create pull request
               if: ${{ env.FOUND_DIFF  == 'true' && github.event_name != 'pull_request' }}
               id: create-pr
-              uses: peter-evans/create-pull-request@v7
+              uses: peter-evans/create-pull-request@v8
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   sign-commits: true
