@@ -102,7 +102,8 @@ func getExampleClusterClient() *ClusterClient {
 
 	// Flush the database before each test to ensure a clean state.
 	mode := options.SYNC
-	_, err = client.FlushAllWithOptions(context.Background(),
+	_, err = client.FlushAllWithOptions(
+		context.Background(),
 		options.FlushClusterOptions{FlushMode: &mode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {
@@ -164,7 +165,8 @@ func getExampleClusterClientWithSubscription(
 
 	// Flush the database before each test to ensure a clean state.
 	syncmode := options.SYNC
-	_, err = client.FlushAllWithOptions(context.Background(),
+	_, err = client.FlushAllWithOptions(
+		context.Background(),
 		options.FlushClusterOptions{FlushMode: &syncmode, RouteOption: &options.RouteOption{Route: config.AllPrimaries}},
 	)
 	if err != nil {

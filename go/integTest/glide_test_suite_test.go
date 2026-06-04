@@ -493,7 +493,8 @@ func (suite *GlideTestSuite) createConnectionTimeoutClient(
 		WithRequestTimeout(requestTimeout).
 		WithReconnectStrategy(backoffStrategy).
 		WithAdvancedConfiguration(
-			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout))
+			config.NewAdvancedClientConfiguration().WithConnectionTimeout(connectTimeout),
+		)
 	return glide.NewClient(clientConfig)
 }
 
@@ -502,7 +503,8 @@ func (suite *GlideTestSuite) createConnectionTimeoutClusterClient(
 ) (*glide.ClusterClient, error) {
 	clientConfig := suite.defaultClusterClientConfig().
 		WithAdvancedConfiguration(
-			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout)).
+			config.NewAdvancedClusterClientConfiguration().WithConnectionTimeout(connectTimeout),
+		).
 		WithRequestTimeout(requestTimeout)
 	return glide.NewClusterClient(clientConfig)
 }

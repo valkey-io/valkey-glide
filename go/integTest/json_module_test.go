@@ -598,7 +598,9 @@ func (suite *GlideTestSuite) TestModuleJsonSetWithCondition_Cluster() {
 func (suite *GlideTestSuite) TestModuleJsonGetWithOptions_Cluster() {
 	suite.verifyJsonGetWithOptions(suite.clusterJsonOps())
 }
+
 func (suite *GlideTestSuite) TestModuleJsonDel_Cluster() { suite.verifyJsonDel(suite.clusterJsonOps()) }
+
 func (suite *GlideTestSuite) TestModuleJsonForget_Cluster() {
 	suite.verifyJsonForget(suite.clusterJsonOps())
 }
