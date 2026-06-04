@@ -231,7 +231,7 @@ jobs:
 
                   # Set up the env parameters for the build
                   if [[ "${{ matrix.build_type }}" == "musl" ]]; then
-                    additional_param="--zig"
+                    additional_param="--cross-compile"
                   fi
 
                   # Install needed dependencies
@@ -250,7 +250,7 @@ jobs:
 
                   # Build the native module
 
-                  # For GNU targets, we use the zig abi param set in the package.json to 2.17
+                  # For GNU targets, use the NAPI v3 cargo-zigbuild path from package.json.
                   if [[ "${{ matrix.TARGET }}" == *"gnu"* ]]; then
                     npm run build:release:gnu
 
