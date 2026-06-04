@@ -26,6 +26,7 @@ from .commands.bitmap import (
 )
 from .commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from .commands.core_options import (
+    ClientPauseMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -250,6 +251,7 @@ __all__ = [
     "SignedEncoding",
     "UnsignedEncoding",
     "ScoreBoundary",
+    "ClientPauseMode",
     "ConditionalChange",
     "HashFieldConditionalChange",
     "OnlyIfEqual",
