@@ -40,7 +40,8 @@ public interface ServerManagementClusterCommands {
      * Section#DEFAULT} option is assumed.
      *
      * @see <a href="https://valkey.io/commands/info/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>String</code> containing the information for the default sections. When
      *     specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
@@ -86,7 +87,8 @@ public interface ServerManagementClusterCommands {
      * @param sections A list of {@link InfoOptions.Section} values specifying which sections of
      *     information to retrieve. When no parameter is provided, the {@link
      *     InfoOptions.Section#DEFAULT} option is assumed.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>String</code> with the containing the information for the sections requested.
      *     When specifying a <code>route</code> other than a single node, it returns a <code>
      *     Map{@literal <String, String>}</code> with each address as the key and its corresponding
@@ -118,7 +120,8 @@ public interface ServerManagementClusterCommands {
      * Rewrites the configuration file with the current configuration.
      *
      * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -151,7 +154,8 @@ public interface ServerManagementClusterCommands {
      * href="https://valkey.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
      * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -187,7 +191,8 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/config-get/">valkey.io</a> for details.
      * @param parameters An <code>array</code> of configuration parameter names to retrieve values
      *     for.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>map</code> of values corresponding to the configuration parameters.<br>
      *     When specifying a route other than a single node, it returns a dictionary where each
      *     address is the key and its corresponding node response is the value.
@@ -227,7 +232,8 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -257,7 +263,8 @@ public interface ServerManagementClusterCommands {
      * Returns the server time.
      *
      * @see <a href="https://valkey.io/commands/time/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return The current server time as a <code>String</code> array with two elements: A <code>
      *     UNIX TIME</code> and the amount of microseconds already elapsed in the current second. The
      *     returned array is in a <code>[UNIX TIME, Microseconds already elapsed]</code> format.
@@ -298,7 +305,8 @@ public interface ServerManagementClusterCommands {
      * was made since then.
      *
      * @see <a href="https://valkey.io/commands/lastsave/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>UNIX TIME</code> of the last DB save executed with success.
      * @example
      *     <pre>{@code
@@ -329,7 +337,8 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to the nodes defined by <code>route</code>.
      *
      * @see <a href="https://valkey.io/commands/save/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -360,7 +369,8 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to the nodes defined by <code>route</code>.
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
      * @example
      *     <pre>{@code
@@ -393,7 +403,8 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to the nodes defined by <code>route</code>.
      *
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
      * @example
      *     <pre>{@code
@@ -428,7 +439,8 @@ public interface ServerManagementClusterCommands {
      *
      * @since Valkey 8.1
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
      * @example
      *     <pre>{@code
@@ -461,7 +473,8 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to the nodes defined by <code>route</code>.
      *
      * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A <code>ClusterValue&lt;String&gt;</code> containing status strings.
      * @example
      *     <pre>{@code
@@ -507,7 +520,8 @@ public interface ServerManagementClusterCommands {
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -524,7 +538,8 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -569,7 +584,8 @@ public interface ServerManagementClusterCommands {
      * Deletes all the keys of the currently selected database. This command never fails.
      *
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -586,7 +602,8 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
@@ -684,7 +701,8 @@ public interface ServerManagementClusterCommands {
      * Displays a piece of generative computer art and the Valkey version.
      *
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
@@ -709,7 +727,8 @@ public interface ServerManagementClusterCommands {
      *       <li>On other versions parameters are ignored.
      *     </ul>
      *
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
@@ -728,7 +747,8 @@ public interface ServerManagementClusterCommands {
      * @apiNote Versions 5 and 6 produce graphical things.
      * @see <a href="https://valkey.io/commands/lolwut/">valkey.io</a> for details.
      * @param version Version of computer art to generate.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
@@ -754,7 +774,8 @@ public interface ServerManagementClusterCommands {
      *       <li>For version <code>6</code>, those are number of columns and number of lines.
      *     </ul>
      *
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A piece of generative computer art along with the current Valkey version.
      * @example
      *     <pre>{@code
@@ -790,7 +811,8 @@ public interface ServerManagementClusterCommands {
      * Returns the number of keys in the database.
      *
      * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return The number of keys in the database.<br>
      *     If the query is routed to multiple nodes, returns the sum of the number of keys across all
      *     routed nodes.
@@ -818,7 +840,8 @@ public interface ServerManagementClusterCommands {
      * @param numreplicas The number of replicas to reach.
      * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
      *     block indefinitely.
-     * @param route The routing configuration for the command.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return An <code>array</code> of two <code>Long</code> values: the number of local replicas
      *     reached and the number of replicas reached.
      * @example
