@@ -4,6 +4,8 @@ package glide.api;
 import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
@@ -77,6 +79,7 @@ import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_VALKEY_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_VALKEY_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -99,6 +102,7 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptArgOptions;
@@ -385,6 +389,43 @@ public class GlideClusterClient extends BaseClient
     public CompletableFuture<String> select(long index) {
         return commandManager.submitNewCommand(
                 Select, new String[] {Long.toString(index)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientPause(long timeout) {
+        return clientPause(timeout, ALL_PRIMARIES);
+    }
+
+    @Override
+    public CompletableFuture<String> clientPause(long timeout, @NonNull ClientPauseMode mode) {
+        return clientPause(timeout, mode, ALL_PRIMARIES);
+    }
+
+    @Override
+    public CompletableFuture<String> clientPause(long timeout, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientPause, new String[] {Long.toString(timeout)}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientPause(
+            long timeout, @NonNull ClientPauseMode mode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientPause,
+                new String[] {Long.toString(timeout), mode.getValkeyApi()},
+                route,
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> clientUnpause() {
+        return clientUnpause(ALL_PRIMARIES);
+    }
+
+    @Override
+    public CompletableFuture<String> clientUnpause(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientUnpause, new String[0], route, this::handleStringResponse);
     }
 
     @Override

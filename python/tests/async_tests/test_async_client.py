@@ -32,6 +32,7 @@ from glide_shared.commands.bitmap import (
 )
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -10013,6 +10014,138 @@ class TestCommands:
         await glide_client.set(non_list_key, "non_list_value")
         with pytest.raises(RequestError):
             await glide_client.lpos(non_list_key, "a")
+
+    # TODO #6083: add end-to-end tests for OFF and SKIP once supported.
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_pause_all_then_unpause(self, request, cluster_mode, protocol):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            request_timeout=10000,
+        )
+        try:
+            key = "client_pause_all_then_unpause_key"
+            assert await glide_client.set(key, "before") == OK
+
+            if isinstance(glide_client, GlideClusterClient):
+                assert (
+                    await glide_client.client_pause(
+                        2000, ClientPauseMode.ALL, route=AllPrimaries()
+                    )
+                    == OK
+                )
+            else:
+                assert await glide_client.client_pause(2000, ClientPauseMode.ALL) == OK
+
+            get_result: List[Optional[bytes]] = [None]
+            set_result: List[Optional[bytes]] = [None]
+            unpause_result: List[Optional[str]] = [None]
+            get_done = anyio.Event()
+            set_done = anyio.Event()
+            unpause_done = anyio.Event()
+
+            async def run_get() -> None:
+                get_result[0] = await glide_client.get(key)
+                get_done.set()
+
+            async def run_set() -> None:
+                set_result[0] = await glide_client.set(key, "after")
+                set_done.set()
+
+            async def run_unpause() -> None:
+                if isinstance(glide_client, GlideClusterClient):
+                    unpause_result[0] = await glide_client.client_unpause(
+                        route=AllPrimaries()
+                    )
+                else:
+                    unpause_result[0] = await glide_client.client_unpause()
+                unpause_done.set()
+
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run_get)
+                tg.start_soon(run_set)
+                tg.start_soon(run_unpause)
+
+                await anyio.sleep(0.3)
+
+                # Verify that none of the commands completes.
+                assert not get_done.is_set()
+                assert not set_done.is_set()
+                assert not unpause_done.is_set()
+
+                # Verify that all commands complete once pause expires.
+                with anyio.fail_after(5.0):
+                    await get_done.wait()
+                    await set_done.wait()
+                    await unpause_done.wait()
+
+            assert get_result[0] == b"before"
+            assert set_result[0] == OK
+            assert unpause_result[0] == OK
+            assert await glide_client.get(key) == b"after"
+        finally:
+            await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_pause_write_then_unpause(
+        self, request, cluster_mode, protocol
+    ):
+        glide_client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+            request_timeout=10000,
+        )
+        try:
+            key = "client_pause_write_then_unpause_key"
+            assert await glide_client.set(key, "before") == OK
+
+            if isinstance(glide_client, GlideClusterClient):
+                assert (
+                    await glide_client.client_pause(
+                        2000, ClientPauseMode.WRITE, route=AllPrimaries()
+                    )
+                    == OK
+                )
+            else:
+                assert (
+                    await glide_client.client_pause(2000, ClientPauseMode.WRITE) == OK
+                )
+
+            # Reads are not blocked by PAUSE WRITE.
+            assert await glide_client.get(key) == b"before"
+
+            set_result: List[Optional[bytes]] = [None]
+            set_done = anyio.Event()
+
+            async def run_set() -> None:
+                set_result[0] = await glide_client.set(key, "after")
+                set_done.set()
+
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(run_set)
+
+                await anyio.sleep(0.3)
+
+                # Verify that SET has not completed because server is paused.
+                assert not set_done.is_set()
+
+                if isinstance(glide_client, GlideClusterClient):
+                    assert await glide_client.client_unpause(route=AllPrimaries()) == OK
+                else:
+                    assert await glide_client.client_unpause() == OK
+
+                # Verify that SET completes once pause expires.
+                with anyio.fail_after(5.0):
+                    await set_done.wait()
+
+            assert set_result[0] == OK
+            assert await glide_client.get(key) == b"after"
+        finally:
+            await glide_client.close()
 
 
 @pytest.mark.anyio
