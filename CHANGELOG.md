@@ -1,6 +1,6 @@
 ## Pending 2.5
 
-### Changes
+#### Changes
 * Go: Add RESET command support ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
 * Java: Add RESET command support ([#5947](https://github.com/valkey-io/valkey-glide/pull/5947))
 * CORE/FFI: Add `MonitorClient` for the MONITOR command ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
