@@ -2134,26 +2134,27 @@ public class CommandTests {
         }
     }
 
-    @Timeout(120)
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    @Timeout(120)
     public void migrate_multi_keys_to_real_server(GlideClient regularClient) {
         try (ValkeyCluster destServer = new ValkeyCluster(false, false, 1, 0, null, null)) {
             NodeAddress destAddr = destServer.getNodesAddr().get(0);
             String key1 = "{migrate}" + UUID.randomUUID();
             String key2 = "{migrate}" + UUID.randomUUID();
-            regularClient.set(key1, "value1").get();
-            regularClient.set(key2, "value2").get();
-
-            String result =
-                    regularClient
-                            .migrate(destAddr.getHost(), destAddr.getPort(), new String[] {key1, key2}, 0, 5000)
-                            .get();
-            assertEquals(OK, result);
-
-            // verify keys were migrated (no longer on source)
-            assertEquals(0L, regularClient.exists(new String[] {key1, key2}).get());
+            try {
+                regularClient.set(key1, "value1").get();
+                regularClient.set(key2, "value2").get();
+                String result =
+                        regularClient
+                                .migrate(destAddr.getHost(), destAddr.getPort(), new String[] {key1, key2}, 0, 5000)
+                                .get();
+                assertEquals(OK, result);
+                assertEquals(0L, regularClient.exists(new String[] {key1, key2}).get());
+            } finally {
+                regularClient.del(new String[] {key1, key2}).get();
+            }
         }
     }
 }

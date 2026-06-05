@@ -16363,6 +16363,7 @@ public class GlideClientTest {
     @SneakyThrows
     @Test
     public void migrate_keys_returns_success() {
+        // setup
         GlideString[] expectedArgs = {
             gs("nonexistent.host"),
             gs("6379"),
@@ -16375,9 +16376,11 @@ public class GlideClientTest {
         };
         CompletableFuture<String> testResponse = setupMigrateKeysCommand(expectedArgs);
 
+        // exercise
         CompletableFuture<String> response =
                 service.migrate("nonexistent.host", 6379L, new String[] {"key1", "key2"}, 0L, 5000L);
 
+        // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
     }
@@ -16385,6 +16388,7 @@ public class GlideClientTest {
     @SneakyThrows
     @Test
     public void migrate_keys_with_options_returns_success() {
+        // setup
         GlideString[] expectedArgs = {
             gs("nonexistent.host"),
             gs("6379"),
@@ -16398,6 +16402,7 @@ public class GlideClientTest {
         };
         CompletableFuture<String> testResponse = setupMigrateKeysCommand(expectedArgs);
 
+        // exercise
         CompletableFuture<String> response =
                 service.migrate(
                         "nonexistent.host",
@@ -16407,6 +16412,7 @@ public class GlideClientTest {
                         5000L,
                         MigrateOptions.builder().replace(true).build());
 
+        // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
     }
@@ -16416,6 +16422,13 @@ public class GlideClientTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> service.migrate("host", 6379L, new String[0], 0L, 5000L));
+    }
+
+    @Test
+    public void migrate_keys_throws_on_null_keys() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (String[]) null, 0L, 5000L));
     }
 
     @Test
