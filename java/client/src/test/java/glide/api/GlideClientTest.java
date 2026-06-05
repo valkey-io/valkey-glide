@@ -16363,36 +16363,21 @@ public class GlideClientTest {
     @SneakyThrows
     @Test
     public void migrate_keys_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-        String host = "nonexistent.host";
-        long port = 6379L;
-        String[] keys = new String[] {"key1", "key2"};
-        long db = 0L;
-        long timeout = 5000L;
+        GlideString[] expectedArgs = {
+            gs("nonexistent.host"),
+            gs("6379"),
+            gs(""),
+            gs("0"),
+            gs("5000"),
+            gs(MigrateOptions.KEYS_VALKEY_API),
+            gs("key1"),
+            gs("key2")
+        };
+        CompletableFuture<String> testResponse = setupMigrateKeysCommand(expectedArgs);
 
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(Migrate),
-                        eq(
-                                new GlideString[] {
-                                    gs(host),
-                                    gs(Long.toString(port)),
-                                    gs(""),
-                                    gs(Long.toString(db)),
-                                    gs(Long.toString(timeout)),
-                                    gs(MigrateOptions.KEYS_VALKEY_API),
-                                    gs("key1"),
-                                    gs("key2")
-                                }),
-                        any()))
-                .thenReturn(testResponse);
+        CompletableFuture<String> response =
+                service.migrate("nonexistent.host", 6379L, new String[] {"key1", "key2"}, 0L, 5000L);
 
-        // exercise
-        CompletableFuture<String> response = service.migrate(host, port, keys, db, timeout);
-
-        // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
     }
@@ -16400,38 +16385,28 @@ public class GlideClientTest {
     @SneakyThrows
     @Test
     public void migrate_keys_with_options_returns_success() {
-        // setup
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-        String host = "nonexistent.host";
-        long port = 6379L;
-        String[] keys = new String[] {"key1", "key2"};
-        long db = 0L;
-        long timeout = 5000L;
-        MigrateOptions options = MigrateOptions.builder().replace(true).build();
+        GlideString[] expectedArgs = {
+            gs("nonexistent.host"),
+            gs("6379"),
+            gs(""),
+            gs("0"),
+            gs("5000"),
+            gs(MigrateOptions.REPLACE_VALKEY_API),
+            gs(MigrateOptions.KEYS_VALKEY_API),
+            gs("key1"),
+            gs("key2")
+        };
+        CompletableFuture<String> testResponse = setupMigrateKeysCommand(expectedArgs);
 
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(Migrate),
-                        eq(
-                                new GlideString[] {
-                                    gs(host),
-                                    gs(Long.toString(port)),
-                                    gs(""),
-                                    gs(Long.toString(db)),
-                                    gs(Long.toString(timeout)),
-                                    gs(MigrateOptions.REPLACE_VALKEY_API),
-                                    gs(MigrateOptions.KEYS_VALKEY_API),
-                                    gs("key1"),
-                                    gs("key2")
-                                }),
-                        any()))
-                .thenReturn(testResponse);
+        CompletableFuture<String> response =
+                service.migrate(
+                        "nonexistent.host",
+                        6379L,
+                        new String[] {"key1", "key2"},
+                        0L,
+                        5000L,
+                        MigrateOptions.builder().replace(true).build());
 
-        // exercise
-        CompletableFuture<String> response = service.migrate(host, port, keys, db, timeout, options);
-
-        // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
     }
@@ -16448,5 +16423,13 @@ public class GlideClientTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> service.migrate("host", 6379L, (GlideString[]) null, 0L, 5000L));
+    }
+
+    private CompletableFuture<String> setupMigrateKeysCommand(GlideString[] expectedArgs) {
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        when(commandManager.<String>submitNewCommand(eq(Migrate), eq(expectedArgs), any()))
+                .thenReturn(testResponse);
+        return testResponse;
     }
 }
