@@ -84,7 +84,7 @@ jobs:
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -106,7 +106,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -114,7 +114,7 @@ jobs:
                   echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
@@ -127,7 +127,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -181,7 +181,7 @@ jobs:
             - name: Upload logs and reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-report-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |
@@ -194,10 +194,10 @@ jobs:
         runs-on: ubuntu-latest
         if: ${{ !github.event.inputs.rc-version }}
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Set up Go
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
                   cache-dependency-path: go/go.sum
@@ -207,7 +207,7 @@ jobs:
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -237,7 +237,7 @@ jobs:
             version-matrix-output: ${{ steps.get-matrices.outputs.version-matrix-output }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -273,12 +273,12 @@ jobs:
                   fi
 
             # Replace `:` in the variable otherwise it can't be used in `upload-artifact`
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   submodules: recursive
 
             - name: Set up Go ${{ matrix.go }}
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
@@ -304,7 +304,7 @@ jobs:
               with:
                   target: ${{ matrix.host.TARGET }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -344,7 +344,7 @@ jobs:
             - name: Upload test reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-reports-go-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ env.IMAGE }}-${{ matrix.host.ARCH }}
                   path: |
@@ -365,7 +365,7 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Output Matrix Parameters for this job
               run: |
@@ -373,7 +373,7 @@ jobs:
                   echo "${{ toJson(matrix) }}"
 
             - name: Set up Go ${{ matrix.go }}
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
@@ -386,7 +386,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   engine-version: ${{ matrix.engine.version }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ffi/target
@@ -421,7 +421,7 @@ jobs:
             - name: Upload logs and reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-report-go-long-timeout-${{ matrix.go }}-${{ matrix.engine.type }}-${{ matrix.engine.version }}-${{ matrix.host.OS }}-${{ matrix.host.ARCH }}
                   path: |

@@ -22,10 +22,10 @@ pub use scripts_container::*;
 // (which is the protobuf type). The crate-root `ConnectionRequest` is the internal
 // type defined below, matching the real glide-core's `pub use client::ConnectionRequest`.
 pub use connection_request::{
-    AuthenticationInfo, CompressionBackend, CompressionConfig, ConnectionRetryStrategy,
-    IamCredentials, NodeDiscoveryMode, PeriodicChecksDisabled, PeriodicChecksManualInterval,
-    ProtocolVersion, PubSubChannelType, PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom,
-    ServiceType,
+    AuthenticationInfo, ClientSideCache, CompressionBackend, CompressionConfig,
+    ConnectionRetryStrategy, EvictionPolicy, IamCredentials, NodeAddress, NodeDiscoveryMode,
+    PeriodicChecksDisabled, PeriodicChecksManualInterval, ProtocolVersion, PubSubChannelType,
+    PubSubChannelsOrPatterns, PubSubSubscriptions, ReadFrom, ServiceType, TlsMode,
 };
 
 pub use telemetrylib::*;

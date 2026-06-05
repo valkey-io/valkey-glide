@@ -140,7 +140,8 @@ func ExampleClusterClient_LPos() {
 func ExampleClient_LPosWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
-	result1, err := client.LPosWithOptions(context.Background(),
+	result1, err := client.LPosWithOptions(
+		context.Background(),
 		"my_list",
 		"e",
 		*options.NewLPosOptions().SetRank(2),
@@ -159,7 +160,8 @@ func ExampleClient_LPosWithOptions() {
 func ExampleClusterClient_LPosWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 	result, err := client.RPush(context.Background(), "my_list", []string{"a", "b", "c", "d", "e", "e"})
-	result1, err := client.LPosWithOptions(context.Background(),
+	result1, err := client.LPosWithOptions(
+		context.Background(),
 		"my_list",
 		"e",
 		*options.NewLPosOptions().SetRank(2),
