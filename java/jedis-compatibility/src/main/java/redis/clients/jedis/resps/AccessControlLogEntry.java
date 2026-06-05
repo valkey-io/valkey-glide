@@ -2,7 +2,8 @@
 package redis.clients.jedis.resps;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * This class holds information about an Access Control Log entry (returned by ACL LOG command) They
