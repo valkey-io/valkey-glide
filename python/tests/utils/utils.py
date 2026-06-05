@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import (
     Any,
+    Awaitable,
     Callable,
     Dict,
     List,
@@ -197,6 +198,110 @@ async def get_version(client: TGlideClient) -> str:
 def sync_get_version(client: TSyncGlideClient) -> str:
     info = parse_info_response(client.info([InfoSection.SERVER]))
     return info.get("valkey_version") or info.get("redis_version")  # type: ignore
+
+
+# Expected server responses for BGSAVE/BGSAVE SCHEDULE.
+BGSAVE_RESPONSES = {
+    "Background saving started",
+    "Background saving scheduled",
+}
+
+# Expected server responses for BGREWRITEAOF.
+BGREWRITEAOF_RESPONSES = {
+    "Background append only file rewriting started",
+    "Background append only file rewriting scheduled",
+}
+
+# Expected server error response for BGSAVE CANCEL when no save is in progress.
+BGSAVE_NOT_CANCELLED_RESPONSE = "Background saving is currently not in progress or scheduled"
+
+
+async def wait_for(
+    condition: Callable[[], Awaitable[bool]],
+    failure: str,
+    timeout: float = 10.0,
+    interval: float = 0.1,
+) -> None:
+    """Waits until a condition is met, polling at a fixed interval.
+
+    Args:
+        condition: Async callable that returns True when the condition is met.
+        failure: Error message raised if the condition is not met within timeout.
+        timeout: Total time to wait in seconds.
+        interval: Time between retries in seconds.
+
+    Raises:
+        TimeoutError: If the condition is not met within the specified timeout.
+    """
+    import asyncio
+    import time as _time
+
+    deadline = _time.monotonic() + timeout
+
+    while _time.monotonic() < deadline:
+        if await condition():
+            return
+        await asyncio.sleep(interval)
+
+    raise TimeoutError(failure)
+
+
+def sync_wait_for(
+    condition: Callable[[], bool],
+    failure: str,
+    timeout: float = 10.0,
+    interval: float = 0.1,
+) -> None:
+    """Waits until a condition is met, polling at a fixed interval.
+
+    Args:
+        condition: Callable that returns True when the condition is met.
+        failure: Error message raised if the condition is not met within timeout.
+        timeout: Total time to wait in seconds.
+        interval: Time between retries in seconds.
+
+    Raises:
+        TimeoutError: If the condition is not met within the specified timeout.
+    """
+    import time as _time
+
+    deadline = _time.monotonic() + timeout
+
+    while _time.monotonic() < deadline:
+        if condition():
+            return
+        _time.sleep(interval)
+
+    raise TimeoutError(failure)
+
+
+async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
+    """Waits until no save (RDB save or AOF rewrite) is in progress on any node."""
+
+    async def _check() -> bool:
+        return not _is_save_in_progress(await client.info([InfoSection.PERSISTENCE]))
+
+    await wait_for(_check, "Timed out waiting for save to complete")
+
+
+def sync_wait_for_save_not_in_progress(client: TSyncGlideClient) -> None:
+    """Waits until no save (RDB save or AOF rewrite) is in progress on any node (sync version)."""
+
+    def _check() -> bool:
+        return not _is_save_in_progress(client.info([InfoSection.PERSISTENCE]))
+
+    sync_wait_for(_check, "Timed out waiting for save to complete")
+
+
+def _is_save_in_progress(result: Union[bytes, Dict[bytes, bytes]]) -> bool:
+    """Returns True if any node has a save (RDB or AOF rewrite) in progress."""
+    if isinstance(result, dict):
+        infos = [v.decode() if isinstance(v, bytes) else v for v in result.values()]
+    else:
+        infos = [result.decode() if isinstance(result, bytes) else result]
+    return any(
+        "rdb_bgsave_in_progress:1" in info or "aof_rewrite_in_progress:1" in info for info in infos
+    )
 
 
 def check_version_lt(version_str: str, min_version: str) -> bool:
