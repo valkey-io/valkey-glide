@@ -108,6 +108,22 @@ export function runBaseTests(config: {
         }
     };
 
+    // Expected valid responses for BGSAVE SCHEDULE.
+    const BGSAVE_SCHEDULE_RESPONSES = new Set([
+        "Background saving started",
+        "Background saving scheduled",
+    ]);
+
+    // Expected valid responses for BGREWRITEAOF
+    const BGREWRITEAOF_RESPONSES = new Set([
+        "Background append only file rewriting started",
+        "Background append only file rewriting scheduled",
+    ]);
+
+    // Expected error response for BGSAVE CANCEL when no save is in progress
+    const BGSAVE_NOT_CANCELLED_RESPONSE =
+        "Background saving is currently not in progress or scheduled";
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
         async (protocol) => {
