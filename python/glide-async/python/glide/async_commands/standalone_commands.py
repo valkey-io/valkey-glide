@@ -9,6 +9,7 @@ from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
+    ClientPauseMode,
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
@@ -999,3 +1000,44 @@ class StandaloneCommands(CoreCommands):
                 [b"foo", b"bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
+
+    async def client_pause(
+        self, timeout: int, mode: Optional[ClientPauseMode] = None
+    ) -> TOK:
+        """
+        Suspends all clients for the specified timeout.
+
+        See [valkey.io](https://valkey.io/commands/client-pause/) for more details.
+
+        Args:
+            timeout (int): The time in milliseconds to pause clients.
+            mode (Optional[ClientPauseMode]): The pause mode to use.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.client_pause(1000)
+                OK
+            >>> await client.client_pause(5000, ClientPauseMode.WRITE)
+                OK
+        """
+        args: List[TEncodable] = [str(timeout)]
+        if mode is not None:
+            args.append(mode.value)
+        return cast(TOK, await self._execute_command(RequestType.ClientPause, args))
+
+    async def client_unpause(self) -> TOK:
+        """
+        Resumes processing commands on all clients.
+
+        See [valkey.io](https://valkey.io/commands/client-unpause/) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.client_unpause()
+                OK
+        """
+        return cast(TOK, await self._execute_command(RequestType.ClientUnpause, []))

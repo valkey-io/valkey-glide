@@ -16,6 +16,8 @@ import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -259,6 +261,7 @@ import com.google.protobuf.ByteString;
 import command_request.CommandRequestOuterClass.Command;
 import command_request.CommandRequestOuterClass.Command.ArgsArray;
 import command_request.CommandRequestOuterClass.RequestType;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
@@ -700,6 +703,18 @@ public class BatchTests {
 
         batch.clientGetName();
         results.add(Pair.of(ClientGetName, buildArgs()));
+
+        batch.clientPause(1000);
+        results.add(Pair.of(ClientPause, buildArgs("1000")));
+
+        batch.clientPause(500, ClientPauseMode.WRITE);
+        results.add(Pair.of(ClientPause, buildArgs("500", "WRITE")));
+
+        batch.clientPause(500, ClientPauseMode.ALL);
+        results.add(Pair.of(ClientPause, buildArgs("500", "ALL")));
+
+        batch.clientUnpause();
+        results.add(Pair.of(ClientUnpause, buildArgs()));
 
         batch.configRewrite();
         results.add(Pair.of(ConfigRewrite, buildArgs()));

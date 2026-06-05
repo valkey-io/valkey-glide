@@ -1115,7 +1115,9 @@ dependencies = [
  "serde_json",
  "serial_test",
  "tokio",
+ "tracing",
  "url",
+ "uuid",
 ]
 
 [[package]]
