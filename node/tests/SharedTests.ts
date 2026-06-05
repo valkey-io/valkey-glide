@@ -65,6 +65,7 @@ import {
     GetAndSetRandomValue,
     getFirstResult,
     getRandomKey,
+    waitForSaveNotInProgress,
 } from "./TestUtilities";
 
 export type BaseClient = GlideClient | GlideClusterClient;
@@ -392,6 +393,122 @@ export function runBaseTests(config: {
                               );
 
                     expect(response?.[0]).toBeGreaterThan(yesterday);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "save %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await waitForSaveNotInProgress(client);
+
+                const result = await client.save();
+                expect(result).toEqual("OK");
+
+                if (client instanceof GlideClusterClient) {
+                    const clusterResult = await client.save({
+                        route: "allPrimaries",
+                    });
+                    expect(clusterResult).toEqual("OK");
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "bgsave %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await waitForSaveNotInProgress(client);
+
+                const result = await client.bgsave();
+                expect(BGSAVE_SCHEDULE_RESPONSES).toContain(result);
+
+                if (client instanceof GlideClusterClient) {
+                    const clusterResult = await client.bgsave({
+                        route: "allPrimaries",
+                    });
+                    Object.values(clusterResult).forEach((v) =>
+                        expect(BGSAVE_SCHEDULE_RESPONSES).toContain(v),
+                    );
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "bgsaveSchedule %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await waitForSaveNotInProgress(client);
+
+                const result = await client.bgsaveSchedule();
+                expect(BGSAVE_SCHEDULE_RESPONSES).toContain(result);
+
+                if (client instanceof GlideClusterClient) {
+                    const clusterResult = await client.bgsaveSchedule({
+                        route: "allPrimaries",
+                    });
+                    Object.values(clusterResult).forEach((v) =>
+                        expect(BGSAVE_SCHEDULE_RESPONSES).toContain(v),
+                    );
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "bgsaveCancel %p",
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    if (cluster.checkIfServerVersionLessThan("8.1.0")) {
+                        return;
+                    }
+
+                    await waitForSaveNotInProgress(client);
+
+                    // When no background save is in progress, BOGSAVE CANCEL should throw
+                    await expect(client.bgsaveCancel()).rejects.toThrow(
+                        BGSAVE_NOT_CANCELLED_RESPONSE,
+                    );
+
+                    if (client instanceof GlideClusterClient) {
+                        await expect(
+                            client.bgsaveCancel({
+                                route: "allPrimaries",
+                            }),
+                        ).rejects.toThrow(BGSAVE_NOT_CANCELLED_RESPONSE);
+                    }
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "bgrewriteaof %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await waitForSaveNotInProgress(client);
+
+                const result = await client.bgrewriteaof();
+                expect(BGREWRITEAOF_RESPONSES).toContain(result);
+
+                if (client instanceof GlideClusterClient) {
+                    const clusterResult = await client.bgrewriteaof({
+                        route: "allPrimaries",
+                    });
+                    Object.values(clusterResult).forEach((v) =>
+                        expect(BGREWRITEAOF_RESPONSES).toContain(v),
+                    );
                 }
             }, protocol);
         },
