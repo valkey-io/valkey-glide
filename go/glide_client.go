@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"context"
+	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 
@@ -173,7 +174,7 @@ func (client *Client) CustomCommand(ctx context.Context, args []string) (any, er
 //
 // Return value:
 //
-//	`"OK"` if all configurations have been successfully set. Otherwise, raises an error.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-set/
 func (client *Client) ConfigSet(ctx context.Context, parameters map[string]string) (string, error) {
@@ -235,7 +236,7 @@ func (client *Client) ConfigGet(ctx context.Context, args []string) (map[string]
 //
 // Return value:
 //
-//	A simple `"OK"` response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *Client) Select(ctx context.Context, index int64) (string, error) {
@@ -606,11 +607,83 @@ func (client *Client) ClientGetName(ctx context.Context) (models.Result[string],
 //
 // Return value:
 //
-//	OK - when connection name is set
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/client-setname/
 func (client *Client) ClientSetName(ctx context.Context, connectionName string) (string, error) {
 	result, err := client.executeCommand(ctx, C.ClientSetName, []string{connectionName})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Suspends all clients for the specified timeout.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The time to pause clients.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *Client) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
+	args := []string{utils.IntToString(timeout.Milliseconds())}
+	result, err := client.executeCommand(ctx, C.ClientPause, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Suspends all clients for the specified timeout.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The time to pause clients.
+//	mode - The pause mode to use.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *Client) ClientPauseWithMode(
+	ctx context.Context,
+	timeout time.Duration,
+	mode options.ClientPauseMode,
+) (string, error) {
+	args := append([]string{utils.IntToString(timeout.Milliseconds())}, string(mode))
+	result, err := client.executeCommand(ctx, C.ClientPause, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Resumes processing commands on all clients.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-unpause/
+func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ClientUnpause, []string{})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -684,7 +757,7 @@ func (client *Client) ScanWithOptions(
 //
 // Return value:
 //
-//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *Client) ConfigRewrite(ctx context.Context) (string, error) {
@@ -793,7 +866,7 @@ func (client *Client) FunctionStats(ctx context.Context) (map[string]models.Func
 //
 // Return value:
 //
-//	"OK" if the library exists, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *Client) FunctionDelete(ctx context.Context, libName string) (string, error) {
@@ -951,7 +1024,7 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 //
 // Return value:
 //
-//	A simple "OK" response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
