@@ -9479,9 +9479,12 @@ class TestCommands:
         with pytest.raises(ValueError):
             MigrateOptions(username="user").to_args()
 
-        # Multi-key: error on invalid host with existing keys
-        key2 = get_random_string(10)
-        key3 = get_random_string(10)
+        # Multi-key: error on invalid host with existing keys.
+        # Use hash tag {3560} so all keys land on slot 0 (same as key=""),
+        # ensuring the migrating node owns these keys in cluster mode.
+        hash_tag = get_random_string(5)
+        key2 = f"{{3560}}{hash_tag}a"
+        key3 = f"{{3560}}{hash_tag}b"
         glide_sync_client.set(key2, "value2")
         glide_sync_client.set(key3, "value3")
         with pytest.raises(RequestError):
@@ -9503,9 +9506,10 @@ class TestCommands:
         with pytest.raises(ValueError):
             glide_sync_client.migrate("invalid-host", 6379, "", 0, 5000)
 
-        # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made)
-        non_existent1 = get_random_string(10)
-        non_existent2 = get_random_string(10)
+        # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
+        # Use hash tag {3560} so keys route to slot 0 (same as key="") in cluster mode.
+        non_existent1 = f"{{3560}}{get_random_string(5)}"
+        non_existent2 = f"{{3560}}{get_random_string(5)}"
         result = glide_sync_client.migrate(
             "invalid-host",
             6379,
