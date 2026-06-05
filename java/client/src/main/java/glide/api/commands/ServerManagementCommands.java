@@ -583,4 +583,33 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> failover(FailoverOptions options);
+
+    /**
+     * Makes the server a replica of the specified primary, or promotes it to a primary if {@link
+     * #replicaofNoOne()} is called.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @param host The host of the primary to replicate.
+     * @param port The port of the primary to replicate.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaof("localhost", 6379).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaof(String host, int port);
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaofNoOne().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaofNoOne();
 }

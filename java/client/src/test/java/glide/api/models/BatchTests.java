@@ -128,6 +128,7 @@ import static command_request.CommandRequestOuterClass.RequestType.RPushX;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Rename;
 import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Restore;
 import static command_request.CommandRequestOuterClass.RequestType.SAdd;
 import static command_request.CommandRequestOuterClass.RequestType.SCard;
@@ -1188,6 +1189,10 @@ public class BatchTests {
                 .failover(FailoverOptions.builder().to("localhost", 6380).timeout(1000).build());
         results.add(Pair.of(FailOver, buildArgs()));
         results.add(Pair.of(FailOver, buildArgs("TO", "localhost", "6380", "TIMEOUT", "1000")));
+
+        batch.replicaof("localhost", 6379).replicaofNoOne();
+        results.add(Pair.of(ReplicaOf, buildArgs("localhost", "6379")));
+        results.add(Pair.of(ReplicaOf, buildArgs("NO", "ONE")));
 
         batch.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));

@@ -121,6 +121,7 @@ import static command_request.CommandRequestOuterClass.RequestType.RPushX;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Rename;
 import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Restore;
 import static command_request.CommandRequestOuterClass.RequestType.SAdd;
 import static command_request.CommandRequestOuterClass.RequestType.SCard;
@@ -16415,6 +16416,46 @@ public class GlideClientTest {
 
         // exercise
         CompletableFuture<String> response = service.failover(FailoverOptions.abort());
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void replicaof_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(
+                        eq(ReplicaOf), eq(new String[] {"localhost", "6379"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.replicaof("localhost", 6379);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void replicaofNoOne_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(
+                        eq(ReplicaOf), eq(new String[] {"NO", "ONE"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.replicaofNoOne();
         String payload = response.get();
 
         // verify

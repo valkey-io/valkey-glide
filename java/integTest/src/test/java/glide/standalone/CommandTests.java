@@ -2141,4 +2141,12 @@ public class CommandTests {
                 assertThrows(ExecutionException.class, () -> regularClient.failover(options).get());
         assertInstanceOf(RequestException.class, exception.getCause());
     }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void replicaof_and_replicaofNoOne(GlideClient regularClient) {
+        // Promote back to primary (REPLICAOF NO ONE) - should succeed even if already a primary
+        assertEquals(OK, regularClient.replicaofNoOne().get());
+    }
 }

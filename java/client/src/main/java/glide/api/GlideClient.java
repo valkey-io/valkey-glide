@@ -31,6 +31,7 @@ import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.Save;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
@@ -404,6 +405,18 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<String> failover(@NonNull FailoverOptions options) {
         return commandManager.submitNewCommand(FailOver, options.toArgs(), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaof(@NonNull String host, int port) {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {host, Integer.toString(port)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaofNoOne() {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {"NO", "ONE"}, this::handleStringResponse);
     }
 
     @Override

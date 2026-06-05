@@ -130,6 +130,7 @@ import static command_request.CommandRequestOuterClass.RequestType.RPushX;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Rename;
 import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.Restore;
 import static command_request.CommandRequestOuterClass.RequestType.SAdd;
@@ -5086,6 +5087,31 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T failover(FailoverOptions options) {
         protobufBatch.addCommands(buildCommand(FailOver, newArgsBuilder().add(options.toArgs())));
+        return getThis();
+    }
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @param host The host of the primary to replicate.
+     * @param port The port of the primary to replicate.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T replicaof(String host, int port) {
+        protobufBatch.addCommands(
+                buildCommand(ReplicaOf, newArgsBuilder().add(host).add(Integer.toString(port))));
+        return getThis();
+    }
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public T replicaofNoOne() {
+        protobufBatch.addCommands(buildCommand(ReplicaOf, newArgsBuilder().add("NO").add("ONE")));
         return getThis();
     }
 
