@@ -16,6 +16,8 @@ import static command_request.CommandRequestOuterClass.RequestType.BitOp;
 import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
+import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite;
@@ -92,6 +94,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
@@ -298,6 +301,7 @@ import command_request.CommandRequestOuterClass.RequestType;
 import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
@@ -306,6 +310,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -5039,6 +5044,88 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals("TEST", response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClientPause), eq(new String[] {"1000"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_with_write_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000", "WRITE"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000, ClientPauseMode.WRITE);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientPause_with_all_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ClientPause), eq(new String[] {"1000", "ALL"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientPause(1000, ClientPauseMode.ALL);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientUnpause_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(ClientUnpause), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.clientUnpause();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
@@ -16271,5 +16358,56 @@ public class GlideClientTest {
 
         // verify
         assertNull(response.get());
+    }
+
+    @Test
+    public void migrate_keys_throws_on_invalid_keys() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, new String[0], 0L, 5000L));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (String[]) null, 0L, 5000L));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (GlideString[]) null, 0L, 5000L));
+    }
+
+    @SneakyThrows
+    @Test
+    public void migrate_keys_with_options() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        when(commandManager.<String>submitNewCommand(
+                        eq(Migrate),
+                        eq(
+                                new GlideString[] {
+                                    gs("host"),
+                                    gs("6379"),
+                                    gs(""),
+                                    gs("0"),
+                                    gs("5000"),
+                                    gs(MigrateOptions.REPLACE_VALKEY_API),
+                                    gs(MigrateOptions.KEYS_VALKEY_API),
+                                    gs("key1"),
+                                    gs("key2")
+                                }),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response =
+                service.migrate(
+                        "host",
+                        6379L,
+                        new String[] {"key1", "key2"},
+                        0L,
+                        5000L,
+                        MigrateOptions.builder().replace(true).build());
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 }

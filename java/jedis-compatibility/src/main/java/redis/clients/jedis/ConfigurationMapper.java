@@ -7,7 +7,6 @@ import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
-import java.util.*;
 import java.util.logging.Logger;
 import javax.net.ssl.SSLParameters;
 import redis.clients.jedis.exceptions.JedisException;
