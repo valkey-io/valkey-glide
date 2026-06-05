@@ -3318,6 +3318,8 @@ dependencies = [
  "logger_core",
  "pyo3",
  "redis",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

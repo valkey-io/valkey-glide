@@ -50,7 +50,7 @@ jobs:
                   fi
 
             - name: Checkout target branch
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   ref: ${{ env.TARGET_BRANCH }}
                   repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -62,13 +62,13 @@ jobs:
                   echo "TARGET_COMMIT=`git rev-parse HEAD`" >> $GITHUB_ENV
 
             - name: Set up JDK 21 for the ORT package
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: "temurin"
                   java-version: 21
 
             - name: Cache ORT and Gradle packages
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               id: cache-ort
               with:
                   path: |
@@ -79,7 +79,7 @@ jobs:
 
             - name: Checkout ORT Repository
               if: steps.cache-ort.outputs.cache-hit != 'true'
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   repository: "oss-review-toolkit/ort"
                   path: "./ort"
@@ -87,7 +87,7 @@ jobs:
                   submodules: recursive
 
             - name: Install Rust toolchain
-              uses: dtolnay/rust-toolchain@1.85
+              uses: dtolnay/rust-toolchain@c56a35af9328d0bc581dc86c05e58f97f7c38a0e # 1.85
 
             - name: Build and install ORT
               if: steps.cache-ort.outputs.cache-hit != 'true'
@@ -110,7 +110,7 @@ jobs:
 
               ### NodeJS ###
             - name: Set up Node.js
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
 
             - name: Run ORT tools for Node
               uses: ./.github/workflows/run-ort-tools
@@ -119,7 +119,7 @@ jobs:
 
               ### Python ###
             - name: Set up Python 3.10
-              uses: actions/setup-python@v5
+              uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
               with:
                   python-version: "3.10"
 
@@ -158,13 +158,13 @@ jobs:
 
               ### Java ###
             - name: Set up JDK 11
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
               with:
                   distribution: "temurin"
                   java-version: 11
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "29.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -181,7 +181,7 @@ jobs:
 
               ### GO ###
             - name: Set up GO
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
               with:
                   go-version: 1.22
 
@@ -215,7 +215,7 @@ jobs:
 
             - name: Upload the final package list
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: final-package-list-${{ steps.date.outputs.date }}
                   path: |
@@ -224,7 +224,7 @@ jobs:
 
             - name: Upload the skipped package list
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: skipped-package-list-${{ steps.date.outputs.date }}
                   path: |
@@ -233,7 +233,7 @@ jobs:
 
             - name: Upload the unknown/unapproved package list
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: unapproved-package-list-${{ steps.date.outputs.date }}
                   path: |
@@ -275,7 +275,7 @@ jobs:
             - name: Create pull request
               if: ${{ env.FOUND_DIFF  == 'true' && github.event_name != 'pull_request' }}
               id: create-pr
-              uses: peter-evans/create-pull-request@v7
+              uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   sign-commits: true

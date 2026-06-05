@@ -208,7 +208,8 @@ func ExampleClient_GeoSearch() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearch(context.Background(),
+	result, err := client.GeoSearch(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -230,7 +231,8 @@ func ExampleClusterClient_GeoSearch() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearch(context.Background(),
+	result, err := client.GeoSearch(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -252,7 +254,8 @@ func ExampleClient_GeoSearchWithResultOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithResultOptions(context.Background(),
+	result, err := client.GeoSearchWithResultOptions(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -275,7 +278,8 @@ func ExampleClusterClient_GeoSearchWithResultOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithResultOptions(context.Background(),
+	result, err := client.GeoSearchWithResultOptions(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -298,7 +302,8 @@ func ExampleClient_GeoSearchWithFullOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithFullOptions(context.Background(),
+	result, err := client.GeoSearchWithFullOptions(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -322,7 +327,8 @@ func ExampleClusterClient_GeoSearchWithFullOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithFullOptions(context.Background(),
+	result, err := client.GeoSearchWithFullOptions(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -346,7 +352,8 @@ func ExampleClient_GeoSearchWithInfoOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithInfoOptions(context.Background(),
+	result, err := client.GeoSearchWithInfoOptions(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -369,7 +376,8 @@ func ExampleClusterClient_GeoSearchWithInfoOptions() {
 
 	AddInitialGeoData(client, key)
 
-	result, err := client.GeoSearchWithInfoOptions(context.Background(),
+	result, err := client.GeoSearchWithInfoOptions(
+		context.Background(),
 		key,
 		&options.GeoMemberOrigin{Member: "Palermo"},
 		*options.NewCircleSearchShape(200, constants.GeoUnitKilometers),
@@ -393,7 +401,8 @@ func ExampleClient_GeoSearchStore() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStore(context.Background(),
+	result, err := client.GeoSearchStore(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -417,7 +426,8 @@ func ExampleClusterClient_GeoSearchStore() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStore(context.Background(),
+	result, err := client.GeoSearchStore(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -441,7 +451,8 @@ func ExampleClient_GeoSearchStoreWithInfoOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithInfoOptions(context.Background(),
+	result, err := client.GeoSearchStoreWithInfoOptions(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -466,7 +477,8 @@ func ExampleClusterClient_GeoSearchStoreWithInfoOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithInfoOptions(context.Background(),
+	result, err := client.GeoSearchStoreWithInfoOptions(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -491,7 +503,8 @@ func ExampleClient_GeoSearchStoreWithResultOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithResultOptions(context.Background(),
+	result, err := client.GeoSearchStoreWithResultOptions(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -516,7 +529,8 @@ func ExampleClusterClient_GeoSearchStoreWithResultOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithResultOptions(context.Background(),
+	result, err := client.GeoSearchStoreWithResultOptions(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -541,7 +555,8 @@ func ExampleClient_GeoSearchStoreWithFullOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithFullOptions(context.Background(),
+	result, err := client.GeoSearchStoreWithFullOptions(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
@@ -567,7 +582,8 @@ func ExampleClusterClient_GeoSearchStoreWithFullOptions() {
 
 	AddInitialGeoData(client, source)
 
-	result, err := client.GeoSearchStoreWithFullOptions(context.Background(),
+	result, err := client.GeoSearchStoreWithFullOptions(
+		context.Background(),
 		destination,
 		source,
 		&options.GeoMemberOrigin{Member: "Palermo"},
