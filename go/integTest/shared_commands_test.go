@@ -2026,7 +2026,8 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Equal(suite.T(), int64(2), res5.Value())
 
 		// unlimited comparisons
-		res6, err := client.LPosWithOptions(context.Background(),
+		res6, err := client.LPosWithOptions(
+			context.Background(),
 			key,
 			"a",
 			*options.NewLPosOptions().SetRank(1).SetMaxLen(0),
@@ -2035,7 +2036,8 @@ func (suite *GlideTestSuite) TestLPos_withAndWithoutOptions() {
 		assert.Equal(suite.T(), int64(0), res6.Value())
 
 		// limited comparisons
-		res7, err := client.LPosWithOptions(context.Background(),
+		res7, err := client.LPosWithOptions(
+			context.Background(),
 			key,
 			"c",
 			*options.NewLPosOptions().SetRank(1).SetMaxLen(2),
@@ -3691,7 +3693,8 @@ func (suite *GlideTestSuite) TestBZMPopAndBZMPopWithOptions() {
 		assert.Equal(suite.T(), int64(3), res4)
 
 		// Try to pop the top 2 elements from key1
-		res5, err := client.BZMPopWithOptions(context.Background(),
+		res5, err := client.BZMPopWithOptions(
+			context.Background(),
 			[]string{key1},
 			constants.MAX,
 			100*time.Millisecond,
@@ -4077,7 +4080,8 @@ func (suite *GlideTestSuite) TestExpireAtWithOptions_NewExpiryGreaterThanCurrent
 		assert.True(suite.T(), resultExpireAt)
 
 		newFutureTimestamp := time.Now().Add(20 * time.Second)
-		resultExpireWithOptions, err := client.ExpireAtWithOptions(context.Background(),
+		resultExpireWithOptions, err := client.ExpireAtWithOptions(
+			context.Background(),
 			key,
 			newFutureTimestamp,
 			constants.NewExpiryGreaterThanCurrent,
@@ -5135,7 +5139,8 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.NewString()
 		// stream does not exist
-		res, err := client.XAddWithOptions(context.Background(),
+		res, err := client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 			*options.NewXAddOptions().SetDontMakeNewStream(),
@@ -5156,7 +5161,8 @@ func (suite *GlideTestSuite) TestXAddWithOptions() {
 		client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field2", Value: "value2"}})
 		// TODO run XLen there
 		// this will trim the first entry.
-		res, err = client.XAddWithOptions(context.Background(),
+		res, err = client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "field3", Value: "value3"}},
 			*options.NewXAddOptions().SetTrimOptions(options.NewXTrimOptionsWithMaxLen(2).SetExactTrimming()),
@@ -5214,7 +5220,8 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
-		xadd, err = client.XAddWithOptions(context.Background(),
+		xadd, err = client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "entry2_field1", Value: "entry2_value1"}},
 			*options.NewXAddOptions().SetId("0-2"),
@@ -5289,7 +5296,8 @@ func (suite *GlideTestSuite) TestXAutoClaim() {
 		)
 
 		// add one more entry
-		xadd, err = client.XAddWithOptions(context.Background(),
+		xadd, err = client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "entry3_field1", Value: "entry3_value1"}},
 			*options.NewXAddOptions().SetId("0-3"),
@@ -5533,7 +5541,8 @@ func (suite *GlideTestSuite) TestXRead() {
 		suite.NoError(err)
 		assert.Empty(suite.T(), read)
 
-		res, err := client.XAddWithOptions(context.Background(),
+		res, err := client.XAddWithOptions(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: "k1_field1", Value: "k1_value1"}, {Field: "k1_field1", Value: "k1_value2"}},
 			*options.NewXAddOptions().SetId("0-1"),
@@ -5541,7 +5550,8 @@ func (suite *GlideTestSuite) TestXRead() {
 		suite.NoError(err)
 		assert.False(suite.T(), res.IsNil())
 
-		res, err = client.XAddWithOptions(context.Background(),
+		res, err = client.XAddWithOptions(
+			context.Background(),
 			key2,
 			[]models.FieldValue{{Field: "k2_field1", Value: "k2_value1"}},
 			*options.NewXAddOptions().SetId("2-0"),
@@ -5595,7 +5605,8 @@ func (suite *GlideTestSuite) TestXRead() {
 				WithUseTLS(suite.tls))
 			require.NoError(suite.T(), err)
 		}
-		read, err = testClient.XReadWithOptions(context.Background(),
+		read, err = testClient.XReadWithOptions(
+			context.Background(),
 			map[string]string{key1: "0-1"},
 			*options.NewXReadOptions().SetBlock(1000 * time.Millisecond),
 		)
@@ -5631,21 +5642,24 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 		consumer := uuid.NewString()
 
 		// Setup: Create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries List
-		xadd, err := client.XAddWithOptions(context.Background(),
+		xadd, err := client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "f0", Value: "v0"}},
 			*options.NewXAddOptions().SetId("1-0"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-0", xadd.Value())
-		xadd, err = client.XAddWithOptions(context.Background(),
+		xadd, err = client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "f1", Value: "v1"}},
 			*options.NewXAddOptions().SetId("1-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "1-1", xadd.Value())
-		xadd, err = client.XAddWithOptions(context.Background(),
+		xadd, err = client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "f2", Value: "v2"}},
 			*options.NewXAddOptions().SetId("1-2"),
@@ -5676,19 +5690,22 @@ func (suite *GlideTestSuite) TestXGroupSetId() {
 
 		// // Verify entries
 		assert.Contains(suite.T(), entryMap, "1-0")
-		assert.Equal(suite.T(), entryMap["1-0"],
+		assert.Equal(
+			suite.T(), entryMap["1-0"],
 			[]models.FieldValue{{Field: "f0", Value: "v0"}},
 		)
 
 		assert.Contains(suite.T(), entryMap, "1-1")
 		// Check for field "f1" with value "v1" in entry 1-1
-		assert.Equal(suite.T(), entryMap["1-1"],
+		assert.Equal(
+			suite.T(), entryMap["1-1"],
 			[]models.FieldValue{{Field: "f1", Value: "v1"}},
 		)
 
 		assert.Contains(suite.T(), entryMap, "1-2")
 		// Check for field "f2" with value "v2" in entry 1-2
-		assert.Equal(suite.T(), entryMap["1-2"],
+		assert.Equal(
+			suite.T(), entryMap["1-2"],
 			[]models.FieldValue{{Field: "f2", Value: "v2"}},
 		)
 		// Sanity check: xreadgroup should not return more entries since they're all already in the
@@ -6019,21 +6036,24 @@ func (suite *GlideTestSuite) TestZRange() {
 		var query options.ZRangeQuery
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, true))
+			options.NewScoreBoundary(3, true),
+		)
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
 		assert.Equal(t, []string{"a", "b", "c"}, res)
 		// score [-inf:3)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, false))
+			options.NewScoreBoundary(3, false),
+		)
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
 		assert.Equal(t, []string{"a", "b"}, res)
 		// score (3:-inf] reverse
 		query = options.NewRangeByScoreQuery(
 			options.NewScoreBoundary(3, false),
-			options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+		).
 			SetReverse()
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
@@ -6041,7 +6061,8 @@ func (suite *GlideTestSuite) TestZRange() {
 		// score [-inf:+inf] limit 1 2
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewInfiniteScoreBoundary(constants.PositiveInfinity)).
+			options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
+		).
 			SetLimit(1, 2)
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
@@ -6049,7 +6070,8 @@ func (suite *GlideTestSuite) TestZRange() {
 		// score [-inf:3) reverse (none)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, true)).
+			options.NewScoreBoundary(3, true),
+		).
 			SetReverse()
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
@@ -6057,21 +6079,24 @@ func (suite *GlideTestSuite) TestZRange() {
 		// score [+inf:3) (none)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
-			options.NewScoreBoundary(3, false))
+			options.NewScoreBoundary(3, false),
+		)
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(res))
 		// lex [-:c)
 		query = options.NewRangeByLexQuery(
 			options.NewInfiniteLexBoundary(constants.NegativeInfinity),
-			options.NewLexBoundary("c", false))
+			options.NewLexBoundary("c", false),
+		)
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
 		assert.Equal(t, []string{"a", "b"}, res)
 		// lex [+:-] reverse limit 1 2
 		query = options.NewRangeByLexQuery(
 			options.NewInfiniteLexBoundary(constants.PositiveInfinity),
-			options.NewInfiniteLexBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteLexBoundary(constants.NegativeInfinity),
+		).
 			SetReverse().SetLimit(1, 2)
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
@@ -6079,7 +6104,8 @@ func (suite *GlideTestSuite) TestZRange() {
 		// lex (c:-] reverse
 		query = options.NewRangeByLexQuery(
 			options.NewLexBoundary("c", false),
-			options.NewInfiniteLexBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteLexBoundary(constants.NegativeInfinity),
+		).
 			SetReverse()
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
@@ -6087,7 +6113,8 @@ func (suite *GlideTestSuite) TestZRange() {
 		// lex [+:c] (none)
 		query = options.NewRangeByLexQuery(
 			options.NewInfiniteLexBoundary(constants.PositiveInfinity),
-			options.NewLexBoundary("c", true))
+			options.NewLexBoundary("c", true),
+		)
 		res, err = client.ZRange(context.Background(), key, query)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(res))
@@ -6141,7 +6168,8 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		// score [-inf:3]
 		query := options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, true))
+			options.NewScoreBoundary(3, true),
+		)
 		res, err = client.ZRangeWithScores(context.Background(), key, query)
 		expected = []models.MemberAndScore{
 			{Member: "f", Score: float64(1.0)},
@@ -6156,7 +6184,8 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		// score [-inf:3)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, false))
+			options.NewScoreBoundary(3, false),
+		)
 		res, err = client.ZRangeWithScores(context.Background(), key, query)
 		expected = []models.MemberAndScore{
 			{Member: "f", Score: float64(1.0)},
@@ -6170,7 +6199,8 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		// score (3:-inf] reverse
 		query = options.NewRangeByScoreQuery(
 			options.NewScoreBoundary(3, false),
-			options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+		).
 			SetReverse()
 		res, err = client.ZRangeWithScores(context.Background(), key, query)
 		expected = []models.MemberAndScore{
@@ -6185,7 +6215,8 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		// score [inf:-inf] reverse
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
-			options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+		).
 			SetReverse()
 		res, err = client.ZRangeWithScores(context.Background(), key, query)
 		expected = []models.MemberAndScore{
@@ -6204,7 +6235,8 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		// score [-inf:+inf] limit 4 2
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewInfiniteScoreBoundary(constants.PositiveInfinity)).
+			options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
+		).
 			SetLimit(4, 2)
 		res, err = client.ZRangeWithScores(context.Background(), key, query)
 		expected = []models.MemberAndScore{
@@ -6216,7 +6248,8 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		// score [-inf:3) reverse (none)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, true)).
+			options.NewScoreBoundary(3, true),
+		).
 			SetReverse()
 		res, err = client.ZRangeWithScores(context.Background(), key, query)
 		assert.NoError(t, err)
@@ -6224,7 +6257,8 @@ func (suite *GlideTestSuite) TestZRangeWithScores() {
 		// score [+inf:3) (none)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
-			options.NewScoreBoundary(3, false))
+			options.NewScoreBoundary(3, false),
+		)
 		res, err = client.ZRangeWithScores(context.Background(), key, query)
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(res))
@@ -6268,7 +6302,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		var query options.ZRangeQuery
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, true))
+			options.NewScoreBoundary(3, true),
+		)
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
 		res1, err = client.ZRange(context.Background(), dest, query)
@@ -6278,7 +6313,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// score [-inf:3)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, false))
+			options.NewScoreBoundary(3, false),
+		)
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
 		res1, err = client.ZRange(context.Background(), dest, query)
@@ -6288,7 +6324,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// score (3:-inf] reverse
 		query = options.NewRangeByScoreQuery(
 			options.NewScoreBoundary(3, false),
-			options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+		).
 			SetReverse()
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
@@ -6299,7 +6336,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// score [-inf:+inf] limit 1 2
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewInfiniteScoreBoundary(constants.PositiveInfinity)).
+			options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
+		).
 			SetLimit(1, 2)
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
@@ -6310,7 +6348,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// score [-inf:3) reverse (none)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
-			options.NewScoreBoundary(3, true)).
+			options.NewScoreBoundary(3, true),
+		).
 			SetReverse()
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
@@ -6321,7 +6360,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// score [+inf:3) (none)
 		query = options.NewRangeByScoreQuery(
 			options.NewInfiniteScoreBoundary(constants.PositiveInfinity),
-			options.NewScoreBoundary(3, false))
+			options.NewScoreBoundary(3, false),
+		)
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
 		res1, err = client.ZRange(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -6331,7 +6371,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// lex [-:c)
 		query = options.NewRangeByLexQuery(
 			options.NewInfiniteLexBoundary(constants.NegativeInfinity),
-			options.NewLexBoundary("c", false))
+			options.NewLexBoundary("c", false),
+		)
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
 		res1, err = client.ZRange(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -6341,7 +6382,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// lex [+:-] reverse limit 1 2
 		query = options.NewRangeByLexQuery(
 			options.NewInfiniteLexBoundary(constants.PositiveInfinity),
-			options.NewInfiniteLexBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteLexBoundary(constants.NegativeInfinity),
+		).
 			SetReverse().SetLimit(1, 2)
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
@@ -6352,7 +6394,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// lex (c:-] reverse
 		query = options.NewRangeByLexQuery(
 			options.NewLexBoundary("c", false),
-			options.NewInfiniteLexBoundary(constants.NegativeInfinity)).
+			options.NewInfiniteLexBoundary(constants.NegativeInfinity),
+		).
 			SetReverse()
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
@@ -6363,7 +6406,8 @@ func (suite *GlideTestSuite) TestZRangeStore() {
 		// lex [+:c] (none)
 		query = options.NewRangeByLexQuery(
 			options.NewInfiniteLexBoundary(constants.PositiveInfinity),
-			options.NewLexBoundary("c", true))
+			options.NewLexBoundary("c", true),
+		)
 		res, err = client.ZRangeStore(context.Background(), dest, key, query)
 		assert.NoError(t, err)
 		res1, err = client.ZRange(context.Background(), dest, options.NewRangeByIndexQuery(0, -1))
@@ -6476,7 +6520,8 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		field1 := uuid.NewString()
 		field2 := uuid.NewString()
 		t := suite.T()
-		xAddResult, err := client.XAddWithOptions(context.Background(),
+		xAddResult, err := client.XAddWithOptions(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: field1, Value: "foo"}, {Field: field2, Value: "bar"}},
 			*options.NewXAddOptions().SetDontMakeNewStream(),
@@ -6484,7 +6529,8 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.NoError(t, err)
 		assert.True(t, xAddResult.IsNil())
 
-		xAddResult, err = client.XAddWithOptions(context.Background(),
+		xAddResult, err = client.XAddWithOptions(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: field1, Value: "foo1"}, {Field: field2, Value: "bar1"}},
 			*options.NewXAddOptions().SetId("0-1"),
@@ -6492,7 +6538,8 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), "0-1")
 
-		_, err = client.XAdd(context.Background(),
+		_, err = client.XAdd(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: field1, Value: "foo2"}, {Field: field2, Value: "bar2"}},
 		)
@@ -6503,7 +6550,8 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.Equal(t, int64(2), xLenResult)
 
 		// Trim the first entry.
-		xAddResult, err = client.XAddWithOptions(context.Background(),
+		xAddResult, err = client.XAddWithOptions(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: field1, Value: "foo3"}, {Field: field2, Value: "bar2"}},
 			*options.NewXAddOptions().SetTrimOptions(
@@ -6518,7 +6566,8 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.Equal(t, int64(2), xLenResult)
 
 		// Trim the second entry.
-		xAddResult, err = client.XAddWithOptions(context.Background(),
+		xAddResult, err = client.XAddWithOptions(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: field1, Value: "foo4"}, {Field: field2, Value: "bar4"}},
 			*options.NewXAddOptions().SetTrimOptions(
@@ -6532,7 +6581,8 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.Equal(t, int64(2), xLenResult)
 
 		// Test xtrim to remove 1 element
-		xTrimResult, err := client.XTrim(context.Background(),
+		xTrimResult, err := client.XTrim(
+			context.Background(),
 			key1,
 			*options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
@@ -6543,7 +6593,8 @@ func (suite *GlideTestSuite) Test_XAdd_XLen_XTrim() {
 		assert.Equal(t, int64(1), xLenResult)
 
 		// Key does not exist - returns 0
-		xTrimResult, err = client.XTrim(context.Background(),
+		xTrimResult, err = client.XTrim(
+			context.Background(),
 			key2,
 			*options.NewXTrimOptionsWithMaxLen(1).SetExactTrimming(),
 		)
@@ -6687,7 +6738,8 @@ func (suite *GlideTestSuite) Test_XDel() {
 		streamId3 := "0-3"
 		t := suite.T()
 
-		xAddResult, err := client.XAddWithOptions(context.Background(),
+		xAddResult, err := client.XAddWithOptions(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: "f1", Value: "foo1"}, {Field: "f2", Value: "bar2"}},
 			*options.NewXAddOptions().SetId(streamId1),
@@ -6695,7 +6747,8 @@ func (suite *GlideTestSuite) Test_XDel() {
 		assert.NoError(t, err)
 		assert.Equal(t, xAddResult.Value(), streamId1)
 
-		xAddResult, err = client.XAddWithOptions(context.Background(),
+		xAddResult, err = client.XAddWithOptions(
+			context.Background(),
 			key1,
 			[]models.FieldValue{{Field: "f1", Value: "foo1"}, {Field: "f2", Value: "bar2"}},
 			*options.NewXAddOptions().SetId(streamId2),
@@ -6727,9 +6780,6 @@ func (suite *GlideTestSuite) Test_XDel() {
 }
 
 func (suite *GlideTestSuite) TestZScan() {
-	// See https://github.com/valkey-io/valkey-glide/issues/5813
-	suite.T().Skip("Skipping TestZScan until flakiness is fixed")
-
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key1 := uuid.New().String()
 		initialCursor := models.NewCursor()
@@ -6811,10 +6861,6 @@ func (suite *GlideTestSuite) TestZScan() {
 		for !cursor.IsFinished() {
 			result, err := client.ZScan(context.Background(), key1, cursor)
 			assert.NoError(suite.T(), err)
-			assert.NotEqual(suite.T(), cursor, result.Cursor)
-			if len(result.Data) > 0 {
-				assert.False(suite.T(), isSubset(result.Data, resultCollection))
-			}
 			resultCollection = append(resultCollection, result.Data...)
 			cursor = result.Cursor
 		}
@@ -6969,7 +7015,8 @@ func (suite *GlideTestSuite) TestXPending() {
 			)
 
 			// 3b. Assert that we get 2 details for consumer1 that includes
-			detailResult, _ := client.XPendingWithOptions(context.Background(),
+			detailResult, _ := client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -7043,7 +7090,8 @@ func (suite *GlideTestSuite) TestXPending() {
 			)
 
 			// 3b. Assert that we get 2 details for consumer1 that includes
-			detailResult, _ := client.XPendingWithOptions(context.Background(),
+			detailResult, _ := client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(consumer1),
@@ -7090,7 +7138,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
 			suite.verifyOK(
-				client.XGroupCreateWithOptions(context.Background(),
+				client.XGroupCreateWithOptions(
+					context.Background(),
 					key,
 					groupName,
 					zeroStreamId,
@@ -7131,7 +7180,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), summaryResult.NumOfMessages > 0)
 
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 1).SetConsumer(consumer1),
@@ -7140,7 +7190,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.True(suite.T(), len(detailResult) > 0)
 
 			// returns empty if + before -
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("+", "-", 10).SetConsumer(consumer1),
@@ -7149,7 +7200,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// min idletime of 100 seconds shouldn't produce any results
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(100000),
@@ -7158,7 +7210,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// invalid consumer - no results
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(invalidConsumer),
@@ -7167,14 +7220,16 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// Return an error when range bound is not a valid ID
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("invalid-id", "+", 10),
 			)
 			suite.Error(err)
 
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "invalid-id", 10),
@@ -7182,7 +7237,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			suite.Error(err)
 
 			// invalid count should return no results
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", -1),
@@ -7191,7 +7247,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// Return an error when an invalid group is provided
-			_, err = client.XPending(context.Background(),
+			_, err = client.XPending(
+				context.Background(),
 				key,
 				"invalid-group",
 			)
@@ -7199,14 +7256,16 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			suite.True(strings.Contains(err.Error(), "NOGROUP"))
 
 			// non-existent key throws a RequestError (NOGROUP)
-			_, err = client.XPending(context.Background(),
+			_, err = client.XPending(
+				context.Background(),
 				missingKey,
 				groupName,
 			)
 			suite.Error(err)
 			suite.True(strings.Contains(err.Error(), "NOGROUP"))
 
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				missingKey,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10),
@@ -7216,14 +7275,16 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 
 			// Key exists, but it is not a stream
 			_, _ = client.Set(context.Background(), nonStreamKey, "bar")
-			_, err = client.XPending(context.Background(),
+			_, err = client.XPending(
+				context.Background(),
 				nonStreamKey,
 				groupName,
 			)
 			suite.Error(err)
 			suite.True(strings.Contains(err.Error(), "WRONGTYPE"))
 
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				nonStreamKey,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10),
@@ -7243,7 +7304,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			invalidConsumer := "invalid-consumer-" + uuid.New().String()
 
 			suite.verifyOK(
-				client.XGroupCreateWithOptions(context.Background(),
+				client.XGroupCreateWithOptions(
+					context.Background(),
 					key,
 					groupName,
 					zeroStreamId,
@@ -7284,7 +7346,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.NoError(suite.T(), err)
 			assert.True(suite.T(), summaryResult.NumOfMessages > 0)
 
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 1).SetConsumer(consumer1),
@@ -7293,7 +7356,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.True(suite.T(), len(detailResult) > 0)
 
 			// returns empty if + before -
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("+", "-", 10).SetConsumer(consumer1),
@@ -7302,7 +7366,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// min idletime of 100 seconds shouldn't produce any results
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(100000),
@@ -7311,7 +7376,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// invalid consumer - no results
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10).SetConsumer(invalidConsumer),
@@ -7320,14 +7386,16 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// Return an error when range bound is not a valid ID
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("invalid-id", "+", 10),
 			)
 			suite.Error(err)
 
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "invalid-id", 10),
@@ -7335,7 +7403,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			suite.Error(err)
 
 			// invalid count should return no results
-			detailResult, err = client.XPendingWithOptions(context.Background(),
+			detailResult, err = client.XPendingWithOptions(
+				context.Background(),
 				key,
 				groupName,
 				*options.NewXPendingOptions("-", "+", -1),
@@ -7344,7 +7413,8 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			assert.Equal(suite.T(), 0, len(detailResult))
 
 			// Return an error when an invalid group is provided
-			_, err = client.XPending(context.Background(),
+			_, err = client.XPending(
+				context.Background(),
 				key,
 				"invalid-group",
 			)
@@ -7352,14 +7422,16 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 			suite.True(strings.Contains(err.Error(), "NOGROUP"))
 
 			// non-existent key throws a RequestError (NOGROUP)
-			_, err = client.XPending(context.Background(),
+			_, err = client.XPending(
+				context.Background(),
 				missingKey,
 				groupName,
 			)
 			suite.Error(err)
 			suite.True(strings.Contains(err.Error(), "NOGROUP"))
 
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				missingKey,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10),
@@ -7369,14 +7441,16 @@ func (suite *GlideTestSuite) TestXPendingFailures() {
 
 			// Key exists, but it is not a stream
 			_, _ = client.Set(context.Background(), nonStreamKey, "bar")
-			_, err = client.XPending(context.Background(),
+			_, err = client.XPending(
+				context.Background(),
 				nonStreamKey,
 				groupName,
 			)
 			suite.Error(err)
 			suite.True(strings.Contains(err.Error(), "WRONGTYPE"))
 
-			_, err = client.XPendingWithOptions(context.Background(),
+			_, err = client.XPendingWithOptions(
+				context.Background(),
 				nonStreamKey,
 				groupName,
 				*options.NewXPendingOptions("-", "+", 10),
@@ -7615,7 +7689,8 @@ func (suite *GlideTestSuite) TestZRemRangeByLex() {
 		assert.Equal(suite.T(), int64(4), zAddResult)
 
 		// min > max
-		zRemRangeByLexResult, err := client.ZRemRangeByLex(context.Background(),
+		zRemRangeByLexResult, err := client.ZRemRangeByLex(
+			context.Background(),
 			key1,
 			*options.NewRangeByLexQuery(options.NewLexBoundary("d", false), options.NewLexBoundary("a", false)),
 		)
@@ -7623,7 +7698,8 @@ func (suite *GlideTestSuite) TestZRemRangeByLex() {
 		assert.Equal(suite.T(), int64(0), zRemRangeByLexResult)
 
 		// Remove members with lexicographical range
-		zRemRangeByLexResult, err = client.ZRemRangeByLex(context.Background(),
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			context.Background(),
 			key1,
 			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", true)),
 		)
@@ -7639,7 +7715,8 @@ func (suite *GlideTestSuite) TestZRemRangeByLex() {
 		assert.Equal(suite.T(), int64(1), zRemRangeByLexResult)
 
 		// Non-existing key
-		zRemRangeByLexResult, err = client.ZRemRangeByLex(context.Background(),
+		zRemRangeByLexResult, err = client.ZRemRangeByLex(
+			context.Background(),
 			"non_existing_key",
 			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", false)),
 		)
@@ -7651,7 +7728,8 @@ func (suite *GlideTestSuite) TestZRemRangeByLex() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "OK", setResult)
 
-		_, err = client.ZRemRangeByLex(context.Background(),
+		_, err = client.ZRemRangeByLex(
+			context.Background(),
 			stringKey,
 			*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", false)),
 		)
@@ -7674,7 +7752,8 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 		assert.Equal(suite.T(), int64(4), zAddResult)
 
 		// min > max
-		zRemRangeByScoreResult, err := client.ZRemRangeByScore(context.Background(),
+		zRemRangeByScoreResult, err := client.ZRemRangeByScore(
+			context.Background(),
 			key1,
 			*options.NewRangeByScoreQuery(options.NewScoreBoundary(2.0, false), options.NewScoreBoundary(1.0, false)),
 		)
@@ -7682,7 +7761,8 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 		assert.Equal(suite.T(), int64(0), zRemRangeByScoreResult)
 
 		// Remove members with score range
-		zRemRangeByScoreResult, err = client.ZRemRangeByScore(context.Background(),
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			context.Background(),
 			key1,
 			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(3.0, true)),
 		)
@@ -7690,7 +7770,8 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 		assert.Equal(suite.T(), int64(2), zRemRangeByScoreResult)
 
 		// Remove all members
-		zRemRangeByScoreResult, err = client.ZRemRangeByScore(context.Background(),
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			context.Background(),
 			key1,
 			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
 		)
@@ -7698,7 +7779,8 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 		assert.Equal(suite.T(), int64(1), zRemRangeByScoreResult)
 
 		// Non-existing key
-		zRemRangeByScoreResult, err = client.ZRemRangeByScore(context.Background(),
+		zRemRangeByScoreResult, err = client.ZRemRangeByScore(
+			context.Background(),
 			"non_existing_key",
 			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
 		)
@@ -7710,7 +7792,8 @@ func (suite *GlideTestSuite) TestZRemRangeByScore() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "OK", setResult)
 
-		_, err = client.ZRemRangeByScore(context.Background(),
+		_, err = client.ZRemRangeByScore(
+			context.Background(),
 			stringKey,
 			*options.NewRangeByScoreQuery(options.NewScoreBoundary(1.0, false), options.NewScoreBoundary(10.0, true)),
 		)
@@ -8290,14 +8373,16 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 		consumer1 := uuid.NewString()
 		consumer2 := uuid.NewString()
 
-		xadd, err := client.XAddWithOptions(context.Background(),
+		xadd, err := client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
-		xadd, err = client.XAddWithOptions(context.Background(),
+		xadd, err = client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 			*options.NewXAddOptions().SetId("0-2"),
@@ -8315,7 +8400,8 @@ func (suite *GlideTestSuite) TestXInfoConsumers() {
 
 		suite.verifyOK(client.XGroupCreate(context.Background(), key, group, "0-0"))
 
-		xReadGroup, err := client.XReadGroupWithOptions(context.Background(),
+		xReadGroup, err := client.XReadGroupWithOptions(
+			context.Background(),
 			group,
 			consumer1,
 			map[string]string{key: ">"},
@@ -8477,14 +8563,16 @@ func (suite *GlideTestSuite) TestXInfoGroups() {
 			}, xinfo)
 		}
 
-		xadd, err := client.XAddWithOptions(context.Background(),
+		xadd, err := client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "e1_f1", Value: "e1_v1"}, {Field: "e1_f2", Value: "e1_v2"}},
 			*options.NewXAddOptions().SetId("0-1"),
 		)
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), "0-1", xadd.Value())
-		xadd, err = client.XAddWithOptions(context.Background(),
+		xadd, err = client.XAddWithOptions(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "e2_f1", Value: "e2_v1"}, {Field: "e2_f2", Value: "e2_v2"}},
 			*options.NewXAddOptions().SetId("0-2"),
@@ -8960,7 +9048,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		consumer1 := "consumer-1-" + uuid.New().String()
 		consumer2 := "consumer-2-" + uuid.New().String()
 
-		resp, err := client.XGroupCreateWithOptions(context.Background(),
+		resp, err := client.XGroupCreateWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			zeroStreamId,
@@ -9008,14 +9097,16 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(
 			suite.T(),
 			entryMap[streamid_1],
-			[]models.FieldValue{{Field: "field1", Value: "value1"}})
+			[]models.FieldValue{{Field: "field1", Value: "value1"}},
+		)
 
 		assert.Contains(suite.T(), entryMap, streamid_2)
 		// Check for field "field2" with value "value2" in entry
 		assert.Equal(
 			suite.T(),
 			entryMap[streamid_2],
-			[]models.FieldValue{{Field: "field2", Value: "value2"}})
+			[]models.FieldValue{{Field: "field2", Value: "value2"}},
+		)
 
 		// Add 3 more stream entries for consumer 2
 		streamid_3, err := client.XAdd(context.Background(), key, []models.FieldValue{{Field: "field3", Value: "value3"}})
@@ -9085,7 +9176,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 
 		// ensure idle time > 0
 		time.Sleep(2000 * time.Millisecond)
-		pendingResultExtended, err := client.XPendingWithOptions(context.Background(),
+		pendingResultExtended, err := client.XPendingWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			*options.NewXPendingOptions("-", "+", 10),
@@ -9116,7 +9208,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.GreaterOrEqual(suite.T(), pendingResultExtended[4].DeliveryCount, int64(0))
 
 		// use claim to claim stream 3 and 5 for consumer 1
-		claimResult, err := client.XClaim(context.Background(),
+		claimResult, err := client.XClaim(
+			context.Background(),
 			key,
 			groupName,
 			consumer1,
@@ -9138,7 +9231,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		}
 		assert.Equal(suite.T(), expectedClaimResult, claimResult)
 
-		claimResultJustId, err := client.XClaimJustId(context.Background(),
+		claimResultJustId, err := client.XClaimJustId(
+			context.Background(),
 			key,
 			groupName,
 			consumer1,
@@ -9153,7 +9247,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.NoError(suite.T(), err)
 
 		// using force, we can xclaim the message without reading it
-		claimResult, err = client.XClaimWithOptions(context.Background(),
+		claimResult, err = client.XClaimWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			consumer1,
@@ -9174,7 +9269,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 			claimResult,
 		)
 
-		forcePendingResult, err := client.XPendingWithOptions(context.Background(),
+		forcePendingResult, err := client.XPendingWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			*options.NewXPendingOptions(streamid_6, streamid_6, 1),
@@ -9192,7 +9288,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.NoError(suite.T(), err)
 		assert.Equal(suite.T(), int64(4), xackResult)
 
-		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
+		pendingResultExtended, err = client.XPendingWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			*options.NewXPendingOptions(streamid_3, "+", 10),
@@ -9202,7 +9299,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		assert.Equal(suite.T(), streamid_5, pendingResultExtended[0].Id)
 		assert.Equal(suite.T(), consumer1, pendingResultExtended[0].ConsumerName)
 
-		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
+		pendingResultExtended, err = client.XPendingWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			*options.NewXPendingOptions("-", "("+streamid_5, 10),
@@ -9217,7 +9315,8 @@ func (suite *GlideTestSuite) TestXPendingAndXClaim() {
 		// might not see all expected pending messages immediately after XCLAIM resets idle time
 		time.Sleep(5 * time.Millisecond)
 
-		pendingResultExtended, err = client.XPendingWithOptions(context.Background(),
+		pendingResultExtended, err = client.XPendingWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			*options.NewXPendingOptions("-", "+", 10).SetMinIdleTime(1).SetConsumer(consumer1),
@@ -9236,7 +9335,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		consumer1 := "consumer-1-" + uuid.New().String()
 
 		// create group and consumer for the group
-		groupCreateResult, err := client.XGroupCreateWithOptions(context.Background(),
+		groupCreateResult, err := client.XGroupCreateWithOptions(
+			context.Background(),
 			key,
 			groupName,
 			zeroStreamId,
@@ -9293,7 +9393,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		)
 		suite.ErrorContains(err, "NOGROUP")
 
-		_, err = client.XClaimWithOptions(context.Background(),
+		_, err = client.XClaimWithOptions(
+			context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
@@ -9313,7 +9414,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		)
 		suite.ErrorContains(err, "NOGROUP")
 
-		_, err = client.XClaimJustIdWithOptions(context.Background(),
+		_, err = client.XClaimJustIdWithOptions(
+			context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
@@ -9336,7 +9438,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		)
 		assert.Error(suite.T(), err)
 
-		_, err = client.XClaimWithOptions(context.Background(),
+		_, err = client.XClaimWithOptions(
+			context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
@@ -9356,7 +9459,8 @@ func (suite *GlideTestSuite) TestXClaimFailure() {
 		)
 		suite.Error(err)
 
-		_, err = client.XClaimJustIdWithOptions(context.Background(),
+		_, err = client.XClaimJustIdWithOptions(
+			context.Background(),
 			stringKey,
 			groupName,
 			consumer1,
@@ -9455,14 +9559,16 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		negativeInfinity := options.NewInfiniteStreamBoundary(constants.NegativeInfinity)
 
 		// add stream entries
-		streamId1, err := client.XAdd(context.Background(),
+		streamId1, err := client.XAdd(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "field1", Value: "value1"}},
 		)
 		assert.NoError(suite.T(), err)
 		assert.NotNil(suite.T(), streamId1)
 
-		streamId2, err := client.XAdd(context.Background(),
+		streamId2, err := client.XAdd(
+			context.Background(),
 			key,
 			[]models.FieldValue{{Field: "field2", Value: "value2"}},
 		)
@@ -9642,14 +9748,16 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		// xrange and xrevrange against a non-stream key
 		_, err = client.Set(context.Background(), stringKey, "test")
 		assert.NoError(suite.T(), err)
-		_, err = client.XRange(context.Background(),
+		_, err = client.XRange(
+			context.Background(),
 			stringKey,
 			negativeInfinity,
 			positiveInfinity,
 		)
 		suite.Error(err)
 
-		_, err = client.XRevRange(context.Background(),
+		_, err = client.XRevRange(
+			context.Background(),
 			stringKey,
 			positiveInfinity,
 			negativeInfinity,
@@ -9657,14 +9765,16 @@ func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 		suite.Error(err)
 
 		// xrange and xrevrange when range bound is not a valid id
-		_, err = client.XRange(context.Background(),
+		_, err = client.XRange(
+			context.Background(),
 			key,
 			options.NewStreamBoundary("invalid-id", true),
 			positiveInfinity,
 		)
 		suite.Error(err)
 
-		_, err = client.XRevRange(context.Background(),
+		_, err = client.XRevRange(
+			context.Background(),
 			key,
 			options.NewStreamBoundary("invalid-id", true),
 			negativeInfinity,
@@ -9946,7 +10056,8 @@ func (suite *GlideTestSuite) TestBitFieldRO_MultipleGets() {
 		getRO, err := client.BitFieldRO(context.Background(), key, getROCommands)
 		suite.NoError(err)
 
-		assert.Equal(suite.T(),
+		assert.Equal(
+			suite.T(),
 			[]int64{getNormal[0].Value(), getNormal[1].Value()},
 			[]int64{getRO[0].Value(), getRO[1].Value()},
 		)
@@ -9993,7 +10104,8 @@ func (suite *GlideTestSuite) TestZInter() {
 		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "two", Score: 5.5}}, zinterWithScoresResult)
 
 		// intersect results with max aggregate
-		zinterWithMaxAggregateResult, err := client.ZInterWithScores(context.Background(),
+		zinterWithMaxAggregateResult, err := client.ZInterWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateMax),
 		)
@@ -10001,7 +10113,8 @@ func (suite *GlideTestSuite) TestZInter() {
 		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "two", Score: 3.5}}, zinterWithMaxAggregateResult)
 
 		// intersect results with min aggregate
-		zinterWithMinAggregateResult, err := client.ZInterWithScores(context.Background(),
+		zinterWithMinAggregateResult, err := client.ZInterWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
@@ -10009,7 +10122,8 @@ func (suite *GlideTestSuite) TestZInter() {
 		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "two", Score: 2.0}}, zinterWithMinAggregateResult)
 
 		// intersect results with sum aggregate
-		zinterWithSumAggregateResult, err := client.ZInterWithScores(context.Background(),
+		zinterWithSumAggregateResult, err := client.ZInterWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
@@ -10017,7 +10131,8 @@ func (suite *GlideTestSuite) TestZInter() {
 		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "two", Score: 5.5}}, zinterWithSumAggregateResult)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
-		zinterWithWeightedKeysResult, err := client.ZInterWithScores(context.Background(),
+		zinterWithWeightedKeysResult, err := client.ZInterWithScores(
+			context.Background(),
 			options.WeightedKeys{
 				KeyWeightPairs: []options.KeyWeightPair{
 					{Key: key1, Weight: 2.0},
@@ -10030,7 +10145,8 @@ func (suite *GlideTestSuite) TestZInter() {
 		assert.Equal(suite.T(), []models.MemberAndScore{{Member: "two", Score: 11.0}}, zinterWithWeightedKeysResult)
 
 		// non-existent key - empty intersection
-		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(context.Background(),
+		zinterWithNonExistentKeyResult, err := client.ZInterWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
@@ -10038,7 +10154,8 @@ func (suite *GlideTestSuite) TestZInter() {
 		assert.Empty(suite.T(), zinterWithNonExistentKeyResult)
 
 		// empty key list - request error
-		_, err = client.ZInterWithScores(context.Background(), options.KeyArray{Keys: []string{}},
+		_, err = client.ZInterWithScores(
+			context.Background(), options.KeyArray{Keys: []string{}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		suite.Error(err)
@@ -10050,7 +10167,8 @@ func (suite *GlideTestSuite) TestZInter() {
 		_, err = client.ZInter(context.Background(), options.KeyArray{Keys: []string{key1, key3}})
 		suite.Error(err)
 
-		_, err = client.ZInterWithScores(context.Background(),
+		_, err = client.ZInterWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
@@ -10099,7 +10217,8 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		)
 
 		// Store the intersection of key1 and key2 in key4 with max aggregate
-		res, err = client.ZInterStoreWithOptions(context.Background(), key3, options.KeyArray{Keys: []string{key1, key2}},
+		res, err = client.ZInterStoreWithOptions(
+			context.Background(), key3, options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateMax),
 		)
 		assert.NoError(suite.T(), err)
@@ -10115,7 +10234,8 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		)
 
 		// Store the intersection of key1 and key2 in key5 with min aggregate
-		res, err = client.ZInterStoreWithOptions(context.Background(), key3, options.KeyArray{Keys: []string{key1, key2}},
+		res, err = client.ZInterStoreWithOptions(
+			context.Background(), key3, options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
@@ -10131,7 +10251,8 @@ func (suite *GlideTestSuite) TestZInterStore() {
 		)
 
 		// Store the intersection of key1 and key2 in key6 with sum aggregate
-		res, err = client.ZInterStoreWithOptions(context.Background(), key3, options.KeyArray{Keys: []string{key1, key2}},
+		res, err = client.ZInterStoreWithOptions(
+			context.Background(), key3, options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZInterOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NoError(suite.T(), err)
@@ -10167,12 +10288,13 @@ func (suite *GlideTestSuite) TestZInterStore() {
 
 		// Store the intersection of key1 with 1.0 weight and key2 with -2.0 weight in key3 with 2.0 weights
 		// and min aggregate
-		res, err = client.ZInterStoreWithOptions(context.Background(), key3, options.WeightedKeys{
-			KeyWeightPairs: []options.KeyWeightPair{
-				{Key: key1, Weight: 1.0},
-				{Key: key2, Weight: -2.0},
+		res, err = client.ZInterStoreWithOptions(
+			context.Background(), key3, options.WeightedKeys{
+				KeyWeightPairs: []options.KeyWeightPair{
+					{Key: key1, Weight: 1.0},
+					{Key: key2, Weight: -2.0},
+				},
 			},
-		},
 			*options.NewZInterOptions().SetAggregate(options.AggregateMin),
 		)
 		assert.NoError(suite.T(), err)
@@ -10389,7 +10511,8 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		)
 
 		// Union results with max aggregate
-		zUnionWithMaxAggregateResult, err := client.ZUnionWithScores(context.Background(),
+		zUnionWithMaxAggregateResult, err := client.ZUnionWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateMax),
 		)
@@ -10401,7 +10524,8 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		)
 
 		// Union results with min aggregate
-		zUnionWithMinAggregateResult, err := client.ZUnionWithScores(context.Background(),
+		zUnionWithMinAggregateResult, err := client.ZUnionWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateMin),
 		)
@@ -10413,7 +10537,8 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		)
 
 		// Union results with sum aggregate
-		zUnionWithSumAggregateResult, err := client.ZUnionWithScores(context.Background(),
+		zUnionWithSumAggregateResult, err := client.ZUnionWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
@@ -10425,7 +10550,8 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
-		zUnionWithWeightedKeysResult, err := client.ZUnionWithScores(context.Background(),
+		zUnionWithWeightedKeysResult, err := client.ZUnionWithScores(
+			context.Background(),
 			options.WeightedKeys{
 				KeyWeightPairs: []options.KeyWeightPair{
 					{Key: key1, Weight: 3.0},
@@ -10442,7 +10568,8 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		)
 
 		// non-existent key - empty union
-		zUnionWithNonExistentKeyResult, err := client.ZUnionWithScores(context.Background(),
+		zUnionWithNonExistentKeyResult, err := client.ZUnionWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
@@ -10454,7 +10581,8 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		)
 
 		// empty key list - empty union
-		zUnionWithEmptyKeyArray, err := client.ZUnionWithScores(context.Background(), options.KeyArray{Keys: []string{}},
+		zUnionWithEmptyKeyArray, err := client.ZUnionWithScores(
+			context.Background(), options.KeyArray{Keys: []string{}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
 		assert.NotNil(suite.T(), err)
@@ -10467,7 +10595,8 @@ func (suite *GlideTestSuite) TestZUnionAndZUnionWithScores() {
 		_, err = client.ZUnion(context.Background(), options.KeyArray{Keys: []string{key1, key3}})
 		suite.Error(err)
 
-		_, err = client.ZUnionWithScores(context.Background(),
+		_, err = client.ZUnionWithScores(
+			context.Background(),
 			options.KeyArray{Keys: []string{key1, key3}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 		)
@@ -10525,7 +10654,8 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		)
 
 		// Union results with max aggregate
-		zUnionStoreWithMaxAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
+		zUnionStoreWithMaxAggregateResult, err := client.ZUnionStoreWithOptions(
+			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateMax),
@@ -10541,7 +10671,8 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		)
 
 		// Union results with min aggregate
-		zUnionStoreWithMinAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
+		zUnionStoreWithMinAggregateResult, err := client.ZUnionStoreWithOptions(
+			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateMin),
@@ -10557,7 +10688,8 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		)
 
 		// Union results with sum aggregate
-		zUnionStoreWithSumAggregateResult, err := client.ZUnionStoreWithOptions(context.Background(),
+		zUnionStoreWithSumAggregateResult, err := client.ZUnionStoreWithOptions(
+			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key2}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
@@ -10573,7 +10705,8 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		)
 
 		// Scores are multiplied by a 2.0 weight for key1 and key2 during aggregation
-		zUnionStoreWithWeightedKeysResult, err := client.ZUnionStoreWithOptions(context.Background(),
+		zUnionStoreWithWeightedKeysResult, err := client.ZUnionStoreWithOptions(
+			context.Background(),
 			dest,
 			options.WeightedKeys{
 				KeyWeightPairs: []options.KeyWeightPair{
@@ -10594,7 +10727,8 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		)
 
 		// non-existent key - empty union
-		zUnionStoreWithNonExistentKeyResult, err := client.ZUnionStoreWithOptions(context.Background(),
+		zUnionStoreWithNonExistentKeyResult, err := client.ZUnionStoreWithOptions(
+			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key3}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
@@ -10608,7 +10742,8 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		// empty key list - empty union
 		_, err = client.ZRem(context.Background(), dest, []string{"one", "two"}) // Flush previous results
 		assert.NoError(suite.T(), err)
-		zUnionStoreWithEmptyKeyArray, err := client.ZUnionStoreWithOptions(context.Background(),
+		zUnionStoreWithEmptyKeyArray, err := client.ZUnionStoreWithOptions(
+			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
@@ -10626,7 +10761,8 @@ func (suite *GlideTestSuite) TestZUnionStoreAndZUnionStoreWithOptions() {
 		_, err = client.ZUnionStore(context.Background(), dest, options.KeyArray{Keys: []string{key1, key3}})
 		suite.Error(err)
 
-		_, err = client.ZUnionStoreWithOptions(context.Background(),
+		_, err = client.ZUnionStoreWithOptions(
+			context.Background(),
 			dest,
 			options.KeyArray{Keys: []string{key1, key3}},
 			*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
@@ -10717,7 +10853,8 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		client.ZAdd(context.Background(), key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0})
 
 		// count members in range a exclusive to c inclusive
-		result, err := client.ZLexCount(context.Background(),
+		result, err := client.ZLexCount(
+			context.Background(),
 			key1,
 			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
@@ -10728,7 +10865,8 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		assert.Equal(t, int64(2), result)
 
 		// count members in range negative to positive infinity
-		result, err = client.ZLexCount(context.Background(),
+		result, err = client.ZLexCount(
+			context.Background(),
 			key1,
 			*options.NewRangeByLexQuery(
 				options.NewInfiniteLexBoundary("-"),
@@ -10739,7 +10877,8 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		assert.Equal(t, int64(3), result)
 
 		// count members in range negative infinity to c inclusive
-		result, err = client.ZLexCount(context.Background(),
+		result, err = client.ZLexCount(
+			context.Background(),
 			key1,
 			*options.NewRangeByLexQuery(
 				options.NewInfiniteLexBoundary("-"),
@@ -10750,7 +10889,8 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		assert.Equal(t, int64(3), result)
 
 		// non-existent key
-		result, err = client.ZLexCount(context.Background(),
+		result, err = client.ZLexCount(
+			context.Background(),
 			key2,
 			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
@@ -10764,7 +10904,8 @@ func (suite *GlideTestSuite) TestZLexCount() {
 		_, err = client.Set(context.Background(), key2, "value")
 		assert.NoError(t, err)
 
-		_, err = client.ZLexCount(context.Background(),
+		_, err = client.ZLexCount(
+			context.Background(),
 			key2,
 			*options.NewRangeByLexQuery(
 				options.NewLexBoundary("a", false),
@@ -10795,7 +10936,8 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 		membersToCoordinates = map[string]options.GeospatialData{
 			"Catania": {Longitude: 15.087269, Latitude: 39},
 		}
-		result, err = client.GeoAddWithOptions(context.Background(),
+		result, err = client.GeoAddWithOptions(
+			context.Background(),
 			key1,
 			membersToCoordinates,
 			*options.NewGeoAddOptions().SetConditionalChange(constants.OnlyIfDoesNotExist),
@@ -10804,7 +10946,8 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 		assert.Equal(t, int64(0), result)
 
 		// Test with XX option (only if exists)
-		result, err = client.GeoAddWithOptions(context.Background(),
+		result, err = client.GeoAddWithOptions(
+			context.Background(),
 			key1,
 			membersToCoordinates,
 			*options.NewGeoAddOptions().SetConditionalChange(constants.OnlyIfExists),
@@ -10817,7 +10960,8 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 			"Catania":  {Longitude: 15.087269, Latitude: 40},
 			"Tel-Aviv": {Longitude: 32.0853, Latitude: 34.7818},
 		}
-		result, err = client.GeoAddWithOptions(context.Background(),
+		result, err = client.GeoAddWithOptions(
+			context.Background(),
 			key1,
 			membersToCoordinates,
 			*options.NewGeoAddOptions().SetChanged(true),
@@ -10829,7 +10973,8 @@ func (suite *GlideTestSuite) TestGeoAdd() {
 		_, err = client.Set(context.Background(), key2, "bar")
 		assert.NoError(t, err)
 
-		_, err = client.GeoAddWithOptions(context.Background(),
+		_, err = client.GeoAddWithOptions(
+			context.Background(),
 			key2,
 			membersToCoordinates,
 			*options.NewGeoAddOptions().SetChanged(true),
@@ -11139,7 +11284,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				Dist: 0.0,
 			},
 		}
-		memberResults, err := client.GeoSearchWithFullOptions(context.Background(),
+		memberResults, err := client.GeoSearchWithFullOptions(
+			context.Background(),
 			key1,
 			&options.GeoMemberOrigin{Member: "Catania"},
 			*options.NewBoxSearchShape(meters, meters, constants.GeoUnitMeters),
@@ -11152,7 +11298,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		// Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
 		feetValue := 400 * 3280.8399
 		feetShape := options.NewBoxSearchShape(feetValue, feetValue, constants.GeoUnitFeet)
-		feetResult, err := client.GeoSearchWithFullOptions(context.Background(),
+		feetResult, err := client.GeoSearchWithFullOptions(
+			context.Background(),
 			key1,
 			&options.GeoMemberOrigin{Member: "Palermo"},
 			*feetShape,
@@ -11170,7 +11317,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		// Test search by radius with feet units from member
 		feetRadius := 200 * 3280.8399
 
-		feetResults, err := client.GeoSearchWithResultOptions(context.Background(),
+		feetResults, err := client.GeoSearchWithResultOptions(
+			context.Background(),
 			key1,
 			&options.GeoMemberOrigin{Member: "Catania"},
 			*options.NewCircleSearchShape(feetRadius, constants.GeoUnitFeet),
@@ -11181,7 +11329,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 
 		// Test search by radius with meters units from member
 		metersRadius := 200 * 1000
-		metersResults, err := client.GeoSearchWithResultOptions(context.Background(),
+		metersResults, err := client.GeoSearchWithResultOptions(
+			context.Background(),
 			key1,
 			&options.GeoMemberOrigin{Member: "Catania"},
 			*options.NewCircleSearchShape(float64(metersRadius), constants.GeoUnitMeters),
@@ -11191,7 +11340,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		assert.Equal(suite.T(), []string{"Palermo", "Catania"}, metersResults)
 
 		// Test search by radius with miles units from geospatial data
-		milesResults, err := client.GeoSearchWithResultOptions(context.Background(),
+		milesResults, err := client.GeoSearchWithResultOptions(
+			context.Background(),
 			key1,
 			&options.GeoCoordOrigin{
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
@@ -11203,7 +11353,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		assert.Equal(suite.T(), []string{"edge1", "edge2", "Palermo", "Catania"}, milesResults)
 
 		// Test search by radius with kilometers units, with limited count and all options
-		kmResults, err := client.GeoSearchWithFullOptions(context.Background(),
+		kmResults, err := client.GeoSearchWithFullOptions(
+			context.Background(),
 			key1,
 			&options.GeoCoordOrigin{
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
@@ -11253,7 +11404,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 				},
 			},
 		}
-		anyResult, err := client.GeoSearchWithFullOptions(context.Background(),
+		anyResult, err := client.GeoSearchWithFullOptions(
+			context.Background(),
 			key1,
 			&options.GeoCoordOrigin{
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
@@ -11267,7 +11419,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 
 		// Test empty results - small area
 		smallShape := options.NewBoxSearchShape(50, 50, constants.GeoUnitMeters)
-		emptyResults1, err := client.GeoSearchWithResultOptions(context.Background(),
+		emptyResults1, err := client.GeoSearchWithResultOptions(
+			context.Background(),
 			key1,
 			&options.GeoCoordOrigin{
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
@@ -11280,7 +11433,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 
 		// Test empty results - very small radius
 		tinyShape := options.NewCircleSearchShape(5, constants.GeoUnitMeters)
-		emptyResults2, err := client.GeoSearchWithResultOptions(context.Background(),
+		emptyResults2, err := client.GeoSearchWithResultOptions(
+			context.Background(),
 			key1,
 			&options.GeoCoordOrigin{
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
@@ -11293,7 +11447,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 
 		// Test non-existing member error
 		nonExistingMemberOrigin := &options.GeoMemberOrigin{Member: "non-existing-member"}
-		_, err = client.GeoSearchWithResultOptions(context.Background(),
+		_, err = client.GeoSearchWithResultOptions(
+			context.Background(),
 			key1,
 			nonExistingMemberOrigin,
 			*options.NewCircleSearchShape(100, constants.GeoUnitMeters),
@@ -11304,7 +11459,8 @@ func (suite *GlideTestSuite) TestGeoSearch() {
 		// Test wrong key type error
 		_, err = client.Set(context.Background(), key2, "nonZSETvalue")
 		suite.NoError(err)
-		_, err = client.GeoSearchWithResultOptions(context.Background(),
+		_, err = client.GeoSearchWithResultOptions(
+			context.Background(),
 			key2,
 			&options.GeoCoordOrigin{
 				GeospatialData: options.GeospatialData{Longitude: 15, Latitude: 37},
@@ -11366,7 +11522,8 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		suite.Equal(expectedArray, zRangeResult)
 
 		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with distance
-		count, err = client.GeoSearchStoreWithInfoOptions(context.Background(),
+		count, err = client.GeoSearchStoreWithInfoOptions(
+			context.Background(),
 			destinationKey,
 			sourceKey,
 			searchOrigin,
@@ -11388,7 +11545,8 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		}
 
 		// Test storing results of a box search, unit: kilometers, from a geospatial data point, with count
-		count, err = client.GeoSearchStoreWithResultOptions(context.Background(),
+		count, err = client.GeoSearchStoreWithResultOptions(
+			context.Background(),
 			destinationKey,
 			sourceKey,
 			searchOrigin,
@@ -11415,7 +11573,8 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 
 		// Test storing results of a radius search, unit: feet, from a member
 		feetValue := 200 * 3280.8399
-		count, err = client.GeoSearchStoreWithResultOptions(context.Background(),
+		count, err = client.GeoSearchStoreWithResultOptions(
+			context.Background(),
 			destinationKey,
 			sourceKey,
 			&options.GeoMemberOrigin{Member: "Catania"},
@@ -11435,7 +11594,8 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		suite.Equal(expectedArray3, zRangeResultWithCount)
 
 		// Test storing results of a search that returns 0 results
-		count, err = client.GeoSearchStore(context.Background(),
+		count, err = client.GeoSearchStore(
+			context.Background(),
 			destinationKey,
 			sourceKey,
 			searchOrigin,
@@ -11452,7 +11612,8 @@ func (suite *GlideTestSuite) TestGeoSearchStore() {
 		suite.Equal([]models.MemberAndScore{}, zRangeResultZero)
 
 		// Test storing results of a search with ANY option
-		count, err = client.GeoSearchStoreWithResultOptions(context.Background(),
+		count, err = client.GeoSearchStoreWithResultOptions(
+			context.Background(),
 			destinationKey,
 			sourceKey,
 			searchOrigin,

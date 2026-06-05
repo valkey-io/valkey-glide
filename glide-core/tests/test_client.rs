@@ -1998,22 +1998,25 @@ pub(crate) mod shared_client_tests {
             )
             .await;
 
-            let res = retry(|| async {
-                let mut client = test_basics.client.clone();
-                client
-                    .send_pipeline(
-                        &pipeline,
-                        None,
-                        false,
-                        None,
-                        PipelineRetryStrategy {
-                            retry_server_error: true,
-                            retry_connection_error: false,
-                        },
-                    )
-                    .await
-                    .ok()
-            })
+            let res = retry_until_timeout(
+                || async {
+                    let mut client = test_basics.client.clone();
+                    client
+                        .send_pipeline(
+                            &pipeline,
+                            None,
+                            false,
+                            None,
+                            PipelineRetryStrategy {
+                                retry_server_error: true,
+                                retry_connection_error: false,
+                            },
+                        )
+                        .await
+                        .ok()
+                },
+                std::time::Duration::from_millis(10_000),
+            )
             .await;
 
             let expected = Value::Array(vec![
@@ -2152,22 +2155,25 @@ pub(crate) mod shared_client_tests {
             // Kill all connections.
             kill_connection(&mut test_basics.client).await;
 
-            let res = retry(|| async {
-                let mut client = test_basics.client.clone();
-                client
-                    .send_pipeline(
-                        &pipeline,
-                        None,
-                        false,
-                        None,
-                        PipelineRetryStrategy {
-                            retry_server_error: true,
-                            retry_connection_error: false,
-                        },
-                    )
-                    .await
-                    .ok()
-            })
+            let res = retry_until_timeout(
+                || async {
+                    let mut client = test_basics.client.clone();
+                    client
+                        .send_pipeline(
+                            &pipeline,
+                            None,
+                            false,
+                            None,
+                            PipelineRetryStrategy {
+                                retry_server_error: true,
+                                retry_connection_error: false,
+                            },
+                        )
+                        .await
+                        .ok()
+                },
+                std::time::Duration::from_millis(10_000),
+            )
             .await;
 
             let expected = Value::Array(vec![

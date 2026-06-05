@@ -634,7 +634,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 	}
 
 	request.ClusterModeEnabled = true
-	if (config.AdvancedClusterClientConfiguration.connectionTimeout) != 0 {
+	if config.AdvancedClusterClientConfiguration.connectionTimeout != 0 {
 		connectionTimeout, err := utils.DurationToMilliseconds(config.AdvancedClusterClientConfiguration.connectionTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("setting connection timeout returned an error: %w", err)
