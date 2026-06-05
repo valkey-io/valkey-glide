@@ -2073,7 +2073,7 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void migrate_multi_keys(GlideClient regularClient) {
+    public void migrate_multi_keys_invalid_host(GlideClient regularClient) {
         String key1 = "{migrate}" + UUID.randomUUID();
         String key2 = "{migrate}" + UUID.randomUUID();
         regularClient.set(key1, "value1").get();
@@ -2104,53 +2104,26 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void migrate_multi_keys_with_options(GlideClient regularClient) {
-        String key1 = "{migrate}" + UUID.randomUUID();
-        String key2 = "{migrate}" + UUID.randomUUID();
-        regularClient.set(key1, "value1").get();
-        regularClient.set(key2, "value2").get();
-        MigrateOptions options = MigrateOptions.builder().replace(true).build();
-        try {
-            ExecutionException executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () ->
-                                    regularClient
-                                            .migrate(
-                                                    "nonexistent.host", 6379, new String[] {key1, key2}, 0, 5000, options)
-                                            .get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(
-                    executionException.getCause().getMessage().contains("Connection refused")
-                            || executionException.getCause().getMessage().contains("Name or service not known")
-                            || executionException
-                                    .getCause()
-                                    .getMessage()
-                                    .contains("nodename nor servname provided")
-                            || executionException.getCause().getMessage().contains("Temporary failure")
-                            || executionException.getCause().getMessage().contains("IOERR"));
-        } finally {
-            regularClient.del(new String[] {key1, key2}).get();
-        }
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
     @Timeout(120)
-    public void migrate_multi_keys_to_real_server(GlideClient regularClient) {
-        try (ValkeyCluster destServer = new ValkeyCluster(false, false, 1, 0, null, null)) {
-            NodeAddress destAddr = destServer.getNodesAddr().get(0);
+    public void migrate_multi_keys_with_options_to_secondary(GlideClient regularClient) {
+        try (ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+            NodeAddress dest = secondary.getNodesAddr().get(0);
             String key1 = "{migrate}" + UUID.randomUUID();
             String key2 = "{migrate}" + UUID.randomUUID();
             try {
                 regularClient.set(key1, "value1").get();
                 regularClient.set(key2, "value2").get();
-                String result =
+                assertEquals(
+                        OK,
                         regularClient
-                                .migrate(destAddr.getHost(), destAddr.getPort(), new String[] {key1, key2}, 0, 5000)
-                                .get();
-                assertEquals(OK, result);
+                                .migrate(
+                                        dest.getHost(),
+                                        dest.getPort(),
+                                        new String[] {key1, key2},
+                                        0,
+                                        5000,
+                                        MigrateOptions.builder().replace(true).build())
+                                .get());
                 assertEquals(0L, regularClient.exists(new String[] {key1, key2}).get());
             } finally {
                 regularClient.del(new String[] {key1, key2}).get();

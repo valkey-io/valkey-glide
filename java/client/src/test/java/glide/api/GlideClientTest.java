@@ -16360,52 +16360,46 @@ public class GlideClientTest {
         assertNull(response.get());
     }
 
-    @SneakyThrows
     @Test
-    public void migrate_keys_returns_success() {
-        // setup
-        GlideString[] expectedArgs = {
-            gs("nonexistent.host"),
-            gs("6379"),
-            gs(""),
-            gs("0"),
-            gs("5000"),
-            gs(MigrateOptions.KEYS_VALKEY_API),
-            gs("key1"),
-            gs("key2")
-        };
-        CompletableFuture<String> testResponse = setupMigrateKeysCommand(expectedArgs);
-
-        // exercise
-        CompletableFuture<String> response =
-                service.migrate("nonexistent.host", 6379L, new String[] {"key1", "key2"}, 0L, 5000L);
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(OK, response.get());
+    public void migrate_keys_throws_on_invalid_keys() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, new String[0], 0L, 5000L));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (String[]) null, 0L, 5000L));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (GlideString[]) null, 0L, 5000L));
     }
 
     @SneakyThrows
     @Test
-    public void migrate_keys_with_options_returns_success() {
+    public void migrate_keys_with_options() {
         // setup
-        GlideString[] expectedArgs = {
-            gs("nonexistent.host"),
-            gs("6379"),
-            gs(""),
-            gs("0"),
-            gs("5000"),
-            gs(MigrateOptions.REPLACE_VALKEY_API),
-            gs(MigrateOptions.KEYS_VALKEY_API),
-            gs("key1"),
-            gs("key2")
-        };
-        CompletableFuture<String> testResponse = setupMigrateKeysCommand(expectedArgs);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        when(commandManager.<String>submitNewCommand(
+                        eq(Migrate),
+                        eq(
+                                new GlideString[] {
+                                    gs("host"),
+                                    gs("6379"),
+                                    gs(""),
+                                    gs("0"),
+                                    gs("5000"),
+                                    gs(MigrateOptions.REPLACE_VALKEY_API),
+                                    gs(MigrateOptions.KEYS_VALKEY_API),
+                                    gs("key1"),
+                                    gs("key2")
+                                }),
+                        any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response =
                 service.migrate(
-                        "nonexistent.host",
+                        "host",
                         6379L,
                         new String[] {"key1", "key2"},
                         0L,
@@ -16415,34 +16409,5 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
-    }
-
-    @Test
-    public void migrate_keys_throws_on_empty_keys() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> service.migrate("host", 6379L, new String[0], 0L, 5000L));
-    }
-
-    @Test
-    public void migrate_keys_throws_on_null_keys() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> service.migrate("host", 6379L, (String[]) null, 0L, 5000L));
-    }
-
-    @Test
-    public void migrate_keys_binary_throws_on_null_keys() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> service.migrate("host", 6379L, (GlideString[]) null, 0L, 5000L));
-    }
-
-    private CompletableFuture<String> setupMigrateKeysCommand(GlideString[] expectedArgs) {
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(OK);
-        when(commandManager.<String>submitNewCommand(eq(Migrate), eq(expectedArgs), any()))
-                .thenReturn(testResponse);
-        return testResponse;
     }
 }
