@@ -9518,7 +9518,7 @@ class TestCommands:
             5000,
             MigrateOptions(keys=[non_existent1, non_existent2]),
         )
-        assert result == "NOKEY"
+        assert result == b"NOKEY"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
