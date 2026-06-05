@@ -4368,6 +4368,21 @@ export function createLastSave(): command_request.Command {
 }
 
 /** @internal */
+export function createSave(): command_request.Command {
+    return createCommand(RequestType.Save, []);
+}
+
+/** @internal */
+export function createBgSave(args?: string[]): command_request.Command {
+    return createCommand(RequestType.BgSave, args ?? []);
+}
+
+/** @internal */
+export function createBgRewriteAof(): command_request.Command {
+    return createCommand(RequestType.BgRewriteAof, []);
+}
+
+/** @internal */
 export function createLCS(
     key1: GlideString,
     key2: GlideString,
