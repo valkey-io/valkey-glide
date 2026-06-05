@@ -1184,15 +1184,17 @@ public class BatchTests {
         results.add(Pair.of(FlushDB, buildArgs()));
         results.add(Pair.of(FlushDB, buildArgs(ASYNC.toString())));
 
-        batch
-                .failover()
-                .failover(FailoverOptions.builder().to("localhost", 6380).timeout(1000).build());
-        results.add(Pair.of(FailOver, buildArgs()));
-        results.add(Pair.of(FailOver, buildArgs("TO", "localhost", "6380", "TIMEOUT", "1000")));
+        if (batch instanceof Batch) {
+            ((Batch) batch)
+                    .failover()
+                    .failover(FailoverOptions.builder().to("localhost", 6380).timeout(1000).build());
+            results.add(Pair.of(FailOver, buildArgs()));
+            results.add(Pair.of(FailOver, buildArgs("TO", "localhost", "6380", "TIMEOUT", "1000")));
 
-        batch.replicaof("localhost", 6379).replicaofNoOne();
-        results.add(Pair.of(ReplicaOf, buildArgs("localhost", "6379")));
-        results.add(Pair.of(ReplicaOf, buildArgs("NO", "ONE")));
+            ((Batch) batch).replicaof("localhost", 6379).replicaofNoOne();
+            results.add(Pair.of(ReplicaOf, buildArgs("localhost", "6379")));
+            results.add(Pair.of(ReplicaOf, buildArgs("NO", "ONE")));
+        }
 
         batch.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));
