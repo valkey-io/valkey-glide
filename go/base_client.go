@@ -7818,16 +7818,7 @@ func (client *baseClient) MigrateKeys(
 	destinationDB int64,
 	timeout int64,
 ) (string, error) {
-	if len(keys) == 0 {
-		return models.DefaultStringResponse, errors.New("MigrateKeys: keys must not be empty")
-	}
-	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout), constants.KeysKeyword}
-	args = append(args, keys...)
-	result, err := client.executeCommand(ctx, C.Migrate, args)
-	if err != nil {
-		return models.DefaultStringResponse, err
-	}
-	return handleStringResponse(result)
+	return client.MigrateKeysWithOptions(ctx, host, port, keys, destinationDB, timeout, options.MigrateOptions{})
 }
 
 // Atomically transfers the specified keys from a source Valkey instance to a destination Valkey instance
@@ -7860,7 +7851,7 @@ func (client *baseClient) MigrateKeysWithOptions(
 	migrateOptions options.MigrateOptions,
 ) (string, error) {
 	if len(keys) == 0 {
-		return models.DefaultStringResponse, errors.New("MigrateKeysWithOptions: keys must not be empty")
+		return models.DefaultStringResponse, errors.New("keys must not be empty")
 	}
 	optionArgs, err := migrateOptions.ToArgs()
 	if err != nil {
