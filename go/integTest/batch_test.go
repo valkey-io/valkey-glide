@@ -14,7 +14,7 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
-	"github.com/valkey-io/valkey-glide/go/v2/internal/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
 	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
@@ -714,6 +714,11 @@ func CreateConnectionManagementTests(batch *pipeline.ClusterBatch, isAtomic bool
 
 	batch.ClientGetName()
 	testData = append(testData, CommandTestData{ExpectedResponse: connectionName, TestName: "ClientGetName()"})
+
+	if !isAtomic {
+		batch.Reset()
+		testData = append(testData, CommandTestData{ExpectedResponse: "RESET", TestName: "Reset()"})
+	}
 
 	return BatchTestData{CommandTestData: testData, TestName: "Connection Management commands"}
 }

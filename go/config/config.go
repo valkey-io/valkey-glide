@@ -206,6 +206,21 @@ const (
 	NodeDiscoveryModeDiscoverAll NodeDiscoveryMode = 2
 )
 
+// AddressResolver is a callback interface for resolving server addresses before connection.
+//
+// When provided to a client configuration, this callback is invoked for each configured address
+// during connection establishment and during cluster topology refreshes. The callback receives
+// the configured host and port, and should return the actual host and port to use for the connection.
+//
+// Use cases:
+//   - Custom DNS resolution for service discovery
+//   - Address translation for proxy setups
+//   - Dynamic endpoint resolution for cloud environments
+//
+// The resolver must be safe for concurrent use, as it may be called from multiple goroutines
+// during connection and topology refresh.
+type AddressResolver func(host string, port int) (string, int)
+
 type baseClientConfiguration struct {
 	addresses         []NodeAddress
 	useTLS            bool
@@ -219,6 +234,7 @@ type baseClientConfiguration struct {
 	DatabaseId        *int `json:"database_id,omitempty"`
 	compressionConfig *CompressionConfiguration
 	clientSideCache   *ClientSideCache
+	addressResolver   AddressResolver
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -570,6 +586,18 @@ func (config *ClientConfiguration) WithNodeDiscoveryMode(mode NodeDiscoveryMode)
 	return config
 }
 
+// WithAddressResolver sets a custom address resolver for the standalone client.
+// The resolver is called during connection establishment and topology refresh to translate
+// addresses before connecting. Return the original host and port to use them unchanged.
+func (config *ClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClientConfiguration {
+	config.addressResolver = resolver
+	return config
+}
+
+func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
+	return config.addressResolver
+}
+
 func (config *ClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }
@@ -606,7 +634,7 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 	}
 
 	request.ClusterModeEnabled = true
-	if (config.AdvancedClusterClientConfiguration.connectionTimeout) != 0 {
+	if config.AdvancedClusterClientConfiguration.connectionTimeout != 0 {
 		connectionTimeout, err := utils.DurationToMilliseconds(config.AdvancedClusterClientConfiguration.connectionTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("setting connection timeout returned an error: %w", err)
@@ -617,6 +645,24 @@ func (config *ClusterClientConfiguration) ToProtobuf() (*protobuf.ConnectionRequ
 		request.PubsubSubscriptions = config.subscriptionConfig.toProtobuf()
 	}
 	request.RefreshTopologyFromInitialNodes = config.AdvancedClusterClientConfiguration.refreshTopologyFromInitialNodes
+
+	// Handle periodic topology checks configuration
+	if config.AdvancedClusterClientConfiguration.periodicChecks != nil {
+		switch v := config.AdvancedClusterClientConfiguration.periodicChecks.(type) {
+		case PeriodicChecksDisabled:
+			request.PeriodicChecks = &protobuf.ConnectionRequest_PeriodicChecksDisabled{
+				PeriodicChecksDisabled: &protobuf.PeriodicChecksDisabled{},
+			}
+		case PeriodicChecksManualInterval:
+			request.PeriodicChecks = &protobuf.ConnectionRequest_PeriodicChecksManualInterval{
+				PeriodicChecksManualInterval: &protobuf.PeriodicChecksManualInterval{
+					DurationInSec: v.DurationInSec,
+				},
+			}
+		case PeriodicChecksEnabled:
+			// Default behavior - no need to set anything in protobuf
+		}
+	}
 
 	// Handle TCP_NODELAY configuration
 	if config.AdvancedClusterClientConfiguration.tcpNoDelay != nil {
@@ -778,8 +824,20 @@ func (config *ClusterClientConfiguration) WithClientSideCache(
 	return config
 }
 
+// WithAddressResolver sets a custom address resolver for the cluster client.
+// The resolver is called during connection establishment and topology refresh to translate
+// addresses before connecting. Return the original host and port to use them unchanged.
+func (config *ClusterClientConfiguration) WithAddressResolver(resolver AddressResolver) *ClusterClientConfiguration {
+	config.addressResolver = resolver
+	return config
+}
+
 func (config *ClusterClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
+}
+
+func (config *ClusterClientConfiguration) GetAddressResolver() AddressResolver {
+	return config.addressResolver
 }
 
 func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscriptionConfig {
@@ -935,11 +993,38 @@ func (config *AdvancedClientConfiguration) WithPubSubReconciliationIntervalMs(
 	return config
 }
 
+// PeriodicChecksConfig is an interface implemented by [PeriodicChecksEnabled],
+// [PeriodicChecksDisabled], and [PeriodicChecksManualInterval] to configure
+// periodic topology checks for cluster clients.
+type PeriodicChecksConfig interface {
+	isPeriodicChecksConfig()
+}
+
+// PeriodicChecksEnabled enables periodic topology checks with the default interval.
+// This is the default behavior when no periodic checks configuration is set.
+type PeriodicChecksEnabled struct{}
+
+func (PeriodicChecksEnabled) isPeriodicChecksConfig() {}
+
+// PeriodicChecksDisabled disables periodic topology checks.
+type PeriodicChecksDisabled struct{}
+
+func (PeriodicChecksDisabled) isPeriodicChecksConfig() {}
+
+// PeriodicChecksManualInterval configures periodic topology checks with a custom interval.
+type PeriodicChecksManualInterval struct {
+	// DurationInSec is the interval in seconds between periodic topology checks.
+	DurationInSec uint32
+}
+
+func (PeriodicChecksManualInterval) isPeriodicChecksConfig() {}
+
 // Represents advanced configuration settings for a Cluster client used in
 // [ClusterClientConfiguration].
 type AdvancedClusterClientConfiguration struct {
 	connectionTimeout               time.Duration
 	refreshTopologyFromInitialNodes bool
+	periodicChecks                  PeriodicChecksConfig
 	tlsConfig                       *TlsConfiguration
 	tcpNoDelay                      *bool
 	pubsubReconciliationIntervalMs  *int
@@ -972,6 +1057,23 @@ func (config *AdvancedClusterClientConfiguration) WithRefreshTopologyFromInitial
 	refreshTopologyFromInitialNodes bool,
 ) *AdvancedClusterClientConfiguration {
 	config.refreshTopologyFromInitialNodes = refreshTopologyFromInitialNodes
+	return config
+}
+
+// WithPeriodicChecks configures the periodic topology checks for the cluster client.
+// These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
+// Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
+//
+// Accepted values:
+//   - [PeriodicChecksEnabled]: Enables periodic checks with the default interval (this is the default).
+//   - [PeriodicChecksDisabled]: Disables periodic topology checks.
+//   - [PeriodicChecksManualInterval]: Enables periodic checks with a custom interval in seconds.
+//
+// If not set, defaults to enabled with the default interval.
+func (config *AdvancedClusterClientConfiguration) WithPeriodicChecks(
+	periodicChecks PeriodicChecksConfig,
+) *AdvancedClusterClientConfiguration {
+	config.periodicChecks = periodicChecks
 	return config
 }
 

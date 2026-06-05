@@ -40,6 +40,12 @@ const DEFAULT_MIN_COMPRESSION_SIZE = 64;
  *     backend: CompressionBackend.LZ4,
  *     minCompressionSize: 128,
  * };
+ *
+ * // Enable compression with custom max decompressed size limit
+ * const config: CompressionConfiguration = {
+ *     enabled: true,
+ *     maxDecompressedSize: 100 * 1024 * 1024, // 100MB limit
+ * };
  * ```
  */
 export interface CompressionConfiguration {
@@ -63,6 +69,13 @@ export interface CompressionConfiguration {
      * Must be at least 6 bytes. Defaults to 64 bytes.
      */
     minCompressionSize?: number;
+    /**
+     * Maximum allowed size in bytes for decompressed data.
+     * This limit prevents decompression bombs (maliciously crafted compressed data
+     * that expands to huge sizes).
+     * If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
+     */
+    maxDecompressedSize?: number;
 }
 
 /**
@@ -85,6 +98,13 @@ export function validateCompressionConfiguration(
         !Number.isInteger(config.compressionLevel)
     ) {
         throw new ConfigurationError("compressionLevel must be an integer");
+    }
+
+    if (
+        config.maxDecompressedSize !== undefined &&
+        config.maxDecompressedSize <= 0
+    ) {
+        throw new ConfigurationError("maxDecompressedSize must be positive");
     }
 }
 
@@ -109,6 +129,13 @@ export function compressionConfigToProtobuf(
 
     if (config.compressionLevel !== undefined) {
         proto.compressionLevel = config.compressionLevel;
+    }
+
+    // Handle maxDecompressedSize:
+    // - undefined = don't set field, let Rust use its default (512MB)
+    // - number > 0 = use that value
+    if (config.maxDecompressedSize !== undefined) {
+        proto.maxDecompressedSize = config.maxDecompressedSize;
     }
 
     return connection_request.CompressionConfig.create(proto);

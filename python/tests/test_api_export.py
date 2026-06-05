@@ -118,11 +118,7 @@ allowed_missing_re_exports_in_async = [
     "LoggerError"
 ]
 
-allowed_missing_re_exports_in_sync: list[str] = [
-    # python/glide-shared/glide_shared/cache.py
-    "ClientSideCache",
-    "EvictionPolicy",
-]
+allowed_missing_re_exports_in_sync: list[str] = []
 
 
 class AnomalousSymbolVisitor(ast.NodeVisitor):

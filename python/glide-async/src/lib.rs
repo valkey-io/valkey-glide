@@ -257,6 +257,9 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drop_otel_span, m)?)?;
     m.add_function(wrap_pyfunction!(init_opentelemetry, m)?)?;
     m.add_function(wrap_pyfunction!(get_min_compressed_size, m)?)?;
+    m.add_function(wrap_pyfunction!(get_cache_metric_from_registry, m)?)?;
+    m.add_function(wrap_pyfunction!(register_address_resolver, m)?)?;
+    m.add_function(wrap_pyfunction!(remove_address_resolver, m)?)?;
 
     #[pyfunction]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -266,6 +269,76 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     #[pyfunction]
     fn get_min_compressed_size() -> usize {
         glide_core::compression::MIN_COMPRESSED_SIZE
+    }
+
+    /// A Python-to-Rust address resolver wrapper that implements the `AddressResolver` trait.
+    /// It holds a reference to the Python callable and invokes it via the GIL when resolution is needed.
+    struct PyAddressResolver {
+        callback: Arc<PyObject>,
+    }
+
+    impl std::fmt::Debug for PyAddressResolver {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "PyAddressResolver {{ callback: <Python callable> }}")
+        }
+    }
+
+    // SAFETY: PyObject is Send+Sync when accessed only through Python::with_gil.
+    unsafe impl Send for PyAddressResolver {}
+    unsafe impl Sync for PyAddressResolver {}
+
+    impl redis::AddressResolver for PyAddressResolver {
+        fn resolve(&self, host: &str, port: u16) -> (String, u16) {
+            let callback = Arc::clone(&self.callback);
+            let host = host.to_string();
+            Python::with_gil(|py| {
+                match callback.call(py, (host.as_str(), port), None) {
+                    Ok(result) => {
+                        // Expect a tuple (str, int)
+                        match result.extract::<(String, u16)>(py) {
+                            Ok((resolved_host, resolved_port)) => (resolved_host, resolved_port),
+                            Err(err) => {
+                                logger_core::log_error_lazy!(
+                                    "address_resolver",
+                                    format!(
+                                        "Address resolver returned invalid result: {err}. Using original address."
+                                    )
+                                );
+                                (host, port)
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        logger_core::log_error_lazy!(
+                            "address_resolver",
+                            format!(
+                                "Address resolver callback failed: {err}. Using original address."
+                            )
+                        );
+                        (host, port)
+                    }
+                }
+            })
+        }
+    }
+
+    /// Register a Python address resolver callback in the global registry.
+    /// Returns the registry key (UUID) that must be set in the ConnectionRequest's
+    /// address_resolver_key field so the socket listener can look it up.
+    #[pyfunction]
+    fn register_address_resolver(callback: PyObject) -> String {
+        let key = uuid::Uuid::new_v4().to_string();
+        let resolver = Arc::new(PyAddressResolver {
+            callback: Arc::new(callback),
+        });
+        glide_core::address_resolver_registry::register(key.clone(), resolver);
+        key
+    }
+
+    /// Remove an address resolver from the global registry by key.
+    #[pyfunction]
+    fn remove_address_resolver(key: String) {
+        glide_core::address_resolver_registry::remove(&key);
     }
 
     #[pyfunction]
@@ -551,6 +624,45 @@ impl From<Level> for logger_core::Level {
             Level::Trace => logger_core::Level::Trace,
             Level::Off => logger_core::Level::Off,
         }
+    }
+}
+
+/// Synchronously query a cache metric by cache ID and metric type.
+///
+/// This bypasses the async protobuf/UDS path by reading directly from
+/// the global cache registry's atomic counters.
+///
+/// # Arguments
+/// * `cache_id` - The unique identifier of the cache
+/// * `metrics_type` - Integer matching protobuf CacheMetricsType enum values
+///
+/// # Returns
+/// * Python float for rate metrics (hit_rate, miss_rate)
+/// * Python int for count metrics (entry_count, evictions, expirations, total_lookups)
+#[pyfunction]
+fn get_cache_metric_from_registry(
+    py: Python,
+    cache_id: String,
+    metrics_type: i32,
+) -> PyResult<PyObject> {
+    let metric = glide_core::cache_metric_type_from_proto(metrics_type)
+        .map_err(|e| PyTypeError::new_err(e.to_string()))?;
+
+    match redis::cache::query_cache_metric(&cache_id, metric) {
+        Ok(Value::Double(f)) => Ok(f
+            .into_pyobject(py)
+            .expect("Expected a proper conversion of f64 into a Python float.")
+            .into_any()
+            .unbind()),
+        Ok(Value::Int(i)) => Ok(i
+            .into_pyobject(py)
+            .expect("Expected a proper conversion of i64 into a Python int.")
+            .into_any()
+            .unbind()),
+        Ok(_) => Err(PyTypeError::new_err(
+            "Unexpected value type from cache metric query",
+        )),
+        Err(e) => Err(PyTypeError::new_err(e.to_string())),
     }
 }
 

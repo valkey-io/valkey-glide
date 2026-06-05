@@ -9,13 +9,7 @@
 
 import Long from "long";
 import * as net from "net";
-import {
-    Buffer,
-    BufferWriter,
-    Long as ProtoLong,
-    Reader,
-    Writer,
-} from "protobufjs/minimal";
+import { Buffer, BufferWriter, Reader, Writer } from "protobufjs/minimal";
 import {
     AggregationType,
     BaseScanOptions,
@@ -62,6 +56,7 @@ import {
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MigrateOptions,
     OpenTelemetry,
     RangeByIndex,
     RangeByLex,
@@ -76,6 +71,8 @@ import {
     SetOptions,
     SortOptions,
     StartSocketConnection,
+    registerAddressResolver,
+    removeAddressResolver,
     StreamAddOptions,
     StreamClaimOptions,
     StreamGroupOptions,
@@ -170,6 +167,7 @@ import {
     createLeakedOtelSpan,
     createOtelSpanWithTraceContext,
     createMGet,
+    createMigrate,
     createMSet,
     createMSetNX,
     createMove,
@@ -201,6 +199,7 @@ import {
     createRPushX,
     createRename,
     createRenameNX,
+    createReset,
     createRestore,
     createSAdd,
     createSCard,
@@ -287,7 +286,7 @@ import {
     getStatistics,
     compressionConfigToProtobuf,
     validateCompressionConfiguration,
-    valueFromSplitPointer,
+    valueFromPointer,
 } from ".";
 import {
     command_request,
@@ -543,28 +542,6 @@ export function convertRecordToGlideRecord<T>(
     return Object.entries(data).map(([key, value]) => {
         return { key, value };
     });
-}
-
-/**
- * Our purpose in creating PointerResponse type is to mark when response is of number/long pointer response type.
- * Consequently, when the response is returned, we can check whether it is instanceof the PointerResponse type and pass it to the Rust core function with the proper parameters.
- */
-class PointerResponse {
-    pointer: number | ProtoLong | null;
-    // As Javascript does not support 64-bit integers,
-    // we split the Rust u64 pointer into two u32 integers (high and low) and build it again when we call value_from_split_pointer, the Rust function.
-    high: number | undefined;
-    low: number | undefined;
-
-    constructor(
-        pointer: number | ProtoLong | null,
-        high?: number | undefined,
-        low?: number | undefined,
-    ) {
-        this.pointer = pointer;
-        this.high = high;
-        this.low = low;
-    }
 }
 
 /** Represents the types of services that can be used for IAM authentication. */
@@ -959,6 +936,37 @@ export interface BaseClientConfiguration {
      * ```
      */
     clientSideCache?: ClientSideCache;
+
+    /**
+     * Optional callback for resolving server addresses before connection.
+     *
+     * When provided, this callback will be invoked for each configured address during connection
+     * establishment and during cluster topology refreshes. The callback receives the configured
+     * host and port, and should return a tuple `[resolvedHost, resolvedPort]` with the actual
+     * address to use for the connection.
+     *
+     * Use cases:
+     * - Custom DNS resolution for service discovery
+     * - Address translation for proxy setups
+     * - Dynamic endpoint resolution for cloud environments
+     *
+     * If the resolver throws an exception or returns an invalid value, the original address
+     * is used as a fallback.
+     *
+     * @example
+     * ```typescript
+     * const config: BaseClientConfiguration = {
+     *   addresses: [{ host: "internal-service", port: 9999 }],
+     *   addressResolver: (host, port) => {
+     *     if (host === "internal-service") {
+     *       return ["10.0.0.5", 6379];
+     *     }
+     *     return [host, port];
+     *   },
+     * };
+     * ```
+     */
+    addressResolver?: (host: string, port: number) => [string, number];
 }
 
 /**
@@ -1149,6 +1157,7 @@ export class BaseClient {
     private pendingPushNotification: response.Response[] = [];
     private readonly inflightRequestsLimit: number;
     private config: BaseClientConfiguration | undefined;
+    private addressResolverKey: string | undefined;
 
     protected configurePubsub(
         options: GlideClusterClientConfiguration | GlideClientConfiguration,
@@ -1326,33 +1335,13 @@ export class BaseClient {
             const errorType = getRequestErrorClass(message.requestError.type);
             reject(new errorType(message.requestError.message ?? undefined));
         } else if (message.respPointer != null) {
-            let pointer;
-
-            if (typeof message.respPointer === "number") {
-                // Response from type number
-                const long = Long.fromNumber(message.respPointer);
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    long.high,
-                    long.low,
-                );
-            } else {
-                // Response from type long
-                pointer = new PointerResponse(
-                    message.respPointer,
-                    message.respPointer.high,
-                    message.respPointer.low,
-                );
-            }
+            const ptrNum =
+                typeof message.respPointer === "number"
+                    ? message.respPointer
+                    : message.respPointer.toNumber();
 
             try {
-                resolve(
-                    valueFromSplitPointer(
-                        pointer.high!,
-                        pointer.low!,
-                        decoder === Decoder.String,
-                    ),
-                );
+                resolve(valueFromPointer(ptrNum, decoder === Decoder.String));
             } catch (err: unknown) {
                 Logger.log("error", "Decoder", `Decoding error: '${err}'`);
                 reject(
@@ -1853,19 +1842,14 @@ export class BaseClient {
             (decoder ?? this.defaultDecoder) === Decoder.String;
 
         if (responsePointer) {
-            if (typeof responsePointer !== "number") {
-                nextPushNotificationValue = valueFromSplitPointer(
-                    responsePointer.high,
-                    responsePointer.low,
-                    isStringDecoder,
-                ) as Record<string, unknown>;
-            } else {
-                nextPushNotificationValue = valueFromSplitPointer(
-                    0,
-                    responsePointer,
-                    isStringDecoder,
-                ) as Record<string, unknown>;
-            }
+            const ptrNum =
+                typeof responsePointer === "number"
+                    ? responsePointer
+                    : responsePointer.toNumber();
+            nextPushNotificationValue = valueFromPointer(
+                ptrNum,
+                isStringDecoder,
+            ) as Record<string, unknown>;
 
             const messageKind = nextPushNotificationValue["kind"];
 
@@ -2460,6 +2444,43 @@ export class BaseClient {
     ): Promise<boolean> {
         return this.createWritePromise(
             createCopy(source, destination, options),
+        );
+    }
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+     * Once the key is successfully transferred, it is deleted from the source instance.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns "OK" on success, or "NOKEY" if the key does not exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
+     * ```
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // Output: "OK" - "mykey" was copied to the destination, replacing any existing key.
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString,
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
         );
     }
 
@@ -8948,6 +8969,27 @@ export class BaseClient {
     }
 
     /**
+     * Resets the connection state.
+     *
+     * @see {@link https://valkey.io/commands/reset/|valkey.io} for more details.
+     *
+     * @remarks Resets the database index, client name, protocol, and pubsub subscriptions.
+     *
+     * @returns "RESET" when the connection state is successfully reset.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.reset();
+     * console.log(result); // Output: "RESET"
+     * ```
+     */
+    public async reset(): Promise<"RESET"> {
+        return this.createWritePromise(createReset(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
      * Overwrites part of the string stored at `key`, starting at the specified byte `offset`,
      * for the entire length of `value`. If the `offset` is larger than the current length of the string at `key`,
      * the string is padded with zero bytes to make `offset` fit. Creates the `key` if it doesn't exist.
@@ -9470,15 +9512,37 @@ export class BaseClient {
      */
     protected connectToServer(options: BaseClientConfiguration): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Register address resolver in the global registry before sending
+            // the connection request, so the socket listener can pick it up.
+            if (options.addressResolver) {
+                this.addressResolverKey = registerAddressResolver(
+                    options.addressResolver,
+                );
+            }
+
             this.promiseCallbackFunctions[0] = [
                 resolve,
-                reject,
+                (err: unknown) => {
+                    // Clean up the resolver from the registry if connection fails
+                    if (this.addressResolverKey) {
+                        removeAddressResolver(this.addressResolverKey);
+                        this.addressResolverKey = undefined;
+                    }
+
+                    reject(err);
+                },
                 options?.defaultDecoder,
             ];
 
-            const message = connection_request.ConnectionRequest.create(
-                this.createClientRequest(options),
-            );
+            const request = this.createClientRequest(options);
+
+            // Set the address resolver key in the protobuf request
+            if (this.addressResolverKey) {
+                request.addressResolverKey = this.addressResolverKey;
+            }
+
+            const message =
+                connection_request.ConnectionRequest.create(request);
 
             this.writeOrBufferRequest(
                 message,
@@ -9510,6 +9574,13 @@ export class BaseClient {
         this.pubsubFutures.forEach(([, reject]) => {
             reject(new ClosingError(errorMessage || ""));
         });
+
+        // Clean up address resolver from the global registry
+        if (this.addressResolverKey) {
+            removeAddressResolver(this.addressResolverKey);
+            this.addressResolverKey = undefined;
+        }
+
         Logger.log("info", "Client lifetime", "disposing of client");
         this.socket.end();
     }

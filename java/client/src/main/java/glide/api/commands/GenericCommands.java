@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.scan.ScanOptions;
 import java.util.concurrent.CompletableFuture;
 
@@ -199,4 +200,62 @@ public interface GenericCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> scan(GlideString cursor, ScanOptions options);
+
+    /**
+     * Migrate multiple keys from the current server to a destination server. This command is for
+     * standalone clients only (not cluster mode).
+     *
+     * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
+     * @param destinationHost Hostname or IP address of the destination server.
+     * @param destinationPort Port of the destination server.
+     * @param keys The keys to migrate. Must not be null or empty.
+     * @param destinationDB The database index on the destination server.
+     * @param timeout Maximum idle time in milliseconds for the bulk-transfer.
+     * @return <code>"OK"</code> on success.
+     * @throws IllegalArgumentException if keys is null or empty.
+     */
+    CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String[] keys,
+            long destinationDB,
+            long timeout);
+
+    /** Binary variant of {@link #migrate(String, long, String[], long, long)}. */
+    CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString[] keys,
+            long destinationDB,
+            long timeout);
+
+    /**
+     * Migrate multiple keys from the current server to a destination server with options.
+     *
+     * @see <a href="https://valkey.io/commands/migrate/">valkey.io</a> for details.
+     * @param destinationHost Hostname or IP address of the destination server.
+     * @param destinationPort Port of the destination server.
+     * @param keys The keys to migrate. Must not be null or empty.
+     * @param destinationDB The database index on the destination server.
+     * @param timeout Maximum idle time in milliseconds for the bulk-transfer.
+     * @param migrateOptions Additional options.
+     * @return <code>"OK"</code> on success.
+     * @throws IllegalArgumentException if keys is null or empty.
+     */
+    CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String[] keys,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions);
+
+    /** Binary variant of {@link #migrate(String, long, String[], long, long, MigrateOptions)}. */
+    CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString[] keys,
+            long destinationDB,
+            long timeout,
+            MigrateOptions migrateOptions);
 }

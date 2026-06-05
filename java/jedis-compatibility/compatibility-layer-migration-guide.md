@@ -88,8 +88,8 @@ blockingSocketTimeoutMillis
 ### Client Types
 - ✅ Basic Jedis client
 - ✅ Simple connection configurations
-- ⚠️ JedisPool (limited support)
-- ⚠️ JedisPooled (limited support)
+- ✅ **JedisPool** (standalone): Core Jedis-style pooling — `getResource()`, try-with-resources / `close()`, `Pool#returnBrokenResource`, broken vs healthy return, `GenericObjectPoolConfig` honored via Commons Pool 2. Each pooled `Jedis` uses its own GLIDE `GlideClient` (not a shared TCP connection like classic Jedis).
+- ⚠️ **JedisPooled** (limited support): API compatibility; internal GLIDE connection management differs from upstream Jedis.
 
 ### Configuration
 - ✅ Host and port configuration
@@ -101,9 +101,9 @@ blockingSocketTimeoutMillis
 ## Drawbacks and Unsupported Features
 
 ### Connection Management
-- **JedisPool advanced configurations**: Complex pool settings not fully supported
-- **JedisPooled**: Advanced pooled connection features unavailable
-- **Connection pooling**: Native Jedis pooling mechanisms not implemented
+- **JedisSentinelPool / Sentinel**: Not provided by this compatibility layer (use GLIDE topology configuration outside Jedis APIs if needed).
+- **JedisPooled**: Advanced pooled-connection features from upstream Jedis may differ or be no-ops where GLIDE owns connection lifecycle.
+- **Architecture note**: Standalone `JedisPool` maps each pool slot to one `GlideClient`; this matches Jedis call patterns but not necessarily the same resource usage as socket-per-connection Jedis.
 - **Failover configurations**: Jedis-specific failover logic not supported
 
 ### Advanced Features
@@ -143,7 +143,7 @@ blockingSocketTimeoutMillis
 - **Client certificates**: SSL client certificate authentication not supported in compatibility layer
 - **SSL protocols and cipher suites**: Advanced SSL protocol settings cannot be automatically converted
 - **Custom serializers**: Jedis serialization options not supported
-- **Connection validation**: Jedis connection health checks unavailable
+- **Connection validation**: When Commons Pool validation is enabled (e.g. `testOnBorrow`), `GlideJedisFactory#validateObject` uses `PING`; tune pool config as needed.
 - **Retry mechanisms**: Jedis-specific retry logic not implemented
 
 ### Cluster Support

@@ -383,8 +383,6 @@ fn process_batch_response_for_decompression(
     response: redis::Value,
     client: &Client,
 ) -> Result<redis::Value, crate::compression::CompressionError> {
-    use redis::Value;
-
     // Get compression manager from client
     let compression_manager = client.compression_manager();
     let compression_manager_ref = compression_manager.as_deref();
@@ -394,32 +392,7 @@ fn process_batch_response_for_decompression(
         return Ok(response);
     };
 
-    if !manager.is_enabled() {
-        return Ok(response);
-    }
-
-    // Process based on response type
-    match response {
-        Value::Array(responses) => {
-            // Process each response using the existing decompression function
-            let mut processed_responses = Vec::with_capacity(responses.len());
-            for response in responses {
-                let processed_response = match crate::compression::decompress_single_value_response(
-                    response.clone(),
-                    manager,
-                ) {
-                    Ok(decompressed) => decompressed,
-                    Err(_) => response, // Return original on error
-                };
-                processed_responses.push(processed_response);
-            }
-
-            Ok(Value::Array(processed_responses))
-        }
-
-        // For non-array responses, try to decompress directly
-        other => crate::compression::decompress_single_value_response(other, manager),
-    }
+    crate::compression::decompress_batch_response(response, manager)
 }
 
 fn process_command_for_compression(
@@ -928,7 +901,24 @@ async fn create_client(
     request: ConnectionRequest,
     push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    let client = match Client::new(request.into(), push_tx).await {
+    // Extract the address resolver key before converting (protobuf field won't survive into())
+    let resolver_key = request
+        .address_resolver_key
+        .as_ref()
+        .filter(|k| !k.is_empty())
+        .map(|k| k.to_string());
+
+    let mut conn_request: crate::client::ConnectionRequest = request.into();
+
+    // Look up the address resolver from the global registry using the key
+    // provided in the connection request.
+    if let Some(key) = resolver_key
+        && let Some(resolver) = crate::address_resolver_registry::remove(&key)
+    {
+        conn_request.address_resolver = Some(resolver);
+    }
+
+    let client = match Client::new(conn_request, push_tx).await {
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };

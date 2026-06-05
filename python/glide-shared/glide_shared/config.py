@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, IntEnum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Tuple, Union
 
 from glide_shared.cache import ClientSideCache
 from glide_shared.commands.core_options import PubSubMsg
@@ -42,6 +42,52 @@ class NodeAddress:
     def __init__(self, host: str = "localhost", port: int = 6379):
         self.host = host
         self.port = port
+
+
+class AddressResolver(Protocol):
+    """
+    A callback protocol for resolving server addresses before connection.
+
+    When provided to a client configuration, this callback is invoked for each
+    configured address during connection establishment and during cluster topology
+    refreshes. The callback receives the configured host and port, and should return
+    the actual host and port to use for the connection.
+
+    Use cases:
+        - Custom DNS resolution for service discovery
+        - Address translation for proxy setups
+        - Dynamic endpoint resolution for cloud environments
+
+    Note:
+        The resolver must be thread-safe and should avoid blocking operations,
+        as it may be called from multiple threads during connection and topology refresh.
+        If the resolver raises an exception, the original address will be used as a fallback.
+
+    Example::
+
+        def my_resolver(host: str, port: int) -> Tuple[str, int]:
+            # Custom resolution logic
+            resolved_host = my_dns_resolver.resolve(host)
+            return (resolved_host, port)
+
+        config = GlideClientConfiguration(
+            addresses=[NodeAddress("my-service", 6379)],
+            address_resolver=my_resolver,
+        )
+    """
+
+    def __call__(self, host: str, port: int) -> Tuple[str, int]:
+        """
+        Resolve the given host and port to the actual connection address.
+
+        Args:
+            host (str): The configured host name or IP address.
+            port (int): The configured port number.
+
+        Returns:
+            Tuple[str, int]: A tuple of (resolved_host, resolved_port) to use for connection.
+        """
+        ...
 
 
 class ReadFrom(Enum):
@@ -193,12 +239,16 @@ class CompressionConfiguration:
             ZSTD default is 3
             LZ4 default is 0
         min_compression_size (int): The minimum size in bytes for values to be compressed. Values smaller than this will not be compressed. Defaults to 64 bytes.
+        max_decompressed_size (Optional[int]): Maximum allowed size in bytes for decompressed data.
+            This limit prevents decompression bombs (maliciously crafted compressed data that expands to huge sizes).
+            If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
     """
 
     enabled: bool = False
     backend: CompressionBackend = CompressionBackend.ZSTD
     compression_level: Optional[int] = None
     min_compression_size: int = 64
+    max_decompressed_size: Optional[int] = None  # Use Rust default (512MB)
 
     def __post_init__(self) -> None:
         """Validate compression configuration parameters."""
@@ -216,6 +266,9 @@ class CompressionConfiguration:
             raise ConfigurationError(
                 f"min_compression_size should be at least {min_size} bytes"
             )
+
+        if self.max_decompressed_size is not None and self.max_decompressed_size <= 0:
+            raise ConfigurationError("max_decompressed_size must be positive if set")
 
         # Note: compression_level validation is performed by the Rust core,
         # which uses the actual compression library's valid ranges.
@@ -242,6 +295,12 @@ class CompressionConfiguration:
 
         if self.compression_level is not None:
             config.compression_level = self.compression_level
+
+        # Handle max_decompressed_size:
+        # - None = don't set field, let Rust use its default (512MB)
+        # - int > 0 = use that value
+        if self.max_decompressed_size is not None:
+            config.max_decompressed_size = self.max_decompressed_size
 
         return config
 
@@ -692,6 +751,30 @@ class BaseClientConfiguration:
               even if the configurations are identical.
             - Clients using different DBs cannot share the same cache.
             - Clients using different ACL users cannot share the same cache.
+
+        address_resolver (Optional[AddressResolver]): Optional callback for resolving server addresses
+            before connection. When provided, this callback will be invoked for each configured address
+            during connection establishment and during cluster topology refreshes.
+            The callback receives the configured host and port, and should return the actual
+            host and port to use for the connection.
+
+            This is useful for:
+                - Custom DNS resolution for service discovery
+                - Address translation for proxy setups
+                - Dynamic endpoint resolution for cloud environments
+
+            If not set, addresses are used as configured without modification.
+
+            Example::
+
+                def my_resolver(host: str, port: int) -> Tuple[str, int]:
+                    resolved_host = my_dns_resolver.resolve(host)
+                    return (resolved_host, port)
+
+                config = GlideClientConfiguration(
+                    addresses=[NodeAddress("my-service", 6379)],
+                    address_resolver=my_resolver,
+                )
     """
 
     def __init__(
@@ -711,6 +794,7 @@ class BaseClientConfiguration:
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
         client_side_cache: Optional[ClientSideCache] = None,
+        address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -727,6 +811,7 @@ class BaseClientConfiguration:
         self.lazy_connect = lazy_connect
         self.compression = compression
         self.client_side_cache = client_side_cache
+        self.address_resolver = address_resolver
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -1023,6 +1108,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         read_only: bool = False,
         client_side_cache: Optional[ClientSideCache] = None,
         node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
+        address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1040,6 +1126,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             lazy_connect=lazy_connect,
             compression=compression,
             client_side_cache=client_side_cache,
+            address_resolver=address_resolver,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
         self.read_only = read_only
@@ -1264,6 +1351,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         lazy_connect: Optional[bool] = None,
         compression: Optional[CompressionConfiguration] = None,
         client_side_cache: Optional[ClientSideCache] = None,
+        address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1281,6 +1369,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             lazy_connect=lazy_connect,
             compression=compression,
             client_side_cache=client_side_cache,
+            address_resolver=address_resolver,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

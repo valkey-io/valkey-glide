@@ -26,6 +26,7 @@ from .commands.bitmap import (
 )
 from .commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from .commands.core_options import (
+    ClientPauseMode,
     ConditionalChange,
     ExpireOptions,
     ExpiryGetEx,
@@ -37,6 +38,7 @@ from .commands.core_options import (
     HashFieldConditionalChange,
     InfoSection,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
@@ -118,6 +120,7 @@ from .commands.stream import (
     TrimByMinId,
 )
 from .config import (
+    AddressResolver,
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
@@ -196,6 +199,7 @@ __all__ = [
     "BatchRetryStrategy",
     "ClusterBatchOptions",
     # Config
+    "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
     "CompressionBackend",
@@ -247,6 +251,7 @@ __all__ = [
     "SignedEncoding",
     "UnsignedEncoding",
     "ScoreBoundary",
+    "ClientPauseMode",
     "ConditionalChange",
     "HashFieldConditionalChange",
     "OnlyIfEqual",
@@ -266,6 +271,7 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
+    "MigrateOptions",
     "LexBoundary",
     "Limit",
     "ListDirection",

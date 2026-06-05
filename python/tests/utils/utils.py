@@ -673,6 +673,7 @@ def create_sync_client_config(
     client_cert_pem: Optional[bytes] = None,
     client_key_pem: Optional[bytes] = None,
     read_only: bool = False,
+    cache: Optional[ClientSideCache] = None,
 ) -> Union[SyncGlideClusterClientConfiguration, SyncGlideClientConfiguration]:
     if use_tls is not None:
         use_tls = use_tls
@@ -727,6 +728,7 @@ def create_sync_client_config(
             ),
             lazy_connect=lazy_connect,
             compression=compression_config,
+            client_side_cache=cache,
         )
     else:
         if valkey_cluster is None:
@@ -753,6 +755,7 @@ def create_sync_client_config(
             lazy_connect=lazy_connect,
             compression=compression_config,
             read_only=read_only,
+            client_side_cache=cache,
         )
 
 

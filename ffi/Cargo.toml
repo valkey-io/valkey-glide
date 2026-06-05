@@ -14,8 +14,10 @@ redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp"
 glide-core = { path = "../glide-core", features = ["proto"] }
 tokio = { version = "^1", features = ["rt", "macros", "rt-multi-thread", "time"] }
 logger_core = { path = "../logger_core" }
+tracing = "0.1"
 serde_json = "1.0"
 url = "2"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 rstest = "^0.23"

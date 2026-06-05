@@ -461,6 +461,32 @@ mod tests {
     }
 
     #[test]
+    fn test_flush_all_records_invalidation_per_key() {
+        let cache = new_lfu_cache(make_config(10_000));
+
+        cache.insert(
+            b"key1".to_vec(),
+            CachedKeyType::String,
+            Value::BulkString(b"v1".to_vec()),
+        );
+        cache.insert(
+            b"key2".to_vec(),
+            CachedKeyType::String,
+            Value::BulkString(b"v2".to_vec()),
+        );
+        cache.insert(
+            b"key3".to_vec(),
+            CachedKeyType::String,
+            Value::BulkString(b"v3".to_vec()),
+        );
+
+        cache.flush_all();
+
+        let metrics = cache.metrics().unwrap();
+        assert_eq!(metrics.invalidations(), 3);
+    }
+
+    #[test]
     fn test_metrics_evictions() {
         // Small cache to force eviction
         let cache = new_lfu_cache(make_config(150));
@@ -571,7 +597,7 @@ mod tests {
         }
 
         // Verify frequency increased by checking internal state
-        let inner_lock = cache.store.lock().unwrap();
+        let inner_lock = cache.store.read().unwrap();
         let entry = inner_lock.cache.get(&b"key1".to_vec()).unwrap();
         assert_eq!(entry.frequency, 6); // 1 initial + 5 gets
     }

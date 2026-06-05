@@ -18,6 +18,7 @@ from glide_shared.commands.core_options import (
     ExpirySet,
     HashFieldConditionalChange,
     InsertPosition,
+    MigrateOptions,
     OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
@@ -160,11 +161,11 @@ class CoreCommands(Protocol):
         """
         return cast(TOK, await self._refresh_iam_token())
 
-    async def _get_cache_metrics(
+    def _get_cache_metrics(
         self, metrics_type: CacheMetricsType.ValueType
     ) -> TResult: ...
 
-    async def get_cache_hit_rate(self) -> float:
+    def get_cache_hit_rate(self) -> float:
         """
         Get the cache hit rate (hits / total requests).
 
@@ -175,13 +176,13 @@ class CoreCommands(Protocol):
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
 
         Example:
-            >>> hit_rate = await client.get_cache_hit_rate()
+            >>> hit_rate = client.get_cache_hit_rate()
             >>> print(f"Cache hit rate: {hit_rate:.2%}")
             Cache hit rate: 85.50%
         """
-        return cast(float, await self._get_cache_metrics(CacheMetricsType.HitRate))
+        return cast(float, self._get_cache_metrics(CacheMetricsType.HitRate))
 
-    async def get_cache_miss_rate(self) -> float:
+    def get_cache_miss_rate(self) -> float:
         """
         Get the cache miss rate (misses / total requests).
 
@@ -192,13 +193,13 @@ class CoreCommands(Protocol):
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
 
         Example:
-            >>> miss_rate = await client.get_cache_miss_rate()
+            >>> miss_rate = client.get_cache_miss_rate()
             >>> print(f"Cache miss rate: {miss_rate:.2%}")
             Cache miss rate: 14.50%
         """
-        return cast(float, await self._get_cache_metrics(CacheMetricsType.MissRate))
+        return cast(float, self._get_cache_metrics(CacheMetricsType.MissRate))
 
-    async def get_cache_entry_count(self) -> int:
+    def get_cache_entry_count(self) -> int:
         """
         Get the current number of entries in the client-side cache.
 
@@ -209,13 +210,13 @@ class CoreCommands(Protocol):
             RequestError: If client-side caching is not enabled.
 
         Example:
-            >>> entry_count = await client.get_cache_entry_count()
+            >>> entry_count = client.get_cache_entry_count()
             >>> print(f"Cache entry count: {entry_count}")
             Cache entry count: 1500
         """
-        return cast(int, await self._get_cache_metrics(CacheMetricsType.EntryCount))
+        return cast(int, self._get_cache_metrics(CacheMetricsType.EntryCount))
 
-    async def get_cache_evictions(self) -> int:
+    def get_cache_evictions(self) -> int:
         """
         Get the total number of entries evicted from the client-side cache due to memory constraints.
 
@@ -226,13 +227,13 @@ class CoreCommands(Protocol):
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
 
         Example:
-            >>> evictions = await client.get_cache_evictions()
+            >>> evictions = client.get_cache_evictions()
             >>> print(f"Cache evictions: {evictions}")
             Cache evictions: 100
         """
-        return cast(int, await self._get_cache_metrics(CacheMetricsType.Evictions))
+        return cast(int, self._get_cache_metrics(CacheMetricsType.Evictions))
 
-    async def get_cache_total_lookups(self) -> int:
+    def get_cache_total_lookups(self) -> int:
         """
         Get the total number of cache lookups (hits + misses).
 
@@ -243,13 +244,13 @@ class CoreCommands(Protocol):
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
 
         Example:
-            >>> total = await client.get_cache_total_lookups()
+            >>> total = client.get_cache_total_lookups()
             >>> print(f"Total cache lookups: {total}")
             Total cache lookups: 5000
         """
-        return cast(int, await self._get_cache_metrics(CacheMetricsType.TotalLookups))
+        return cast(int, self._get_cache_metrics(CacheMetricsType.TotalLookups))
 
-    async def get_cache_expirations(self) -> int:
+    def get_cache_expirations(self) -> int:
         """
         Get the total number of entries removed from the client-side cache due to TTL expiration.
 
@@ -260,11 +261,11 @@ class CoreCommands(Protocol):
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
 
         Example:
-            >>> expirations = await client.get_cache_expirations()
+            >>> expirations = client.get_cache_expirations()
             >>> print(f"Cache expirations: {expirations}")
             Cache expirations: 250
         """
-        return cast(int, await self._get_cache_metrics(CacheMetricsType.Expirations))
+        return cast(int, self._get_cache_metrics(CacheMetricsType.Expirations))
 
     async def set(
         self,
@@ -2410,6 +2411,17 @@ class CoreCommands(Protocol):
             A simple OK response.
         """
         return cast(TOK, await self._execute_command(RequestType.Select, [str(index)]))
+
+    async def reset(self) -> bytes:
+        """
+        Reset the connection state.
+
+        See [valkey.io](https://valkey.io/commands/reset/) for details.
+
+        Returns:
+            bytes: The string "RESET".
+        """
+        return cast(bytes, await self._execute_command(RequestType.Reset, []))
 
     async def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """
@@ -6970,6 +6982,52 @@ class CoreCommands(Protocol):
         return cast(
             TOK,
             await self._execute_command(RequestType.Restore, args),
+        )
+
+    async def migrate(
+        self,
+        host: str,
+        port: int,
+        key: TEncodable,
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = None,
+    ) -> str:
+        """
+        Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+
+        See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        Args:
+            host (str): The host of the destination Valkey instance.
+            port (int): The port of the destination Valkey instance.
+            key (TEncodable): The key to migrate.
+            destination_db (int): The database index on the destination instance.
+            timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
+            options (Optional[MigrateOptions]): Optional migration options.
+
+        Returns:
+            str: "OK" on success, or "NOKEY" if the key does not exist.
+
+        Examples:
+            >>> await client.set("mykey", "myvalue")
+            >>> await client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
+                "OK"
+            >>> await client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
+                "NOKEY"
+        """
+        args: List[TEncodable] = [
+            host,
+            str(port),
+            key,
+            str(destination_db),
+            str(timeout),
+        ]
+        if options:
+            args.extend(options.to_args())
+        return cast(
+            str,
+            await self._execute_command(RequestType.Migrate, args),
         )
 
     async def sscan(

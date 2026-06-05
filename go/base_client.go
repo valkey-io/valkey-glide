@@ -20,6 +20,10 @@ package glide
 //                     const uint8_t *message, int64_t message_len,
 //                     const uint8_t *channel, int64_t channel_len,
 //                     const uint8_t *pattern, int64_t pattern_len);
+// uint16_t addressResolverCallback(uintptr_t client_id, const uint8_t *host, uintptr_t host_len,
+//                                  uint16_t port,
+//                                  uint8_t *resolved_host_buf, uintptr_t resolved_host_buf_len,
+//                                  uintptr_t *resolved_host_len);
 import "C"
 
 import (
@@ -29,6 +33,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -44,6 +49,8 @@ import (
 
 const OK = "OK"
 
+var clientIDCounter atomic.Uintptr
+
 type payload struct {
 	value *C.struct_CommandResponse
 	error error
@@ -51,6 +58,7 @@ type payload struct {
 
 type clientConfiguration interface {
 	ToProtobuf() (*protobuf.ConnectionRequest, error)
+	GetAddressResolver() config.AddressResolver
 }
 
 type baseClient struct {
@@ -58,6 +66,7 @@ type baseClient struct {
 	coreClient     unsafe.Pointer
 	mu             *sync.Mutex
 	messageHandler *MessageHandler
+	resolverID     uintptr
 }
 
 // setMessageHandler assigns a message handler to the client for processing pub/sub messages
@@ -133,8 +142,8 @@ func buildAsyncClientType(successCb C.SuccessCallback, failureCb C.FailureCallba
 // Passes the pointers to callback functions which will be invoked when the command succeeds or fails.
 // Once the connection is established, this function invokes `free_connection_response` exposed by rust library to free the
 // connection_response to avoid any memory leaks.
-func createClient(config clientConfiguration) (*baseClient, error) {
-	request, err := config.ToProtobuf()
+func createClient(cfg clientConfiguration) (*baseClient, error) {
+	request, err := cfg.ToProtobuf()
 	if err != nil {
 		return nil, err
 	}
@@ -148,30 +157,48 @@ func createClient(config clientConfiguration) (*baseClient, error) {
 	defer C.free(requestBytes)
 
 	clientType, err := buildAsyncClientType(
-		(C.SuccessCallback)(unsafe.Pointer(C.successCallback)),
-		(C.FailureCallback)(unsafe.Pointer(C.failureCallback)),
+		C.SuccessCallback(unsafe.Pointer(C.successCallback)),
+		C.FailureCallback(unsafe.Pointer(C.failureCallback)),
 	)
 	if err != nil {
 		return nil, NewClosingError(err.Error())
 	}
 	client := &baseClient{pending: make(map[unsafe.Pointer]struct{}), mu: &sync.Mutex{}}
 
+	// Determine resolver callback and client ID
+	var resolverCallback C.AddressResolverCallback
+	var clientID uintptr
+	if cfgWithResolver, ok := cfg.(interface{ GetAddressResolver() config.AddressResolver }); ok {
+		if resolver := cfgWithResolver.GetAddressResolver(); resolver != nil {
+			clientID = uintptr(clientIDCounter.Add(1))
+			registerResolver(clientID, resolver)
+			resolverCallback = C.AddressResolverCallback(unsafe.Pointer(C.addressResolverCallback))
+		}
+	}
+
 	cResponse := (*C.struct_ConnectionResponse)(
 		C.create_client(
 			(*C.uchar)(requestBytes),
 			C.uintptr_t(byteCount),
 			&clientType,
-			(C.PubSubCallback)(unsafe.Pointer(C.pubSubCallback)),
+			C.PubSubCallback(unsafe.Pointer(C.pubSubCallback)),
+			resolverCallback,
+			C.uintptr_t(clientID),
 		),
 	)
+
 	defer C.free_connection_response(cResponse)
 	cErr := cResponse.connection_error_message
 	if cErr != nil {
 		message := C.GoString(cErr)
+		if clientID != 0 {
+			unregisterResolver(clientID)
+		}
 		return nil, NewConnectionError(message)
 	}
 
 	client.coreClient = cResponse.conn_ptr
+	client.resolverID = clientID
 
 	// Register the client in our registry using the pointer value from C
 	registerClient(client, uintptr(cResponse.conn_ptr))
@@ -192,6 +219,11 @@ func (client *baseClient) Close() {
 
 	C.close_client(client.coreClient)
 	client.coreClient = nil
+
+	if client.resolverID != 0 {
+		unregisterResolver(client.resolverID)
+		client.resolverID = 0
+	}
 
 	// iterating the channel map while holding the lock guarantees those unsafe.Pointers is still valid
 	// because holding the lock guarantees the owner of the unsafe.Pointer hasn't exit.
@@ -538,12 +570,12 @@ func createRouteInfo(pinner pinner, route config.Route) *C.RouteInfo {
 		routeInfo := C.RouteInfo{}
 		switch r := route.(type) {
 		case config.SimpleSingleNodeRoute:
-			routeInfo.route_type = (uint32)(r)
+			routeInfo.route_type = uint32(r)
 		case config.SimpleMultiNodeRoute:
-			routeInfo.route_type = (uint32)(r)
+			routeInfo.route_type = uint32(r)
 		case config.SimpleNodeRoute:
 			// enum variants have the same ordinals
-			routeInfo.route_type = (uint32)(r)
+			routeInfo.route_type = uint32(r)
 		case *config.SlotIdRoute:
 			routeInfo.route_type = C.SlotId
 			routeInfo.slot_id = C.int(r.SlotID)
@@ -595,7 +627,7 @@ func createCmdInfo(pinner pinner, cmd internal.Cmd) C.CmdInfo {
 	for i, str := range cmd.Args {
 		// TODO do we need to pin there too?
 		// cArgsPtr[i] = (*C.uchar)(pinner.Pin(unsafe.Pointer(unsafe.StringData((str)))))
-		cArgsPtr[i] = (*C.uchar)(unsafe.Pointer(unsafe.StringData((str))))
+		cArgsPtr[i] = (*C.uchar)(unsafe.Pointer(unsafe.StringData(str)))
 		argLengthsPtr[i] = C.size_t(len(str))
 	}
 	info.arg_count = C.ulong(numArgs)
@@ -1503,7 +1535,8 @@ func (client *baseClient) IncrBy(ctx context.Context, key string, amount int64) 
 //
 // [valkey.io]: https://valkey.io/commands/incrbyfloat/
 func (client *baseClient) IncrByFloat(ctx context.Context, key string, amount float64) (float64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.IncrByFloat,
 		[]string{key, utils.FloatToString(amount)},
 	)
@@ -2943,7 +2976,8 @@ func (client *baseClient) LPosCountWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.LPos,
 		append([]string{key, element, constants.CountKeyword, utils.IntToString(count)}, optionArgs...),
 	)
@@ -3783,7 +3817,8 @@ func (client *baseClient) LInsert(
 		return models.DefaultIntResponse, err
 	}
 
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.LInsert,
 		[]string{key, insertPositionStr, pivot, element},
 	)
@@ -4250,7 +4285,8 @@ func (client *baseClient) BLMove(
 		return models.CreateNilStringResult(), err
 	}
 
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.BLMove,
 		[]string{source, destination, whereFromStr, whereToStr, utils.FloatToString(timeout.Seconds())},
 	)
@@ -4462,7 +4498,8 @@ func (client *baseClient) ExpireAtWithOptions(
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ExpireAt,
 		[]string{key, utils.IntToString(expireTime.Unix()), expireConditionStr},
 	)
@@ -4599,7 +4636,8 @@ func (client *baseClient) PExpireAtWithOptions(
 	if err != nil {
 		return models.DefaultBoolResponse, err
 	}
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.PExpireAt,
 		[]string{key, utils.IntToString(expireTime.UnixMilli()), expireConditionStr},
 	)
@@ -5153,7 +5191,8 @@ func (client *baseClient) ZAdd(
 	key string,
 	membersScoreMap map[string]float64,
 ) (int64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ZAdd,
 		append([]string{key}, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
@@ -5191,7 +5230,8 @@ func (client *baseClient) ZAddWithOptions(
 		return models.DefaultIntResponse, err
 	}
 	commandArgs := append([]string{key}, optionArgs...)
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ZAdd,
 		append(commandArgs, utils.ConvertMapToValueKeyStringArray(membersScoreMap)...),
 	)
@@ -7666,6 +7706,91 @@ func (client *baseClient) CopyWithOptions(
 	return handleBoolResponse(result)
 }
 
+// Transfers a key from the current Valkey instance to a destination Valkey instance.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx           - The context for controlling the command execution.
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	key           - The key to migrate.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) Migrate(
+	ctx context.Context,
+	host string,
+	port int64,
+	key string,
+	destinationDB int64,
+	timeout int64,
+) (string, error) {
+	result, err := client.executeCommand(ctx, C.Migrate, []string{
+		host,
+		utils.IntToString(port),
+		key,
+		utils.IntToString(destinationDB),
+		utils.IntToString(timeout),
+	})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Transfers a key from the current Valkey instance to a destination Valkey instance with options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx            - The context for controlling the command execution.
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	key            - The key to migrate.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Return value:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *baseClient) MigrateWithOptions(
+	ctx context.Context,
+	host string,
+	port int64,
+	key string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) (string, error) {
+	optionArgs, err := migrateOptions.ToArgs()
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	args := []string{
+		host,
+		utils.IntToString(port),
+		key,
+		utils.IntToString(destinationDB),
+		utils.IntToString(timeout),
+	}
+	result, err := client.executeCommand(ctx, C.Migrate, append(args, optionArgs...))
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
 // Returns stream entries matching a given range of IDs.
 //
 // See [valkey.io] for details.
@@ -8297,7 +8422,8 @@ func (client *baseClient) ZDiffWithScores(ctx context.Context, keys []string) ([
 //
 // [valkey.io]: https://valkey.io/commands/zdiffstore/
 func (client *baseClient) ZDiffStore(ctx context.Context, destination string, keys []string) (int64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.ZDiffStore,
 		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
 	)
@@ -8724,7 +8850,8 @@ func (client *baseClient) GeoAdd(
 	key string,
 	membersToGeospatialData map[string]options.GeospatialData,
 ) (int64, error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoAdd,
 		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
 	)
@@ -8791,7 +8918,8 @@ func (client *baseClient) GeoAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
 func (client *baseClient) GeoHash(ctx context.Context, key string, members []string) ([]models.Result[string], error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoHash,
 		append([]string{key}, members...),
 	)
@@ -8852,7 +8980,8 @@ func (client *baseClient) GeoDist(
 	member1 string,
 	member2 string,
 ) (models.Result[float64], error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoDist,
 		[]string{key, member1, member2},
 	)
@@ -8888,7 +9017,8 @@ func (client *baseClient) GeoDistWithUnit(
 	member2 string,
 	unit constants.GeoUnit,
 ) (models.Result[float64], error) {
-	result, err := client.executeCommand(ctx,
+	result, err := client.executeCommand(
+		ctx,
 		C.GeoDist,
 		[]string{key, member1, member2, string(unit)},
 	)
@@ -10745,6 +10875,27 @@ func (client *baseClient) AclUsers(ctx context.Context) ([]string, error) {
 // [valkey.io]: https://valkey.io/commands/acl-whoami/
 func (client *baseClient) AclWhoAmI(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.AclWhoami, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(result)
+}
+
+// Reset resets the connection state.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	Returns "RESET" on success.
+//
+// [valkey.io]: https://valkey.io/commands/reset/
+func (client *baseClient) Reset(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.Reset, []string{})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

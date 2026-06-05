@@ -1,10 +1,13 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
+import static glide.TestConfiguration.CLUSTER_HOSTS;
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestUtilities.*;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,8 +21,22 @@ import glide.api.BaseClient;
 import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.*;
+import glide.api.models.configuration.AddressResolver;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
+import glide.api.models.configuration.BackoffStrategy;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.PeriodicChecksManualInterval;
+import glide.api.models.configuration.PeriodicChecksStatus;
+import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.ReadFrom;
+import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.ResolvedAddress;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
 import java.util.ArrayList;
@@ -137,6 +154,11 @@ public class ConnectionTests {
     @Test
     public void test_routing_by_slot_to_replica_with_az_affinity_strategy_to_all_replicas() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+        // Windows integration tests has replicas set to zero due to resource limitations
+        // on Github Action using Windows runner with WSL
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
 
         String az = "us-east-1a";
 
@@ -352,6 +374,11 @@ public class ConnectionTests {
     @Test
     public void test_az_affinity_replicas_and_primary_routes_to_primary() {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0"), "Skip for versions below 8");
+        // Windows integration tests has replicas set to zero due to resource limitations
+        // on Github Action using Windows runner with WSL
+        // TODO: Remove the skip after fixing Windows Replicas issues
+        // https://github.com/valkey-io/valkey-glide/issues/5210
+        assumeTrue(!isWindows(), "Skip on Windows");
 
         String az = "us-east-1a";
         String otherAz = "us-east-1b";
@@ -764,7 +791,6 @@ public class ConnectionTests {
                             expectedNewConnections,
                             clientsBeforeLazyInit,
                             clientsAfterFirstCommand));
-
         } finally {
             if (monitoringClient != null) {
                 monitoringClient.close();
@@ -932,5 +958,202 @@ public class ConnectionTests {
         assertEquals("OK", clientFalse.set("key3", "value3").get());
         assertEquals("value3", clientFalse.get("key3").get());
         clientFalse.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_standalone_client() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = STANDALONE_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        // Use a fake/placeholder address in configuration
+        String fakeHost = "fake-host-that-does-not-exist.invalid";
+        int fakePort = 9999;
+
+        // Create resolver that translates fake address to real server address
+        AddressResolver resolver =
+                (host, port) -> {
+                    // Only translate our fake address to the real one
+                    if (fakeHost.equals(host) && port == fakePort) {
+                        return new ResolvedAddress(actualHost, actualPort);
+                    }
+                    // Pass through any other addresses unchanged
+                    return new ResolvedAddress(host, port);
+                };
+
+        // Configure client with fake address - connection should succeed because
+        // resolver translates it to the real address
+        GlideClient client =
+                GlideClient.createClient(
+                                GlideClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(fakeHost).port(fakePort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Verify the client works - this proves the resolved address was used
+        assertEquals("PONG", client.ping().get());
+        assertEquals("OK", client.set("resolver_test_key", "resolver_test_value").get());
+        assertEquals("resolver_test_value", client.get("resolver_test_key").get());
+
+        client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        // Use a fake/placeholder address in configuration
+        String fakeHost = "fake-cluster-host.invalid";
+        int fakePort = 9999;
+
+        // Create resolver that translates fake address to real server address
+        AddressResolver resolver =
+                (host, port) -> {
+                    // Only translate our fake address to the real one
+                    if (fakeHost.equals(host) && port == fakePort) {
+                        return new ResolvedAddress(actualHost, actualPort);
+                    }
+                    // Pass through any other addresses unchanged
+                    return new ResolvedAddress(host, port);
+                };
+
+        // Configure client with fake address - connection should succeed because
+        // resolver translates it to the real address
+        GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(fakeHost).port(fakePort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Verify the client works - this proves the resolved address was used
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client_throws_exception() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        AddressResolver resolver =
+                (host, port) -> {
+                    throw new RuntimeException("test-exception");
+                };
+
+        GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Connection still goes through, as the fallback is to use the original address if resolver
+        // throws an exception
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
+    }
+
+    @Test
+    @SneakyThrows
+    public void test_address_resolver_cluster_client_returns_null() {
+        // Get the actual server address from test configuration
+        String[] actualHostParts = CLUSTER_HOSTS[0].split(":");
+        String actualHost = actualHostParts[0];
+        int actualPort = Integer.parseInt(actualHostParts[1]);
+
+        AddressResolver resolver = (host, port) -> null;
+
+        GlideClusterClient client =
+                GlideClusterClient.createClient(
+                                GlideClusterClientConfiguration.builder()
+                                        .address(NodeAddress.builder().host(actualHost).port(actualPort).build())
+                                        .addressResolver(resolver)
+                                        .build())
+                        .get();
+
+        // Connection still goes through, as the fallback is to use the original address if resolver
+        // returns null
+        assertEquals("PONG", client.ping().get());
+        assertEquals(
+                "OK", client.set("cluster_resolver_test_key", "cluster_resolver_test_value").get());
+        assertEquals("cluster_resolver_test_value", client.get("cluster_resolver_test_key").get());
+
+        client.close();
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void test_client_pause_and_unpause_standalone(ProtocolVersion protocol) {
+        try (GlideClient client =
+                GlideClient.createClient(commonClientConfig().protocol(protocol).build()).get()) {
+
+            // pause with default mode (ALL implied by server)
+            assertEquals(OK, client.clientPause(100).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // pause with explicit WRITE mode
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.WRITE).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // pause with explicit ALL mode
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.ALL).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // zero timeout: immediately unpauses, subsequent command must succeed
+            assertEquals(OK, client.clientPause(0).get());
+            assertEquals("PONG", client.ping().get());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    public void test_client_pause_and_unpause_cluster(ProtocolVersion protocol) {
+        try (GlideClusterClient client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get()) {
+
+            // default route (ALL_PRIMARIES)
+            assertEquals(OK, client.clientPause(100).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // explicit ALL_PRIMARIES route
+            assertEquals(OK, client.clientPause(100, ALL_PRIMARIES).get());
+            assertEquals(OK, client.clientUnpause(ALL_PRIMARIES).get());
+
+            // with WRITE mode, default route
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.WRITE).get());
+            assertEquals(OK, client.clientUnpause().get());
+
+            // with WRITE mode, explicit route
+            assertEquals(OK, client.clientPause(100, ClientPauseMode.WRITE, ALL_PRIMARIES).get());
+            assertEquals(OK, client.clientUnpause(ALL_PRIMARIES).get());
+
+            // zero timeout + verify cluster still responsive
+            assertEquals(OK, client.clientPause(0).get());
+            assertEquals("PONG", client.ping().get());
+        }
     }
 }

@@ -1,11 +1,15 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+// Re-export everything from the real protobuf connection_request module.
+// The FFI code accesses protobuf types via `glide_core::connection_request::*`.
 pub use glide_core::connection_request::{
     AuthenticationInfo,
+    ClientSideCache,
     CompressionBackend,
     CompressionConfig,
     ConnectionRequest,
     ConnectionRetryStrategy,
+    EvictionPolicy,
     IamCredentials,
     NodeAddress,
     NodeDiscoveryMode,

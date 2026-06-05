@@ -38,14 +38,11 @@ EXCLUDED_API_FUNCTIONS = {
         "start_socket_listener_external",
         "value_from_pointer",
         "aclose",
-        # cache
-        "_get_cache_metrics",
-        "get_cache_hit_rate",
-        "get_cache_miss_rate",
-        "get_cache_entry_count",
-        "get_cache_evictions",
-        "get_cache_expirations",
-        "get_cache_total_lookups",
+        # cache metrics sync path (PyO3 only, sync client uses FFI)
+        "get_cache_metric_from_registry",
+        # address resolver registry (PyO3 only, sync client passes callback via FFI)
+        "register_address_resolver",
+        "remove_address_resolver",
     ],
     "sync_only": [],
 }
@@ -97,7 +94,9 @@ EXCLUDED_TESTS_FILENAMES = {
         "test_deprecation_warnings.py",
         "test_client_side_cache.py",
     ],
-    "sync_only": [],
+    "sync_only": [
+        "test_sync_client_side_cache.py",
+    ],
 }
 
 

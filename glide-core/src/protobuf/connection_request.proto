@@ -76,6 +76,9 @@ message CompressionConfig {
     CompressionBackend backend = 2;
     optional int32 compression_level = 3;
     uint32 min_compression_size = 4;
+    // Maximum allowed size for decompressed data to prevent decompression bombs.
+    // If not set, defaults to 512MB (matching Valkey's proto-max-bulk-len).
+    optional uint64 max_decompressed_size = 5;
 }
 
 message PubSubChannelsOrPatterns
@@ -94,6 +97,7 @@ message ClientSideCache {
     uint64 entry_ttl_ms = 3; // 0 = no expiration
     optional EvictionPolicy eviction_policy = 4;
     bool enable_metrics = 5;
+    bool server_assisted = 6;
 }
 
 enum EvictionPolicy {
@@ -133,6 +137,7 @@ message ConnectionRequest {
     optional bool read_only = 26;
     optional ClientSideCache client_side_cache = 27;
     NodeDiscoveryMode node_discovery_mode = 28;
+    optional string address_resolver_key = 29;
 }
 
 message ConnectionRetryStrategy {

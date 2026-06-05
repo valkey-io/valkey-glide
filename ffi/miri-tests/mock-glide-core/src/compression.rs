@@ -4,8 +4,26 @@
 
 use crate::request_type::RequestType;
 
-/// Re-export the minimum compressed size constant from glide-core
-pub use glide_core::compression::MIN_COMPRESSED_SIZE;
+/// Header size for compressed data (3 bytes magic + 1 byte version + 1 byte backend_id)
+pub const HEADER_SIZE: usize = 5;
+
+/// Minimum compressed size (header + at least 1 byte of payload)
+pub const MIN_COMPRESSED_SIZE: usize = HEADER_SIZE + 1;
+
+/// Mock compression error type
+#[derive(Debug, Clone)]
+pub struct CompressionError(String);
+
+impl std::fmt::Display for CompressionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for CompressionError {}
+
+/// Mock compression result type
+pub type CompressionResult<T> = Result<T, CompressionError>;
 
 /// Mock compression manager
 #[derive(Debug)]
@@ -36,4 +54,22 @@ pub fn process_command_args_for_compression(
     _compression_manager: Option<&CompressionManager>,
 ) -> Result<(), String> {
     Ok(())
+}
+
+/// Mock function to decompress batch response
+/// In Miri tests, this is a no-op that returns the value unchanged
+pub fn decompress_batch_response(
+    value: redis::Value,
+    _compression_manager: &CompressionManager,
+) -> Result<redis::Value, String> {
+    Ok(value)
+}
+
+/// Mock function to try decompress batch response with optional manager
+/// In Miri tests, this is a no-op that returns the value unchanged
+pub fn try_decompress_batch_response(
+    value: redis::Value,
+    _manager: Option<&CompressionManager>,
+) -> CompressionResult<redis::Value> {
+    Ok(value)
 }
