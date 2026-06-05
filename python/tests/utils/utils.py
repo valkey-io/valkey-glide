@@ -308,6 +308,18 @@ def check_version_lt(version_str: str, min_version: str) -> bool:
     return version.parse(version_str) < version.parse(min_version)
 
 
+def assert_response_in(
+    result: Union[str, Dict[bytes, str]],
+    expected: Set[str],
+) -> None:
+    """Asserts that a response contains only expected values."""
+    if isinstance(result, dict):
+        for value in result.values():
+            assert value in expected, f"Unexpected response: {value}"
+    else:
+        assert result in expected, f"Unexpected response: {result}"
+
+
 def compare_maps(
     map1: Optional[
         Union[
