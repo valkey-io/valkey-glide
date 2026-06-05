@@ -43,6 +43,7 @@ import {
     connection_request,
     response,
 } from "../build-ts/ProtobufMessage";
+import { createMigrate } from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
 
@@ -1126,4 +1127,115 @@ describe("Circular Dependency Fix", () => {
         }).not.toThrow();
     });
     /* eslint-enable @typescript-eslint/no-require-imports */
+});
+
+describe("createMigrate validation", () => {
+    it("builds basic single-key command", () => {
+        const cmd = createMigrate("host", 6379, "mykey", 0, 1000);
+        expect(cmd.requestType).toEqual(RequestType.Migrate);
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer(["host", "6379", "mykey", "0", "1000"]),
+        );
+    });
+
+    it("builds multi-key KEYS command", () => {
+        const cmd = createMigrate("host", 6379, "", 0, 1000, {
+            keys: ["k1", "k2"],
+        });
+        expect(cmd.requestType).toEqual(RequestType.Migrate);
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer([
+                "host",
+                "6379",
+                "",
+                "0",
+                "1000",
+                "KEYS",
+                "k1",
+                "k2",
+            ]),
+        );
+    });
+
+    it("throws when keys array is empty", () => {
+        expect(() =>
+            createMigrate("host", 6379, "", 0, 1000, { keys: [] }),
+        ).toThrow("MigrateOptions: 'keys' must not be empty");
+    });
+
+    it("throws when key is non-empty and keys is also provided", () => {
+        expect(() =>
+            createMigrate("host", 6379, "somekey", 0, 1000, { keys: ["k1"] }),
+        ).toThrow(
+            "MigrateOptions: 'key' must be empty string when 'options.keys' is provided",
+        );
+    });
+
+    it("throws when username is set without password", () => {
+        expect(() =>
+            createMigrate("host", 6379, "k", 0, 1000, { username: "user" }),
+        ).toThrow("MigrateOptions: 'username' requires 'password' to be set");
+    });
+
+    it("builds command with COPY, REPLACE and AUTH options", () => {
+        const cmd = createMigrate("host", 6379, "k", 0, 1000, {
+            copy: true,
+            replace: true,
+            password: "pass",
+        });
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer([
+                "host",
+                "6379",
+                "k",
+                "0",
+                "1000",
+                "COPY",
+                "REPLACE",
+                "AUTH",
+                "pass",
+            ]),
+        );
+    });
+
+    it("builds command with AUTH2 (username + password)", () => {
+        const cmd = createMigrate("host", 6379, "k", 0, 1000, {
+            username: "user",
+            password: "pass",
+        });
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer([
+                "host",
+                "6379",
+                "k",
+                "0",
+                "1000",
+                "AUTH2",
+                "user",
+                "pass",
+            ]),
+        );
+    });
+
+    it("builds multi-key command with COPY, REPLACE and KEYS", () => {
+        const cmd = createMigrate("host", 6379, "", 0, 1000, {
+            copy: true,
+            replace: true,
+            keys: ["k1", "k2"],
+        });
+        expect(cmd.argsArray?.args).toEqual(
+            convertStringArrayToBuffer([
+                "host",
+                "6379",
+                "",
+                "0",
+                "1000",
+                "COPY",
+                "REPLACE",
+                "KEYS",
+                "k1",
+                "k2",
+            ]),
+        );
+    });
 });
