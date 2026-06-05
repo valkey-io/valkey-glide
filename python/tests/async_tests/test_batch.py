@@ -1673,9 +1673,7 @@ class TestBatch:
 
         # Empty keys list raises ValueError
         with pytest.raises(ValueError):
-            batch3.migrate(
-                "invalid-host", 6379, "", 0, 5000, MigrateOptions(keys=[])
-            )
+            batch3.migrate("invalid-host", 6379, "", 0, 5000, MigrateOptions(keys=[]))
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

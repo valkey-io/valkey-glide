@@ -145,3 +145,15 @@ class TestMigrateOptions:
         assert MigrateOptions(
             copy=True, replace=True, username="user", password="secret"
         ).to_args() == ["COPY", "REPLACE", "AUTH2", "user", "secret"]
+
+    def test_keys(self):
+        assert MigrateOptions(keys=["k1", "k2"]).to_args() == ["KEYS", "k1", "k2"]
+
+    def test_keys_after_copy_replace_auth(self):
+        assert MigrateOptions(
+            copy=True, replace=True, password="secret", keys=["k1"]
+        ).to_args() == ["COPY", "REPLACE", "AUTH", "secret", "KEYS", "k1"]
+
+    def test_empty_keys_raises(self):
+        with pytest.raises(ValueError, match="'keys' must not be empty"):
+            MigrateOptions(keys=[]).to_args()
