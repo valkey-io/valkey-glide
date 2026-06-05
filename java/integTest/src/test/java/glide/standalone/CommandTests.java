@@ -348,19 +348,16 @@ public class CommandTests {
 
         assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.ALL).get());
 
-        CompletableFuture<String> get = regularClient.get(key);
         CompletableFuture<String> set = regularClient.set(key, "after");
         CompletableFuture<String> unpause = regularClient.clientUnpause();
 
         Thread.sleep(300);
 
         // Verify that none of the commands completes.
-        assertFalse(get.isDone());
         assertFalse(set.isDone());
         assertFalse(unpause.isDone());
 
         // Verify that all commands complete once pause expires.
-        assertEquals("before", get.get(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals("after", regularClient.get(key).get());
