@@ -1071,15 +1071,15 @@ func (client *ClusterClient) SaveWithOptions(ctx context.Context, opts options.R
 //
 // [valkey.io]: https://valkey.io/commands/bgsave/
 func (client *ClusterClient) BgSave(ctx context.Context) (models.ClusterValue[string], error) {
-	response, err := client.executeCommand(ctx, C.BgSave, []string{})
+	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{}, config.AllPrimaries)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleStringToStringMapResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return models.CreateClusterMultiValue[string](data), nil
 }
 
 // Asynchronously saves the dataset to disk in the background.
@@ -1133,15 +1133,15 @@ func (client *ClusterClient) BgSaveWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/bgsave/
 func (client *ClusterClient) BgSaveSchedule(ctx context.Context) (models.ClusterValue[string], error) {
-	response, err := client.executeCommand(ctx, C.BgSave, []string{"SCHEDULE"})
+	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{"SCHEDULE"}, config.AllPrimaries)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleStringToStringMapResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return models.CreateClusterMultiValue[string](data), nil
 }
 
 // Schedules a background save of the database.
@@ -1197,15 +1197,15 @@ func (client *ClusterClient) BgSaveScheduleWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/bgsave/
 func (client *ClusterClient) BgSaveCancel(ctx context.Context) (models.ClusterValue[string], error) {
-	response, err := client.executeCommand(ctx, C.BgSave, []string{"CANCEL"})
+	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{"CANCEL"}, config.AllPrimaries)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleStringToStringMapResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return models.CreateClusterMultiValue[string](data), nil
 }
 
 // Aborts all in-progress and scheduled background saves.
@@ -1261,15 +1261,15 @@ func (client *ClusterClient) BgSaveCancelWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/bgrewriteaof/
 func (client *ClusterClient) BgRewriteAof(ctx context.Context) (models.ClusterValue[string], error) {
-	response, err := client.executeCommand(ctx, C.BgRewriteAof, []string{})
+	response, err := client.executeCommandWithRoute(ctx, C.BgRewriteAof, []string{}, config.AllPrimaries)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	data, err := handleStringResponse(response)
+	data, err := handleStringToStringMapResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	return models.CreateClusterSingleValue[string](data), nil
+	return models.CreateClusterMultiValue[string](data), nil
 }
 
 // Initiates a background rewrite of the append-only file (AOF).

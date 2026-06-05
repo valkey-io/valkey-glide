@@ -472,19 +472,17 @@ export async function waitForNotBusy(client: GlideClusterClient | GlideClient) {
 }
 
 /**
- * Waits until a condition is met, polling at a fixed interval.
+ * Waits until a condition is met.
  *
  * @param condition - Async function that returns true when the condition is met.
  * @param failure - Error message thrown if the condition is not met within timeout.
- * @param timeout - Total time to wait in milliseconds (default 10000).
- * @param interval - Time between retries in milliseconds (default 100).
  */
 export async function waitFor(
     condition: () => Promise<boolean>,
     failure: string,
-    timeout = 10000,
-    interval = 100,
 ): Promise<void> {
+    const timeout = 10000;
+    const interval = 100;
     const start = Date.now();
 
     while (Date.now() - start < timeout) {

@@ -215,33 +215,33 @@ BGREWRITEAOF_RESPONSES = {
 # Expected server error response for BGSAVE CANCEL when no save is in progress.
 BGSAVE_NOT_CANCELLED_RESPONSE = "Background saving is currently not in progress or scheduled"
 
+# Timeout and interval between retries while waiting for a condition to be met.
+_WAIT_FOR_TIMEOUT_SEC = 10.0
+_WAIT_FOR_INTERVAL_SEC = 0.1
+
 
 async def wait_for(
     condition: Callable[[], Awaitable[bool]],
     failure: str,
-    timeout: float = 10.0,
-    interval: float = 0.1,
 ) -> None:
-    """Waits until a condition is met, polling at a fixed interval.
+    """Waits until a condition is met.
 
     Args:
         condition: Async callable that returns True when the condition is met.
         failure: Error message raised if the condition is not met within timeout.
-        timeout: Total time to wait in seconds.
-        interval: Time between retries in seconds.
 
     Raises:
-        TimeoutError: If the condition is not met within the specified timeout.
+        TimeoutError: If the condition is not met within the timeout.
     """
     import asyncio
     import time as _time
 
-    deadline = _time.monotonic() + timeout
+    deadline = _time.monotonic() + _WAIT_FOR_TIMEOUT_SEC
 
     while _time.monotonic() < deadline:
         if await condition():
             return
-        await asyncio.sleep(interval)
+        await asyncio.sleep(_WAIT_FOR_INTERVAL_SEC)
 
     raise TimeoutError(failure)
 
@@ -249,34 +249,30 @@ async def wait_for(
 def sync_wait_for(
     condition: Callable[[], bool],
     failure: str,
-    timeout: float = 10.0,
-    interval: float = 0.1,
 ) -> None:
-    """Waits until a condition is met, polling at a fixed interval.
+    """Waits until a condition is met.
 
     Args:
         condition: Callable that returns True when the condition is met.
         failure: Error message raised if the condition is not met within timeout.
-        timeout: Total time to wait in seconds.
-        interval: Time between retries in seconds.
 
     Raises:
-        TimeoutError: If the condition is not met within the specified timeout.
+        TimeoutError: If the condition is not met within the timeout.
     """
     import time as _time
 
-    deadline = _time.monotonic() + timeout
+    deadline = _time.monotonic() + _WAIT_FOR_TIMEOUT_SEC
 
     while _time.monotonic() < deadline:
         if condition():
             return
-        _time.sleep(interval)
+        _time.sleep(_WAIT_FOR_INTERVAL_SEC)
 
     raise TimeoutError(failure)
 
 
 async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
-    """Waits until no save (RDB save or AOF rewrite) is in progress on any node."""
+    """Waits until no save (RDB save or AOF rewrite) is in progress."""
 
     async def _check() -> bool:
         return not _is_save_in_progress(await client.info([InfoSection.PERSISTENCE]))
@@ -285,7 +281,7 @@ async def wait_for_save_not_in_progress(client: TGlideClient) -> None:
 
 
 def sync_wait_for_save_not_in_progress(client: TSyncGlideClient) -> None:
-    """Waits until no save (RDB save or AOF rewrite) is in progress on any node (sync version)."""
+    """Waits until no save (RDB save or AOF rewrite) is in progress."""
 
     def _check() -> bool:
         return not _is_save_in_progress(client.info([InfoSection.PERSISTENCE]))
