@@ -28,6 +28,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Reset;
@@ -55,6 +56,7 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ScanOptions;
@@ -709,5 +711,105 @@ public class GlideClient extends BaseClient
 
                     return new PubSubStateImpl<>(desired, actual);
                 });
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String[] keys,
+            long destinationDB,
+            long timeout) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(Long.toString(destinationPort))
+                        .add("")
+                        .add(Long.toString(destinationDB))
+                        .add(Long.toString(timeout))
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString[] keys,
+            long destinationDB,
+            long timeout) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(GlideString.of(""))
+                        .add(destinationDB)
+                        .add(timeout)
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            String[] keys,
+            long destinationDB,
+            long timeout,
+            @NonNull MigrateOptions migrateOptions) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(Long.toString(destinationPort))
+                        .add("")
+                        .add(Long.toString(destinationDB))
+                        .add(Long.toString(timeout))
+                        .add(migrateOptions.toArgs())
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> migrate(
+            String destinationHost,
+            long destinationPort,
+            GlideString[] keys,
+            long destinationDB,
+            long timeout,
+            @NonNull MigrateOptions migrateOptions) {
+        if (keys == null || keys.length == 0) {
+            throw new IllegalArgumentException("keys must not be null or empty");
+        }
+        return commandManager.submitNewCommand(
+                Migrate,
+                new ArgsBuilder()
+                        .add(destinationHost)
+                        .add(destinationPort)
+                        .add(GlideString.of(""))
+                        .add(destinationDB)
+                        .add(timeout)
+                        .add(migrateOptions.toArgs())
+                        .add(MigrateOptions.KEYS_VALKEY_API)
+                        .add(keys)
+                        .toArray(),
+                this::handleStringResponse);
     }
 }
