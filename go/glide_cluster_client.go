@@ -1014,6 +1014,301 @@ func (client *ClusterClient) LastSaveWithOptions(
 	return models.CreateClusterSingleValue[int64](data), nil
 }
 
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A simple OK response.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *ClusterClient) Save(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.Save, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A simple OK response.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *ClusterClient) SaveWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(ctx, C.Save, []string{}, opts.Route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) BgSave(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) BgSaveWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil &&
+		opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Schedules a background save of the database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) BgSaveSchedule(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"SCHEDULE"})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Schedules a background save of the database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) BgSaveScheduleWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{"SCHEDULE"}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil &&
+		opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Aborts all in-progress and scheduled background saves.
+//
+// Available since Valkey 8.1.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) BgSaveCancel(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"CANCEL"})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Aborts all in-progress and scheduled background saves.
+//
+// Available since Valkey 8.1.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) BgSaveCancelWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{"CANCEL"}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil &&
+		opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *ClusterClient) BgRewriteAof(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.BgRewriteAof, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *ClusterClient) BgRewriteAofWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	response, err := client.executeCommandWithRoute(ctx, C.BgRewriteAof, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil &&
+		opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.
