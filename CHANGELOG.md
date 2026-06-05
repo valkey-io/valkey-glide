@@ -8,6 +8,10 @@
 
 ### Changes
 
+* Java: Add `MIGRATE KEYS` (multi-key) variant — supports migrating multiple keys atomically via `KEYS key [key ...]` syntax ([#6063](https://github.com/valkey-io/valkey-glide/pull/6063))
+* Node: Add `MIGRATE KEYS` (multi-key) variant — supports migrating multiple keys atomically via `keys` field in `MigrateOptions`; uses `KEYS key [key ...]` syntax ([#6064](https://github.com/valkey-io/valkey-glide/pull/6064))
+* Go: Add `MigrateKeys` and `MigrateKeysWithOptions` — multi-key MIGRATE variant using `KEYS key [key ...]` syntax ([#6065](https://github.com/valkey-io/valkey-glide/pull/6065))
+* Python: Add `MIGRATE KEYS` (multi-key) variant — supports migrating multiple keys atomically via `keys` field in `MigrateOptions`; uses `KEYS key [key ...]` syntax ([#6066](https://github.com/valkey-io/valkey-glide/pull/6066))
 * Core, Java: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
 * Core, Python, Java, Node, Go: Add `CLIENT PAUSE` and `CLIENT UNPAUSE` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
 * Go: Add RESET command support ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
