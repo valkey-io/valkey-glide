@@ -1313,7 +1313,7 @@ class TestSyncBatch:
             batch3.migrate(
                 "invalid-host",
                 6379,
-                get_random_string(5),
+                "",
                 0,
                 5000,
                 MigrateOptions(keys=[]),
