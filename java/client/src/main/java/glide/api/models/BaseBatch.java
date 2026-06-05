@@ -36,6 +36,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.FCall;
 import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -248,6 +249,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.HGetExOptions;
@@ -5061,6 +5063,29 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T flushdb(FlushMode mode) {
         protobufBatch.addCommands(buildCommand(FlushDB, newArgsBuilder().add(mode)));
+        return getThis();
+    }
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> if the failover was successfully initiated.
+     */
+    public T failover() {
+        protobufBatch.addCommands(buildCommand(FailOver));
+        return getThis();
+    }
+
+    /**
+     * Starts a coordinated failover with the specified options.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @param options The failover options.
+     * @return Command Response - <code>"OK"</code> if the failover was successfully initiated.
+     */
+    public T failover(FailoverOptions options) {
+        protobufBatch.addCommands(buildCommand(FailOver, newArgsBuilder().add(options.toArgs())));
         return getThis();
     }
 

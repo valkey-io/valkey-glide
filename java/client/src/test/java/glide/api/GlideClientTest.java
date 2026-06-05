@@ -35,6 +35,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.FCall;
 import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -303,6 +304,7 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions.Section;
@@ -16356,5 +16358,67 @@ public class GlideClientTest {
 
         // verify
         assertNull(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void failover_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(eq(FailOver), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.failover();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void failover_with_options_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(
+                        eq(FailOver),
+                        eq(new String[] {"TO", "localhost", "6380", "FORCE", "TIMEOUT", "1000"}),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        FailoverOptions options =
+                FailoverOptions.builder().to("localhost", 6380).force().timeout(1000).build();
+        CompletableFuture<String> response = service.failover(options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void failover_abort_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(eq(FailOver), eq(new String[] {"ABORT"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.failover(FailoverOptions.abort());
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }

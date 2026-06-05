@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import java.util.Map;
@@ -553,4 +554,33 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> aclWhoami();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     * This command must be sent to a primary node.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas
+     * with the specified options.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @param options The failover options.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover(FailoverOptions.builder().to("localhost", 6380).timeout(1000).build()).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover(FailoverOptions options);
 }

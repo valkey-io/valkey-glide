@@ -56,6 +56,7 @@ import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptOptions;
@@ -2106,5 +2107,38 @@ public class CommandTests {
         assertTrue(
                 exception.getMessage().toUpperCase().contains("NOSCRIPT"),
                 "Expected NOSCRIPT error after script is fully released and flushed");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void failover_no_replicas(GlideClient regularClient) {
+        // FAILOVER without replicas should fail with an error
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> regularClient.failover().get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void failover_abort_no_failover_in_progress(GlideClient regularClient) {
+        // FAILOVER ABORT when no failover is in progress should fail
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.failover(FailoverOptions.abort()).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void failover_with_invalid_target(GlideClient regularClient) {
+        // FAILOVER TO a non-existent host should fail
+        FailoverOptions options =
+                FailoverOptions.builder().to("invalid_host", 9999).timeout(100).build();
+        ExecutionException exception =
+                assertThrows(ExecutionException.class, () -> regularClient.failover(options).get());
+        assertInstanceOf(RequestException.class, exception.getCause());
     }
 }

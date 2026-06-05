@@ -35,6 +35,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.FCall;
 import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -265,6 +266,7 @@ import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.ExpirySet;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FieldConditionalChange;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.HGetExExpiry;
@@ -1180,6 +1182,12 @@ public class BatchTests {
         batch.flushdb().flushdb(ASYNC);
         results.add(Pair.of(FlushDB, buildArgs()));
         results.add(Pair.of(FlushDB, buildArgs(ASYNC.toString())));
+
+        batch
+                .failover()
+                .failover(FailoverOptions.builder().to("localhost", 6380).timeout(1000).build());
+        results.add(Pair.of(FailOver, buildArgs()));
+        results.add(Pair.of(FailOver, buildArgs("TO", "localhost", "6380", "TIMEOUT", "1000")));
 
         batch.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));
