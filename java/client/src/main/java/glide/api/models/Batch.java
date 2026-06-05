@@ -1,12 +1,15 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
 import static command_request.CommandRequestOuterClass.RequestType.Select;
 import static glide.utils.ArgsBuilder.checkTypeOrThrow;
 import static glide.utils.ArgsBuilder.newArgsBuilder;
 
 import glide.api.GlideClient;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.scan.ScanOptions;
 import lombok.NonNull;
 
@@ -118,6 +121,54 @@ public class Batch extends BaseBatch<Batch> {
         checkTypeOrThrow(cursor);
         protobufBatch.addCommands(
                 buildCommand(Scan, newArgsBuilder().add(cursor).add(options.toArgs())));
+        return this;
+    }
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> if the failover was successfully initiated.
+     */
+    public Batch failover() {
+        protobufBatch.addCommands(buildCommand(FailOver));
+        return this;
+    }
+
+    /**
+     * Starts a coordinated failover with the specified options.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @param options The failover options.
+     * @return Command Response - <code>"OK"</code> if the failover was successfully initiated.
+     */
+    public Batch failover(@NonNull FailoverOptions options) {
+        protobufBatch.addCommands(buildCommand(FailOver, newArgsBuilder().add(options.toArgs())));
+        return this;
+    }
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @param host The host of the primary to replicate.
+     * @param port The port of the primary to replicate.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public Batch replicaof(@NonNull String host, int port) {
+        protobufBatch.addCommands(
+                buildCommand(ReplicaOf, newArgsBuilder().add(host).add(Integer.toString(port))));
+        return this;
+    }
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> on success.
+     */
+    public Batch replicaofNoOne() {
+        protobufBatch.addCommands(buildCommand(ReplicaOf, newArgsBuilder().add("NO").add("ONE")));
         return this;
     }
 }
