@@ -9,7 +9,8 @@ description: >
 inputs:
     engine-version:
         description: >
-            Valkey engine version (e.g. 9.1).
+            Valkey engine version (e.g. 9.0, 8.1). The Docker image is
+            pinned to 9.1-rc1 regardless - see the TODO in the image step.
         required: true
 
 runs:
@@ -18,8 +19,12 @@ runs:
         - name: Determine Docker image
           id: docker-image
           shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
           run: |
-              IMAGE="valkey/valkey-bundle:9.1"
+              # TEMPORARY: Pin to 9.1-rc1 until stable per-version valkey-bundle tags exist.
+              # TODO: switch to valkey/valkey-bundle:${ENGINE_VERSION} once stable tags are published.
+              IMAGE="valkey/valkey-bundle:9.1-rc1"
               echo "image=$IMAGE" >> $GITHUB_OUTPUT
               echo "Using Docker image: $IMAGE"
 

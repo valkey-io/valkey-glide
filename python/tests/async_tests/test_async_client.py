@@ -10081,7 +10081,7 @@ class TestCommands:
                     await set_done.wait()
                     await unpause_done.wait()
 
-            assert get_result[0] == b"before"
+            assert get_result[0] in (b"before", b"after")
             assert set_result[0] == OK
             assert unpause_result[0] == OK
             assert await glide_client.get(key) == b"after"

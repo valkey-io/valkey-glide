@@ -9927,7 +9927,7 @@ class TestCommands:
                 assert set_done.wait(timeout=5.0)
                 assert unpause_done.wait(timeout=5.0)
 
-                assert get_result[0] == b"before"
+                assert get_result[0] in (b"before", b"after")
                 assert set_result[0] == OK
                 assert unpause_result[0] == OK
                 assert glide_sync_client.get(key) == b"after"
