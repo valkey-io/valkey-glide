@@ -567,7 +567,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/set/">valkey.io</a> for details.
      * @param key The key to store.
      * @param value The value to store with the given <code>key</code>.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T set(@NonNull ArgType key, @NonNull ArgType value) {
         checkTypeOrThrow(key);
@@ -639,7 +639,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see <a href="https://valkey.io/commands/mset/">valkey.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
-     * @return Command Response - A simple <code>OK</code> response.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T mset(@NonNull Map<?, ?> keyValueMap) {
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
@@ -1769,7 +1769,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param key The key of the list.
      * @param start The starting point of the range.
      * @param end The end of the range.
-     * @return Command Response - Always <code>OK</code>.<br>
+     * @return Command Response - <code>"OK"</code> response on success.<br>
      *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
      *     <code>end</code>, the list is emptied and the key is removed.<br>
      *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
@@ -2164,8 +2164,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
-     * @return Command response - <code>OK</code> if all configurations have been successfully set.
-     *     Otherwise, the command fails with an error.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T configSet(@NonNull Map<ArgType, ArgType> parameters) {
         protobufBatch.addCommands(
@@ -2542,8 +2541,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Rewrites the configuration file with the current configuration.
      *
      * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
-     * @return Command Response - <code>OK</code> is returned when the configuration was rewritten
-     *     properly. Otherwise, the command fails with an error.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T configRewrite() {
         protobufBatch.addCommands(buildCommand(ConfigRewrite));
@@ -2556,8 +2554,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * href="https://valkey.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
      * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @return Command Response - <code>OK</code> to confirm that the statistics were successfully
-     *     reset.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T configResetStat() {
         protobufBatch.addCommands(buildCommand(ConfigResetStat));
@@ -4217,7 +4214,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T xgroupCreate(
             @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id) {
@@ -4240,7 +4237,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     group's perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @param options The group options {@link StreamGroupOptions}.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T xgroupCreate(
             @NonNull ArgType key,
@@ -4323,7 +4320,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T xgroupSetId(
             @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id) {
@@ -4345,7 +4342,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
      * @param entriesRead A value representing the number of stream entries already read by the group.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T xgroupSetId(
             @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id, long entriesRead) {
@@ -5023,7 +5020,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T flushall() {
         protobufBatch.addCommands(buildCommand(FlushAll));
@@ -5036,7 +5033,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T flushall(FlushMode mode) {
         protobufBatch.addCommands(buildCommand(FlushAll, newArgsBuilder().add(mode)));
@@ -5047,7 +5044,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Deletes all the keys of the currently selected database. This command never fails.
      *
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T flushdb() {
         protobufBatch.addCommands(buildCommand(FlushDB));
@@ -5060,7 +5057,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T flushdb(FlushMode mode) {
         protobufBatch.addCommands(buildCommand(FlushDB, newArgsBuilder().add(mode)));
@@ -5616,7 +5613,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param destination The key of the destination HyperLogLog where the merged data sets will be
      *     stored.
      * @param sourceKeys The keys of the HyperLogLog structures to be merged.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T pfmerge(@NonNull ArgType destination, @NonNull ArgType[] sourceKeys) {
         checkTypeOrThrow(destination);
@@ -5830,8 +5827,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
      *     persist.
      * @param value The serialized value to deserialize and assign to <code>key</code>.
-     * @return Command Response - Return <code>OK</code> if the <code>key</code> was successfully
-     *     restored with a <code>value</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T restore(@NonNull ArgType key, long ttl, @NonNull byte[] value) {
         checkTypeOrThrow(key);
@@ -5852,8 +5848,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     persist.
      * @param value The serialized value to deserialize and assign to <code>key</code>.
      * @param restoreOptions The restore options. See {@link RestoreOptions}.
-     * @return Command Response - Return <code>OK</code> if the <code>key</code> was successfully
-     *     restored with a <code>value</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T restore(
             @NonNull ArgType key,
@@ -6271,7 +6266,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T functionRestore(@NonNull byte[] payload) {
         protobufBatch.addCommands(buildCommand(FunctionRestore, newArgsBuilder().add(payload)));
@@ -6286,7 +6281,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T functionRestore(@NonNull byte[] payload, @NonNull FunctionRestorePolicy policy) {
         protobufBatch.addCommands(
@@ -6590,7 +6585,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
      * @param key The key of the list.
      * @param index The index of the element in the list to be set.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T lset(@NonNull ArgType key, long index, @NonNull ArgType element) {
         checkTypeOrThrow(key);
@@ -6804,7 +6799,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @since Valkey 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T functionFlush() {
         protobufBatch.addCommands(buildCommand(FunctionFlush));
@@ -6818,7 +6813,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public T functionFlush(@NonNull FlushMode mode) {
         protobufBatch.addCommands(buildCommand(FunctionFlush, newArgsBuilder().add(mode)));
@@ -6833,7 +6828,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *     will throw {@link IllegalArgumentException}.
      * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
-     * @return Command Response - <code>OK</code>.
+     * @return Command Response - <code>"OK"</code> response on success.
      */
     public <ArgType> T functionDelete(@NonNull ArgType libName) {
         checkTypeOrThrow(libName);

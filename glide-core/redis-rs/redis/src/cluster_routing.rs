@@ -601,7 +601,7 @@ impl ResponsePolicy {
             | b"FLUSHDB" | b"FUNCTION DELETE" | b"FUNCTION FLUSH" | b"FUNCTION LOAD"
             | b"FUNCTION RESTORE" | b"MEMORY PURGE" | b"MSET" | b"JSON.MSET" | b"PING"
             | b"SCRIPT FLUSH" | b"SCRIPT LOAD" | b"SELECT" | b"SLOWLOG RESET" | b"UNWATCH"
-            | b"WATCH" | b"RESET" => Some(ResponsePolicy::AllSucceeded),
+            | b"WATCH" | b"RESET" | b"SAVE" => Some(ResponsePolicy::AllSucceeded),
 
             b"KEYS"
             | b"FT._ALIASLIST"

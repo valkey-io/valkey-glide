@@ -385,6 +385,9 @@ public abstract class BaseClient
     public static final String WITHMATCHLEN_COMMAND_STRING = "WITHMATCHLEN";
     public static final String LCS_MATCHES_RESULT_KEY = "matches";
 
+    protected static final String SCHEDULE_VALKEY_API = "SCHEDULE";
+    protected static final String CANCEL_VALKEY_API = "CANCEL";
+
     // Constant empty arrays to reduce allocations
     protected static final String[] EMPTY_STRING_ARRAY = new String[0];
     protected static final GlideString[] EMPTY_GLIDE_STRING_ARRAY = new GlideString[0];
