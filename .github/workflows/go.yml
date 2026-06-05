@@ -102,9 +102,19 @@ jobs:
                   run-with-macos: ${{ github.event.inputs.run-with-macos }}
                   use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        needs: get-matrices
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
+
     test-go:
         name: Go Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 35
         strategy:
             fail-fast: false
@@ -257,7 +267,8 @@ jobs:
 
     test-go-container:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: get-containers
+        needs: [get-containers, approve-self-hosted]
+        if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 25
         strategy:
             fail-fast: false
@@ -364,7 +375,8 @@ jobs:
 
     test-long-timeout:
         name: Go Long Timeout Tests - ${{ matrix.go }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
-        needs: get-matrices
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 35
         strategy:
             fail-fast: false

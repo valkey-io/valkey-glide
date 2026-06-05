@@ -44,7 +44,17 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
+
     redis-rs-CI:
+        needs: [approve-self-hosted]
+        if: always() && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         runs-on: ${{ inputs.use-self-hosted-linux && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-latest' }}
 
         steps:
