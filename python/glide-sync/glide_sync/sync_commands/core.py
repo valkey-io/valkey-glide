@@ -6969,19 +6969,7 @@ class CoreCommands(Protocol):
             >>> client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
                 "NOKEY"
         """
-        if (options is None or options.keys is None) and (key == "" or key == b""):
-            raise ValueError(
-                "migrate: 'key' must not be empty when 'options.keys' is not provided"
-            )
-        if (
-            options is not None
-            and options.keys is not None
-            and key != ""
-            and key != b""
-        ):
-            raise ValueError(
-                "migrate: 'key' must be empty string when 'options.keys' is provided"
-            )
+        MigrateOptions.validate_key_and_options(key, options)
         args: List[TEncodable] = [
             host,
             str(port),

@@ -9503,6 +9503,19 @@ class TestCommands:
         with pytest.raises(ValueError):
             glide_sync_client.migrate("invalid-host", 6379, "", 0, 5000)
 
+        # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made)
+        non_existent1 = get_random_string(10)
+        non_existent2 = get_random_string(10)
+        result = glide_sync_client.migrate(
+            "invalid-host",
+            6379,
+            "",
+            0,
+            5000,
+            MigrateOptions(keys=[non_existent1, non_existent2]),
+        )
+        assert result == "NOKEY"
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_wait(self, glide_sync_client: TGlideClient):

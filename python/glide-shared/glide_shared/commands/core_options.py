@@ -439,6 +439,25 @@ class MigrateOptions:
     username: Optional[str] = None
     keys: Optional[List[TEncodable]] = None
 
+    @staticmethod
+    def validate_key_and_options(
+        key: TEncodable, options: Optional["MigrateOptions"]
+    ) -> None:
+        """Validate that ``key`` and ``options.keys`` are not used together."""
+        if (options is None or options.keys is None) and (key == "" or key == b""):
+            raise ValueError(
+                "migrate: 'key' must not be empty when 'options.keys' is not provided"
+            )
+        if (
+            options is not None
+            and options.keys is not None
+            and key != ""
+            and key != b""
+        ):
+            raise ValueError(
+                "migrate: 'key' must be empty string when 'options.keys' is provided"
+            )
+
     def to_args(self) -> List[TEncodable]:
         if self.username is not None and self.password is None:
             raise ValueError("MigrateOptions: 'username' requires 'password' to be set")
