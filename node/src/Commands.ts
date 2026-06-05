@@ -352,6 +352,13 @@ export function createClientGetName(): command_request.Command {
 /**
  * @internal
  */
+export function createReset(): command_request.Command {
+    return createCommand(RequestType.Reset, []);
+}
+
+/**
+ * @internal
+ */
 export function createConfigRewrite(): command_request.Command {
     return createCommand(RequestType.ConfigRewrite, []);
 }
@@ -426,6 +433,43 @@ export function createIncrByFloat(
  */
 export function createClientId(): command_request.Command {
     return createCommand(RequestType.ClientId, []);
+}
+
+/**
+ * Defines the pause mode for {@link GlideClient.clientPause} and
+ *      {@link GlideClusterClient.clientPause} commands.
+ *
+ * @see {@link https://valkey.io/commands/client-pause/|valkey.io} for details.
+ */
+export enum ClientPauseMode {
+    /** Pause all client commands. */
+    ALL = "ALL",
+
+    /** Pause client write commands. */
+    WRITE = "WRITE",
+}
+
+/**
+ * @internal
+ */
+export function createClientPause(
+    timeout: number,
+    mode?: ClientPauseMode,
+): command_request.Command {
+    const args: string[] = [timeout.toString()];
+
+    if (mode !== undefined) {
+        args.push(mode);
+    }
+
+    return createCommand(RequestType.ClientPause, args);
+}
+
+/**
+ * @internal
+ */
+export function createClientUnpause(): command_request.Command {
+    return createCommand(RequestType.ClientUnpause, []);
 }
 
 /**

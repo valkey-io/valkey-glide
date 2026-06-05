@@ -1654,3 +1654,12 @@ class TestBatch:
         assert result is not None
         assert isinstance(result[0], RequestError)
         assert isinstance(result[1], RequestError)
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_reset_batch(self, glide_client: GlideClient):
+        batch = Batch(is_atomic=False)
+        batch.reset()
+        result = await exec_batch(glide_client, batch, raise_on_error=True)
+        assert result is not None
+        assert result[0] == b"RESET"

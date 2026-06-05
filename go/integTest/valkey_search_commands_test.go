@@ -51,7 +51,8 @@ func (suite *GlideTestSuite) jsonSetCluster(ctx context.Context, client *glide.C
 // createIndexHelper creates a simple HASH index with a numeric and text field (cluster).
 func (suite *GlideTestSuite) createIndexHelper(ctx context.Context, client *glide.ClusterClient, indexName string) string {
 	prefix := "{hash-search-" + uuid.New().String() + "}:"
-	_, err := glideft.ClusterFtCreate(ctx, client, indexName,
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, indexName,
 		[]options.Field{
 			options.NewNumericField("price"),
 			options.NewTextField("title"),
@@ -68,7 +69,8 @@ func (suite *GlideTestSuite) createIndexHelper(ctx context.Context, client *glid
 // createIndexHelperStandalone creates a simple HASH index with a numeric and text field (standalone).
 func (suite *GlideTestSuite) createIndexHelperStandalone(ctx context.Context, client *glide.Client, indexName string) string {
 	prefix := "hash-search-" + uuid.New().String() + ":"
-	_, err := glideft.FtCreate(ctx, client, indexName,
+	_, err := glideft.FtCreate(
+		ctx, client, indexName,
 		[]options.Field{
 			options.NewNumericField("price"),
 			options.NewTextField("title"),

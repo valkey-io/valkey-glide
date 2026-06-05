@@ -22,7 +22,8 @@ func Example_clusterFtCreate() {
 	ctx := context.Background()
 
 	// Create a vector search index on hash keys with prefix "doc:"
-	_, err := glideft.ClusterFtCreate(ctx, client, "my_index",
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, "my_index",
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -61,7 +62,8 @@ func Example_clusterFtSearch() {
 	prefix := "{searchdoc}:"
 	index := "{searchdoc}:index"
 
-	_, err := glideft.ClusterFtCreate(ctx, client, index,
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -105,7 +107,8 @@ func Example_clusterFtAggregate() {
 	prefix := "{aggdoc}:"
 	index := "{aggdoc}:index"
 
-	_, err := glideft.ClusterFtCreate(ctx, client, index,
+	_, err := glideft.ClusterFtCreate(
+		ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("score"),
 		},
@@ -125,7 +128,8 @@ func Example_clusterFtAggregate() {
 	time.Sleep(time.Second)
 
 	// Aggregate with LOAD to retrieve field values for matching documents
-	rows, err := glideft.ClusterFtAggregate(ctx, client, index, "@score:[20 +inf]",
+	rows, err := glideft.ClusterFtAggregate(
+		ctx, client, index, "@score:[20 +inf]",
 		&options.FtAggregateOptions{
 			LoadAll: true,
 		},
@@ -151,7 +155,8 @@ func Example_ftCreate() {
 	ctx := context.Background()
 
 	// Create a vector search index on hash keys with prefix "doc:"
-	_, err := glideft.FtCreate(ctx, client, "my_standalone_index",
+	_, err := glideft.FtCreate(
+		ctx, client, "my_standalone_index",
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -190,7 +195,8 @@ func Example_ftSearch() {
 	prefix := "searchdoc:"
 	index := "searchdoc:index"
 
-	_, err := glideft.FtCreate(ctx, client, index,
+	_, err := glideft.FtCreate(
+		ctx, client, index,
 		[]options.Field{
 			options.NewTextField("title"),
 			options.NewNumericField("score"),
@@ -234,7 +240,8 @@ func Example_ftAggregate() {
 	prefix := "aggdoc:"
 	index := "aggdoc:index"
 
-	_, err := glideft.FtCreate(ctx, client, index,
+	_, err := glideft.FtCreate(
+		ctx, client, index,
 		[]options.Field{
 			options.NewNumericField("score"),
 		},
@@ -254,7 +261,8 @@ func Example_ftAggregate() {
 	time.Sleep(time.Second)
 
 	// Aggregate with LOAD to retrieve field values for matching documents
-	rows, err := glideft.FtAggregate(ctx, client, index, "@score:[20 +inf]",
+	rows, err := glideft.FtAggregate(
+		ctx, client, index, "@score:[20 +inf]",
 		&options.FtAggregateOptions{
 			LoadAll: true,
 		},

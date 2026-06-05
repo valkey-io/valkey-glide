@@ -73,11 +73,11 @@ function runSyncPythonBenchmark(){
 
 function runNodeBenchmark(){
   cd ${BENCH_FOLDER}/../node
-  npm install
+  npm ci
   rm -rf build-ts
   npm run build:benchmark
   cd ${BENCH_FOLDER}/node
-  npm install
+  npm ci
   npx tsc
   npm run bench -- --resultsFile=../$1 --dataSize $2 --concurrentTasks $concurrentTasks --clients $chosenClients --host $host --clientCount $clientCount $tlsFlag $clusterFlag $portFlag $minimalFlag
 }
@@ -112,7 +112,7 @@ function runRustBenchmark(){
 
 function flushDB() {
   cd $utilitiesDir
-  npm install
+  npm ci
   npx tsc
   npm run flush -- --host $host $tlsFlag $clusterFlag $portFlag
 }
