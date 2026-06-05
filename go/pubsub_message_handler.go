@@ -178,7 +178,8 @@ func (queue *PubSubMessageQueue) UnregisterSignalChannel(ch chan struct{}) {
 		if channel == ch {
 			queue.nextMessageReadySignals = append(
 				queue.nextMessageReadySignals[:idx],
-				queue.nextMessageReadySignals[idx+1:]...)
+				queue.nextMessageReadySignals[idx+1:]...,
+			)
 			break
 		}
 	}

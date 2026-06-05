@@ -43,7 +43,8 @@ func ExampleClient_ZAddWithOptions() {
 	var client *Client = getExampleClient() // example helper function
 
 	opts, err := options.NewZAddOptions().SetChanged(true)
-	result, err := client.ZAddWithOptions(context.Background(),
+	result, err := client.ZAddWithOptions(
+		context.Background(),
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0},
 		*opts,
@@ -60,7 +61,8 @@ func ExampleClusterClient_ZAddWithOptions() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	opts, err := options.NewZAddOptions().SetChanged(true)
-	result, err := client.ZAddWithOptions(context.Background(),
+	result, err := client.ZAddWithOptions(
+		context.Background(),
 		"key1",
 		map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0},
 		*opts,
@@ -404,7 +406,8 @@ func ExampleClient_ZRange() {
 	// Retrieve members within a score range in descending order
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+	).SetReverse()
 	result2, err := client.ZRange(context.Background(), "key1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -429,7 +432,8 @@ func ExampleClusterClient_ZRange() {
 	// Retrieve members within a score range in descending order
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+	).SetReverse()
 	result2, err := client.ZRange(context.Background(), "key1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -453,7 +457,8 @@ func ExampleClient_ZRangeWithScores() {
 
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+	).SetReverse()
 	result2, err := client.ZRangeWithScores(context.Background(), "key1", query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -476,7 +481,8 @@ func ExampleClusterClient_ZRangeWithScores() {
 
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+	).SetReverse()
 	result2, err := client.ZRangeWithScores(context.Background(), "key1", query)
 	if err != nil {
 		fmt.Println("Glide example failed with an error: ", err)
@@ -497,7 +503,8 @@ func ExampleClient_ZRangeStore() {
 	client.ZAdd(context.Background(), "key1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+	).SetReverse()
 	result, err := client.ZRangeStore(context.Background(), "dest", "key1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -514,7 +521,8 @@ func ExampleClusterClient_ZRangeStore() {
 	client.ZAdd(context.Background(), "{key}1", map[string]float64{"one": 1.0, "two": 2.0, "three": 3.0})
 	query := options.NewRangeByScoreQuery(
 		options.NewScoreBoundary(3, false),
-		options.NewInfiniteScoreBoundary(constants.NegativeInfinity)).SetReverse()
+		options.NewInfiniteScoreBoundary(constants.NegativeInfinity),
+	).SetReverse()
 	result, err := client.ZRangeStore(context.Background(), "{key}dest", "{key}1", query)
 	// `result` contains members which have scores within the range of negative infinity to 3, in descending order
 	if err != nil {
@@ -859,7 +867,8 @@ func ExampleClient_ZRemRangeByLex() {
 	var client *Client = getExampleClient() // example helper function
 
 	result, err := client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	result1, err := client.ZRemRangeByLex(context.Background(),
+	result1, err := client.ZRemRangeByLex(
+		context.Background(),
 		"key1",
 		*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", true)),
 	)
@@ -878,7 +887,8 @@ func ExampleClusterClient_ZRemRangeByLex() {
 	var client *ClusterClient = getExampleClusterClient() // example helper function
 
 	result, err := client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
-	result1, err := client.ZRemRangeByLex(context.Background(),
+	result1, err := client.ZRemRangeByLex(
+		context.Background(),
 		"key1",
 		*options.NewRangeByLexQuery(options.NewLexBoundary("a", false), options.NewLexBoundary("c", true)),
 	)
@@ -1202,7 +1212,8 @@ func ExampleClient_ZInterWithScores() {
 
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
 	client.ZAdd(context.Background(), "key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
-	result, err := client.ZInterWithScores(context.Background(),
+	result, err := client.ZInterWithScores(
+		context.Background(),
 		options.KeyArray{
 			Keys: []string{"key1", "key2"},
 		},
@@ -1220,7 +1231,8 @@ func ExampleClusterClient_ZInterWithScores() {
 
 	client.ZAdd(context.Background(), "{key}1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
 	client.ZAdd(context.Background(), "{key}2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
-	result, err := client.ZInterWithScores(context.Background(),
+	result, err := client.ZInterWithScores(
+		context.Background(),
 		options.KeyArray{
 			Keys: []string{"{key}1", "{key}2"},
 		},
@@ -1271,7 +1283,8 @@ func ExampleClient_ZInterStoreWithOptions() {
 
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
 	client.ZAdd(context.Background(), "key2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
-	result, err := client.ZInterStoreWithOptions(context.Background(),
+	result, err := client.ZInterStoreWithOptions(
+		context.Background(),
 		"dest",
 		options.KeyArray{
 			Keys: []string{"key1", "key2"},
@@ -1291,7 +1304,8 @@ func ExampleClusterClient_ZInterStoreWithOptions() {
 
 	client.ZAdd(context.Background(), "{key}1", map[string]float64{"a": 1.0, "b": 2.5, "c": 3.0, "d": 4.0})
 	client.ZAdd(context.Background(), "{key}2", map[string]float64{"b": 1.0, "c": 2.5, "d": 3.0, "e": 4.0})
-	result, err := client.ZInterStoreWithOptions(context.Background(),
+	result, err := client.ZInterStoreWithOptions(
+		context.Background(),
 		"{key}dest",
 		options.KeyArray{
 			Keys: []string{"{key}1", "{key}2"},
@@ -1447,7 +1461,8 @@ func ExampleClient_ZUnionWithScores() {
 	client.ZAdd(context.Background(), "key1", memberScoreMap1)
 	client.ZAdd(context.Background(), "key2", memberScoreMap2)
 
-	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
+	zUnionResult, _ := client.ZUnionWithScores(
+		context.Background(),
 		options.KeyArray{Keys: []string{"key1", "key2"}},
 		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
@@ -1471,7 +1486,8 @@ func ExampleClusterClient_ZUnionWithScores() {
 	client.ZAdd(context.Background(), "{key}1", memberScoreMap1)
 	client.ZAdd(context.Background(), "{key}2", memberScoreMap2)
 
-	zUnionResult, _ := client.ZUnionWithScores(context.Background(),
+	zUnionResult, _ := client.ZUnionWithScores(
+		context.Background(),
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
 		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
 	)
@@ -1495,7 +1511,8 @@ func ExampleClient_ZUnionStore() {
 	client.ZAdd(context.Background(), "key1", memberScoreMap1)
 	client.ZAdd(context.Background(), "key2", memberScoreMap2)
 
-	zUnionStoreResult, err := client.ZUnionStore(context.Background(),
+	zUnionStoreResult, err := client.ZUnionStore(
+		context.Background(),
 		"dest",
 		options.KeyArray{Keys: []string{"key1", "key2"}},
 	)
@@ -1523,7 +1540,8 @@ func ExampleClusterClient_ZUnionStore() {
 	client.ZAdd(context.Background(), "{key}1", memberScoreMap1)
 	client.ZAdd(context.Background(), "{key}2", memberScoreMap2)
 
-	zUnionStoreResult, err := client.ZUnionStore(context.Background(),
+	zUnionStoreResult, err := client.ZUnionStore(
+		context.Background(),
 		"{key}dest",
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
 	)
@@ -1551,7 +1569,8 @@ func ExampleClient_ZUnionStoreWithOptions() {
 	client.ZAdd(context.Background(), "key1", memberScoreMap1)
 	client.ZAdd(context.Background(), "key2", memberScoreMap2)
 
-	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
+	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(
+		context.Background(),
 		"dest",
 		options.KeyArray{Keys: []string{"key1", "key2"}},
 		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
@@ -1580,7 +1599,8 @@ func ExampleClusterClient_ZUnionStoreWithOptions() {
 	client.ZAdd(context.Background(), "{key}1", memberScoreMap1)
 	client.ZAdd(context.Background(), "{key}2", memberScoreMap2)
 
-	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(context.Background(),
+	zUnionStoreWithOptionsResult, err := client.ZUnionStoreWithOptions(
+		context.Background(),
 		"{key}dest",
 		options.KeyArray{Keys: []string{"{key}1", "{key}2"}},
 		*options.NewZUnionOptions().SetAggregate(options.AggregateSum),
@@ -1638,7 +1658,8 @@ func ExampleClient_ZInterCardWithOptions() {
 	client.ZAdd(context.Background(), key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 	client.ZAdd(context.Background(), key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
-	res, err := client.ZInterCardWithOptions(context.Background(),
+	res, err := client.ZInterCardWithOptions(
+		context.Background(),
 		[]string{key1, key2},
 		*options.NewZInterCardOptions().SetLimit(5),
 	)
@@ -1659,7 +1680,8 @@ func ExampleClusterClient_ZInterCardWithOptions() {
 	client.ZAdd(context.Background(), key1, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 	client.ZAdd(context.Background(), key2, map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "e": 4.0})
 
-	res, err := client.ZInterCardWithOptions(context.Background(),
+	res, err := client.ZInterCardWithOptions(
+		context.Background(),
 		[]string{key1, key2},
 		*options.NewZInterCardOptions().SetLimit(5),
 	)
@@ -1677,7 +1699,8 @@ func ExampleClient_ZLexCount() {
 
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
-	result, err := client.ZLexCount(context.Background(), "key1",
+	result, err := client.ZLexCount(
+		context.Background(), "key1",
 		*options.NewRangeByLexQuery(
 			options.NewLexBoundary("a", false),
 			options.NewLexBoundary("c", true),
@@ -1697,7 +1720,8 @@ func ExampleClusterClient_ZLexCount() {
 
 	client.ZAdd(context.Background(), "key1", map[string]float64{"a": 1.0, "b": 2.0, "c": 3.0, "d": 4.0})
 
-	result, err := client.ZLexCount(context.Background(), "key1",
+	result, err := client.ZLexCount(
+		context.Background(), "key1",
 		*options.NewRangeByLexQuery(
 			options.NewLexBoundary("a", false),
 			options.NewLexBoundary("c", true),

@@ -1,5 +1,4 @@
 #!/bin/bash -e
-npm install --save-dev typedoc
 typedoc src/BaseClient.ts                   \
         src/Batch.ts                  \
         src/GlideClient.ts                  \

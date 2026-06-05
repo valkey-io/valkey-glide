@@ -4,12 +4,20 @@ package compatibility.jedis;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.junit.jupiter.api.*;
 import redis.clients.jedis.DefaultJedisClientConfig;
 import redis.clients.jedis.GlideJedisFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Transaction;
 
 /** Simplified JedisPool compatibility test that validates basic GLIDE JedisPool functionality. */
 public class JedisPoolTest {
@@ -185,6 +193,88 @@ public class JedisPoolTest {
             // After returning connection, active should decrease
             int finalActive = pool.getNumActive();
             assertTrue(finalActive >= 0, "Final active connections should be non-negative");
+        }
+    }
+
+    @Test
+    void pool_broken_resource_is_invalidated_and_replaced() {
+        try (JedisPool pool = new JedisPool(valkeyHost, valkeyPort)) {
+            try (Jedis jedis = pool.getResource()) {
+                jedis.ping();
+                jedis.setBroken(true);
+            }
+            try (Jedis jedis2 = pool.getResource()) {
+                assertEquals(
+                        "PONG",
+                        jedis2.ping(),
+                        "verify: pool remains usable after broken connection is closed and invalidated");
+            }
+        }
+    }
+
+    @Test
+    void pool_allows_multi_after_prior_borrow_abandoned_multi() {
+        try (JedisPool pool = new JedisPool(valkeyHost, valkeyPort)) {
+            try (Jedis j1 = pool.getResource()) {
+                j1.multi();
+                // exercise: return connection without exec/discard/Transaction.close (abandoned MULTI)
+            }
+            try (Jedis j2 = pool.getResource()) {
+                Transaction t = j2.multi();
+                assertNotNull(
+                        t, "verify: multi() succeeds on reused connection after abandoned prior multi");
+                String key = UUID.randomUUID().toString();
+                t.set(key, "v");
+                List<Object> results = t.exec();
+                assertNotNull(results, "verify: exec completes after healthy transaction");
+                j2.del(key);
+            }
+        }
+    }
+
+    @Test
+    void pool_concurrent_borrow_and_return() throws InterruptedException {
+        int threadCount = 8;
+        int iterationsPerThread = 50;
+        GenericObjectPoolConfig<Jedis> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(4);
+        try (JedisPool pool = new JedisPool(poolConfig, valkeyHost, valkeyPort)) {
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            CountDownLatch done = new CountDownLatch(threadCount * iterationsPerThread);
+            AtomicInteger failures = new AtomicInteger(0);
+            for (int t = 0; t < threadCount; t++) {
+                executor.submit(
+                        () -> {
+                            for (int i = 0; i < iterationsPerThread; i++) {
+                                try (Jedis jedis = pool.getResource()) {
+                                    jedis.ping();
+                                } catch (Exception e) {
+                                    failures.incrementAndGet();
+                                } finally {
+                                    done.countDown();
+                                }
+                            }
+                        });
+            }
+            assertTrue(
+                    done.await(120, TimeUnit.SECONDS),
+                    "verify: all concurrent borrow/return cycles finished within deadline");
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(30, TimeUnit.SECONDS));
+            assertEquals(0, failures.get(), "verify: no thread observed borrow/ping/close failures");
+        }
+    }
+
+    @Test
+    void pool_returnBrokenResource_directly_invalidates_borrowed_connection() {
+        try (JedisPool pool = new JedisPool(valkeyHost, valkeyPort)) {
+            Jedis jedis = pool.getResource();
+            jedis.ping();
+            pool.returnBrokenResource(jedis);
+            try (Jedis jedis2 = pool.getResource()) {
+                assertEquals(
+                        "PONG", jedis2.ping(), "verify: pool usable after explicit returnBrokenResource");
+            }
         }
     }
 }

@@ -5,7 +5,9 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.isWindows;
+import static glide.TestUtilities.waitForCondition;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
@@ -18672,6 +18674,36 @@ public class SharedCommandTests {
 
         String result = client.aclSave().get();
         assertEquals("OK", result);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void reset(BaseClient client) {
+        String result =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).reset().get()
+                        : ((GlideClient) client).reset().get();
+        assertEquals("RESET", result);
+        // Verify client recovers after reset
+        String pong =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).ping().get()
+                        : ((GlideClient) client).ping().get();
+        assertEquals("PONG", pong);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void save(BaseClient client) {
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+
+        if (client instanceof GlideClient) {
+            assertEquals(OK, ((GlideClient) client).save().get());
+        } else {
+            assertEquals(OK, ((GlideClusterClient) client).save().get());
+        }
     }
 
     /**
