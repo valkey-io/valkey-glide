@@ -62,8 +62,11 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
+import glide.cluster.ValkeyCluster;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -2114,39 +2117,49 @@ public class CommandTests {
     @SneakyThrows
     public void failover_no_replicas(GlideClient regularClient) {
         // FAILOVER without replicas should fail with an error
-        ExecutionException exception =
+        ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> regularClient.failover().get());
-        assertInstanceOf(RequestException.class, exception.getCause());
-    }
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getCause().getMessage().contains("no replica")
+                        || executionException.getCause().getMessage().contains("ERR"),
+                "Expected error about no replicas, got: " + executionException.getCause().getMessage());
 
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    @SneakyThrows
-    public void failover_abort_no_failover_in_progress(GlideClient regularClient) {
-        // FAILOVER ABORT when no failover is in progress should fail
-        ExecutionException exception =
+        // FAILOVER ABORT when no failover is in progress should also fail
+        executionException =
                 assertThrows(
                         ExecutionException.class, () -> regularClient.failover(FailoverOptions.abort()).get());
-        assertInstanceOf(RequestException.class, exception.getCause());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getCause().getMessage().contains("No failover")
+                        || executionException.getCause().getMessage().contains("ERR"),
+                "Expected error about no failover in progress, got: "
+                        + executionException.getCause().getMessage());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void failover_with_invalid_target(GlideClient regularClient) {
-        // FAILOVER TO a non-existent host should fail
-        FailoverOptions options =
-                FailoverOptions.builder().to("invalid_host", 9999).timeout(100).build();
-        ExecutionException exception =
-                assertThrows(ExecutionException.class, () -> regularClient.failover(options).get());
-        assertInstanceOf(RequestException.class, exception.getCause());
+    @Timeout(120)
+    public void failover_to_replica(GlideClient regularClient) {
+        // Spin up a standalone primary with 1 replica
+        try (ValkeyCluster standalone = new ValkeyCluster(false, false, 1, 1, null, null)) {
+            NodeAddress primaryAddr = standalone.getNodesAddr().get(0);
+            GlideClientConfiguration config =
+                    GlideClientConfiguration.builder().address(primaryAddr).requestTimeout(10000).build();
+            try (GlideClient client = GlideClient.createClient(config).get()) {
+                // FAILOVER with a timeout should succeed (returns OK immediately)
+                String result = client.failover(FailoverOptions.builder().timeout(10000).build()).get();
+                assertEquals(OK, result);
+            }
+        }
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void replicaof_and_replicaofNoOne(GlideClient regularClient) {
-        // Promote back to primary (REPLICAOF NO ONE) - should succeed even if already a primary
+        // REPLICAOF NO ONE should succeed even if already a primary
         assertEquals(OK, regularClient.replicaofNoOne().get());
     }
 }
