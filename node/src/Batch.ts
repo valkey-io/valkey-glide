@@ -52,6 +52,7 @@ import {
     ListDirection,
     LolwutOptions,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
+    MigrateOptions,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -173,6 +174,7 @@ import {
     createLastSave,
     createLolwut,
     createMGet,
+    createMigrate,
     createMSet,
     createMSetNX,
     createMove,
@@ -201,6 +203,7 @@ import {
     createRandomKey,
     createRename,
     createRenameNX,
+    createReset,
     createRestore,
     createSAdd,
     createSCard,
@@ -453,6 +456,32 @@ export class BaseBatch<T extends BaseBatch<T>> {
     ): T {
         return this.addAndReturn(createCopy(source, destination, options));
     }
+
+    /**
+     * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     */
+    public migrate(
+        host: string,
+        port: number,
+        key: GlideString,
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): T {
+        return this.addAndReturn(
+            createMigrate(host, port, key, destinationDB, timeout, options),
+        );
+    }
+
     /**
      * Gets information and statistics about the server.
      *
@@ -3611,6 +3640,20 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public wait(numreplicas: number, timeout: number): T {
         return this.addAndReturn(createWait(numreplicas, timeout));
+    }
+
+    /**
+     * Resets the connection state.
+     *
+     * @see {@link https://valkey.io/commands/reset/|valkey.io} for more details.
+     *
+     * @remarks RESET cannot be used inside an atomic batch (MULTI/EXEC transaction).
+     *     Use a non-atomic batch (`new Batch(false)`) instead.
+     *
+     * Command Response - "RESET" when the connection state is successfully reset.
+     */
+    public reset(): T {
+        return this.addAndReturn(createReset());
     }
 
     /**

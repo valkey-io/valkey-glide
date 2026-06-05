@@ -23,6 +23,7 @@ import {
 } from "./BaseClient";
 import { ClusterBatch } from "./Batch";
 import {
+    ClientPauseMode,
     ClusterBatchOptions,
     ClusterScanOptions,
     FlushMode,
@@ -34,6 +35,8 @@ import {
     LolwutOptions,
     createClientGetName,
     createClientId,
+    createClientPause,
+    createClientUnpause,
     createConfigGet,
     createConfigResetStat,
     createConfigRewrite,
@@ -1890,6 +1893,67 @@ export class GlideClusterClient extends BaseClient {
     public async unwatch(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createUnWatch(), {
             decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Suspends all clients for the specified timeout.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/client-pause/|valkey.io} for details.
+     *
+     * @param timeout - The time in milliseconds to pause clients.
+     * @param mode - (Optional) The pause mode to use.
+     *   + If not provided, all commands are paused.
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
+     * @returns `"OK"` response on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientPause(1000);
+     * console.log(result); // Output: 'OK'
+     * ```
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientPause(1000, ClientPauseMode.WRITE);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async clientPause(
+        timeout: number,
+        mode?: ClientPauseMode,
+        options?: RouteOption & DecoderOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createClientPause(timeout, mode), {
+            route: "allPrimaries" as const,
+            ...options,
+        });
+    }
+
+    /**
+     * Resumes processing commands on all clients.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/client-unpause/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} and {@link DecoderOption}.
+     * @returns `"OK"` response on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.clientUnpause();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async clientUnpause(
+        options?: RouteOption & DecoderOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createClientUnpause(), {
+            route: "allPrimaries" as const,
             ...options,
         });
     }

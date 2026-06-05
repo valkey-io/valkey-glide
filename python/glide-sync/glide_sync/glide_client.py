@@ -121,6 +121,7 @@ class BaseClient(CoreCommands):
             resolver_fn = self._config.address_resolver
 
             def _address_resolver_callback(
+                client_id,
                 host_ptr,
                 host_len,
                 port,
@@ -152,6 +153,7 @@ class BaseClient(CoreCommands):
             client_type,
             pubsub_callback,
             address_resolver_callback,
+            0,  # client_id is not used by the Python client
         )
 
         Logger.log(Level.INFO, "connection info", "new connection established")

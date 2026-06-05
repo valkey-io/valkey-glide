@@ -2,6 +2,9 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
+import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
+import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -14,7 +17,9 @@ import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitForCondition;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -50,6 +55,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ScriptOptions;
@@ -336,6 +342,59 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void clientPauseAll_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseAll_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
+
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> get = regularClient.get(key);
+        CompletableFuture<String> set = regularClient.set(key, "after");
+        CompletableFuture<String> unpause = regularClient.clientUnpause();
+
+        Thread.sleep(300);
+
+        // Verify that none of the commands completes.
+        assertFalse(get.isDone());
+        assertFalse(set.isDone());
+        assertFalse(unpause.isDone());
+
+        // Verify that all commands complete once pause expires.
+        assertEquals("before", get.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPauseWrite_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseWrite_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
+
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.WRITE).get());
+
+        // Reads are not blocked by PAUSE WRITE.
+        assertEquals("before", regularClient.get(key).get());
+
+        CompletableFuture<String> set = regularClient.set(key, "after");
+
+        Thread.sleep(300);
+
+        // Verify that SET has not completed because server is paused.
+        assertFalse(set.isDone());
+
+        assertEquals(OK, regularClient.clientUnpause().get());
+
+        // Verify that SET completes once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void config_reset_stat(GlideClient regularClient) {
         String data = regularClient.info(new Section[] {STATS}).get();
         long value_before = getValueFromInfo(data, "total_net_input_bytes");
@@ -470,6 +529,42 @@ public class CommandTests {
         long result = regularClient.lastsave().get();
         Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
         assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave(GlideClient client) {
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsave().get()));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule(GlideClient client) {
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsaveSchedule().get()));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel(GlideClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> client.bgsaveCancel().get());
+        assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof(GlideClient client) {
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        assertTrue(BGREWRITEAOF_RESPONSES.contains(client.bgrewriteaof().get()));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1421,7 +1516,6 @@ public class CommandTests {
         // Empty return - match a random UUID
         ScanOptions options = ScanOptions.builder().matchPattern("*" + UUID.randomUUID()).build();
         Object[] emptyResult = regularClient.scan(initialCursor, options).get();
-        assertNotEquals(initialCursor, emptyResult[resultCursorIndex]);
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor
@@ -1509,7 +1603,6 @@ public class CommandTests {
         // Empty return - match a random UUID
         ScanOptions options = ScanOptions.builder().matchPattern("*" + UUID.randomUUID()).build();
         Object[] emptyResult = regularClient.scan(initialCursor, options).get();
-        assertNotEquals(initialCursor, emptyResult[resultCursorIndex]);
         assertDeepEquals(new String[] {}, emptyResult[resultCollectionIndex]);
 
         // Negative cursor

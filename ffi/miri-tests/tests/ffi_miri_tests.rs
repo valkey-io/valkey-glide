@@ -40,6 +40,7 @@ unsafe extern "C-unwind" fn pubsub_callback(
 
 /// No-op address resolver that returns port 0 to signal "use original address".
 unsafe extern "C-unwind" fn noop_address_resolver(
+    _client_id: usize,
     _host: *const u8,
     _host_len: usize,
     _port: u16,
@@ -80,6 +81,7 @@ fn create_client_test() {
             client_type_ptr,
             pubsub_callback,
             noop_address_resolver,
+            0usize,
         );
         let conn_ptr = (*connection_response_ptr).conn_ptr;
         close_client(conn_ptr);

@@ -338,7 +338,8 @@ pub async fn create_cluster_client(
         get_shared_cluster_addresses(configuration.use_tls)
     };
 
-    if let Some(redis_connection_info) = &configuration.connection_info
+    if !configuration.skip_acl_setup
+        && let Some(redis_connection_info) = &configuration.connection_info
         && redis_connection_info.password.is_some()
     {
         assert!(!configuration.shared_server);
@@ -427,12 +428,13 @@ CLUSTER_NODES=127.0.0.1:39163,127.0.0.1:23178,127.0.0.1:25186,127.0.0.1:52500,12
 }
 
 /// Holds all components needed for pubsub topology test setup.
-/// The `_client_holder` keeps the Arc alive so the weak reference in the synchronizer remains valid.
+/// The `client_holder` keeps the Arc alive so the weak reference in the synchronizer remains valid.
 #[cfg(not(feature = "mock-pubsub"))]
 pub struct PubSubTestSetup {
     pub connection: ClusterConnection,
     pub synchronizer: Arc<dyn PubSubSynchronizer>,
-    pub _client_holder: Arc<TokioRwLock<ClientWrapper>>,
+    pub client_holder: Arc<TokioRwLock<ClientWrapper>>,
+    pub glide_client: Client,
 }
 
 #[cfg(not(feature = "mock-pubsub"))]
@@ -493,10 +495,16 @@ impl PubSubTestSetup {
             .expect("Expected GlidePubSubSynchronizer")
             .set_internal_client(Arc::downgrade(&client_arc));
 
+        // Create a glide Client for routing commands through Client::send_command
+        // (e.g. RESET, which calls handle_reset_command to clear desired subscriptions)
+        let glide_client =
+            glide_core::client::Client::new_for_test(client_arc.clone(), synchronizer.clone());
+
         Self {
             connection,
             synchronizer,
-            _client_holder: client_arc,
+            client_holder: client_arc,
+            glide_client,
         }
     }
 

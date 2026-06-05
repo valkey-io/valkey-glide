@@ -2,6 +2,9 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
+import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
+import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -17,8 +20,10 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitForCondition;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -61,6 +66,7 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ListDirection;
@@ -104,6 +110,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -121,6 +128,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
+
+    private static final int SCRIPT_POLL_TIMEOUT_MS = 8000;
+    private static final int SCRIPT_POLL_INTERVAL_MS = 500;
 
     private static final List<Arguments> clients = new ArrayList<>();
 
@@ -595,6 +605,59 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void clientPauseAll_then_clientUnpause(GlideClusterClient clusterClient) {
+        String key = "clientPauseAll_then_clientUnpause_key";
+        assertEquals(OK, clusterClient.set(key, "before").get());
+
+        assertEquals(OK, clusterClient.clientPause(2000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> get = clusterClient.get(key);
+        CompletableFuture<String> set = clusterClient.set(key, "after");
+        CompletableFuture<String> unpause = clusterClient.clientUnpause();
+
+        Thread.sleep(300);
+
+        // Verify that none of the commands completes.
+        assertFalse(get.isDone());
+        assertFalse(set.isDone());
+        assertFalse(unpause.isDone());
+
+        // Verify that all commands complete once pause expires.
+        assertEquals("before", get.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", clusterClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPauseWrite_then_clientUnpause(GlideClusterClient clusterClient) {
+        String key = "clientPauseWrite_then_clientUnpause_key";
+        assertEquals(OK, clusterClient.set(key, "before").get());
+
+        assertEquals(OK, clusterClient.clientPause(2000, ClientPauseMode.WRITE).get());
+
+        // Reads are not blocked by PAUSE WRITE.
+        assertEquals("before", clusterClient.get(key).get());
+
+        CompletableFuture<String> set = clusterClient.set(key, "after");
+
+        Thread.sleep(300);
+
+        // Verify that SET has not completed because server is paused.
+        assertFalse(set.isDone());
+
+        assertEquals(OK, clusterClient.clientUnpause().get());
+
+        // Verify that SET completes once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", clusterClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void config_reset_stat(GlideClusterClient clusterClient) {
         // Ensure some network activity has occurred to guarantee valueBefore > 0
         clusterClient.info(new Section[] {STATS}).get();
@@ -877,6 +940,117 @@ public class CommandTests {
         for (Long value : data.getMultiValue().values()) {
             assertTrue(Instant.ofEpochSecond(value).isAfter(yesterday));
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void save_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsave()
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsave(ALL_PRIMARIES)
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsaveSchedule()
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsaveSchedule(ALL_PRIMARIES)
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> clusterClient.bgsaveCancel().get());
+        assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel_with_route(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        ExecutionException e =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+        assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgrewriteaof()
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGREWRITEAOF_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgrewriteaof(ALL_PRIMARIES)
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGREWRITEAOF_RESPONSES.contains(value)));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -3587,11 +3761,10 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void scriptKill_with_route(GlideClusterClient clusterClient) {
-        // create and load a long-running script and a primary node route
-        Script script = new Script(createLongRunningLuaScript(5, true), true);
+        Script script = new Script(createLongRunningLuaScript(10, true), true);
         Route route = new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY);
 
-        // Verify that script_kill raises an error when no script is running
+        // Verify no script is running initially
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.scriptKill(route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -3601,39 +3774,29 @@ public class CommandTests {
                         .toLowerCase()
                         .contains("no scripts in execution right now"));
 
-        CompletableFuture<Object> promise = new CompletableFuture<>();
-        promise.complete(null);
-
         try (GlideClusterClient testClient =
-                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(10000).build())
+                GlideClusterClient.createClient(commonClusterClientConfig().requestTimeout(15000).build())
                         .get()) {
             try {
-                testClient.invokeScript(script, route);
+                // Poll scriptKill in background; block on script in foreground to guarantee execution
+                CompletableFuture<String> killResult =
+                        pollScriptKillInBackground(() -> clusterClient.scriptKill(route));
 
-                Thread.sleep(1000);
+                ExecutionException scriptErr =
+                        assertThrows(
+                                ExecutionException.class, () -> testClient.invokeScript(script, route).get());
+                assertTrue(
+                        scriptErr.getMessage().toLowerCase().contains("script killed"),
+                        "Expected 'script killed' but got: " + scriptErr.getMessage());
 
-                // Run script kill until it returns OK
-                boolean scriptKilled = false;
-                int timeout = 4000; // ms
-                while (timeout >= 0) {
-                    try {
-                        assertEquals(OK, clusterClient.scriptKill(route).get());
-                        scriptKilled = true;
-                        break;
-                    } catch (RequestException ignored) {
-                    }
-                    Thread.sleep(500);
-                    timeout -= 500;
-                }
-
-                assertTrue(scriptKilled);
+                assertEquals(OK, killResult.get());
             } finally {
                 waitForNotBusy(clusterClient::scriptKill);
                 script.close();
             }
         }
 
-        // Verify that script_kill raises an error when no script is running
+        // Verify no script is running after kill
         executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.scriptKill(route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -3648,13 +3811,10 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void scriptKill_unkillable(GlideClusterClient clusterClient) {
-        // Ensure no script is blocking the cluster from a previous test
         waitForNotBusy(clusterClient::scriptKill);
 
         String key = UUID.randomUUID().toString();
-        // Route to the same node where the script will run (based on the key)
         Route route = new SlotKeyRoute(key, PRIMARY);
-        // Create a script that writes data (making it unkillable) and runs for 6 seconds
         String code = createLongRunningLuaScript(6, false);
 
         try (Script script = new Script(code, false);
@@ -3669,44 +3829,110 @@ public class CommandTests {
                                                 .build())
                                 .get()) {
 
+            // Poll scriptKill in background looking for "unkillable" error
+            CompletableFuture<Boolean> unkillableResult =
+                    pollForUnkillableInBackground(() -> clusterClient.scriptKill(route));
+
+            // Block on script execution to guarantee it's running on the server
             CompletableFuture<Object> scriptFuture =
                     testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
-
-            // Wait for the script to start executing on the server
-            Thread.sleep(1000);
-
             try {
-                // Try to kill the script - it should fail with "unkillable" since it has writes
-                boolean foundUnkillable = false;
-                for (int i = 0; i < 25 && !foundUnkillable; i++) {
-                    try {
-                        clusterClient.scriptKill(route).get();
-                    } catch (ExecutionException e) {
-                        if (e.getCause() instanceof RequestException) {
-                            String msg = e.getMessage().toLowerCase();
-                            if (msg.contains("unkillable")) {
-                                foundUnkillable = true;
-                            } else if (msg.contains("no scripts in execution")) {
-                                Thread.sleep(200);
-                            }
-                        }
-                    }
-                }
-
-                assertTrue(foundUnkillable, "Expected to find 'unkillable' error for write script");
-            } finally {
-                // Always wait for the unkillable script to finish before closing the client,
-                // even if the assertion above fails. Leaving a running script blocks the
-                // server and causes the next parameterized iteration to get connection errors.
-                try {
-                    scriptFuture.get();
-                } catch (Exception ignored) {
-                }
+                scriptFuture.get();
+            } catch (Exception ignored) {
+                // Write script completes normally after its duration
             }
+
+            assertTrue(unkillableResult.get(), "Expected to find 'unkillable' error for write script");
         }
-        // Confirm the cluster is healthy before the next iteration (RESP2 -> RESP3).
         waitForNotBusy(clusterClient::scriptKill);
         clusterClient.ping().get();
+    }
+
+    /**
+     * Polls scriptKill in a background thread until it succeeds (returns OK). This ensures the script
+     * has started executing before the kill is attempted, avoiding NotBusy race conditions.
+     */
+    private CompletableFuture<String> pollScriptKillInBackground(
+            Supplier<CompletableFuture<String>> killCommand) {
+        CompletableFuture<String> result = new CompletableFuture<>();
+        Thread thread =
+                new Thread(
+                        () -> {
+                            long deadline = System.currentTimeMillis() + SCRIPT_POLL_TIMEOUT_MS;
+                            while (System.currentTimeMillis() < deadline) {
+                                try {
+                                    String res = killCommand.get().get();
+                                    result.complete(res);
+                                    return;
+                                } catch (Exception e) {
+                                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                    if (!msg.contains("no scripts in execution")) {
+                                        // Unexpected error - fail fast
+                                        result.completeExceptionally(e);
+                                        return;
+                                    }
+                                    // Expected - script hasn't started yet, keep polling
+                                }
+                                try {
+                                    Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
+                                } catch (InterruptedException ie) {
+                                    result.completeExceptionally(ie);
+                                    Thread.currentThread().interrupt();
+                                    return;
+                                }
+                            }
+                            result.completeExceptionally(
+                                    new AssertionError(
+                                            "Timed out waiting to kill script after " + SCRIPT_POLL_TIMEOUT_MS + "ms"));
+                        });
+        thread.setDaemon(true);
+        thread.start();
+        return result;
+    }
+
+    /**
+     * Polls scriptKill in a background thread until it returns an "unkillable" error, confirming the
+     * write script is running but cannot be killed.
+     */
+    private CompletableFuture<Boolean> pollForUnkillableInBackground(
+            Supplier<CompletableFuture<String>> killCommand) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        Thread thread =
+                new Thread(
+                        () -> {
+                            long deadline = System.currentTimeMillis() + SCRIPT_POLL_TIMEOUT_MS;
+                            while (System.currentTimeMillis() < deadline) {
+                                try {
+                                    killCommand.get().get();
+                                } catch (Exception e) {
+                                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                                    if (msg.contains("unkillable")) {
+                                        result.complete(true);
+                                        return;
+                                    }
+                                    if (!msg.contains("no scripts in execution")) {
+                                        // Unexpected error - fail fast
+                                        result.completeExceptionally(e);
+                                        return;
+                                    }
+                                }
+                                try {
+                                    Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
+                                } catch (InterruptedException ie) {
+                                    result.completeExceptionally(ie);
+                                    Thread.currentThread().interrupt();
+                                    return;
+                                }
+                            }
+                            result.completeExceptionally(
+                                    new AssertionError(
+                                            "Timed out waiting for 'unkillable' error after "
+                                                    + SCRIPT_POLL_TIMEOUT_MS
+                                                    + "ms"));
+                        });
+        thread.setDaemon(true);
+        thread.start();
+        return result;
     }
 
     /**

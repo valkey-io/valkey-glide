@@ -10,10 +10,12 @@ import {
     expect,
     it,
 } from "@jest/globals";
+import { setTimeout as sleep } from "node:timers/promises";
 import { BufferReader, BufferWriter } from "protobufjs/minimal";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     Batch,
+    ClientPauseMode,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
@@ -753,6 +755,49 @@ describe("GlideClient", () => {
 
                 expect(results).toEqual(["OK", "OK", true, value1]);
             }
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "migrate test_%p",
+        async (protocol) => {
+            const client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = getRandomKey();
+            const [serverHost, serverPort] = cluster.getAddresses()[0];
+
+            // NOKEY when key does not exist
+            expect(
+                await client.migrate(serverHost, serverPort, key, 0, 1000),
+            ).toEqual("NOKEY");
+
+            // Error when host is invalid
+            await client.set(key, "value");
+            await expect(
+                client.migrate("invalid-host", 6379, key, 0, 1000),
+            ).rejects.toThrow();
+
+            // Error with options (COPY, REPLACE, AUTH)
+            await expect(
+                client.migrate("invalid-host", 6379, key, 0, 1000, {
+                    copy: true,
+                    replace: true,
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
+
+            // Error with AUTH2 (username + password)
+            await expect(
+                client.migrate("invalid-host", 6379, key, 0, 1000, {
+                    username: "user",
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
 
             client.close();
         },
@@ -1944,6 +1989,91 @@ describe("GlideClient", () => {
             } finally {
                 lazyClient.close();
             }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPauseAll then clientUnpause_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 10000,
+                }),
+            );
+            const key = "clientPauseAll_then_clientUnpause_key";
+            expect(await client.set(key, "before")).toEqual("OK");
+
+            expect(await client.clientPause(2000, ClientPauseMode.ALL)).toEqual(
+                "OK",
+            );
+
+            let getDone = false;
+            const get = client.get(key).then((r) => {
+                getDone = true;
+                return r;
+            });
+            let setDone = false;
+            const set = client.set(key, "after").then((r) => {
+                setDone = true;
+                return r;
+            });
+            let unpauseDone = false;
+            const unpause = client.clientUnpause().then((r) => {
+                unpauseDone = true;
+                return r;
+            });
+
+            await sleep(300);
+
+            // Verify that none of the commands completes during the pause window.
+            expect(getDone).toBe(false);
+            expect(setDone).toBe(false);
+            expect(unpauseDone).toBe(false);
+
+            // Verify that all commands complete once pause expires naturally.
+            expect(await get).toEqual("before");
+            expect(await set).toEqual("OK");
+            expect(await unpause).toEqual("OK");
+            expect(await client.get(key)).toEqual("after");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientPauseWrite then clientUnpause_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 10000,
+                }),
+            );
+            const key = "clientPauseWrite_then_clientUnpause_key";
+            expect(await client.set(key, "before")).toEqual("OK");
+
+            expect(
+                await client.clientPause(2000, ClientPauseMode.WRITE),
+            ).toEqual("OK");
+
+            // Reads are not blocked by PAUSE WRITE.
+            expect(await client.get(key)).toEqual("before");
+
+            let setDone = false;
+            const set = client.set(key, "after").then((r) => {
+                setDone = true;
+                return r;
+            });
+
+            await sleep(300);
+
+            // Verify that SET has not completed because server is paused.
+            expect(setDone).toBe(false);
+
+            expect(await client.clientUnpause()).toEqual("OK");
+
+            // Verify that SET completes once pause expires.
+            expect(await set).toEqual("OK");
+            expect(await client.get(key)).toEqual("after");
         },
         TIMEOUT,
     );

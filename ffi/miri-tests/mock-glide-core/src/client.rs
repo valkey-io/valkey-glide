@@ -2,8 +2,25 @@
 
 pub use glide_core::client::{GlideRt, get_or_init_runtime};
 
+/// Mirrors glide_core::client::NodeAddress (internal type, not protobuf).
+pub struct NodeAddress {
+    pub host: String,
+    pub port: u16,
+}
+
+/// Mirrors glide_core::client::TlsMode (internal type).
+#[derive(Clone, Copy, PartialEq)]
+pub enum TlsMode {
+    NoTls,
+    SecureTls,
+    InsecureTls,
+}
+
 use crate::ConnectionRequest;
-use redis::{Pipeline, PipelineRetryStrategy, ScanStateRC, Cmd, PushInfo, Value, ClusterScanArgs, RoutingInfo, RedisResult};
+use redis::{
+    ClusterScanArgs, Cmd, Pipeline, PipelineRetryStrategy, PushInfo, RedisResult, RoutingInfo,
+    ScanStateRC, Value,
+};
 
 pub struct ConnectionError;
 
@@ -19,7 +36,7 @@ impl fmt::Display for ConnectionError {
 
 #[derive(Clone)]
 pub struct Client {
-    _push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>
+    _push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>,
 }
 
 impl Client {
@@ -28,7 +45,7 @@ impl Client {
         push_sender: Option<tokio::sync::mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<Self, ConnectionError> {
         Ok(Client {
-            _push_sender: push_sender
+            _push_sender: push_sender,
         })
     }
 
@@ -92,7 +109,9 @@ impl Client {
     }
 
     /// Mock compression_manager method for Miri tests
-    pub fn compression_manager(&self) -> Option<std::sync::Arc<crate::compression::CompressionManager>> {
+    pub fn compression_manager(
+        &self,
+    ) -> Option<std::sync::Arc<crate::compression::CompressionManager>> {
         None
     }
 
@@ -130,4 +149,33 @@ impl Client {
     pub fn cache_total_lookups(&self) -> RedisResult<Value> {
         todo!()
     }
+}
+
+// ─── MonitorClient stubs for miri-tests ──────────────────────────────────────
+
+pub struct MonitorLine {
+    pub timestamp: f64,
+    pub db: i64,
+    pub client_addr: String,
+    pub command: String,
+    pub args: Vec<String>,
+}
+
+pub type MonitorLineCallback = std::sync::Arc<dyn Fn(MonitorLine) + Send + Sync>;
+
+pub struct MonitorClient;
+
+impl MonitorClient {
+    pub async fn new(
+        _address: &NodeAddress,
+        _redis_connection_info: redis::RedisConnectionInfo,
+        _tls_mode: TlsMode,
+        _on_line: MonitorLineCallback,
+    ) -> redis::RedisResult<Self> {
+        Ok(MonitorClient)
+    }
+
+    pub async fn stop_async(self) {}
+
+    pub fn stop(&mut self) {}
 }
