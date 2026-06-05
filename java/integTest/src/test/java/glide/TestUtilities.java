@@ -7,7 +7,7 @@ import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
-import static glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -35,13 +35,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -54,6 +57,22 @@ import lombok.experimental.UtilityClass;
 public class TestUtilities {
     /** Key names for versions returned in info command. */
     private static final String VALKEY_VERSION_KEY = "valkey_version";
+
+    /** Expected server responses for BGSAVE SCHEDULE. */
+    public static final Set<String> BGSAVE_SCHEDULE_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList("Background saving started", "Background saving scheduled"));
+
+    /** Expected server error response for BGSAVE CANCEL when no save is in progress. */
+    public static final String BGSAVE_NOT_CANCELLED_RESPONSE =
+            "Background saving is currently not in progress or scheduled";
+
+    /** Expected server responses for BGREWRITEAOF. */
+    public static final Set<String> BGREWRITEAOF_RESPONSES =
+            new java.util.HashSet<>(
+                    Arrays.asList(
+                            "Background append only file rewriting started",
+                            "Background append only file rewriting scheduled"));
 
     private static final String REDIS_VERSION_KEY = "redis_version";
 
@@ -142,7 +161,7 @@ public class TestUtilities {
                 return Long.parseLong(line.split(":")[1]);
             }
         }
-        fail();
+        fail("Key '" + value + "' not found in INFO output");
         return 0;
     }
 
@@ -564,6 +583,29 @@ public class TestUtilities {
     }
 
     /**
+     * Polls the given condition until it returns {@code true} or times out.
+     *
+     * @param condition A callable that returns {@code true} when the desired state is reached.
+     * @param failure Message to include in the assertion if the timeout is exceeded.
+     */
+    @SneakyThrows
+    public static void waitForCondition(Callable<Boolean> condition, String failure) {
+        long sleep = 100;
+        long timeout = 10000;
+
+        while (timeout > 0) {
+            if (condition.call()) {
+                return;
+            }
+
+            Thread.sleep(sleep);
+            timeout -= sleep;
+        }
+
+        fail(failure);
+    }
+
+    /**
      * This method returns the server version using a glide client.
      *
      * @param client Glide client to be used for running the info command.
@@ -747,5 +789,42 @@ public class TestUtilities {
                 .region(IAM_TEST_REGION_US_EAST_1)
                 .refreshIntervalSeconds(refreshIntervalSeconds)
                 .build();
+    }
+
+    /**
+     * Returns {@code true} if a save is in progress.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    public static boolean isSaveInProgress(@NonNull final BaseClient client) {
+        for (String info : getInfo(client)) {
+            if (info.contains("rdb_bgsave_in_progress:1")) {
+                return true;
+            }
+        }
+
+        for (String info : getInfo(client)) {
+            if (info.contains("aof_rewrite_in_progress:1")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns the results of `INFO` command.<br>
+     * Routes command to all primary nodes for cluster clients.
+     *
+     * @param client The client to query.
+     */
+    @SneakyThrows
+    private static List<String> getInfo(@NonNull final BaseClient client) {
+        if (client instanceof GlideClient) {
+            return Collections.singletonList(((GlideClient) client).info().get());
+        }
+        ClusterValue<String> clusterInfo = ((GlideClusterClient) client).info(ALL_PRIMARIES).get();
+        return new ArrayList<>(clusterInfo.getMultiValue().values());
     }
 }

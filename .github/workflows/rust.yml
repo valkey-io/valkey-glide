@@ -86,7 +86,7 @@ jobs:
             # language version matrix is omitted
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
             - id: get-matrices
               uses: ./.github/workflows/create-test-matrices
               with:
@@ -108,7 +108,7 @@ jobs:
             VALKEY_GLIDE_DNS_TESTS_ENABLED: "1"
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -118,7 +118,7 @@ jobs:
                   engine-version: ${{ matrix.engine.version }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       glide-core/target
@@ -147,7 +147,7 @@ jobs:
               working-directory: ./ffi/miri-tests
               run: cargo miri test
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       glide-core/target
@@ -164,7 +164,7 @@ jobs:
                   cargo check --benches --all-features
                   cargo check --no-default-features
 
-            - uses: actions/cache@v4
+            - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       glide-core/target
@@ -182,7 +182,7 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 30
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - uses: ./.github/workflows/lint-rust
               with:

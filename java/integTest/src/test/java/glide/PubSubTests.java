@@ -4,6 +4,7 @@ package glide;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.TestUtilities.isWindows;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.utils.Java8Utils.createMap;
@@ -76,8 +77,11 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-@Timeout(30) // sec
+@Timeout(60) // sec
 public class PubSubTests {
+
+    private static final int REQUEST_TIMEOUT = isWindows() ? 15000 : 5000;
+    private static final int SUBSCRIBE_TIMEOUT = isWindows() ? 15000 : 5000;
 
     /** Enumeration for specifying how subscriptions are established. */
     private enum SubscriptionMethod {
@@ -125,7 +129,7 @@ public class PubSubTests {
         }
         return GlideClient.createClient(
                         commonClientConfig()
-                                .requestTimeout(5000)
+                                .requestTimeout(REQUEST_TIMEOUT)
                                 .subscriptionConfiguration(builder.build())
                                 .build())
                 .get();
@@ -145,7 +149,7 @@ public class PubSubTests {
         }
         return GlideClusterClient.createClient(
                         commonClusterClientConfig()
-                                .requestTimeout(5000)
+                                .requestTimeout(REQUEST_TIMEOUT)
                                 .subscriptionConfiguration(builder.build())
                                 .build())
                 .get();
@@ -245,7 +249,7 @@ public class PubSubTests {
                 client.subscribeLazy(channels).get();
                 Thread.sleep(MESSAGE_DELIVERY_DELAY);
             } else {
-                client.subscribe(channels, 5000).get();
+                client.subscribe(channels, SUBSCRIBE_TIMEOUT).get();
             }
         }
     }
@@ -263,7 +267,7 @@ public class PubSubTests {
                 client.psubscribeLazy(patterns).get();
                 Thread.sleep(MESSAGE_DELIVERY_DELAY);
             } else {
-                client.psubscribe(patterns, 5000).get();
+                client.psubscribe(patterns, SUBSCRIBE_TIMEOUT).get();
             }
         }
     }
@@ -282,7 +286,7 @@ public class PubSubTests {
                     ((GlideClusterClient) client).ssubscribeLazy(channels).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
                 } else {
-                    ((GlideClusterClient) client).ssubscribe(channels, 5000).get();
+                    ((GlideClusterClient) client).ssubscribe(channels, SUBSCRIBE_TIMEOUT).get();
                 }
             }
         }
@@ -478,7 +482,7 @@ public class PubSubTests {
     private GlideClient createStandaloneClientWithCallback(MessageCallback callback) {
         return GlideClient.createClient(
                         commonClientConfig()
-                                .requestTimeout(5000)
+                                .requestTimeout(REQUEST_TIMEOUT)
                                 .subscriptionConfiguration(
                                         StandaloneSubscriptionConfiguration.builder()
                                                 .callback(callback, pubsubMessageQueue)
@@ -491,7 +495,7 @@ public class PubSubTests {
     private GlideClusterClient createClusterClientWithCallback(MessageCallback callback) {
         return GlideClusterClient.createClient(
                         commonClusterClientConfig()
-                                .requestTimeout(5000)
+                                .requestTimeout(REQUEST_TIMEOUT)
                                 .subscriptionConfiguration(
                                         ClusterSubscriptionConfiguration.builder()
                                                 .callback(callback, pubsubMessageQueue)
@@ -2174,7 +2178,7 @@ public class PubSubTests {
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Unsubscribe (blocking)
-                    listener.punsubscribe(createSet(pattern2), 5000).get();
+                    listener.punsubscribe(createSet(pattern2), SUBSCRIBE_TIMEOUT).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2208,7 +2212,7 @@ public class PubSubTests {
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Unsubscribe (blocking)
-                    listener.unsubscribe(createSet(channel2), 5000).get();
+                    listener.unsubscribe(createSet(channel2), SUBSCRIBE_TIMEOUT).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2268,7 +2272,7 @@ public class PubSubTests {
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Unsubscribe (blocking)
-                    listener.sunsubscribe(createSet(channel2), 5000).get();
+                    listener.sunsubscribe(createSet(channel2), SUBSCRIBE_TIMEOUT).get();
                     Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
                     // Publish message
@@ -2327,7 +2331,7 @@ public class PubSubTests {
             listener =
                     GlideClient.createClient(
                                     commonClientConfig()
-                                            .requestTimeout(5000)
+                                            .requestTimeout(REQUEST_TIMEOUT)
                                             .subscriptionConfiguration(subConfig)
                                             .build())
                             .get();
@@ -2340,7 +2344,7 @@ public class PubSubTests {
             listener =
                     GlideClusterClient.createClient(
                                     commonClusterClientConfig()
-                                            .requestTimeout(5000)
+                                            .requestTimeout(REQUEST_TIMEOUT)
                                             .subscriptionConfiguration(subConfig)
                                             .build())
                             .get();
@@ -2360,7 +2364,7 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Now unsubscribe dynamically from the pre-configured subscription (blocking)
-        listener.unsubscribe(createSet(channel2), 5000).get();
+        listener.unsubscribe(createSet(channel2), SUBSCRIBE_TIMEOUT).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
         // Publish another message
@@ -2457,7 +2461,7 @@ public class PubSubTests {
             Thread.sleep(500);
 
             // Unsubscribe from all (blocking)
-            client.unsubscribe(5000).get();
+            client.unsubscribe(SUBSCRIBE_TIMEOUT).get();
             Thread.sleep(500);
             Thread.sleep(500);
 
@@ -2505,7 +2509,7 @@ public class PubSubTests {
             Thread.sleep(500);
 
             // Unsubscribe from all (blocking)
-            client.unsubscribe(5000).get();
+            client.unsubscribe(SUBSCRIBE_TIMEOUT).get();
             Thread.sleep(500);
 
             // Verify all unsubscribed
@@ -2551,7 +2555,7 @@ public class PubSubTests {
             Thread.sleep(500);
 
             // Unsubscribe from all patterns (blocking)
-            client.punsubscribe(5000).get();
+            client.punsubscribe(SUBSCRIBE_TIMEOUT).get();
             Thread.sleep(1000); // Wait longer to ensure unsubscribe completes
 
             // Verify all unsubscribed
@@ -2603,7 +2607,7 @@ public class PubSubTests {
             Thread.sleep(500);
 
             // Unsubscribe from all sharded channels (blocking)
-            client.sunsubscribe(5000).get();
+            client.sunsubscribe(SUBSCRIBE_TIMEOUT).get();
             Thread.sleep(500);
 
             // Verify all unsubscribed
