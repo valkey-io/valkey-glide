@@ -571,7 +571,7 @@ func (client *Client) Save(ctx context.Context) (string, error) {
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponse(response)
 }
 
 // Asynchronously saves the dataset to disk in the background.

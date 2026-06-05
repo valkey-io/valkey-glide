@@ -564,13 +564,13 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *tes
 
 // Expected valid responses for BGSAVE SCHEDULE.
 var bgsaveResponses = []string{
-    "Background saving started",
+	"Background saving started",
 	"Background saving scheduled",
 }
 
 // Expected valid responses for BGREWRITEAOF.
 var bgrewriteaofResponses = []string{
-    "Background append only file rewriting started",
+	"Background append only file rewriting started",
 	"Background append only file rewriting scheduled",
 }
 

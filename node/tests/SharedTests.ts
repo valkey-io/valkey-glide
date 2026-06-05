@@ -409,6 +409,7 @@ export function runBaseTests(config: {
                 expect(result).toEqual("OK");
 
                 if (client instanceof GlideClusterClient) {
+                    await waitForSaveNotInProgress(client);
                     const clusterResult = await client.save({
                         route: "allPrimaries",
                     });
@@ -429,6 +430,7 @@ export function runBaseTests(config: {
                 expect(BGSAVE_SCHEDULE_RESPONSES).toContain(result);
 
                 if (client instanceof GlideClusterClient) {
+                    await waitForSaveNotInProgress(client);
                     const clusterResult = await client.bgsave({
                         route: "allPrimaries",
                     });
@@ -451,6 +453,7 @@ export function runBaseTests(config: {
                 expect(BGSAVE_SCHEDULE_RESPONSES).toContain(result);
 
                 if (client instanceof GlideClusterClient) {
+                    await waitForSaveNotInProgress(client);
                     const clusterResult = await client.bgsaveSchedule({
                         route: "allPrimaries",
                     });
@@ -503,6 +506,7 @@ export function runBaseTests(config: {
                 expect(BGREWRITEAOF_RESPONSES).toContain(result);
 
                 if (client instanceof GlideClusterClient) {
+                    await waitForSaveNotInProgress(client);
                     const clusterResult = await client.bgrewriteaof({
                         route: "allPrimaries",
                     });

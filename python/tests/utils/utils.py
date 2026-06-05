@@ -311,9 +311,11 @@ def assert_response_in(
     """Asserts that a response contains only expected values."""
     if isinstance(result, dict):
         for value in result.values():
-            assert value in expected, f"Unexpected response: {value}"
+            decoded = value.decode() if isinstance(value, bytes) else value
+            assert decoded in expected, f"Unexpected response: {decoded}"
     else:
-        assert result in expected, f"Unexpected response: {result}"
+        decoded = result.decode() if isinstance(result, bytes) else result
+        assert decoded in expected, f"Unexpected response: {decoded}"
 
 
 def compare_maps(

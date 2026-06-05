@@ -502,24 +502,21 @@ export async function waitFor(
 export async function waitForSaveNotInProgress(
     client: GlideClusterClient | GlideClient,
 ) {
-    await waitFor(
-        async () => {
-            const info =
-                client instanceof GlideClient
-                    ? await client.info([InfoOptions.Persistence])
-                    : Object.values(
-                          await client.info({
-                              sections: [InfoOptions.Persistence],
-                          }),
-                      ).join();
+    await waitFor(async () => {
+        const info =
+            client instanceof GlideClient
+                ? await client.info([InfoOptions.Persistence])
+                : Object.values(
+                      await client.info({
+                          sections: [InfoOptions.Persistence],
+                      }),
+                  ).join();
 
-            return (
-                !info.includes("rdb_bgsave_in_progress:1") &&
-                !info.includes("aof_rewrite_in_progress:1")
-            );
-        },
-        "Timed out waiting for save to complete",
-    );
+        return (
+            !info.includes("rdb_bgsave_in_progress:1") &&
+            !info.includes("aof_rewrite_in_progress:1")
+        );
+    }, "Timed out waiting for save to complete");
 }
 
 /**

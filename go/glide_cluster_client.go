@@ -1028,11 +1028,11 @@ func (client *ClusterClient) LastSaveWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/save/
 func (client *ClusterClient) Save(ctx context.Context) (string, error) {
-	response, err := client.executeCommand(ctx, C.Save, []string{})
+	response, err := client.executeCommandWithRoute(ctx, C.Save, []string{}, config.AllPrimaries)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponses(response)
 }
 
 // Synchronously saves the dataset to disk.
@@ -1050,11 +1050,15 @@ func (client *ClusterClient) Save(ctx context.Context) (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/save/
 func (client *ClusterClient) SaveWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
-	response, err := client.executeCommandWithRoute(ctx, C.Save, []string{}, opts.Route)
+	route := config.Route(config.AllPrimaries)
+	if opts.Route != nil {
+		route = opts.Route
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.Save, []string{}, route)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	return handleStringResponse(response)
+	return handleOkResponses(response)
 }
 
 // Asynchronously saves the dataset to disk in the background.
