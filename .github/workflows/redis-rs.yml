@@ -39,7 +39,7 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -50,7 +50,7 @@ jobs:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Cache dependencies
-              uses: Swatinem/rust-cache@v2
+              uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
               with:
                   cache-on-failure: true
                   workspaces: ./glide-core/redis-rs/redis
@@ -79,7 +79,7 @@ jobs:
             - name: Upload test reports
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: test-reports-redis-rs-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/test-results.xml
@@ -92,7 +92,7 @@ jobs:
             - name: Upload benchmark results
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: benchmark-results-redis-rs-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/bench-results.xml
@@ -118,7 +118,7 @@ jobs:
             - name: Upload audit results
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: audit-results-redis-rs--${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/audit-results.txt
@@ -141,7 +141,7 @@ jobs:
             - name: Upload machete results
               if: always()
               continue-on-error: true
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: machete-results-redis-rs-${{ github.sha }}
                   path: ./glide-core/redis-rs/redis/machete-results.txt
