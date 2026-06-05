@@ -58,8 +58,8 @@ public class TestUtilities {
     /** Key names for versions returned in info command. */
     private static final String VALKEY_VERSION_KEY = "valkey_version";
 
-    /** Expected server responses for BGSAVE SCHEDULE. */
-    public static final Set<String> BGSAVE_SCHEDULE_RESPONSES =
+    /** Expected server responses for BGSAVE and BGSAVE SCHEDULE. */
+    public static final Set<String> BGSAVE_RESPONSES =
             new java.util.HashSet<>(
                     Arrays.asList("Background saving started", "Background saving scheduled"));
 
@@ -583,29 +583,6 @@ public class TestUtilities {
     }
 
     /**
-     * Polls the given condition until it returns {@code true} or times out.
-     *
-     * @param condition A callable that returns {@code true} when the desired state is reached.
-     * @param failure Message to include in the assertion if the timeout is exceeded.
-     */
-    @SneakyThrows
-    public static void waitForCondition(Callable<Boolean> condition, String failure) {
-        long sleep = 100;
-        long timeout = 10000;
-
-        while (timeout > 0) {
-            if (condition.call()) {
-                return;
-            }
-
-            Thread.sleep(sleep);
-            timeout -= sleep;
-        }
-
-        fail(failure);
-    }
-
-    /**
      * This method returns the server version using a glide client.
      *
      * @param client Glide client to be used for running the info command.
@@ -792,39 +769,56 @@ public class TestUtilities {
     }
 
     /**
-     * Returns {@code true} if a save is in progress.
+     * Waits until no save (RDB save or AOF rewrite) is in progress.
      *
      * @param client The client to query.
      */
-    @SneakyThrows
-    public static boolean isSaveInProgress(@NonNull final BaseClient client) {
-        for (String info : getInfo(client)) {
-            if (info.contains("rdb_bgsave_in_progress:1")) {
-                return true;
-            }
-        }
-
-        for (String info : getInfo(client)) {
-            if (info.contains("aof_rewrite_in_progress:1")) {
-                return true;
-            }
-        }
-
-        return false;
+    public static void waitForSaveNotInProgress(@NonNull final BaseClient client) {
+        waitFor(() -> !isSaveInProgress(client), "Timed out waiting for save to complete");
     }
 
     /**
-     * Returns the results of `INFO` command.<br>
-     * Routes command to all primary nodes for cluster clients.
+     * Waits until a condition is met.
+     *
+     * @param condition A callable that returns {@code true} when the desired state is reached.
+     * @param failure Message to include in the assertion if the timeout is exceeded.
+     */
+    @SneakyThrows
+    private static void waitFor(Callable<Boolean> condition, String failure) {
+        long sleep = 100;
+        long timeout = 10000;
+
+        while (timeout > 0) {
+            if (condition.call()) {
+                return;
+            }
+
+            Thread.sleep(sleep);
+            timeout -= sleep;
+        }
+
+        fail(failure);
+    }
+
+    /**
+     * Returns {@code true} if a save (RDB save or AOF rewrite) is in progress on any node.
      *
      * @param client The client to query.
      */
     @SneakyThrows
-    private static List<String> getInfo(@NonNull final BaseClient client) {
+    private static boolean isSaveInProgress(@NonNull final BaseClient client) {
+        List<String> infos;
         if (client instanceof GlideClient) {
-            return Collections.singletonList(((GlideClient) client).info().get());
+            infos = Collections.singletonList(((GlideClient) client).info().get());
+        } else {
+            ClusterValue<String> clusterInfo = ((GlideClusterClient) client).info(ALL_PRIMARIES).get();
+            infos = new ArrayList<>(clusterInfo.getMultiValue().values());
         }
-        ClusterValue<String> clusterInfo = ((GlideClusterClient) client).info(ALL_PRIMARIES).get();
-        return new ArrayList<>(clusterInfo.getMultiValue().values());
+
+        return infos.stream()
+                .anyMatch(
+                        info ->
+                                info.contains("rdb_bgsave_in_progress:1")
+                                        || info.contains("aof_rewrite_in_progress:1"));
     }
 }

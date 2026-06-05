@@ -935,7 +935,7 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[str]: Non-empty status strings.
+            TClusterResponse[str]: A non-empty status string.
 
         Examples:
             >>> await client.bgsave()
@@ -948,7 +948,9 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.BgSave, [], route),
         )
 
-    async def bgsave_schedule(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+    async def bgsave_schedule(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
         """
         Schedules a background save of the database.
 
@@ -959,7 +961,7 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[str]: Non-empty status strings.
+            TClusterResponse[str]: A non-empty status string.
 
         Examples:
             >>> await client.bgsave_schedule()
@@ -972,7 +974,9 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.BgSave, ["SCHEDULE"], route),
         )
 
-    async def bgsave_cancel(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+    async def bgsave_cancel(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
         """
         Aborts all in-progress and scheduled background saves.
 
@@ -986,7 +990,7 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[str]: Non-empty status strings.
+            TClusterResponse[str]: A non-empty status string.
 
         Examples:
             >>> await client.bgsave_cancel()
@@ -999,7 +1003,9 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.BgSave, ["CANCEL"], route),
         )
 
-    async def bgrewriteaof(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+    async def bgrewriteaof(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
         """
         Initiates a background rewrite of the append-only file (AOF).
 
@@ -1010,7 +1016,7 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[str]: Non-empty status strings.
+            TClusterResponse[str]: A non-empty status string.
 
         Examples:
             >>> await client.bgrewriteaof()

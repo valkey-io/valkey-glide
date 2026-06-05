@@ -213,7 +213,9 @@ BGREWRITEAOF_RESPONSES = {
 }
 
 # Expected server error response for BGSAVE CANCEL when no save is in progress.
-BGSAVE_NOT_CANCELLED_RESPONSE = "Background saving is currently not in progress or scheduled"
+BGSAVE_NOT_CANCELLED_RESPONSE = (
+    "Background saving is currently not in progress or scheduled"
+)
 
 # Timeout and interval between retries while waiting for a condition to be met.
 _WAIT_FOR_TIMEOUT_SEC = 10.0
@@ -304,7 +306,7 @@ def check_version_lt(version_str: str, min_version: str) -> bool:
     return version.parse(version_str) < version.parse(min_version)
 
 
-def assert_response_in(
+def assert_responses_in(
     result: Union[str, Dict[bytes, str]],
     expected: Set[str],
 ) -> None:

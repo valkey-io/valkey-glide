@@ -680,7 +680,7 @@ class StandaloneCommands(CoreCommands):
             Since: Valkey 8.1.
 
         Returns:
-            str: A status string.
+            str: A non-empty status string.
 
         Examples:
             >>> await client.bgsave_cancel()

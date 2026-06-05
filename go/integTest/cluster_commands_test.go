@@ -1379,6 +1379,19 @@ func (suite *GlideTestSuite) TestBgSaveScheduleCluster() {
 	}
 }
 
+func (suite *GlideTestSuite) TestBgSaveScheduleWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	opts := options.RouteOption{Route: config.AllPrimaries}
+	result, err := client.BgSaveScheduleWithOptions(context.Background(), opts)
+	assert.NoError(t, err)
+	assert.True(t, result.IsMultiValue())
+	for _, value := range result.MultiValue() {
+		assert.Contains(t, bgsaveResponses, value)
+	}
+}
+
 func (suite *GlideTestSuite) TestBgSaveCancelCluster() {
 	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
 	client := suite.defaultClusterClient()
@@ -1390,11 +1403,36 @@ func (suite *GlideTestSuite) TestBgSaveCancelCluster() {
 	assert.Contains(t, err.Error(), bgsaveNotCancelledResponse)
 }
 
+func (suite *GlideTestSuite) TestBgSaveCancelWithOptionsCluster() {
+	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	opts := options.RouteOption{Route: config.AllPrimaries}
+	// When no save is in progress, BGSAVE CANCEL should return an error
+	_, err := client.BgSaveCancelWithOptions(context.Background(), opts)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), bgsaveNotCancelledResponse)
+}
+
 func (suite *GlideTestSuite) TestBgRewriteAofCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	suite.waitForSaveNotInProgress(client)
 	result, err := client.BgRewriteAof(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, result.IsMultiValue())
+	for _, value := range result.MultiValue() {
+		assert.Contains(t, bgrewriteaofResponses, value)
+	}
+}
+
+func (suite *GlideTestSuite) TestBgRewriteAofWithOptionsCluster() {
+	client := suite.defaultClusterClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	opts := options.RouteOption{Route: config.AllPrimaries}
+	result, err := client.BgRewriteAofWithOptions(context.Background(), opts)
 	assert.NoError(t, err)
 	assert.True(t, result.IsMultiValue())
 	for _, value := range result.MultiValue() {

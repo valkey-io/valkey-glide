@@ -372,12 +372,12 @@ func handleOkResponses(response *C.struct_CommandResponse) (string, error) {
 		return "OK", nil
 	}
 
-    _, err := handleStringToStringMapResponse(response)
+	_, err := handleStringToStringMapResponse(response)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
 
-    return "OK", nil
+	return "OK", nil
 }
 
 func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (models.Result[string], error) {

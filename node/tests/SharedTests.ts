@@ -109,8 +109,8 @@ export function runBaseTests(config: {
         }
     };
 
-    // Expected valid responses for BGSAVE SCHEDULE.
-    const BGSAVE_SCHEDULE_RESPONSES = new Set([
+    // Expected valid responses for BGSAVE and BGSAVE SCHEDULE.
+    const BGSAVE_RESPONSES = new Set([
         "Background saving started",
         "Background saving scheduled",
     ]);
@@ -427,7 +427,7 @@ export function runBaseTests(config: {
                 await waitForSaveNotInProgress(client);
 
                 const result = await client.bgsave();
-                expect(BGSAVE_SCHEDULE_RESPONSES).toContain(result);
+                expect(BGSAVE_RESPONSES).toContain(result);
 
                 if (client instanceof GlideClusterClient) {
                     await waitForSaveNotInProgress(client);
@@ -435,7 +435,7 @@ export function runBaseTests(config: {
                         route: "allPrimaries",
                     });
                     Object.values(clusterResult).forEach((v) =>
-                        expect(BGSAVE_SCHEDULE_RESPONSES).toContain(v),
+                        expect(BGSAVE_RESPONSES).toContain(v),
                     );
                 }
             }, protocol);
@@ -450,7 +450,7 @@ export function runBaseTests(config: {
                 await waitForSaveNotInProgress(client);
 
                 const result = await client.bgsaveSchedule();
-                expect(BGSAVE_SCHEDULE_RESPONSES).toContain(result);
+                expect(BGSAVE_RESPONSES).toContain(result);
 
                 if (client instanceof GlideClusterClient) {
                     await waitForSaveNotInProgress(client);
@@ -458,7 +458,7 @@ export function runBaseTests(config: {
                         route: "allPrimaries",
                     });
                     Object.values(clusterResult).forEach((v) =>
-                        expect(BGSAVE_SCHEDULE_RESPONSES).toContain(v),
+                        expect(BGSAVE_RESPONSES).toContain(v),
                     );
                 }
             }, protocol);

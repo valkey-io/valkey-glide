@@ -562,7 +562,7 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *tes
 	}
 }
 
-// Expected valid responses for BGSAVE SCHEDULE.
+// Expected valid responses for BGSAVE and BGSAVE SCHEDULE.
 var bgsaveResponses = []string{
 	"Background saving started",
 	"Background saving scheduled",
@@ -577,7 +577,7 @@ var bgrewriteaofResponses = []string{
 // Expected server error response for BGSAVE CANCEL when no save is in progress.
 const bgsaveNotCancelledResponse = "Background saving is currently not in progress or scheduled"
 
-// waitFor polls a condition at a fixed interval until it returns true or the timeout is reached.
+// waitFor waits until a condition is met.
 func (suite *GlideTestSuite) waitFor(condition func() bool, failure string) {
 	t := suite.T()
 	t.Helper()

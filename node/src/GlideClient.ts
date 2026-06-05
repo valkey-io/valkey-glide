@@ -1038,7 +1038,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async bgsave(): Promise<string> {
-        return this.createWritePromise(createBgSave());
+        return this.createWritePromise(createBgSave(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -1055,7 +1057,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async bgsaveSchedule(): Promise<string> {
-        return this.createWritePromise(createBgSave(["SCHEDULE"]));
+        return this.createWritePromise(createBgSave(["SCHEDULE"]), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -1074,7 +1078,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async bgsaveCancel(): Promise<string> {
-        return this.createWritePromise(createBgSave(["CANCEL"]));
+        return this.createWritePromise(createBgSave(["CANCEL"]), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
@@ -1091,7 +1097,9 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async bgrewriteaof(): Promise<string> {
-        return this.createWritePromise(createBgRewriteAof());
+        return this.createWritePromise(createBgRewriteAof(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**

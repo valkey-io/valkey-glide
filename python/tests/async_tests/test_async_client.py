@@ -111,7 +111,7 @@ from tests.utils.utils import (
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
     assert_connected,
-    assert_response_in,
+    assert_responses_in,
     check_function_list_response,
     check_function_stats_response,
     check_if_server_version_lt,
@@ -5541,19 +5541,34 @@ class TestCommands:
         result = await glide_client.save()
         assert result == OK
 
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.save(route=AllPrimaries())
+            assert result == OK
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_bgsave(self, glide_client: TGlideClient):
         await wait_for_save_not_in_progress(glide_client)
         result = await glide_client.bgsave()
-        assert_response_in(result, BGSAVE_RESPONSES)
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.bgsave(route=AllPrimaries())
+            assert_responses_in(result, BGSAVE_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_bgsave_schedule(self, glide_client: TGlideClient):
         await wait_for_save_not_in_progress(glide_client)
         result = await glide_client.bgsave_schedule()
-        assert_response_in(result, BGSAVE_RESPONSES)
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.bgsave_schedule(route=AllPrimaries())
+            assert_responses_in(result, BGSAVE_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5565,12 +5580,22 @@ class TestCommands:
         with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
             await glide_client.bgsave_cancel()
 
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
+                await glide_client.bgsave_cancel(route=AllPrimaries())
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_bgrewriteaof(self, glide_client: TGlideClient):
         await wait_for_save_not_in_progress(glide_client)
         result = await glide_client.bgrewriteaof()
-        assert_response_in(result, BGREWRITEAOF_RESPONSES)
+        assert_responses_in(result, BGREWRITEAOF_RESPONSES)
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.bgrewriteaof(route=AllPrimaries())
+            assert_responses_in(result, BGREWRITEAOF_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

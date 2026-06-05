@@ -4,7 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
-import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
+import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -17,10 +17,9 @@ import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.parseInfoResponseToMap;
-import static glide.TestUtilities.waitForCondition;
 import static glide.TestUtilities.waitForNotBusy;
+import static glide.TestUtilities.waitForSaveNotInProgress;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -535,16 +534,16 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave(GlideClient client) {
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsave().get()));
+        waitForSaveNotInProgress(client);
+        assertTrue(BGSAVE_RESPONSES.contains(client.bgsave().get()));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule(GlideClient client) {
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsaveSchedule().get()));
+        waitForSaveNotInProgress(client);
+        assertTrue(BGSAVE_RESPONSES.contains(client.bgsaveSchedule().get()));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -552,7 +551,7 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel(GlideClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        waitForSaveNotInProgress(client);
 
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> client.bgsaveCancel().get());
@@ -563,7 +562,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof(GlideClient client) {
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        waitForSaveNotInProgress(client);
         assertTrue(BGREWRITEAOF_RESPONSES.contains(client.bgrewriteaof().get()));
     }
 
