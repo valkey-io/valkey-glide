@@ -6,7 +6,8 @@ import java.util.List;
 import lombok.NonNull;
 
 /**
- * Options for the <code>FAILOVER</code> command.
+ * Optional arguments for {@link glide.api.GlideClient#failover(FailoverOptions)} and {@link
+ * glide.api.GlideClusterClient#failover(FailoverOptions, glide.api.models.configuration.Route)}.
  *
  * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
  */
@@ -31,71 +32,64 @@ public class FailoverOptions {
         return opts;
     }
 
-    /** Builder for constructing {@link FailoverOptions}. */
-    public static class Builder {
-        private String host;
-        private int port;
-        private boolean force;
-        private Long timeout;
-
-        /**
-         * Sets the target replica to failover to.
-         *
-         * @param host The host of the target replica.
-         * @param port The port of the target replica.
-         * @return This builder.
-         */
-        public Builder to(@NonNull String host, int port) {
-            this.host = host;
-            this.port = port;
-            return this;
-        }
-
-        /**
-         * If both TIMEOUT and TO are set, forces failover to the target replica once the timeout
-         * elapses instead of rolling back.
-         *
-         * @return This builder.
-         */
-        public Builder force() {
-            this.force = true;
-            return this;
-        }
-
-        /**
-         * Sets the maximum time in milliseconds to wait in the waiting-for-sync state before aborting
-         * the failover.
-         *
-         * @param milliseconds The timeout in milliseconds.
-         * @return This builder.
-         */
-        public Builder timeout(long milliseconds) {
-            this.timeout = milliseconds;
-            return this;
-        }
-
-        /**
-         * Builds the {@link FailoverOptions}.
-         *
-         * @return A new {@link FailoverOptions} instance.
-         */
-        public FailoverOptions build() {
-            FailoverOptions opts = new FailoverOptions();
-            opts.host = this.host;
-            opts.port = this.port;
-            opts.force = this.force;
-            opts.timeout = this.timeout;
-            return opts;
-        }
+    /**
+     * Creates options with only a timeout.
+     *
+     * @param milliseconds The maximum time in milliseconds to wait before aborting the failover.
+     * @return A new {@link FailoverOptions} with TIMEOUT set.
+     */
+    public static FailoverOptions timeout(long milliseconds) {
+        FailoverOptions opts = new FailoverOptions();
+        opts.timeout = milliseconds;
+        return opts;
     }
 
     /**
-     * Creates a new builder.
+     * Creates options to failover to a specific replica.
      *
-     * @return A new {@link Builder} instance.
+     * @param host The host of the target replica.
+     * @param port The port of the target replica.
+     * @return A new {@link FailoverOptions} targeting the specified replica.
      */
-    public static Builder builder() {
-        return new Builder();
+    public static FailoverOptions to(@NonNull String host, int port) {
+        FailoverOptions opts = new FailoverOptions();
+        opts.host = host;
+        opts.port = port;
+        return opts;
+    }
+
+    /**
+     * Creates options to failover to a specific replica with a timeout.
+     *
+     * @param host The host of the target replica.
+     * @param port The port of the target replica.
+     * @param milliseconds The maximum time in milliseconds to wait before aborting the failover.
+     * @return A new {@link FailoverOptions} targeting the specified replica with a timeout.
+     */
+    public static FailoverOptions to(@NonNull String host, int port, long milliseconds) {
+        FailoverOptions opts = new FailoverOptions();
+        opts.host = host;
+        opts.port = port;
+        opts.timeout = milliseconds;
+        return opts;
+    }
+
+    /**
+     * Creates options to force a failover to a specific replica after the timeout elapses. Requires
+     * both TO and TIMEOUT to be specified.
+     *
+     * @param host The host of the target replica.
+     * @param port The port of the target replica.
+     * @param milliseconds The maximum time in milliseconds to wait before forcing the failover.
+     * @return A new {@link FailoverOptions} with TO, TIMEOUT, and FORCE set.
+     */
+    public static FailoverOptions forced(@NonNull String host, int port, long milliseconds) {
+        FailoverOptions opts = new FailoverOptions();
+        opts.host = host;
+        opts.port = port;
+        opts.force = true;
+        opts.timeout = milliseconds;
+        return opts;
     }
 
     /**

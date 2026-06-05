@@ -2149,7 +2149,7 @@ public class CommandTests {
                     GlideClientConfiguration.builder().address(primaryAddr).requestTimeout(10000).build();
             try (GlideClient client = GlideClient.createClient(config).get()) {
                 // FAILOVER with a timeout should succeed (returns OK immediately)
-                String result = client.failover(FailoverOptions.builder().timeout(10000).build()).get();
+                String result = client.failover(FailoverOptions.timeout(10000)).get();
                 assertEquals(OK, result);
             }
         }
@@ -2158,8 +2158,19 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    @Timeout(120)
     public void replicaof_and_replicaofNoOne(GlideClient regularClient) {
-        // REPLICAOF NO ONE should succeed even if already a primary
-        assertEquals(OK, regularClient.replicaofNoOne().get());
+        // Spin up a secondary standalone server to use as replication target
+        try (ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+            NodeAddress secondaryAddr = secondary.getNodesAddr().get(0);
+            GlideClientConfiguration config =
+                    GlideClientConfiguration.builder().address(secondaryAddr).requestTimeout(10000).build();
+            try (GlideClient client = GlideClient.createClient(config).get()) {
+                // Make it a replica of a non-existent primary (will succeed with OK immediately)
+                assertEquals(OK, client.replicaof("localhost", 6379).get());
+                // Promote back to primary
+                assertEquals(OK, client.replicaofNoOne().get());
+            }
+        }
     }
 }

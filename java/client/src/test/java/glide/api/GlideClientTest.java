@@ -16394,8 +16394,7 @@ public class GlideClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        FailoverOptions options =
-                FailoverOptions.builder().to("localhost", 6380).force().timeout(1000).build();
+        FailoverOptions options = FailoverOptions.forced("localhost", 6380, 1000);
         CompletableFuture<String> response = service.failover(options);
         String payload = response.get();
 
