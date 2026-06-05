@@ -7,7 +7,8 @@ import glide.api.commands.GenericBaseCommands;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.*;
+import lombok.Builder;
+import lombok.Getter;
 
 /**
  * Optional arguments to {@link GenericBaseCommands#restore(GlideString, long, byte[],

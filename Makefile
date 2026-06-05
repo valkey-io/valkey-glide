@@ -21,6 +21,8 @@ java:
 java-lint:
 	@echo "$(GREEN)Running spotlessApply$(RESET)"
 	@cd java && ./gradlew :spotlessApply
+	@echo "$(GREEN)Running checkstyle$(RESET)"
+	@cd java && ./gradlew checkstyleMain checkstyleTest
 
 java-test: check-valkey-server
 	@echo "$(GREEN)Running integration tests$(RESET)"

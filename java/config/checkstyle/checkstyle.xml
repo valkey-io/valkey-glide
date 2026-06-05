@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+    Checkstyle configuration for Valkey GLIDE Java client.
+
+    Complements Spotless (which handles formatting and unused import removal)
+    by catching semantic issues that Spotless does not cover.
+
+    Start with a small, focused rule set and expand over time.
+-->
+<module name="Checker">
+    <property name="severity" value="error"/>
+
+    <module name="TreeWalker">
+        <!-- Flags duplicate imports (e.g. importing the same class twice). -->
+        <module name="RedundantImport"/>
+
+        <!-- Flags wildcard/star imports (e.g. import java.util.*). -->
+        <module name="AvoidStarImport">
+            <!-- Allow star imports for static members (e.g. static assertions in tests). -->
+            <property name="allowStaticMemberImports" value="true"/>
+        </module>
+
+        <!-- Flags imports that are never used. Serves as a safety net alongside Spotless. -->
+        <module name="UnusedImports"/>
+    </module>
+</module>
