@@ -9586,7 +9586,9 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 		migrateOpts := options.NewMigrateOptions().SetCopy().SetReplace()
 
 		// Non-existent keys return "NOKEY" (not an error)
-		result, err := client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{nonExistentKey1, nonExistentKey2}, 0, 1000, *migrateOpts)
+		result, err := client.MigrateKeysWithOptions(
+			ctx, "nonexistent.host", 6379, []string{nonExistentKey1, nonExistentKey2}, 0, 1000, *migrateOpts,
+		)
 		suite.NoError(err)
 		suite.Equal("NOKEY", result)
 
