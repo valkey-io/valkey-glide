@@ -348,6 +348,22 @@ macro_rules! log_info_rate_limited {
     }};
 }
 
+#[macro_export]
+macro_rules! log_debug_rate_limited {
+    ($identifier:expr, $interval_secs:expr, $message:expr) => {{
+        static LAST_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let last = LAST_LOG.load(std::sync::atomic::Ordering::Relaxed);
+        if now >= last + $interval_secs {
+            LAST_LOG.store(now, std::sync::atomic::Ordering::Relaxed);
+            $crate::log_debug($identifier, $message);
+        }
+    }};
+}
+
 // Logs the given log, with log_identifier and log level prefixed. If the given log level is below the threshold of given when the logger was initialized, the log will be ignored.
 // log_identifier should be used to add context to a log, and make it easier to connect it to other relevant logs. For example, it can be used to pass a task identifier.
 // If this is called before a logger was initialized the log will not be registered.

@@ -225,6 +225,37 @@ where
         }
     }
 
+    if connection_info.server_assisted_cache {
+        if connection_info.protocol == ProtocolVersion::RESP2 {
+            return Err(RedisError::from((
+                ErrorKind::InvalidClientConfig,
+                "server_assisted_cache requires RESP3 protocol",
+            )));
+        }
+        match cmd("CLIENT")
+            .arg("TRACKING")
+            .arg("ON")
+            .arg("BCAST")
+            .query_async(con)
+            .await
+        {
+            Ok(Value::Okay) => {}
+            Err(e) => {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Failed to enable server-assisted client tracking",
+                    e.to_string(),
+                )));
+            }
+            _ => {
+                return Err(RedisError::from((
+                    ErrorKind::ClientError,
+                    "Unexpected response from CLIENT TRACKING ON BCAST",
+                )));
+            }
+        }
+    }
+
     if discover_az {
         update_az_from_info(con).await?;
     }

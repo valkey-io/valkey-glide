@@ -72,6 +72,7 @@ pub struct ClientSideCache {
     pub entry_ttl_ms: u64,
     pub eviction_policy: Option<EvictionPolicy>,
     pub enable_metrics: bool,
+    pub server_assisted: bool,
 }
 
 /// Authentication information for connecting to Redis/Valkey servers
@@ -367,6 +368,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                         protobuf::EvictionPolicy::LFU => EvictionPolicy::Lfu,
                     }),
                 enable_metrics: proto_cache.enable_metrics,
+                server_assisted: proto_cache.server_assisted,
             });
 
         // Convert protobuf compression config to internal compression config

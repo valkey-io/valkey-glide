@@ -8,6 +8,7 @@ from glide_shared.commands.core_options import (
     ExpirySet,
     ExpiryType,
     ExpiryTypeGetEx,
+    MigrateOptions,
 )
 
 from tests.utils.utils import is_single_response
@@ -115,3 +116,32 @@ class TestCommandsUnitTests:
             [["value", ["value"]], ["value", ["valued"]]], [""]
         )
         assert is_single_response(None, None)
+
+
+class TestMigrateOptions:
+    def test_no_options(self):
+        assert MigrateOptions().to_args() == []
+
+    def test_copy(self):
+        assert MigrateOptions(copy=True).to_args() == ["COPY"]
+
+    def test_replace(self):
+        assert MigrateOptions(replace=True).to_args() == ["REPLACE"]
+
+    def test_copy_and_replace(self):
+        assert MigrateOptions(copy=True, replace=True).to_args() == ["COPY", "REPLACE"]
+
+    def test_password(self):
+        assert MigrateOptions(password="secret").to_args() == ["AUTH", "secret"]
+
+    def test_username_and_password(self):
+        assert MigrateOptions(username="user", password="secret").to_args() == [
+            "AUTH2",
+            "user",
+            "secret",
+        ]
+
+    def test_all_options(self):
+        assert MigrateOptions(
+            copy=True, replace=True, username="user", password="secret"
+        ).to_args() == ["COPY", "REPLACE", "AUTH2", "user", "secret"]
