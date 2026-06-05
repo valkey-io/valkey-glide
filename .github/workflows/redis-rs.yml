@@ -24,7 +24,17 @@ on:
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/redis-rs.yml
     workflow_dispatch:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
+                default: false
     workflow_call:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
 
 concurrency:
     group: redis-rs-${{ github.head_ref || github.ref }}
@@ -35,7 +45,7 @@ env:
 
 jobs:
     redis-rs-CI:
-        runs-on: ubuntu-latest
+        runs-on: ${{ inputs.use-self-hosted-linux && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-latest' }}
 
         steps:
             - name: Checkout repository

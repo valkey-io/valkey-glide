@@ -48,6 +48,10 @@ on:
                     - use-self-hosted
                     - use-github
                 default: false
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
+                default: false
             name:
                 required: false
                 type: string
@@ -57,6 +61,10 @@ on:
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
                 type: string
+                default: "false"
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
                 default: false
 
 concurrency:
@@ -86,6 +94,7 @@ jobs:
                   language-name: node
                   run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
                   run-with-macos: ${{ github.event.inputs.run-with-macos }}
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     test-node:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
@@ -316,6 +325,7 @@ jobs:
                   language-name: node
                   run-full-matrix: true
                   containers: true
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     test-node-container:
         runs-on: ${{ matrix.host.RUNNER }}
