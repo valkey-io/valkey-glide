@@ -472,6 +472,59 @@ export async function waitForNotBusy(client: GlideClusterClient | GlideClient) {
 }
 
 /**
+ * Waits until a condition is met, polling at a fixed interval.
+ *
+ * @param condition - Async function that returns true when the condition is met.
+ * @param failure - Error message thrown if the condition is not met within timeout.
+ * @param timeout - Total time to wait in milliseconds (default 10000).
+ * @param interval - Time between retries in milliseconds (default 100).
+ */
+export async function waitFor(
+    condition: () => Promise<boolean>,
+    failure: string,
+    timeout = 10000,
+    interval = 100,
+): Promise<void> {
+    const start = Date.now();
+
+    while (Date.now() - start < timeout) {
+        if (await condition()) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+
+    throw new Error(failure);
+}
+
+/**
+ * Waits until no save (RDB save or AOF rewrite) is in progress.
+ */
+export async function waitForSaveNotInProgress(
+    client: GlideClusterClient | GlideClient,
+) {
+    await waitFor(
+        async () => {
+            const info =
+                client instanceof GlideClient
+                    ? await client.info([InfoOptions.Persistence])
+                    : Object.values(
+                          await client.info({
+                              sections: [InfoOptions.Persistence],
+                          }),
+                      ).join();
+
+            return (
+                !info.includes("rdb_bgsave_in_progress:1") &&
+                !info.includes("aof_rewrite_in_progress:1")
+            );
+        },
+        "Timed out waiting for save to complete",
+    );
+}
+
+/**
  * Create a lua script which runs an endless loop up to timeout sec.
  * Execution takes at least 5 sec regardless of the timeout
  */
