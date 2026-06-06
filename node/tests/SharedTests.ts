@@ -477,7 +477,7 @@ export function runBaseTests(config: {
 
                     await waitForSaveNotInProgress(client);
 
-                    // When no background save is in progress, BOGSAVE CANCEL should throw
+                    // When no save is in progress, BGSAVE CANCEL should return an error
                     await expect(client.bgsaveCancel()).rejects.toThrow(
                         BGSAVE_NOT_CANCELLED_RESPONSE,
                     );

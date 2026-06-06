@@ -1873,6 +1873,7 @@ export class GlideClusterClient extends BaseClient {
     public async save(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createSave(), {
             decoder: Decoder.String,
+            route: "allPrimaries" as const,
             ...options,
         });
     }
@@ -1898,8 +1899,14 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgSave(),
-            options,
-        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+            { route: "allPrimaries" as const, ...options },
+        ).then((res) =>
+            convertClusterGlideRecord(
+                res,
+                true,
+                options?.route ?? "allPrimaries",
+            ),
+        );
     }
 
     /**
@@ -1923,8 +1930,14 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgSave(["SCHEDULE"]),
-            options,
-        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+            { route: "allPrimaries" as const, ...options },
+        ).then((res) =>
+            convertClusterGlideRecord(
+                res,
+                true,
+                options?.route ?? "allPrimaries",
+            ),
+        );
     }
 
     /**
@@ -1942,7 +1955,7 @@ export class GlideClusterClient extends BaseClient {
      * @example
      * ```typescript
      * const result = await client.bgsaveCancel();
-     * console.log(result); // "OK"
+     * console.log(result); // "Background saving cancelled"
      * ```
      */
     public async bgsaveCancel(
@@ -1950,8 +1963,14 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgSave(["CANCEL"]),
-            options,
-        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+            { route: "allPrimaries" as const, ...options },
+        ).then((res) =>
+            convertClusterGlideRecord(
+                res,
+                true,
+                options?.route ?? "allPrimaries",
+            ),
+        );
     }
 
     /**
@@ -1975,8 +1994,14 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgRewriteAof(),
-            options,
-        ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+            { route: "allPrimaries" as const, ...options },
+        ).then((res) =>
+            convertClusterGlideRecord(
+                res,
+                true,
+                options?.route ?? "allPrimaries",
+            ),
+        );
     }
 
     /**

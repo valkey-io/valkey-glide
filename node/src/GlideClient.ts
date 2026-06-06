@@ -1074,7 +1074,7 @@ export class GlideClient extends BaseClient {
      * @example
      * ```typescript
      * const result = await client.bgsaveCancel();
-     * console.log(result); // "OK"
+     * console.log(result); // "Background saving cancelled"
      * ```
      */
     public async bgsaveCancel(): Promise<string> {

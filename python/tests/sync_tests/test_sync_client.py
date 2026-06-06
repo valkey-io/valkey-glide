@@ -5446,12 +5446,17 @@ class TestCommands:
         min_version = "8.1.0"
         if sync_check_if_server_version_lt(glide_sync_client, min_version):
             return pytest.skip(reason=f"Valkey version required >= {min_version}")
+
         sync_wait_for_save_not_in_progress(glide_sync_client)
+
+        # When no save is in progress, BGSAVE CANCEL should return an error
         with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
             glide_sync_client.bgsave_cancel()
 
         if isinstance(glide_sync_client, GlideClusterClient):
             sync_wait_for_save_not_in_progress(glide_sync_client)
+
+            # When no save is in progress, BGSAVE CANCEL should return an error
             with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
                 glide_sync_client.bgsave_cancel(route=AllPrimaries())
 

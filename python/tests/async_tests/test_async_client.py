@@ -5576,12 +5576,17 @@ class TestCommands:
         min_version = "8.1.0"
         if await check_if_server_version_lt(glide_client, min_version):
             return pytest.skip(reason=f"Valkey version required >= {min_version}")
+
         await wait_for_save_not_in_progress(glide_client)
+
+        # When no save is in progress, BGSAVE CANCEL should return an error
         with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
             await glide_client.bgsave_cancel()
 
         if isinstance(glide_client, GlideClusterClient):
             await wait_for_save_not_in_progress(glide_client)
+
+            # When no save is in progress, BGSAVE CANCEL should return an error
             with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
                 await glide_client.bgsave_cancel(route=AllPrimaries())
 
