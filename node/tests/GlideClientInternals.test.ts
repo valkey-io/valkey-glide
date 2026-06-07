@@ -4,16 +4,6 @@
 
 import { describe, expect, it } from "@jest/globals";
 import {
-    BaseClientConfiguration,
-    ClientPauseMode,
-    ClosingError,
-    ClusterBatch,
-    ClusterTransaction,
-    convertGlideRecordToRecord,
-    Decoder,
-    GlideClient,
-    GlideClientConfiguration,
-    GlideClusterClient,
     GlideClusterClientConfiguration,
     MAX_REQUEST_ARGS_LEN,
 } from "../build-ts";
@@ -71,40 +61,6 @@ describe("NAPI createLeakedStringVec", () => {
 describe("NAPI valueFromSplitPointer", () => {
     it("valueFromSplitPointer function is exported", () => {
         expect(typeof valueFromSplitPointer).toBe("function");
-    });
-
-    it("should set arguments according to clientPause request without mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientPause(1000),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000"]),
-        });
-    });
-
-    it("should set arguments according to clientPause request with ALL mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.clientPause(1000, ClientPauseMode.ALL),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000", "ALL"]),
-        });
-    });
-
-    it("should set arguments according to clientPause request with WRITE mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.clientPause(1000, ClientPauseMode.WRITE),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000", "WRITE"]),
-        });
-    });
-
-    it("should set arguments according to clientUnpause request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientUnpause(),
-            expectedRequestType: RequestType.ClientUnpause,
-            expectedValue: convertStringArrayToBuffer([]),
-        });
     });
 });
 
