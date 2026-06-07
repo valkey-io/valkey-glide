@@ -1,0 +1,26 @@
+name: 'Install Rust and Protoc'
+description: 'Install Rust toolchain and protobuf compiler'
+
+inputs:
+  rust-version:
+    description: 'Rust version to install'
+    required: false
+    default: 'stable'
+  target:
+    description: 'Rust target triple to add'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # 1.80.0
+      with:
+        toolchain: ${{ inputs.rust-version }}
+        targets: ${{ inputs.target }}
+
+    - name: Install protoc
+      uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+      with:
+        repo-token: ${{ github.token }}
