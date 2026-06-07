@@ -122,7 +122,7 @@ jobs:
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.CD_TARGET || matrix.host.TARGET }}
@@ -275,7 +275,7 @@ jobs:
               with:
                   go-version: ${{ env.BASE_GO_VERSION }}
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}

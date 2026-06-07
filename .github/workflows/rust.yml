@@ -16,8 +16,8 @@ on:
             - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
@@ -31,8 +31,8 @@ on:
             - ffi/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/lint-rust/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
@@ -134,7 +134,7 @@ jobs:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
