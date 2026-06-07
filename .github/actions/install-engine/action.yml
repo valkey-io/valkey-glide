@@ -1,0 +1,50 @@
+name: 'Install Valkey Engine'
+description: 'Install and cache Valkey server for testing'
+
+inputs:
+  engine-version:
+    description: 'Valkey version to install (e.g., 9.0, 8.1)'
+    required: true
+
+outputs:
+  cache-key:
+    description: 'Cache key used for the installation'
+    value: ${{ steps.cache.outputs.cache-primary-key }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Compute cache key
+      id: cache-key
+      shell: bash
+      run: |
+        VERSION="${{ inputs.engine-version }}"
+        GIT_SHA=$(git ls-remote https://github.com/valkey-io/valkey.git "refs/tags/${VERSION}" | cut -f1)
+        PLATFORM="${{ runner.os }}-${{ runner.arch }}"
+        echo "key=valkey-${VERSION}-${GIT_SHA:0:8}-${PLATFORM}" >> $GITHUB_OUTPUT
+
+    - name: Restore from cache
+      id: cache
+      uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
+      with:
+        path: ~/valkey-install
+        key: ${{ steps.cache-key.outputs.key }}
+
+    - name: Build and install Valkey
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: ${{ runner.os == 'Windows' && 'wsl-bash {0}' || 'bash' }}
+      run: |
+        git clone --depth 1 --branch ${{ inputs.engine-version }} \
+          https://github.com/valkey-io/valkey.git ~/valkey-src
+        cd ~/valkey-src
+        make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+        make PREFIX=~/valkey-install install
+
+    - name: Create backward-compatible symlinks
+      shell: bash
+      run: |
+        cd ~/valkey-install/bin
+        for cmd in valkey-*; do
+          ln -sf "$cmd" "redis-${cmd#valkey-}"
+        done
+        echo "$HOME/valkey-install/bin" >> $GITHUB_PATH
