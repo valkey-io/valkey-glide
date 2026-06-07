@@ -1,0 +1,100 @@
+name: 'Install Shared Dependencies'
+description: 'Install platform-specific dependencies for valkey-glide builds'
+
+inputs:
+  os:
+    description: 'The current operating system'
+    required: true
+    type: string
+  target:
+    description: 'Rust target toolchain (e.g., x86_64-unknown-linux-gnu)'
+    required: false
+    default: ''
+  engine-version:
+    description: 'Valkey engine version to install (optional)'
+    required: false
+    default: ''
+  language:
+    description: 'The language being built (optional, for language-specific setup)'
+    required: false
+    type: string
+  github-token:
+    description: 'GITHUB_TOKEN, GitHub App installation access token'
+    required: true
+    type: string
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect platform and install dependencies
+      shell: bash
+      env:
+        INPUT_OS: ${{ inputs.os }}
+        INPUT_TARGET: ${{ inputs.target }}
+      run: |
+        # Platform detection and dependency installation
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          # Check for Alpine/MUSL (via /etc/alpine-release or target containing 'musl')
+          if [[ -f /etc/alpine-release ]] || [[ "$INPUT_TARGET" == *"musl"* ]]; then
+            echo "Installing dependencies for Alpine/MUSL..."
+            apk update
+            wget -O - https://sh.rustup.rs | sh -s -- -y
+            source "$HOME/.cargo/env"
+            apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev py3-pip
+          # Check for Amazon Linux (via /etc/amazon-linux-release or os input)
+          elif [[ -f /etc/amazon-linux-release ]] || [[ "$INPUT_OS" == "amazon-linux" ]]; then
+            echo "Installing dependencies for Amazon Linux..."
+            yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
+          # Default to Ubuntu/Debian (apt)
+          else
+            echo "Installing dependencies for Ubuntu/Debian..."
+            sudo apt update -y
+            sudo apt install -y git gcc pkg-config openssl libssl-dev
+          fi
+        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          echo "Installing dependencies for macOS..."
+          brew update
+          brew install openssl coreutils
+        fi
+
+    - name: Setup WSL (Windows only)
+      if: inputs.os == 'windows' && inputs.engine-version != '' && runner.arch != 'ARM64'
+      uses: Vampire/setup-wsl@887f39deb6c0976365e546926fe66f41b77d65ff # v6.0.0
+      with:
+        distribution: Ubuntu-22.04
+        use-cache: true
+        update: true
+        additional-packages: python3 python3-pip build-essential git pkg-config libssl-dev
+
+    - name: Setup Python for Windows
+      if: inputs.os == 'windows'
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: '3.x'
+
+    - name: Install Rust toolchain and protoc
+      if: "!contains(inputs.target, 'musl')"
+      uses: ./.github/actions/install-rust-and-protoc
+      with:
+        target: ${{ inputs.target }}
+        github-token: ${{ inputs.github-token }}
+
+    - name: Install Valkey engine (optional)
+      if: inputs.engine-version != '' && !(inputs.os == 'windows' && runner.arch == 'ARM64')
+      uses: ./.github/actions/install-engine
+      with:
+        engine-version: ${{ inputs.engine-version }}
+        target: ${{ inputs.target }}
+
+    - name: Skip Valkey installation notice (Windows ARM64)
+      if: inputs.engine-version != '' && inputs.os == 'windows' && runner.arch == 'ARM64'
+      shell: bash
+      run: |
+        echo "::notice::Skipping Valkey server installation on Windows ARM64 due to platform limitations"
+        echo "VALKEY_SKIP_INSTALL=true" >> $GITHUB_ENV
+
+    - name: Install zig
+      if: contains(inputs.target, 'linux-gnu')
+      uses: ./.github/actions/install-zig
+      with:
+        target: ${{ inputs.target }}
