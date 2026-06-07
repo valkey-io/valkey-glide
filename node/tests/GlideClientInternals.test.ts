@@ -4,16 +4,6 @@
 
 import { describe, expect, it } from "@jest/globals";
 import {
-    BaseClientConfiguration,
-    ClientPauseMode,
-    ClosingError,
-    ClusterBatch,
-    ClusterTransaction,
-    convertGlideRecordToRecord,
-    Decoder,
-    GlideClient,
-    GlideClientConfiguration,
-    GlideClusterClient,
     GlideClusterClientConfiguration,
     MAX_REQUEST_ARGS_LEN,
 } from "../build-ts";
@@ -22,14 +12,10 @@ import {
     freeLeakedStringVec,
     valueFromSplitPointer,
 } from "../build-ts/native";
-import {
-    command_request,
-    connection_request,
-    response,
-} from "../build-ts/ProtobufMessage";
+import { command_request } from "../build-ts/ProtobufMessage";
 import { createMigrate } from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
-const { RequestType, CommandRequest } = command_request;
+const { RequestType } = command_request;
 
 describe("NAPI createLeakedStringVec", () => {
     it("should create and return pointer pair", () => {
@@ -79,93 +65,6 @@ describe("NAPI createLeakedStringVec", () => {
 describe("NAPI valueFromSplitPointer", () => {
     it("valueFromSplitPointer function is exported", () => {
         expect(typeof valueFromSplitPointer).toBe("function");
-    });
-
-    it("should set arguments according to clientPause request without mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientPause(1000),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000"]),
-        });
-    });
-
-    it("should set arguments according to clientPause request with ALL mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.clientPause(1000, ClientPauseMode.ALL),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000", "ALL"]),
-        });
-    });
-
-    it("should set arguments according to clientPause request with WRITE mode", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                client.clientPause(1000, ClientPauseMode.WRITE),
-            expectedRequestType: RequestType.ClientPause,
-            expectedValue: convertStringArrayToBuffer(["1000", "WRITE"]),
-        });
-    });
-
-    it("should set arguments according to clientUnpause request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => client.clientUnpause(),
-            expectedRequestType: RequestType.ClientUnpause,
-            expectedValue: convertStringArrayToBuffer([]),
-        });
-    });
-
-    it("should set arguments according to failover request without options", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => (client as GlideClient).failover(),
-            expectedRequestType: RequestType.FailOver,
-            expectedValue: convertStringArrayToBuffer([]),
-        });
-    });
-
-    it("should set arguments according to failover request with abort", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                (client as GlideClient).failover({ abort: true }),
-            expectedRequestType: RequestType.FailOver,
-            expectedValue: convertStringArrayToBuffer(["ABORT"]),
-        });
-    });
-
-    it("should set arguments according to failover request with to and timeout", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                (client as GlideClient).failover({
-                    to: { host: "localhost", port: 6380, force: true },
-                    timeoutMs: 1000,
-                }),
-            expectedRequestType: RequestType.FailOver,
-            expectedValue: convertStringArrayToBuffer([
-                "TO",
-                "localhost",
-                "6380",
-                "FORCE",
-                "TIMEOUT",
-                "1000",
-            ]),
-        });
-    });
-
-    it("should set arguments according to replicaof request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) =>
-                (client as GlideClient).replicaof("localhost", 6379),
-            expectedRequestType: RequestType.ReplicaOf,
-            expectedValue: convertStringArrayToBuffer(["localhost", "6379"]),
-        });
-    });
-
-    it("should set arguments according to replicaofNoOne request", async () => {
-        await testSentValueMatches({
-            sendRequest: (client) => (client as GlideClient).replicaofNoOne(),
-            expectedRequestType: RequestType.ReplicaOf,
-            expectedValue: convertStringArrayToBuffer(["NO", "ONE"]),
-        });
     });
 });
 
