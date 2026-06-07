@@ -1,0 +1,16 @@
+name: 'Install Zig'
+description: 'Install Zig compiler for cross-compilation'
+
+inputs:
+  zig-version:
+    description: 'Zig version to install'
+    required: false
+    default: '0.11.0'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Zig
+      uses: goto-bus-stop/setup-zig@7ab2955eb728f5440978d5824358023be3a2802d # v2.2.0
+      with:
+        version: ${{ inputs.zig-version }}
