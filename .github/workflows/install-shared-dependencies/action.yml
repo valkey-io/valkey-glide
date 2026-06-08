@@ -70,7 +70,7 @@ runs:
 
         - name: Setup WSL (Windows only)
           if: "${{ inputs.os == 'windows' && inputs.engine-version }}"
-          uses: Vampire/setup-wsl@v6
+          uses: Vampire/setup-wsl@887f39deb6c0976365e546926fe66f41b77d65ff # v6
           with:
               distribution: Ubuntu-22.04
               use-cache: true
@@ -79,7 +79,7 @@ runs:
 
         - name: Setup Python for Windows
           if: "${{ inputs.os == 'windows' }}"
-          uses: actions/setup-python@v5
+          uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
           with:
               python-version: "3.x"
 

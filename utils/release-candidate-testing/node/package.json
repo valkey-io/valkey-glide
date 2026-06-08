@@ -6,7 +6,7 @@
     "type": "module",
     "scripts": {
         "test": "node index.js",
-        "build:utils": "cd ../../ && npm install && npm run build",
+        "build:utils": "cd ../../ && npm ci && npm run build",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },

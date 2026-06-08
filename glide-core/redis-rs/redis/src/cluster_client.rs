@@ -50,6 +50,7 @@ struct BuilderParams {
     database_id: i64,
     tcp_nodelay: bool,
     cache: Option<Arc<dyn GlideCache>>,
+    server_assisted_cache: bool,
     address_resolver: Option<Arc<dyn AddressResolver>>,
 }
 
@@ -155,6 +156,7 @@ pub struct ClusterParams {
     pub(crate) database_id: i64,
     pub(crate) tcp_nodelay: bool,
     pub(crate) cache: Option<Arc<dyn GlideCache>>,
+    pub(crate) server_assisted_cache: bool,
     /// Optional callback for resolving addresses before connection.
     pub(crate) address_resolver: Option<Arc<dyn AddressResolver>>,
 }
@@ -190,6 +192,7 @@ impl ClusterParams {
             database_id: value.database_id,
             tcp_nodelay: value.tcp_nodelay,
             cache: value.cache,
+            server_assisted_cache: value.server_assisted_cache,
             address_resolver: value.address_resolver,
         })
     }
@@ -222,6 +225,7 @@ impl ClusterParams {
             database_id: 0,
             tcp_nodelay: false,
             cache: None,
+            server_assisted_cache: false,
             address_resolver: None,
         }
     }
@@ -590,6 +594,12 @@ impl ClusterClientBuilder {
     /// Sets the cache for the new ClusterClient.
     pub fn cache(mut self, cache: Option<Arc<dyn GlideCache>>) -> ClusterClientBuilder {
         self.builder_params.cache = cache;
+        self
+    }
+
+    /// Sets whether server-assisted client-side caching (CLIENT TRACKING) is enabled.
+    pub fn server_assisted_cache(mut self, enabled: bool) -> ClusterClientBuilder {
+        self.builder_params.server_assisted_cache = enabled;
         self
     }
 

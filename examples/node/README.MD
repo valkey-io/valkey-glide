@@ -8,7 +8,7 @@ npm i -g npm@8
 ## Install GLIDE package and build the example
 ```
 cd valkey-glide/examples/node
-npm install
+npm ci
 npx tsc
 ```
 

@@ -1028,6 +1028,7 @@ pub(crate) fn get_connection_info(
             protocol: cluster_params.protocol,
             db: cluster_params.database_id,
             cache: cluster_params.cache,
+            server_assisted_cache: cluster_params.server_assisted_cache,
         },
     })
 }

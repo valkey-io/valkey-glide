@@ -184,6 +184,7 @@ public class Transaction implements Closeable {
             throw new JedisConnectionException("Transaction interrupted", e);
         } catch (Exception e) {
             broken = true;
+            jedis.markBrokenIfPooledConnectionFailure(e);
             throw new JedisException("Failed to execute transaction", e);
         } finally {
             inMulti = false;

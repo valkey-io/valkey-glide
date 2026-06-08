@@ -42,7 +42,8 @@ To send us a pull request, please:
    - All commits require a DCO signoff (`git commit -s -m "message"`) and should follow the [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>(<scope>): <description>`. To add a signoff to an existing commit: `git commit --amend --signoff --no-edit`.
    - All commits must be cryptographically signed so they show as "Verified" on GitHub. Use GPG or SSH signing by configuring `git config commit.gpgsign true`. To sign a commit: `git commit -S -s -m "message"`. See [GitHub's guide on signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits) for setup instructions.
 5. Send us a pull request, answering any default questions in the pull request interface.
-6. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
+6. Make sure to update the documentation in the [valkey-glide-docs](https://github.com/valkey-io/valkey-glide-docs) repository if necessary.
+7. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
 
 GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
