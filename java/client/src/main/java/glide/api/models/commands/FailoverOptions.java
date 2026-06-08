@@ -75,8 +75,7 @@ public class FailoverOptions {
     }
 
     /**
-     * Creates options to force a failover to a specific replica after the timeout elapses. Requires
-     * both TO and TIMEOUT to be specified.
+     * Creates options to force a failover to a specific replica after the timeout elapses.
      *
      * @param host The host of the target replica.
      * @param port The port of the target replica.
