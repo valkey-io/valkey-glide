@@ -1296,6 +1296,9 @@ func (client *ClusterClient) LatencyResetWithEventsAndOptions(
 	events []string,
 	opts options.RouteOption,
 ) (int64, error) {
+	if opts.Route == nil {
+		return client.LatencyResetWithEvents(ctx, events)
+	}
 	response, err := client.executeCommandWithRoute(ctx, C.LatencyReset, events, opts.Route)
 	if err != nil {
 		return models.DefaultIntResponse, err
