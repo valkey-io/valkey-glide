@@ -1242,6 +1242,9 @@ func (client *ClusterClient) LatencyReset(ctx context.Context) (int64, error) {
 //
 // [valkey.io]: https://valkey.io/commands/latency-reset/
 func (client *ClusterClient) LatencyResetWithOptions(ctx context.Context, opts options.RouteOption) (int64, error) {
+	if opts.Route == nil {
+		return client.LatencyReset(ctx)
+	}
 	response, err := client.executeCommandWithRoute(ctx, C.LatencyReset, []string{}, opts.Route)
 	if err != nil {
 		return models.DefaultIntResponse, err
