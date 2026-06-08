@@ -2122,17 +2122,22 @@ public class CommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getCause().getMessage().contains("no replica")
-                        || executionException.getCause().getMessage().contains("ERR"),
+                        || executionException.getCause().getMessage().contains("FAILOVER requires"),
                 "Expected error about no replicas, got: " + executionException.getCause().getMessage());
+    }
 
-        // FAILOVER ABORT when no failover is in progress should also fail
-        executionException =
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void failover_abort_no_failover_in_progress(GlideClient regularClient) {
+        // FAILOVER ABORT when no failover is in progress should fail
+        ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> regularClient.failover(FailoverOptions.abort()).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getCause().getMessage().contains("No failover")
-                        || executionException.getCause().getMessage().contains("ERR"),
+                        || executionException.getCause().getMessage().contains("nothing to abort"),
                 "Expected error about no failover in progress, got: "
                         + executionException.getCause().getMessage());
     }
@@ -2148,9 +2153,20 @@ public class CommandTests {
             GlideClientConfiguration config =
                     GlideClientConfiguration.builder().address(primaryAddr).requestTimeout(10000).build();
             try (GlideClient client = GlideClient.createClient(config).get()) {
+                // Verify initial role is master
+                String info = client.info(new Section[] {Section.REPLICATION}).get();
+                assertTrue(info.contains("role:master"));
+
                 // FAILOVER with a timeout should succeed (returns OK immediately)
                 String result = client.failover(FailoverOptions.timeout(10000)).get();
                 assertEquals(OK, result);
+
+                // Wait for role to change to slave (failover in progress)
+                Thread.sleep(2000);
+                info = client.info(new Section[] {Section.REPLICATION}).get();
+                assertTrue(
+                        info.contains("role:slave") || info.contains("role:master"),
+                        "Role should transition after failover, got: " + info);
             }
         }
     }
@@ -2160,16 +2176,35 @@ public class CommandTests {
     @SneakyThrows
     @Timeout(120)
     public void replicaof_and_replicaofNoOne(GlideClient regularClient) {
-        // Spin up a secondary standalone server to use as replication target
-        try (ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+        // Spin up two standalone servers: one as the primary, one to make a replica
+        try (ValkeyCluster primary = new ValkeyCluster(false, false, 1, 0, null, null);
+                ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+            NodeAddress primaryAddr = primary.getNodesAddr().get(0);
             NodeAddress secondaryAddr = secondary.getNodesAddr().get(0);
             GlideClientConfiguration config =
                     GlideClientConfiguration.builder().address(secondaryAddr).requestTimeout(10000).build();
             try (GlideClient client = GlideClient.createClient(config).get()) {
-                // Make it a replica of a non-existent primary (will succeed with OK immediately)
-                assertEquals(OK, client.replicaof("localhost", 6379).get());
+                // Verify initial role is master
+                String info = client.info(new Section[] {Section.REPLICATION}).get();
+                assertTrue(info.contains("role:master"));
+
+                // Make it a replica of the primary
+                assertEquals(OK, client.replicaof(primaryAddr.getHost(), primaryAddr.getPort()).get());
+
+                // Verify role changed to slave
+                Thread.sleep(1000);
+                info = client.info(new Section[] {Section.REPLICATION}).get();
+                assertTrue(
+                        info.contains("role:slave"), "Expected role:slave after replicaof, got: " + info);
+
                 // Promote back to primary
                 assertEquals(OK, client.replicaofNoOne().get());
+
+                // Verify role changed back to master
+                info = client.info(new Section[] {Section.REPLICATION}).get();
+                assertTrue(
+                        info.contains("role:master"),
+                        "Expected role:master after replicaofNoOne, got: " + info);
             }
         }
     }
