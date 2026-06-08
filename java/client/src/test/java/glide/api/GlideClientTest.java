@@ -95,6 +95,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
@@ -312,6 +313,7 @@ import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -16380,6 +16382,19 @@ public class GlideClientTest {
         assertEquals(OK, payload);
     }
 
+    @Test
+    public void migrate_keys_throws_on_invalid_keys() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, new String[0], 0L, 5000L));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (String[]) null, 0L, 5000L));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.migrate("host", 6379L, (GlideString[]) null, 0L, 5000L));
+    }
+
     @SneakyThrows
     @Test
     public void failover_with_options_returns_success() {
@@ -16392,8 +16407,6 @@ public class GlideClientTest {
                         eq(new String[] {"TO", "localhost", "6380", "FORCE", "TIMEOUT", "1000"}),
                         any()))
                 .thenReturn(testResponse);
-
-        // exercise
         FailoverOptions options = FailoverOptions.forced("localhost", 6380, 1000);
         CompletableFuture<String> response = service.failover(options);
         String payload = response.get();
@@ -16401,6 +16414,42 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    public void migrate_keys_with_options() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+        when(commandManager.<String>submitNewCommand(
+                        eq(Migrate),
+                        eq(
+                                new GlideString[] {
+                                    gs("host"),
+                                    gs("6379"),
+                                    gs(""),
+                                    gs("0"),
+                                    gs("5000"),
+                                    gs(MigrateOptions.REPLACE_VALKEY_API),
+                                    gs(MigrateOptions.KEYS_VALKEY_API),
+                                    gs("key1"),
+                                    gs("key2")
+                                }),
+                        any()))
+              .thenReturn(testResponse);
+          CompletableFuture<String> response =
+            service.migrate(
+                    "host",
+                    6379L,
+                    new String[] {"key1", "key2"},
+                    0L,
+                    5000L,
+                    MigrateOptions.builder().replace(true).build());
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+
+        // exercise
     }
 
     @SneakyThrows

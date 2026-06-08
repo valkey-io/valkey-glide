@@ -26,6 +26,9 @@ public final class MigrateOptions {
     /** Valkey API keyword for AUTH2 option. */
     public static final String AUTH2_VALKEY_API = "AUTH2";
 
+    /** Valkey API keyword for KEYS option (multi-key migration). */
+    public static final String KEYS_VALKEY_API = "KEYS";
+
     /** If set, do not remove the key from the source instance. */
     private final boolean copy;
 

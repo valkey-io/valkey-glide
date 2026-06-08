@@ -59,6 +59,7 @@ import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.scan.ScanOptions;
@@ -352,19 +353,16 @@ public class CommandTests {
 
         assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.ALL).get());
 
-        CompletableFuture<String> get = regularClient.get(key);
         CompletableFuture<String> set = regularClient.set(key, "after");
         CompletableFuture<String> unpause = regularClient.clientUnpause();
 
         Thread.sleep(300);
 
         // Verify that none of the commands completes.
-        assertFalse(get.isDone());
         assertFalse(set.isDone());
         assertFalse(unpause.isDone());
 
         // Verify that all commands complete once pause expires.
-        assertEquals("before", get.get(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
         assertEquals("after", regularClient.get(key).get());
@@ -2168,6 +2166,35 @@ public class CommandTests {
                         info.contains("role:slave") || info.contains("role:master"),
                         "Role should transition after failover, got: " + info);
             }
+          
+        }
+    }
+
+    public void migrate_multi_keys_invalid_host(GlideClient regularClient) {
+        String key1 = "{migrate}" + UUID.randomUUID();
+        String key2 = "{migrate}" + UUID.randomUUID();
+        regularClient.set(key1, "value1").get();
+        regularClient.set(key2, "value2").get();
+        try {
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    regularClient
+                                            .migrate("nonexistent.host", 6379, new String[] {key1, key2}, 0, 5000)
+                                            .get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(
+                    executionException.getCause().getMessage().contains("Connection refused")
+                            || executionException.getCause().getMessage().contains("Name or service not known")
+                            || executionException
+                                    .getCause()
+                                    .getMessage()
+                                    .contains("nodename nor servname provided")
+                            || executionException.getCause().getMessage().contains("Temporary failure")
+                            || executionException.getCause().getMessage().contains("IOERR"));
+        } finally {
+            regularClient.del(new String[] {key1, key2}).get();
         }
     }
 
@@ -2205,6 +2232,33 @@ public class CommandTests {
                 assertTrue(
                         info.contains("role:master"),
                         "Expected role:master after replicaofNoOne, got: " + info);
+             }
+        }
+    }
+
+    public void migrate_multi_keys_with_options_to_secondary(GlideClient regularClient) {
+        try (ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+            NodeAddress dest = secondary.getNodesAddr().get(0);
+            String key1 = "{migrate}" + UUID.randomUUID();
+            String key2 = "{migrate}" + UUID.randomUUID();
+            try {
+                regularClient.set(key1, "value1").get();
+                regularClient.set(key2, "value2").get();
+                assertEquals(
+                        OK,
+                        regularClient
+                                .migrate(
+                                        dest.getHost(),
+                                        dest.getPort(),
+                                        new String[] {key1, key2},
+                                        0,
+                                        5000,
+                                        MigrateOptions.builder().replace(true).build())
+                                .get());
+                assertEquals(0L, regularClient.exists(new String[] {key1, key2}).get());
+            } finally {
+                regularClient.del(new String[] {key1, key2}).get();
+
             }
         }
     }

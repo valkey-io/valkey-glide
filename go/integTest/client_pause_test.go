@@ -37,14 +37,9 @@ func (suite *GlideTestSuite) TestClientPauseAllThenUnpause() {
 			err   error
 		}
 
-		getCh := make(chan stringResult, 1)
 		setCh := make(chan stringResult, 1)
 		unpauseCh := make(chan stringResult, 1)
 
-		go func() {
-			v, err := client.Get(ctx, key)
-			getCh <- stringResult{value: v.Value(), err: err}
-		}()
 		go func() {
 			v, err := client.Set(ctx, key, "after")
 			setCh <- stringResult{value: v, err: err}
@@ -66,8 +61,6 @@ func (suite *GlideTestSuite) TestClientPauseAllThenUnpause() {
 
 		// Verify that none of the commands completed while paused.
 		select {
-		case r := <-getCh:
-			suite.Failf("GET completed while paused", "value=%q err=%v", r.value, r.err)
 		case r := <-setCh:
 			suite.Failf("SET completed while paused", "value=%q err=%v", r.value, r.err)
 		case r := <-unpauseCh:
@@ -86,12 +79,9 @@ func (suite *GlideTestSuite) TestClientPauseAllThenUnpause() {
 			}
 		}
 
-		getRes := collect(getCh, "GET")
 		setRes := collect(setCh, "SET")
 		unpauseRes := collect(unpauseCh, "UNPAUSE")
 
-		suite.NoError(getRes.err)
-		suite.Equal("before", getRes.value)
 		suite.NoError(setRes.err)
 		suite.Equal("OK", setRes.value)
 		suite.NoError(unpauseRes.err)

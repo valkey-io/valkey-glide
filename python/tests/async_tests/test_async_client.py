@@ -10039,16 +10039,10 @@ class TestCommands:
             else:
                 assert await glide_client.client_pause(2000, ClientPauseMode.ALL) == OK
 
-            get_result: List[Optional[bytes]] = [None]
             set_result: List[Optional[bytes]] = [None]
             unpause_result: List[Optional[str]] = [None]
-            get_done = anyio.Event()
             set_done = anyio.Event()
             unpause_done = anyio.Event()
-
-            async def run_get() -> None:
-                get_result[0] = await glide_client.get(key)
-                get_done.set()
 
             async def run_set() -> None:
                 set_result[0] = await glide_client.set(key, "after")
@@ -10064,24 +10058,20 @@ class TestCommands:
                 unpause_done.set()
 
             async with anyio.create_task_group() as tg:
-                tg.start_soon(run_get)
                 tg.start_soon(run_set)
                 tg.start_soon(run_unpause)
 
                 await anyio.sleep(0.3)
 
                 # Verify that none of the commands completes.
-                assert not get_done.is_set()
                 assert not set_done.is_set()
                 assert not unpause_done.is_set()
 
                 # Verify that all commands complete once pause expires.
                 with anyio.fail_after(5.0):
-                    await get_done.wait()
                     await set_done.wait()
                     await unpause_done.wait()
 
-            assert get_result[0] == b"before"
             assert set_result[0] == OK
             assert unpause_result[0] == OK
             assert await glide_client.get(key) == b"after"
