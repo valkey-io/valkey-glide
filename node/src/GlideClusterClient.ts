@@ -1873,7 +1873,6 @@ export class GlideClusterClient extends BaseClient {
     public async save(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createSave(), {
             decoder: Decoder.String,
-            route: "allPrimaries" as const,
             ...options,
         });
     }
@@ -1901,16 +1900,9 @@ export class GlideClusterClient extends BaseClient {
             createBgSave(),
             {
                 decoder: Decoder.String,
-                route: "allPrimaries" as const,
                 ...options,
             },
-        ).then((res) =>
-            convertClusterGlideRecord(
-                res,
-                true,
-                options?.route ?? "allPrimaries",
-            ),
-        );
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
     }
 
     /**
@@ -1936,16 +1928,9 @@ export class GlideClusterClient extends BaseClient {
             createBgSave(["SCHEDULE"]),
             {
                 decoder: Decoder.String,
-                route: "allPrimaries" as const,
                 ...options,
             },
-        ).then((res) =>
-            convertClusterGlideRecord(
-                res,
-                true,
-                options?.route ?? "allPrimaries",
-            ),
-        );
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
     }
 
     /**
@@ -1973,16 +1958,9 @@ export class GlideClusterClient extends BaseClient {
             createBgSave(["CANCEL"]),
             {
                 decoder: Decoder.String,
-                route: "allPrimaries" as const,
                 ...options,
             },
-        ).then((res) =>
-            convertClusterGlideRecord(
-                res,
-                true,
-                options?.route ?? "allPrimaries",
-            ),
-        );
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
     }
 
     /**
@@ -2008,16 +1986,9 @@ export class GlideClusterClient extends BaseClient {
             createBgRewriteAof(),
             {
                 decoder: Decoder.String,
-                route: "allPrimaries" as const,
                 ...options,
             },
-        ).then((res) =>
-            convertClusterGlideRecord(
-                res,
-                true,
-                options?.route ?? "allPrimaries",
-            ),
-        );
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
     }
 
     /**

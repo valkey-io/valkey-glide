@@ -24,7 +24,7 @@ from glide_shared.constants import (
 )
 from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
-from glide_shared.routes import AllPrimaries, Route
+from glide_shared.routes import Route
 
 from .core import CoreCommands
 
@@ -921,7 +921,7 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TOK,
-            await self._execute_command(RequestType.Save, [], route or AllPrimaries()),
+            await self._execute_command(RequestType.Save, [], route),
         )
 
     async def bgsave(self, route: Optional[Route] = None) -> TClusterResponse[str]:
@@ -945,9 +945,7 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[str],
-            await self._execute_command(
-                RequestType.BgSave, [], route or AllPrimaries()
-            ),
+            await self._execute_command(RequestType.BgSave, [], route),
         )
 
     async def bgsave_schedule(
@@ -973,9 +971,7 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[str],
-            await self._execute_command(
-                RequestType.BgSave, ["SCHEDULE"], route or AllPrimaries()
-            ),
+            await self._execute_command(RequestType.BgSave, ["SCHEDULE"], route),
         )
 
     async def bgsave_cancel(
@@ -1004,9 +1000,7 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[str],
-            await self._execute_command(
-                RequestType.BgSave, ["CANCEL"], route or AllPrimaries()
-            ),
+            await self._execute_command(RequestType.BgSave, ["CANCEL"], route),
         )
 
     async def bgrewriteaof(
@@ -1032,9 +1026,7 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[str],
-            await self._execute_command(
-                RequestType.BgRewriteAof, [], route or AllPrimaries()
-            ),
+            await self._execute_command(RequestType.BgRewriteAof, [], route),
         )
 
     async def publish(
