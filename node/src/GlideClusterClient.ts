@@ -1899,7 +1899,11 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgSave(),
-            { route: "allPrimaries" as const, ...options },
+            {
+                decoder: Decoder.String,
+                route: "allPrimaries" as const,
+                ...options,
+            },
         ).then((res) =>
             convertClusterGlideRecord(
                 res,
@@ -1930,7 +1934,11 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgSave(["SCHEDULE"]),
-            { route: "allPrimaries" as const, ...options },
+            {
+                decoder: Decoder.String,
+                route: "allPrimaries" as const,
+                ...options,
+            },
         ).then((res) =>
             convertClusterGlideRecord(
                 res,
@@ -1963,7 +1971,11 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgSave(["CANCEL"]),
-            { route: "allPrimaries" as const, ...options },
+            {
+                decoder: Decoder.String,
+                route: "allPrimaries" as const,
+                ...options,
+            },
         ).then((res) =>
             convertClusterGlideRecord(
                 res,
@@ -1994,7 +2006,11 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<string>> {
         return this.createWritePromise<ClusterGlideRecord<string>>(
             createBgRewriteAof(),
-            { route: "allPrimaries" as const, ...options },
+            {
+                decoder: Decoder.String,
+                route: "allPrimaries" as const,
+                ...options,
+            },
         ).then((res) =>
             convertClusterGlideRecord(
                 res,

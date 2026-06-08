@@ -426,10 +426,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 await waitForSaveNotInProgress(client);
 
-                const result = await client.bgsave();
-                expect(BGSAVE_RESPONSES).toContain(result);
-
                 if (client instanceof GlideClusterClient) {
+                    const result = await client.bgsave();
+                    Object.values(result).forEach((v) =>
+                        expect(BGSAVE_RESPONSES).toContain(v),
+                    );
+
                     await waitForSaveNotInProgress(client);
                     const clusterResult = await client.bgsave({
                         route: "allPrimaries",
@@ -437,6 +439,9 @@ export function runBaseTests(config: {
                     Object.values(clusterResult).forEach((v) =>
                         expect(BGSAVE_RESPONSES).toContain(v),
                     );
+                } else {
+                    const result = await client.bgsave();
+                    expect(BGSAVE_RESPONSES).toContain(result);
                 }
             }, protocol);
         },
@@ -449,10 +454,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 await waitForSaveNotInProgress(client);
 
-                const result = await client.bgsaveSchedule();
-                expect(BGSAVE_RESPONSES).toContain(result);
-
                 if (client instanceof GlideClusterClient) {
+                    const result = await client.bgsaveSchedule();
+                    Object.values(result).forEach((v) =>
+                        expect(BGSAVE_RESPONSES).toContain(v),
+                    );
+
                     await waitForSaveNotInProgress(client);
                     const clusterResult = await client.bgsaveSchedule({
                         route: "allPrimaries",
@@ -460,6 +467,9 @@ export function runBaseTests(config: {
                     Object.values(clusterResult).forEach((v) =>
                         expect(BGSAVE_RESPONSES).toContain(v),
                     );
+                } else {
+                    const result = await client.bgsaveSchedule();
+                    expect(BGSAVE_RESPONSES).toContain(result);
                 }
             }, protocol);
         },
@@ -502,10 +512,12 @@ export function runBaseTests(config: {
             await runTest(async (client: BaseClient) => {
                 await waitForSaveNotInProgress(client);
 
-                const result = await client.bgrewriteaof();
-                expect(BGREWRITEAOF_RESPONSES).toContain(result);
-
                 if (client instanceof GlideClusterClient) {
+                    const result = await client.bgrewriteaof();
+                    Object.values(result).forEach((v) =>
+                        expect(BGREWRITEAOF_RESPONSES).toContain(v),
+                    );
+
                     await waitForSaveNotInProgress(client);
                     const clusterResult = await client.bgrewriteaof({
                         route: "allPrimaries",
@@ -513,6 +525,9 @@ export function runBaseTests(config: {
                     Object.values(clusterResult).forEach((v) =>
                         expect(BGREWRITEAOF_RESPONSES).toContain(v),
                     );
+                } else {
+                    const result = await client.bgrewriteaof();
+                    expect(BGREWRITEAOF_RESPONSES).toContain(result);
                 }
             }, protocol);
         },
