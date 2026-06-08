@@ -9550,61 +9550,6 @@ func (suite *GlideTestSuite) TestMigrateWithOptions() {
 	})
 }
 
-func (suite *GlideTestSuite) TestMigrateKeys() {
-	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		ctx := context.Background()
-		key1 := "{migrate}" + uuid.New().String()
-		key2 := "{migrate}" + uuid.New().String()
-		nonExistentKey1 := "{migrate}" + uuid.New().String()
-		nonExistentKey2 := "{migrate}" + uuid.New().String()
-
-		// Non-existent keys return "NOKEY" (not an error)
-		result, err := client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{nonExistentKey1, nonExistentKey2}, 0, 1000)
-		suite.NoError(err)
-		suite.Equal("NOKEY", result)
-
-		// Existing keys migrated to unreachable host returns an error
-		client.Set(ctx, key1, "value1")
-		client.Set(ctx, key2, "value2")
-		_, err = client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
-		suite.Error(err)
-
-		// Empty keys returns error
-		_, err = client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{}, 0, 1000)
-		suite.Error(err)
-		suite.Contains(err.Error(), "keys must not be empty")
-	})
-}
-
-func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
-	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
-		ctx := context.Background()
-		key1 := "{migrate}" + uuid.New().String()
-		key2 := "{migrate}" + uuid.New().String()
-		nonExistentKey1 := "{migrate}" + uuid.New().String()
-		nonExistentKey2 := "{migrate}" + uuid.New().String()
-		migrateOpts := options.NewMigrateOptions().SetCopy().SetReplace()
-
-		// Non-existent keys return "NOKEY" (not an error)
-		result, err := client.MigrateKeysWithOptions(
-			ctx, "nonexistent.host", 6379, []string{nonExistentKey1, nonExistentKey2}, 0, 1000, *migrateOpts,
-		)
-		suite.NoError(err)
-		suite.Equal("NOKEY", result)
-
-		// Existing keys migrated to unreachable host returns an error
-		client.Set(ctx, key1, "value1")
-		client.Set(ctx, key2, "value2")
-		_, err = client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts)
-		suite.Error(err)
-
-		// Empty keys returns error
-		_, err = client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{}, 0, 1000, *migrateOpts)
-		suite.Error(err)
-		suite.Contains(err.Error(), "keys must not be empty")
-	})
-}
-
 func (suite *GlideTestSuite) TestXRangeAndXRevRange() {
 	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
 		key := uuid.New().String()

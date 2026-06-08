@@ -5169,49 +5169,6 @@ func (b *BaseBatch[T]) MigrateWithOptions(
 	)
 }
 
-// MigrateKeys atomically transfers the specified keys from a source Valkey instance to a destination Valkey instance.
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/migrate/
-func (b *BaseBatch[T]) MigrateKeys(
-	host string,
-	port int64,
-	keys []string,
-	destinationDB int64,
-	timeout int64,
-) *T {
-	return b.MigrateKeysWithOptions(host, port, keys, destinationDB, timeout, options.MigrateOptions{})
-}
-
-// MigrateKeysWithOptions atomically transfers the specified keys from a source Valkey instance to a destination
-// Valkey instance with additional options.
-//
-// See [valkey.io] for details.
-//
-// [valkey.io]: https://valkey.io/commands/migrate/
-func (b *BaseBatch[T]) MigrateKeysWithOptions(
-	host string,
-	port int64,
-	keys []string,
-	destinationDB int64,
-	timeout int64,
-	migrateOptions options.MigrateOptions,
-) *T {
-	if len(keys) == 0 {
-		return b.addError("MigrateKeysWithOptions", errors.New("keys must not be empty"))
-	}
-	optionArgs, err := migrateOptions.ToArgs()
-	if err != nil {
-		return b.addError("MigrateKeysWithOptions", err)
-	}
-	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
-	args = append(args, optionArgs...)
-	args = append(args, constants.KeysKeyword)
-	args = append(args, keys...)
-	return b.addCmdAndTypeChecker(C.Migrate, args, reflect.String, false)
-}
-
 // Returns stream entries matching a given range of IDs.
 //
 // See [valkey.io] for details.

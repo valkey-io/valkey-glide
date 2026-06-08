@@ -24,4 +24,33 @@ type GenericCommands interface {
 	ScanWithOptions(ctx context.Context, cursor models.Cursor, scanOptions options.ScanOptions) (models.ScanResult, error)
 
 	RandomKey(ctx context.Context) (models.Result[string], error)
+
+	// MigrateKeys atomically transfers the specified keys from a source Valkey instance to a
+	// destination Valkey instance. On success, keys are deleted from the source.
+	// This command is for standalone clients only (not cluster mode).
+	//
+	// [valkey.io]: https://valkey.io/commands/migrate/
+	MigrateKeys(
+		ctx context.Context,
+		host string,
+		port int64,
+		keys []string,
+		destinationDB int64,
+		timeout int64,
+	) (string, error)
+
+	// MigrateKeysWithOptions atomically transfers the specified keys from a source Valkey instance
+	// to a destination Valkey instance with additional options.
+	// This command is for standalone clients only (not cluster mode).
+	//
+	// [valkey.io]: https://valkey.io/commands/migrate/
+	MigrateKeysWithOptions(
+		ctx context.Context,
+		host string,
+		port int64,
+		keys []string,
+		destinationDB int64,
+		timeout int64,
+		migrateOptions options.MigrateOptions,
+	) (string, error)
 }
