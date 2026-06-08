@@ -5,6 +5,10 @@ inputs:
   engine-version:
     description: 'Valkey version to install (e.g., 9.0, 8.1)'
     required: true
+  target:
+    description: 'Rust target triple for platform-specific builds (e.g., x86_64-unknown-linux-gnu)'
+    required: false
+    default: ''
 
 outputs:
   cache-key:
@@ -17,10 +21,17 @@ runs:
     - name: Compute cache key
       id: cache-key
       shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
       run: |
         VERSION="${{ inputs.engine-version }}"
         GIT_SHA=$(git ls-remote https://github.com/valkey-io/valkey.git "refs/tags/${VERSION}" | cut -f1)
-        PLATFORM="${{ runner.os }}-${{ runner.arch }}"
+        # Use target if provided, otherwise use runner os/arch
+        if [[ -n "$TARGET" ]]; then
+          PLATFORM="$TARGET"
+        else
+          PLATFORM="${{ runner.os }}-${{ runner.arch }}"
+        fi
         echo "key=valkey-${VERSION}-${GIT_SHA:0:8}-${PLATFORM}" >> $GITHUB_OUTPUT
 
     - name: Restore from cache

@@ -8,6 +8,10 @@ description: >
   supported on macOS or Windows Docker.
 
 inputs:
+  engine-version:
+    description: 'Valkey engine version (e.g., 9.0, 9.1). Used to configure version-specific cluster settings.'
+    required: false
+    default: '9.0'
   standalone-port:
     description: 'Port for standalone module server'
     required: false
@@ -71,8 +75,16 @@ runs:
       env:
         IMAGE: ${{ steps.docker-image.outputs.image }}
         BASE_PORT: ${{ inputs.cluster-port-start }}
+        ENGINE_VERSION: ${{ inputs.engine-version }}
       run: |
         echo "=== Starting Valkey cluster with modules on ports $BASE_PORT-$((BASE_PORT + 5)) ==="
+
+        # Determine version-specific cluster arguments
+        MAJOR=$(echo "$ENGINE_VERSION" | cut -d. -f1)
+        EXTRA_ARGS=""
+        if [ "$MAJOR" -ge 9 ]; then
+          EXTRA_ARGS="--cluster-databases 16"
+        fi
 
         for i in {0..5}; do
           PORT=$((BASE_PORT + i))
@@ -85,7 +97,8 @@ runs:
             --appendonly no \
             --protected-mode no \
             --enable-debug-command yes \
-            --save ""
+            --save "" \
+            $EXTRA_ARGS
         done
 
     - name: Wait for servers

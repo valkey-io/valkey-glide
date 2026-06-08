@@ -6,6 +6,10 @@ inputs:
     description: 'Zig version to install'
     required: false
     default: '0.11.0'
+  target:
+    description: 'Rust target triple for cargo-zigbuild (e.g., x86_64-unknown-linux-gnu)'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -14,3 +18,12 @@ runs:
       uses: goto-bus-stop/setup-zig@7ab2955eb728f5440978d5824358023be3a2802d # v2.2.0
       with:
         version: ${{ inputs.zig-version }}
+
+    - name: Set cargo-zigbuild target
+      if: inputs.target != ''
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+      run: |
+        # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
+        echo "CARGO_ZIGBUILD_TARGET=$TARGET" >> $GITHUB_ENV
