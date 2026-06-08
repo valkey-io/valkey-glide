@@ -16435,21 +16435,20 @@ public class GlideClientTest {
                                     gs("key2")
                                 }),
                         any()))
-              .thenReturn(testResponse);
-          CompletableFuture<String> response =
-            service.migrate(
-                    "host",
-                    6379L,
-                    new String[] {"key1", "key2"},
-                    0L,
-                    5000L,
-                    MigrateOptions.builder().replace(true).build());
+                .thenReturn(testResponse);
+        // exercise
+        CompletableFuture<String> response =
+                service.migrate(
+                        "host",
+                        6379L,
+                        new String[] {"key1", "key2"},
+                        0L,
+                        5000L,
+                        MigrateOptions.builder().replace(true).build());
 
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
-
-        // exercise
     }
 
     @SneakyThrows
