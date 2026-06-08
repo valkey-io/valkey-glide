@@ -4,7 +4,6 @@ package integTest
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -336,9 +335,5 @@ func (suite *GlideTestSuite) TestLatencyHistory_ContextCancelled() {
 
 	_, err := client.LatencyHistory(ctx, "command")
 	require.Error(t, err)
-	assert.True(t,
-		strings.Contains(err.Error(), "context canceled") ||
-			strings.Contains(err.Error(), "Operation was cancelled") ||
-			strings.Contains(err.Error(), "request was cancelled"),
-		"expected context cancellation error, got: %v", err)
+	assert.Equal(t, context.Canceled.Error(), err.Error())
 }
