@@ -361,16 +361,8 @@ func (o *OpenTelemetry) createSpanWithRemoteContext(requestType C.RequestType, s
 		return 0
 	}
 
-	traceID := C.CString(spanContext.TraceID)
-	defer C.free(unsafe.Pointer(traceID))
-	spanID := C.CString(spanContext.SpanID)
-	defer C.free(unsafe.Pointer(spanID))
-
-	var traceState *C.char
-	if spanContext.TraceState != "" {
-		traceState = C.CString(spanContext.TraceState)
-		defer C.free(unsafe.Pointer(traceState))
-	}
+	traceID, spanID, traceState, cleanup := spanContext.toCStrings()
+	defer cleanup()
 
 	return uint64(C.create_otel_span_with_trace_context(
 		C.enum_RequestType(requestType),
@@ -386,16 +378,8 @@ func (o *OpenTelemetry) createBatchSpanWithRemoteContext(spanContext SpanContext
 		return 0
 	}
 
-	traceID := C.CString(spanContext.TraceID)
-	defer C.free(unsafe.Pointer(traceID))
-	spanID := C.CString(spanContext.SpanID)
-	defer C.free(unsafe.Pointer(spanID))
-
-	var traceState *C.char
-	if spanContext.TraceState != "" {
-		traceState = C.CString(spanContext.TraceState)
-		defer C.free(unsafe.Pointer(traceState))
-	}
+	traceID, spanID, traceState, cleanup := spanContext.toCStrings()
+	defer cleanup()
 
 	return uint64(C.create_batch_otel_span_with_trace_context(
 		traceID,
@@ -403,6 +387,26 @@ func (o *OpenTelemetry) createBatchSpanWithRemoteContext(spanContext SpanContext
 		C.uint8_t(spanContext.TraceFlags),
 		traceState,
 	))
+}
+
+func (spanContext SpanContext) toCStrings() (*C.char, *C.char, *C.char, func()) {
+	traceID := C.CString(spanContext.TraceID)
+	spanID := C.CString(spanContext.SpanID)
+
+	var traceState *C.char
+	if spanContext.TraceState != "" {
+		traceState = C.CString(spanContext.TraceState)
+	}
+
+	cleanup := func() {
+		C.free(unsafe.Pointer(traceID))
+		C.free(unsafe.Pointer(spanID))
+		if traceState != nil {
+			C.free(unsafe.Pointer(traceState))
+		}
+	}
+
+	return traceID, spanID, traceState, cleanup
 }
 
 func (o *OpenTelemetry) createCommandSpanForContext(ctx context.Context, requestType C.RequestType) uint64 {
@@ -655,8 +659,8 @@ func isValidHexID(value string, expectedLength int) bool {
 	return true
 }
 
-// isValidTraceState mirrors opentelemetry-rust TraceState::from_str so Go rejects
-// remote parents that Rust would otherwise turn into standalone spans.
+// isValidTraceState validates remote tracestate before passing it through FFI so
+// invalid remote contexts can still fall back to span-pointer parents.
 func isValidTraceState(traceState string) bool {
 	traceState = strings.TrimRight(traceState, ",")
 	if traceState == "" {
@@ -669,7 +673,6 @@ func isValidTraceState(traceState string) bool {
 			return false
 		}
 
-		value = strings.TrimLeft(value, "=")
 		if !isValidTraceStateKey(key) || !isValidTraceStateValue(value) {
 			return false
 		}
@@ -678,7 +681,7 @@ func isValidTraceState(traceState string) bool {
 }
 
 func isValidTraceStateKey(key string) bool {
-	if len(key) > 256 {
+	if len(key) == 0 || len(key) > 256 {
 		return false
 	}
 
@@ -698,7 +701,7 @@ func isValidTraceStateKey(key string) bool {
 		case i == 0 && !isLower && !isDigit:
 			return false
 		case isAt:
-			if vendorStart != -1 || i+14 < len(key) {
+			if vendorStart != -1 || i == len(key)-1 || i+15 < len(key) {
 				return false
 			}
 			vendorStart = i
@@ -710,7 +713,24 @@ func isValidTraceStateKey(key string) bool {
 }
 
 func isValidTraceStateValue(value string) bool {
-	return len(value) <= 256 && !strings.Contains(value, ",") && !strings.Contains(value, "=")
+	if len(value) == 0 || len(value) > 256 {
+		return false
+	}
+
+	for i := 0; i < len(value)-1; i++ {
+		if !isValidTraceStateValueChar(value[i]) {
+			return false
+		}
+	}
+	return isValidTraceStateValueLast(value[len(value)-1])
+}
+
+func isValidTraceStateValueChar(char byte) bool {
+	return char >= 0x20 && char <= 0x7e && char != ',' && char != '='
+}
+
+func isValidTraceStateValueLast(char byte) bool {
+	return char >= 0x21 && char <= 0x7e && char != ',' && char != '='
 }
 
 // extractSpanPointer is an internal method that safely extracts parent span pointer from context

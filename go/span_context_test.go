@@ -388,6 +388,49 @@ func TestSpanContextExtractor_NormalizesUppercaseHex(t *testing.T) {
 	assert.Equal(t, "b7ad6b7169203331", got.SpanID)
 }
 
+func TestTraceStateKeyValidation(t *testing.T) {
+	testCases := []struct {
+		name  string
+		key   string
+		valid bool
+	}{
+		{name: "simple key", key: "vendor", valid: true},
+		{name: "empty key", key: "", valid: false},
+		{name: "system id with fourteen characters", key: "tenant@abcdefghijklmn", valid: true},
+		{name: "system id with fifteen characters", key: "tenant@abcdefghijklmno", valid: false},
+		{name: "empty system id", key: "tenant@", valid: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.valid, isValidTraceStateKey(tc.key))
+		})
+	}
+}
+
+func TestTraceStateValueValidation(t *testing.T) {
+	testCases := []struct {
+		name  string
+		value string
+		valid bool
+	}{
+		{name: "opaque value", value: "opaqueValue1", valid: true},
+		{name: "leading space with nonblank terminator", value: " opaque", valid: true},
+		{name: "empty value", value: "", valid: false},
+		{name: "space only value", value: " ", valid: false},
+		{name: "trailing space", value: "opaque ", valid: false},
+		{name: "tab character", value: "opaque\tvalue", valid: false},
+		{name: "comma", value: "opaque,value", valid: false},
+		{name: "equals", value: "opaque=value", valid: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.valid, isValidTraceStateValue(tc.value))
+		})
+	}
+}
+
 func TestSpanContextExtractor_PanicRecovery(t *testing.T) {
 	otel := GetOtelInstance()
 	t.Cleanup(func() {
