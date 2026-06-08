@@ -16416,6 +16416,8 @@ public class GlideClientTest {
         assertEquals(OK, payload);
     }
 
+    @SneakyThrows
+    @Test
     public void migrate_keys_with_options() {
         // setup
         CompletableFuture<String> testResponse = new CompletableFuture<>();
