@@ -1911,7 +1911,7 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
                     .create_string_from_std(str)
                     .and_then(|val| val.into_unknown(js_env))
             } else {
-                BufferSlice::from_data(js_env, str.as_bytes().to_vec())?.into_unknown(js_env)
+                BufferSlice::from_data(js_env, str.into_bytes())?.into_unknown(js_env)
             }
         }
         Value::Okay => js_env
@@ -1927,7 +1927,7 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
                     .create_string(str)
                     .and_then(|val| val.into_unknown(js_env))
             } else {
-                BufferSlice::from_data(js_env, data.to_vec())?.into_unknown(js_env)
+                BufferSlice::from_data(js_env, data)?.into_unknown(js_env)
             }
         }
         Value::Array(array) => {
@@ -1968,7 +1968,7 @@ fn resp_value_to_js<'a>(val: Value, js_env: &'a Env, string_decoder: bool) -> Re
                     .and_then(|val| val.into_unknown(js_env))
             } else {
                 // VerbatimString is binary safe -> convert it into such
-                BufferSlice::from_data(js_env, text.as_bytes().to_vec())?.into_unknown(js_env)
+                BufferSlice::from_data(js_env, text.into_bytes())?.into_unknown(js_env)
             }
         }
         Value::BigNumber(num) => {
