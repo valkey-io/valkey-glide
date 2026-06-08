@@ -1991,4 +1991,174 @@ mod tests {
             }
         }
     }
+
+    /// A sink whose write side is never ready, so the pipeline's bounded channel
+    /// never drains: a producer waiting for capacity stays parked in the
+    /// `send_recv` liveness loop, and the writer never records a `start_send`
+    /// (drain) progress bump. The read side yields exactly the responses the test
+    /// injects via its `resp_tx`, so the ONLY thing that can advance the liveness
+    /// `progress` counter is the `poll_read` bump on response receipt. This lets
+    /// the tests below drive the liveness signal deterministically under
+    /// `start_paused` virtual time.
+    struct ReadProgressSink {
+        resp_rx: futures_mpsc::Receiver<RedisResult<Value>>,
+    }
+
+    impl Stream for ReadProgressSink {
+        type Item = RedisResult<Value>;
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Pin::new(&mut self.resp_rx).poll_next(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for ReadProgressSink {
+        type Error = RedisError;
+        fn poll_ready(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            // Never ready: the writer can never pull from the channel, so it stays
+            // full (the producer keeps waiting for capacity) and no drain progress
+            // bump is ever recorded. The `Forward` driver is re-polled via the
+            // read waker that `PipelineSink::poll_ready`'s Pending path registers
+            // through `poll_read`, so returning a bare Pending here is correct.
+            Poll::Pending
+        }
+        fn start_send(self: Pin<&mut Self>, _item: Vec<u8>) -> Result<(), Self::Error> {
+            unreachable!("poll_ready never returns Ready, so start_send is never called")
+        }
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    /// Yields repeatedly so spawned pipeline tasks (the producer under test, the
+    /// filler, and the `Forward` driver) can run to their next park point without
+    /// advancing the (paused) clock.
+    async fn settle() {
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Spawns a `ReadProgressSink`-backed pipeline (buffer = 1) plus enough filler
+    /// producers to saturate it, so the returned `subject` producer blocks in the
+    /// slot-acquire liveness loop. The `Forward` combinator buffers one pulled
+    /// message in addition to the channel's `buffer_size`, so `buffer_size + 1`
+    /// producers are absorbed before a producer blocks on capacity — hence two
+    /// fillers for buffer = 1. All producers use an effectively-infinite timeout,
+    /// so the only way the subject can resolve early is the dead path
+    /// (`FatalSendError`). Returns (subject, fillers, driver, resp_tx).
+    #[allow(clippy::type_complexity)]
+    async fn spawn_blocked_producer() -> (
+        tokio::task::JoinHandle<RedisResult<Value>>,
+        Vec<tokio::task::JoinHandle<RedisResult<Value>>>,
+        tokio::task::JoinHandle<()>,
+        futures_mpsc::Sender<RedisResult<Value>>,
+    ) {
+        let (resp_tx, resp_rx) = futures_mpsc::channel::<RedisResult<Value>>(64);
+        let (pipeline, driver) =
+            Pipeline::new_with_buffer_size(ReadProgressSink { resp_rx }, None, None, 1);
+        let driver_handle = tokio::spawn(driver);
+
+        // buffer_size (1) in the channel + 1 buffered by `Forward` = 2 absorbed.
+        let mut fillers = Vec::new();
+        for _ in 0..2 {
+            let mut f = pipeline.clone();
+            fillers.push(tokio::spawn(async move {
+                f.send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    Duration::from_secs(3600),
+                    false,
+                )
+                .await
+            }));
+            settle().await; // let the writer absorb this filler before the next
+        }
+
+        let mut subject = pipeline.clone();
+        let subject_handle = tokio::spawn(async move {
+            subject
+                .send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    Duration::from_secs(3600),
+                    false,
+                )
+                .await
+        });
+        settle().await; // subject parks in the liveness loop
+
+        (subject_handle, fillers, driver_handle, resp_tx)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_single_no_progress_tick_does_not_kill_live_connection() {
+        // Guards the `DEAD_TICKS = 2` debounce: a *single* no-progress liveness
+        // tick must NOT declare a live connection dead. The subject is parked in
+        // the slot-acquire loop; we feed a response on every *other* tick, so each
+        // gap is exactly one no-progress tick (`no_progress_ticks` reaches 1, then
+        // resets when the next tick observes the injected progress). With
+        // `DEAD_TICKS = 2` the subject stays alive; with `DEAD_TICKS = 1` it would
+        // be killed (`FatalSendError`) on the very first no-progress tick, failing
+        // the in-loop assertion below.
+        let (subject, fillers, driver, mut resp_tx) = spawn_blocked_producer().await;
+
+        for _ in 0..6 {
+            tokio::time::advance(Duration::from_millis(100)).await; // one no-progress tick
+            settle().await;
+            assert!(
+                !subject.is_finished(),
+                "a single no-progress tick must not kill a live connection \
+                 (DEAD_TICKS must be >= 2); the producer was declared dead"
+            );
+            resp_tx.try_send(Ok(Value::Okay)).expect("inject response");
+            settle().await; // Forward drains it -> poll_read progress bump
+            tokio::time::advance(Duration::from_millis(100)).await; // next tick observes progress -> reset
+            settle().await;
+        }
+
+        assert!(
+            !subject.is_finished(),
+            "producer must remain alive across repeated single no-progress ticks"
+        );
+
+        subject.abort();
+        for f in fillers {
+            f.abort();
+        }
+        driver.abort();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_poll_read_progress_alone_keeps_connection_alive() {
+        // Isolates the response-receipt (`poll_read`) liveness signal from the
+        // drain (`start_send`) signal. `ReadProgressSink` never accepts a drain,
+        // so `start_send` never bumps progress; the only liveness signal available
+        // is the `poll_read` bump when an injected response is drained. A producer
+        // parked in the slot-acquire loop must therefore stay alive (never
+        // `FatalSendError`) as long as responses keep flowing. Deleting the
+        // `poll_read` progress bump regresses this: with no progress at all the
+        // producer would be declared dead after `DEAD_TICKS` ticks.
+        let (subject, fillers, driver, mut resp_tx) = spawn_blocked_producer().await;
+
+        for _ in 0..10 {
+            resp_tx.try_send(Ok(Value::Okay)).expect("inject response");
+            settle().await; // Forward drains it -> poll_read progress bump
+            tokio::time::advance(Duration::from_millis(100)).await; // one liveness tick (sees progress)
+            settle().await;
+        }
+
+        assert!(
+            !subject.is_finished(),
+            "a producer must stay alive while poll_read keeps recording progress; \
+             it resolved early (likely FatalSendError) — is the poll_read liveness \
+             bump still present?"
+        );
+
+        subject.abort();
+        for f in fillers {
+            f.abort();
+        }
+        driver.abort();
+    }
 }
