@@ -9,22 +9,23 @@ inputs:
   target:
     description: 'Rust target triple to add'
     required: false
-    default: ''
+    default: 'x86_64-unknown-linux-gnu'
   github-token:
-    description: 'GitHub token for protoc installation (uses github.token if not provided)'
-    required: false
-    default: ''
+    description: 'GitHub token for protoc installation'
+    required: true
 
 runs:
   using: 'composite'
   steps:
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # 1.80.0
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@d0592fe69e35bc8f12e3dbaf9ad2694d976cb8e3 # stable
       with:
         toolchain: ${{ inputs.rust-version }}
         targets: ${{ inputs.target }}
+        components: rustfmt, clippy
 
-    - name: Install protoc
+    - name: Install protoc (protobuf)
       uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
       with:
-        repo-token: ${{ inputs.github-token || github.token }}
+        version: "25.1"
+        repo-token: ${{ inputs.github-token }}
