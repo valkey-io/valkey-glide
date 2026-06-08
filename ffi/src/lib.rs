@@ -46,6 +46,7 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio::runtime::Runtime;
+use uuid::Uuid;
 
 #[repr(C)]
 pub struct ScriptHashBuffer {
@@ -1196,6 +1197,7 @@ pub unsafe extern "C-unwind" fn create_client(
 ///   - `periodic_checks`: Health check configuration with either `manual_interval` (object with `duration_in_sec`) or `disabled` (bool) (object)
 ///   - `iam_credentials`: AWS IAM authentication with `cluster_name`, `region`, `service_type` ("ELASTICACHE" or "MEMORYDB"), and optional `refresh_interval_seconds` (object)
 ///   - `pubsub_subscriptions`: Pre-subscribe to channels on connection - map of channel type (0=Exact, 1=Pattern, 2=Sharded) to array of channel names (object)
+///   - `client_side_cache`: Client-side caching configuration with `max_cache_kb` (u64, required), `entry_ttl_ms` (u64, required, 0 = no expiration), optional `eviction_policy` ("LRU" or "LFU", defaults to LRU), and optional `enable_metrics` (bool, defaults to false). The `cache_id` is auto-generated internally. (object)
 ///
 /// * `client_type`: Type of client to create (sync/async).
 ///
@@ -1271,6 +1273,17 @@ pub unsafe extern "C-unwind" fn create_client(
 ///     "}"
 /// "}";
 /// create_client_from_uri("valkey://localhost:6379", pubsub_opts, &client_type, 0);
+///
+/// // Client-side caching
+/// const char* cache_opts = "{"
+///     "\"client_side_cache\": {"
+///         "\"max_cache_kb\": 2048,"
+///         "\"entry_ttl_ms\": 60000,"
+///         "\"eviction_policy\": \"LRU\","
+///         "\"enable_metrics\": true"
+///     "}"
+/// "}";
+/// create_client_from_uri("valkey://localhost:6379", cache_opts, &client_type, 0);
 /// ```
 ///
 /// # Safety
@@ -1464,6 +1477,7 @@ fn is_known_connection_options_json_key(key: &str) -> bool {
             | "periodic_checks"
             | "iam_credentials"
             | "pubsub_subscriptions"
+            | "client_side_cache"
     )
 }
 
@@ -1908,6 +1922,70 @@ fn apply_json_options(
         }
 
         request.pubsub_subscriptions = ::protobuf::MessageField::some(subscriptions);
+    }
+
+    // Handle client_side_cache
+    if let Some(cache) = obj.get("client_side_cache") {
+        let cache_obj = cache
+            .as_object()
+            .ok_or_else(|| "client_side_cache must be an object".to_string())?;
+
+        if cache_obj.contains_key("cache_id") {
+            return Err(
+                "client_side_cache.cache_id is not accepted; it is generated internally"
+                    .to_string(),
+            );
+        }
+
+        let mut config = connection_request::ClientSideCache::new();
+
+        // max_cache_kb (required)
+        let max_cache_kb = cache_obj
+            .get("max_cache_kb")
+            .ok_or_else(|| "client_side_cache.max_cache_kb is required".to_string())?;
+        config.max_cache_kb = max_cache_kb.as_u64().ok_or_else(|| {
+            "client_side_cache.max_cache_kb must be a positive integer".to_string()
+        })?;
+        if config.max_cache_kb == 0 {
+            return Err("client_side_cache.max_cache_kb must be greater than 0".to_string());
+        }
+
+        // entry_ttl_ms (required)
+        let entry_ttl_ms = cache_obj
+            .get("entry_ttl_ms")
+            .ok_or_else(|| "client_side_cache.entry_ttl_ms is required".to_string())?;
+        config.entry_ttl_ms = entry_ttl_ms.as_u64().ok_or_else(|| {
+            "client_side_cache.entry_ttl_ms must be a non-negative integer".to_string()
+        })?;
+
+        // eviction_policy (optional, defaults to LRU)
+        if let Some(policy) = cache_obj.get("eviction_policy") {
+            let policy_str = policy
+                .as_str()
+                .ok_or_else(|| "client_side_cache.eviction_policy must be a string".to_string())?;
+            let policy_enum = match policy_str.to_uppercase().as_str() {
+                "LRU" => connection_request::EvictionPolicy::LRU,
+                "LFU" => connection_request::EvictionPolicy::LFU,
+                _ => {
+                    return Err(format!(
+                        "Unknown eviction_policy: {}. Valid values are: LRU, LFU",
+                        policy_str
+                    ));
+                }
+            };
+            config.eviction_policy = Some(::protobuf::EnumOrUnknown::new(policy_enum));
+        }
+
+        // enable_metrics (optional, defaults to false)
+        if let Some(metrics) = cache_obj.get("enable_metrics") {
+            config.enable_metrics = metrics
+                .as_bool()
+                .ok_or_else(|| "client_side_cache.enable_metrics must be a boolean".to_string())?;
+        }
+
+        // Auto-generate cache_id after all validation passes (not accepted from JSON input)
+        config.cache_id = Uuid::new_v4().to_string().into();
+        request.client_side_cache = ::protobuf::MessageField::some(config);
     }
 
     Ok(())

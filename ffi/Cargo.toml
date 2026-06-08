@@ -17,6 +17,7 @@ logger_core = { path = "../logger_core" }
 tracing = "0.1"
 serde_json = "1.0"
 url = "2"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 rstest = "^0.23"

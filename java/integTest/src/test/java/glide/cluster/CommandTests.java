@@ -2,6 +2,9 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
+import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
+import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -17,8 +20,10 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitForCondition;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -61,6 +66,7 @@ import glide.api.models.ClusterBatch;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.ListDirection;
@@ -599,6 +605,56 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void clientPauseAll_then_clientUnpause(GlideClusterClient clusterClient) {
+        String key = "clientPauseAll_then_clientUnpause_key";
+        assertEquals(OK, clusterClient.set(key, "before").get());
+
+        assertEquals(OK, clusterClient.clientPause(2000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> set = clusterClient.set(key, "after");
+        CompletableFuture<String> unpause = clusterClient.clientUnpause();
+
+        Thread.sleep(300);
+
+        // Verify that none of the commands completes.
+        assertFalse(set.isDone());
+        assertFalse(unpause.isDone());
+
+        // Verify that all commands complete once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", clusterClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPauseWrite_then_clientUnpause(GlideClusterClient clusterClient) {
+        String key = "clientPauseWrite_then_clientUnpause_key";
+        assertEquals(OK, clusterClient.set(key, "before").get());
+
+        assertEquals(OK, clusterClient.clientPause(2000, ClientPauseMode.WRITE).get());
+
+        // Reads are not blocked by PAUSE WRITE.
+        assertEquals("before", clusterClient.get(key).get());
+
+        CompletableFuture<String> set = clusterClient.set(key, "after");
+
+        Thread.sleep(300);
+
+        // Verify that SET has not completed because server is paused.
+        assertFalse(set.isDone());
+
+        assertEquals(OK, clusterClient.clientUnpause().get());
+
+        // Verify that SET completes once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", clusterClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void config_reset_stat(GlideClusterClient clusterClient) {
         // Ensure some network activity has occurred to guarantee valueBefore > 0
         clusterClient.info(new Section[] {STATS}).get();
@@ -881,6 +937,117 @@ public class CommandTests {
         for (Long value : data.getMultiValue().values()) {
             assertTrue(Instant.ofEpochSecond(value).isAfter(yesterday));
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void save_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsave()
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsave(ALL_PRIMARIES)
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsaveSchedule()
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgsaveSchedule(ALL_PRIMARIES)
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> clusterClient.bgsaveCancel().get());
+        assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel_with_route(GlideClusterClient clusterClient) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+
+        ExecutionException e =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+        assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgrewriteaof()
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGREWRITEAOF_RESPONSES.contains(value)));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
+        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        clusterClient
+                .bgrewriteaof(ALL_PRIMARIES)
+                .get()
+                .getMultiValue()
+                .values()
+                .forEach(value -> assertTrue(BGREWRITEAOF_RESPONSES.contains(value)));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

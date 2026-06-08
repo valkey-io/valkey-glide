@@ -44,7 +44,7 @@ jobs:
             should_publish: ${{ steps.get-params.outputs.should_publish }}
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   fetch-depth: 0
 
@@ -182,17 +182,17 @@ jobs:
         name: Build for ${{ matrix.TARGET }} (${{ matrix.build_type }})
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   fetch-depth: 0
 
             - name: Setup Node.js
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
 
             - name: Cache cargo registry
-              uses: actions/cache@v4
+              uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
               with:
                   path: |
                       ~/.cargo
@@ -205,12 +205,13 @@ jobs:
 
             # You might ask why we don't use the common action for installing Rust, the reason is many targets to install, and caching will be more efficient
             - name: Install Rust with the required target
-              uses: dtolnay/rust-toolchain@stable
+              uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
               with:
+                  toolchain: stable
                   targets: ${{ matrix.TARGET }}
 
             - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
+              uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3
               with:
                   version: "25.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -273,7 +274,7 @@ jobs:
 
             # Upload the native .node modules as artifacts
             - name: Upload Native Modules
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               with:
                   name: bindings-${{ matrix.TARGET }}-${{ matrix.RUNNER }}
                   path: ./node/${{ matrix.TARGET }}
@@ -282,7 +283,7 @@ jobs:
 
             # We want to use the native.js and native.d.ts files in the base package, but we don't have the glide dir yet so we upload them as artifacts
             - name: Upload Module js files
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
               if: ${{ matrix.TARGET == 'x86_64-unknown-linux-gnu' }}
               with:
                   name: js-files-${{ github.run_id }}
@@ -301,7 +302,7 @@ jobs:
             release_package_artifact_name: "release-packages-${{ github.run_id }}"
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   fetch-depth: 0
             - name: Create Build Directory
@@ -312,20 +313,20 @@ jobs:
 
             # Put the native.js and native.d.ts files in the src directory
             - name: Download Module js files
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   name: js-files-${{ github.run_id }}
                   path: ./node/build-ts
 
             # Download all native modules
             - name: Download all native modules
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
               with:
                   path: ./node/artifacts
 
             # Setup Node.js for publishing to NPM and caching
             - name: Setup Node.js with npm cache
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"
@@ -439,7 +440,7 @@ jobs:
               # Delete artifacts if not published
             - name: Delete artifacts
               if: always() && ${{ needs.get-build-parameters.outputs.should_publish == 'false' }}
-              uses: geekyeggo/delete-artifact@v2
+              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
               with:
                   name: |
                       artifacts-*
@@ -469,7 +470,7 @@ jobs:
 
             - name: Checkout (via action)
               if: ${{ !(matrix.TARGET == 'aarch64-unknown-linux-musl') }}
-              uses: actions/checkout@v4
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
               with:
                   fetch-depth: 0
 
@@ -489,7 +490,7 @@ jobs:
 
             - name: Setup Node.js
               if: ${{ !(matrix.build_type == 'musl') }}
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
 
@@ -542,7 +543,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Delete artifacts
-              uses: geekyeggo/delete-artifact@v2
+              uses: geekyeggo/delete-artifact@54ab544f12cdb7b71613a16a2b5a37a9ade990af # v2
               with:
                   name: |
                       bindings-*
@@ -555,7 +556,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Setup Node.js
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
               with:
                   node-version: latest
                   registry-url: "https://registry.npmjs.org"

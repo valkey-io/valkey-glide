@@ -223,10 +223,12 @@ if (System.getenv("UBER_JAR_BUILD") == "true") {
     shadowJar.dependsOn('copyAllNativeLibs')
     compileTestJava.dependsOn('copyAllNativeLibs')
     javadoc.dependsOn('copyAllNativeLibs')
+    checkstyleMain.dependsOn('copyAllNativeLibs')
 } else {
     shadowJar.dependsOn('copyNativeLib')
     compileTestJava.dependsOn('copyNativeLib')
     javadoc.dependsOn('copyNativeLib')
+    checkstyleMain.dependsOn('copyNativeLib')
     copyNativeLib.dependsOn('buildRust')
 }
 
