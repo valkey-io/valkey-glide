@@ -175,6 +175,7 @@ import {
     createLolwut,
     createMGet,
     createMigrate,
+    createMigrateKeys,
     createMSet,
     createMSetNX,
     createMove,
@@ -460,17 +461,14 @@ export class BaseBatch<T extends BaseBatch<T>> {
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
      *
-     * Supports multi-key migration via `options.keys`: when provided, `key` is ignored and
-     * the wire format becomes `MIGRATE host port "" db timeout [options] KEYS key1 key2 ...`.
-     *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param key - The key to migrate. Pass `""` when using `options.keys`.
+     * @param key - The key to migrate.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
-     * @param options - Optional migration options. Use `options.keys` for multi-key migration.
+     * @param options - Optional migration options.
      */
     public migrate(
         host: string,
@@ -4493,6 +4491,43 @@ export class Batch extends BaseBatch<Batch> {
      */
     public select(index: number): Batch {
         return this.addAndReturn(createSelect(index));
+    }
+
+    /**
+     * Atomically transfers the specified keys from the current Valkey instance
+     * to a destination Valkey instance. On success, keys are deleted from the source.
+     *
+     * Note: Multi-key `MIGRATE` is only supported on standalone clients.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param keys - The keys to migrate. Must not be empty.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     *
+     * Command Response - `"OK"` on success, `"NOKEY"` if none of the keys exist.
+     */
+    public migrateKeys(
+        host: string,
+        port: number,
+        keys: GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Batch {
+        return this.addAndReturn(
+            createMigrateKeys(
+                host,
+                port,
+                keys,
+                destinationDB,
+                timeout,
+                options,
+            ),
+        );
     }
 
     /** Publish a message on pubsub channel.

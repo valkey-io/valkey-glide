@@ -803,59 +803,66 @@ describe("GlideClient", () => {
             const key2 = getRandomKey();
             const key3 = getRandomKey();
             expect(
-                await client.migrate(serverHost, serverPort, "", 0, 1000, {
-                    keys: [key2, key3],
-                }),
+                await client.migrateKeys(
+                    serverHost,
+                    serverPort,
+                    [key2, key3],
+                    0,
+                    1000,
+                ),
             ).toEqual("NOKEY");
 
             // Multi-key: error on invalid host
             await client.set(key2, "value2");
             await client.set(key3, "value3");
             await expect(
-                client.migrate("invalid-host", 6379, "", 0, 1000, {
-                    keys: [key2, key3],
-                }),
+                client.migrateKeys("invalid-host", 6379, [key2, key3], 0, 1000),
             ).rejects.toThrow();
 
             // Multi-key: error with options
             await expect(
-                client.migrate("invalid-host", 6379, "", 0, 1000, {
-                    copy: true,
-                    replace: true,
-                    keys: [key2, key3],
-                }),
+                client.migrateKeys(
+                    "invalid-host",
+                    6379,
+                    [key2, key3],
+                    0,
+                    1000,
+                    {
+                        copy: true,
+                        replace: true,
+                    },
+                ),
             ).rejects.toThrow();
 
             // Multi-key: empty keys array throws
             await expect(
-                client.migrate(serverHost, serverPort, "", 0, 1000, {
-                    keys: [],
-                }),
-            ).rejects.toThrow("MigrateOptions: 'keys' must not be empty");
-
-            // Non-empty key with keys option throws
-            await expect(
-                client.migrate(serverHost, serverPort, key, 0, 1000, {
-                    keys: [key2],
-                }),
-            ).rejects.toThrow(
-                "MigrateOptions: 'key' must be empty string when 'options.keys' is provided",
-            );
+                client.migrateKeys(serverHost, serverPort, [], 0, 1000),
+            ).rejects.toThrow("keys must not be empty");
 
             // Multi-key with single key: NOKEY when key does not exist
             const key4 = getRandomKey();
             expect(
-                await client.migrate(serverHost, serverPort, "", 0, 1000, {
-                    keys: [key4],
-                }),
+                await client.migrateKeys(
+                    serverHost,
+                    serverPort,
+                    [key4],
+                    0,
+                    1000,
+                ),
             ).toEqual("NOKEY");
 
             // Multi-key with AUTH: error on invalid host
             await expect(
-                client.migrate("invalid-host", 6379, "", 0, 1000, {
-                    keys: [key2, key3],
-                    password: "secret",
-                }),
+                client.migrateKeys(
+                    "invalid-host",
+                    6379,
+                    [key2, key3],
+                    0,
+                    1000,
+                    {
+                        password: "secret",
+                    },
+                ),
             ).rejects.toThrow();
 
             client.close();

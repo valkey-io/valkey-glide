@@ -49,6 +49,7 @@ import {
     createSave,
     createBgSave,
     createBgRewriteAof,
+    createMigrateKeys,
     createPing,
     createPublish,
     createRandomKey,
@@ -65,6 +66,7 @@ import {
     FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
+    MigrateOptions,
     ScanOptions,
 } from "./Commands";
 
@@ -1119,6 +1121,48 @@ export class GlideClient extends BaseClient {
         options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createRandomKey(), options);
+    }
+
+    /**
+     * Atomically transfers the specified keys from the current Valkey instance
+     * to a destination Valkey instance. On success, keys are deleted from the source.
+     *
+     * Note: Multi-key `MIGRATE` is only supported on standalone clients.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param keys - The keys to migrate. Must not be empty.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional settings: `copy`, `replace`, `password`, `username`.
+     * @returns `"OK"` on success, `"NOKEY"` if none of the keys exist.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.migrateKeys("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
+     * console.log(result); // Output: "OK" - "key1" and "key2" were migrated atomically.
+     * ```
+     */
+    public async migrateKeys(
+        host: string,
+        port: number,
+        keys: GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrateKeys(
+                host,
+                port,
+                keys,
+                destinationDB,
+                timeout,
+                options,
+            ),
+        );
     }
 
     /**

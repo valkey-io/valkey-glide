@@ -2481,27 +2481,20 @@ export class BaseClient {
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
      * Once the key is successfully transferred, it is deleted from the source instance.
      *
-     * Supports multi-key migration via `options.keys`: when provided, `key` is ignored and
-     * the wire format becomes `MIGRATE host port "" db timeout [options] KEYS key1 key2 ...`.
-     *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param key - The key to migrate. Pass `""` when using `options.keys`.
+     * @param key - The key to migrate.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
-     * @param options - Optional migration options. Use `options.keys` for multi-key migration.
-     * @returns "OK" on success, or "NOKEY" if the key(s) do not exist.
+     * @param options - Optional migration options.
+     * @returns `"OK"` on success, or `"NOKEY"` if the key does not exist.
      *
      * @example
      * ```typescript
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
      * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
-     * ```
-     * ```typescript
-     * const result = await client.migrate("127.0.0.1", 6379, "", 0, 5000, { keys: ["key1", "key2"] });
-     * console.log(result); // Output: "OK" - "key1" and "key2" were migrated atomically.
      * ```
      */
     public async migrate(
