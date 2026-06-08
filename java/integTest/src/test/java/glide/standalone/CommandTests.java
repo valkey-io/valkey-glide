@@ -2166,10 +2166,12 @@ public class CommandTests {
                         info.contains("role:slave") || info.contains("role:master"),
                         "Role should transition after failover, got: " + info);
             }
-          
         }
     }
 
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void migrate_multi_keys_invalid_host(GlideClient regularClient) {
         String key1 = "{migrate}" + UUID.randomUUID();
         String key2 = "{migrate}" + UUID.randomUUID();
@@ -2232,10 +2234,14 @@ public class CommandTests {
                 assertTrue(
                         info.contains("role:master"),
                         "Expected role:master after replicaofNoOne, got: " + info);
-             }
+            }
         }
     }
 
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    @Timeout(120)
     public void migrate_multi_keys_with_options_to_secondary(GlideClient regularClient) {
         try (ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
             NodeAddress dest = secondary.getNodesAddr().get(0);
@@ -2258,7 +2264,6 @@ public class CommandTests {
                 assertEquals(0L, regularClient.exists(new String[] {key1, key2}).get());
             } finally {
                 regularClient.del(new String[] {key1, key2}).get();
-
             }
         }
     }
