@@ -3,7 +3,6 @@ name: Install zig compiler and ziglang
 inputs:
     target:
         description: "Specified target for rust toolchain, ex. x86_64-unknown-linux-gnu"
-        type: string
         required: false
         default: "x86_64-unknown-linux-gnu"
 

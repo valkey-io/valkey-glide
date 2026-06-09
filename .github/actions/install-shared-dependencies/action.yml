@@ -4,37 +4,19 @@ inputs:
     os:
         description: "The current operating system"
         required: true
-        type: string
-        options:
-            - amazon-linux
-            - macos
-            - ubuntu
-            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
-        type: string
         required: false
         default: "x86_64-unknown-linux-gnu"
-        options:
-            - x86_64-unknown-linux-gnu
-            - aarch64-unknown-linux-gnu
-            - x86_64-apple-darwin
-            - aarch64-apple-darwin
-            - aarch64-unknown-linux-musl
-            - x86_64-unknown-linux-musl
-            - x86_64-pc-windows-msvc
     engine-version:
         description: "Engine version to install"
         required: false
-        type: string
     language:
         description: "The language being built (optional, for language-specific setup)"
         required: false
-        type: string
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
-        type: string
 
 runs:
     using: "composite"
