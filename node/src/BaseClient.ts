@@ -2479,7 +2479,8 @@ export class BaseClient {
 
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-     * Once the key is successfully transferred, it is deleted from the source instance.
+     * Once the key is successfully transferred, it is deleted from the source instance
+     * unless `copy` is set to `true` in options.
      *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
