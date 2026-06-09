@@ -18744,9 +18744,9 @@ public class SharedCommandTests {
     @SneakyThrows
     public static Stream<Arguments> getClientsWithCache() {
         ClientSideCache standaloneCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).build();
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(true).build();
         ClientSideCache clusterCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).build();
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(true).build();
         return Stream.of(
                 Arguments.of(
                         GlideClient.createClient(commonClientConfig().clientSideCache(standaloneCache).build())
@@ -18762,12 +18762,22 @@ public class SharedCommandTests {
     @SneakyThrows
     public void clientSideCache_set_and_get(BaseClient client) {
         String key = UUID.randomUUID().toString();
-        String value = "testValue";
+        String value = "cachedValue";
 
-        assertEquals(OK, client.set(key, value).get());
-        assertEquals(value, client.get(key).get());
-        assertEquals(value, client.get(key).get());
+        try {
+            assertEquals(OK, client.set(key, value).get());
 
-        client.close();
+            // First GET: cache miss, populates cache
+            assertEquals(value, client.get(key).get());
+
+            // Second GET: served from local cache
+            assertEquals(value, client.get(key).get());
+
+            // Verify caching was actually used by checking metrics
+            assertTrue(
+                    client.getCacheHitRate().get() > 0, "Expected cache hit rate > 0 after second GET");
+        } finally {
+            client.close();
+        }
     }
 }
