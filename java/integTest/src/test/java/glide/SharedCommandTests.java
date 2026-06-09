@@ -120,6 +120,7 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
@@ -18727,5 +18728,46 @@ public class SharedCommandTests {
             // If it's a different error, rethrow it
             throw e;
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientTrackingInfo(BaseClient client) {
+        Map<String, Object> info = client.clientTrackingInfo().get();
+        assertNotNull(info);
+        assertTrue(info.containsKey("flags"));
+        assertTrue(info.containsKey("redirect"));
+        assertTrue(info.containsKey("prefixes"));
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getClientsWithCache() {
+        ClientSideCache standaloneCache =
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).build();
+        ClientSideCache clusterCache =
+                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).build();
+        return Stream.of(
+                Arguments.of(
+                        GlideClient.createClient(commonClientConfig().clientSideCache(standaloneCache).build())
+                                .get()),
+                Arguments.of(
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig().clientSideCache(clusterCache).build())
+                                .get()));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClientsWithCache")
+    @SneakyThrows
+    public void clientSideCache_set_and_get(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String value = "testValue";
+
+        assertEquals(OK, client.set(key, value).get());
+        assertEquals(value, client.get(key).get());
+        assertEquals(value, client.get(key).get());
+
+        client.close();
     }
 }
