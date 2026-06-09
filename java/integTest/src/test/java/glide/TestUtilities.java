@@ -28,6 +28,9 @@ import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.IamAuthConfig;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
+import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
 import glide.api.models.configuration.ServiceType;
 import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.cluster.ValkeyCluster;
@@ -73,6 +76,9 @@ public class TestUtilities {
                     Arrays.asList(
                             "Background append only file rewriting started",
                             "Background append only file rewriting scheduled"));
+
+    /** Route for routing to a single primary node by slot key. */
+    public static final SingleNodeRoute PRIMARY_SLOT_ROUTE = new SlotKeyRoute("1", SlotType.PRIMARY);
 
     private static final String REDIS_VERSION_KEY = "redis_version";
 

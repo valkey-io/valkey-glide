@@ -1336,8 +1336,7 @@ func (suite *GlideTestSuite) TestSaveWithOptionsCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	suite.waitForSaveNotInProgress(client)
-	opts := options.RouteOption{Route: config.AllPrimaries}
-	result, err := client.SaveWithOptions(context.Background(), opts)
+	result, err := client.SaveWithOptions(context.Background(), primarySlotRouteOption)
 	assert.NoError(t, err)
 	assert.Equal(t, "OK", result)
 }
@@ -1358,13 +1357,10 @@ func (suite *GlideTestSuite) TestBgSaveWithOptionsCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	suite.waitForSaveNotInProgress(client)
-	opts := options.RouteOption{Route: config.AllPrimaries}
-	result, err := client.BgSaveWithOptions(context.Background(), opts)
+	result, err := client.BgSaveWithOptions(context.Background(), primarySlotRouteOption)
 	assert.NoError(t, err)
-	assert.True(t, result.IsMultiValue())
-	for _, value := range result.MultiValue() {
-		assert.Contains(t, bgsaveResponses, value)
-	}
+	assert.True(t, result.IsSingleValue())
+	assert.Contains(t, bgsaveResponses, result.SingleValue())
 }
 
 func (suite *GlideTestSuite) TestBgSaveScheduleCluster() {
@@ -1383,13 +1379,10 @@ func (suite *GlideTestSuite) TestBgSaveScheduleWithOptionsCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	suite.waitForSaveNotInProgress(client)
-	opts := options.RouteOption{Route: config.AllPrimaries}
-	result, err := client.BgSaveScheduleWithOptions(context.Background(), opts)
+	result, err := client.BgSaveScheduleWithOptions(context.Background(), primarySlotRouteOption)
 	assert.NoError(t, err)
-	assert.True(t, result.IsMultiValue())
-	for _, value := range result.MultiValue() {
-		assert.Contains(t, bgsaveResponses, value)
-	}
+	assert.True(t, result.IsSingleValue())
+	assert.Contains(t, bgsaveResponses, result.SingleValue())
 }
 
 func (suite *GlideTestSuite) TestBgSaveCancelCluster() {
@@ -1408,9 +1401,8 @@ func (suite *GlideTestSuite) TestBgSaveCancelWithOptionsCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	suite.waitForSaveNotInProgress(client)
-	opts := options.RouteOption{Route: config.AllPrimaries}
 	// When no save is in progress, BGSAVE CANCEL should return an error
-	_, err := client.BgSaveCancelWithOptions(context.Background(), opts)
+	_, err := client.BgSaveCancelWithOptions(context.Background(), primarySlotRouteOption)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), bgsaveNotCancelledResponse)
 }
@@ -1431,13 +1423,10 @@ func (suite *GlideTestSuite) TestBgRewriteAofWithOptionsCluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	suite.waitForSaveNotInProgress(client)
-	opts := options.RouteOption{Route: config.AllPrimaries}
-	result, err := client.BgRewriteAofWithOptions(context.Background(), opts)
+	result, err := client.BgRewriteAofWithOptions(context.Background(), primarySlotRouteOption)
 	assert.NoError(t, err)
-	assert.True(t, result.IsMultiValue())
-	for _, value := range result.MultiValue() {
-		assert.Contains(t, bgrewriteaofResponses, value)
-	}
+	assert.True(t, result.IsSingleValue())
+	assert.Contains(t, bgrewriteaofResponses, result.SingleValue())
 }
 
 func (suite *GlideTestSuite) TestConfigResetStatCluster() {

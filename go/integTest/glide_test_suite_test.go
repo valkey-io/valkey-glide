@@ -577,6 +577,9 @@ var bgrewriteaofResponses = []string{
 // Expected server error response for BGSAVE CANCEL when no save is in progress.
 const bgsaveNotCancelledResponse = "Background saving is currently not in progress or scheduled"
 
+// Route option for routing to a single primary node by slot key.
+var primarySlotRouteOption = options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+
 // waitFor waits until a condition is met.
 func (suite *GlideTestSuite) waitFor(condition func() bool, failure string) {
 	t := suite.T()

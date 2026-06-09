@@ -110,6 +110,7 @@ from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
+    PRIMARY_SLOT_ROUTE,
     assert_connected,
     assert_responses_in,
     check_function_list_response,
@@ -5543,7 +5544,7 @@ class TestCommands:
 
         if isinstance(glide_client, GlideClusterClient):
             await wait_for_save_not_in_progress(glide_client)
-            result = await glide_client.save(route=AllPrimaries())
+            result = await glide_client.save(route=PRIMARY_SLOT_ROUTE)
             assert result == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -5555,7 +5556,7 @@ class TestCommands:
 
         if isinstance(glide_client, GlideClusterClient):
             await wait_for_save_not_in_progress(glide_client)
-            result = await glide_client.bgsave(route=AllPrimaries())
+            result = await glide_client.bgsave(route=PRIMARY_SLOT_ROUTE)
             assert_responses_in(result, BGSAVE_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -5567,7 +5568,7 @@ class TestCommands:
 
         if isinstance(glide_client, GlideClusterClient):
             await wait_for_save_not_in_progress(glide_client)
-            result = await glide_client.bgsave_schedule(route=AllPrimaries())
+            result = await glide_client.bgsave_schedule(route=PRIMARY_SLOT_ROUTE)
             assert_responses_in(result, BGSAVE_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -5588,7 +5589,7 @@ class TestCommands:
 
             # When no save is in progress, BGSAVE CANCEL should return an error
             with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
-                await glide_client.bgsave_cancel(route=AllPrimaries())
+                await glide_client.bgsave_cancel(route=PRIMARY_SLOT_ROUTE)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5599,7 +5600,7 @@ class TestCommands:
 
         if isinstance(glide_client, GlideClusterClient):
             await wait_for_save_not_in_progress(glide_client)
-            result = await glide_client.bgrewriteaof(route=AllPrimaries())
+            result = await glide_client.bgrewriteaof(route=PRIMARY_SLOT_ROUTE)
             assert_responses_in(result, BGREWRITEAOF_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -11047,7 +11048,7 @@ class TestScripts:
 
         if cluster_mode:
             await cast(GlideClusterClient, glide_client).invoke_script_route(
-                script3, route=SlotKeyRoute(SlotType.PRIMARY, "1")
+                script3, route=PRIMARY_SLOT_ROUTE
             )
         else:
             await glide_client.invoke_script(script3)

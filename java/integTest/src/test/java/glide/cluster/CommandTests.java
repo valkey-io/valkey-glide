@@ -5,6 +5,7 @@ import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
+import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -943,7 +944,7 @@ public class CommandTests {
     @SneakyThrows
     public void save_with_route(GlideClusterClient clusterClient) {
         waitForSaveNotInProgress(clusterClient);
-        assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
+        assertEquals(OK, clusterClient.save(PRIMARY_SLOT_ROUTE).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -964,12 +965,8 @@ public class CommandTests {
     @SneakyThrows
     public void bgsave_with_route(GlideClusterClient clusterClient) {
         waitForSaveNotInProgress(clusterClient);
-        clusterClient
-                .bgsave(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGSAVE_RESPONSES.contains(value)));
+        String result = clusterClient.bgsave(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGSAVE_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -990,12 +987,9 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
         waitForSaveNotInProgress(clusterClient);
-        clusterClient
-                .bgsaveSchedule(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGSAVE_RESPONSES.contains(value)));
+        String result =
+                clusterClient.bgsaveSchedule(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGSAVE_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1019,7 +1013,8 @@ public class CommandTests {
 
         ExecutionException e =
                 assertThrows(
-                        ExecutionException.class, () -> clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+                        ExecutionException.class,
+                        () -> clusterClient.bgsaveCancel(PRIMARY_SLOT_ROUTE).get());
         assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
     }
 
@@ -1041,12 +1036,9 @@ public class CommandTests {
     @SneakyThrows
     public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
         waitForSaveNotInProgress(clusterClient);
-        clusterClient
-                .bgrewriteaof(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGREWRITEAOF_RESPONSES.contains(value)));
+        String result =
+                clusterClient.bgrewriteaof(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGREWRITEAOF_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

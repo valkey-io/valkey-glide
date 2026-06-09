@@ -44,6 +44,7 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
+    RouteOption,
     Score,
     ScoreFilter,
     Script,
@@ -124,6 +125,9 @@ export function runBaseTests(config: {
     // Expected error response for BGSAVE CANCEL when no save is in progress
     const BGSAVE_NOT_CANCELLED_RESPONSE =
         "Background saving is currently not in progress or scheduled";
+
+    // Route option for routing to a single primary node by slot key.
+    const PRIMARY_SLOT_ROUTE_OPTION: RouteOption = { route: { type: "primarySlotKey", key: "1" }}
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
@@ -410,9 +414,7 @@ export function runBaseTests(config: {
 
                 if (client instanceof GlideClusterClient) {
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.save({
-                        route: "allPrimaries",
-                    });
+                    const clusterResult = await client.save(PRIMARY_SLOT_ROUTE_OPTION);
                     expect(clusterResult).toEqual("OK");
                 }
             }, protocol);
@@ -433,12 +435,8 @@ export function runBaseTests(config: {
                     );
 
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.bgsave({
-                        route: "allPrimaries",
-                    });
-                    Object.values(clusterResult).forEach((v) =>
-                        expect(BGSAVE_RESPONSES).toContain(v),
-                    );
+                    const clusterResult = await client.bgsave(PRIMARY_SLOT_ROUTE_OPTION);
+                    expect(BGSAVE_RESPONSES).toContain(clusterResult as string);
                 } else {
                     const result = await client.bgsave();
                     expect(BGSAVE_RESPONSES).toContain(result);
@@ -461,12 +459,8 @@ export function runBaseTests(config: {
                     );
 
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.bgsaveSchedule({
-                        route: "allPrimaries",
-                    });
-                    Object.values(clusterResult).forEach((v) =>
-                        expect(BGSAVE_RESPONSES).toContain(v),
-                    );
+                    const clusterResult = await client.bgsaveSchedule(PRIMARY_SLOT_ROUTE_OPTION);
+                    expect(BGSAVE_RESPONSES).toContain(clusterResult as string);
                 } else {
                     const result = await client.bgsaveSchedule();
                     expect(BGSAVE_RESPONSES).toContain(result);
@@ -494,9 +488,7 @@ export function runBaseTests(config: {
 
                     if (client instanceof GlideClusterClient) {
                         await expect(
-                            client.bgsaveCancel({
-                                route: "allPrimaries",
-                            }),
+                            client.bgsaveCancel(PRIMARY_SLOT_ROUTE_OPTION),
                         ).rejects.toThrow(BGSAVE_NOT_CANCELLED_RESPONSE);
                     }
                 },
@@ -519,11 +511,9 @@ export function runBaseTests(config: {
                     );
 
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.bgrewriteaof({
-                        route: "allPrimaries",
-                    });
-                    Object.values(clusterResult).forEach((v) =>
-                        expect(BGREWRITEAOF_RESPONSES).toContain(v),
+                    const clusterResult = await client.bgrewriteaof(PRIMARY_SLOT_ROUTE_OPTION);
+                    expect(BGREWRITEAOF_RESPONSES).toContain(
+                        clusterResult as string,
                     );
                 } else {
                     const result = await client.bgrewriteaof();

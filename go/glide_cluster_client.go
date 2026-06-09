@@ -1096,6 +1096,13 @@ func (client *ClusterClient) BgSaveWithOptions(
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
+	if opts.Route != nil && !opts.Route.IsMultiNode() {
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterSingleValue[string](data), nil
+	}
 	data, err := handleStringToStringMapResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
@@ -1143,6 +1150,13 @@ func (client *ClusterClient) BgSaveScheduleWithOptions(
 	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{"SCHEDULE"}, opts.Route)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil && !opts.Route.IsMultiNode() {
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterSingleValue[string](data), nil
 	}
 	data, err := handleStringToStringMapResponse(response)
 	if err != nil {
@@ -1196,6 +1210,13 @@ func (client *ClusterClient) BgSaveCancelWithOptions(
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
+	if opts.Route != nil && !opts.Route.IsMultiNode() {
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterSingleValue[string](data), nil
+	}
 	data, err := handleStringToStringMapResponse(response)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
@@ -1243,6 +1264,13 @@ func (client *ClusterClient) BgRewriteAofWithOptions(
 	response, err := client.executeCommandWithRoute(ctx, C.BgRewriteAof, []string{}, opts.Route)
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
+	}
+	if opts.Route != nil && !opts.Route.IsMultiNode() {
+		data, err := handleStringResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterSingleValue[string](data), nil
 	}
 	data, err := handleStringToStringMapResponse(response)
 	if err != nil {

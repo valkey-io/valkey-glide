@@ -90,7 +90,7 @@ from glide_shared.constants import (
     TFunctionStatsSingleNodeResponse,
     TResult,
 )
-from glide_shared.routes import AllNodes
+from glide_shared.routes import AllNodes, SlotKeyRoute, SlotType
 from glide_sync import GlideClient as SyncGlideClient
 from glide_sync import GlideClusterClient as SyncGlideClusterClient
 from glide_sync import TGlideClient as TSyncGlideClient
@@ -213,9 +213,10 @@ BGREWRITEAOF_RESPONSES = {
 }
 
 # Expected server error response for BGSAVE CANCEL when no save is in progress.
-BGSAVE_NOT_CANCELLED_RESPONSE = (
-    "Background saving is currently not in progress or scheduled"
-)
+BGSAVE_NOT_CANCELLED_RESPONSE = "Background saving is currently not in progress or scheduled"
+
+# Route for routing to a single primary node by slot key.
+PRIMARY_SLOT_ROUTE = SlotKeyRoute(SlotType.PRIMARY, "1")
 
 # Timeout and interval between retries while waiting for a condition to be met.
 _WAIT_FOR_TIMEOUT_SEC = 10.0
@@ -298,8 +299,7 @@ def _is_save_in_progress(result: Union[bytes, Dict[bytes, bytes]]) -> bool:
     else:
         infos = [result.decode() if isinstance(result, bytes) else result]
     return any(
-        "rdb_bgsave_in_progress:1" in info or "aof_rewrite_in_progress:1" in info
-        for info in infos
+        "rdb_bgsave_in_progress:1" in info or "aof_rewrite_in_progress:1" in info for info in infos
     )
 
 
