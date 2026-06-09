@@ -2754,32 +2754,18 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	}()
 
 	// Poll ScriptKill on the main goroutine until the script is running and killed
-	killTimeout := time.After(10 * time.Second)
-	killTicker := time.NewTicker(500 * time.Millisecond)
-	defer killTicker.Stop()
-
 	var killErr error
 	var result string
-	for {
-		select {
-		case <-killTimeout:
-			suite.T().Fatal("Timed out waiting for script kill to succeed")
-			return
-		case <-killTicker.C:
-			result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
-			if killErr == nil {
-				goto killDone
-			}
-		}
-	}
-killDone:
-	killTicker.Stop()
+	require.Eventually(suite.T(), func() bool {
+		result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
+		return killErr == nil
+	}, 10*time.Second, 500*time.Millisecond, "Timed out waiting for script kill to succeed")
 
 	// Wait for invoke to complete after kill
 	<-invokeDone
 
-	assert.Error(suite.T(), invokeErr)
-	assert.True(suite.T(), strings.Contains(strings.ToLower(invokeErr.Error()), "script killed"))
+	require.Error(suite.T(), invokeErr)
+	assert.Contains(suite.T(), strings.ToLower(invokeErr.Error()), "script killed")
 	assert.NoError(suite.T(), killErr)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()
