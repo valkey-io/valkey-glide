@@ -33,13 +33,11 @@ describe("tls GlideClusterClient", () => {
         cluster = await ValkeyCluster.createCluster(
             true,
             3,
-            2,
+            0,
             getServerVersion,
             true,
             TLS_OPTIONS,
         );
-        // Small delay to ensure cluster is fully ready after TLS setup
-        await new Promise((resolve) => setTimeout(resolve, 1000));
     }, CLUSTER_CREATION_TIMEOUT);
 
     afterEach(async () => {
