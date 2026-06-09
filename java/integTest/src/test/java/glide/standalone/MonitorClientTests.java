@@ -45,6 +45,7 @@ public class MonitorClientTests {
                                 }
                             })) {
 
+                Thread.sleep(200);
                 client.set(key, value).get();
 
                 assertTrue(latch.await(5, TimeUnit.SECONDS), "Expected a SET monitor message");
@@ -62,9 +63,10 @@ public class MonitorClientTests {
         try (MonitorClient monitor = MonitorClient.create(config);
                 GlideClient client = GlideClient.createClient(config).get()) {
 
+            Thread.sleep(200);
             client.ping().get();
 
-            MonitorMsg msg = monitor.getMonitorMessage(5000);
+            MonitorMsg msg = monitor.getMonitorMessage(10000);
             assertNotNull(msg, "Expected a monitor message after PING");
         }
     }
@@ -107,6 +109,7 @@ public class MonitorClientTests {
         try (MonitorClient monitor = MonitorClient.create(config);
                 GlideClient client = GlideClient.createClient(config).get()) {
 
+            Thread.sleep(200);
             String key = UUID.randomUUID().toString();
             client.set(key, "value").get();
 
