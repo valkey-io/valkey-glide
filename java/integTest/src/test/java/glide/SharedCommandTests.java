@@ -18744,16 +18744,33 @@ public class SharedCommandTests {
     @SneakyThrows
     public static Stream<Arguments> getClientsWithCache() {
         ClientSideCache standaloneCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(true).build();
+                ClientSideCache.builder()
+                        .maxCacheKb(1L)
+                        .entryTtlMs(60000L)
+                        .enableMetrics(true)
+                        .serverAssisted(true)
+                        .build();
         ClientSideCache clusterCache =
-                ClientSideCache.builder().maxCacheKb(1L).entryTtlMs(60000L).enableMetrics(true).build();
+                ClientSideCache.builder()
+                        .maxCacheKb(1L)
+                        .entryTtlMs(60000L)
+                        .enableMetrics(true)
+                        .serverAssisted(true)
+                        .build();
         return Stream.of(
                 Arguments.of(
-                        GlideClient.createClient(commonClientConfig().clientSideCache(standaloneCache).build())
+                        GlideClient.createClient(
+                                        commonClientConfig()
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .clientSideCache(standaloneCache)
+                                                .build())
                                 .get()),
                 Arguments.of(
                         GlideClusterClient.createClient(
-                                        commonClusterClientConfig().clientSideCache(clusterCache).build())
+                                        commonClusterClientConfig()
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .clientSideCache(clusterCache)
+                                                .build())
                                 .get()));
     }
 
