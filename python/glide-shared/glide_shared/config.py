@@ -552,6 +552,51 @@ class TlsAdvancedConfiguration:
         self.client_key_pem = client_key_pem
 
 
+class ClientCircuitBreakerConfiguration:
+    """
+    Configuration for the client-wide circuit breaker.
+
+    The circuit breaker detects when the GLIDE core is unhealthy (sustained error rate)
+    and rejects requests at the FFI boundary before threads park. Disabled by default.
+
+    Attributes:
+        window_size_ms (int): Sliding window duration in milliseconds for error rate calculation. Default: 10000.
+        failure_rate_threshold (float): Error rate (0.0-1.0) within the window to trip. Default: 0.5.
+        min_errors (int): Minimum errors within window before rate is evaluated. Default: 50.
+        open_timeout_ms (int): Time in milliseconds in Open state before allowing a probe. Default: 5000.
+        count_timeouts (bool): Whether timeouts count toward tripping. Default: False.
+        consecutive_successes (int): Successful probes needed before closing. Default: 3.
+    """
+
+    def __init__(
+        self,
+        window_size_ms: int = 10000,
+        failure_rate_threshold: float = 0.5,
+        min_errors: int = 50,
+        open_timeout_ms: int = 5000,
+        count_timeouts: bool = False,
+        consecutive_successes: int = 3,
+    ):
+        if window_size_ms <= 0:
+            raise ValueError("window_size_ms must be positive")
+        if not (0.0 < failure_rate_threshold <= 1.0):
+            raise ValueError(
+                "failure_rate_threshold must be between 0.0 (exclusive) and 1.0 (inclusive)"
+            )
+        if min_errors <= 0:
+            raise ValueError("min_errors must be positive")
+        if open_timeout_ms <= 0:
+            raise ValueError("open_timeout_ms must be positive")
+        if consecutive_successes <= 0:
+            raise ValueError("consecutive_successes must be positive")
+        self.window_size_ms = window_size_ms
+        self.failure_rate_threshold = failure_rate_threshold
+        self.min_errors = min_errors
+        self.open_timeout_ms = open_timeout_ms
+        self.count_timeouts = count_timeouts
+        self.consecutive_successes = consecutive_successes
+
+
 class AdvancedBaseClientConfiguration:
     """
     Represents the advanced configuration settings for a base Glide client.
@@ -795,6 +840,7 @@ class BaseClientConfiguration:
         compression: Optional[CompressionConfiguration] = None,
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
+        client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
     ):
         self.addresses = addresses
         self.use_tls = use_tls
@@ -812,6 +858,7 @@ class BaseClientConfiguration:
         self.compression = compression
         self.client_side_cache = client_side_cache
         self.address_resolver = address_resolver
+        self.client_circuit_breaker = client_circuit_breaker
 
         if read_from == ReadFrom.AZ_AFFINITY and not client_az:
             raise ValueError(
@@ -938,6 +985,18 @@ class BaseClientConfiguration:
             request.client_name = self.client_name
         if self.inflight_requests_limit:
             request.inflight_requests_limit = self.inflight_requests_limit
+        if self.client_circuit_breaker:
+            cb = self.client_circuit_breaker
+            request.client_circuit_breaker.window_size_ms = cb.window_size_ms
+            request.client_circuit_breaker.failure_rate_threshold = (
+                cb.failure_rate_threshold
+            )
+            request.client_circuit_breaker.min_errors = cb.min_errors
+            request.client_circuit_breaker.open_timeout_ms = cb.open_timeout_ms
+            request.client_circuit_breaker.count_timeouts = cb.count_timeouts
+            request.client_circuit_breaker.consecutive_successes = (
+                cb.consecutive_successes
+            )
         if self.client_az:
             request.client_az = self.client_az
         if self.database_id is not None:
@@ -1109,6 +1168,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         client_side_cache: Optional[ClientSideCache] = None,
         node_discovery_mode: NodeDiscoveryMode = NodeDiscoveryMode.STANDARD,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
+        client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1127,6 +1187,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
             compression=compression,
             client_side_cache=client_side_cache,
             address_resolver=address_resolver,
+            client_circuit_breaker=client_circuit_breaker,
         )
         self.pubsub_subscriptions = pubsub_subscriptions
         self.read_only = read_only
@@ -1352,6 +1413,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
         compression: Optional[CompressionConfiguration] = None,
         client_side_cache: Optional[ClientSideCache] = None,
         address_resolver: Optional[Callable[[str, int], Tuple[str, int]]] = None,
+        client_circuit_breaker: Optional[ClientCircuitBreakerConfiguration] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -1370,6 +1432,7 @@ class GlideClusterClientConfiguration(BaseClientConfiguration):
             compression=compression,
             client_side_cache=client_side_cache,
             address_resolver=address_resolver,
+            client_circuit_breaker=client_circuit_breaker,
         )
         self.periodic_checks = periodic_checks
         self.pubsub_subscriptions = pubsub_subscriptions

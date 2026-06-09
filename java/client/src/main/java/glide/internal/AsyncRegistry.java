@@ -2,6 +2,7 @@
 package glide.internal;
 
 import glide.api.logging.Logger;
+import glide.api.models.exceptions.CircuitBreakerException;
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ExecAbortException;
 import glide.api.models.exceptions.RequestException;
@@ -336,6 +337,9 @@ public final class AsyncRegistry {
                 break;
             case 1:
                 ex = new ExecAbortException(msg);
+                break;
+            case 4:
+                ex = new CircuitBreakerException(msg);
                 break;
             default:
                 ex = new RequestException(msg);
