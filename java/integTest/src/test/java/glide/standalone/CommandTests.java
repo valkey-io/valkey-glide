@@ -97,6 +97,10 @@ public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
 
+    private static boolean hasRole(GlideClient client, String role) throws Exception {
+        return client.info(new Section[] {Section.REPLICATION}).get().contains("role:" + role);
+    }
+
     private static final List<Arguments> clients = new ArrayList<>();
 
     @BeforeAll
@@ -2154,8 +2158,7 @@ public class CommandTests {
                     GlideClientConfiguration.builder().address(primaryAddr).requestTimeout(10000).build();
             try (GlideClient client = GlideClient.createClient(config).get()) {
                 // Verify initial role is master
-                String info = client.info(new Section[] {Section.REPLICATION}).get();
-                assertTrue(info.contains("role:master"));
+                assertTrue(hasRole(client, "master"));
 
                 // FAILOVER with a timeout should succeed (returns OK immediately)
                 String result = client.failover(FailoverOptions.timeout(10000)).get();
@@ -2163,9 +2166,7 @@ public class CommandTests {
 
                 // Wait for role to change to slave after failover
                 waitForCondition(
-                        () -> client.info(new Section[] {Section.REPLICATION})
-                                .get()
-                                .contains("role:slave"),
+                        () -> hasRole(client, "slave"),
                         "Expected role to change to slave after failover");
             }
         }
@@ -2216,17 +2217,14 @@ public class CommandTests {
                     GlideClientConfiguration.builder().address(secondaryAddr).requestTimeout(10000).build();
             try (GlideClient client = GlideClient.createClient(config).get()) {
                 // Verify initial role is master
-                String info = client.info(new Section[] {Section.REPLICATION}).get();
-                assertTrue(info.contains("role:master"));
+                assertTrue(hasRole(client, "master"));
 
                 // Make it a replica of the primary
                 assertEquals(OK, client.replicaof(primaryAddr.getHost(), primaryAddr.getPort()).get());
 
                 // Verify role changed to slave
                 waitForCondition(
-                        () -> client.info(new Section[] {Section.REPLICATION})
-                                .get()
-                                .contains("role:slave"),
+                        () -> hasRole(client, "slave"),
                         "Expected role to change to slave after replicaof");
 
                 // Promote back to primary
@@ -2234,9 +2232,7 @@ public class CommandTests {
 
                 // Verify role changed back to master
                 waitForCondition(
-                        () -> client.info(new Section[] {Section.REPLICATION})
-                                .get()
-                                .contains("role:master"),
+                        () -> hasRole(client, "master"),
                         "Expected role to change to master after replicaofNoOne");
             }
         }
