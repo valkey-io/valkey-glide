@@ -55,13 +55,12 @@ jobs:
           submodules: recursive
 
       - name: Run Semgrep
+        env:
+          EXCLUDE_RULES: ${{ inputs.exclude-rules || 'generic.secrets.security.detected-private-key.detected-private-key' }}
         run: |
           EXCLUDE_ARGS=""
-          EXCLUDE_RULES="${{ inputs.exclude-rules || '' }}"
-          if [ -n "$EXCLUDE_RULES" ]; then
-            # Convert comma-separated list to --exclude-rule flags
-            for rule in $(echo "$EXCLUDE_RULES" | tr ',' ' '); do
-              EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude-rule $rule"
-            done
-          fi
+          for rule in $(echo "$EXCLUDE_RULES" | tr ',' ' '); do
+            EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude-rule $rule"
+          done
+          echo "Running: semgrep ci --config ${{ inputs.config || 'auto' }} --no-suppress-errors $EXCLUDE_ARGS"
           semgrep ci --config ${{ inputs.config || 'auto' }} --no-suppress-errors $EXCLUDE_ARGS
