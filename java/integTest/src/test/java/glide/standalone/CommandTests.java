@@ -2223,19 +2223,21 @@ public class CommandTests {
                 assertEquals(OK, client.replicaof(primaryAddr.getHost(), primaryAddr.getPort()).get());
 
                 // Verify role changed to slave
-                Thread.sleep(1000);
-                info = client.info(new Section[] {Section.REPLICATION}).get();
-                assertTrue(
-                        info.contains("role:slave"), "Expected role:slave after replicaof, got: " + info);
+                waitForCondition(
+                        () -> client.info(new Section[] {Section.REPLICATION})
+                                .get()
+                                .contains("role:slave"),
+                        "Expected role to change to slave after replicaof");
 
                 // Promote back to primary
                 assertEquals(OK, client.replicaofNoOne().get());
 
                 // Verify role changed back to master
-                info = client.info(new Section[] {Section.REPLICATION}).get();
-                assertTrue(
-                        info.contains("role:master"),
-                        "Expected role:master after replicaofNoOne, got: " + info);
+                waitForCondition(
+                        () -> client.info(new Section[] {Section.REPLICATION})
+                                .get()
+                                .contains("role:master"),
+                        "Expected role to change to master after replicaofNoOne");
             }
         }
     }
