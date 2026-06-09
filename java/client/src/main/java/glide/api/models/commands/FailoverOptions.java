@@ -35,12 +35,12 @@ public class FailoverOptions {
     /**
      * Creates options with only a timeout.
      *
-     * @param milliseconds The maximum time in milliseconds to wait before aborting the failover.
+     * @param timeoutMs The maximum time in milliseconds to wait before aborting the failover.
      * @return A new {@link FailoverOptions} with TIMEOUT set.
      */
-    public static FailoverOptions timeout(long milliseconds) {
+    public static FailoverOptions timeout(long timeoutMs) {
         FailoverOptions opts = new FailoverOptions();
-        opts.timeout = milliseconds;
+        opts.timeout = timeoutMs;
         return opts;
     }
 
@@ -63,14 +63,14 @@ public class FailoverOptions {
      *
      * @param host The host of the target replica.
      * @param port The port of the target replica.
-     * @param milliseconds The maximum time in milliseconds to wait before aborting the failover.
+     * @param timeoutMs The maximum time in milliseconds to wait before aborting the failover.
      * @return A new {@link FailoverOptions} targeting the specified replica with a timeout.
      */
-    public static FailoverOptions to(@NonNull String host, int port, long milliseconds) {
+    public static FailoverOptions to(@NonNull String host, int port, long timeoutMs) {
         FailoverOptions opts = new FailoverOptions();
         opts.host = host;
         opts.port = port;
-        opts.timeout = milliseconds;
+        opts.timeout = timeoutMs;
         return opts;
     }
 
@@ -79,15 +79,15 @@ public class FailoverOptions {
      *
      * @param host The host of the target replica.
      * @param port The port of the target replica.
-     * @param milliseconds The maximum time in milliseconds to wait before forcing the failover.
+     * @param timeoutMs The maximum time in milliseconds to wait before forcing the failover.
      * @return A new {@link FailoverOptions} with TO, TIMEOUT, and FORCE set.
      */
-    public static FailoverOptions forced(@NonNull String host, int port, long milliseconds) {
+    public static FailoverOptions forced(@NonNull String host, int port, long timeoutMs) {
         FailoverOptions opts = new FailoverOptions();
         opts.host = host;
         opts.port = port;
         opts.force = true;
-        opts.timeout = milliseconds;
+        opts.timeout = timeoutMs;
         return opts;
     }
 
