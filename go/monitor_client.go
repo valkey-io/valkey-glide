@@ -83,11 +83,13 @@ func monitorCallback(
 	if cb == nil {
 		client.queue = append(client.queue, line)
 		client.cond.Broadcast()
+		client.mu.Unlock()
+		return
 	}
+	client.activeCBs.Add(1)
 	client.mu.Unlock()
-	if cb != nil {
-		cb(line)
-	}
+	cb(line)
+	client.activeCBs.Done()
 }
 
 // MonitorClient listens to all commands processed by the server via the MONITOR command.
@@ -99,6 +101,7 @@ type MonitorClient struct {
 	callback   func(MonitorLine)
 	queue      []MonitorLine
 	closed     bool
+	activeCBs  sync.WaitGroup
 }
 
 // NewMonitorClient creates a new MonitorClient connected to a standalone server.
@@ -175,6 +178,7 @@ func (c *MonitorClient) TryGetMonitorMessage() (MonitorLine, bool) {
 }
 
 // Close stops the monitor client and releases its resources.
+// Calling Close from within a MonitorClient callback will deadlock.
 func (c *MonitorClient) Close() {
 	c.mu.Lock()
 	if c.closed {
@@ -185,6 +189,7 @@ func (c *MonitorClient) Close() {
 	c.mu.Unlock()
 
 	c.cond.Broadcast()
+	c.activeCBs.Wait()
 
 	if c.coreClient != nil {
 		unregisterMonitorClient(uintptr(c.coreClient))
