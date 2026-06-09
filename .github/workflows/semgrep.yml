@@ -1,66 +1,43 @@
-name: Semgrep Security Scan
+name: Semgrep
 
 permissions:
     contents: read
 
 on:
     workflow_call:
-        inputs:
-            config:
-                description: "Semgrep config to use"
-                type: string
-                default: "auto"
-            exclude-rules:
-                description: "Comma-separated list of rule IDs to exclude"
-                type: string
-                default: "generic.secrets.security.detected-private-key.detected-private-key"
+    # Scan changed files in PRs (diff-aware scanning):
     pull_request: {}
+    # Scan on-demand through GitHub Actions interface:
     workflow_dispatch:
         inputs:
             branch:
                 description: "The branch to run against the semgrep tool"
                 required: true
-            config:
-                description: "Semgrep config to use"
-                type: string
-                default: "auto"
-            exclude-rules:
-                description: "Comma-separated list of rule IDs to exclude"
-                type: string
-                default: "generic.secrets.security.detected-private-key.detected-private-key"
     push:
         branches:
             - main
             - release-*
             - v*
+    # Schedule the CI job (this method uses cron syntax):
     schedule:
-        - cron: "0 8 * * *" # Runs Semgrep scan daily at 08:00 UTC
+        - cron: "0 8 * * *" # Sets Semgrep to scan every day at 08:00 UTC.
 
 jobs:
     semgrep:
+        # User definable name of this GitHub Actions job.
         name: semgrep/ci
+        # If you are self-hosting, change the following `runs-on` value:
         runs-on: ubuntu-latest
 
         container:
-            image: semgrep/semgrep:1.45.0 # Pinned version
+            # A Docker image with Semgrep installed. Do not change this.
+            image: semgrep/semgrep
 
-        # Skip any PR created by dependabot to avoid permission issues
+        # Skip any PR created by dependabot to avoid permission issues:
         if: (github.actor != 'dependabot[bot]' && github.repository_owner == 'valkey-io')
 
         steps:
-            - name: Checkout
-              uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-              with:
-                  submodules: recursive
-
-            - name: Run Semgrep
-              env:
-                  SEMGREP_CONFIG: ${{ inputs.config || 'auto' }}
-                  EXCLUDE_RULES: ${{ inputs.exclude-rules || 'generic.secrets.security.detected-private-key.detected-private-key' }}
-              run: |
-                  EXCLUDE_ARGS=""
-                  for rule in $(echo "$EXCLUDE_RULES" | tr ',' ' '); do
-                    EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude-rule $rule"
-                  done
-                  echo "Running: semgrep ci --config $SEMGREP_CONFIG --no-suppress-errors $EXCLUDE_ARGS"
-                  semgrep ci --config "$SEMGREP_CONFIG" --no-suppress-errors $EXCLUDE_ARGS
+            # Fetch project source with GitHub Actions Checkout.
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+            # Run the "semgrep ci" command on the command line of the docker image.
+            - run: semgrep ci --config auto --no-suppress-errors --exclude-rule generic.secrets.security.detected-private-key.detected-private-key
