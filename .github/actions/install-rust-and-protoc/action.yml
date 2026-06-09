@@ -1,4 +1,5 @@
 name: Install Rust tool chain and protoc
+description: Install Rust toolchain and protobuf compiler
 
 inputs:
     target:

@@ -1,4 +1,5 @@
 name: Install shared software dependencies
+description: Install platform-specific dependencies for valkey-glide builds
 
 inputs:
     os:

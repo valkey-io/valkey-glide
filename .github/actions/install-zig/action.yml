@@ -1,4 +1,5 @@
 name: Install zig compiler and ziglang
+description: Install Zig compiler and cargo-zigbuild for cross-compilation
 
 inputs:
     target:

@@ -1,4 +1,5 @@
 name: Install Engine
+description: Install and cache Valkey server for testing
 
 inputs:
     engine-version:
