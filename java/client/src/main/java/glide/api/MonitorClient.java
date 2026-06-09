@@ -1,14 +1,18 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import com.google.protobuf.ByteString;
 import connection_request.ConnectionRequestOuterClass.AuthenticationInfo;
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
 import connection_request.ConnectionRequestOuterClass.NodeAddress;
 import connection_request.ConnectionRequestOuterClass.ProtocolVersion;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.commands.MonitorMsg;
+import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.ConnectionException;
 import glide.internal.GlideNativeBridge;
 import glide.internal.MonitorCallback;
@@ -103,10 +107,11 @@ public class MonitorClient implements AutoCloseable {
      * @throws InterruptedException if interrupted while waiting.
      */
     public MonitorMsg getMonitorMessage() throws InterruptedException {
-        if (closed.get()) {
-            return null;
+        while (!closed.get()) {
+            MonitorMsg msg = queue.poll(100, TimeUnit.MILLISECONDS);
+            if (msg != null) return msg;
         }
-        return queue.take();
+        return null;
     }
 
     /**
@@ -158,10 +163,30 @@ public class MonitorClient implements AutoCloseable {
                     NodeAddress.newBuilder().setHost(addr.getHost()).setPort(addr.getPort()).build());
         }
 
+        AdvancedBaseClientConfiguration advanced = config.getAdvancedConfiguration();
+        boolean insecureTls = false;
+        if (advanced != null) {
+            TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
+            if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
+                if (!config.isUseTLS()) {
+                    throw new ConfigurationError(
+                            "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
+                }
+                insecureTls = true;
+            }
+        }
+
         if (config.isUseTLS()) {
-            builder.setTlsMode(TlsMode.SecureTls);
+            builder.setTlsMode(insecureTls ? TlsMode.InsecureTls : TlsMode.SecureTls);
         } else {
             builder.setTlsMode(TlsMode.NoTls);
+        }
+
+        if (advanced != null) {
+            TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
+            if (tlsConfig != null && tlsConfig.getRootCertificates() != null) {
+                builder.addRootCerts(ByteString.copyFrom(tlsConfig.getRootCertificates()));
+            }
         }
 
         ServerCredentials creds = config.getCredentials();
