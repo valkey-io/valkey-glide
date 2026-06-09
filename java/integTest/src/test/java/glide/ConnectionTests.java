@@ -27,6 +27,7 @@ import glide.api.models.configuration.AddressResolver;
 import glide.api.models.configuration.AdvancedGlideClientConfiguration;
 import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
+import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
@@ -1155,5 +1156,37 @@ public class ConnectionTests {
             assertEquals(OK, client.clientPause(0).get());
             assertEquals("PONG", client.ping().get());
         }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_client_circuit_breaker_config_connects_successfully() {
+        // Verify client connects and operates normally with CB enabled
+        GlideClusterClient clusterClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .clientCircuitBreakerConfiguration(
+                                                ClientCircuitBreakerConfiguration.builder()
+                                                        .windowSizeMs(10000)
+                                                        .failureRateThreshold(0.5f)
+                                                        .minErrors(50)
+                                                        .openTimeoutMs(5000)
+                                                        .countTimeouts(false)
+                                                        .consecutiveSuccesses(3)
+                                                        .build())
+                                        .build())
+                        .get();
+        assertEquals("PONG", clusterClient.ping().get());
+        clusterClient.close();
+
+        GlideClient standaloneClient =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .clientCircuitBreakerConfiguration(
+                                                ClientCircuitBreakerConfiguration.builder().build())
+                                        .build())
+                        .get();
+        assertEquals("PONG", standaloneClient.ping().get());
+        standaloneClient.close();
     }
 }

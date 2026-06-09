@@ -66,6 +66,14 @@ class ConfigurationError(RequestError):
     pass
 
 
+class CircuitBreakerError(RequestError):
+    """
+    Thrown when a request is rejected because the client circuit breaker is open.
+    """
+
+    pass
+
+
 class LoggerError(GlideError):
     """
     Errors that are thrown when the logger has an error initializing.
@@ -83,6 +91,8 @@ def get_request_error_class(
         return ExecAbortError
     if error_type == RequestErrorType.Timeout:
         return TimeoutError
+    if error_type == RequestErrorType.CircuitBreakerOpen:
+        return CircuitBreakerError
     if error_type == RequestErrorType.Unspecified:
         return RequestError
     return RequestError
