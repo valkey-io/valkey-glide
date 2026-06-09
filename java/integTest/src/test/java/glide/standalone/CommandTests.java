@@ -2166,8 +2166,7 @@ public class CommandTests {
 
                 // Wait for role to change to slave after failover
                 waitForCondition(
-                        () -> hasRole(client, "slave"),
-                        "Expected role to change to slave after failover");
+                        () -> hasRole(client, "slave"), "Expected role to change to slave after failover");
             }
         }
     }
@@ -2224,8 +2223,7 @@ public class CommandTests {
 
                 // Verify role changed to slave
                 waitForCondition(
-                        () -> hasRole(client, "slave"),
-                        "Expected role to change to slave after replicaof");
+                        () -> hasRole(client, "slave"), "Expected role to change to slave after replicaof");
 
                 // Promote back to primary
                 assertEquals(OK, client.replicaofNoOne().get());
