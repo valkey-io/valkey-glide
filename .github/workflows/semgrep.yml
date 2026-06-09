@@ -57,10 +57,10 @@ jobs:
       - name: Run Semgrep
         run: |
           EXCLUDE_ARGS=""
-          if [[ -n "${{ inputs.exclude-rules || '' }}" ]]; then
+          EXCLUDE_RULES="${{ inputs.exclude-rules || '' }}"
+          if [ -n "$EXCLUDE_RULES" ]; then
             # Convert comma-separated list to --exclude-rule flags
-            IFS=',' read -ra RULES <<< "${{ inputs.exclude-rules }}"
-            for rule in "${RULES[@]}"; do
+            for rule in $(echo "$EXCLUDE_RULES" | tr ',' ' '); do
               EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude-rule $rule"
             done
           fi
