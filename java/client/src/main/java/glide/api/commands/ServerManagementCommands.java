@@ -1,10 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Supports commands for the "Server Management" group for a standalone client.
@@ -553,4 +555,63 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> aclWhoami();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     * This command must be sent to a primary node. This is the standalone equivalent of {@link
+     * glide.api.commands.ClusterOperationsCommands#clusterFailover()}.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     * This command must be sent to a primary node. This is the standalone equivalent of {@link
+     * glide.api.commands.ClusterOperationsCommands#clusterFailover()}.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @param options The failover options.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover(FailoverOptions.to("localhost", 6380, 1000)).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover(FailoverOptions options);
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @param host The host of the primary to replicate.
+     * @param port The port of the primary to replicate.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaof("localhost", 6379).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaof(@NonNull String host, int port);
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaofNoOne().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaofNoOne();
 }

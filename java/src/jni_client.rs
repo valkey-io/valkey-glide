@@ -1008,7 +1008,12 @@ fn get_glide_core_client_cache_safe(env: &mut JNIEnv) -> Result<GlideCoreClientC
 /// (e.g., inflight limit exceeded) where the Java thread must not park.
 ///
 /// Requires the calling thread to already have a JNIEnv (which JNI entry points always do).
-pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, message: &str) {
+pub fn complete_error_sync(
+    env: &mut JNIEnv,
+    callback_id: jni::sys::jlong,
+    message: &str,
+    error_code: i32,
+) {
     let Ok(method_cache) = get_method_cache(env) else {
         log::error!(
             "complete_error_sync: method cache not initialized for callback_id={}",
@@ -1028,7 +1033,6 @@ pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, messa
     };
 
     // Call AsyncRegistry.completeCallbackWithErrorCode(callbackId, errorCode, errorMessage)
-    // Error code 4 = RequestException (matches the existing inflight error path)
     let result = unsafe {
         env.call_static_method_unchecked(
             &method_cache.async_handle_table_class,
@@ -1036,9 +1040,9 @@ pub fn complete_error_sync(env: &mut JNIEnv, callback_id: jni::sys::jlong, messa
             jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
             &[
                 jni::sys::jvalue { j: callback_id },
-                jni::sys::jvalue { i: 4 }, // RequestException error code
+                jni::sys::jvalue { i: error_code },
                 jni::sys::jvalue {
-                    l: error_msg.into_raw(),
+                    l: error_msg.as_raw(),
                 },
             ],
         )

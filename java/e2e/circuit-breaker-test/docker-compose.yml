@@ -1,0 +1,79 @@
+name: circuit-breaker-test
+
+services:
+  valkey-1:
+    image: valkey/valkey:latest
+    container_name: cb-valkey-1
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      cb-net:
+        ipv4_address: 172.33.0.11
+
+  valkey-2:
+    image: valkey/valkey:latest
+    container_name: cb-valkey-2
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      cb-net:
+        ipv4_address: 172.33.0.12
+
+  valkey-3:
+    image: valkey/valkey:latest
+    container_name: cb-valkey-3
+    command: >
+      valkey-server
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+      --bind 0.0.0.0
+    networks:
+      cb-net:
+        ipv4_address: 172.33.0.13
+
+  cluster-init:
+    image: valkey/valkey:latest
+    container_name: cb-cluster-init
+    depends_on:
+      - valkey-1
+      - valkey-2
+      - valkey-3
+    command: >
+      sh -c "sleep 5 && valkey-cli --cluster create 172.33.0.11:6379 172.33.0.12:6379 172.33.0.13:6379 --cluster-replicas 0 --cluster-yes"
+    networks:
+      - cb-net
+    restart: "no"
+
+  test-runner:
+    build: .
+    container_name: cb-test-runner
+    depends_on:
+      cluster-init:
+        condition: service_completed_successfully
+    environment:
+      - DURATION_SECS=${DURATION_SECS:-30}
+      - INJECT_INTERVAL_SECS=${INJECT_INTERVAL_SECS:-0}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cb-net
+    restart: "no"
+
+networks:
+  cb-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.33.0.0/16

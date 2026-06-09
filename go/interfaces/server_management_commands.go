@@ -47,6 +47,14 @@ type ServerManagementCommands interface {
 
 	ConfigRewrite(ctx context.Context) (string, error)
 
+	MemoryDoctor(ctx context.Context) (string, error)
+
+	MemoryMallocStats(ctx context.Context) (string, error)
+
+	MemoryPurge(ctx context.Context) (string, error)
+
+	MemoryStats(ctx context.Context) (map[string]any, error)
+
 	AclCat(ctx context.Context) ([]string, error)
 
 	AclCatWithCategory(ctx context.Context, category string) ([]string, error)

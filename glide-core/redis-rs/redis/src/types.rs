@@ -130,6 +130,8 @@ pub enum ErrorKind {
     FatalReceiveError,
     /// An error raised that was identified on the client before execution.
     ClientError,
+    /// Client circuit breaker is open, rejecting requests.
+    CircuitBreakerOpen,
     /// An extension error.  This is an error created by the server
     /// that is not directly understood by the library.
     ExtensionError,
@@ -955,6 +957,7 @@ impl RedisError {
             ErrorKind::FatalReceiveError => "a fatal error occurred while attempting to receive a response from the server",
             ErrorKind::ExtensionError => "extension error",
             ErrorKind::ClientError => "client error",
+            ErrorKind::CircuitBreakerOpen => "circuit breaker open",
             ErrorKind::ReadOnly => "read-only",
             ErrorKind::MasterNameNotFoundBySentinel => "master name not found by sentinel",
             ErrorKind::NoValidReplicasFoundBySentinel => "no valid replicas found by sentinel",
@@ -1142,6 +1145,7 @@ impl RedisError {
             ErrorKind::InvalidClientConfig => RetryMethod::NoRetry,
             ErrorKind::CrossSlot => RetryMethod::NoRetry,
             ErrorKind::ClientError => RetryMethod::NoRetry,
+            ErrorKind::CircuitBreakerOpen => RetryMethod::NoRetry,
             ErrorKind::EmptySentinelList => RetryMethod::NoRetry,
             ErrorKind::NotBusy => RetryMethod::NoRetry,
             ErrorKind::RESP3NotSupported => RetryMethod::NoRetry,

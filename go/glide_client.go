@@ -574,7 +574,7 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// LatencyHistory returns the latency spike time series for the specified event.
+// Returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
@@ -596,7 +596,7 @@ func (client *Client) LatencyHistory(ctx context.Context, event string) ([]model
 	return handleLatencyHistoryResponse(response)
 }
 
-// LatencyLatest reports the latest latency events logged.
+// Reports the latest latency events logged.
 //
 // See [valkey.io] for details.
 //
@@ -617,7 +617,7 @@ func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyInfo, 
 	return handleLatencyLatestResponse(response)
 }
 
-// LatencyReset resets the latency time series for the specified events.
+// Resets the latency time series for the specified events.
 // If no events are specified, all events are reset.
 //
 // See [valkey.io] for details.
@@ -638,6 +638,87 @@ func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64
 		return models.DefaultIntResponse, err
 	}
 	return handleIntResponse(response)
+}
+
+// Provides memory usage diagnosis report.
+// The command returns a detailed analysis of memory consumption patterns in the server.
+//
+// Return value:
+//
+//	A string containing the memory usage analysis report.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryDoctor, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Returns memory allocator internal statistics.
+// The output of this command is specific to the allocator being used.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A string containing the memory allocator statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryMallocStats, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Attempts to purge dirty pages for reclamation by the allocator.
+// This command can help reduce memory fragmentation.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	OK to confirm that the purge operation was executed.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryPurge, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Returns memory usage statistics for the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A map containing memory usage statistics with metric names as keys and values as their corresponding data.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (client *Client) MemoryStats(ctx context.Context) (map[string]any, error) {
+	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToAnyMapResponse(response)
 }
 
 // Gets the name of the current connection.

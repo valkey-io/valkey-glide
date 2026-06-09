@@ -4,7 +4,7 @@ use glide_core::{
     client::Client,
     connection_request::{ConnectionRequest, NodeAddress, TlsMode},
 };
-use iai_callgrind::{library_benchmark, library_benchmark_group, main};
+use gungraun::{library_benchmark, library_benchmark_group, main};
 use redis::{Value, cmd};
 use std::hint::black_box;
 use tokio::runtime::Builder;

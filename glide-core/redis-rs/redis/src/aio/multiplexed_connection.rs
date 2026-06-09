@@ -27,7 +27,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::fmt::Debug;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task::{self, Poll};
 use std::time::Duration;
@@ -92,6 +92,16 @@ pub(crate) struct Pipeline<SinkItem> {
     sender: mpsc::Sender<PipelineMessage<SinkItem>>,
     push_manager: Arc<ArcSwap<PushManager>>,
     is_stream_closed: Arc<AtomicBool>,
+    /// Monotonic liveness counter bumped by the writer task on each unit of
+    /// progress: when it drains a message from the channel into the sink (a freed
+    /// slot, in `start_send`) and when it receives a server response (in
+    /// `poll_read`). Producers use it while waiting for a free channel slot: a
+    /// connection that keeps making progress is alive (slow), not dead, so the
+    /// send must wait rather than fail. The `start_send` bump is the load-bearing
+    /// one — under sustained backpressure the `Forward` combinator starves
+    /// response reading, so a response-only signal would freeze. See
+    /// [`Self::send_recv`].
+    progress: Arc<AtomicU64>,
 }
 
 impl<SinkItem> Debug for Pipeline<SinkItem>
@@ -114,6 +124,7 @@ pin_project! {
         is_stream_closed: Arc<AtomicBool>,
         response_sync_lost: bool,
         cache: Option<Arc<dyn GlideCache>>,
+        progress: Arc<AtomicU64>,
     }
 
         impl<T> PinnedDrop for PipelineSink<T> {
@@ -142,6 +153,7 @@ where
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
         is_stream_closed: Arc<AtomicBool>,
         cache: Option<Arc<dyn GlideCache>>,
+        progress: Arc<AtomicU64>,
     ) -> Self
     where
         T: Sink<SinkItem, Error = RedisError> + Stream<Item = RedisResult<Value>> + 'static,
@@ -155,6 +167,7 @@ where
             is_stream_closed,
             response_sync_lost: false,
             cache,
+            progress,
         }
     }
 
@@ -175,6 +188,9 @@ where
                     return Poll::Ready(Err(()));
                 }
             };
+            // A response (or push) arrived from the server: record liveness so
+            // producers blocked on a full channel can tell "slow" from "dead".
+            self.progress.fetch_add(1, Ordering::Relaxed);
             self.as_mut().send_result(item);
         }
     }
@@ -425,6 +441,19 @@ where
             is_fenced,
         }: PipelineMessage<SinkItem>,
     ) -> Result<(), Self::Error> {
+        // A message was pulled from the channel into the sink, so a channel slot
+        // just freed: the writer is making progress. Producers waiting on a full
+        // channel use this as a liveness signal to tell backpressure from a dead
+        // connection (see `send_recv`). It is recorded here — for every pulled
+        // message, including the load-shed and error paths below, since a slot
+        // frees regardless of outcome — as well as on response receipt, because
+        // under sustained backpressure the `Forward` combinator keeps draining the
+        // channel and starves the response-reading path.
+        self.as_mut()
+            .project()
+            .progress
+            .fetch_add(1, Ordering::Relaxed);
+
         // If there is nothing to receive our output we do not need to send the message as it is
         // ambiguous whether the message will be sent anyway. Helps shed some load on the
         // connection.
@@ -523,6 +552,14 @@ impl<SinkItem> Pipeline<SinkItem>
 where
     SinkItem: Send + 'static,
 {
+    /// Default capacity of the bounded channel connecting request producers to the
+    /// single pipeline writer task. Sized to the Little's Law steady-state inflight
+    /// estimate (~50 requests; see the derivation above `DEFAULT_MAX_INFLIGHT_REQUESTS`
+    /// in glide-core/src/client/mod.rs). The inflight limit itself
+    /// (`DEFAULT_MAX_INFLIGHT_REQUESTS` = 1000) sits above this channel and provides
+    /// burst headroom.
+    const DEFAULT_BUFFER_SIZE: usize = 50;
+
     fn new<T>(
         sink_stream: T,
         disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
@@ -535,17 +572,48 @@ where
         T::Error: Send,
         T::Error: ::std::fmt::Debug,
     {
-        const BUFFER_SIZE: usize = 50;
-        let (sender, mut receiver) = mpsc::channel(BUFFER_SIZE);
+        Self::new_with_buffer_size(
+            sink_stream,
+            disconnect_notifier,
+            cache,
+            Self::DEFAULT_BUFFER_SIZE,
+        )
+    }
+
+    /// Like [`Self::new`] but with an explicit capacity for the bounded channel
+    /// connecting request producers to the writer task.
+    ///
+    /// This channel only becomes a bottleneck when the writer drains it more
+    /// slowly than producers fill it — i.e. when the socket write path is blocked
+    /// (full TCP send buffer), which happens under high latency and/or large
+    /// payloads. A larger capacity raises burst headroom before producers block,
+    /// at the cost of more memory held in the channel (≈ capacity × payload size)
+    /// and weaker backpressure pacing of the writer task.
+    fn new_with_buffer_size<T>(
+        sink_stream: T,
+        disconnect_notifier: Option<Box<dyn DisconnectNotifier>>,
+        cache: Option<Arc<dyn GlideCache>>,
+        buffer_size: usize,
+    ) -> (Self, impl Future<Output = ()>)
+    where
+        T: Sink<SinkItem, Error = RedisError> + Stream<Item = RedisResult<Value>> + 'static,
+        T: Send + 'static,
+        T::Item: Send,
+        T::Error: Send,
+        T::Error: ::std::fmt::Debug,
+    {
+        let (sender, mut receiver) = mpsc::channel(buffer_size);
         let push_manager: Arc<ArcSwap<PushManager>> =
             Arc::new(ArcSwap::new(Arc::new(PushManager::default())));
         let is_stream_closed = Arc::new(AtomicBool::new(false));
+        let progress = Arc::new(AtomicU64::new(0));
         let sink = PipelineSink::new::<SinkItem>(
             sink_stream,
             push_manager.clone(),
             disconnect_notifier,
             is_stream_closed.clone(),
             cache,
+            progress.clone(),
         );
         let f = stream::poll_fn(move |cx| receiver.poll_recv(cx))
             .map(Ok)
@@ -556,6 +624,7 @@ where
                 sender,
                 push_manager,
                 is_stream_closed,
+                progress,
             },
             f,
         )
@@ -582,41 +651,72 @@ where
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
-        // Timeout on pipeline send to detect dead connections. The pipeline channel
-        // is bounded (50 slots). Under normal operation, a slot frees in microseconds.
-        // Defaults to 100ms unless request_timeout is shorter, with a minimum of 1ms.
-        let send_timeout = std::cmp::max(
+        // Acquire a slot in the bounded pipeline channel, distinguishing a
+        // slow-but-live connection from a dead one. We poll for capacity in short
+        // "liveness ticks" and watch the writer's progress counter (bumped when it
+        // drains a message into the sink or receives a response). If consecutive
+        // ticks elapse with the channel still full and NO progress, the writer is
+        // stuck and the connection is treated as dead (FatalSendError), preserving
+        // fast dead-connection detection (#5715). While progress continues the
+        // channel is merely under backpressure, so we keep waiting up to the request
+        // `timeout` rather than failing a live command (#5446).
+        let liveness_tick = std::cmp::max(
             std::cmp::min(timeout, std::time::Duration::from_millis(100)),
             std::time::Duration::from_millis(1),
         );
+        // Require consecutive no-progress ticks before declaring death, so a single
+        // scheduling gap (e.g. the writer task not yet polled at startup) cannot
+        // kill a live connection.
+        const DEAD_TICKS: u32 = 2;
         let send_start = std::time::Instant::now();
-        match tokio::time::timeout(
-            send_timeout,
-            self.sender.send(PipelineMessage {
-                input,
-                pipeline_response_count,
-                output: sender,
-                is_transaction: is_atomic,
-                is_fenced,
-            }),
-        )
-        .await
-        {
-            Ok(Ok(())) => {}
-            Ok(Err(err)) => {
-                return Err(RedisError::from((
-                    crate::ErrorKind::FatalSendError,
-                    "Failed to send the request to the server",
-                    err.to_string(),
-                )));
+        let mut no_progress_ticks = 0u32;
+        let permit = loop {
+            let progress_before = self.progress.load(Ordering::Relaxed);
+            match tokio::time::timeout(liveness_tick, self.sender.reserve()).await {
+                Ok(Ok(permit)) => break permit,
+                Ok(Err(_closed)) => {
+                    return Err(RedisError::from((
+                        crate::ErrorKind::FatalSendError,
+                        "Failed to send the request to the server",
+                        "the pipeline writer task has terminated".to_string(),
+                    )));
+                }
+                Err(_elapsed) => {
+                    if send_start.elapsed() >= timeout {
+                        // Backpressure outlasted the request's own timeout budget.
+                        // Report a genuine timeout (NoRetry, is_timeout()), matching
+                        // the receive-side timeout — not a fatal/reconnect send error.
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            "Timed out waiting for pipeline send capacity",
+                        )
+                        .into());
+                    }
+                    if self.progress.load(Ordering::Relaxed) == progress_before {
+                        no_progress_ticks += 1;
+                        if no_progress_ticks >= DEAD_TICKS {
+                            // No progress across consecutive ticks while the channel
+                            // stays full: the writer is stuck, not merely slow.
+                            return Err(RedisError::from((
+                                crate::ErrorKind::FatalSendError,
+                                "Pipeline channel full — connection likely dead",
+                            )));
+                        }
+                    } else {
+                        // A slot freed or a response arrived: backpressure, not
+                        // death. Reset the dead-tick counter and keep waiting.
+                        no_progress_ticks = 0;
+                    }
+                }
             }
-            Err(_elapsed) => {
-                return Err(RedisError::from((
-                    crate::ErrorKind::FatalSendError,
-                    "Pipeline channel full — connection likely dead",
-                )));
-            }
-        }
+        };
+        permit.send(PipelineMessage {
+            input,
+            pipeline_response_count,
+            output: sender,
+            is_transaction: is_atomic,
+            is_fenced,
+        });
         let send_elapsed = send_start.elapsed();
         let send_warn_threshold = std::cmp::min(timeout / 4, std::time::Duration::from_millis(500));
         if send_elapsed > send_warn_threshold {
@@ -624,7 +724,7 @@ where
                 "pipeline",
                 5,
                 format!(
-                    "pipeline.send() blocked for {:?} (threshold={:?}, response_timeout={:?}, channel capacity=50)",
+                    "pipeline.send() blocked for {:?} (threshold={:?}, response_timeout={:?})",
                     send_elapsed, send_warn_threshold, timeout
                 )
             );
@@ -1159,6 +1259,123 @@ mod tests {
         }
     }
 
+    /// A mock connection used to benchmark the pipeline buffer in isolation,
+    /// without real sockets or a server.
+    ///
+    /// It models a real connection over the network:
+    /// - every written command produces one `+OK` response after `latency` (the RTT);
+    /// - `poll_ready` returns `Pending` once `window` commands are outstanding
+    ///   (written but not yet responded to), modelling a bounded TCP send buffer.
+    ///
+    /// Backpressure from `window` is what makes the pipeline's internal channel
+    /// fill, so the configured buffer size only affects behaviour when `window` is
+    /// small relative to the offered concurrency. With `window == usize::MAX`
+    /// there is no backpressure and the buffer size is irrelevant.
+    struct MockServerSink {
+        cmd_tx: mpsc::UnboundedSender<Vec<u8>>,
+        resp_rx: mpsc::UnboundedReceiver<RedisResult<Value>>,
+        shared: Arc<MockShared>,
+        window: usize,
+    }
+
+    struct MockShared {
+        outstanding: std::sync::atomic::AtomicUsize,
+        max_outstanding: std::sync::atomic::AtomicUsize,
+        ready_waker: futures::task::AtomicWaker,
+    }
+
+    impl MockServerSink {
+        /// Builds the mock sink plus the server future that produces delayed
+        /// responses. The caller must spawn the returned future on the runtime.
+        fn new(latency: Duration, window: usize) -> (Self, impl Future<Output = ()>) {
+            let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+            let (resp_tx, resp_rx) = mpsc::unbounded_channel::<RedisResult<Value>>();
+            let shared = Arc::new(MockShared {
+                outstanding: std::sync::atomic::AtomicUsize::new(0),
+                max_outstanding: std::sync::atomic::AtomicUsize::new(0),
+                ready_waker: futures::task::AtomicWaker::new(),
+            });
+
+            let server_shared = shared.clone();
+            let server = async move {
+                // One delayed responder per command models a pipelined server,
+                // where many RTTs overlap rather than being serialised.
+                while let Some(bytes) = cmd_rx.recv().await {
+                    let resp_tx = resp_tx.clone();
+                    let shared = server_shared.clone();
+                    tokio::spawn(async move {
+                        if !latency.is_zero() {
+                            tokio::time::sleep(latency).await;
+                        }
+                        // Hold the payload for the "RTT" to model data in flight,
+                        // then drop it before acking.
+                        drop(bytes);
+                        let _ = resp_tx.send(Ok(Value::Okay));
+                        shared.outstanding.fetch_sub(1, Ordering::SeqCst);
+                        shared.ready_waker.wake();
+                    });
+                }
+            };
+
+            (
+                MockServerSink {
+                    cmd_tx,
+                    resp_rx,
+                    shared,
+                    window,
+                },
+                server,
+            )
+        }
+    }
+
+    impl Stream for MockServerSink {
+        type Item = RedisResult<Value>;
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            self.get_mut().resp_rx.poll_recv(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for MockServerSink {
+        type Error = RedisError;
+
+        fn poll_ready(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            if self.shared.outstanding.load(Ordering::SeqCst) < self.window {
+                return Poll::Ready(Ok(()));
+            }
+            // Window full: register for wakeup when a response frees a slot, then
+            // re-check to avoid a lost wakeup race.
+            self.shared.ready_waker.register(cx.waker());
+            if self.shared.outstanding.load(Ordering::SeqCst) < self.window {
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Pending
+            }
+        }
+
+        fn start_send(self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+            let cur = self.shared.outstanding.fetch_add(1, Ordering::SeqCst) + 1;
+            self.shared.max_outstanding.fetch_max(cur, Ordering::SeqCst);
+            self.cmd_tx.send(item).map_err(|e| {
+                RedisError::from((crate::ErrorKind::IoError, "mock send error", e.to_string()))
+            })
+        }
+
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
     #[tokio::test]
     async fn test_pipeline_send_timeout_when_sink_stalls() {
         // Test for #5715: Pipeline send blocks forever on dead shard
@@ -1166,13 +1383,14 @@ mod tests {
         //
         // When a TCP connection becomes half-open (e.g., network partition without RST),
         // the send buffer fills and AsyncWrite::poll_write blocks indefinitely. This
-        // causes the pipeline's internal 50-slot channel to fill, and any subsequent
-        // send() call blocks forever waiting for a slot.
+        // causes the pipeline's internal channel to fill, and any subsequent send()
+        // call blocks forever waiting for a slot.
         //
-        // The adaptive send timeout (min(timeout, 100ms), floor 1ms) wraps the channel
-        // send, so it fails with FatalSendError instead of hanging. This test verifies
-        // that behavior by creating a pipeline with no driver (never drains), filling
-        // the channel, and asserting the next send completes within the timeout.
+        // The liveness-aware send loop detects this: with the channel full and the
+        // writer making no progress (no slot freed, no response) across consecutive
+        // liveness ticks, it fails with FatalSendError instead of hanging. This test
+        // creates a pipeline with no driver (never drains, never makes progress),
+        // fills the channel, and asserts the next send fails fast with FatalSendError.
 
         let stall_flag = Arc::new(AtomicBool::new(false));
         let (sink_tx, _sink_rx) = futures_mpsc::channel(100);
@@ -1203,8 +1421,11 @@ mod tests {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        // Next send should hit the send timeout  instead of blocking forever
-        let timeout = Duration::from_millis(200);
+        // The request timeout is generous (2s) so that the dead-connection path
+        // (fired after DEAD_TICKS no-progress liveness ticks, ~2 × 100ms) is what
+        // trips — not the overall request-timeout budget. Without the fix this send
+        // would block forever.
+        let timeout = Duration::from_secs(2);
         let start = std::time::Instant::now();
         let result = pipeline
             .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
@@ -1213,16 +1434,16 @@ mod tests {
 
         assert!(result.is_err(), "Expected error when sink is stalled");
         let err = result.unwrap_err();
-        assert!(
-            err.kind() == crate::ErrorKind::FatalSendError
-                || err.kind() == crate::ErrorKind::IoError,
-            "Expected FatalSendError or IoError, got: {:?}",
+        assert_eq!(
+            err.kind(),
+            crate::ErrorKind::FatalSendError,
+            "dead connection must fail fast via the no-progress dead path, got: {:?}",
             err.kind()
         );
         assert!(
-            elapsed < Duration::from_millis(200),
-            "Send took {:?}, expected < 200ms (send_timeout = 100ms). \
-             Without the fix, this hangs forever.",
+            elapsed < Duration::from_secs(1),
+            "Send took {:?}, expected to fail fast (~2 liveness ticks), well under \
+             the 2s request timeout. Without the fix, this hangs forever.",
             elapsed,
         );
     }
@@ -1404,5 +1625,549 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_new_with_buffer_size_respects_capacity() {
+        // The internal pipeline channel capacity must equal the configured buffer
+        // size rather than the hardcoded default of 50. With a buffer of 3 and no
+        // driver draining the channel, the first 3 sends fill it and the 4th must
+        // hit the send timeout. If the parameter were ignored (capacity stayed 50),
+        // the 4th send would succeed instead — so this asserts the value is wired
+        // through, not merely that the constructor exists.
+        let stall_flag = Arc::new(AtomicBool::new(false));
+        let (sink_tx, _sink_rx) = futures_mpsc::channel(100);
+        let (_resp_tx, resp_rx) = futures_mpsc::channel(100);
+
+        let sink = StallingSink {
+            stall: stall_flag,
+            inner_tx: sink_tx,
+            inner_rx: resp_rx,
+        };
+
+        let (mut pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 3);
+        std::mem::forget(driver); // never drain, so the channel stays full
+
+        // Fill the 3 buffer slots with sends that then park awaiting responses.
+        for _ in 0..3 {
+            let mut pipeline_clone = pipeline.clone();
+            tokio::spawn(async move {
+                let _ = pipeline_clone
+                    .send_single(
+                        crate::cmd("PING").get_packed_command(),
+                        Duration::from_secs(60),
+                        false,
+                    )
+                    .await;
+            });
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // The 4th send must time out because the 3-slot channel is full.
+        let timeout = Duration::from_millis(200);
+        let start = std::time::Instant::now();
+        let result = pipeline
+            .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+            .await;
+        let elapsed = start.elapsed();
+
+        assert!(
+            result.is_err(),
+            "expected send to fail when the 3-slot buffer is full"
+        );
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "send should time out quickly once the buffer is full, took {:?}",
+            elapsed
+        );
+    }
+
+    #[tokio::test]
+    async fn test_mock_server_sink_responds_to_all_commands() {
+        // Validates the benchmark harness itself: with zero latency and an
+        // unbounded in-flight window (no writer-side backpressure), every command
+        // sent through the pipeline must receive its OK response, regardless of
+        // buffer size. If this baseline ever fails, the sweep numbers are
+        // meaningless — so this is the harness's self-check.
+        let (sink, server) = MockServerSink::new(Duration::ZERO, usize::MAX);
+        let server_handle = tokio::spawn(server);
+
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        let driver_handle = tokio::spawn(driver);
+
+        let mut handles = Vec::new();
+        for _ in 0..200 {
+            let mut p = pipeline.clone();
+            handles.push(tokio::spawn(async move {
+                p.send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    Duration::from_secs(5),
+                    false,
+                )
+                .await
+            }));
+        }
+        for h in handles {
+            let res = h.await.unwrap();
+            assert!(res.is_ok(), "command failed: {:?}", res);
+        }
+
+        drop(pipeline);
+        let _ = driver_handle.await;
+        server_handle.abort();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_backpressure_does_not_fail_live_commands() {
+        // Issue #5446: under sustained backpressure (slow drain — here a narrow
+        // 2-command in-flight window plus 10ms latency), the 50-slot channel fills
+        // while the connection is alive and responses keep flowing. Commands must
+        // wait for a slot, not fail. The fixed 100ms send-timeout fails most of
+        // them with FatalSendError; a liveness-aware send-timeout must not.
+        let (sink, server) = MockServerSink::new(Duration::from_millis(10), 2);
+        let server_handle = tokio::spawn(server);
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        let driver_handle = tokio::spawn(driver);
+
+        let mut handles = Vec::new();
+        for _ in 0..200 {
+            let mut p = pipeline.clone();
+            handles.push(tokio::spawn(async move {
+                p.send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    Duration::from_secs(30),
+                    false,
+                )
+                .await
+            }));
+        }
+        let mut ok = 0usize;
+        let mut failed = 0usize;
+        for h in handles {
+            match h.await.unwrap() {
+                Ok(_) => ok += 1,
+                Err(_) => failed += 1,
+            }
+        }
+
+        drop(pipeline);
+        let _ = driver_handle.await;
+        server_handle.abort();
+
+        assert_eq!(
+            failed, 0,
+            "live-but-slow connection must not fail commands under backpressure: \
+             {ok} ok, {failed} failed"
+        );
+        assert_eq!(ok, 200, "all commands should eventually succeed");
+        // Note: this test also guards the `start_send` liveness signal. Under this
+        // sustained backpressure the `Forward` combinator starves `poll_read`, so
+        // the response-receipt bump never fires; the test passes only because
+        // `start_send` records drain progress. Removing that bump regresses this.
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn test_backpressure_timeout_is_classified_as_timeout() {
+        // When backpressure outlasts the request's own timeout budget (the
+        // connection is alive and draining, just slower than the deadline), the
+        // failure must be a genuine timeout — `is_timeout()` true, retry method
+        // NoRetry — not a fatal/reconnect send error and not an immediately
+        // retryable error against the already-overloaded connection.
+        let (sink, server) = MockServerSink::new(Duration::from_millis(10), 2);
+        let server_handle = tokio::spawn(server);
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        let driver_handle = tokio::spawn(driver);
+
+        let timeout = Duration::from_millis(150);
+        let mut handles = Vec::new();
+        for _ in 0..300 {
+            let mut p = pipeline.clone();
+            handles.push(tokio::spawn(async move {
+                p.send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+                    .await
+            }));
+        }
+
+        let mut ok = 0usize;
+        let mut timed_out = 0usize;
+        let mut other_err = 0usize;
+        for h in handles {
+            match h.await.unwrap() {
+                Ok(_) => ok += 1,
+                Err(e) if e.is_timeout() => timed_out += 1,
+                Err(_) => other_err += 1,
+            }
+        }
+
+        // Teardown: abort the driver rather than awaiting a graceful shutdown.
+        // The 150ms timeout makes some sends abandon their request while their
+        // InFlight entries are still queued (their responses were starved by the
+        // `Forward` combinator under backpressure — see #6110). `PipelineSink::
+        // poll_close` drains those in-flight responses but then parks on the
+        // response stream; a real socket would unblock it with EOF on close, but
+        // the mock's response channel never reaches EOF, so awaiting the driver
+        // would hang. This test asserts only the classification of the sends
+        // already collected above, so graceful driver shutdown is neither needed
+        // nor available here.
+        drop(pipeline);
+        driver_handle.abort();
+        server_handle.abort();
+
+        assert!(
+            timed_out > 0,
+            "expected some commands to exceed the timeout budget under backpressure \
+             (ok={ok}, timed_out={timed_out}, other_err={other_err})"
+        );
+        assert_eq!(
+            other_err, 0,
+            "backpressure failures must be timeouts, not fatal/other errors: \
+             {other_err} non-timeout failures"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_send_fails_when_writer_terminated() {
+        // If the writer task has gone away (its channel receiver dropped), a
+        // producer's send must fail promptly with FatalSendError rather than spin
+        // in the liveness loop waiting for capacity that will never free.
+        let (sink, _server) = MockServerSink::new(Duration::ZERO, usize::MAX);
+        let (mut pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, 50);
+        drop(driver); // writer/receiver gone -> channel closed
+
+        let start = std::time::Instant::now();
+        let result = pipeline
+            .send_single(
+                crate::cmd("PING").get_packed_command(),
+                Duration::from_secs(5),
+                false,
+            )
+            .await;
+        let elapsed = start.elapsed();
+
+        let err = result.expect_err("send must fail when the writer is gone");
+        assert_eq!(
+            err.kind(),
+            crate::ErrorKind::FatalSendError,
+            "got: {:?}",
+            err.kind()
+        );
+        // Prove it took the closed-channel branch (`reserve()` returns Err
+        // immediately) rather than the no-progress dead path, which only trips
+        // after DEAD_TICKS liveness ticks (~200ms). Both return FatalSendError,
+        // so the kind alone cannot distinguish them — the elapsed time can.
+        assert!(
+            elapsed < Duration::from_millis(100),
+            "closed channel must fail immediately, not via the ~200ms no-progress \
+             path; took {elapsed:?}"
+        );
+    }
+
+    /// Runs `total` concurrent commands of `payload` bytes through a pipeline with
+    /// the given internal `buffer` capacity, against a mock server with `latency`
+    /// RTT and a `window`-command in-flight limit. Returns total wall-clock time.
+    async fn run_buffer_sweep_case(
+        buffer: usize,
+        payload: usize,
+        latency: Duration,
+        window: usize,
+        total: usize,
+    ) -> SweepResult {
+        let (sink, server) = MockServerSink::new(latency, window);
+        let shared = sink.shared.clone();
+        let server_handle = tokio::spawn(server);
+        let (pipeline, driver) = Pipeline::new_with_buffer_size(sink, None, None, buffer);
+        let driver_handle = tokio::spawn(driver);
+
+        // Build the command once (SET k <payload-bytes>); clone the packed bytes
+        // per send so each occupies ~`payload` bytes in the pipeline channel.
+        let value = vec![b'x'; payload];
+        let mut command = crate::cmd("SET");
+        command.arg("k").arg(value.as_slice());
+        let packed = command.get_packed_command();
+
+        let start = std::time::Instant::now();
+        let mut handles = Vec::with_capacity(total);
+        for _ in 0..total {
+            let mut p = pipeline.clone();
+            let packed = packed.clone();
+            handles.push(tokio::spawn(async move {
+                p.send_single(packed, Duration::from_secs(60), false).await
+            }));
+        }
+        let mut ok = 0usize;
+        let mut failed = 0usize;
+        let mut error_kind = String::new();
+        for h in handles {
+            match h.await.unwrap() {
+                Ok(_) => ok += 1,
+                Err(e) => {
+                    failed += 1;
+                    if error_kind.is_empty() {
+                        error_kind = format!("{:?}", e.kind());
+                    }
+                }
+            }
+        }
+        let elapsed = start.elapsed();
+
+        let max_outstanding = shared.max_outstanding.load(Ordering::SeqCst);
+        drop(pipeline);
+        let _ = driver_handle.await;
+        server_handle.abort();
+        SweepResult {
+            elapsed,
+            max_outstanding,
+            ok,
+            failed,
+            error_kind,
+        }
+    }
+
+    struct SweepResult {
+        elapsed: Duration,
+        max_outstanding: usize,
+        ok: usize,
+        failed: usize,
+        error_kind: String,
+    }
+
+    fn mean_stddev(samples: &[f64]) -> (f64, f64) {
+        let n = samples.len() as f64;
+        let mean = samples.iter().sum::<f64>() / n;
+        let var = samples.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
+        (mean, var.sqrt())
+    }
+
+    /// Investigation harness for issue #5446: does the pipeline buffer size affect
+    /// throughput, and if so, in which regime?
+    ///
+    /// Sweeps buffer size × payload × latency. The in-flight `window` is derived
+    /// from a byte budget (a TCP send buffer is bounded in bytes, not commands),
+    /// so large payloads get a small window. Run manually:
+    ///
+    ///   cargo test --lib bench_pipeline_buffer_sweep -- --ignored --nocapture
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore = "benchmark: run manually with --ignored --nocapture"]
+    async fn bench_pipeline_buffer_sweep() {
+        const REPS: usize = 10;
+        const SOCKET_BUFFER_BYTES: usize = 2 * 1024 * 1024; // models TCP send buffer
+        const TOTAL_COMMANDS: usize = 500;
+        let buffer_sizes = [50usize, 200, 1000, 4000];
+        let payload_sizes = [64usize, 4096, 1_048_576];
+        let latencies = [Duration::from_millis(0), Duration::from_millis(10)];
+
+        println!(
+            "\n=== Pipeline buffer sweep (cmds={TOTAL_COMMANDS}, reps={REPS}, \
+             socket_buf={SOCKET_BUFFER_BYTES}B, runtime=multi_thread/4) ===\n\
+             payload  latency  window  buffer   mean_ms  stddev_ms  max_inflight  ok  failed"
+        );
+
+        for &payload in &payload_sizes {
+            let window = std::cmp::max(1, SOCKET_BUFFER_BYTES / payload);
+            for &latency in &latencies {
+                for &buffer in &buffer_sizes {
+                    let mut samples = Vec::with_capacity(REPS);
+                    let mut max_inflight = 0usize;
+                    let mut last_ok = 0usize;
+                    let mut last_failed = 0usize;
+                    let mut last_err_kind = String::new();
+                    for _ in 0..REPS {
+                        let r =
+                            run_buffer_sweep_case(buffer, payload, latency, window, TOTAL_COMMANDS)
+                                .await;
+                        samples.push(r.elapsed.as_secs_f64() * 1000.0);
+                        max_inflight = max_inflight.max(r.max_outstanding);
+                        last_ok = r.ok;
+                        last_failed = r.failed;
+                        last_err_kind = r.error_kind;
+                    }
+                    let (mean, stddev) = mean_stddev(&samples);
+                    println!(
+                        "{payload:>7}  {:>5}ms  {window:>6}  {buffer:>6}  {mean:>8.2}  {stddev:>8.2}  {max_inflight:>6}  {last_ok:>4}  {last_failed:>4}  {last_err_kind}",
+                        latency.as_millis()
+                    );
+                }
+                println!();
+            }
+        }
+    }
+
+    /// A sink whose write side is never ready, so the pipeline's bounded channel
+    /// never drains: a producer waiting for capacity stays parked in the
+    /// `send_recv` liveness loop, and the writer never records a `start_send`
+    /// (drain) progress bump. The read side yields exactly the responses the test
+    /// injects via its `resp_tx`, so the ONLY thing that can advance the liveness
+    /// `progress` counter is the `poll_read` bump on response receipt. This lets
+    /// the tests below drive the liveness signal deterministically under
+    /// `start_paused` virtual time.
+    struct ReadProgressSink {
+        resp_rx: futures_mpsc::Receiver<RedisResult<Value>>,
+    }
+
+    impl Stream for ReadProgressSink {
+        type Item = RedisResult<Value>;
+        fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            Pin::new(&mut self.resp_rx).poll_next(cx)
+        }
+    }
+
+    impl Sink<Vec<u8>> for ReadProgressSink {
+        type Error = RedisError;
+        fn poll_ready(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            // Never ready: the writer can never pull from the channel, so it stays
+            // full (the producer keeps waiting for capacity) and no drain progress
+            // bump is ever recorded. The `Forward` driver is re-polled via the
+            // read waker that `PipelineSink::poll_ready`'s Pending path registers
+            // through `poll_read`, so returning a bare Pending here is correct.
+            Poll::Pending
+        }
+        fn start_send(self: Pin<&mut Self>, _item: Vec<u8>) -> Result<(), Self::Error> {
+            unreachable!("poll_ready never returns Ready, so start_send is never called")
+        }
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn poll_close(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    /// Yields repeatedly so spawned pipeline tasks (the producer under test, the
+    /// filler, and the `Forward` driver) can run to their next park point without
+    /// advancing the (paused) clock.
+    async fn settle() {
+        for _ in 0..16 {
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Spawns a `ReadProgressSink`-backed pipeline (buffer = 1) plus enough filler
+    /// producers to saturate it, so the returned `subject` producer blocks in the
+    /// slot-acquire liveness loop. The `Forward` combinator buffers one pulled
+    /// message in addition to the channel's `buffer_size`, so `buffer_size + 1`
+    /// producers are absorbed before a producer blocks on capacity — hence two
+    /// fillers for buffer = 1. All producers use an effectively-infinite timeout,
+    /// so the only way the subject can resolve early is the dead path
+    /// (`FatalSendError`). Returns (subject, fillers, driver, resp_tx).
+    #[allow(clippy::type_complexity)]
+    async fn spawn_blocked_producer() -> (
+        tokio::task::JoinHandle<RedisResult<Value>>,
+        Vec<tokio::task::JoinHandle<RedisResult<Value>>>,
+        tokio::task::JoinHandle<()>,
+        futures_mpsc::Sender<RedisResult<Value>>,
+    ) {
+        let (resp_tx, resp_rx) = futures_mpsc::channel::<RedisResult<Value>>(64);
+        let (pipeline, driver) =
+            Pipeline::new_with_buffer_size(ReadProgressSink { resp_rx }, None, None, 1);
+        let driver_handle = tokio::spawn(driver);
+
+        // buffer_size (1) in the channel + 1 buffered by `Forward` = 2 absorbed.
+        let mut fillers = Vec::new();
+        for _ in 0..2 {
+            let mut f = pipeline.clone();
+            fillers.push(tokio::spawn(async move {
+                f.send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    Duration::from_secs(3600),
+                    false,
+                )
+                .await
+            }));
+            settle().await; // let the writer absorb this filler before the next
+        }
+
+        let mut subject = pipeline.clone();
+        let subject_handle = tokio::spawn(async move {
+            subject
+                .send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    Duration::from_secs(3600),
+                    false,
+                )
+                .await
+        });
+        settle().await; // subject parks in the liveness loop
+
+        (subject_handle, fillers, driver_handle, resp_tx)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_single_no_progress_tick_does_not_kill_live_connection() {
+        // Guards the `DEAD_TICKS = 2` debounce: a *single* no-progress liveness
+        // tick must NOT declare a live connection dead. The subject is parked in
+        // the slot-acquire loop; we feed a response on every *other* tick, so each
+        // gap is exactly one no-progress tick (`no_progress_ticks` reaches 1, then
+        // resets when the next tick observes the injected progress). With
+        // `DEAD_TICKS = 2` the subject stays alive; with `DEAD_TICKS = 1` it would
+        // be killed (`FatalSendError`) on the very first no-progress tick, failing
+        // the in-loop assertion below.
+        let (subject, fillers, driver, mut resp_tx) = spawn_blocked_producer().await;
+
+        for _ in 0..6 {
+            tokio::time::advance(Duration::from_millis(100)).await; // one no-progress tick
+            settle().await;
+            assert!(
+                !subject.is_finished(),
+                "a single no-progress tick must not kill a live connection \
+                 (DEAD_TICKS must be >= 2); the producer was declared dead"
+            );
+            resp_tx.try_send(Ok(Value::Okay)).expect("inject response");
+            settle().await; // Forward drains it -> poll_read progress bump
+            tokio::time::advance(Duration::from_millis(100)).await; // next tick observes progress -> reset
+            settle().await;
+        }
+
+        assert!(
+            !subject.is_finished(),
+            "producer must remain alive across repeated single no-progress ticks"
+        );
+
+        subject.abort();
+        for f in fillers {
+            f.abort();
+        }
+        driver.abort();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn test_poll_read_progress_alone_keeps_connection_alive() {
+        // Isolates the response-receipt (`poll_read`) liveness signal from the
+        // drain (`start_send`) signal. `ReadProgressSink` never accepts a drain,
+        // so `start_send` never bumps progress; the only liveness signal available
+        // is the `poll_read` bump when an injected response is drained. A producer
+        // parked in the slot-acquire loop must therefore stay alive (never
+        // `FatalSendError`) as long as responses keep flowing. Deleting the
+        // `poll_read` progress bump regresses this: with no progress at all the
+        // producer would be declared dead after `DEAD_TICKS` ticks.
+        let (subject, fillers, driver, mut resp_tx) = spawn_blocked_producer().await;
+
+        for _ in 0..10 {
+            resp_tx.try_send(Ok(Value::Okay)).expect("inject response");
+            settle().await; // Forward drains it -> poll_read progress bump
+            tokio::time::advance(Duration::from_millis(100)).await; // one liveness tick (sees progress)
+            settle().await;
+        }
+
+        assert!(
+            !subject.is_finished(),
+            "a producer must stay alive while poll_read keeps recording progress; \
+             it resolved early (likely FatalSendError) — is the poll_read liveness \
+             bump still present?"
+        );
+
+        subject.abort();
+        for f in fillers {
+            f.abort();
+        }
+        driver.abort();
     }
 }

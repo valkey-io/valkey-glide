@@ -61,6 +61,22 @@ type ServerManagementClusterCommands interface {
 
 	ConfigRewriteWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
 
+	MemoryDoctor(ctx context.Context) (models.ClusterValue[string], error)
+
+	MemoryDoctorWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	MemoryMallocStats(ctx context.Context) (models.ClusterValue[string], error)
+
+	MemoryMallocStatsWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	MemoryPurge(ctx context.Context) (string, error)
+
+	MemoryPurgeWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
+
+	MemoryStats(ctx context.Context) (models.ClusterValue[map[string]any], error)
+
+	MemoryStatsWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[map[string]any], error)
+
 	AclCat(ctx context.Context) ([]string, error)
 
 	AclCatWithCategory(ctx context.Context, category string) ([]string, error)

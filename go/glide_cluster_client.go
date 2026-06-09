@@ -1035,7 +1035,7 @@ func (client *ClusterClient) ConfigResetStat(ctx context.Context) (string, error
 	return handleOkResponse(response)
 }
 
-// LatencyHistory returns the latency spike time series for the specified event.
+// Returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
@@ -1071,7 +1071,7 @@ func (client *ClusterClient) LatencyHistory(
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyHistory returns the latency spike time series for the specified event.
+// Returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
@@ -1113,7 +1113,7 @@ func (client *ClusterClient) LatencyHistoryWithOptions(
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyLatest reports the latest latency events logged.
+// Reports the latest latency events logged.
 //
 // See [valkey.io] for details.
 //
@@ -1147,7 +1147,7 @@ func (client *ClusterClient) LatencyLatest(
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyLatest reports the latest latency events logged.
+// Reports the latest latency events logged.
 //
 // See [valkey.io] for details.
 //
@@ -1187,7 +1187,7 @@ func (client *ClusterClient) LatencyLatestWithOptions(
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyReset resets the latency time series for the specified events
+// Resets the latency time series for the specified events
 // If no events are specified, all events are reset.
 //
 // See [valkey.io] for details.
@@ -1210,7 +1210,7 @@ func (client *ClusterClient) LatencyReset(ctx context.Context, events ...string)
 	return handleIntResponse(response)
 }
 
-// LatencyReset resets the latency time series for the specified events
+// Resets the latency time series for the specified events
 // If no events are specified, all events are reset.
 //
 // See [valkey.io] for details.
@@ -1263,6 +1263,267 @@ func (client *ClusterClient) ConfigResetStatWithOptions(ctx context.Context, opt
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
+}
+
+// Provides memory usage diagnosis report.
+// The command returns a detailed analysis of memory consumption patterns in the server.
+// Routes to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage analysis report(s).
+//	When multiple nodes are queried, returns a map of node addresses to their reports.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (client *ClusterClient) MemoryDoctor(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.MemoryDoctor, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringToStringMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterMultiValue[string](data), nil
+}
+
+// Provides memory usage diagnosis report with routing configuration.
+// The command returns a detailed analysis of memory consumption patterns in the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage analysis report(s).
+//	Returns a single value when routing to one node, or a map when routing to multiple nodes.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (client *ClusterClient) MemoryDoctorWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	if opts.Route == nil {
+		return client.MemoryDoctor(ctx)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryDoctor, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+
+	if opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Returns memory allocator internal statistics.
+// The output of this command is specific to the allocator being used.
+// Routes to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A ClusterValue containing memory allocator statistics.
+//	When multiple nodes are queried, returns a map of node addresses to their statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (client *ClusterClient) MemoryMallocStats(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.MemoryMallocStats, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringToStringMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterMultiValue[string](data), nil
+}
+
+// Returns memory allocator internal statistics with routing configuration.
+// The output of this command is specific to the allocator being used.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A ClusterValue containing memory allocator statistics.
+//	Returns a single value when routing to one node, or a map when routing to multiple nodes.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (client *ClusterClient) MemoryMallocStatsWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	if opts.Route == nil {
+		return client.MemoryMallocStats(ctx)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryMallocStats, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+
+	if opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Attempts to purge dirty pages for reclamation by the allocator.
+// This command can help reduce memory fragmentation.
+// The command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	OK to confirm that the purge operation was executed.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (client *ClusterClient) MemoryPurge(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryPurge, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Attempts to purge dirty pages for reclamation by the allocator.
+// This command can help reduce memory fragmentation.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK to confirm that the purge operation was executed.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (client *ClusterClient) MemoryPurgeWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryPurge, []string{}, opts.Route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Returns memory usage statistics for the server.
+// Routes to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage statistics.
+//	When multiple nodes are queried, returns a map of node addresses to their stats maps.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (client *ClusterClient) MemoryStats(ctx context.Context) (models.ClusterValue[map[string]any], error) {
+	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+	data, err := handleStringToStringAnyMapMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+	return models.CreateClusterMultiValue[map[string]any](data), nil
+}
+
+// Returns memory usage statistics for the server with routing configuration.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage statistics.
+//	Returns a single stats map when routing to one node, or a map of nodes when routing to multiple.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (client *ClusterClient) MemoryStatsWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[map[string]any], error) {
+	if opts.Route == nil {
+		return client.MemoryStats(ctx)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryStats, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+
+	if opts.Route.IsMultiNode() {
+		data, err := handleStringToStringAnyMapMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[map[string]any](), err
+		}
+		return models.CreateClusterMultiValue[map[string]any](data), nil
+	}
+
+	data, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+	return models.CreateClusterSingleValue[map[string]any](data), nil
 }
 
 // Sets configuration parameters to the specified values.
