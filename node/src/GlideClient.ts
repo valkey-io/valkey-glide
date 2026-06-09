@@ -1125,7 +1125,8 @@ export class GlideClient extends BaseClient {
 
     /**
      * Atomically transfers the specified keys from the current Valkey instance
-     * to a destination Valkey instance. On success, keys are deleted from the source.
+     * to a destination Valkey instance. On success, keys are deleted from the source
+     * unless `copy` is set to `true` in options.
      *
      * Note: Multi-key `MIGRATE` is only supported on standalone clients.
      *

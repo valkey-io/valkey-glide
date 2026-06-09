@@ -2496,6 +2496,12 @@ export class BaseClient {
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
      * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
      * ```
+     * @example
+     * ```typescript
+     * // Migrate with copy (keep source key) and replace (overwrite destination)
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // Output: "OK" - "mykey" was copied to the destination instance.
+     * ```
      */
     public async migrate(
         host: string,

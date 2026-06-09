@@ -3437,25 +3437,25 @@ export interface MigrateOptions {
 }
 
 /** @internal */
-function buildMigrateOptionsArgs(
-    args: GlideString[],
-    options: MigrateOptions,
-): void {
+function buildMigrateOptionsArgs(options: MigrateOptions): GlideString[] {
     if (options.username !== undefined && options.password === undefined) {
         throw new Error(
             "MigrateOptions: 'username' requires 'password' to be set",
         );
     }
 
-    if (options.copy) args.push("COPY");
+    const optArgs: GlideString[] = [];
+    if (options.copy) optArgs.push("COPY");
 
-    if (options.replace) args.push("REPLACE");
+    if (options.replace) optArgs.push("REPLACE");
 
     if (options.username !== undefined && options.password !== undefined) {
-        args.push("AUTH2", options.username, options.password);
+        optArgs.push("AUTH2", options.username, options.password);
     } else if (options.password !== undefined) {
-        args.push("AUTH", options.password);
+        optArgs.push("AUTH", options.password);
     }
+
+    return optArgs;
 }
 
 export function createMigrate(
@@ -3474,7 +3474,7 @@ export function createMigrate(
         timeout.toString(),
     ];
 
-    if (options) buildMigrateOptionsArgs(args, options);
+    if (options) args.push(...buildMigrateOptionsArgs(options));
 
     return createCommand(RequestType.Migrate, args);
 }
@@ -3500,7 +3500,7 @@ export function createMigrateKeys(
         timeout.toString(),
     ];
 
-    if (options) buildMigrateOptionsArgs(args, options);
+    if (options) args.push(...buildMigrateOptionsArgs(options));
 
     args.push("KEYS", ...keys);
     return createCommand(RequestType.Migrate, args);
