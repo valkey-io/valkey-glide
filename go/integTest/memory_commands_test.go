@@ -4,6 +4,7 @@ package integTest
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/stretchr/testify/assert"
@@ -146,7 +147,7 @@ func (suite *GlideTestSuite) TestMemoryStats_StandaloneWithDataOperations() {
 	assert.NoError(t, err)
 
 	for i := 0; i < 100; i++ {
-		key := "memory_test_key_" + string(rune(i))
+		key := fmt.Sprintf("memory_test_key_%d", i)
 		value := strings.Repeat("x", 1000)
 		_, err := client.Set(context.Background(), key, value)
 		assert.NoError(t, err)
