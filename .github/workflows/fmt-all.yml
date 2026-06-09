@@ -32,6 +32,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/python.yml
         with:
+            full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
         secrets: inherit
@@ -40,6 +41,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/node.yml
         with:
+            full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
         secrets: inherit
@@ -48,6 +50,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/go.yml
         with:
+            full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
         secrets: inherit
@@ -56,6 +59,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/java.yml
         with:
+            full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
         secrets: inherit
@@ -64,6 +68,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/java.yml
         with:
+            full-matrix: true
             windows-only: true
         secrets: inherit
 
@@ -71,6 +76,7 @@ jobs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/rust.yml
         with:
+            full-matrix: true
             run-with-macos: ${{ inputs.run-with-macos }}
             use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
         secrets: inherit

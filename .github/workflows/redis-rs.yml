@@ -55,7 +55,7 @@ jobs:
     redis-rs-CI:
         needs: [approve-self-hosted]
         if: always() && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
-        runs-on: ${{ inputs.use-self-hosted-linux && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-latest' }}
+        runs-on: ${{ (inputs.use-self-hosted-linux || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')) && fromJSON('["self-hosted","Linux","x64","ephemeral"]') || 'ubuntu-latest' }}
 
         steps:
             - name: Checkout repository
