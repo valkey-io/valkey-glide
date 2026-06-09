@@ -2118,6 +2118,7 @@ public class CommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> regularClient.failover().get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+        // Error message differs between Redis ("no replica") and Valkey ("FAILOVER requires")
         assertTrue(
                 executionException.getCause().getMessage().contains("no replica")
                         || executionException.getCause().getMessage().contains("FAILOVER requires"),
@@ -2133,6 +2134,7 @@ public class CommandTests {
                 assertThrows(
                         ExecutionException.class, () -> regularClient.failover(FailoverOptions.abort()).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+        // Error message differs between Redis ("No failover") and Valkey ("nothing to abort")
         assertTrue(
                 executionException.getCause().getMessage().contains("No failover")
                         || executionException.getCause().getMessage().contains("nothing to abort"),
