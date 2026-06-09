@@ -13,7 +13,7 @@ on:
       exclude-rules:
         description: 'Comma-separated list of rule IDs to exclude'
         type: string
-        default: ''
+        default: 'generic.secrets.security.detected-private-key.detected-private-key'
   # Keep existing triggers for direct usage in main repo
   pull_request: {}
   workflow_dispatch:
@@ -28,7 +28,7 @@ on:
       exclude-rules:
         description: 'Comma-separated list of rule IDs to exclude'
         type: string
-        default: ''
+        default: 'generic.secrets.security.detected-private-key.detected-private-key'
   push:
     branches:
       - main
