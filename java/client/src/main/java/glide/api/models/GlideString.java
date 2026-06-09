@@ -2,11 +2,7 @@
 package glide.api.models;
 
 import glide.utils.Java8Utils;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CoderResult;
-import java.nio.charset.CodingErrorAction;
+import glide.utils.Utf8Validator;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -122,7 +118,7 @@ public class GlideString implements Comparable<GlideString> {
                     return false;
                 } else {
                     try {
-                        if (isValidUtf8(bytes)) {
+                        if (Utf8Validator.isWellFormed(bytes)) {
                             string = new String(bytes, StandardCharsets.UTF_8);
                             return true;
                         }
@@ -133,31 +129,6 @@ public class GlideString implements Comparable<GlideString> {
                 }
             }
         }
-    }
-
-    /** Fast check for valid UTF-8 utilizing a chunked CharsetDecoder. */
-    private static boolean isValidUtf8(byte[] bytes) {
-        CharsetDecoder decoder =
-                StandardCharsets.UTF_8
-                        .newDecoder()
-                        .onMalformedInput(CodingErrorAction.REPORT)
-                        .onUnmappableCharacter(CodingErrorAction.REPORT);
-        ByteBuffer in = ByteBuffer.wrap(bytes);
-        CharBuffer out = CharBuffer.allocate(Math.max(1, Math.min(bytes.length, 4096)));
-
-        while (true) {
-            CoderResult result = decoder.decode(in, out, true);
-            if (result.isError()) {
-                return false;
-            }
-            if (result.isUnderflow()) {
-                break;
-            }
-            out.clear();
-        }
-
-        out.clear();
-        return !decoder.flush(out).isError();
     }
 
     @Override
