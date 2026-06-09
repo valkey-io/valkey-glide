@@ -2161,12 +2161,12 @@ public class CommandTests {
                 String result = client.failover(FailoverOptions.timeout(10000)).get();
                 assertEquals(OK, result);
 
-                // Wait for role to change to slave (failover in progress)
-                Thread.sleep(2000);
-                info = client.info(new Section[] {Section.REPLICATION}).get();
-                assertTrue(
-                        info.contains("role:slave") || info.contains("role:master"),
-                        "Role should transition after failover, got: " + info);
+                // Wait for role to change to slave after failover
+                waitForCondition(
+                        () -> client.info(new Section[] {Section.REPLICATION})
+                                .get()
+                                .contains("role:slave"),
+                        "Expected role to change to slave after failover");
             }
         }
     }
