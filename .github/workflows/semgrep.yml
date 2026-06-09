@@ -9,7 +9,11 @@ on:
       config:
         description: 'Semgrep config to use'
         type: string
-        default: 'p/default'
+        default: 'auto'
+      exclude-rules:
+        description: 'Comma-separated list of rule IDs to exclude'
+        type: string
+        default: ''
   # Keep existing triggers for direct usage in main repo
   pull_request: {}
   workflow_dispatch:
@@ -20,7 +24,11 @@ on:
       config:
         description: 'Semgrep config to use'
         type: string
-        default: 'p/default'
+        default: 'auto'
+      exclude-rules:
+        description: 'Comma-separated list of rule IDs to exclude'
+        type: string
+        default: ''
   push:
     branches:
       - main
@@ -47,4 +55,13 @@ jobs:
           submodules: recursive
 
       - name: Run Semgrep
-        run: semgrep scan --config ${{ inputs.config || 'p/default' }} --error
+        run: |
+          EXCLUDE_ARGS=""
+          if [[ -n "${{ inputs.exclude-rules || '' }}" ]]; then
+            # Convert comma-separated list to --exclude-rule flags
+            IFS=',' read -ra RULES <<< "${{ inputs.exclude-rules }}"
+            for rule in "${RULES[@]}"; do
+              EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude-rule $rule"
+            done
+          fi
+          semgrep ci --config ${{ inputs.config || 'auto' }} --no-suppress-errors $EXCLUDE_ARGS
