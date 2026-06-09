@@ -1,34 +1,34 @@
-name: 'Install Zig'
-description: 'Install Zig compiler and cargo-zigbuild for cross-compilation'
+name: "Install Zig"
+description: "Install Zig compiler and cargo-zigbuild for cross-compilation"
 
 inputs:
-  target:
-    description: 'Rust target triple for cargo-zigbuild (e.g., x86_64-unknown-linux-gnu)'
-    required: false
-    default: 'x86_64-unknown-linux-gnu'
+    target:
+        description: "Rust target triple for cargo-zigbuild (e.g., x86_64-unknown-linux-gnu)"
+        required: false
+        default: "x86_64-unknown-linux-gnu"
 
 runs:
-  using: 'composite'
-  steps:
-    - name: Install Zig via pip
-      shell: bash
-      env:
-        TARGET: ${{ inputs.target }}
-      run: |
-        # Install zig via pip - works across all platforms including containers
-        if [[ -f /etc/os-release ]] && grep -q "Amazon Linux" /etc/os-release; then
-          yum install -y python3-pip
-          pip3 install ziglang
-        elif [[ -f /etc/os-release ]] && grep -q "Alpine" /etc/os-release; then
-          apk add py3-pip
-          pip3 install ziglang --break-system-packages
-        else
-          sudo apt install -y python3-pip || true
-          pip3 install ziglang --break-system-packages || pip3 install ziglang
-        fi
+    using: "composite"
+    steps:
+        - name: Install Zig via pip
+          shell: bash
+          env:
+              TARGET: ${{ inputs.target }}
+          run: |
+              # Install zig via pip - works across all platforms including containers
+              if [[ -f /etc/os-release ]] && grep -q "Amazon Linux" /etc/os-release; then
+                yum install -y python3-pip
+                pip3 install ziglang
+              elif [[ -f /etc/os-release ]] && grep -q "Alpine" /etc/os-release; then
+                apk add py3-pip
+                pip3 install ziglang --break-system-packages
+              else
+                sudo apt install -y python3-pip || true
+                pip3 install ziglang --break-system-packages || pip3 install ziglang
+              fi
 
-        # Install cargo-zigbuild for cross-compilation
-        cargo install --locked cargo-zigbuild
+              # Install cargo-zigbuild for cross-compilation
+              cargo install --locked cargo-zigbuild
 
-        # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
-        echo "CARGO_ZIGBUILD_TARGET=$TARGET" >> $GITHUB_ENV
+              # Set environment variable to prevent cargo-zigbuild from auto-detecting malformed targets
+              echo "CARGO_ZIGBUILD_TARGET=$TARGET" >> $GITHUB_ENV

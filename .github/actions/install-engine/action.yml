@@ -1,118 +1,118 @@
-name: 'Install Valkey Engine'
-description: 'Install and cache Valkey server for testing'
+name: "Install Valkey Engine"
+description: "Install and cache Valkey server for testing"
 
 inputs:
-  engine-version:
-    description: 'Valkey version to install (e.g., 9.0, 8.1)'
-    required: true
-  target:
-    description: 'Rust target triple for platform-specific builds (e.g., x86_64-unknown-linux-gnu)'
-    required: true
-    default: 'x86_64-unknown-linux-gnu'
+    engine-version:
+        description: "Valkey version to install (e.g., 9.0, 8.1)"
+        required: true
+    target:
+        description: "Rust target triple for platform-specific builds (e.g., x86_64-unknown-linux-gnu)"
+        required: true
+        default: "x86_64-unknown-linux-gnu"
 
 env:
-  CARGO_TERM_COLOR: always
+    CARGO_TERM_COLOR: always
 
 runs:
-  using: 'composite'
-  steps:
-    - name: Setup Environment Variables
-      shell: bash
-      env:
-        ENGINE_VERSION: ${{ inputs.engine-version }}
-      run: |
-        echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
+    using: "composite"
+    steps:
+        - name: Setup Environment Variables
+          shell: bash
+          env:
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              echo "ENGINE_VERSION=$ENGINE_VERSION" >> $GITHUB_ENV
 
-    - name: Prepare Valkey sources
-      id: prepare-sources
-      shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
-      env:
-        WSLENV: ENGINE_VERSION/u:GITHUB_OUTPUT/p
-      run: |
-        echo "Cloning and checking out Valkey $ENGINE_VERSION"
-        if [[ -d valkey ]]; then
-          echo "Removing existing valkey directory..."
-          rm -fR valkey
-        fi
-        git clone https://github.com/valkey-io/valkey.git
-        cd valkey/src
-        git checkout $ENGINE_VERSION
-        SOURCES_VERSION=$(grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]') || :
-        if [[ -z $SOURCES_VERSION ]]; then
-          SOURCES_VERSION=$(grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]')
-        fi
-        echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_OUTPUT
+        - name: Prepare Valkey sources
+          id: prepare-sources
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: ENGINE_VERSION/u:GITHUB_OUTPUT/p
+          run: |
+              echo "Cloning and checking out Valkey $ENGINE_VERSION"
+              if [[ -d valkey ]]; then
+                echo "Removing existing valkey directory..."
+                rm -fR valkey
+              fi
+              git clone https://github.com/valkey-io/valkey.git
+              cd valkey/src
+              git checkout $ENGINE_VERSION
+              SOURCES_VERSION=$(grep ' VALKEY_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]') || :
+              if [[ -z $SOURCES_VERSION ]]; then
+                SOURCES_VERSION=$(grep ' REDIS_VERSION ' version.h | grep -o -E '[0-9]+\.[0-9]\.[0-9]')
+              fi
+              echo "SOURCES_VERSION=$SOURCES_VERSION" >> $GITHUB_OUTPUT
 
-    - name: Restore from cache
-      id: cache-valkey
-      uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
-      with:
-        path: |
-          valkey/src/valkey-server
-          valkey/src/valkey-cli
-          valkey/src/redis-server
-          valkey/src/redis-cli
-        key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}
+        - name: Restore from cache
+          id: cache-valkey
+          uses: actions/cache@0c907a75c2c80ebcb7f088228285e798b750cf8f # v4.2.1
+          with:
+              path: |
+                  valkey/src/valkey-server
+                  valkey/src/valkey-cli
+                  valkey/src/redis-server
+                  valkey/src/redis-cli
+              key: valkey-${{ steps.prepare-sources.outputs.SOURCES_VERSION }}-${{ inputs.target }}
 
-    - name: Install cached engine
-      if: steps.cache-valkey.outputs.cache-hit == 'true'
-      shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
-      run: |
-        cd valkey/src
-        if command -v sudo &> /dev/null; then
-          echo "sudo command exists"
-          SUDO=sudo
-        fi
-        # Remove existing binaries to prevent version mismatches on persistent self-hosted runners
-        $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
-        # Copy files individually, as valkey and redis usually won't exist at the same time
-        for file in valkey-server valkey-cli redis-server redis-cli; do
-          if [[ -f $file ]]; then
-            $SUDO cp $file /usr/local/bin/
-          fi
-        done
-        if [[ ! -e /usr/local/bin/redis-server ]]; then
-          $SUDO cp valkey-server /usr/local/bin/redis-server
-        fi
-        echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
+        - name: Install cached engine
+          if: steps.cache-valkey.outputs.cache-hit == 'true'
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          run: |
+              cd valkey/src
+              if command -v sudo &> /dev/null; then
+                echo "sudo command exists"
+                SUDO=sudo
+              fi
+              # Remove existing binaries to prevent version mismatches on persistent self-hosted runners
+              $SUDO rm -f /usr/local/bin/valkey-server /usr/local/bin/valkey-cli /usr/local/bin/redis-server /usr/local/bin/redis-cli
+              # Copy files individually, as valkey and redis usually won't exist at the same time
+              for file in valkey-server valkey-cli redis-server redis-cli; do
+                if [[ -f $file ]]; then
+                  $SUDO cp $file /usr/local/bin/
+                fi
+              done
+              if [[ ! -e /usr/local/bin/redis-server ]]; then
+                $SUDO cp valkey-server /usr/local/bin/redis-server
+              fi
+              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
-    - name: Build and install engine
-      if: steps.cache-valkey.outputs.cache-hit != 'true'
-      shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
-      run: |
-        cd valkey
-        make BUILD_TLS=yes -j4
-        if command -v sudo &> /dev/null; then
-          echo "sudo command exists"
-          sudo make install
-        else
-          echo "sudo command does not exist"
-          make install
-        fi
-        echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
+        - name: Build and install engine
+          if: steps.cache-valkey.outputs.cache-hit != 'true'
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          run: |
+              cd valkey
+              make BUILD_TLS=yes -j4
+              if command -v sudo &> /dev/null; then
+                echo "sudo command exists"
+                sudo make install
+              else
+                echo "sudo command does not exist"
+                make install
+              fi
+              echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
-    - name: WSL configuration (Windows)
-      if: contains(inputs.target, 'windows')
-      shell: wsl-bash {0}
-      run: |
-        echo "=== Configuring WSL ==="
-        # Fix system configuration for cluster mode
-        echo 'Configuring system for cluster mode...'
-        sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
-        sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
-        echo 'WSL Configuration complete'
+        - name: WSL configuration (Windows)
+          if: contains(inputs.target, 'windows')
+          shell: wsl-bash {0}
+          run: |
+              echo "=== Configuring WSL ==="
+              # Fix system configuration for cluster mode
+              echo 'Configuring system for cluster mode...'
+              sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
+              sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
+              echo 'WSL Configuration complete'
 
-    - name: Verify Valkey installation and symlinks
-      if: "!contains(inputs.engine-version, '-rc')"
-      shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
-      env:
-        WSLENV: ENGINE_VERSION/u
-      run: |
-        # Verify the engine is properly installed with the expected version
-        INSTALLED_VER=$(/usr/local/bin/redis-server -v) || INSTALLED_VER=$(/usr/local/bin/valkey-server -v)
-        if [[ $INSTALLED_VER != *"${ENGINE_VERSION}"* ]]; then
-          echo "Wrong version has been installed. Expected: $ENGINE_VERSION, Installed: $INSTALLED_VER"
-          exit 1
-        else
-          echo "Successfully installed the server: $INSTALLED_VER"
-        fi
+        - name: Verify Valkey installation and symlinks
+          if: "!contains(inputs.engine-version, '-rc')"
+          shell: ${{ contains(inputs.target, 'windows') && 'wsl-bash {0}' || 'bash' }}
+          env:
+              WSLENV: ENGINE_VERSION/u
+          run: |
+              # Verify the engine is properly installed with the expected version
+              INSTALLED_VER=$(/usr/local/bin/redis-server -v) || INSTALLED_VER=$(/usr/local/bin/valkey-server -v)
+              if [[ $INSTALLED_VER != *"${ENGINE_VERSION}"* ]]; then
+                echo "Wrong version has been installed. Expected: $ENGINE_VERSION, Installed: $INSTALLED_VER"
+                exit 1
+              else
+                echo "Successfully installed the server: $INSTALLED_VER"
+              fi

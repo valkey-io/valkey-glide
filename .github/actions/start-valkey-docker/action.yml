@@ -1,197 +1,197 @@
-name: 'Start Valkey Docker Servers'
+name: "Start Valkey Docker Servers"
 description: >
-  Start standalone and cluster Valkey servers with modules (Search, JSON,
-  Bloom, LDAP) using Docker containers. Uses configurable ports for both
-  standalone and cluster servers to avoid conflicts between repositories.
+    Start standalone and cluster Valkey servers with modules (Search, JSON,
+    Bloom, LDAP) using Docker containers. Uses configurable ports for both
+    standalone and cluster servers to avoid conflicts between repositories.
 
-  NOTE: This action requires Linux. It uses --network host which is not
-  supported on macOS or Windows Docker.
+    NOTE: This action requires Linux. It uses --network host which is not
+    supported on macOS or Windows Docker.
 
 inputs:
-  engine-version:
-    description: 'Valkey engine version (e.g., 9.0, 9.1). Used to configure version-specific cluster settings.'
-    required: false
-    default: '9.0'
-  standalone-port:
-    description: 'Port for standalone module server'
-    required: false
-    default: '6389'
-  cluster-port-start:
-    description: 'Starting port for cluster nodes (uses 6 consecutive ports)'
-    required: false
-    default: '8001'
+    engine-version:
+        description: "Valkey engine version (e.g., 9.0, 9.1). Used to configure version-specific cluster settings."
+        required: false
+        default: "9.0"
+    standalone-port:
+        description: "Port for standalone module server"
+        required: false
+        default: "6389"
+    cluster-port-start:
+        description: "Starting port for cluster nodes (uses 6 consecutive ports)"
+        required: false
+        default: "8001"
 
 outputs:
-  standalone-endpoint:
-    description: 'Standalone server endpoint'
-    value: ${{ steps.endpoints.outputs.standalone }}
-  cluster-endpoints:
-    description: 'Comma-separated cluster node endpoints'
-    value: ${{ steps.endpoints.outputs.cluster }}
+    standalone-endpoint:
+        description: "Standalone server endpoint"
+        value: ${{ steps.endpoints.outputs.standalone }}
+    cluster-endpoints:
+        description: "Comma-separated cluster node endpoints"
+        value: ${{ steps.endpoints.outputs.cluster }}
 
 runs:
-  using: 'composite'
-  steps:
-    - name: Verify Linux platform
-      if: runner.os != 'Linux'
-      shell: bash
-      run: |
-        echo "::error::start-valkey-docker requires Linux (Docker host networking is not supported on ${{ runner.os }})"
-        exit 1
-
-    - name: Determine Docker image
-      id: docker-image
-      shell: bash
-      run: |
-        IMAGE="valkey/valkey-bundle:9.1"
-        echo "image=$IMAGE" >> $GITHUB_OUTPUT
-        echo "Using Docker image: $IMAGE"
-
-    - name: Pull Docker image
-      shell: bash
-      env:
-        IMAGE: ${{ steps.docker-image.outputs.image }}
-      run: |
-        echo "Pulling $IMAGE..."
-        docker pull "$IMAGE"
-
-    - name: Start standalone server with modules
-      shell: bash
-      env:
-        IMAGE: ${{ steps.docker-image.outputs.image }}
-        STANDALONE_PORT: ${{ inputs.standalone-port }}
-      run: |
-        echo "=== Starting standalone Valkey server with modules on port $STANDALONE_PORT ==="
-
-        docker run -d --name valkey-standalone --network host \
-          "$IMAGE" valkey-server \
-          --port "$STANDALONE_PORT" \
-          --enable-debug-command yes \
-          --protected-mode no \
-          --save ""
-
-    - name: Start cluster nodes
-      shell: bash
-      env:
-        IMAGE: ${{ steps.docker-image.outputs.image }}
-        BASE_PORT: ${{ inputs.cluster-port-start }}
-        ENGINE_VERSION: ${{ inputs.engine-version }}
-      run: |
-        echo "=== Starting Valkey cluster with modules on ports $BASE_PORT-$((BASE_PORT + 5)) ==="
-
-        # Determine version-specific cluster arguments
-        MAJOR=$(echo "$ENGINE_VERSION" | cut -d. -f1)
-        EXTRA_ARGS=""
-        if [ "$MAJOR" -ge 9 ]; then
-          EXTRA_ARGS="--cluster-databases 16"
-        fi
-
-        for i in {0..5}; do
-          PORT=$((BASE_PORT + i))
-          docker run -d --name "valkey-cluster-$i" --network host \
-            "$IMAGE" valkey-server \
-            --port "$PORT" \
-            --cluster-enabled yes \
-            --cluster-config-file "nodes-${PORT}.conf" \
-            --cluster-node-timeout 5000 \
-            --appendonly no \
-            --protected-mode no \
-            --enable-debug-command yes \
-            --save "" \
-            $EXTRA_ARGS
-        done
-
-    - name: Wait for servers
-      shell: bash
-      env:
-        STANDALONE_PORT: ${{ inputs.standalone-port }}
-        BASE_PORT: ${{ inputs.cluster-port-start }}
-      run: |
-        TIMEOUT=15
-        START=$(date +%s)
-
-        # Wait for standalone
-        echo "Waiting for standalone server on port $STANDALONE_PORT..."
-        until docker exec valkey-standalone valkey-cli -p "$STANDALONE_PORT" PING 2>/dev/null | grep -q PONG; do
-          if [[ $(($(date +%s) - START)) -gt $TIMEOUT ]]; then
-            echo "::error::Standalone server failed to start within ${TIMEOUT}s"
-            echo "::group::Container Logs (valkey-standalone)"
-            docker logs valkey-standalone 2>&1 || true
-            echo "::endgroup::"
-            exit 1
-          fi
-          sleep 1
-        done
-        echo "Standalone server ready on port $STANDALONE_PORT"
-
-        # Wait for cluster nodes
-        for i in {0..5}; do
-          PORT=$((BASE_PORT + i))
-          echo "Waiting for cluster node $i on port $PORT..."
-          until docker exec "valkey-cluster-$i" valkey-cli -p "$PORT" PING 2>/dev/null | grep -q PONG; do
-            if [[ $(($(date +%s) - START)) -gt $TIMEOUT ]]; then
-              echo "::error::Cluster node $i (port $PORT) failed to start within ${TIMEOUT}s"
-              echo "::group::Container Logs (valkey-cluster-$i)"
-              docker logs "valkey-cluster-$i" 2>&1 || true
-              echo "::endgroup::"
+    using: "composite"
+    steps:
+        - name: Verify Linux platform
+          if: runner.os != 'Linux'
+          shell: bash
+          run: |
+              echo "::error::start-valkey-docker requires Linux (Docker host networking is not supported on ${{ runner.os }})"
               exit 1
-            fi
-            sleep 1
-          done
-          echo "Cluster node $i ready on port $PORT"
-        done
 
-    - name: Form cluster
-      shell: bash
-      env:
-        BASE_PORT: ${{ inputs.cluster-port-start }}
-      run: |
-        echo "Forming cluster..."
+        - name: Determine Docker image
+          id: docker-image
+          shell: bash
+          run: |
+              IMAGE="valkey/valkey-bundle:9.1"
+              echo "image=$IMAGE" >> $GITHUB_OUTPUT
+              echo "Using Docker image: $IMAGE"
 
-        # Build node list for cluster create
-        NODES=""
-        for i in {0..5}; do
-          NODES="$NODES 127.0.0.1:$((BASE_PORT + i))"
-        done
+        - name: Pull Docker image
+          shell: bash
+          env:
+              IMAGE: ${{ steps.docker-image.outputs.image }}
+          run: |
+              echo "Pulling $IMAGE..."
+              docker pull "$IMAGE"
 
-        # Form the cluster (3 primaries, 3 replicas)
-        docker exec valkey-cluster-0 valkey-cli --cluster create $NODES \
-          --cluster-replicas 1 \
-          --cluster-yes
+        - name: Start standalone server with modules
+          shell: bash
+          env:
+              IMAGE: ${{ steps.docker-image.outputs.image }}
+              STANDALONE_PORT: ${{ inputs.standalone-port }}
+          run: |
+              echo "=== Starting standalone Valkey server with modules on port $STANDALONE_PORT ==="
 
-        echo "Cluster formation complete"
+              docker run -d --name valkey-standalone --network host \
+                "$IMAGE" valkey-server \
+                --port "$STANDALONE_PORT" \
+                --enable-debug-command yes \
+                --protected-mode no \
+                --save ""
 
-    - name: Set endpoint outputs
-      id: endpoints
-      shell: bash
-      env:
-        STANDALONE_PORT: ${{ inputs.standalone-port }}
-        BASE_PORT: ${{ inputs.cluster-port-start }}
-      run: |
-        echo "standalone=localhost:$STANDALONE_PORT" >> $GITHUB_OUTPUT
+        - name: Start cluster nodes
+          shell: bash
+          env:
+              IMAGE: ${{ steps.docker-image.outputs.image }}
+              BASE_PORT: ${{ inputs.cluster-port-start }}
+              ENGINE_VERSION: ${{ inputs.engine-version }}
+          run: |
+              echo "=== Starting Valkey cluster with modules on ports $BASE_PORT-$((BASE_PORT + 5)) ==="
 
-        ENDPOINTS=""
-        for i in {0..5}; do
-          [[ -n "$ENDPOINTS" ]] && ENDPOINTS="$ENDPOINTS,"
-          ENDPOINTS="${ENDPOINTS}localhost:$((BASE_PORT + i))"
-        done
-        echo "cluster=$ENDPOINTS" >> $GITHUB_OUTPUT
+              # Determine version-specific cluster arguments
+              MAJOR=$(echo "$ENGINE_VERSION" | cut -d. -f1)
+              EXTRA_ARGS=""
+              if [ "$MAJOR" -ge 9 ]; then
+                EXTRA_ARGS="--cluster-databases 16"
+              fi
 
-    - name: Export environment variables
-      shell: bash
-      env:
-        STANDALONE_PORT: ${{ inputs.standalone-port }}
-        BASE_PORT: ${{ inputs.cluster-port-start }}
-      run: |
-        echo "MODULES_STANDALONE_ENDPOINT=localhost:$STANDALONE_PORT" >> $GITHUB_ENV
+              for i in {0..5}; do
+                PORT=$((BASE_PORT + i))
+                docker run -d --name "valkey-cluster-$i" --network host \
+                  "$IMAGE" valkey-server \
+                  --port "$PORT" \
+                  --cluster-enabled yes \
+                  --cluster-config-file "nodes-${PORT}.conf" \
+                  --cluster-node-timeout 5000 \
+                  --appendonly no \
+                  --protected-mode no \
+                  --enable-debug-command yes \
+                  --save "" \
+                  $EXTRA_ARGS
+              done
 
-        ENDPOINTS=""
-        for i in {0..5}; do
-          [[ -n "$ENDPOINTS" ]] && ENDPOINTS="$ENDPOINTS,"
-          ENDPOINTS="${ENDPOINTS}localhost:$((BASE_PORT + i))"
-        done
-        echo "MODULES_CLUSTER_ENDPOINTS=$ENDPOINTS" >> $GITHUB_ENV
+        - name: Wait for servers
+          shell: bash
+          env:
+              STANDALONE_PORT: ${{ inputs.standalone-port }}
+              BASE_PORT: ${{ inputs.cluster-port-start }}
+          run: |
+              TIMEOUT=15
+              START=$(date +%s)
 
-        echo "Environment variables exported:"
-        echo "  MODULES_STANDALONE_ENDPOINT=localhost:$STANDALONE_PORT"
-        echo "  MODULES_CLUSTER_ENDPOINTS=$ENDPOINTS"
+              # Wait for standalone
+              echo "Waiting for standalone server on port $STANDALONE_PORT..."
+              until docker exec valkey-standalone valkey-cli -p "$STANDALONE_PORT" PING 2>/dev/null | grep -q PONG; do
+                if [[ $(($(date +%s) - START)) -gt $TIMEOUT ]]; then
+                  echo "::error::Standalone server failed to start within ${TIMEOUT}s"
+                  echo "::group::Container Logs (valkey-standalone)"
+                  docker logs valkey-standalone 2>&1 || true
+                  echo "::endgroup::"
+                  exit 1
+                fi
+                sleep 1
+              done
+              echo "Standalone server ready on port $STANDALONE_PORT"
+
+              # Wait for cluster nodes
+              for i in {0..5}; do
+                PORT=$((BASE_PORT + i))
+                echo "Waiting for cluster node $i on port $PORT..."
+                until docker exec "valkey-cluster-$i" valkey-cli -p "$PORT" PING 2>/dev/null | grep -q PONG; do
+                  if [[ $(($(date +%s) - START)) -gt $TIMEOUT ]]; then
+                    echo "::error::Cluster node $i (port $PORT) failed to start within ${TIMEOUT}s"
+                    echo "::group::Container Logs (valkey-cluster-$i)"
+                    docker logs "valkey-cluster-$i" 2>&1 || true
+                    echo "::endgroup::"
+                    exit 1
+                  fi
+                  sleep 1
+                done
+                echo "Cluster node $i ready on port $PORT"
+              done
+
+        - name: Form cluster
+          shell: bash
+          env:
+              BASE_PORT: ${{ inputs.cluster-port-start }}
+          run: |
+              echo "Forming cluster..."
+
+              # Build node list for cluster create
+              NODES=""
+              for i in {0..5}; do
+                NODES="$NODES 127.0.0.1:$((BASE_PORT + i))"
+              done
+
+              # Form the cluster (3 primaries, 3 replicas)
+              docker exec valkey-cluster-0 valkey-cli --cluster create $NODES \
+                --cluster-replicas 1 \
+                --cluster-yes
+
+              echo "Cluster formation complete"
+
+        - name: Set endpoint outputs
+          id: endpoints
+          shell: bash
+          env:
+              STANDALONE_PORT: ${{ inputs.standalone-port }}
+              BASE_PORT: ${{ inputs.cluster-port-start }}
+          run: |
+              echo "standalone=localhost:$STANDALONE_PORT" >> $GITHUB_OUTPUT
+
+              ENDPOINTS=""
+              for i in {0..5}; do
+                [[ -n "$ENDPOINTS" ]] && ENDPOINTS="$ENDPOINTS,"
+                ENDPOINTS="${ENDPOINTS}localhost:$((BASE_PORT + i))"
+              done
+              echo "cluster=$ENDPOINTS" >> $GITHUB_OUTPUT
+
+        - name: Export environment variables
+          shell: bash
+          env:
+              STANDALONE_PORT: ${{ inputs.standalone-port }}
+              BASE_PORT: ${{ inputs.cluster-port-start }}
+          run: |
+              echo "MODULES_STANDALONE_ENDPOINT=localhost:$STANDALONE_PORT" >> $GITHUB_ENV
+
+              ENDPOINTS=""
+              for i in {0..5}; do
+                [[ -n "$ENDPOINTS" ]] && ENDPOINTS="$ENDPOINTS,"
+                ENDPOINTS="${ENDPOINTS}localhost:$((BASE_PORT + i))"
+              done
+              echo "MODULES_CLUSTER_ENDPOINTS=$ENDPOINTS" >> $GITHUB_ENV
+
+              echo "Environment variables exported:"
+              echo "  MODULES_STANDALONE_ENDPOINT=localhost:$STANDALONE_PORT"
+              echo "  MODULES_CLUSTER_ENDPOINTS=$ENDPOINTS"
