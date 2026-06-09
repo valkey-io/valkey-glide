@@ -30,7 +30,11 @@ git submodule update --init --recursive
 
 ## Available Actions
 
-### install-shared-dependencies
+### install-shared-dependencies (Main Repo Only)
+
+> **Note:** This action is for **internal use in the main valkey-glide repository only**. It cannot be used directly from external repos via submodule because it internally references sibling actions with relative paths that won't resolve correctly from the caller's workspace.
+>
+> **For external repos:** Create your own local `install-shared-dependencies` wrapper that calls the individual shared actions. See [Creating a Local Wrapper for External Repos](#creating-a-local-wrapper-for-external-repos) below.
 
 Installs platform-specific dependencies for valkey-glide builds. This is the primary action for setting up build environments across different platforms.
 
@@ -54,44 +58,6 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 - **Alpine/MUSL:** Installs `protobuf-dev`, `musl-dev`, `make`, `gcc`, and Rust via `apk`
 - **Windows:** Sets up WSL with Ubuntu 22.04 and Python
 - **Windows ARM64:** Skips Valkey server installation (platform limitation)
-
-#### Example Usage
-
-```yaml
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
-        uses: ./valkey-glide/.github/actions/install-shared-dependencies
-        with:
-          os: ubuntu
-          engine-version: '9.0'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-```
-
-```yaml
-# Cross-compilation example
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies for cross-compilation
-        uses: ./valkey-glide/.github/actions/install-shared-dependencies
-        with:
-          os: ubuntu
-          target: aarch64-unknown-linux-gnu
-          engine-version: '9.0'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-```
 
 ---
 
@@ -423,7 +389,7 @@ When updating external actions, always update both the SHA and the version comme
 
 ## Complete Workflow Example
 
-Here's a complete example showing how a language repo workflow might use multiple shared actions:
+Here's a complete example showing how a language repo workflow might use shared actions. Note that `install-shared-dependencies` requires a local wrapper (see [Creating a Local Wrapper](#creating-a-local-wrapper-for-external-repos)), while individual actions can be called directly via submodule.
 
 ```yaml
 # .github/workflows/ci.yml in valkey-glide-csharp
@@ -447,12 +413,25 @@ jobs:
         with:
           submodules: recursive
 
+      # Option 1: Use local wrapper (requires creating .github/actions/install-shared-dependencies/)
       - name: Install shared dependencies
-        uses: ./valkey-glide/.github/actions/install-shared-dependencies
+        uses: ./.github/actions/install-shared-dependencies
         with:
           os: ${{ matrix.os == 'ubuntu-latest' && 'ubuntu' || matrix.os == 'macos-latest' && 'macos' || 'windows' }}
-          engine-version: '9.0'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          target: x86_64-unknown-linux-gnu
+          server-version: '9.0'
+
+      # Option 2: Call individual actions directly (no local wrapper needed)
+      # - name: Install Rust and protoc
+      #   uses: ./valkey-glide/.github/actions/install-rust-and-protoc
+      #   with:
+      #     target: x86_64-unknown-linux-gnu
+      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      #
+      # - name: Install Valkey engine
+      #   uses: ./valkey-glide/.github/actions/install-engine
+      #   with:
+      #     engine-version: '9.0'
 
       - name: Build
         run: dotnet build
@@ -467,11 +446,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install dependencies
-        uses: ./valkey-glide/.github/actions/install-shared-dependencies
+      - name: Install Rust and protoc
+        uses: ./valkey-glide/.github/actions/install-rust-and-protoc
         with:
-          os: ubuntu
+          target: x86_64-unknown-linux-gnu
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Valkey engine
+        uses: ./valkey-glide/.github/actions/install-engine
+        with:
+          engine-version: '9.0'
+          target: x86_64-unknown-linux-gnu
 
       - name: Start Valkey servers with modules
         uses: ./valkey-glide/.github/actions/start-valkey-docker
@@ -485,6 +470,113 @@ jobs:
           VALKEY_STANDALONE: ${{ env.MODULES_STANDALONE_ENDPOINT }}
           VALKEY_CLUSTER: ${{ env.MODULES_CLUSTER_ENDPOINTS }}
 ```
+
+---
+
+## Creating a Local Wrapper for External Repos
+
+Since `install-shared-dependencies` cannot be called directly via submodule (due to nested action path resolution), external repos should create their own local wrapper that delegates to the individual shared actions.
+
+### Example: Local install-shared-dependencies Wrapper
+
+Create `.github/actions/install-shared-dependencies/action.yml` in your language repo:
+
+```yaml
+name: Install shared software dependencies
+description: "Install shared software dependencies using valkey-glide submodule actions."
+
+inputs:
+    os:
+        description: "The current operating system (see 'os-matrix.json')"
+        required: true
+    target:
+        description: "Specified target for rust toolchain (see 'os-matrix.json')"
+        required: true
+    server-version:
+        description: "Server version to install. Skips server installation if not specified."
+        required: false
+    github-token:
+        description: "GitHub token for protoc installation"
+        required: false
+        default: ${{ github.token }}
+
+runs:
+    using: "composite"
+    steps:
+        # Platform-specific OS dependencies (inline - these are simple shell commands)
+        - name: Install software dependencies for macOS
+          shell: bash
+          if: "${{ inputs.os == 'macos' }}"
+          run: |
+              brew update
+              brew install openssl coreutils
+
+        - name: Install software dependencies for Ubuntu GNU
+          shell: bash
+          if: "${{ inputs.os == 'ubuntu' }}"
+          run: |
+              sudo apt update -y
+              sudo apt install -y git gcc pkg-config openssl libssl-dev
+
+        - name: Install software dependencies for Amazon-Linux
+          shell: bash
+          if: "${{ inputs.os == 'amazon-linux' }}"
+          run: |
+              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext libasan tar --allowerasing
+
+        - name: Install software dependencies for Windows
+          if: "${{ runner.os == 'Windows' && runner.arch != 'ARM64' }}"
+          uses: Vampire/setup-wsl@887f39deb6c0976365e546926fe66f41b77d65ff # v6.0.0
+          with:
+              distribution: Ubuntu-22.04
+              use-cache: true
+              update: true
+              additional-packages: python3 python3-pip build-essential git pkg-config libssl-dev
+
+        # Delegate to shared actions from valkey-glide submodule
+        - name: Install Rust toolchain and protoc
+          uses: ./valkey-glide/.github/actions/install-rust-and-protoc
+          with:
+              target: ${{ inputs.target }}
+              github-token: ${{ inputs.github-token }}
+
+        - name: Install server from source
+          if: "${{ inputs.server-version && !(runner.os == 'Windows' && runner.arch == 'ARM64') }}"
+          uses: ./valkey-glide/.github/actions/install-engine
+          with:
+              engine-version: ${{ inputs.server-version }}
+              target: ${{ inputs.target }}
+
+        - name: Start module servers via Docker (valkey 9.0, ubuntu)
+          if: "${{ inputs.server-version == '9.0' && inputs.os == 'ubuntu' }}"
+          uses: ./valkey-glide/.github/actions/start-valkey-docker
+          with:
+              engine-version: ${{ inputs.server-version }}
+
+        - name: Install zig
+          if: ${{ contains(inputs.target, 'linux-gnu') }}
+          uses: ./valkey-glide/.github/actions/install-zig
+          with:
+              target: ${{ inputs.target }}
+```
+
+### Using the Local Wrapper
+
+Once created, your workflows can call the local wrapper just like main repo does:
+
+```yaml
+- name: Install shared software dependencies
+  uses: ./.github/actions/install-shared-dependencies
+  with:
+      os: ${{ matrix.host.os }}
+      target: ${{ matrix.host.target }}
+      server-version: ${{ matrix.server.version }}
+```
+
+This pattern:
+- Keeps the workflow interface identical to main repo
+- Delegates to shared individual actions from the submodule
+- Handles platform-specific dependencies inline (simple shell commands)
 
 ---
 
