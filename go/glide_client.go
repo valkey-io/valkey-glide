@@ -574,30 +574,21 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// LatencyHistory returns the raw `[timestamp, latency_ms]` pairs recorded for the given event.
-//
-// Up to 160 samples may be returned. If the event is unknown, the latency monitor is
-// disabled (the server's `latency-monitor-threshold` is `0`), or no spike has crossed the
-// threshold, an empty slice is returned. To enable recording for a session, set the
-// threshold to a non-zero millisecond value via `CONFIG SET latency-monitor-threshold <ms>`.
-//
-// In a standalone deployment with replicas the Valkey core dispatches `LATENCY HISTORY`
-// to all nodes and the client merges the per-node responses into a single slice sorted by
-// ascending timestamp. For per-node visibility, use [ClusterClient].
+// LatencyHistory returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	event - The latency event to fetch (e.g. "command", "fork", "fast-command").
+//	event - The latency event to fetch (e.g. "command", "fork").
 //
 // Return value:
 //
-//	A slice of [models.LatencyHistoryEntry] sorted by ascending timestamp.
+//	The latency entries from the event.
 //
 // [valkey.io]: https://valkey.io/commands/latency-history/
-func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyHistoryEntry, error) {
+func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error) {
 	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
 	if err != nil {
 		return nil, err
@@ -605,20 +596,7 @@ func (client *Client) LatencyHistory(ctx context.Context, event string) ([]model
 	return handleLatencyHistoryResponse(response)
 }
 
-// LatencyLatest reports the latest latency event recorded for every known event.
-//
-// Each entry exposes the event name, the unix timestamp of the latest spike, the latest
-// latency in milliseconds, and the all-time maximum since the server was started or the
-// event was reset via `LATENCY RESET`. Additional fields returned by Valkey 8.1+
-// (sum/count) are not surfaced.
-//
-// Latency monitoring must be enabled on the server (`latency-monitor-threshold` non-zero)
-// for events to be recorded.
-//
-// In a standalone deployment with replicas the Valkey core dispatches `LATENCY LATEST` to
-// all nodes; the client merges the per-node responses into a single slice with one entry
-// per event name (the most recent timestamp wins; `MaxMs` is the cross-node maximum). For
-// per-node visibility, use [ClusterClient].
+// LatencyLatest reports the latest latency events logged.
 //
 // See [valkey.io] for details.
 //
@@ -628,10 +606,10 @@ func (client *Client) LatencyHistory(ctx context.Context, event string) ([]model
 //
 // Return value:
 //
-//	A slice of [models.LatencyLatestEntry], one per recorded event.
+//	Latency info for each recorded event.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
-func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyLatestEntry, error) {
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyInfo, error) {
 	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
 	if err != nil {
 		return nil, err
@@ -639,32 +617,8 @@ func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyLatest
 	return handleLatencyLatestResponse(response)
 }
 
-// LatencyReset resets the latency time series for all events.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//
-// Return value:
-//
-//	The number of event time series that were reset.
-//
-// [valkey.io]: https://valkey.io/commands/latency-reset/
-func (client *Client) LatencyReset(ctx context.Context) (int64, error) {
-	response, err := client.executeCommand(ctx, C.LatencyReset, []string{})
-	if err != nil {
-		return models.DefaultIntResponse, err
-	}
-	return handleIntResponse(response)
-}
-
-// LatencyResetWithEvents resets the latency time series for the supplied events.
-//
-// Passing an empty slice is equivalent to calling [Client.LatencyReset] and resets every
-// known event. Unknown events are silently ignored by the server and not counted in the
-// returned total.
+// LatencyReset resets the latency time series for the specified events.
+// If no events are specified, all events are reset.
 //
 // See [valkey.io] for details.
 //
@@ -678,7 +632,7 @@ func (client *Client) LatencyReset(ctx context.Context) (int64, error) {
 //	The number of event time series that were reset.
 //
 // [valkey.io]: https://valkey.io/commands/latency-reset/
-func (client *Client) LatencyResetWithEvents(ctx context.Context, events []string) (int64, error) {
+func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64, error) {
 	response, err := client.executeCommand(ctx, C.LatencyReset, events)
 	if err != nil {
 		return models.DefaultIntResponse, err

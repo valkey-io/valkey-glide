@@ -481,16 +481,16 @@ type LCSPosition struct {
 	End int64
 }
 
-// LatencyHistoryEntry represents the time and latency for a latency spike.
-type LatencyHistoryEntry struct {
+// LatencyEntry represents the time and latency for a latency spike.
+type LatencyEntry struct {
 	// Time is the time of latency spike.
 	Time time.Time
 	// Latency is the duration of the latency spike.
 	Latency time.Duration
 }
 
-// LatencyLatestInfo represents data about an event's latency spike time series.
-type LatencyLatestInfo struct {
+// LatencyInfo represents data about an event's latency spike time series.
+type LatencyInfo struct {
 	// EventName is the name of the event.
 	EventName string
 	// Time is the time of the latest latency spike for the event.
@@ -500,9 +500,9 @@ type LatencyLatestInfo struct {
 	// Maximum is the all-time maximum duration of a latency spike for the event.
 	Maximum time.Duration
 	// Sum is the duration of all latency spikes in the event's time series.
-    // Only populated for Valkey 8.1+.
+	// Only populated for Valkey 8.1+.
 	Sum Result[time.Duration]
 	// Count is the number of latency spikes recorded in the event's time series.
-    // Only populated for Valkey 8.1+.
+	// Only populated for Valkey 8.1+.
 	Count Result[int64]
 }

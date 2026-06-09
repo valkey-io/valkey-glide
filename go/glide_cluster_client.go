@@ -1035,95 +1035,85 @@ func (client *ClusterClient) ConfigResetStat(ctx context.Context) (string, error
 	return handleOkResponse(response)
 }
 
-// LatencyHistory returns the raw `[timestamp, latency_ms]` pairs recorded for the given
-// event. By default the command is dispatched to all nodes (per the Valkey routing rules)
-// and the response is exposed as a multi-value [models.ClusterValue] keyed by node address.
+// LatencyHistory returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	event - The latency event to fetch (e.g. "command", "fork", "fast-command").
+//	event - The latency event to fetch (e.g. "command", "fork").
 //
 // Return value:
 //
-//	A multi-value [models.ClusterValue] mapping node address to the per-node latency history.
+//	A multi-value [models.ClusterValue] mapping node address to the per-node latency entries.
 //
 // [valkey.io]: https://valkey.io/commands/latency-history/
 func (client *ClusterClient) LatencyHistory(
 	ctx context.Context,
 	event string,
-) (models.ClusterValue[[]models.LatencyHistoryEntry], error) {
+) (models.ClusterValue[[]models.LatencyEntry], error) {
 	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyHistoryEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
 	}
 	if response != nil && response.response_type == uint32(C.Map) {
 		data, err := handleLatencyHistoryClusterResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[[]models.LatencyHistoryEntry](), err
+			return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
 		}
 		return models.CreateClusterMultiValue(data), nil
 	}
 	data, err := handleLatencyHistoryResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyHistoryEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
 	}
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyHistoryWithOptions is the routing-aware variant of [ClusterClient.LatencyHistory].
-//
-// When `opts.Route` is a multi-node route (e.g. AllNodes / AllPrimaries) the response is
-// returned as a multi-value [models.ClusterValue] keyed by node address. When `opts.Route`
-// resolves to a single node, the response is returned as a single-value [models.ClusterValue].
-// When `opts.Route` is nil, the behavior matches [ClusterClient.LatencyHistory] (the core
-// applies the default AllNodes routing for `LATENCY HISTORY` and the result is exposed as a
-// multi-value [models.ClusterValue]).
+// LatencyHistory returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	event - The latency event to fetch (e.g. "command", "fork", "fast-command").
-//	opts - The routing configuration; pass `options.RouteOption{}` to use defaults.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
-//	A [models.ClusterValue] containing the latency history.
+//	A [models.ClusterValue] containing the latency entries.
 //
 // [valkey.io]: https://valkey.io/commands/latency-history/
 func (client *ClusterClient) LatencyHistoryWithOptions(
 	ctx context.Context,
 	event string,
 	opts options.RouteOption,
-) (models.ClusterValue[[]models.LatencyHistoryEntry], error) {
+) (models.ClusterValue[[]models.LatencyEntry], error) {
 	if opts.Route == nil {
 		return client.LatencyHistory(ctx, event)
 	}
 	response, err := client.executeCommandWithRoute(ctx, C.LatencyHistory, []string{event}, opts.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyHistoryEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
 	}
 	if opts.Route.IsMultiNode() {
 		data, err := handleLatencyHistoryClusterResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[[]models.LatencyHistoryEntry](), err
+			return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
 		}
 		return models.CreateClusterMultiValue(data), nil
 	}
 	data, err := handleLatencyHistoryResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyHistoryEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
 	}
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyLatest reports the latest latency event recorded for every known event on each
-// cluster node. By default the command is dispatched to all nodes and the result is exposed
-// as a multi-value [models.ClusterValue] keyed by node address.
+// LatencyLatest reports the latest latency events logged.
 //
 // See [valkey.io] for details.
 //
@@ -1133,140 +1123,86 @@ func (client *ClusterClient) LatencyHistoryWithOptions(
 //
 // Return value:
 //
-//	A multi-value [models.ClusterValue] mapping node address to the per-node latency entries.
+//	A multi-value [models.ClusterValue] mapping node address to the per-node latency info.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
 func (client *ClusterClient) LatencyLatest(
 	ctx context.Context,
-) (models.ClusterValue[[]models.LatencyLatestEntry], error) {
+) (models.ClusterValue[[]models.LatencyInfo], error) {
 	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyLatestEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
 	}
 	if response != nil && response.response_type == uint32(C.Map) {
 		data, err := handleLatencyLatestClusterResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[[]models.LatencyLatestEntry](), err
+			return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
 		}
 		return models.CreateClusterMultiValue(data), nil
 	}
 	data, err := handleLatencyLatestResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyLatestEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
 	}
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyLatestWithOptions is the routing-aware variant of [ClusterClient.LatencyLatest].
-//
-// When `opts.Route` is a multi-node route (e.g. AllNodes / AllPrimaries) the response is
-// returned as a multi-value [models.ClusterValue] keyed by node address. When `opts.Route`
-// resolves to a single node, the response is returned as a single-value [models.ClusterValue].
-// When `opts.Route` is nil, the behavior matches [ClusterClient.LatencyLatest].
+// LatencyLatest reports the latest latency events logged.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	opts - The routing configuration; pass `options.RouteOption{}` to use defaults.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
-//	A [models.ClusterValue] containing the latest latency entries.
+//	A [models.ClusterValue] containing the latency info.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
 func (client *ClusterClient) LatencyLatestWithOptions(
 	ctx context.Context,
 	opts options.RouteOption,
-) (models.ClusterValue[[]models.LatencyLatestEntry], error) {
+) (models.ClusterValue[[]models.LatencyInfo], error) {
 	if opts.Route == nil {
 		return client.LatencyLatest(ctx)
 	}
 	response, err := client.executeCommandWithRoute(ctx, C.LatencyLatest, []string{}, opts.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyLatestEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
 	}
 	if opts.Route.IsMultiNode() {
 		data, err := handleLatencyLatestClusterResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[[]models.LatencyLatestEntry](), err
+			return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
 		}
 		return models.CreateClusterMultiValue(data), nil
 	}
 	data, err := handleLatencyLatestResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyLatestEntry](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
 	}
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// LatencyReset resets every event's latency time series across the cluster.
-//
-// In cluster mode the command is dispatched to all nodes and the per-node counts are
-// summed by the core (Valkey response policy `Aggregate(Sum)`).
+// LatencyReset resets the latency time series for the specified events
+// If no events are specified, all events are reset.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
+//	events - The latency events to reset (e.g. "command", "fork").
 //
 // Return value:
 //
-//	The total number of event time series that were reset across the cluster.
+//	The number of event time series that were reset.
 //
 // [valkey.io]: https://valkey.io/commands/latency-reset/
-func (client *ClusterClient) LatencyReset(ctx context.Context) (int64, error) {
-	response, err := client.executeCommand(ctx, C.LatencyReset, []string{})
-	if err != nil {
-		return models.DefaultIntResponse, err
-	}
-	return handleIntResponse(response)
-}
-
-// LatencyResetWithOptions is the routing-aware variant of [ClusterClient.LatencyReset].
-// When the route targets multiple nodes the per-node counts are summed by the core
-// (Valkey response policy `Aggregate(Sum)`).
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//	opts - The routing configuration; pass `options.RouteOption{}` to use defaults.
-//
-// Return value:
-//
-//	The number of event time series that were reset (summed across nodes).
-//
-// [valkey.io]: https://valkey.io/commands/latency-reset/
-func (client *ClusterClient) LatencyResetWithOptions(ctx context.Context, opts options.RouteOption) (int64, error) {
-	if opts.Route == nil {
-		return client.LatencyReset(ctx)
-	}
-	response, err := client.executeCommandWithRoute(ctx, C.LatencyReset, []string{}, opts.Route)
-	if err != nil {
-		return models.DefaultIntResponse, err
-	}
-	return handleIntResponse(response)
-}
-
-// LatencyResetWithEvents resets the latency time series only for the supplied events.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx - The context for controlling the command execution.
-//	events - The latency events to reset.
-//
-// Return value:
-//
-//	The total number of event time series that were reset across the cluster.
-//
-// [valkey.io]: https://valkey.io/commands/latency-reset/
-func (client *ClusterClient) LatencyResetWithEvents(ctx context.Context, events []string) (int64, error) {
+func (client *ClusterClient) LatencyReset(ctx context.Context, events ...string) (int64, error) {
 	response, err := client.executeCommand(ctx, C.LatencyReset, events)
 	if err != nil {
 		return models.DefaultIntResponse, err
@@ -1274,30 +1210,30 @@ func (client *ClusterClient) LatencyResetWithEvents(ctx context.Context, events 
 	return handleIntResponse(response)
 }
 
-// LatencyResetWithEventsAndOptions is the routing-aware variant of
-// [ClusterClient.LatencyResetWithEvents]. When the route targets multiple nodes the
-// per-node counts are summed by the core (Valkey response policy `Aggregate(Sum)`).
+// LatencyReset resets the latency time series for the specified events
+// If no events are specified, all events are reset.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	events - The latency events to reset; an empty slice resets every event.
-//	opts - The routing configuration; pass `options.RouteOption{}` to use defaults.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//	events - The latency events to reset (e.g. "command", "fork").
 //
 // Return value:
 //
-//	The number of event time series that were reset (summed across nodes).
+//	The number of event time series that were reset.
 //
 // [valkey.io]: https://valkey.io/commands/latency-reset/
-func (client *ClusterClient) LatencyResetWithEventsAndOptions(
+func (client *ClusterClient) LatencyResetWithOptions(
 	ctx context.Context,
-	events []string,
 	opts options.RouteOption,
+	events ...string,
 ) (int64, error) {
 	if opts.Route == nil {
-		return client.LatencyResetWithEvents(ctx, events)
+		return client.LatencyReset(ctx, events...)
 	}
 	response, err := client.executeCommandWithRoute(ctx, C.LatencyReset, events, opts.Route)
 	if err != nil {

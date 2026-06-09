@@ -92,8 +92,8 @@ func (suite *GlideTestSuite) TestLatencyHistory() {
 	require.NoError(t, err)
 	assert.NotNil(t, entries)
 	for _, e := range entries {
-		assert.GreaterOrEqual(t, e.Timestamp, int64(0))
-		assert.GreaterOrEqual(t, e.LatencyMs, int64(0))
+		assert.False(t, e.Time.IsZero())
+		assert.GreaterOrEqual(t, e.Latency, time.Duration(0))
 	}
 
 	// An unknown event must not error – the server simply returns an empty array.
@@ -117,9 +117,9 @@ func (suite *GlideTestSuite) TestLatencyLatest() {
 	assert.NotNil(t, entries)
 	for _, e := range entries {
 		assert.NotEmpty(t, e.EventName)
-		assert.GreaterOrEqual(t, e.Timestamp, int64(0))
-		assert.GreaterOrEqual(t, e.LatestMs, int64(0))
-		assert.GreaterOrEqual(t, e.MaxMs, e.LatestMs)
+		assert.False(t, e.Time.IsZero())
+		assert.GreaterOrEqual(t, e.Latest, time.Duration(0))
+		assert.GreaterOrEqual(t, e.Maximum, e.Latest)
 	}
 }
 
@@ -151,7 +151,7 @@ func (suite *GlideTestSuite) TestLatencyResetWithEvents() {
 	suite.triggerLatencySpikeStandalone(ctx)
 	time.Sleep(50 * time.Millisecond)
 
-	resetCount, err := client.LatencyResetWithEvents(ctx, []string{"command"})
+	resetCount, err := client.LatencyReset(ctx, "command")
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, resetCount, int64(0))
 
@@ -160,7 +160,7 @@ func (suite *GlideTestSuite) TestLatencyResetWithEvents() {
 	assert.Empty(t, hist)
 
 	// Resetting an unknown event is a no-op (returns 0).
-	unknownReset, err := client.LatencyResetWithEvents(ctx, []string{"no-such-event"})
+	unknownReset, err := client.LatencyReset(ctx, "no-such-event")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), unknownReset)
 }
@@ -185,14 +185,14 @@ func (suite *GlideTestSuite) TestLatencyHistory_Cluster() {
 		for addr, entries := range nodes {
 			assert.NotEmpty(t, addr)
 			for _, e := range entries {
-				assert.GreaterOrEqual(t, e.Timestamp, int64(0))
-				assert.GreaterOrEqual(t, e.LatencyMs, int64(0))
+				assert.False(t, e.Time.IsZero())
+				assert.GreaterOrEqual(t, e.Latency, time.Duration(0))
 			}
 		}
 	} else {
 		for _, e := range val.SingleValue() {
-			assert.GreaterOrEqual(t, e.Timestamp, int64(0))
-			assert.GreaterOrEqual(t, e.LatencyMs, int64(0))
+			assert.False(t, e.Time.IsZero())
+			assert.GreaterOrEqual(t, e.Latency, time.Duration(0))
 		}
 	}
 }
@@ -217,8 +217,8 @@ func (suite *GlideTestSuite) TestLatencyHistoryWithOptions_Cluster() {
 	require.NoError(t, err)
 	assert.True(t, single.IsSingleValue(), "RandomRoute should resolve to a single-value ClusterValue")
 	for _, e := range single.SingleValue() {
-		assert.GreaterOrEqual(t, e.Timestamp, int64(0))
-		assert.GreaterOrEqual(t, e.LatencyMs, int64(0))
+		assert.False(t, e.Time.IsZero())
+		assert.GreaterOrEqual(t, e.Latency, time.Duration(0))
 	}
 
 	// Nil route should match the no-options method (default routing → multi-value).
@@ -245,7 +245,7 @@ func (suite *GlideTestSuite) TestLatencyLatest_Cluster() {
 			assert.NotEmpty(t, addr)
 			for _, e := range entries {
 				assert.NotEmpty(t, e.EventName)
-				assert.GreaterOrEqual(t, e.MaxMs, e.LatestMs)
+				assert.GreaterOrEqual(t, e.Maximum, e.Latest)
 			}
 		}
 	}
@@ -298,14 +298,14 @@ func (suite *GlideTestSuite) TestLatencyResetWithEvents_Cluster() {
 	suite.triggerLatencySpikeCluster(ctx)
 	time.Sleep(50 * time.Millisecond)
 
-	total, err := client.LatencyResetWithEvents(ctx, []string{"command", "fast-command"})
+	total, err := client.LatencyReset(ctx, "command", "fast-command")
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, total, int64(0))
 
-	noop, err := client.LatencyResetWithEventsAndOptions(
+	noop, err := client.LatencyResetWithOptions(
 		ctx,
-		[]string{"no-such-event"},
 		options.RouteOption{Route: config.AllNodes},
+		"no-such-event",
 	)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), noop)
