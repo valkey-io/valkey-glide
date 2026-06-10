@@ -88,6 +88,7 @@ if (!isJedisNoClassifierUber) {
     jar.dependsOn(tasks.named('copyNativeLib'))
     javadoc.dependsOn(tasks.named('copyNativeLib'))
     compileTestJava.dependsOn(tasks.named('copyNativeLib'))
+    checkstyleMain.dependsOn(tasks.named('copyNativeLib'))
 }
 
 tasks.withType(Test) {
