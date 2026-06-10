@@ -145,7 +145,7 @@ Closed → Open → HalfOpen → Closed
 
 - **Closed**: Normal operation. Errors tracked in a sliding window.
 - **Open**: Requests rejected immediately. Transitions to HalfOpen after `open_timeout`.
-- **HalfOpen**: All traffic allowed (optimistic). Closes after `consecutive_successes` successful commands. Reopens on any error.
+- **HalfOpen**: All traffic allowed (optimistic). Closes after `consecutive_successes` successful commands. Reopens on failure unless inflight is draining (straggler tolerance).
 
 ### Configuration
 
@@ -161,6 +161,12 @@ Closed → Open → HalfOpen → Closed
 ### Error Classification
 
 Only transport-level errors count toward tripping: `IoError`, `FatalSendError`, `FatalReceiveError`, and connection drops. Server-side errors (WRONGTYPE, MOVED, etc.) do not count. Timeouts are opt-in via `count_timeouts`.
+
+### Recovery Guards
+
+Before closing the breaker (HalfOpen to Closed), straggler tolerance prevents premature reopening:
+
+- **Straggler tolerance**: a failure in HalfOpen does not immediately reopen the breaker if inflight count is below the level at trip time (system is draining). This tolerates late responses from the previous degraded period. Capped at 2 forgiven failures per HalfOpen cycle.
 
 ### Exception Type
 
