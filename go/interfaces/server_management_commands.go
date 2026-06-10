@@ -269,4 +269,51 @@ type ServerManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/acl-whoami/
 	AclWhoAmI(ctx context.Context) (string, error)
+
+	// Failover starts a coordinated failover from the connected primary to one of its replicas.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   `"OK"` on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/failover/
+	Failover(ctx context.Context) (string, error)
+
+	// FailoverWithOptions starts a coordinated failover with the specified options.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   opts - The failover options.
+	//
+	// Return value:
+	//   `"OK"` on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/failover/
+	FailoverWithOptions(ctx context.Context, opts *options.FailoverOptions) (string, error)
+
+	// ReplicaOf makes the server a replica of the specified primary.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   host - The host of the primary to replicate.
+	//   port - The port of the primary to replicate.
+	//
+	// Return value:
+	//   `"OK"` on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/replicaof/
+	ReplicaOf(ctx context.Context, host string, port int) (string, error)
+
+	// ReplicaOfNoOne promotes the current server to a primary by stopping replication.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   `"OK"` on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/replicaof/
+	ReplicaOfNoOne(ctx context.Context) (string, error)
 }
