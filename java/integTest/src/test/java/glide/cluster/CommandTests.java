@@ -987,8 +987,7 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
         waitForSaveNotInProgress(clusterClient);
-        String result =
-                clusterClient.bgsaveSchedule(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        String result = clusterClient.bgsaveSchedule(PRIMARY_SLOT_ROUTE).get().getSingleValue();
         assertTrue(BGSAVE_RESPONSES.contains(result));
     }
 
@@ -1013,8 +1012,7 @@ public class CommandTests {
 
         ExecutionException e =
                 assertThrows(
-                        ExecutionException.class,
-                        () -> clusterClient.bgsaveCancel(PRIMARY_SLOT_ROUTE).get());
+                        ExecutionException.class, () -> clusterClient.bgsaveCancel(PRIMARY_SLOT_ROUTE).get());
         assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
     }
 
@@ -1036,8 +1034,7 @@ public class CommandTests {
     @SneakyThrows
     public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
         waitForSaveNotInProgress(clusterClient);
-        String result =
-                clusterClient.bgrewriteaof(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        String result = clusterClient.bgrewriteaof(PRIMARY_SLOT_ROUTE).get().getSingleValue();
         assertTrue(BGREWRITEAOF_RESPONSES.contains(result));
     }
 

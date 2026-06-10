@@ -790,7 +790,7 @@ public class TestUtilities {
      * @param failure Message to include in the assertion if the timeout is exceeded.
      */
     @SneakyThrows
-    private static void waitFor(Callable<Boolean> condition, String failure) {
+    public static void waitFor(Callable<Boolean> condition, String failure) {
         long sleep = 100;
         long timeout = 10000;
 
