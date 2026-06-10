@@ -7,6 +7,10 @@ import redis.clients.jedis.StreamEntryID;
 /**
  * Parameters for XTRIM command in Jedis compatibility layer. Provides a fluent API for trimming
  * streams by maximum length or minimum ID.
+ *
+ * <p>Trim field semantics and GLIDE conversion are shared with {@link AbstractXAddParams} via {@link
+ * StreamTrimParamState}. See {@link AbstractXAddParams} class Javadoc for maxLen vs limit and
+ * maxLen-over-minId priority.
  */
 public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
 
@@ -15,10 +19,7 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
         return (T) this;
     }
 
-    private Long maxLen;
-    private String minId;
-    private Boolean exactTrimming;
-    private Long limit;
+    private final StreamTrimParamState trim = new StreamTrimParamState();
 
     /**
      * Trim the stream to approximately the specified maximum length using MAXLEN ~ threshold.
@@ -27,8 +28,8 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
      * @return this
      */
     public T maxLen(long maxLen) {
-        this.maxLen = maxLen;
-        this.exactTrimming = false;
+        trim.maxLen = maxLen;
+        trim.exactTrimming = false;
         return self();
     }
 
@@ -39,8 +40,8 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
      * @return this
      */
     public T maxLenExact(long maxLen) {
-        this.maxLen = maxLen;
-        this.exactTrimming = true;
+        trim.maxLen = maxLen;
+        trim.exactTrimming = true;
         return self();
     }
 
@@ -51,8 +52,8 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
      * @return this
      */
     public T minId(String minId) {
-        this.minId = minId;
-        this.exactTrimming = false;
+        trim.minId = minId;
+        trim.exactTrimming = false;
         return self();
     }
 
@@ -63,8 +64,8 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
      * @return this
      */
     public T minId(StreamEntryID minId) {
-        this.minId = minId != null ? minId.toString() : null;
-        this.exactTrimming = false;
+        trim.minId = minId != null ? minId.toString() : null;
+        trim.exactTrimming = false;
         return self();
     }
 
@@ -75,8 +76,8 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
      * @return this
      */
     public T minIdExact(String minId) {
-        this.minId = minId;
-        this.exactTrimming = true;
+        trim.minId = minId;
+        trim.exactTrimming = true;
         return self();
     }
 
@@ -87,37 +88,38 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
      * @return this
      */
     public T minIdExact(StreamEntryID minId) {
-        this.minId = minId != null ? minId.toString() : null;
-        this.exactTrimming = true;
+        trim.minId = minId != null ? minId.toString() : null;
+        trim.exactTrimming = true;
         return self();
     }
 
     /**
-     * Set the LIMIT count for trimming.
+     * Set the LIMIT count for trimming — maximum entries to evict in this trim pass. See {@link
+     * AbstractXAddParams#limit(long)} for how limit relates to maxLen / minId.
      *
-     * @param limit maximum number of entries to trim
+     * @param limit maximum number of entries to trim in one pass
      * @return this
      */
     public T limit(long limit) {
-        this.limit = limit;
+        trim.limit = limit;
         return self();
     }
 
     // Getters for internal use
     public Long getMaxLen() {
-        return maxLen;
+        return trim.maxLen;
     }
 
     public String getMinId() {
-        return minId;
+        return trim.minId;
     }
 
     public Boolean getExactTrimming() {
-        return exactTrimming;
+        return trim.exactTrimming;
     }
 
     public Long getLimit() {
-        return limit;
+        return trim.limit;
     }
 
     /**
@@ -127,22 +129,6 @@ public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
      * @throws IllegalArgumentException if neither maxLen nor minId is specified
      */
     public StreamTrimOptions toStreamTrimOptions() {
-        boolean exact = exactTrimming != null && exactTrimming;
-
-        if (maxLen != null) {
-            if (limit != null) {
-                return new StreamTrimOptions.MaxLen(maxLen, limit);
-            } else {
-                return new StreamTrimOptions.MaxLen(exact, maxLen);
-            }
-        } else if (minId != null) {
-            if (limit != null) {
-                return new StreamTrimOptions.MinId(minId, limit);
-            } else {
-                return new StreamTrimOptions.MinId(exact, minId);
-            }
-        } else {
-            throw new IllegalArgumentException("XTrimParams must specify either maxLen or minId");
-        }
+        return trim.toStreamTrimOptions(true);
     }
 }
