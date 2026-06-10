@@ -101,4 +101,128 @@ public class Utf8ValidatorTest {
                 Arguments.of("Length exceeds array", 0, 11),
                 Arguments.of("Offset + Length exceeds array", 5, 6));
     }
+
+    // =========================================================================
+    // The following tests and helpers are ported from Google Guava's Utf8Test:
+    // https://github.com/google/guava/blob/3e65944ec9207ca652128969fd1334e9920dde07/guava-tests/test/com/google/common/base/Utf8Test.java
+    // =========================================================================
+
+    // 128 - [chars 0x0000 to 0x007f]
+    private static final long ONE_BYTE_ROUNDTRIPPABLE_CHARACTERS = 0x007f - 0x0000 + 1;
+    // 128
+    private static final long EXPECTED_ONE_BYTE_ROUNDTRIPPABLE_COUNT =
+            ONE_BYTE_ROUNDTRIPPABLE_CHARACTERS;
+    // 1920 [chars 0x0080 to 0x07FF]
+    private static final long TWO_BYTE_ROUNDTRIPPABLE_CHARACTERS = 0x07FF - 0x0080 + 1;
+    // 18,304
+    private static final long EXPECTED_TWO_BYTE_ROUNDTRIPPABLE_COUNT =
+            (long) Math.pow(EXPECTED_ONE_BYTE_ROUNDTRIPPABLE_COUNT, 2)
+                    + TWO_BYTE_ROUNDTRIPPABLE_CHARACTERS;
+    // 2048
+    private static final long THREE_BYTE_SURROGATES = 2 * 1024;
+    // 61,440 [chars 0x0800 to 0xFFFF, minus surrogates]
+    private static final long THREE_BYTE_ROUNDTRIPPABLE_CHARACTERS =
+            0xFFFF - 0x0800 + 1 - THREE_BYTE_SURROGATES;
+    // 2,650,112
+    private static final long EXPECTED_THREE_BYTE_ROUNDTRIPPABLE_COUNT =
+            (long) Math.pow(EXPECTED_ONE_BYTE_ROUNDTRIPPABLE_COUNT, 3)
+                    + 2 * TWO_BYTE_ROUNDTRIPPABLE_CHARACTERS * ONE_BYTE_ROUNDTRIPPABLE_CHARACTERS
+                    + THREE_BYTE_ROUNDTRIPPABLE_CHARACTERS;
+
+    @org.junit.jupiter.api.Test
+    public void testIsWellFormed_1Byte() {
+        testBytes(1, EXPECTED_ONE_BYTE_ROUNDTRIPPABLE_COUNT);
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testIsWellFormed_2Bytes() {
+        testBytes(2, EXPECTED_TWO_BYTE_ROUNDTRIPPABLE_COUNT);
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testIsWellFormed_3Bytes() {
+        testBytes(3, EXPECTED_THREE_BYTE_ROUNDTRIPPABLE_COUNT);
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testIsWellFormed_4BytesSamples() {
+        // Valid 4 byte.
+        assertWellFormed(0xF0, 0xA4, 0xAD, 0xA2);
+        // Bad trailing bytes
+        assertNotWellFormed(0xF0, 0xA4, 0xAD, 0x7F);
+        assertNotWellFormed(0xF0, 0xA4, 0xAD, 0xC0);
+        // Special cases for byte2
+        assertNotWellFormed(0xF0, 0x8F, 0xAD, 0xA2);
+        assertNotWellFormed(0xF4, 0x90, 0xAD, 0xA2);
+    }
+
+    @org.junit.jupiter.api.Test
+    public void testSomeSequences() {
+        // Empty
+        assertWellFormed();
+        // One-byte characters, including control characters
+        assertWellFormed(0x00, 0x61, 0x62, 0x63, 0x7F); // "\u0000abc\u007f"
+        // Two-byte characters
+        assertWellFormed(0xC2, 0xA2, 0xC2, 0xA2); // "\u00a2\u00a2"
+        // Three-byte characters
+        assertWellFormed(0xc8, 0x8a, 0x63, 0xc8, 0x8a, 0x63); // "\u020ac\u020ac"
+        // Four-byte characters
+        // "\u024B62\u024B62"
+        assertWellFormed(0xc9, 0x8b, 0x36, 0x32, 0xc9, 0x8b, 0x36, 0x32);
+        // Mixed string
+        // "a\u020ac\u00a2b\\u024B62u020acc\u00a2de\u024B62"
+        assertWellFormed(
+                0x61, 0xc8, 0x8a, 0x63, 0xc2, 0xa2, 0x62, 0x5c, 0x75, 0x30, 0x32, 0x34, 0x42, 0x36, 0x32,
+                0x75, 0x30, 0x32, 0x30, 0x61, 0x63, 0x63, 0xc2, 0xa2, 0x64, 0x65, 0xc9, 0x8b, 0x36, 0x32);
+        // Not a valid string
+        assertNotWellFormed(-1, 0, -1, 0);
+    }
+
+    private static byte[] toByteArray(int... bytes) {
+        byte[] realBytes = new byte[bytes.length];
+        for (int i = 0; i < bytes.length; i++) {
+            realBytes[i] = (byte) bytes[i];
+        }
+        return realBytes;
+    }
+
+    private static void assertWellFormed(int... bytes) {
+        assertTrue(Utf8Validator.isWellFormed(toByteArray(bytes)));
+    }
+
+    private static void assertNotWellFormed(int... bytes) {
+        assertFalse(Utf8Validator.isWellFormed(toByteArray(bytes)));
+    }
+
+    private static void testBytes(int numBytes, long expectedCount) {
+        testBytes(numBytes, expectedCount, 0, -1);
+    }
+
+    private static void testBytes(int numBytes, long expectedCount, long start, long lim) {
+        byte[] bytes = new byte[numBytes];
+        if (lim == -1) {
+            lim = 1L << (numBytes * 8);
+        }
+        long countRoundTripped = 0;
+        for (long byteChar = start; byteChar < lim; byteChar++) {
+            long tmpByteChar = byteChar;
+            for (int i = 0; i < numBytes; i++) {
+                bytes[bytes.length - i - 1] = (byte) tmpByteChar;
+                tmpByteChar = tmpByteChar >> 8;
+            }
+            boolean isRoundTrippable = Utf8Validator.isWellFormed(bytes);
+            assertEquals(isRoundTrippable, Utf8Validator.isWellFormed(bytes, 0, numBytes));
+            String s = new String(bytes, StandardCharsets.UTF_8);
+            byte[] bytesReencoded = s.getBytes(StandardCharsets.UTF_8);
+            boolean bytesEqual = java.util.Arrays.equals(bytes, bytesReencoded);
+
+            if (bytesEqual != isRoundTrippable) {
+                org.junit.jupiter.api.Assertions.fail();
+            }
+            if (isRoundTrippable) {
+                countRoundTripped++;
+            }
+        }
+        assertEquals(expectedCount, countRoundTripped);
+    }
 }
