@@ -4928,7 +4928,9 @@ export interface FailoverOptions {
 }
 
 /** @internal */
-export function createFailover(options?: FailoverOptions): command_request.Command {
+export function createFailover(
+    options?: FailoverOptions,
+): command_request.Command {
     const args: string[] = [];
 
     if (options?.abort) {

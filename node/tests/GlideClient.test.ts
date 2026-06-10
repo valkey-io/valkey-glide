@@ -2192,9 +2192,9 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             // FAILOVER ABORT when no failover is in progress should error
-            await expect(
-                client.failover({ abort: true }),
-            ).rejects.toThrow(RequestError);
+            await expect(client.failover({ abort: true })).rejects.toThrow(
+                RequestError,
+            );
             client.close();
         },
         TIMEOUT,
