@@ -16,10 +16,15 @@ use tokio::{
 };
 
 use crate::connection::create_rustls_config;
-use std::sync::Arc;
-use tokio_rustls::{client::TlsStream, TlsConnector};
-
 use crate::tls::TlsConnParams;
+use std::sync::{Arc, OnceLock};
+
+/// Cached TLS configurations to avoid repeatedly loading system certificates.
+/// On Linux, loading native certs can involve reading and parsing ~300KB of cert files,
+/// which adds ~6ms per connection when done repeatedly.
+static TLS_CONFIG_DEFAULT: OnceLock<Result<Arc<rustls::ClientConfig>, String>> = OnceLock::new();
+static TLS_CONFIG_INSECURE: OnceLock<Result<Arc<rustls::ClientConfig>, String>> = OnceLock::new();
+use tokio_rustls::{client::TlsStream, TlsConnector};
 
 #[cfg(unix)]
 use super::Path;
@@ -125,8 +130,48 @@ impl RedisRuntime for Tokio {
         tls_params: &Option<TlsConnParams>,
         tcp_nodelay: bool,
     ) -> RedisResult<Self> {
-        let config = create_rustls_config(insecure, tls_params.clone())?;
-        let tls_connector = TlsConnector::from(Arc::new(config));
+        let has_custom_params = tls_params
+            .as_ref()
+            .is_some_and(|p| p.client_tls_params.is_some() || p.root_cert_store.is_some());
+
+        let config = if has_custom_params {
+            // Custom TLS params (mTLS, custom CA) - cannot cache
+            Arc::new(create_rustls_config(insecure, tls_params.clone())?)
+        } else if insecure {
+            TLS_CONFIG_INSECURE
+                .get_or_init(|| {
+                    create_rustls_config(true, tls_params.clone())
+                        .map(Arc::new)
+                        .map_err(|e| e.to_string())
+                })
+                .as_ref()
+                .map_err(|e| {
+                    crate::RedisError::from((
+                        crate::ErrorKind::IoError,
+                        "TLS config error",
+                        e.clone(),
+                    ))
+                })?
+                .clone()
+        } else {
+            TLS_CONFIG_DEFAULT
+                .get_or_init(|| {
+                    create_rustls_config(false, tls_params.clone())
+                        .map(Arc::new)
+                        .map_err(|e| e.to_string())
+                })
+                .as_ref()
+                .map_err(|e| {
+                    crate::RedisError::from((
+                        crate::ErrorKind::IoError,
+                        "TLS config error",
+                        e.clone(),
+                    ))
+                })?
+                .clone()
+        };
+
+        let tls_connector = TlsConnector::from(config);
 
         Ok(tls_connector
             .connect(
