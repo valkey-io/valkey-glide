@@ -1110,6 +1110,4 @@ class StandaloneCommands(CoreCommands):
             >>> client.replicaof_no_one()
                 OK
         """
-        return cast(
-            TOK, self._execute_command(RequestType.ReplicaOf, ["NO", "ONE"])
-        )
+        return cast(TOK, self._execute_command(RequestType.ReplicaOf, ["NO", "ONE"]))

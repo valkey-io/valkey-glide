@@ -12404,7 +12404,9 @@ class TestSyncScripts:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_failover_abort_no_failover_in_progress(self, glide_sync_client: GlideClient):
+    def test_failover_abort_no_failover_in_progress(
+        self, glide_sync_client: GlideClient
+    ):
         # FAILOVER ABORT when no failover is in progress should error
         with pytest.raises(RequestError):
             glide_sync_client.failover(abort=True)
