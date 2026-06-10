@@ -15,6 +15,8 @@ import org.junit.jupiter.api.Test;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.MigrateParams;
+import redis.clients.jedis.params.XAddParams;
+import redis.clients.jedis.params.XTrimParams;
 
 /** Unit tests for Jedis 4.x param helpers (review-driven correctness). */
 public class Jedis4ParamBehaviorTest {
@@ -77,5 +79,29 @@ public class Jedis4ParamBehaviorTest {
                 () ->
                         new ClusterConnectionProvider(
                                 Collections.emptySet(), DefaultJedisClientConfig.builder().build()));
+    }
+
+    @Test
+    public void clusterConnectionProvider_rejectsNullNodes() {
+        assertThrows(
+                NullPointerException.class,
+                () ->
+                        new ClusterConnectionProvider(
+                                null, DefaultJedisClientConfig.builder().build()));
+    }
+
+    @Test
+    public void xAddParams_documentsTrimPriorityViaConversion() {
+        XAddParams p = XAddParams.xAddParams().maxLen(50).minId("1-0").limit(5);
+        assertEquals(Long.valueOf(50), p.getMaxLen());
+        assertEquals("1-0", p.getMinId());
+        assertEquals(Long.valueOf(5), p.getLimit());
+        assertNotNull(p.toStreamAddOptions());
+    }
+
+    @Test
+    public void xTrimParams_sharesTrimConversionWithXAdd() {
+        XTrimParams trim = XTrimParams.xTrimParams().maxLen(100).limit(3);
+        assertNotNull(trim.toStreamTrimOptions());
     }
 }

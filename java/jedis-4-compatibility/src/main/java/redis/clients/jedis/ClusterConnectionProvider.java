@@ -25,7 +25,8 @@ public class ClusterConnectionProvider implements ClusterNodesConnectionProvider
 
     @Override
     public Connection getConnection() {
-        // Return connection to first node for compatibility
+        // Jedis compatibility: return a lightweight Connection view for the first seed node.
+        // Cluster commands route via GLIDE; use getClusterNodes() for per-node ConnectionPool views.
         HostAndPort firstNode = nodes.iterator().next();
         return new Connection(firstNode);
     }
@@ -48,7 +49,7 @@ public class ClusterConnectionProvider implements ClusterNodesConnectionProvider
     public Map<String, ConnectionPool> getClusterNodes() {
         Map<String, ConnectionPool> map = new LinkedHashMap<>();
         for (HostAndPort n : nodes) {
-            map.put(n.getHost() + ":" + n.getPort(), new ConnectionPool(n));
+            map.put(n.toString(), new ConnectionPool(n));
         }
         return Collections.unmodifiableMap(map);
     }
