@@ -42,6 +42,60 @@ type ServerManagementCommands interface {
 
 	LastSave(ctx context.Context) (int64, error)
 
+	// Save synchronously saves the dataset to disk.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/save/
+	Save(ctx context.Context) (string, error)
+
+	// Bgsave asynchronously saves the dataset to disk in the background.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A non-empty status string.
+	//
+	// [valkey.io]: https://valkey.io/commands/bgsave/
+	Bgsave(ctx context.Context) (string, error)
+
+	// BgRewriteAof initiates a background rewrite of the append-only file (AOF).
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A non-empty status string.
+	//
+	// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+	BgRewriteAof(ctx context.Context) (string, error)
+
+	// ReplicaOf configures the server to replicate from the specified host and port.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   host - The hostname or IP address of the primary server.
+	//   port - The port of the primary server.
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/replicaof/
+	ReplicaOf(ctx context.Context, host string, port int64) (string, error)
+
+	// ReplicaOfNoOne turns off replication and promotes the server to a primary.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/replicaof/
+	ReplicaOfNoOne(ctx context.Context) (string, error)
+
 	ConfigResetStat(ctx context.Context) (string, error)
 
 	ConfigRewrite(ctx context.Context) (string, error)

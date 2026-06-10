@@ -7286,6 +7286,81 @@ func (b *BaseBatch[T]) LastSave() *T {
 	return b.addCmdAndTypeChecker(C.LastSave, []string{}, reflect.Int64, false)
 }
 
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (b *BaseBatch[T]) Save() *T {
+	return b.addCmdAndTypeChecker(C.Save, []string{}, reflect.String, false)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (b *BaseBatch[T]) Bgsave() *T {
+	return b.addCmdAndTypeChecker(C.BgSave, []string{}, reflect.String, false)
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (b *BaseBatch[T]) BgRewriteAof() *T {
+	return b.addCmdAndTypeChecker(C.BgRewriteAof, []string{}, reflect.String, false)
+}
+
+// Configures the server to replicate from the specified host and port.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host - The hostname or IP address of the primary server.
+//	port - The port of the primary server.
+//
+// Command Response:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (b *BaseBatch[T]) ReplicaOf(host string, port int64) *T {
+	return b.addCmdAndTypeChecker(
+		C.ReplicaOf,
+		[]string{host, utils.IntToString(port)},
+		reflect.String,
+		false,
+	)
+}
+
+// Turns off replication and promotes the server to a primary.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (b *BaseBatch[T]) ReplicaOfNoOne() *T {
+	return b.addCmdAndTypeChecker(C.ReplicaOf, []string{"NO", "ONE"}, reflect.String, false)
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.

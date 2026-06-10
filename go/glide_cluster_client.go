@@ -1014,6 +1014,169 @@ func (client *ClusterClient) LastSaveWithOptions(
 	return models.CreateClusterSingleValue[int64](data), nil
 }
 
+// Synchronously saves the dataset to disk.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *ClusterClient) Save(ctx context.Context) (string, error) {
+	return client.SaveWithOptions(ctx, options.RouteOption{Route: config.AllPrimaries})
+}
+
+// Synchronously saves the dataset to disk.
+// The command will be routed to the nodes defined by opts.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *ClusterClient) SaveWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
+	route := config.Route(config.AllPrimaries)
+	if opts.Route != nil {
+		route = opts.Route
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.Save, []string{}, route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A [models.ClusterValue] containing status strings.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) Bgsave(ctx context.Context) (models.ClusterValue[string], error) {
+	return client.BgsaveWithOptions(ctx, options.RouteOption{Route: config.AllPrimaries})
+}
+
+// Asynchronously saves the dataset to disk in the background.
+// The command will be routed to the nodes defined by opts.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A [models.ClusterValue] containing status strings.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *ClusterClient) BgsaveWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	route := config.Route(config.AllPrimaries)
+	if opts.Route != nil {
+		route = opts.Route
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.BgSave, []string{}, route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A [models.ClusterValue] containing status strings.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *ClusterClient) BgRewriteAof(ctx context.Context) (models.ClusterValue[string], error) {
+	return client.BgRewriteAofWithOptions(ctx, options.RouteOption{Route: config.AllPrimaries})
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+// The command will be routed to the nodes defined by opts.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command.
+//
+// Return value:
+//
+//	A [models.ClusterValue] containing status strings.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *ClusterClient) BgRewriteAofWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	route := config.Route(config.AllPrimaries)
+	if opts.Route != nil {
+		route = opts.Route
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.BgRewriteAof, []string{}, route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	if route != nil && route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.

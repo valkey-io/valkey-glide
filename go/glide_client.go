@@ -553,6 +553,113 @@ func (client *Client) LastSave(ctx context.Context) (int64, error) {
 	return handleIntResponse(response)
 }
 
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *Client) Save(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.Save, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) Bgsave(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *Client) BgRewriteAof(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgRewriteAof, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Configures the server to replicate from the specified host and port.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	host - The hostname or IP address of the primary server.
+//	port - The port of the primary server.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOf(ctx context.Context, host string, port int64) (string, error) {
+	response, err := client.executeCommand(ctx, C.ReplicaOf, []string{host, utils.IntToString(port)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Turns off replication and promotes the server to a primary.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOfNoOne(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.ReplicaOf, []string{"NO", "ONE"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.

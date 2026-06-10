@@ -41,6 +41,72 @@ type ServerManagementClusterCommands interface {
 
 	LastSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[int64], error)
 
+	// Save synchronously saves the dataset to disk.
+	// The command will be routed to all primary nodes.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/save/
+	Save(ctx context.Context) (string, error)
+
+	// SaveWithOptions synchronously saves the dataset to disk.
+	// The command will be routed to the nodes defined by routeOption.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/save/
+	SaveWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
+
+	// Bgsave asynchronously saves the dataset to disk in the background.
+	// The command will be routed to all primary nodes.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A [models.ClusterValue] containing status strings.
+	//
+	// [valkey.io]: https://valkey.io/commands/bgsave/
+	Bgsave(ctx context.Context) (models.ClusterValue[string], error)
+
+	// BgsaveWithOptions asynchronously saves the dataset to disk in the background.
+	// The command will be routed to the nodes defined by routeOption.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A [models.ClusterValue] containing status strings.
+	//
+	// [valkey.io]: https://valkey.io/commands/bgsave/
+	BgsaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	// BgRewriteAof initiates a background rewrite of the append-only file (AOF).
+	// The command will be routed to all primary nodes.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A [models.ClusterValue] containing status strings.
+	//
+	// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+	BgRewriteAof(ctx context.Context) (models.ClusterValue[string], error)
+
+	// BgRewriteAofWithOptions initiates a background rewrite of the append-only file (AOF).
+	// The command will be routed to the nodes defined by routeOption.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A [models.ClusterValue] containing status strings.
+	//
+	// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+	BgRewriteAofWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
 	ConfigResetStat(ctx context.Context) (string, error)
 
 	ConfigResetStatWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
