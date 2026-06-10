@@ -12394,3 +12394,23 @@ class TestSyncScripts:
             thread.join(timeout=4)
 
         test_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_failover_no_replicas(self, glide_sync_client: GlideClient):
+        # FAILOVER on a primary with no replicas should error
+        with pytest.raises(RequestError):
+            glide_sync_client.failover()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_failover_abort_no_failover_in_progress(self, glide_sync_client: GlideClient):
+        # FAILOVER ABORT when no failover is in progress should error
+        with pytest.raises(RequestError):
+            glide_sync_client.failover(abort=True)
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_replicaof_no_one(self, glide_sync_client: GlideClient):
+        # REPLICAOF NO ONE on a primary should succeed
+        assert glide_sync_client.replicaof_no_one() == OK

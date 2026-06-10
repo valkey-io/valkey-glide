@@ -2170,4 +2170,47 @@ describe("GlideClient", () => {
         },
         TIMEOUT,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_no_replicas_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // FAILOVER on a primary with no replicas should error
+            // Error message differs between Redis and Valkey
+            await expect(client.failover()).rejects.toThrow(RequestError);
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_abort_no_failover_in_progress_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // FAILOVER ABORT when no failover is in progress should error
+            await expect(
+                client.failover({ abort: true }),
+            ).rejects.toThrow(RequestError);
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "replicaofNoOne_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // REPLICAOF NO ONE on a primary should succeed
+            const result = await client.replicaofNoOne();
+            expect(result).toBe("OK");
+            client.close();
+        },
+        TIMEOUT,
+    );
 });

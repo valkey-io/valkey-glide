@@ -12497,3 +12497,24 @@ class TestScripts:
                 await standalone_client.delete(["key"])
             finally:
                 await standalone_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_failover_no_replicas(self, glide_client: GlideClient):
+        # FAILOVER on a primary with no replicas should error
+        # Error message differs between Redis and Valkey
+        with pytest.raises(RequestError):
+            await glide_client.failover()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_failover_abort_no_failover_in_progress(self, glide_client: GlideClient):
+        # FAILOVER ABORT when no failover is in progress should error
+        with pytest.raises(RequestError):
+            await glide_client.failover(abort=True)
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_replicaof_no_one(self, glide_client: GlideClient):
+        # REPLICAOF NO ONE on a primary should succeed
+        assert await glide_client.replicaof_no_one() == OK

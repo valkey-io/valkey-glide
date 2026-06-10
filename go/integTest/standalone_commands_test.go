@@ -1384,3 +1384,25 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
+
+func (suite *GlideTestSuite) TestFailover_NoReplicas() {
+	client := suite.defaultClient()
+	// FAILOVER on a primary with no replicas should error
+	_, err := client.Failover(context.Background())
+	suite.Error(err)
+}
+
+func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {
+	client := suite.defaultClient()
+	// FAILOVER ABORT when no failover is in progress should error
+	_, err := client.FailoverWithOptions(context.Background(), options.NewFailoverOptionsWithAbort())
+	suite.Error(err)
+}
+
+func (suite *GlideTestSuite) TestReplicaOfNoOne() {
+	client := suite.defaultClient()
+	// REPLICAOF NO ONE on a primary should succeed
+	response, err := client.ReplicaOfNoOne(context.Background())
+	suite.NoError(err)
+	assert.Equal(suite.T(), "OK", response)
+}
