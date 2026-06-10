@@ -1075,6 +1075,10 @@ class StandaloneCommands(CoreCommands):
                 OK
         """
         args: List[TEncodable] = []
+        if (host is None) != (port is None):
+            raise ValueError("Both host and port must be provided together")
+        if force and (host is None or port is None):
+            raise ValueError("force requires host and port to be specified")
         if abort:
             args.append("ABORT")
         else:

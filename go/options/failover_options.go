@@ -11,7 +11,6 @@ type FailoverOptions struct {
 	Force     bool
 	Abort     bool
 	TimeoutMs int64
-	hasTo     bool
 }
 
 // NewFailoverOptionsWithAbort creates options to abort an ongoing failover.
@@ -26,17 +25,17 @@ func NewFailoverOptionsWithTimeout(timeoutMs int64) *FailoverOptions {
 
 // NewFailoverOptionsWithTo creates options to failover to a specific replica.
 func NewFailoverOptionsWithTo(host string, port int) *FailoverOptions {
-	return &FailoverOptions{Host: host, Port: port, hasTo: true}
+	return &FailoverOptions{Host: host, Port: port}
 }
 
 // NewFailoverOptionsWithToAndTimeout creates options to failover to a specific replica with a timeout.
 func NewFailoverOptionsWithToAndTimeout(host string, port int, timeoutMs int64) *FailoverOptions {
-	return &FailoverOptions{Host: host, Port: port, TimeoutMs: timeoutMs, hasTo: true}
+	return &FailoverOptions{Host: host, Port: port, TimeoutMs: timeoutMs}
 }
 
 // NewFailoverOptionsForced creates options to force failover to a specific replica after timeout.
 func NewFailoverOptionsForced(host string, port int, timeoutMs int64) *FailoverOptions {
-	return &FailoverOptions{Host: host, Port: port, Force: true, TimeoutMs: timeoutMs, hasTo: true}
+	return &FailoverOptions{Host: host, Port: port, Force: true, TimeoutMs: timeoutMs}
 }
 
 // ToArgs converts the options to command arguments.
@@ -46,7 +45,7 @@ func (o *FailoverOptions) ToArgs() []string {
 		args = append(args, "ABORT")
 		return args
 	}
-	if o.hasTo {
+	if o.Host != "" {
 		args = append(args, "TO", o.Host, strconv.Itoa(o.Port))
 		if o.Force {
 			args = append(args, "FORCE")
