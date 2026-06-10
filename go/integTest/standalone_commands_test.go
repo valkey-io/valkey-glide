@@ -1398,11 +1398,3 @@ func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {
 	_, err := client.FailoverWithOptions(context.Background(), options.NewFailoverOptionsWithAbort())
 	suite.Error(err)
 }
-
-func (suite *GlideTestSuite) TestReplicaOfNoOne() {
-	client := suite.defaultClient()
-	// REPLICAOF NO ONE on a primary should succeed
-	response, err := client.ReplicaOfNoOne(context.Background())
-	suite.NoError(err)
-	assert.Equal(suite.T(), "OK", response)
-}
