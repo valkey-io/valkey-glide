@@ -41,17 +41,24 @@ public class AccessControlLogEntry implements Serializable {
     private static final long DEFAULT_LONG_VALUE = 0L;
 
     public AccessControlLogEntry(Map<String, Object> map) {
+        if (map == null) {
+            throw new IllegalArgumentException("ACL log entry map cannot be null");
+        }
         count = toLong(map.get(COUNT));
-        reason = (String) map.get(REASON);
-        context = (String) map.get(CONTEXT);
-        object = (String) map.get(OBJECT);
-        username = (String) map.get(USERNAME);
-        ageSeconds = (String) map.get(AGE_SECONDS);
-        clientInfo = getMapFromRawClientInfo((String) map.get(CLIENT_INFO));
+        reason = toStringField(map.get(REASON));
+        context = toStringField(map.get(CONTEXT));
+        object = toStringField(map.get(OBJECT));
+        username = toStringField(map.get(USERNAME));
+        ageSeconds = toStringField(map.get(AGE_SECONDS));
+        clientInfo = getMapFromRawClientInfo(toStringField(map.get(CLIENT_INFO)));
         logEntry = map;
         entryId = toLong(map.get(ENTRY_ID));
         timestampCreated = toLong(map.get(TIMESTAMP_CREATED));
         timestampLastUpdated = toLong(map.get(TIMESTAMP_LAST_UPDATED));
+    }
+
+    private static String toStringField(Object value) {
+        return value == null ? null : value.toString();
     }
 
     /**

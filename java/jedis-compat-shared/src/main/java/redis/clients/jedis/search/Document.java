@@ -23,6 +23,10 @@ public class Document {
         return properties.entrySet();
     }
 
+    /**
+     * TODO(search): Return the document relevance score when Valkey Search result mapping is
+     * implemented. Currently returns 0.0 as a compatibility stub.
+     */
     public double getScore() {
         return 0.0;
     }

@@ -13,7 +13,6 @@ public class ScanResult<T> {
 
     public ScanResult(String cursor, List<T> result) {
         this.cursor = cursor;
-        // Defensive copy to prevent external modification (fixes SpotBugs EI_EXPOSE_REP2)
         this.result = result != null ? new ArrayList<>(result) : new ArrayList<>();
     }
 
@@ -27,7 +26,6 @@ public class ScanResult<T> {
      */
     public ScanResult(byte[] cursor, List<T> result) {
         this.cursor = cursor != null ? new String(cursor, StandardCharsets.UTF_8) : "0";
-        // Defensive copy to prevent external modification (fixes SpotBugs EI_EXPOSE_REP2)
         this.result = result != null ? new ArrayList<>(result) : new ArrayList<>();
     }
 
@@ -48,7 +46,6 @@ public class ScanResult<T> {
     }
 
     public List<T> getResult() {
-        // Return unmodifiable view to prevent external modification (fixes SpotBugs EI_EXPOSE_REP)
         return Collections.unmodifiableList(result);
     }
 

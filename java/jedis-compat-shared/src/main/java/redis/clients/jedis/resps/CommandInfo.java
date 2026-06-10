@@ -97,6 +97,11 @@ public class CommandInfo {
                 @Override
                 public CommandInfo build(Object data) {
                     List<Object> commandData = (List<Object>) data;
+                    if (commandData == null || commandData.size() < 10) {
+                        throw new IllegalArgumentException(
+                                "Invalid COMMAND INFO response: expected at least 10 elements, got "
+                                        + (commandData == null ? "null" : commandData.size()));
+                    }
 
                     long arity = LONG.build(commandData.get(1));
                     List<String> flags = STRING_LIST.build(commandData.get(2));
