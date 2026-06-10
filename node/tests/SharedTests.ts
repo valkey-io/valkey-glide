@@ -127,7 +127,9 @@ export function runBaseTests(config: {
         "Background saving is currently not in progress or scheduled";
 
     // Route option for routing to a single primary node by slot key.
-    const PRIMARY_SLOT_ROUTE_OPTION: RouteOption = { route: { type: "primarySlotKey", key: "1" }}
+    const PRIMARY_SLOT_ROUTE_OPTION: RouteOption = {
+        route: { type: "primarySlotKey", key: "1" },
+    };
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
@@ -414,7 +416,9 @@ export function runBaseTests(config: {
 
                 if (client instanceof GlideClusterClient) {
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.save(PRIMARY_SLOT_ROUTE_OPTION);
+                    const clusterResult = await client.save(
+                        PRIMARY_SLOT_ROUTE_OPTION,
+                    );
                     expect(clusterResult).toEqual("OK");
                 }
             }, protocol);
@@ -435,7 +439,9 @@ export function runBaseTests(config: {
                     );
 
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.bgsave(PRIMARY_SLOT_ROUTE_OPTION);
+                    const clusterResult = await client.bgsave(
+                        PRIMARY_SLOT_ROUTE_OPTION,
+                    );
                     expect(BGSAVE_RESPONSES).toContain(clusterResult as string);
                 } else {
                     const result = await client.bgsave();
@@ -459,7 +465,9 @@ export function runBaseTests(config: {
                     );
 
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.bgsaveSchedule(PRIMARY_SLOT_ROUTE_OPTION);
+                    const clusterResult = await client.bgsaveSchedule(
+                        PRIMARY_SLOT_ROUTE_OPTION,
+                    );
                     expect(BGSAVE_RESPONSES).toContain(clusterResult as string);
                 } else {
                     const result = await client.bgsaveSchedule();
@@ -511,7 +519,9 @@ export function runBaseTests(config: {
                     );
 
                     await waitForSaveNotInProgress(client);
-                    const clusterResult = await client.bgrewriteaof(PRIMARY_SLOT_ROUTE_OPTION);
+                    const clusterResult = await client.bgrewriteaof(
+                        PRIMARY_SLOT_ROUTE_OPTION,
+                    );
                     expect(BGREWRITEAOF_RESPONSES).toContain(
                         clusterResult as string,
                     );
