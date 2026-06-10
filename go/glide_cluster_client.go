@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 	"unsafe"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -233,7 +234,7 @@ func (client *ClusterClient) CustomCommand(ctx context.Context, args []string) (
 //
 // Return value:
 //
-//	A simple `"OK"` response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/select/
 func (client *ClusterClient) Select(ctx context.Context, index int64) (string, error) {
@@ -337,7 +338,7 @@ func (client *ClusterClient) InfoWithOptions(
 //	ctx - The context for controlling the command execution.
 //	args  - Arguments for the custom command including the command name.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -610,7 +611,7 @@ func (client *ClusterClient) Echo(ctx context.Context, message string) (models.R
 //	ctx     - The context for controlling the command execution.
 //	message - The message to be echoed back.
 //	opts    - Specifies the routing configuration for the command. The client will route the
-//	          command to the nodes defined by `opts.Route`.
+//	          command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -626,7 +627,7 @@ func (client *ClusterClient) EchoWithOptions(
 	if err != nil {
 		return models.CreateEmptyClusterValue[string](), err
 	}
-	if (opts.Route).IsMultiNode() {
+	if opts.Route.IsMultiNode() {
 		data, err := handleStringToStringMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[string](), err
@@ -921,7 +922,7 @@ func (client *ClusterClient) ClientId(ctx context.Context) (models.ClusterValue[
 //
 //	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -937,7 +938,7 @@ func (client *ClusterClient) ClientIdWithOptions(
 		return models.CreateEmptyClusterValue[int64](), err
 	}
 	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
+		opts.Route.IsMultiNode() {
 		data, err := handleStringIntMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[int64](), err
@@ -983,7 +984,7 @@ func (client *ClusterClient) LastSave(ctx context.Context) (models.ClusterValue[
 //
 //	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -999,7 +1000,7 @@ func (client *ClusterClient) LastSaveWithOptions(
 		return models.CreateEmptyClusterValue[int64](), err
 	}
 	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
+		opts.Route.IsMultiNode() {
 		data, err := handleStringIntMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[int64](), err
@@ -1042,7 +1043,7 @@ func (client *ClusterClient) ConfigResetStat(ctx context.Context) (string, error
 //
 //	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1055,6 +1056,267 @@ func (client *ClusterClient) ConfigResetStatWithOptions(ctx context.Context, opt
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
+}
+
+// Provides memory usage diagnosis report.
+// The command returns a detailed analysis of memory consumption patterns in the server.
+// Routes to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage analysis report(s).
+//	When multiple nodes are queried, returns a map of node addresses to their reports.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (client *ClusterClient) MemoryDoctor(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.MemoryDoctor, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringToStringMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterMultiValue[string](data), nil
+}
+
+// Provides memory usage diagnosis report with routing configuration.
+// The command returns a detailed analysis of memory consumption patterns in the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage analysis report(s).
+//	Returns a single value when routing to one node, or a map when routing to multiple nodes.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (client *ClusterClient) MemoryDoctorWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	if opts.Route == nil {
+		return client.MemoryDoctor(ctx)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryDoctor, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+
+	if opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Returns memory allocator internal statistics.
+// The output of this command is specific to the allocator being used.
+// Routes to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A ClusterValue containing memory allocator statistics.
+//	When multiple nodes are queried, returns a map of node addresses to their statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (client *ClusterClient) MemoryMallocStats(ctx context.Context) (models.ClusterValue[string], error) {
+	response, err := client.executeCommand(ctx, C.MemoryMallocStats, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	data, err := handleStringToStringMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterMultiValue[string](data), nil
+}
+
+// Returns memory allocator internal statistics with routing configuration.
+// The output of this command is specific to the allocator being used.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A ClusterValue containing memory allocator statistics.
+//	Returns a single value when routing to one node, or a map when routing to multiple nodes.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (client *ClusterClient) MemoryMallocStatsWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[string], error) {
+	if opts.Route == nil {
+		return client.MemoryMallocStats(ctx)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryMallocStats, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+
+	if opts.Route.IsMultiNode() {
+		data, err := handleStringToStringMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[string](), err
+		}
+		return models.CreateClusterMultiValue[string](data), nil
+	}
+
+	data, err := handleStringResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[string](), err
+	}
+	return models.CreateClusterSingleValue[string](data), nil
+}
+
+// Attempts to purge dirty pages for reclamation by the allocator.
+// This command can help reduce memory fragmentation.
+// The command will be routed to all nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	OK to confirm that the purge operation was executed.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (client *ClusterClient) MemoryPurge(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryPurge, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Attempts to purge dirty pages for reclamation by the allocator.
+// This command can help reduce memory fragmentation.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	OK to confirm that the purge operation was executed.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (client *ClusterClient) MemoryPurgeWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryPurge, []string{}, opts.Route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Returns memory usage statistics for the server.
+// Routes to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage statistics.
+//	When multiple nodes are queried, returns a map of node addresses to their stats maps.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (client *ClusterClient) MemoryStats(ctx context.Context) (models.ClusterValue[map[string]any], error) {
+	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+	data, err := handleStringToStringAnyMapMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+	return models.CreateClusterMultiValue[map[string]any](data), nil
+}
+
+// Returns memory usage statistics for the server with routing configuration.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by route.
+//
+// Return value:
+//
+//	A ClusterValue containing memory usage statistics.
+//	Returns a single stats map when routing to one node, or a map of nodes when routing to multiple.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (client *ClusterClient) MemoryStatsWithOptions(
+	ctx context.Context,
+	opts options.RouteOption,
+) (models.ClusterValue[map[string]any], error) {
+	if opts.Route == nil {
+		return client.MemoryStats(ctx)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.MemoryStats, []string{}, opts.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+
+	if opts.Route.IsMultiNode() {
+		data, err := handleStringToStringAnyMapMapResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[map[string]any](), err
+		}
+		return models.CreateClusterMultiValue[map[string]any](data), nil
+	}
+
+	data, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[map[string]any](), err
+	}
+	return models.CreateClusterSingleValue[map[string]any](data), nil
 }
 
 // Sets configuration parameters to the specified values.
@@ -1089,7 +1351,7 @@ func (client *ClusterClient) ConfigSet(ctx context.Context,
 //	ctx - The context for controlling the command execution.
 //	parameters -  A map consisting of configuration parameters and their respective values to set.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -1148,7 +1410,7 @@ func (client *ClusterClient) ConfigGet(ctx context.Context,
 //	ctx - The context for controlling the command execution.
 //	parameters - An array of configuration parameter names to retrieve values for.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	       command to the nodes defined by route.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -1207,7 +1469,7 @@ func (client *ClusterClient) ClientSetName(ctx context.Context, connectionName s
 //	ctx - The context for controlling the command execution.
 //	connectionName - Connection name of the current connection.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -1264,7 +1526,7 @@ func (client *ClusterClient) ClientGetName(ctx context.Context) (models.Result[s
 //
 //	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -1281,7 +1543,7 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 		return models.CreateEmptyClusterValue[models.Result[string]](), err
 	}
 	if opts.Route != nil &&
-		(opts.Route).IsMultiNode() {
+		opts.Route.IsMultiNode() {
 		data, err := handleStringToStringOrNilMapResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[models.Result[string]](), err
@@ -1295,6 +1557,116 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 	return models.CreateClusterSingleValue[models.Result[string]](data), nil
 }
 
+// Suspends all clients for the specified timeout.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The time to pause clients.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *ClusterClient) ClientPause(ctx context.Context, timeout time.Duration) (string, error) {
+	args := []string{utils.IntToString(timeout.Milliseconds())}
+	result, err := client.executeCommandWithRoute(ctx, C.ClientPause, args, config.AllPrimaries)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Suspends all clients for the specified timeout.
+// The command will be routed to the nodes defined by specified route, or to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	timeout - The time to pause clients.
+//	options - The options for the command.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-pause/
+func (client *ClusterClient) ClientPauseWithOptions(
+	ctx context.Context,
+	timeout time.Duration,
+	options options.ClientPauseClusterOptions,
+) (string, error) {
+	args := []string{utils.IntToString(timeout.Milliseconds())}
+	if options.Mode != nil {
+		args = append(args, string(*options.Mode))
+	}
+	route := config.Route(config.AllPrimaries)
+	if options.RouteOption != nil && options.RouteOption.Route != nil {
+		route = options.RouteOption.Route
+	}
+	result, err := client.executeCommandWithRoute(ctx, C.ClientPause, args, route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Resumes processing commands on all clients.
+// The command will be routed to all primary nodes.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-unpause/
+func (client *ClusterClient) ClientUnpause(ctx context.Context) (string, error) {
+	result, err := client.executeCommandWithRoute(ctx, C.ClientUnpause, []string{}, config.AllPrimaries)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Resumes processing commands on all clients.
+// The command will be routed to the nodes defined by specified route, or to all primary nodes
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	options - Specifies the routing configuration for the command. The client will route the
+//	          command to the nodes defined by `options`.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/client-unpause/
+func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, options options.RouteOption) (string, error) {
+	route := config.Route(config.AllPrimaries)
+	if options.Route != nil {
+		route = options.Route
+	}
+	result, err := client.executeCommandWithRoute(ctx, C.ClientUnpause, []string{}, route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
 // Rewrites the configuration file with the current configuration.
 // The command will be routed a random node.
 //
@@ -1306,7 +1678,7 @@ func (client *ClusterClient) ClientGetNameWithOptions(
 //
 // Return value:
 //
-//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *ClusterClient) ConfigRewrite(ctx context.Context) (string, error) {
@@ -1323,11 +1695,11 @@ func (client *ClusterClient) ConfigRewrite(ctx context.Context) (string, error) 
 //
 //	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
-//	"OK" when the configuration was rewritten properly, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/config-rewrite/
 func (client *ClusterClient) ConfigRewriteWithOptions(ctx context.Context, opts options.RouteOption) (string, error) {
@@ -1364,10 +1736,8 @@ func (client *ClusterClient) RandomKey(ctx context.Context) (models.Result[strin
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	 opts - specifies the routing configuration for the command.
-//
-//		 The client will route the command to the nodes defined by route,
-//		 and will return the first successful result.
+//	opts - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -1397,7 +1767,7 @@ func (client *ClusterClient) RandomKeyWithRoute(ctx context.Context, opts option
 //	replace - Whether the given library should overwrite a library with the same name if it
 //	already exists.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1433,7 +1803,7 @@ func (client *ClusterClient) FunctionLoadWithRoute(ctx context.Context,
 //
 //	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1460,7 +1830,7 @@ func (client *ClusterClient) FunctionFlushWithRoute(ctx context.Context, route o
 //
 //	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1487,7 +1857,7 @@ func (client *ClusterClient) FunctionFlushSyncWithRoute(ctx context.Context, rou
 //
 //	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1516,7 +1886,7 @@ func (client *ClusterClient) FunctionFlushAsyncWithRoute(ctx context.Context, ro
 //	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1538,7 +1908,7 @@ func (client *ClusterClient) FCallWithRoute(
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
@@ -1565,7 +1935,7 @@ func (client *ClusterClient) FCallWithRoute(
 //	ctx - The context for controlling the command execution.
 //	function - The function name.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1586,7 +1956,7 @@ func (client *ClusterClient) FCallReadOnlyWithRoute(ctx context.Context,
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
@@ -1642,7 +2012,7 @@ func (client *ClusterClient) FCallWithArgs(
 //	function - The function name.
 //	arguments - An `array` of `function` arguments. `arguments` should not represent names of keys.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	    command to the nodes defined by `route`.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1665,7 +2035,7 @@ func (client *ClusterClient) FCallWithArgsWithRoute(ctx context.Context,
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
@@ -1693,7 +2063,7 @@ func (client *ClusterClient) FCallWithArgsWithRoute(ctx context.Context,
 //	function - The function name.
 //	args - An `array` of `function` arguments. `args` should not represent names of keys.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	    command to the nodes defined by `route`.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -1716,7 +2086,7 @@ func (client *ClusterClient) FCallReadOnlyWithArgsWithRoute(ctx context.Context,
 		return models.CreateEmptyClusterValue[any](), err
 	}
 	if route.Route != nil &&
-		(route.Route).IsMultiNode() {
+		route.Route.IsMultiNode() {
 		data, err := handleStringToAnyMapResponse(result)
 		if err != nil {
 			return models.CreateEmptyClusterValue[any](), err
@@ -1810,8 +2180,7 @@ func (client *ClusterClient) FunctionStats(ctx context.Context) (
 //
 //	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	       command to the nodes defined by route. If no route is specified, the command
-//	       will be routed to all nodes.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
@@ -1858,7 +2227,7 @@ func (client *ClusterClient) FunctionStatsWithRoute(ctx context.Context,
 //
 // Return value:
 //
-//	"OK" if the library exists, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *ClusterClient) FunctionDelete(ctx context.Context, libName string) (string, error) {
@@ -1878,11 +2247,11 @@ func (client *ClusterClient) FunctionDelete(ctx context.Context, libName string)
 //	ctx - The context for controlling the command execution.
 //	libName - The library name to delete.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	    command to the nodes defined by `route`.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
-//	"OK" if the library exists, otherwise an error is thrown.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/function-delete/
 func (client *ClusterClient) FunctionDeleteWithRoute(
@@ -1942,7 +2311,7 @@ func (client *ClusterClient) FunctionKill(ctx context.Context) (string, error) {
 //
 //	ctx - The context for controlling the command execution.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -2001,7 +2370,7 @@ func (client *ClusterClient) FunctionList(ctx context.Context, query models.Func
 //	ctx - The context for controlling the command execution.
 //	query - The query to use to filter the functions and libraries.
 //	route - Specifies the routing configuration for the command. The client will route the
-//	        command to the nodes defined by route.
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -2189,7 +2558,8 @@ func (client *ClusterClient) FunctionDump(ctx context.Context) (string, error) {
 // Parameters:
 //
 //	ctx   - The context for controlling the command execution.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -2261,7 +2631,8 @@ func (client *ClusterClient) FunctionRestore(ctx context.Context, payload string
 //
 //	ctx - The context for controlling the command execution.
 //	payload - The serialized data from dump operation.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -2329,7 +2700,8 @@ func (client *ClusterClient) FunctionRestoreWithPolicy(
 //	ctx - The context for controlling the command execution.
 //	payload - The serialized data from dump operation.
 //	policy - A policy for handling existing libraries.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -2598,7 +2970,7 @@ func (client *ClusterClient) ScriptKillWithRoute(ctx context.Context, route opti
 //
 // Return value:
 //
-//	A simple "OK" response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
@@ -2623,7 +2995,7 @@ func (client *ClusterClient) Unwatch(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A simple "OK" response.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/unwatch
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
@@ -2811,7 +3183,8 @@ func (client *ClusterClient) ClusterInfo(ctx context.Context) (string, error) {
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -2869,7 +3242,8 @@ func (client *ClusterClient) ClusterNodes(ctx context.Context) (string, error) {
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -2932,7 +3306,8 @@ func (client *ClusterClient) ClusterShards(ctx context.Context) ([]map[string]an
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -3011,7 +3386,8 @@ func (client *ClusterClient) ClusterMyId(ctx context.Context) (string, error) {
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -3073,7 +3449,8 @@ func (client *ClusterClient) ClusterMyShardId(ctx context.Context) (string, erro
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //
@@ -3186,7 +3563,8 @@ func (client *ClusterClient) ClusterLinks(ctx context.Context) ([]map[string]any
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	route - Specifies the routing configuration for the command.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
 //
 // Return value:
 //

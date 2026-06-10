@@ -2,6 +2,9 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
+import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
+import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -14,7 +17,9 @@ import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
+import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitForCondition;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
@@ -50,13 +55,19 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
+import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
+import glide.cluster.ValkeyCluster;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -85,6 +96,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 public class CommandTests {
 
     private static final String INITIAL_VALUE = "VALUE";
+
+    private static boolean hasRole(GlideClient client, String role) throws Exception {
+        return client.info(new Section[] {Section.REPLICATION}).get().contains("role:" + role);
+    }
 
     private static final List<Arguments> clients = new ArrayList<>();
 
@@ -336,6 +351,56 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void clientPauseAll_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseAll_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
+
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.ALL).get());
+
+        CompletableFuture<String> set = regularClient.set(key, "after");
+        CompletableFuture<String> unpause = regularClient.clientUnpause();
+
+        Thread.sleep(300);
+
+        // Verify that none of the commands completes.
+        assertFalse(set.isDone());
+        assertFalse(unpause.isDone());
+
+        // Verify that all commands complete once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(OK, unpause.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientPauseWrite_then_clientUnpause(GlideClient regularClient) {
+        String key = "clientPauseWrite_then_clientUnpause_key";
+        assertEquals(OK, regularClient.set(key, "before").get());
+
+        assertEquals(OK, regularClient.clientPause(2000, ClientPauseMode.WRITE).get());
+
+        // Reads are not blocked by PAUSE WRITE.
+        assertEquals("before", regularClient.get(key).get());
+
+        CompletableFuture<String> set = regularClient.set(key, "after");
+
+        Thread.sleep(300);
+
+        // Verify that SET has not completed because server is paused.
+        assertFalse(set.isDone());
+
+        assertEquals(OK, regularClient.clientUnpause().get());
+
+        // Verify that SET completes once pause expires.
+        assertEquals(OK, set.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals("after", regularClient.get(key).get());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void config_reset_stat(GlideClient regularClient) {
         String data = regularClient.info(new Section[] {STATS}).get();
         long value_before = getValueFromInfo(data, "total_net_input_bytes");
@@ -470,6 +535,42 @@ public class CommandTests {
         long result = regularClient.lastsave().get();
         Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
         assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsave(GlideClient client) {
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsave().get()));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveSchedule(GlideClient client) {
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsaveSchedule().get()));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgsaveCancel(GlideClient client) {
+        assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> client.bgsaveCancel().get());
+        assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void bgrewriteaof(GlideClient client) {
+        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        assertTrue(BGREWRITEAOF_RESPONSES.contains(client.bgrewriteaof().get()));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -2011,5 +2112,157 @@ public class CommandTests {
         assertTrue(
                 exception.getMessage().toUpperCase().contains("NOSCRIPT"),
                 "Expected NOSCRIPT error after script is fully released and flushed");
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void failover_no_replicas(GlideClient regularClient) {
+        // FAILOVER without replicas should fail with an error
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.failover().get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        // Error message differs between Redis ("no replica") and Valkey ("FAILOVER requires")
+        assertTrue(
+                executionException.getCause().getMessage().contains("no replica")
+                        || executionException.getCause().getMessage().contains("FAILOVER requires"),
+                "Expected error about no replicas, got: " + executionException.getCause().getMessage());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void failover_abort_no_failover_in_progress(GlideClient regularClient) {
+        // FAILOVER ABORT when no failover is in progress should fail
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.failover(FailoverOptions.abort()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        // Error message differs between Redis ("No failover") and Valkey ("nothing to abort")
+        assertTrue(
+                executionException.getCause().getMessage().contains("No failover")
+                        || executionException.getCause().getMessage().contains("nothing to abort"),
+                "Expected error about no failover in progress, got: "
+                        + executionException.getCause().getMessage());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    @Timeout(120)
+    public void failover_to_replica(GlideClient regularClient) {
+        // Spin up a standalone primary with 1 replica
+        try (ValkeyCluster standalone = new ValkeyCluster(false, false, 1, 1, null, null)) {
+            NodeAddress primaryAddr = standalone.getNodesAddr().get(0);
+            GlideClientConfiguration config =
+                    GlideClientConfiguration.builder().address(primaryAddr).requestTimeout(10000).build();
+            try (GlideClient client = GlideClient.createClient(config).get()) {
+                // Verify initial role is master
+                assertTrue(hasRole(client, "master"));
+
+                // FAILOVER with a timeout should succeed (returns OK immediately)
+                String result = client.failover(FailoverOptions.timeout(10000)).get();
+                assertEquals(OK, result);
+
+                // Wait for role to change to slave after failover
+                waitForCondition(
+                        () -> hasRole(client, "slave"), "Expected role to change to slave after failover");
+            }
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void migrate_multi_keys_invalid_host(GlideClient regularClient) {
+        String key1 = "{migrate}" + UUID.randomUUID();
+        String key2 = "{migrate}" + UUID.randomUUID();
+        regularClient.set(key1, "value1").get();
+        regularClient.set(key2, "value2").get();
+        try {
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () ->
+                                    regularClient
+                                            .migrate("nonexistent.host", 6379, new String[] {key1, key2}, 0, 5000)
+                                            .get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(
+                    executionException.getCause().getMessage().contains("Connection refused")
+                            || executionException.getCause().getMessage().contains("Name or service not known")
+                            || executionException
+                                    .getCause()
+                                    .getMessage()
+                                    .contains("nodename nor servname provided")
+                            || executionException.getCause().getMessage().contains("Temporary failure")
+                            || executionException.getCause().getMessage().contains("IOERR"));
+        } finally {
+            regularClient.del(new String[] {key1, key2}).get();
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    @Timeout(120)
+    public void replicaof_and_replicaofNoOne(GlideClient regularClient) {
+        // Spin up two standalone servers: one as the primary, one to make a replica
+        try (ValkeyCluster primary = new ValkeyCluster(false, false, 1, 0, null, null);
+                ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+            NodeAddress primaryAddr = primary.getNodesAddr().get(0);
+            NodeAddress secondaryAddr = secondary.getNodesAddr().get(0);
+            GlideClientConfiguration config =
+                    GlideClientConfiguration.builder().address(secondaryAddr).requestTimeout(10000).build();
+            try (GlideClient client = GlideClient.createClient(config).get()) {
+                // Verify initial role is master
+                assertTrue(hasRole(client, "master"));
+
+                // Make it a replica of the primary
+                assertEquals(OK, client.replicaof(primaryAddr.getHost(), primaryAddr.getPort()).get());
+
+                // Verify role changed to slave
+                waitForCondition(
+                        () -> hasRole(client, "slave"), "Expected role to change to slave after replicaof");
+
+                // Promote back to primary
+                assertEquals(OK, client.replicaofNoOne().get());
+
+                // Verify role changed back to master
+                waitForCondition(
+                        () -> hasRole(client, "master"),
+                        "Expected role to change to master after replicaofNoOne");
+            }
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    @Timeout(120)
+    public void migrate_multi_keys_with_options_to_secondary(GlideClient regularClient) {
+        try (ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+            NodeAddress dest = secondary.getNodesAddr().get(0);
+            String key1 = "{migrate}" + UUID.randomUUID();
+            String key2 = "{migrate}" + UUID.randomUUID();
+            try {
+                regularClient.set(key1, "value1").get();
+                regularClient.set(key2, "value2").get();
+                assertEquals(
+                        OK,
+                        regularClient
+                                .migrate(
+                                        dest.getHost(),
+                                        dest.getPort(),
+                                        new String[] {key1, key2},
+                                        0,
+                                        5000,
+                                        MigrateOptions.builder().replace(true).build())
+                                .get());
+                assertEquals(0L, regularClient.exists(new String[] {key1, key2}).get());
+            } finally {
+                regularClient.del(new String[] {key1, key2}).get();
+            }
+        }
     }
 }

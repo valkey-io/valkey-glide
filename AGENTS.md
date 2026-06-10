@@ -44,7 +44,7 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 make all
 
 # Individual language builds
-make java          # Build Java client (release mode)
+make java          # Build Java client
 make python        # Build Python async + sync clients (release mode)
 make node          # Build Node.js client (release mode)
 make go            # Build Go client
@@ -83,7 +83,7 @@ cargo fmt
 
 ```bash
 cd java
-./gradlew :client:buildAllRelease
+./gradlew :client:buildAll
 ./gradlew :integTest:test
 ./gradlew :spotlessApply
 ```
@@ -104,7 +104,7 @@ cd node
 npm ci
 npm run build:release
 npm test
-npx run lint:fix
+npm run lint:fix
 ```
 
 **Go:**

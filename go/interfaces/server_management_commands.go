@@ -46,6 +46,46 @@ type ServerManagementCommands interface {
 
 	ConfigRewrite(ctx context.Context) (string, error)
 
+	// MemoryDoctor provides memory usage diagnosis report.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A string containing the memory usage analysis report.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-doctor/
+	MemoryDoctor(ctx context.Context) (string, error)
+
+	// MemoryMallocStats returns memory allocator internal statistics.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A string containing the memory allocator statistics.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+	MemoryMallocStats(ctx context.Context) (string, error)
+
+	// MemoryPurge attempts to purge dirty pages for reclamation by the allocator.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   "OK" to confirm that the purge operation was executed.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-purge/
+	MemoryPurge(ctx context.Context) (string, error)
+
+	// MemoryStats returns memory usage statistics for the server.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A map containing memory usage statistics.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-stats/
+	MemoryStats(ctx context.Context) (map[string]any, error)
+
 	// AclCat returns a list of all ACL categories.
 	//
 	// See [valkey.io] for details.

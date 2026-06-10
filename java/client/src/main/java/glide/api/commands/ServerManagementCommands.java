@@ -1,10 +1,12 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Supports commands for the "Server Management" group for a standalone client.
@@ -49,8 +51,7 @@ public interface ServerManagementCommands {
      * Rewrites the configuration file with the current configuration.
      *
      * @see <a href="https://valkey.io/commands/config-rewrite/">valkey.io</a> for details.
-     * @return <code>OK</code> when the configuration was rewritten properly, otherwise an error is
-     *     thrown.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configRewrite().get();
@@ -65,7 +66,7 @@ public interface ServerManagementCommands {
      * href="https://valkey.io/commands/latency-histogram/">LATENCY HISTOGRAM</a> commands.
      *
      * @see <a href="https://valkey.io/commands/config-resetstat/">valkey.io</a> for details.
-     * @return <code>OK</code> to confirm that the statistics were successfully reset.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configResetStat().get();
@@ -98,8 +99,7 @@ public interface ServerManagementCommands {
      * @see <a href="https://valkey.io/commands/config-set/">valkey.io</a> for details.
      * @param parameters A <code>map</code> consisting of configuration parameters and their
      *     respective values to set.
-     * @return <code>OK</code> if all configurations have been successfully set. Otherwise, raises an
-     *     error.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.configSet(Map.of("timeout", "1000", "maxmemory", "1GB")).get();
@@ -138,10 +138,76 @@ public interface ServerManagementCommands {
     CompletableFuture<Long> lastsave();
 
     /**
+     * Synchronously saves the dataset to disk.
+     *
+     * @see <a href="https://valkey.io/commands/save/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = client.save().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> save();
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return A non-empty status string.
+     * @example
+     *     <pre>{@code
+     * String response = client.bgsave().get();
+     * assert response.contains("Background saving");
+     * }</pre>
+     */
+    CompletableFuture<String> bgsave();
+
+    /**
+     * Schedules a background save of the database.
+     *
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return A non-empty status string.
+     * @example
+     *     <pre>{@code
+     * String response = client.bgsaveSchedule().get();
+     * assert response.contains("Background saving");
+     * }</pre>
+     */
+    CompletableFuture<String> bgsaveSchedule();
+
+    /**
+     * Aborts all in-progress and scheduled background saves.
+     *
+     * @since Valkey 8.1
+     * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
+     * @return A status string.
+     * @example
+     *     <pre>{@code
+     * String response = client.bgsaveCancel().get();
+     * assert response.contains("Background saving");
+     * }</pre>
+     */
+    CompletableFuture<String> bgsaveCancel();
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).
+     *
+     * @see <a href="https://valkey.io/commands/bgrewriteaof/">valkey.io</a> for details.
+     * @return A non-empty status string.
+     * @example
+     *     <pre>{@code
+     * String response = client.bgrewriteaof().get();
+     * assert response.contains("Background append only file rewriting");
+     * }</pre>
+     */
+    CompletableFuture<String> bgrewriteaof();
+
+    /**
      * Deletes all the keys of all the existing databases. This command never fails.
      *
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushall().get();
@@ -156,7 +222,7 @@ public interface ServerManagementCommands {
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushall(ASYNC).get();
@@ -169,7 +235,7 @@ public interface ServerManagementCommands {
      * Deletes all the keys of the currently selected database. This command never fails.
      *
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushdb().get();
@@ -184,7 +250,7 @@ public interface ServerManagementCommands {
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
-     * @return <code>OK</code>.
+     * @return <code>"OK"</code> response on success.
      * @example
      *     <pre>{@code
      * String response = client.flushdb(ASYNC).get();
@@ -489,4 +555,63 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> aclWhoami();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     * This command must be sent to a primary node. This is the standalone equivalent of {@link
+     * glide.api.commands.ClusterOperationsCommands#clusterFailover()}.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     * This command must be sent to a primary node. This is the standalone equivalent of {@link
+     * glide.api.commands.ClusterOperationsCommands#clusterFailover()}.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @param options The failover options.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover(FailoverOptions.to("localhost", 6380, 1000)).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover(FailoverOptions options);
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @param host The host of the primary to replicate.
+     * @param port The port of the primary to replicate.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaof("localhost", 6379).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaof(@NonNull String host, int port);
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaofNoOne().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaofNoOne();
 }

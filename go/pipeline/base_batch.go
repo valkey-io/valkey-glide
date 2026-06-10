@@ -5684,7 +5684,8 @@ func (b *BaseBatch[T]) ZDiffWithScores(keys []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/zdiffstore/
 func (b *BaseBatch[T]) ZDiffStore(destination string, keys []string) *T {
-	return b.addCmdAndTypeChecker(C.ZDiffStore,
+	return b.addCmdAndTypeChecker(
+		C.ZDiffStore,
 		append([]string{destination, strconv.Itoa(len(keys))}, keys...),
 		reflect.Int64,
 		false,
@@ -6020,7 +6021,8 @@ func (b *BaseBatch[T]) BZPopMax(keys []string, timeout time.Duration) *T {
 //
 // [valkey.io]: https://valkey.io/commands/geoadd/
 func (b *BaseBatch[T]) GeoAdd(key string, membersToGeospatialData map[string]options.GeospatialData) *T {
-	return b.addCmdAndTypeChecker(C.GeoAdd,
+	return b.addCmdAndTypeChecker(
+		C.GeoAdd,
 		append([]string{key}, options.MapGeoDataToArray(membersToGeospatialData)...),
 		reflect.Int64,
 		false,
@@ -6077,7 +6079,8 @@ func (b *BaseBatch[T]) GeoAddWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/geohash/
 func (b *BaseBatch[T]) GeoHash(key string, members []string) *T {
-	return b.addCmdAndConverter(C.GeoHash,
+	return b.addCmdAndConverter(
+		C.GeoHash,
 		append([]string{key}, members...),
 		reflect.Slice,
 		false,
@@ -6125,7 +6128,8 @@ func (b *BaseBatch[T]) GeoPos(key string, members []string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
 func (b *BaseBatch[T]) GeoDist(key string, member1 string, member2 string) *T {
-	return b.addCmdAndTypeChecker(C.GeoDist,
+	return b.addCmdAndTypeChecker(
+		C.GeoDist,
 		[]string{key, member1, member2},
 		reflect.Float64,
 		true,
@@ -6151,7 +6155,8 @@ func (b *BaseBatch[T]) GeoDist(key string, member1 string, member2 string) *T {
 //
 // [valkey.io]: https://valkey.io/commands/geodist/
 func (b *BaseBatch[T]) GeoDistWithUnit(key string, member1 string, member2 string, unit constants.GeoUnit) *T {
-	return b.addCmdAndTypeChecker(C.GeoDist,
+	return b.addCmdAndTypeChecker(
+		C.GeoDist,
 		[]string{key, member1, member2, string(unit)},
 		reflect.Float64,
 		true,

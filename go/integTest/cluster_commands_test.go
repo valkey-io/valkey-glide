@@ -748,7 +748,8 @@ func (suite *GlideTestSuite) TestClusterScanWithDifferentTypes() {
 	allKeys := []string{}
 
 	for !cursor.IsFinished() {
-		result, err := client.ScanWithOptions(context.Background(),
+		result, err := client.ScanWithOptions(
+			context.Background(),
 			cursor,
 			*options.NewClusterScanOptions().SetType(constants.ObjectTypeList),
 		)
