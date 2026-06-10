@@ -161,8 +161,9 @@ jobs:
                       python3.14 -m pip install --upgrade pip
                   fi
 
-            - name: Set up Python
+            - name: Set up Python 3.14
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
+              id: setup_python
               uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
               with:
                   python-version: "3.14"
@@ -405,17 +406,26 @@ jobs:
 
             ### SYNC CLIENT ###
 
-            - name: Determine Python command
+            - name: Determine Python 3.14 path
               id: python_cmd
               run: |
-                  if command -v python3.14 &> /dev/null; then
-                      echo "cmd=python3.14" >> "$GITHUB_OUTPUT"
+                  # Use absolute path so python3.14 is never the default interpreter
+                  if [[ -n "${{ steps.setup_python.outputs.python-path }}" ]]; then
+                      echo "cmd=${{ steps.setup_python.outputs.python-path }}" >> "$GITHUB_OUTPUT"
+                  elif command -v python3.14 &> /dev/null; then
+                      echo "cmd=$(which python3.14)" >> "$GITHUB_OUTPUT"
                   else
-                      echo "cmd=python3" >> "$GITHUB_OUTPUT"
+                      echo "::error::python3.14 not found — required to build and test cp314 wheels"
+                      exit 1
                   fi
 
             - name: Install cibuildwheel
-              run: ${{ steps.python_cmd.outputs.cmd }} -m pip install cibuildwheel
+              run: |
+                  PY="${{ steps.python_cmd.outputs.cmd }}"
+                  # Bootstrap pip via get-pip.py to avoid the broken system pip
+                  # (system pip imports distutils which was removed in Python 3.12+)
+                  curl -sS https://bootstrap.pypa.io/get-pip.py | $PY
+                  $PY -m pip install "cibuildwheel>=4.0.0"
 
             - name: Determine cibuildwheel version and set enable flags
               id: cibw_config
@@ -448,8 +458,23 @@ jobs:
 
             - name: Smoke test wheels
               run: |
-                  python3 -m venv /tmp/smoke-async && /tmp/smoke-async/bin/pip install --find-links python/glide-async/wheels valkey-glide && /tmp/smoke-async/bin/python -c "from glide import GlideClient"
-                  python3 -m venv /tmp/smoke-sync && /tmp/smoke-sync/bin/pip install --find-links python/glide-sync/wheels valkey-glide-sync && /tmp/smoke-sync/bin/python -c "from glide_sync import GlideClient"
+                  # Use the same Python version used to build wheels (3.14) so pip selects
+                  # the local cp314 wheel instead of falling back to a PyPI-published version.
+                  # Create venvs with --without-pip since ensurepip is broken on the
+                  # self-hosted runner, then bootstrap pip via get-pip.py.
+                  PYTHON=${{ steps.python_cmd.outputs.cmd }}
+                  curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+
+                  rm -rf /tmp/smoke-async /tmp/smoke-sync
+                  $PYTHON -m venv --without-pip /tmp/smoke-async
+                  /tmp/smoke-async/bin/python /tmp/get-pip.py
+                  /tmp/smoke-async/bin/pip install --find-links python/glide-async/wheels "valkey-glide==${RELEASE_VERSION}"
+                  /tmp/smoke-async/bin/python -c "from glide import GlideClient; print('Async smoke test passed')"
+
+                  $PYTHON -m venv --without-pip /tmp/smoke-sync
+                  /tmp/smoke-sync/bin/python /tmp/get-pip.py
+                  /tmp/smoke-sync/bin/pip install --find-links python/glide-sync/wheels "valkey-glide-sync==${RELEASE_VERSION}"
+                  /tmp/smoke-sync/bin/python -c "from glide_sync import GlideClient; print('Sync smoke test passed')"
 
             ### UPLOAD WHEELS ###
 
