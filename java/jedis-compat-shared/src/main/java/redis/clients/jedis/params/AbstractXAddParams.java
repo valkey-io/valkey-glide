@@ -6,20 +6,20 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import redis.clients.jedis.StreamEntryID;
 
 /**
- * Parameters for XADD command in Jedis compatibility layer. Provides a fluent API for setting stream
- * entry ID, stream creation behavior, and trimming options.
+ * Parameters for XADD command in Jedis compatibility layer. Provides a fluent API for setting
+ * stream entry ID, stream creation behavior, and trimming options.
  *
  * <p><b>Trim semantics (shared with {@link AbstractXTrimParams}):</b>
  *
  * <ul>
- *   <li>{@code maxLen} sets the stream length threshold (MAXLEN); {@code minId} sets a minimum entry
- *       ID threshold (MINID). If both are configured, <b>maxLen takes priority</b> and minId is
- *       ignored when building GLIDE options — matching Redis XADD trim modifier behavior where only
- *       one strategy is applied per command.
- *   <li>{@code limit} caps how many entries may be evicted in a single trim pass (the LIMIT modifier).
- *       It does not replace maxLen/minId; it qualifies whichever trim strategy is active. For
- *       example, {@code maxLen(1000).limit(10)} means "trim toward ~1000 entries, evicting at most
- *       10 entries this call."
+ *   <li>{@code maxLen} sets the stream length threshold (MAXLEN); {@code minId} sets a minimum
+ *       entry ID threshold (MINID). If both are configured, <b>maxLen takes priority</b> and minId
+ *       is ignored when building GLIDE options — matching Redis XADD trim modifier behavior where
+ *       only one strategy is applied per command.
+ *   <li>{@code limit} caps how many entries may be evicted in a single trim pass (the LIMIT
+ *       modifier). It does not replace maxLen/minId; it qualifies whichever trim strategy is
+ *       active. For example, {@code maxLen(1000).limit(10)} means "trim toward ~1000 entries,
+ *       evicting at most 10 entries this call."
  * </ul>
  */
 public abstract class AbstractXAddParams<T extends AbstractXAddParams<T>> {

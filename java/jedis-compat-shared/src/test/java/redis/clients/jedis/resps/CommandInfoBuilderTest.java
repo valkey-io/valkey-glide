@@ -15,8 +15,7 @@ public class CommandInfoBuilderTest {
     public void builder_rejectsShortResponse() {
         List<Object> tooShort = Arrays.asList("get", 2L, Collections.emptyList());
         assertThrows(
-                IllegalArgumentException.class,
-                () -> CommandInfo.COMMAND_INFO_BUILDER.build(tooShort));
+                IllegalArgumentException.class, () -> CommandInfo.COMMAND_INFO_BUILDER.build(tooShort));
     }
 
     @Test

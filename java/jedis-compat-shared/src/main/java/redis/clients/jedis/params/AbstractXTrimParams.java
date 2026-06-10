@@ -8,9 +8,9 @@ import redis.clients.jedis.StreamEntryID;
  * Parameters for XTRIM command in Jedis compatibility layer. Provides a fluent API for trimming
  * streams by maximum length or minimum ID.
  *
- * <p>Trim field semantics and GLIDE conversion are shared with {@link AbstractXAddParams} via {@link
- * StreamTrimParamState}. See {@link AbstractXAddParams} class Javadoc for maxLen vs limit and
- * maxLen-over-minId priority.
+ * <p>Trim field semantics and GLIDE conversion are shared with {@link AbstractXAddParams} via
+ * {@link StreamTrimParamState}. See {@link AbstractXAddParams} class Javadoc for maxLen vs limit
+ * and maxLen-over-minId priority.
  */
 public abstract class AbstractXTrimParams<T extends AbstractXTrimParams<T>> {
 

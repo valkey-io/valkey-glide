@@ -116,8 +116,7 @@ public class HostAndPort {
                 int port = Integer.parseInt(remainder.substring(1).trim());
                 return new HostAndPort(host, port);
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(
-                        "Invalid port number in: " + hostAndPortStr, e);
+                throw new IllegalArgumentException("Invalid port number in: " + hostAndPortStr, e);
             }
         }
 

@@ -85,9 +85,7 @@ public class Jedis4ParamBehaviorTest {
     public void clusterConnectionProvider_rejectsNullNodes() {
         assertThrows(
                 NullPointerException.class,
-                () ->
-                        new ClusterConnectionProvider(
-                                null, DefaultJedisClientConfig.builder().build()));
+                () -> new ClusterConnectionProvider(null, DefaultJedisClientConfig.builder().build()));
     }
 
     @Test
