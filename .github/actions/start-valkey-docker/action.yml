@@ -11,6 +11,12 @@ inputs:
         description: >
             Valkey engine version (e.g. 9.1).
         required: true
+    cluster-port-start:
+        description: >
+            Starting port for the 6-node cluster (uses 6 consecutive ports).
+            Default is 8001, resulting in ports 8001-8006.
+        required: false
+        default: "8001"
 
 runs:
     using: composite
@@ -69,8 +75,11 @@ runs:
           env:
               IMAGE: ${{ steps.docker-image.outputs.image }}
               ENGINE_VERSION: ${{ inputs.engine-version }}
+              CLUSTER_PORT_START: ${{ inputs.cluster-port-start }}
           run: |
-              echo "=== Starting Valkey cluster with modules on ports 8001-8006 ==="
+              PORT_START=${CLUSTER_PORT_START:-8001}
+              PORT_END=$((PORT_START + 5))
+              echo "=== Starting Valkey cluster with modules on ports ${PORT_START}-${PORT_END} ==="
 
               MAJOR=$(echo "$ENGINE_VERSION" | cut -d. -f1)
               EXTRA_ARGS=""
@@ -78,7 +87,7 @@ runs:
                 EXTRA_ARGS="--cluster-databases 16"
               fi
 
-              for port in 8001 8002 8003 8004 8005 8006; do
+              for port in $(seq $PORT_START $PORT_END); do
                 docker run -d --name "valkey-modules-cluster-${port}" --network host \
                   "$IMAGE" valkey-server \
                   --port "$port" \
@@ -93,7 +102,7 @@ runs:
               done
 
               # Wait for all nodes
-              for port in 8001 8002 8003 8004 8005 8006; do
+              for port in $(seq $PORT_START $PORT_END); do
                 READY=false
                 for i in $(seq 1 30); do
                   if valkey-cli -p $port PING 2>/dev/null | grep -q PONG; then
@@ -110,21 +119,40 @@ runs:
                 fi
               done
 
+              # Build endpoint list dynamically
+              ENDPOINTS=""
+              for port in $(seq $PORT_START $PORT_END); do
+                if [ -n "$ENDPOINTS" ]; then
+                  ENDPOINTS="${ENDPOINTS},"
+                fi
+                ENDPOINTS="${ENDPOINTS}127.0.0.1:${port}"
+              done
+
               # Form the cluster (3 primaries, 3 replicas)
+              P1=$PORT_START
+              P2=$((PORT_START + 1))
+              P3=$((PORT_START + 2))
+              P4=$((PORT_START + 3))
+              P5=$((PORT_START + 4))
+              P6=$((PORT_START + 5))
               valkey-cli --cluster create \
-                127.0.0.1:8001 127.0.0.1:8002 127.0.0.1:8003 \
-                127.0.0.1:8004 127.0.0.1:8005 127.0.0.1:8006 \
+                127.0.0.1:$P1 127.0.0.1:$P2 127.0.0.1:$P3 \
+                127.0.0.1:$P4 127.0.0.1:$P5 127.0.0.1:$P6 \
                 --cluster-replicas 1 \
                 --cluster-yes
 
-              echo "MODULES_CLUSTER_ENDPOINTS=127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003,127.0.0.1:8004,127.0.0.1:8005,127.0.0.1:8006" >> $GITHUB_ENV
-              echo "Cluster with modules ready on ports 8001-8006"
+              echo "MODULES_CLUSTER_ENDPOINTS=${ENDPOINTS}" >> $GITHUB_ENV
+              echo "Cluster with modules ready on ports ${PORT_START}-${PORT_END}"
 
         - name: Verify module servers
           shell: bash
+          env:
+              CLUSTER_PORT_START: ${{ inputs.cluster-port-start }}
           run: |
+              PORT_START=${CLUSTER_PORT_START:-8001}
+              PORT_END=$((PORT_START + 5))
               echo "=== Module server verification ==="
               echo "Standalone with modules (6389): $(valkey-cli -p 6389 PING)"
-              for port in 8001 8002 8003 8004 8005 8006; do
+              for port in $(seq $PORT_START $PORT_END); do
                 echo "Cluster with modules node $port: $(valkey-cli -p $port PING)"
               done
