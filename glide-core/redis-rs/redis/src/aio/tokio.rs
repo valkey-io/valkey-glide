@@ -18,32 +18,130 @@ use tokio::{
 use crate::connection::create_rustls_config;
 use crate::tls::TlsConnParams;
 use crate::{ErrorKind, RedisError};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, RwLock};
 use tokio_rustls::{client::TlsStream, TlsConnector};
 
 /// Cached TLS configurations to avoid repeatedly loading system certificates.
 /// On Linux, loading native certs can involve reading and parsing ~300KB of cert files,
 /// which adds ~6ms per connection when done repeatedly.
-static TLS_CONFIG_DEFAULT: OnceLock<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>> =
-    OnceLock::new();
-static TLS_CONFIG_INSECURE: OnceLock<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>> =
-    OnceLock::new();
+///
+/// Uses `RwLock` to allow cache invalidation if system certificates change
+/// (e.g., CA rotation requiring a re-read of the trust store).
+static TLS_CONFIG_DEFAULT: RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>> =
+    RwLock::new(None);
+static TLS_CONFIG_INSECURE: RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>> =
+    RwLock::new(None);
+
+/// Clear cached TLS configurations, forcing a reload of system certificates
+/// on the next connection.
+fn invalidate_tls_config_cache() {
+    if let Ok(mut guard) = TLS_CONFIG_DEFAULT.write() {
+        *guard = None;
+    }
+    if let Ok(mut guard) = TLS_CONFIG_INSECURE.write() {
+        *guard = None;
+    }
+}
+
+/// Check if an I/O error is a TLS certificate verification failure.
+/// Uses typed downcasting to avoid fragile string matching.
+fn is_tls_cert_error(err: &io::Error) -> bool {
+    err.get_ref()
+        .and_then(|e| e.downcast_ref::<rustls::Error>())
+        .is_some_and(|e| matches!(e, rustls::Error::InvalidCertificate(_)))
+}
 
 /// Retrieve or initialize a cached TLS configuration.
 fn get_cached_tls_config(
-    cache: &'static OnceLock<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>,
+    cache: &'static RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>>,
     insecure: bool,
     tls_params: &Option<TlsConnParams>,
 ) -> RedisResult<Arc<rustls::ClientConfig>> {
-    cache
-        .get_or_init(|| {
-            create_rustls_config(insecure, tls_params.clone())
-                .map(Arc::new)
-                .map_err(|e| (e.kind(), e.to_string()))
-        })
+    // Fast path: read lock
+    if let Ok(guard) = cache.read() {
+        if let Some(result) = guard.as_ref() {
+            return result
+                .as_ref()
+                .map_err(|(kind, msg)| {
+                    RedisError::from((*kind, "TLS configuration error", msg.clone()))
+                })
+                .cloned();
+        }
+    }
+
+    // Slow path: write lock, initialize
+    let mut guard = cache.write().map_err(|_| {
+        RedisError::from((
+            ErrorKind::IoError,
+            "TLS config cache lock poisoned",
+            String::new(),
+        ))
+    })?;
+
+    // Double-check after acquiring write lock
+    if let Some(result) = guard.as_ref() {
+        return result
+            .as_ref()
+            .map_err(|(kind, msg)| {
+                RedisError::from((*kind, "TLS configuration error", msg.clone()))
+            })
+            .cloned();
+    }
+
+    let result = create_rustls_config(insecure, tls_params.clone())
+        .map(Arc::new)
+        .map_err(|e| (e.kind(), e.to_string()));
+
+    let ret = result
         .as_ref()
         .map_err(|(kind, msg)| RedisError::from((*kind, "TLS configuration error", msg.clone())))
-        .cloned()
+        .cloned();
+
+    *guard = Some(result);
+    ret
+}
+
+/// Execute a TLS connection attempt with optional retry on certificate errors.
+///
+/// If the first attempt fails with a certificate verification error and
+/// `has_custom_params` is false, invalidates the TLS config cache and retries
+/// exactly once. This handles the case where system certificates were updated
+/// (e.g., CA rotation) while the process was running.
+async fn tls_connect_with_cert_retry<T, F, Fut>(
+    connect: F,
+    has_custom_params: bool,
+    insecure: bool,
+    tls_params: &Option<TlsConnParams>,
+) -> RedisResult<T>
+where
+    F: Fn(Arc<rustls::ClientConfig>) -> Fut,
+    Fut: Future<Output = io::Result<T>>,
+{
+    let config = if has_custom_params {
+        Arc::new(create_rustls_config(insecure, tls_params.clone())?)
+    } else if insecure {
+        get_cached_tls_config(&TLS_CONFIG_INSECURE, true, tls_params)?
+    } else {
+        get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, tls_params)?
+    };
+
+    let result = connect(config).await;
+
+    match result {
+        Ok(val) => Ok(val),
+        Err(err) if !has_custom_params && is_tls_cert_error(&err) => {
+            // Note: has_custom_params=true can never reach here due to the guard above.
+            // Only the cached config path (default/insecure) is retried after invalidation.
+            invalidate_tls_config_cache();
+            let config = if insecure {
+                get_cached_tls_config(&TLS_CONFIG_INSECURE, true, tls_params)?
+            } else {
+                get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, tls_params)?
+            };
+            Ok(connect(config).await?)
+        }
+        Err(err) => Err(err.into()),
+    }
 }
 
 #[cfg(unix)]
@@ -154,24 +252,29 @@ impl RedisRuntime for Tokio {
             .as_ref()
             .is_some_and(|p| p.client_tls_params.is_some() || p.root_cert_store.is_some());
 
-        let config = if has_custom_params {
-            // Custom TLS params (mTLS, custom CA) - cannot cache
-            Arc::new(create_rustls_config(insecure, tls_params.clone())?)
-        } else if insecure {
-            get_cached_tls_config(&TLS_CONFIG_INSECURE, true, tls_params)?
-        } else {
-            get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, tls_params)?
-        };
+        let hostname_owned = hostname.to_owned();
+        let conn = tls_connect_with_cert_retry(
+            |config| {
+                let hostname = hostname_owned.clone();
+                async move {
+                    let tls_connector = TlsConnector::from(config);
+                    tls_connector
+                        .connect(
+                            rustls_pki_types::ServerName::try_from(hostname.as_str())
+                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?
+                                .to_owned(),
+                            connect_tcp(&socket_addr, tcp_nodelay).await?,
+                        )
+                        .await
+                }
+            },
+            has_custom_params,
+            insecure,
+            tls_params,
+        )
+        .await?;
 
-        let tls_connector = TlsConnector::from(config);
-
-        Ok(tls_connector
-            .connect(
-                rustls_pki_types::ServerName::try_from(hostname)?.to_owned(),
-                connect_tcp(&socket_addr, tcp_nodelay).await?,
-            )
-            .await
-            .map(|con| Tokio::TcpTls(Box::new(con)))?)
+        Ok(Tokio::TcpTls(Box::new(conn)))
     }
 
     #[cfg(unix)]
@@ -196,5 +299,208 @@ impl RedisRuntime for Tokio {
             #[cfg(unix)]
             Tokio::Unix(x) => Box::pin(x),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // --- is_tls_cert_error tests ---
+
+    #[test]
+    fn test_is_tls_cert_error_detects_invalid_certificate() {
+        let rustls_err = rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer);
+        let io_err = io::Error::new(io::ErrorKind::InvalidData, rustls_err);
+        assert!(is_tls_cert_error(&io_err));
+    }
+
+    #[test]
+    fn test_is_tls_cert_error_ignores_non_cert_errors() {
+        let io_err = io::Error::new(io::ErrorKind::ConnectionRefused, "connection refused");
+        assert!(!is_tls_cert_error(&io_err));
+
+        let io_err = io::Error::new(io::ErrorKind::TimedOut, "timed out");
+        assert!(!is_tls_cert_error(&io_err));
+    }
+
+    #[test]
+    fn test_is_tls_cert_error_ignores_other_rustls_errors() {
+        let rustls_err = rustls::Error::General("some other error".into());
+        let io_err = io::Error::new(io::ErrorKind::Other, rustls_err);
+        assert!(!is_tls_cert_error(&io_err));
+    }
+
+    // --- Cache invalidation tests ---
+
+    #[test]
+    #[serial]
+    fn test_invalidate_clears_cache_and_allows_reinitialization() {
+        {
+            let mut guard = TLS_CONFIG_DEFAULT.write().unwrap();
+            *guard = Some(Err((ErrorKind::IoError, "stale".into())));
+        }
+        assert!(TLS_CONFIG_DEFAULT.read().unwrap().is_some());
+
+        invalidate_tls_config_cache();
+        assert!(TLS_CONFIG_DEFAULT.read().unwrap().is_none());
+
+        // Re-initialization: get_cached_tls_config should repopulate
+        let _ = get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, &None);
+        assert!(
+            TLS_CONFIG_DEFAULT.read().unwrap().is_some(),
+            "Cache should be repopulated after invalidation"
+        );
+
+        // Clean up
+        invalidate_tls_config_cache();
+    }
+
+    #[test]
+    #[serial]
+    fn test_invalidate_clears_both_caches() {
+        {
+            *TLS_CONFIG_DEFAULT.write().unwrap() = Some(Err((ErrorKind::IoError, "x".into())));
+            *TLS_CONFIG_INSECURE.write().unwrap() = Some(Err((ErrorKind::IoError, "x".into())));
+        }
+        invalidate_tls_config_cache();
+        assert!(TLS_CONFIG_DEFAULT.read().unwrap().is_none());
+        assert!(TLS_CONFIG_INSECURE.read().unwrap().is_none());
+    }
+
+    // --- Retry semantics tests (exercises tls_connect_with_cert_retry directly) ---
+
+    fn make_cert_error() -> io::Error {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer),
+        )
+    }
+
+    fn make_tcp_error() -> io::Error {
+        io::Error::new(io::ErrorKind::ConnectionRefused, "connection refused")
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_retry_on_cert_error_calls_connect_twice() {
+        invalidate_tls_config_cache();
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        // Always return cert error — should be called exactly twice (initial + one retry)
+        let result: RedisResult<u8> = tls_connect_with_cert_retry(
+            |_config| {
+                let cc = call_count_clone.clone();
+                async move {
+                    cc.fetch_add(1, Ordering::SeqCst);
+                    Err(make_cert_error())
+                }
+            },
+            false, // has_custom_params = false
+            false,
+            &None,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            2,
+            "Should retry exactly once"
+        );
+        invalidate_tls_config_cache();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_no_retry_on_non_cert_error() {
+        invalidate_tls_config_cache();
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: RedisResult<u8> = tls_connect_with_cert_retry(
+            |_config| {
+                let cc = call_count_clone.clone();
+                async move {
+                    cc.fetch_add(1, Ordering::SeqCst);
+                    Err(make_tcp_error())
+                }
+            },
+            false,
+            false,
+            &None,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            1,
+            "Should not retry on non-cert error"
+        );
+        invalidate_tls_config_cache();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_no_retry_with_custom_params_even_on_cert_error() {
+        invalidate_tls_config_cache();
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: RedisResult<u8> = tls_connect_with_cert_retry(
+            |_config| {
+                let cc = call_count_clone.clone();
+                async move {
+                    cc.fetch_add(1, Ordering::SeqCst);
+                    Err(make_cert_error())
+                }
+            },
+            true, // has_custom_params = true
+            false,
+            &None,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            1,
+            "Custom params should skip retry"
+        );
+        invalidate_tls_config_cache();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_successful_connect_does_not_retry() {
+        invalidate_tls_config_cache();
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: RedisResult<u8> = tls_connect_with_cert_retry(
+            |_config| {
+                let cc = call_count_clone.clone();
+                async move {
+                    cc.fetch_add(1, Ordering::SeqCst);
+                    Ok(42u8)
+                }
+            },
+            false,
+            false,
+            &None,
+        )
+        .await;
+
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            1,
+            "Success should not retry"
+        );
+        invalidate_tls_config_cache();
     }
 }
