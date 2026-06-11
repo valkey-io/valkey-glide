@@ -39,6 +39,7 @@ use std::slice::from_raw_parts;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::{Condvar, OnceLock};
 use std::{
     ffi::{CString, c_void},
     os::raw::{c_char, c_double, c_long, c_ulong},
@@ -223,11 +224,11 @@ impl Default for CommandResponse {
     }
 }
 
-#[repr(C)]
 /// IMPORTANT: This enum is mirrored in python/glide-shared/src/lib.rs (fast response parser,
 /// `convert` function) and declared in the CFFI definitions in
 /// python/glide-shared/glide_shared/_glide_ffi.py. Any changes here must be reflected in both.
 #[derive(Debug, Default, Clone)]
+#[repr(C)]
 pub enum ResponseType {
     #[default]
     Null = 0,
@@ -549,9 +550,166 @@ pub enum ClientType {
     SyncClient,
 }
 
+const FRAME_SIZE: usize = 32;
+struct SharedPipeWriter {
+    buffer: std::sync::Mutex<Vec<u8>>,
+    condvar: Condvar,
+    /// Kept for potential future use (e.g. graceful shutdown via close(pipe_fd)).
+    #[allow(dead_code)]
+    pipe_fd: i32,
+}
+static ASYNC_PIPE: OnceLock<SharedPipeWriter> = OnceLock::new();
+impl SharedPipeWriter {
+    fn push_success(&self, cid: u64, rid: usize, rp: usize, ap: usize) {
+        let mut b = self.buffer.lock().unwrap();
+        b.extend_from_slice(&cid.to_ne_bytes());
+        b.extend_from_slice(&(rid as u64).to_ne_bytes());
+        b.extend_from_slice(&(rp as u64).to_ne_bytes());
+        b.extend_from_slice(&(ap as u64).to_ne_bytes());
+        drop(b);
+        self.condvar.notify_one();
+    }
+    fn push_error(&self, cid: u64, rid: usize, et: RequestErrorType, em: String) {
+        let cs = CString::new(em).unwrap_or_else(|_| CString::new("unknown error").unwrap());
+        let p = CString::into_raw(cs) as u64;
+        // Pack error_type in top byte, pointer in low 56 bits.
+        // On standard x86_64/aarch64 userspace, pointers use at most 48 bits.
+        let pk = ((et as u64) << 56) | (p & 0x00FFFFFFFFFFFFFF);
+        let mut b = self.buffer.lock().unwrap();
+        b.extend_from_slice(&cid.to_ne_bytes());
+        b.extend_from_slice(&(rid as u64).to_ne_bytes());
+        b.extend_from_slice(&0u64.to_ne_bytes());
+        b.extend_from_slice(&pk.to_ne_bytes());
+        drop(b);
+        self.condvar.notify_one();
+    }
+    /// Push a pubsub message with inline data (no heap pointer transfer).
+    /// Format: cid(8) sentinel(8) total_len(8) unused(8) + kind(4) msg_len(4) msg(...) ch_len(4) ch(...) pat_len(4) pat(...)
+    /// The 32-byte header is followed by variable-length payload.
+    fn push_pubsub_inline(
+        &self,
+        cid: u64,
+        kind: i32,
+        message: &[u8],
+        channel: &[u8],
+        pattern: &[u8],
+    ) {
+        let payload_len = 4 + 4 + message.len() + 4 + channel.len() + 4 + pattern.len();
+        let mut b = self.buffer.lock().unwrap();
+        // 32-byte frame header
+        b.extend_from_slice(&cid.to_ne_bytes());
+        b.extend_from_slice(&u64::MAX.to_ne_bytes()); // sentinel
+        b.extend_from_slice(&(payload_len as u64).to_ne_bytes()); // total payload len
+        b.extend_from_slice(&0u64.to_ne_bytes()); // unused
+        // Inline payload
+        b.extend_from_slice(&kind.to_ne_bytes());
+        b.extend_from_slice(&(message.len() as u32).to_ne_bytes());
+        b.extend_from_slice(message);
+        b.extend_from_slice(&(channel.len() as u32).to_ne_bytes());
+        b.extend_from_slice(channel);
+        b.extend_from_slice(&(pattern.len() as u32).to_ne_bytes());
+        b.extend_from_slice(pattern);
+        drop(b);
+        self.condvar.notify_one();
+    }
+}
+
+/// No-op success callback — safe to call from any thread (no GIL needed).
+#[unsafe(no_mangle)]
+pub extern "C" fn noop_success_callback(_index: usize, _msg: *const CommandResponse) {}
+
+/// No-op failure callback — safe to call from any thread (no GIL needed).
+#[unsafe(no_mangle)]
+pub extern "C" fn noop_failure_callback(
+    _index: usize,
+    _msg: *const c_char,
+    _err_type: RequestErrorType,
+) {
+}
+
+/// Free an error string delivered via the shared pipe error frame.
+///
+/// # Safety
+/// `ptr` must be a valid pointer returned in a pipe error frame, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_pipe_error_string(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        let _ = unsafe { CString::from_raw(ptr) };
+    }
+}
+
+/// Initialize the process-wide shared pipe for async response delivery.
+/// Spawns a dedicated OS flush thread with adaptive batching.
+///
+/// # Safety
+/// Must be called with a valid writable pipe file descriptor.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn init_async_pipe(pipe_write_fd: i32) {
+    ASYNC_PIPE.get_or_init(|| {
+        let w = SharedPipeWriter {
+            buffer: std::sync::Mutex::new(Vec::with_capacity(FRAME_SIZE * 64)),
+            condvar: Condvar::new(),
+            pipe_fd: pipe_write_fd,
+        };
+        let fd = pipe_write_fd;
+        std::thread::Builder::new()
+            .name("glide-async-pipe-flush".into())
+            .spawn(move || {
+                while let Some(sw) = ASYNC_PIPE.get() {
+                    let data = {
+                        let mut buf = sw.buffer.lock().unwrap();
+                        while buf.is_empty() {
+                            buf = sw.condvar.wait(buf).unwrap();
+                        }
+                        let fc = buf.len() / FRAME_SIZE;
+                        if fc <= 1 {
+                            let mut d = Vec::with_capacity(FRAME_SIZE * 4);
+                            std::mem::swap(&mut *buf, &mut d);
+                            d
+                        } else {
+                            drop(buf);
+                            std::thread::yield_now();
+                            let mut buf = sw.buffer.lock().unwrap();
+                            let mut d = Vec::with_capacity(FRAME_SIZE * 64);
+                            std::mem::swap(&mut *buf, &mut d);
+                            d
+                        }
+                    };
+                    if data.is_empty() {
+                        continue;
+                    }
+                    let mut off = 0;
+                    while off < data.len() {
+                        let w = unsafe {
+                            libc::write(
+                                fd,
+                                data[off..].as_ptr() as *const libc::c_void,
+                                data.len() - off,
+                            )
+                        };
+                        if w > 0 {
+                            off += w as usize;
+                        } else if w == 0 {
+                            break;
+                        } else {
+                            let e = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+                            if e == libc::EINTR || e == libc::EAGAIN {
+                                continue;
+                            }
+                            break; // EPIPE/EBADF — fd is gone
+                        }
+                    }
+                }
+            })
+            .expect("flush thread");
+        w
+    });
+}
+
 /// A `GlideClient` adapter.
 pub struct ClientAdapter {
     runtime: Runtime,
+    pipe_client_id: std::sync::atomic::AtomicU64,
     /// Background runtime for spawned tasks (connection drivers, reconnection, cluster manager).
     /// Only used by sync clients with current_thread main runtime — tokio::spawn calls during
     /// client creation are directed here via _guard so they run independently of block_on.
@@ -594,7 +752,51 @@ impl ClientAdapter {
                 failure_callback,
                 allow_stack_response,
             } => {
-                // Spawn the request for async client
+                let cid = self
+                    .pipe_client_id
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                if cid != 0 && ASYNC_PIPE.get().is_some() {
+                    self.runtime.spawn(async move {
+                        match request_future.await {
+                            Ok(value) => {
+                                let buf = response_buf.map(|rb| (rb.0, rb.1));
+                                match valkey_value_to_arena_response(value, buf) {
+                                    Ok((root_ptr, arena_ptr)) => {
+                                        if let Some(w) = ASYNC_PIPE.get() {
+                                            w.push_success(
+                                                cid,
+                                                request_id,
+                                                root_ptr as usize,
+                                                arena_ptr as usize,
+                                            );
+                                        }
+                                    }
+                                    Err(err) => {
+                                        if let Some(w) = ASYNC_PIPE.get() {
+                                            w.push_error(
+                                                cid,
+                                                request_id,
+                                                errors::error_type(&err),
+                                                errors::error_message(&err),
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                if let Some(w) = ASYNC_PIPE.get() {
+                                    w.push_error(
+                                        cid,
+                                        request_id,
+                                        errors::error_type(&err),
+                                        errors::error_message(&err),
+                                    );
+                                }
+                            }
+                        }
+                    });
+                    return std::ptr::null_mut();
+                }
                 self.runtime.spawn(async move {
                     let result = request_future.await;
                     let _ = Self::handle_result(
@@ -789,21 +991,29 @@ impl ClientAdapter {
         error_type: RequestErrorType,
         request_id: usize,
     ) -> *mut CommandResult {
-        //logger_core::log(logger_core::Level::Error, "ffi", &error_string);
         match self.core.client_type {
             ClientType::AsyncClient {
                 success_callback: _,
                 failure_callback,
                 allow_stack_response: _,
             } => {
-                unsafe {
-                    Self::send_async_custom_error(
-                        failure_callback,
-                        error_string,
-                        error_type,
-                        request_id,
-                    )
-                };
+                let cid = self
+                    .pipe_client_id
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                if cid != 0 && ASYNC_PIPE.get().is_some() {
+                    if let Some(w) = ASYNC_PIPE.get() {
+                        w.push_error(cid, request_id, error_type, error_string);
+                    }
+                } else {
+                    unsafe {
+                        Self::send_async_custom_error(
+                            failure_callback,
+                            error_string,
+                            error_type,
+                            request_id,
+                        )
+                    };
+                }
                 std::ptr::null_mut()
             }
             ClientType::SyncClient => {
@@ -912,16 +1122,34 @@ impl From<redis::PushKind> for PushKind {
 /// - `false` if there was an error processing the message (e.g., conversion failed).
 ///
 /// # Safety
-/// This function is unsafe because it:
-/// - Dereferences raw pointers
-/// - Calls an FFI function (`pubsub_callback`) that may have undefined behavior
-/// - Creates and destroys vectors via `Vec::from_raw_parts`
-/// - Assumes push_msg.data contains valid BulkString values
-///
-/// The caller must ensure:
-/// - `pubsub_callback` is a valid function pointer to a properly implemented callback
-/// - `client_adapter_ptr` is a valid usize representing a client adapter pointer
-/// - Memory allocated during conversion is properly freed after the callback completes
+/// Extract pubsub message/channel/pattern bytes from a PushInfo.
+/// Returns (message, channel, pattern) as owned byte vectors.
+fn extract_pubsub_data(push_msg: &redis::PushInfo) -> (Vec<u8>, Vec<u8>, Option<Vec<u8>>) {
+    let strings: Vec<&[u8]> = push_msg
+        .data
+        .iter()
+        .filter_map(|v| {
+            if let Value::BulkString(s) = v {
+                Some(s.as_slice())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if strings.len() >= 3 {
+        (
+            strings[2].to_vec(),
+            strings[1].to_vec(),
+            Some(strings[0].to_vec()),
+        )
+    } else if strings.len() == 2 {
+        (strings[1].to_vec(), strings[0].to_vec(), None)
+    } else {
+        (vec![], vec![], None)
+    }
+}
+
 unsafe fn process_push_notification(
     push_msg: redis::PushInfo,
     pubsub_callback: PubSubCallback,
@@ -1002,9 +1230,16 @@ fn create_client_internal(
         ClientType::AsyncClient { .. } => {
             // Async clients need a background worker thread to drive the reactor
             // since the calling thread is owned by the foreign language's event loop.
+            // GLIDE_TOKIO_WORKER_THREADS controls the number of tokio worker threads
+            // (default 1). More workers can help concurrent large-response workloads.
+            let worker_threads = std::env::var("GLIDE_TOKIO_WORKER_THREADS")
+                .ok()
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(1)
+                .max(1);
             Builder::new_multi_thread()
                 .enable_all()
-                .worker_threads(1)
+                .worker_threads(worker_threads)
                 .thread_name("Valkey-GLIDE thread")
                 .build()
                 .map_err(|err| {
@@ -1057,6 +1292,7 @@ fn create_client_internal(
     };
 
     // Create the client adapter that will be returned and used as conn_ptr
+    let is_sync = matches!(client_type, ClientType::SyncClient);
     let core = Arc::new(CommandExecutionCore {
         client,
         client_type,
@@ -1064,6 +1300,7 @@ fn create_client_internal(
     let pubsub_callback_store = Arc::new(std::sync::RwLock::new(pubsub_callback));
     let client_adapter = Arc::new(ClientAdapter {
         runtime,
+        pipe_client_id: std::sync::atomic::AtomicU64::new(client_id as u64),
         background_runtime,
         core,
         pubsub_callback: pubsub_callback_store.clone(),
@@ -1077,20 +1314,66 @@ fn create_client_internal(
         .as_ref()
         .unwrap_or(&client_adapter.runtime);
     let callback_store = pubsub_callback_store.clone();
-    spawn_runtime.spawn(async move {
-        while let Some(push_msg) = push_rx.recv().await {
-            if (push_msg.kind == redis::PushKind::Message
-                || push_msg.kind == redis::PushKind::PMessage
-                || push_msg.kind == redis::PushKind::SMessage)
-                && let Ok(guard) = callback_store.read()
-                && let Some(callback) = *guard
-            {
-                unsafe {
-                    process_push_notification(push_msg, callback, client_adapter_ptr);
+    let pipe_cid = client_id as u64;
+    if is_sync {
+        // Sync clients: direct callback (CFFI acquires GIL automatically).
+        spawn_runtime.spawn(async move {
+            while let Some(push_msg) = push_rx.recv().await {
+                if (push_msg.kind == redis::PushKind::Message
+                    || push_msg.kind == redis::PushKind::PMessage
+                    || push_msg.kind == redis::PushKind::SMessage)
+                    && let Ok(guard) = callback_store.read()
+                    && let Some(callback) = *guard
+                {
+                    unsafe {
+                        process_push_notification(push_msg, callback, client_adapter_ptr);
+                    }
                 }
             }
-        }
-    });
+        });
+    } else {
+        // Async clients: route through ASYNC_PIPE.
+        spawn_runtime.spawn(async move {
+            while let Some(push_msg) = push_rx.recv().await {
+                if pipe_cid != 0 {
+                    // Wait for ASYNC_PIPE if not yet initialized (brief spin during startup)
+                    let w = loop {
+                        if let Some(w) = ASYNC_PIPE.get() {
+                            break w;
+                        }
+                        std::hint::spin_loop();
+                    };
+                    if push_msg.kind == redis::PushKind::Message
+                        || push_msg.kind == redis::PushKind::PMessage
+                        || push_msg.kind == redis::PushKind::SMessage
+                        || push_msg.kind == redis::PushKind::Disconnection
+                    {
+                        let (message, channel, pattern) = extract_pubsub_data(&push_msg);
+                        let kind: i32 = PushKind::from(push_msg.kind) as i32;
+                        w.push_pubsub_inline(
+                            pipe_cid,
+                            kind,
+                            &message,
+                            &channel,
+                            pattern.as_deref().unwrap_or(&[]),
+                        );
+                    }
+                    continue;
+                }
+                // Fallback: direct callback (Go/other languages)
+                if (push_msg.kind == redis::PushKind::Message
+                    || push_msg.kind == redis::PushKind::PMessage
+                    || push_msg.kind == redis::PushKind::SMessage)
+                    && let Ok(guard) = callback_store.read()
+                    && let Some(callback) = *guard
+                {
+                    unsafe {
+                        process_push_notification(push_msg, callback, client_adapter_ptr);
+                    }
+                }
+            }
+        });
+    }
 
     Ok(Arc::into_raw(client_adapter))
 }
@@ -2194,15 +2477,37 @@ pub struct ResponseArena {
     strings: Vec<Vec<u8>>,
 }
 
+const MAX_ARENA_POOL_SIZE: usize = 16;
+thread_local! { static ARENA_POOL: std::cell::RefCell<Vec<ResponseArena>> = const { std::cell::RefCell::new(Vec::new()) }; }
 impl ResponseArena {
-    fn new(value: &Value) -> Self {
-        let node_count = Self::count_nodes(value);
-        ResponseArena {
-            nodes: Vec::with_capacity(node_count),
-            strings: Vec::new(),
-        }
+    fn from_pool(value: &Value) -> Self {
+        let nc = Self::count_nodes(value);
+        ARENA_POOL.with(|p| {
+            let mut p = p.borrow_mut();
+            if let Some(mut a) = p.pop() {
+                a.nodes.clear();
+                a.nodes.reserve(nc);
+                a.strings.clear();
+                a
+            } else {
+                ResponseArena {
+                    nodes: Vec::with_capacity(nc),
+                    strings: Vec::new(),
+                }
+            }
+        })
     }
+    fn return_to_pool(self) {
+        ARENA_POOL.with(|p| {
+            let mut p = p.borrow_mut();
+            if p.len() < MAX_ARENA_POOL_SIZE {
+                p.push(self);
+            }
+        });
+    }
+}
 
+impl ResponseArena {
     /// Count total CommandResponse nodes needed for a Value tree.
     /// Maps use wrapper nodes: 1 wrapper per entry + key nodes + value nodes.
     fn count_nodes(value: &Value) -> usize {
@@ -2225,14 +2530,6 @@ impl ResponseArena {
 
     /// Allocate a node in the arena, returning its index.
     fn alloc_node(&mut self) -> usize {
-        debug_assert!(
-            self.nodes.len() < self.nodes.capacity(),
-            "Arena node Vec would reallocate ({} nodes, capacity {}). \
-             This means count_nodes() underestimated — all previously handed-out \
-             pointers would be invalidated after finalize().",
-            self.nodes.len(),
-            self.nodes.capacity(),
-        );
         let idx = self.nodes.len();
         self.nodes.push(CommandResponse::default());
         idx
@@ -2460,7 +2757,7 @@ fn valkey_value_to_arena_response(
     value: Value,
     response_buf: Option<(*mut u8, usize)>,
 ) -> RedisResult<(*mut CommandResponse, *mut ResponseArena)> {
-    let mut arena = ResponseArena::new(&value);
+    let mut arena = ResponseArena::from_pool(&value);
     arena.build(value, response_buf)?;
     Ok(arena.finalize())
 }
@@ -2472,173 +2769,9 @@ fn valkey_value_to_arena_response(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn free_response_arena(arena_ptr: *mut ResponseArena) {
     if !arena_ptr.is_null() {
-        unsafe { drop(Box::from_raw(arena_ptr)) };
+        let arena = unsafe { *Box::from_raw(arena_ptr) };
+        arena.return_to_pool();
     }
-}
-
-#[allow(dead_code)]
-fn valkey_value_to_command_response(
-    value: Value,
-    response_buf: Option<(*mut u8, usize)>,
-) -> RedisResult<CommandResponse> {
-    let mut command_response = CommandResponse::default();
-    let result: RedisResult<CommandResponse> = match value {
-        Value::Nil => Ok(command_response),
-        Value::SimpleString(text) => {
-            let vec: Vec<u8> = text.into_bytes();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.string_value = vec_ptr as *mut c_char;
-            command_response.string_value_len = len;
-            command_response.response_type = ResponseType::String;
-            Ok(command_response)
-        }
-        Value::BulkString(data) => {
-            let data = if let Some((buf, buf_len)) = response_buf {
-                if data.len() > buf_len {
-                    return Err(RedisError::from((
-                        ErrorKind::ClientError,
-                        "Value size exceeds buffer capacity",
-                        format!(
-                            "value is {} bytes but buffer is {} bytes",
-                            data.len(),
-                            buf_len
-                        ),
-                    )));
-                }
-                // Copy data directly into the caller's buffer; the command response
-                // will carry the number of bytes written instead of the data itself.
-                unsafe {
-                    std::ptr::copy_nonoverlapping(data.as_ptr(), buf, data.len());
-                }
-                data.len().to_string().into_bytes()
-            } else {
-                data
-            };
-            let (vec_ptr, len) = convert_vec_to_pointer(data);
-            command_response.string_value = vec_ptr as *mut c_char;
-            command_response.string_value_len = len;
-            command_response.response_type = ResponseType::String;
-            Ok(command_response)
-        }
-        Value::VerbatimString { format: _, text } => {
-            let vec: Vec<u8> = text.into_bytes();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec);
-            command_response.string_value = vec_ptr as *mut c_char;
-            command_response.string_value_len = len;
-            command_response.response_type = ResponseType::String;
-            Ok(command_response)
-        }
-        Value::Okay => {
-            command_response.response_type = ResponseType::Ok;
-            Ok(command_response)
-        }
-        Value::Int(num) => {
-            command_response.int_value = num;
-            command_response.response_type = ResponseType::Int;
-            Ok(command_response)
-        }
-        Value::Double(num) => {
-            command_response.float_value = num;
-            command_response.response_type = ResponseType::Float;
-            Ok(command_response)
-        }
-        Value::Boolean(boolean) => {
-            command_response.bool_value = boolean;
-            command_response.response_type = ResponseType::Bool;
-            Ok(command_response)
-        }
-        Value::Array(array) => {
-            let vec: Result<Vec<CommandResponse>, RedisError> = array
-                .into_iter()
-                .map(|v| valkey_value_to_command_response(v, None))
-                .collect();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec?);
-            command_response.array_value = vec_ptr;
-            command_response.array_value_len = len;
-            command_response.response_type = ResponseType::Array;
-            Ok(command_response)
-        }
-        Value::Map(map) => {
-            let result: Result<Vec<CommandResponse>, RedisError> = map
-                .into_iter()
-                .map(|(key, val)| {
-                    let mut map_response = CommandResponse::default();
-
-                    let map_key = match valkey_value_to_command_response(key, None) {
-                        Ok(map_key) => map_key,
-                        Err(err) => return Err(err),
-                    };
-                    map_response.map_key = Box::into_raw(Box::new(map_key));
-
-                    let map_val = match valkey_value_to_command_response(val, None) {
-                        Ok(map_val) => map_val,
-                        Err(err) => return Err(err),
-                    };
-                    map_response.map_value = Box::into_raw(Box::new(map_val));
-
-                    Ok(map_response)
-                })
-                .collect::<Result<Vec<CommandResponse>, RedisError>>();
-
-            let (vec_ptr, len) = convert_vec_to_pointer(result?);
-            command_response.array_value = vec_ptr;
-            command_response.array_value_len = len;
-            command_response.response_type = ResponseType::Map;
-            Ok(command_response)
-        }
-        Value::Set(array) => {
-            let vec: Result<Vec<CommandResponse>, RedisError> = array
-                .into_iter()
-                .map(|v| valkey_value_to_command_response(v, None))
-                .collect();
-            let (vec_ptr, len) = convert_vec_to_pointer(vec?);
-            command_response.sets_value = vec_ptr;
-            command_response.sets_value_len = len;
-            command_response.response_type = ResponseType::Sets;
-            Ok(command_response)
-        }
-        Value::ServerError(server_error) => {
-            let error_message: String = error_message(&server_error.into());
-            // Convert the formatted string to bytes
-            let bytes = error_message.into_bytes();
-            // Process the bytes as before
-            let (vec_ptr, len) = convert_vec_to_pointer(bytes);
-            command_response.string_value = vec_ptr as *mut c_char;
-            command_response.string_value_len = len;
-            command_response.response_type = ResponseType::Error;
-
-            // Return as Ok to continue transaction processing
-            Ok(command_response)
-        }
-        Value::Push { kind, data } => {
-            // Create kind entry
-            let mut kind_entry = CommandResponse::default();
-            let map_key =
-                valkey_value_to_command_response(Value::SimpleString("kind".to_string()), None)?;
-            kind_entry.map_key = Box::into_raw(Box::new(map_key));
-            let map_val =
-                valkey_value_to_command_response(Value::SimpleString(format!("{:?}", kind)), None)?;
-            kind_entry.map_value = Box::into_raw(Box::new(map_val));
-
-            // Create values entry
-            let mut values_entry = CommandResponse::default();
-            let map_key =
-                valkey_value_to_command_response(Value::SimpleString("values".to_string()), None)?;
-            values_entry.map_key = Box::into_raw(Box::new(map_key));
-            let map_val = valkey_value_to_command_response(Value::Array(data), None)?;
-            values_entry.map_value = Box::into_raw(Box::new(map_val));
-
-            let (map_ptr, map_len) = convert_vec_to_pointer(vec![kind_entry, values_entry]);
-            command_response.array_value = map_ptr;
-            command_response.array_value_len = map_len;
-            command_response.response_type = ResponseType::Map;
-
-            Ok(command_response)
-        }
-        // TODO: Add support for other return types.
-        _ => todo!(),
-    };
-    result
 }
 
 /// Executes a command.
@@ -2752,6 +2885,7 @@ pub unsafe extern "C-unwind" fn command_with_buffer(
 
     // Check if compression is enabled before converting args
     let compression_manager = client_adapter.core.client.compression_manager();
+
     let should_process_compression = compression_manager
         .as_ref()
         .map(|cm| cm.is_enabled())
@@ -3326,27 +3460,48 @@ pub unsafe extern "C-unwind" fn get_cache_metrics(
     metrics_type: i32,
 ) -> *mut CommandResult {
     let client_adapter = unsafe {
-        // we increment the strong count to ensure that the client is not dropped just because we turned it into an Arc.
         Arc::increment_strong_count(client_adapter_ptr);
         Arc::from_raw(client_adapter_ptr as *mut ClientAdapter)
     };
 
     let client = client_adapter.core.client.clone();
-    client_adapter.execute_request(request_id, async move {
-        match CacheMetricsType::from_i32(metrics_type) {
-            Some(CacheMetricsType::HitRate) => client.cache_hit_rate(),
-            Some(CacheMetricsType::MissRate) => client.cache_miss_rate(),
-            Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
-            Some(CacheMetricsType::Evictions) => client.cache_evictions(),
-            Some(CacheMetricsType::Expirations) => client.cache_expirations(),
-            Some(CacheMetricsType::TotalLookups) => client.cache_total_lookups(),
-            None => Err(RedisError::from((
-                ErrorKind::ClientError,
-                "Invalid cache metrics type",
-                format!("Unsupported metrics type: {}", metrics_type),
-            ))),
+    let result = match CacheMetricsType::from_i32(metrics_type) {
+        Some(CacheMetricsType::HitRate) => client.cache_hit_rate(),
+        Some(CacheMetricsType::MissRate) => client.cache_miss_rate(),
+        Some(CacheMetricsType::EntryCount) => client.cache_entry_count(),
+        Some(CacheMetricsType::Evictions) => client.cache_evictions(),
+        Some(CacheMetricsType::Expirations) => client.cache_expirations(),
+        Some(CacheMetricsType::TotalLookups) => client.cache_total_lookups(),
+        None => Err(RedisError::from((
+            ErrorKind::ClientError,
+            "Invalid cache metrics type",
+            format!("Unsupported metrics type: {}", metrics_type),
+        ))),
+    };
+    // For pipe clients (Python async) and sync clients, return directly.
+    // For callback clients (Go, etc.), use execute_request to invoke callbacks.
+    let cid = client_adapter
+        .pipe_client_id
+        .load(std::sync::atomic::Ordering::Relaxed);
+    // Python pipe clients have cid != 0 AND ASYNC_PIPE initialized.
+    // Go/other clients may have cid != 0 for address resolver but no pipe.
+    let is_pipe_or_sync = matches!(client_adapter.core.client_type, ClientType::SyncClient)
+        || (cid != 0 && ASYNC_PIPE.get().is_some());
+    if is_pipe_or_sync {
+        match result {
+            Ok(value) => match valkey_value_to_arena_response(value, None) {
+                Ok((root_ptr, arena_ptr)) => Box::into_raw(Box::new(CommandResult {
+                    response: root_ptr,
+                    command_error: std::ptr::null_mut(),
+                    arena: arena_ptr,
+                })),
+                Err(err) => create_error_result_with_redis_error(err),
+            },
+            Err(err) => create_error_result_with_redis_error(err),
         }
-    })
+    } else {
+        client_adapter.execute_request(request_id, async move { result })
+    }
 }
 
 /// Executes a Lua script.
@@ -3686,6 +3841,9 @@ pub(crate) unsafe fn create_route(
     }
 }
 
+/// Applies compression to command arguments if compression is enabled.
+///
+/// For `CustomCommand`, resolves the actual request type from the command name (first arg)
 /// Convert [`CmdInfo`] to a [`Cmd`].
 ///
 /// # Safety

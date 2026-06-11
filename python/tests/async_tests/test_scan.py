@@ -2,7 +2,7 @@ from typing import AsyncGenerator, List, cast
 
 import anyio
 import pytest
-from glide.glide import ClusterScanCursor
+from glide import ClusterScanCursor
 from glide.glide_client import GlideClient, GlideClusterClient
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.config import ProtocolVersion

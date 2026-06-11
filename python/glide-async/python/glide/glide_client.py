@@ -1,38 +1,33 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import asyncio
+import itertools
+import os
+import struct
 import sys
 import threading
-from types import TracebackType
 from typing import (
-    TYPE_CHECKING,
     Any,
-    Awaitable,
     Dict,
     List,
     Optional,
-    Set,
     Tuple,
     Union,
     cast,
 )
 
-import anyio
 import sniffio
-from anyio import to_thread
-from glide.glide import (
-    DEFAULT_TIMEOUT_IN_MILLISECONDS,
-    MAX_REQUEST_ARGS_LEN,
-    ClusterScanCursor,
-    create_leaked_bytes_vec,
-    create_otel_span,
-    drop_otel_span,
-    get_cache_metric_from_registry,
-    get_statistics,
-    register_address_resolver,
-    remove_address_resolver,
-    start_socket_listener_external,
-    value_from_pointer,
-)
+
+try:
+    import anyio
+
+    HAS_ANYIO = True
+except ImportError:
+    HAS_ANYIO = False
+
+from glide_shared._fast_response import parse_response as _c_parse_response
+from glide_shared._glide_ffi import _GlideFFI
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -42,56 +37,53 @@ from glide_shared.config import (
     ServerCredentials,
 )
 from glide_shared.constants import (
-    DEFAULT_READ_BYTES_SIZE,
     OK,
     TEncodable,
-    TRequest,
     TResult,
 )
 from glide_shared.exceptions import (
     ClosingError,
     ConfigurationError,
-    ConnectionError,
     RequestError,
     get_request_error_class,
 )
-from glide_shared.protobuf.command_request_pb2 import (
-    CacheMetricsType,
-    Command,
-    CommandRequest,
-    RefreshIamToken,
-    RequestType,
+from glide_shared.ffi_helpers import (
+    ENCODING,
+    FFIClientTypeEnum,
+    convert_commands_to_c_batch_info,
+    create_c_batch_options,
+    to_c_route_ptr_and_len,
+    to_c_strings,
 )
-from glide_shared.protobuf.connection_request_pb2 import ConnectionRequest
-from glide_shared.protobuf.response_pb2 import Response
-from glide_shared.protobuf_codec import PartialMessageException, ProtobufCodec
-from glide_shared.routes import Route, set_protobuf_route
+from glide_shared.routes import Route
 
 from .async_commands.cluster_commands import ClusterCommands
-from .async_commands.core import CoreCommands
+from .async_commands.core import CoreCommands, RequestType
 from .async_commands.standalone_commands import StandaloneCommands
 from .logger import Level as LogLevel
 from .logger import Logger as ClientLogger
 from .opentelemetry import OpenTelemetry
+
+_ASYNC_FFI = _GlideFFI()  # Async client's own FFI instance
+
 
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
     from typing_extensions import Self
 
-if TYPE_CHECKING:
-    import asyncio
 
-    import trio
-
-    TTask = Union[asyncio.Task[None], trio.lowlevel.Task]
-    TFuture = Union[asyncio.Future[Any], "_CompatFuture"]
+# ==================== Framework-Agnostic Future ====================
 
 
 class _CompatFuture:
-    """anyio shim for asyncio.Future-like functionality"""
+    """anyio shim for asyncio.Future-like functionality (used for trio support)."""
 
     def __init__(self) -> None:
+        if not HAS_ANYIO:
+            raise RuntimeError(
+                "anyio is required for trio support. Install it with: pip install anyio"
+            )
         self._is_done = anyio.Event()
         self._result: Any = None
         self._exception: Optional[Exception] = None
@@ -108,351 +100,479 @@ class _CompatFuture:
         return self._is_done.is_set()
 
     def __await__(self):
-        return self._is_done.wait().__await__()
+        yield from self._is_done.wait().__await__()
+        if self._exception:
+            raise self._exception
+        return self._result
 
     def result(self) -> Any:
         if self._exception:
             raise self._exception
-
         return self._result
 
 
-def _get_new_future_instance() -> "TFuture":
-    if sniffio.current_async_library() == "asyncio":
-        import asyncio
+TFuture = Union[asyncio.Future, "_CompatFuture"]
 
+
+def _get_new_future_instance() -> "TFuture":
+    """Create a framework-appropriate future instance."""
+    try:
+        if sniffio.current_async_library() == "asyncio":
+            return asyncio.get_running_loop().create_future()
+    except sniffio.AsyncLibraryNotFoundError:
         return asyncio.get_running_loop().create_future()
 
-    # _CompatFuture is also compatible with asyncio, but is not as closely integrated
-    # into the asyncio event loop and thus introduces a noticeable performance
-    # degradation. so we only use it for trio
+    # _CompatFuture is also compatible with asyncio, but introduces performance
+    # degradation, so we only use it for trio/other frameworks
     return _CompatFuture()
+
+
+_async_pipe_read_fd: int = -1
+_next_client_id = itertools.count(1)
+
+
+_async_pipe_registered: bool = False
+_async_pipe_loop: Optional[asyncio.AbstractEventLoop] = (
+    None  # loop that owns the reader
+)
+_trio_pipe_active: bool = False  # True while trio system task is running
+_async_pipe_lock = threading.Lock()
+_client_registry: dict = {}
+_pipe_remainder: bytes = b""
+_FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
+_PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
+
+
+def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
+    """Free resources from a pipe frame whose client has been closed."""
+    # Pubsub frames are inline (no pointers to free)
+    if request_id == _PUBSUB_SENTINEL:
+        return
+    any_c = next(iter(_client_registry.values()), None)
+    if any_c is None:
+        return
+    try:
+        if response_ptr != 0 and arena_or_err != 0:
+            any_c._lib.free_response_arena(any_c._ffi.cast("void*", arena_or_err))
+        elif response_ptr == 0 and arena_or_err != 0:
+            err_ptr = arena_or_err & 0x00FFFFFFFFFFFFFF
+            if err_ptr:
+                any_c._lib.free_pipe_error_string(any_c._ffi.cast("char*", err_ptr))
+    except Exception:
+        pass
+
+
+def _resolve_future(fut, result, client):
+    """Resolve a future with a result or exception, handling cross-loop dispatch."""
+    if isinstance(fut, _CompatFuture):
+        (
+            fut.set_exception(result)
+            if isinstance(result, Exception)
+            else fut.set_result(result)
+        )
+    elif client._loop and client._loop != _async_pipe_loop:
+        if isinstance(result, Exception):
+            client._loop.call_soon_threadsafe(fut.set_exception, result)
+        else:
+            client._loop.call_soon_threadsafe(fut.set_result, result)
+    elif isinstance(result, Exception):
+        fut.set_exception(result)
+    else:
+        fut.set_result(result)
+
+
+def _handle_pipe_success(client, request_id, response_ptr, arena_or_err):
+    """Handle a success frame from the shared pipe (event loop thread)."""
+    if client._is_closed:
+        if arena_or_err and response_ptr != 0:
+            try:
+                client._lib.free_response_arena(client._ffi.cast("void*", arena_or_err))
+            except Exception:
+                pass
+        return
+    try:
+        if response_ptr == 0:
+            result = None
+        else:
+            result, _ = _c_parse_response(response_ptr)
+    except Exception as e:
+        result = e
+    finally:
+        if arena_or_err:
+            client._lib.free_response_arena(client._ffi.cast("void*", arena_or_err))
+    fut = client._pending_futures.pop(request_id, None)
+    if fut is not None and not fut.done():
+        _resolve_future(fut, result, client)
+
+
+def _handle_pipe_error(client, request_id, arena_or_err):
+    """Handle an error frame from the shared pipe."""
+    error_type = (arena_or_err >> 56) & 0xFF
+    err_ptr = arena_or_err & 0x00FFFFFFFFFFFFFF
+    if client._is_closed:
+        if err_ptr:
+            try:
+                client._lib.free_pipe_error_string(client._ffi.cast("char*", err_ptr))
+            except Exception:
+                pass
+        return
+    msg = "Unknown error"
+    if err_ptr:
+        try:
+            msg = client._ffi.string(client._ffi.cast("char*", err_ptr)).decode("utf-8")
+        except Exception:
+            pass
+        finally:
+            client._lib.free_pipe_error_string(client._ffi.cast("char*", err_ptr))
+    exc = get_request_error_class(error_type)(msg)
+    fut = client._pending_futures.pop(request_id, None)
+    if fut is not None and not fut.done():
+        _resolve_future(fut, exc, client)
+
+
+def _handle_inline_pubsub(client, payload: bytes):
+    """Handle inline pubsub data from the pipe (no native pointers)."""
+    try:
+        from glide_shared.ffi_helpers import parse_inline_pubsub
+
+        kind_str, message, channel, pattern = parse_inline_pubsub(payload)
+        if kind_str == "Disconnection":
+            ClientLogger.log(
+                LogLevel.WARN,
+                "disconnect notification",
+                "Transport disconnected, messages might be lost",
+            )
+        elif kind_str in ("Message", "PMessage", "SMessage"):
+            pubsub_msg = PubSubMsg(message=message, channel=channel, pattern=pattern)
+            with client._pubsub_lock:
+                user_callback, context = (
+                    client.config._get_pubsub_callback_and_context()
+                )
+                if not user_callback:
+                    client._pending_push_notifications.append(pubsub_msg)
+                    client._complete_pubsub_futures_safe()
+            if user_callback:
+                user_callback(pubsub_msg, context)
+        elif kind_str is None:
+            ClientLogger.log(
+                LogLevel.WARN,
+                "pubsub_pipe",
+                f"Unknown push notification kind received: {payload[:4]!r}",
+            )
+    except Exception as e:
+        ClientLogger.log(
+            LogLevel.ERROR, "pubsub_pipe", f"Error handling pubsub frame: {e}"
+        )
+
+
+def _drain_stale_pipe_frames():
+    """Drain stale frames from the pipe to prevent reading freed pointers."""
+    while True:
+        try:
+            stale = os.read(_async_pipe_read_fd, 32 * 256)
+            if not stale:
+                break
+        except (BlockingIOError, OSError):
+            break
+
+
+def _on_async_pipe_readable() -> None:
+    # TODO(free-threading): When sys._is_gil_enabled() is False, dispatch frames
+    # to a thread pool for parallel response parsing across cores. Currently
+    # responses are parsed serially on the event loop thread.
+    global _pipe_remainder
+    try:
+        data = os.read(_async_pipe_read_fd, 32 * 512)
+    except (BlockingIOError, OSError):
+        return
+    if not data:
+        return
+    if _pipe_remainder:
+        data = _pipe_remainder + data
+        _pipe_remainder = b""
+    offset = 0
+    while offset + 32 <= len(data):
+        client_id, request_id, response_ptr, arena_or_err = _FRAME_STRUCT.unpack_from(
+            data, offset
+        )
+        offset += 32
+        client = _client_registry.get(client_id)
+        if request_id == _PUBSUB_SENTINEL:
+            # Inline pubsub: response_ptr = payload_len, data follows header
+            payload_len = response_ptr
+            if offset + payload_len > len(data):
+                # Incomplete payload — put header + remaining back
+                offset -= 32
+                break
+            if client is not None:
+                _handle_inline_pubsub(client, data[offset : offset + payload_len])
+            offset += payload_len
+            continue
+        if client is None:
+            _free_orphaned_frame(request_id, response_ptr, arena_or_err)
+            continue
+        if response_ptr != 0:
+            _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+        else:
+            _handle_pipe_error(client, request_id, arena_or_err)
+    if offset < len(data):
+        _pipe_remainder = data[offset:]
+
+
+async def _trio_pipe_reader(pipe_fd: int) -> None:
+    """Background trio task that reads from the shared pipe."""
+    import trio
+
+    global _trio_pipe_active, _async_pipe_registered
+    _trio_pipe_active = True
+    try:
+        while True:
+            await trio.lowlevel.wait_readable(pipe_fd)
+            try:
+                _on_async_pipe_readable()
+            except trio.Cancelled:
+                raise
+            except Exception as e:
+                ClientLogger.log(LogLevel.ERROR, "trio_pipe", f"Pipe read error: {e}")
+    finally:
+        _trio_pipe_active = False
+        _async_pipe_registered = False
 
 
 class BaseClient(CoreCommands):
     def __init__(self, config: BaseClientConfiguration):
-        """
-        To create a new client, use the `create` classmethod
-        """
+        """To create a new client, use the `create` classmethod"""
+        _glide_ffi = _ASYNC_FFI
+        self._ffi = _glide_ffi.ffi
+        self._lib = _glide_ffi.lib
         self.config: BaseClientConfiguration = config
-        self._available_futures: Dict[int, "TFuture"] = {}
-        self._available_callback_indexes: List[int] = list()
-        self._next_callback_index: int = 1  # 0 is reserved for connection setup
-        self._buffered_requests: List[TRequest] = list()
-        self._writer_lock = threading.Lock()
-        self.socket_path: Optional[str] = None
-        self._reader_task: Optional["TTask"] = None
         self._is_closed: bool = False
+        self._core_client = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None  # set in create()
+        self._pending_futures: Dict[int, "TFuture"] = {}
+        self._callback_id_gen = itertools.count(1)
+        self._lock = threading.Lock()
+        self._address_resolver_callback_ref = None
         self._pubsub_futures: List["TFuture"] = []
         self._pubsub_lock = threading.Lock()
-        self._pending_push_notifications: List[Response] = list()
-
-        self._pending_tasks: Optional[Set[Awaitable[None]]] = None
-        """asyncio-only to avoid gc on pending write tasks"""
-
-        self._address_resolver_key: Optional[str] = None
-
-    def _create_task(self, task, *args, **kwargs):
-        """framework agnostic free-floating task shim"""
-        framework = sniffio.current_async_library()
-        if framework == "trio":
-            from functools import partial
-
-            import trio
-
-            return trio.lowlevel.spawn_system_task(partial(task, **kwargs), *args)
-        elif framework == "asyncio":
-            import asyncio
-
-            # the asyncio event loop holds weak refs to tasks, so it's recommended to
-            # hold strong refs to them during their lifetime to prevent garbage
-            # collection
-            t = asyncio.create_task(task(*args, **kwargs))
-
-            if self._pending_tasks is None:
-                self._pending_tasks = set()
-
-            self._pending_tasks.add(t)
-            t.add_done_callback(self._pending_tasks.discard)
-
-            return t
-
-        raise RuntimeError(f"Unsupported async framework {framework}")
+        self._pending_push_notifications: List[PubSubMsg] = []
+        self._pipe_client_id: int = 0
+        self._is_asyncio: bool = True
 
     @classmethod
     async def create(cls, config: BaseClientConfiguration) -> Self:
         """Creates a Glide client.
 
         Args:
-            config (ClientConfiguration): The configuration options for the client, including cluster addresses,
-            authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
+            config (ClientConfiguration): The configuration options for the client.
 
         Returns:
             Self: A promise that resolves to a connected client instance.
-
-        Examples:
-            # Connecting to a Standalone Server
-            >>> from glide import GlideClientConfiguration, NodeAddress, GlideClient, ServerCredentials, BackoffStrategy
-            >>> config = GlideClientConfiguration(
-            ...     [
-            ...         NodeAddress('primary.example.com', 6379),
-            ...         NodeAddress('replica1.example.com', 6379),
-            ...     ],
-            ...     use_tls = True,
-            ...     database_id = 1,
-            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
-            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
-            ...     pubsub_subscriptions = GlideClientConfiguration.PubSubSubscriptions(
-            ...         channels_and_patterns = {GlideClientConfiguration.PubSubChannelModes.Exact: {'updates'}},
-            ...         callback = lambda message,context : print(message),
-            ...     ),
-            ... )
-            >>> client = await GlideClient.create(config)
-
-            # Connecting to a Cluster
-            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient,
-            ... PeriodicChecksManualInterval
-            >>> config = GlideClusterClientConfiguration(
-            ...     [
-            ...         NodeAddress('address1.example.com', 6379),
-            ...         NodeAddress('address2.example.com', 6379),
-            ...     ],
-            ...     use_tls = True,
-            ...     periodic_checks = PeriodicChecksManualInterval(duration_in_sec = 30),
-            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
-            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
-            ...     pubsub_subscriptions = GlideClusterClientConfiguration.PubSubSubscriptions(
-            ...         channels_and_patterns = {
-            ...             GlideClusterClientConfiguration.PubSubChannelModes.Exact: {'updates'},
-            ...             GlideClusterClientConfiguration.PubSubChannelModes.Sharded: {'sharded_channel'},
-            ...         },
-            ...         callback = lambda message,context : print(message),
-            ...     ),
-            ... )
-            >>> client = await GlideClusterClient.create(config)
-
-        Remarks:
-            Use this static method to create and connect a client to a Valkey server.
-            The client will automatically handle connection establishment, including cluster topology discovery and
-            handling of authentication and TLS configurations.
-
-                - **Cluster Topology Discovery**: The client will automatically discover the cluster topology based
-                  on the seed addresses provided.
-                - **Authentication**: If `ServerCredentials` are provided, the client will attempt to authenticate
-                  using the specified username and password.
-                - **TLS**: If `use_tls` is set to `true`, the client will establish secure connections using TLS.
-                - **Periodic Checks**: The `periodic_checks` setting allows you to configure how often the client
-                  checks for cluster topology changes.
-                - **Reconnection Strategy**: The `BackoffStrategy` settings define how the client will attempt to
-                  reconnect in case of disconnections.
-                - **Pub/Sub Subscriptions**: Any channels or patterns specified in `PubSubSubscriptions` will be
-                  subscribed to upon connection.
-
         """
-        config = config
         self = cls(config)
 
-        init_event: threading.Event = threading.Event()
+        try:
+            self._is_asyncio = sniffio.current_async_library() == "asyncio"
+        except sniffio.AsyncLibraryNotFoundError:
+            self._is_asyncio = True
 
-        def init_callback(socket_path: Optional[str], err: Optional[str]):
-            if err is not None:
-                raise ClosingError(err)
-            elif socket_path is None:
-                raise ClosingError(
-                    "Socket initialization error: Missing valid socket path."
-                )
-            else:
-                # Received socket path
-                self.socket_path = socket_path
-                init_event.set()
+        self._loop = asyncio.get_running_loop() if self._is_asyncio else None
 
-        start_socket_listener_external(init_callback=init_callback)
+        # Build connection request
+        conn_req = config._create_a_protobuf_conn_request(
+            cluster_mode=isinstance(config, GlideClusterClientConfiguration)
+        )
+        conn_req.lib_name = "GlidePy"
+        conn_req_bytes = conn_req.SerializeToString()
 
-        # will log if the logger was created (wrapper or costumer) on info
-        # level or higher
-        ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
-        # Wait for the socket listener to complete its initialization
-        await to_thread.run_sync(init_event.wait)
-        # Create UDS connection
-        await self._create_uds_connection()
+        # Create AsyncClient type
+        client_type = self._ffi.new(
+            "ClientType*",
+            {
+                "_type": self._ffi.cast("ClientTypeEnum", FFIClientTypeEnum.Async),
+                "async_client": {
+                    "success_callback": self._lib.noop_success_callback,
+                    "failure_callback": self._lib.noop_failure_callback,
+                    "allow_stack_response": False,
+                },
+            },
+        )
 
-        # Start the reader loop as a background task
-        self._reader_task = self._create_task(self._reader_loop)
+        # Pubsub messages are delivered via the shared pipe — no callback needed.
+        pubsub_callback = self._ffi.cast("PubSubCallback", 0)
 
-        # Register address resolver in the global registry before sending the
-        # connection request, so the socket listener can pick it up.
+        # Create address resolver callback if configured
+        from glide_shared.ffi_helpers import create_address_resolver_callback
+
+        address_resolver_callback = create_address_resolver_callback(
+            self._ffi, self.config.address_resolver
+        )
         if self.config.address_resolver is not None:
-            self._address_resolver_key = register_address_resolver(
-                self.config.address_resolver
+            self._address_resolver_callback_ref = address_resolver_callback
+
+        # Set pipe_client_id before create_client so Rust routes responses
+        # through the pipe from the very first command — no race window.
+        self._pipe_client_id = next(_next_client_id)
+
+        client_response_ptr = self._lib.create_client(
+            conn_req_bytes,
+            len(conn_req_bytes),
+            client_type,
+            pubsub_callback,
+            address_resolver_callback,
+            self._pipe_client_id,
+        )
+
+        ClientLogger.log(LogLevel.INFO, "connection info", "new connection established")
+
+        if client_response_ptr == self._ffi.NULL:
+            raise ClosingError("Failed to create client, response pointer is NULL.")
+
+        client_response = self._ffi.cast("ConnectionResponse*", client_response_ptr)
+        if client_response.conn_ptr != self._ffi.NULL:
+            self._core_client = client_response.conn_ptr
+        else:
+            error_msg = (
+                self._ffi.string(client_response.connection_error_message).decode(
+                    ENCODING
+                )
+                if client_response.connection_error_message != self._ffi.NULL
+                else "Unknown error"
             )
+            self._lib.free_connection_response(client_response_ptr)
+            raise ClosingError(error_msg)
 
-        try:
-            # Set the client configurations
-            await self._set_connection_configurations()
-        except Exception:
-            # Clean up the resolver from the registry if connection fails
-            if self._address_resolver_key is not None:
-                remove_address_resolver(self._address_resolver_key)
-                self._address_resolver_key = None
-            raise
+        self._lib.free_connection_response(client_response_ptr)
+
+        self._setup_pipe()
 
         return self
 
-    async def _create_uds_connection(self) -> None:
-        try:
-            # Open an UDS connection
-            with anyio.fail_after(DEFAULT_TIMEOUT_IN_MILLISECONDS):
-                self._stream = await anyio.connect_unix(
-                    path=cast(str, self.socket_path)
-                )
-        except Exception as e:
-            raise ClosingError("Failed to create UDS connection") from e
+    def _setup_pipe(self) -> None:
+        """Initialize and register the shared response pipe."""
+        global _async_pipe_read_fd, _async_pipe_registered, _async_pipe_loop
+        global _pipe_remainder
+        with _async_pipe_lock:
+            if _async_pipe_read_fd < 0:
+                try:
+                    _async_pipe_read_fd, pw = os.pipe()
+                    os.set_blocking(_async_pipe_read_fd, False)
+                    self._lib.init_async_pipe(pw)
+                except OSError:
+                    _async_pipe_read_fd = -1
+                    self._pipe_client_id = 0
+            # Detect stale registration: the loop that originally called
+            # add_reader has been closed/destroyed (e.g. between anyio.run()
+            # calls in benchmarks).  Reset so we re-register below.
+            if _async_pipe_registered and _async_pipe_loop is not None:
+                if _async_pipe_loop.is_closed():
+                    _async_pipe_registered = False
+                    _async_pipe_loop = None
+                    _pipe_remainder = b""
+                    _drain_stale_pipe_frames()
+            if (
+                _async_pipe_registered
+                and not _trio_pipe_active
+                and _async_pipe_loop is None
+            ):
+                # Trio task exited (back-to-back trio.run)
+                _async_pipe_registered = False
+                _pipe_remainder = b""
+                _drain_stale_pipe_frames()
+            if _async_pipe_read_fd >= 0 and self._pipe_client_id:
+                _client_registry[self._pipe_client_id] = self
+                if not _async_pipe_registered:
+                    if self._is_asyncio:
+                        assert self._loop is not None
+                        self._loop.add_reader(
+                            _async_pipe_read_fd, _on_async_pipe_readable
+                        )
+                        _async_pipe_loop = self._loop
+                    else:
+                        # For trio: spawn a background task that polls the pipe
+                        import trio
 
-    async def close(self, err_message: Optional[str] = None) -> None:
+                        trio.lowlevel.spawn_system_task(
+                            _trio_pipe_reader, _async_pipe_read_fd
+                        )
+                    _async_pipe_registered = True
+
+    # ==================== Callback Handling ====================
+
+    def _get_callback_id(self) -> int:
+        return next(self._callback_id_gen)
+
+    def _complete_pubsub_futures_safe(self):
+        """Complete pending pubsub futures with available messages. Must hold _pubsub_lock."""
+        loop = self._loop
+        while self._pending_push_notifications and self._pubsub_futures:
+            fut = self._pubsub_futures[0]
+            if fut.done():
+                self._pubsub_futures.pop(0)
+                continue
+            msg = self._pending_push_notifications.pop(0)
+            self._pubsub_futures.pop(0)
+            if isinstance(fut, _CompatFuture):
+                fut.set_result(msg)
+            elif loop and not loop.is_closed():
+                loop.call_soon_threadsafe(fut.set_result, msg)
+
+    async def get_pubsub_message(self) -> PubSubMsg:
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback."
+            )
+        fut: "TFuture" = _get_new_future_instance()
+        with self._pubsub_lock:
+            self._pubsub_futures.append(fut)
+            self._complete_pubsub_futures_safe()
+        return await fut
+
+    def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise ConfigurationError(
+                "The operation will never complete since messages will be passed to the configured callback."
+            )
+        with self._pubsub_lock:
+            if self._pending_push_notifications:
+                return self._pending_push_notifications.pop(0)
+            return None
+
+    # ==================== Response Parsing ====================
+
+    def _handle_response(self, message):
+        """Parse a CommandResponse pointer into a Python object.
+
+        For the async client, NULL means no response (returns None) and the arena
+        is freed here since responses arrive via the pipe path without automatic
+        cleanup. The sync client's _handle_response raises on NULL and relies on
+        free_command_result to free the arena.
         """
-        Forwards to `aclose`, the more common method for async resources.
-        """
-        await self.aclose(err_message)
+        if message == self._ffi.NULL:
+            return None
+        addr = int(self._ffi.cast("uintptr_t", message))
+        result, _arena_ptr = _c_parse_response(addr)
+        # Arena is freed by the caller (free_command_result for sync path,
+        # explicit free_response_arena for pipe path)
+        return result
 
-    async def aclose(self, err_message: Optional[str] = None) -> None:
-        """
-        Terminate the client by closing all associated resources, including the socket and any active futures.
-        All open futures will be closed with an exception.
+    # ==================== FFI Helpers ====================
 
-        Args:
-            err_message (Optional[str]): If not None, this error message will be passed along with the exceptions when
-            closing all open futures.
-            Defaults to None.
-        """
-        if not self._is_closed:
-            self._is_closed = True
-            err_message = "" if err_message is None else err_message
-            for response_future in self._available_futures.values():
-                if not response_future.done():
-                    response_future.set_exception(ClosingError(err_message))
-            try:
-                self._pubsub_lock.acquire()
-                for pubsub_future in self._pubsub_futures:
-                    if not pubsub_future.done():
-                        pubsub_future.set_exception(ClosingError(err_message))
-            finally:
-                self._pubsub_lock.release()
+    def _to_c_strings(self, args):
+        return to_c_strings(self._ffi, args)
 
-            await self._stream.aclose()
+    def _to_c_route_ptr_and_len(self, route):
+        return to_c_route_ptr_and_len(self._ffi, route)
 
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: Optional[type[BaseException]],
-        exc: Optional[BaseException],
-        tb: Optional[TracebackType],
-    ) -> None:
-        await self.aclose()
-
-    def _get_future(self, callback_idx: int) -> "TFuture":
-        response_future: "TFuture" = _get_new_future_instance()
-        self._available_futures.update({callback_idx: response_future})
-        return response_future
-
-    def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        request = self.config._create_a_protobuf_conn_request()
-        if self._address_resolver_key is not None:
-            request.address_resolver_key = self._address_resolver_key
-        return request
-
-    async def _set_connection_configurations(self) -> None:
-        conn_request = self._get_protobuf_conn_request()
-        response_future: "TFuture" = self._get_future(0)
-        self._create_write_task(conn_request)
-        await response_future
-        res = response_future.result()
-        if res is not OK:
-            raise ClosingError(res)
-
-    def _create_write_task(self, request: TRequest):
-        self._create_task(self._write_or_buffer_request, request)
-
-    async def _write_or_buffer_request(self, request: TRequest):
-        self._buffered_requests.append(request)
-        if self._writer_lock.acquire(False):
-            try:
-                while len(self._buffered_requests) > 0:
-                    await self._write_buffered_requests_to_socket()
-            except Exception as e:
-                # trio system tasks cannot raise exceptions, so gracefully propagate
-                # any error to the pending future instead
-                callback_idx = (
-                    request.callback_idx if isinstance(request, CommandRequest) else 0
-                )
-                res_future = self._available_futures.pop(callback_idx, None)
-                if res_future and not res_future.done():
-                    res_future.set_exception(e)
-                else:
-                    ClientLogger.log(
-                        LogLevel.WARN,
-                        "unhandled response error",
-                        f"Unhandled response error for unknown request: {callback_idx}",
-                    )
-            finally:
-                self._writer_lock.release()
-
-    async def _write_buffered_requests_to_socket(self) -> None:
-        requests = self._buffered_requests
-        self._buffered_requests = list()
-        b_arr = bytearray()
-        for request in requests:
-            ProtobufCodec.encode_delimited(b_arr, request)
-        try:
-            await self._stream.send(b_arr)
-        except (anyio.ClosedResourceError, anyio.EndOfStream):
-            raise ClosingError("The communication layer was unexpectedly closed.")
-
-    def _encode_arg(self, arg: TEncodable) -> bytes:
-        """
-        Converts a string argument to bytes.
-
-        Args:
-            arg (str): An encodable argument.
-
-        Returns:
-            bytes: The encoded argument as bytes.
-        """
-        if isinstance(arg, str):
-            # TODO: Allow passing different encoding options
-            return bytes(arg, encoding="utf8")
-        if isinstance(arg, (bytearray, memoryview)):
-            return bytes(arg)
-        return arg
-
-    def _encode_and_sum_size(
-        self,
-        args_list: Optional[List[TEncodable]],
-    ) -> Tuple[List[bytes], int]:
-        """
-        Encodes the list and calculates the total memory size.
-
-        Args:
-            args_list (Optional[List[TEncodable]]): A list of strings to be converted to bytes.
-                                                           If None or empty, returns ([], 0).
-
-        Returns:
-            int: The total memory size of the encoded arguments in bytes.
-        """
-        args_size = 0
-        encoded_args_list: List[bytes] = []
-        if not args_list:
-            return (encoded_args_list, args_size)
-        for arg in args_list:
-            encoded_arg = self._encode_arg(arg)
-            encoded_args_list.append(encoded_arg)
-            args_size += len(encoded_arg)
-        return (encoded_args_list, args_size)
+    # ==================== Command Execution ====================
 
     async def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = None,
     ) -> TResult:
@@ -461,36 +581,56 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        # Create span if OpenTelemetry is configured and sampling indicates we should trace
-        span = None
-        if OpenTelemetry.should_sample():
-            command_name = RequestType.Name(request_type)
-            span = create_otel_span(command_name)
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
 
-        request = CommandRequest()
-        request.callback_idx = self._get_callback_index()
-        request.single_command.request_type = request_type
-        request.single_command.args_array.args[:] = [
-            self._encode_arg(elem) for elem in args
-        ]
-        encoded_args, args_size = self._encode_and_sum_size(args)
-        if args_size < MAX_REQUEST_ARGS_LEN:
-            request.single_command.args_array.args[:] = encoded_args
+        self._pending_futures[callback_id] = fut
+
+        c_args, c_lengths, buffers = self._to_c_strings(args)
+
+        # OTel span creation only when initialized (rare)
+        span = 0
+        if OpenTelemetry._instance is not None and OpenTelemetry.should_sample():
+            span_name_cstr = self._ffi.new(
+                "char[]", RequestType.Name(request_type).encode()
+            )
+            span = self._lib.create_named_otel_span(span_name_cstr)
+
+        if route is None:
+            self._lib.command(
+                self._core_client,
+                callback_id,
+                request_type,
+                len(args),
+                c_args,
+                c_lengths,
+                self._ffi.NULL,
+                0,
+                span,
+            )
         else:
-            request.single_command.args_vec_pointer = create_leaked_bytes_vec(
-                encoded_args
+            route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
+            self._lib.command(
+                self._core_client,
+                callback_id,
+                request_type,
+                len(args),
+                c_args,
+                c_lengths,
+                route_ptr,
+                route_len,
+                span,
             )
 
-        # Add span pointer to request if span was created
-        if span:
-            request.root_span_ptr = span
-
-        set_protobuf_route(request, route)
-        return await self._write_request_await_response(request)
+        try:
+            return await fut
+        finally:
+            if span:
+                self._lib.drop_otel_span(span)
 
     async def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool = False,
         retry_server_error: bool = False,
@@ -503,394 +643,97 @@ class BaseClient(CoreCommands):
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
 
-        # Create span if OpenTelemetry is configured and sampling indicates we should trace
-        span = None
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
 
+        self._pending_futures[callback_id] = fut
+
+        span = 0
         if OpenTelemetry.should_sample():
-            # Use "Batch" as span name for batches
-            span = create_otel_span("Batch")
+            span = self._lib.create_batch_otel_span()
 
-        request = CommandRequest()
-        request.callback_idx = self._get_callback_index()
-        batch_commands = []
-        for requst_type, args in commands:
-            command = Command()
-            command.request_type = requst_type
-            # For now, we allow the user to pass the command as array of strings
-            # we convert them here into bytes (the datatype that our rust core expects)
-            encoded_args, args_size = self._encode_and_sum_size(args)
-            if args_size < MAX_REQUEST_ARGS_LEN:
-                command.args_array.args[:] = encoded_args
-            else:
-                command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
-            batch_commands.append(command)
-        request.batch.commands.extend(batch_commands)
-        request.batch.is_atomic = is_atomic
-        request.batch.raise_on_error = raise_on_error
-        if timeout is not None:
-            request.batch.timeout = timeout
-        request.batch.retry_server_error = retry_server_error
-        request.batch.retry_connection_error = retry_connection_error
+        batch_info, batch_refs = convert_commands_to_c_batch_info(
+            self._ffi, commands, is_atomic
+        )
+        batch_options, opts_refs = create_c_batch_options(
+            self._ffi,
+            route,
+            retry_server_error=retry_server_error,
+            retry_connection_error=retry_connection_error,
+            timeout=timeout,
+        )
+        _refs = batch_refs + opts_refs  # noqa: F841  prevent GC
 
-        # Add span pointer to request if span was created
-        if span:
-            request.root_span_ptr = span
+        self._lib.batch(
+            self._core_client,
+            callback_id,
+            batch_info,
+            raise_on_error,
+            batch_options,
+            span,
+        )
 
-        set_protobuf_route(request, route)
-        return await self._write_request_await_response(request)
+        try:
+            return await fut
+        finally:
+            if span != 0:
+                self._lib.drop_otel_span(span)
 
     async def _execute_script(
         self,
         hash: str,
-        keys: Optional[List[Union[str, bytes]]] = None,
-        args: Optional[List[Union[str, bytes]]] = None,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
     ) -> TResult:
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = CommandRequest()
-        request.callback_idx = self._get_callback_index()
-        encoded_keys, keys_size = self._encode_and_sum_size(keys)
-        encoded_args, args_size = self._encode_and_sum_size(args)
-        if (keys_size + args_size) < MAX_REQUEST_ARGS_LEN:
-            request.script_invocation.hash = hash
-            request.script_invocation.keys[:] = encoded_keys
-            request.script_invocation.args[:] = encoded_args
 
-        else:
-            request.script_invocation_pointers.hash = hash
-            request.script_invocation_pointers.keys_pointer = create_leaked_bytes_vec(
-                encoded_keys
-            )
-            request.script_invocation_pointers.args_pointer = create_leaked_bytes_vec(
-                encoded_args
-            )
-        set_protobuf_route(request, route)
-        return await self._write_request_await_response(request)
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
 
-    async def get_pubsub_message(self) -> PubSubMsg:
-        if self._is_closed:
-            raise ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
-            )
+        self._pending_futures[callback_id] = fut
 
-        if self.config._get_pubsub_callback_and_context()[0] is not None:
-            raise ConfigurationError(
-                "The operation will never complete since messages will be passed to the configured callback."
-            )
+        if keys is None:
+            keys = []
+        if args is None:
+            args = []
 
-        # locking might not be required
-        response_future: "TFuture" = _get_new_future_instance()
-        try:
-            self._pubsub_lock.acquire()
-            self._pubsub_futures.append(response_future)
-            self._complete_pubsub_futures_safe()
-        finally:
-            self._pubsub_lock.release()
-        await response_future
-        return response_future.result()
+        keys_c_args, keys_c_lengths, keys_buffers = self._to_c_strings(keys)
+        args_c_args, args_c_lengths, args_buffers = self._to_c_strings(args)
 
-    def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
-        if self._is_closed:
-            raise ClosingError(
-                "Unable to execute requests; the client is closed. Please create a new client."
-            )
+        hash_bytes = hash.encode(ENCODING) + b"\0"
+        hash_buffer = self._ffi.from_buffer(hash_bytes)
 
-        if self.config._get_pubsub_callback_and_context()[0] is not None:
-            raise ConfigurationError(
-                "The operation will never complete since messages will be passed to the configured callback."
-            )
+        route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
-        # locking might not be required
-        msg: Optional[PubSubMsg] = None
-        try:
-            self._pubsub_lock.acquire()
-            self._complete_pubsub_futures_safe()
-            while len(self._pending_push_notifications) and not msg:
-                push_notification = self._pending_push_notifications.pop(0)
-                msg = self._notification_to_pubsub_message_safe(push_notification)
-        finally:
-            self._pubsub_lock.release()
-        return msg
-
-    def _cancel_pubsub_futures_with_exception_safe(self, exception: ConnectionError):
-        while len(self._pubsub_futures):
-            next_future = self._pubsub_futures.pop(0)
-            next_future.set_exception(exception)
-
-    def _notification_to_pubsub_message_safe(
-        self, response: Response
-    ) -> Optional[PubSubMsg]:
-        pubsub_message = None
-        push_notification = cast(
-            Dict[str, Any], value_from_pointer(response.resp_pointer)
-        )
-        message_kind = push_notification["kind"]
-        if message_kind == "Disconnection":
-            ClientLogger.log(
-                LogLevel.WARN,
-                "disconnect notification",
-                "Transport disconnected, messages might be lost",
-            )
-        elif (
-            message_kind == "Message"
-            or message_kind == "PMessage"
-            or message_kind == "SMessage"
-        ):
-            values: List = push_notification["values"]
-            if message_kind == "PMessage":
-                pubsub_message = PubSubMsg(
-                    message=values[2], channel=values[1], pattern=values[0]
-                )
-            else:
-                pubsub_message = PubSubMsg(
-                    message=values[1], channel=values[0], pattern=None
-                )
-        elif (
-            message_kind == "PSubscribe"
-            or message_kind == "Subscribe"
-            or message_kind == "SSubscribe"
-            or message_kind == "Unsubscribe"
-            or message_kind == "PUnsubscribe"
-            or message_kind == "SUnsubscribe"
-        ):
-            pass
-        else:
-            ClientLogger.log(
-                LogLevel.WARN,
-                "unknown notification",
-                f"Unknown notification message: '{message_kind}'",
-            )
-
-        return pubsub_message
-
-    def _complete_pubsub_futures_safe(self):
-        while len(self._pending_push_notifications) and len(self._pubsub_futures):
-            next_push_notification = self._pending_push_notifications.pop(0)
-            pubsub_message = self._notification_to_pubsub_message_safe(
-                next_push_notification
-            )
-            if pubsub_message:
-                self._pubsub_futures.pop(0).set_result(pubsub_message)
-
-    async def _write_request_await_response(self, request: CommandRequest):
-        # Create a response future for this request and add it to the available
-        # futures map
-        response_future = self._get_future(request.callback_idx)
-        self._create_write_task(request)
-        await response_future
-        return response_future.result()
-
-    def _get_callback_index(self) -> int:
-        try:
-            return self._available_callback_indexes.pop()
-        except IndexError:
-            # Use monotonic counter to avoid index collisions with cancelled futures
-            idx = self._next_callback_index
-            self._next_callback_index += 1
-            return idx
-
-    async def _process_response(self, response: Response) -> None:
-        res_future = self._available_futures.pop(response.callback_idx, None)
-        if res_future is not None and res_future.done():
-            # Future is already completed (e.g. request was cancelled while awaiting).
-            # Recycle the callback index to prevent index leaks.
-            self._available_callback_indexes.append(response.callback_idx)
-            ClientLogger.log(
-                LogLevel.DEBUG,
-                "completed response",
-                f"Received response for cancelled request: {response.callback_idx}",
-            )
-            return
-        if not res_future or response.HasField("closing_error"):
-            err_msg = (
-                response.closing_error
-                if response.HasField("closing_error")
-                else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
-            )
-            exc = ClosingError(err_msg)
-            if res_future is not None:
-                res_future.set_exception(exc)
-            else:
-                ClientLogger.log(
-                    LogLevel.WARN,
-                    "unhandled response error",
-                    f"Unhandled response error for unknown request: {response.callback_idx}",
-                )
-            raise exc
-        else:
-            self._available_callback_indexes.append(response.callback_idx)
-            if response.HasField("request_error"):
-                error_type = get_request_error_class(response.request_error.type)
-                res_future.set_exception(error_type(response.request_error.message))
-            elif response.HasField("resp_pointer"):
-                res_future.set_result(value_from_pointer(response.resp_pointer))
-            elif response.HasField("constant_response"):
-                res_future.set_result(OK)
-            else:
-                res_future.set_result(None)
-
-        # Clean up span if it was created
-        if response.HasField("root_span_ptr"):
-            drop_otel_span(response.root_span_ptr)
-
-    async def _process_push(self, response: Response) -> None:
-        if response.HasField("closing_error") or not response.HasField("resp_pointer"):
-            err_msg = (
-                response.closing_error
-                if response.HasField("closing_error")
-                else "Client Error - push notification without resp_pointer"
-            )
-            raise ClosingError(err_msg)
-        try:
-            self._pubsub_lock.acquire()
-            callback, context = self.config._get_pubsub_callback_and_context()
-            if callback:
-                pubsub_message = self._notification_to_pubsub_message_safe(response)
-                if pubsub_message:
-                    callback(pubsub_message, context)
-            else:
-                self._pending_push_notifications.append(response)
-                self._complete_pubsub_futures_safe()
-        finally:
-            self._pubsub_lock.release()
-
-    async def _reader_loop(self) -> None:
-        # Socket reader loop
-        try:
-            remaining_read_bytes = bytearray()
-            while True:
-                try:
-                    read_bytes = await self._stream.receive(DEFAULT_READ_BYTES_SIZE)
-                except (anyio.ClosedResourceError, anyio.EndOfStream):
-                    raise ClosingError(
-                        "The communication layer was unexpectedly closed."
-                    )
-                read_bytes = remaining_read_bytes + bytearray(read_bytes)
-                read_bytes_view = memoryview(read_bytes)
-                offset = 0
-                while offset <= len(read_bytes):
-                    try:
-                        response, offset = ProtobufCodec.decode_delimited(
-                            read_bytes, read_bytes_view, offset, Response
-                        )
-                    except PartialMessageException:
-                        # Received only partial response, break the inner loop
-                        remaining_read_bytes = read_bytes[offset:]
-                        break
-                    response = cast(Response, response)
-                    if response.is_push:
-                        await self._process_push(response=response)
-                    else:
-                        await self._process_response(response=response)
-        except Exception as e:
-            # close and stop reading at terminal exceptions from incoming responses or
-            # stream closures
-            await self.close(str(e))
-
-    async def get_statistics(self) -> dict:
-        """
-        Get compression and connection statistics for this client.
-
-        Returns:
-            dict: A dictionary containing statistics with integer values:
-                - total_connections: Total number of connections
-                - total_clients: Total number of clients
-                - total_values_compressed: Number of values successfully compressed
-                - total_values_decompressed: Number of values successfully decompressed
-                - total_original_bytes: Total bytes of original data before compression
-                - total_bytes_compressed: Total bytes after compression
-                - total_bytes_decompressed: Total bytes after decompression
-                - compression_skipped_count: Number of times compression was skipped
-                - subscription_out_of_sync_count: Number of times subscriptions were out of sync during reconciliation
-                - subscription_last_sync_timestamp: Timestamp of last successful subscription sync (milliseconds since epoch)
-        """
-        stats = get_statistics()
-        # Convert string values to integers for easier arithmetic operations
-        return {key: int(value) for key, value in stats.items()}
-
-    async def _update_connection_password(
-        self, password: Optional[str], immediate_auth: bool
-    ) -> TResult:
-        request = CommandRequest()
-        request.callback_idx = self._get_callback_index()
-        if password is not None:
-            request.update_connection_password.password = password
-        request.update_connection_password.immediate_auth = immediate_auth
-        response = await self._write_request_await_response(request)
-        # Update the client binding side password if managed to change core configuration password
-        if response is OK:
-            if self.config.credentials is None:
-                self.config.credentials = ServerCredentials(password=password or "")
-                self.config.credentials.password = password or ""
-        return response
-
-    async def _refresh_iam_token(self) -> TResult:
-        request = CommandRequest()
-        request.callback_idx = self._get_callback_index()
-        request.refresh_iam_token.CopyFrom(
-            RefreshIamToken()
-        )  # Empty message, just triggers the refresh
-        response = await self._write_request_await_response(request)
-        return response
-
-    def _parse_pubsub_state(self, result: TResult, is_cluster: bool) -> Union[
-        GlideClientConfiguration.PubSubState,
-        GlideClusterClientConfiguration.PubSubState,
-    ]:
-        """Parse subscription state from Rust response"""
-        if not isinstance(result, list) or len(result) != 4:
-            raise RequestError("Invalid response format from GetSubscriptions")
-
-        # Result format: ["desired", {dict}, "actual", {dict}]
-        desired_dict = cast(Dict[bytes, List[bytes]], result[1])
-        actual_dict = cast(Dict[bytes, List[bytes]], result[3])
-
-        if is_cluster:
-            PubSubChannelModes: Any = GlideClusterClientConfiguration.PubSubChannelModes
-            StateClass: Any = GlideClusterClientConfiguration.PubSubState
-            mode_map = {
-                "Exact": PubSubChannelModes.Exact,
-                "Pattern": PubSubChannelModes.Pattern,
-                "Sharded": PubSubChannelModes.Sharded,
-            }
-        else:
-            PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
-            StateClass = GlideClientConfiguration.PubSubState
-            mode_map = {
-                "Exact": PubSubChannelModes.Exact,
-                "Pattern": PubSubChannelModes.Pattern,
-            }
-
-        # Convert bytes keys/values to strings and map to enums
-        desired_subscriptions = {}
-        actual_subscriptions = {}
-
-        for key_bytes, value_list in desired_dict.items():
-            key = key_bytes.decode()
-            if key in mode_map:
-                values = {v.decode() for v in value_list}
-                desired_subscriptions[mode_map[key]] = values
-
-        for key_bytes, value_list in actual_dict.items():
-            key = key_bytes.decode()
-            if key in mode_map:
-                values = {v.decode() for v in value_list}
-                actual_subscriptions[mode_map[key]] = values
-
-        return StateClass(
-            desired_subscriptions=desired_subscriptions,
-            actual_subscriptions=actual_subscriptions,
+        self._lib.invoke_script(
+            self._core_client,
+            callback_id,
+            hash_buffer,
+            len(keys),
+            keys_c_args,
+            keys_c_lengths,
+            len(args),
+            args_c_args,
+            args_c_lengths,
+            route_ptr,
+            route_len,
+            0,
         )
 
-    def _get_cache_metrics(self, metrics_type: CacheMetricsType.ValueType) -> TResult:
+        return await fut
+
+    # ==================== Cache Metrics ====================
+
+    def _get_cache_metrics(self, metrics_type: int) -> "TResult":
         """
-        Get cache metrics.
+        Get cache metrics via FFI.
 
         Args:
-            metrics_type: Type of metric to retrieve (e.g., hit rate, miss rate).
+            metrics_type: Type of metric to retrieve.
 
         Returns:
             The requested cache metric.
@@ -898,14 +741,157 @@ class BaseClient(CoreCommands):
         Raises:
             RequestError: If client-side caching is not enabled or metrics tracking is disabled.
         """
-        if not self.config.client_side_cache:
-            raise RequestError("Client-side caching is not enabled")
-        try:
-            return get_cache_metric_from_registry(
-                self.config.client_side_cache.cache_id, metrics_type
-            )
-        except Exception as e:
-            raise RequestError(str(e)) from e
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+        if self._core_client == self._ffi.NULL:
+            raise ValueError("Invalid client pointer.")
+
+        from glide_shared.ffi_helpers import handle_command_result
+
+        command_result = self._lib.get_cache_metrics(self._core_client, 0, metrics_type)
+        return handle_command_result(
+            self._ffi, self._lib, command_result, self._handle_response
+        )
+
+    # ==================== Connection Management ====================
+
+    async def _update_connection_password(
+        self, password: Optional[str], immediate_auth: bool
+    ) -> TResult:
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
+
+        self._pending_futures[callback_id] = fut
+
+        c_password = (
+            self._ffi.new("char[]", password.encode(ENCODING))
+            if password is not None
+            else self._ffi.new("char[]", b"")
+        )
+
+        self._lib.update_connection_password(
+            self._core_client,
+            callback_id,
+            c_password,
+            immediate_auth,
+        )
+
+        result = await fut
+        if result is OK:
+            if self.config.credentials is None:
+                self.config.credentials = ServerCredentials(password=password or "")
+            self.config.credentials.password = password or ""
+        return result
+
+    async def _refresh_iam_token(self) -> TResult:
+        if self._is_closed:
+            raise ClosingError("Client is closed.")
+
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
+
+        self._pending_futures[callback_id] = fut
+
+        self._lib.refresh_iam_token(
+            self._core_client,
+            callback_id,
+        )
+
+        return await fut
+
+    async def get_statistics(self) -> dict:
+        stats = self._lib.get_statistics()
+        return {
+            "total_connections": stats.total_connections,
+            "total_clients": stats.total_clients,
+            "total_values_compressed": stats.total_values_compressed,
+            "total_values_decompressed": stats.total_values_decompressed,
+            "total_original_bytes": stats.total_original_bytes,
+            "total_bytes_compressed": stats.total_bytes_compressed,
+            "total_bytes_decompressed": stats.total_bytes_decompressed,
+            "compression_skipped_count": stats.compression_skipped_count,
+            "subscription_out_of_sync_count": stats.subscription_out_of_sync_count,
+            "subscription_last_sync_timestamp": stats.subscription_last_sync_timestamp,
+        }
+
+    def _parse_pubsub_state(self, result: TResult, is_cluster: bool):
+        if not isinstance(result, list) or len(result) != 4:
+            raise RequestError("Invalid response format from GetSubscriptions")
+
+        desired_dict = result[1]
+        actual_dict = result[3]
+
+        if is_cluster:
+            PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
+            StateClass = GlideClusterClientConfiguration.PubSubState
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+                "Sharded": PubSubChannelModes.Sharded,
+            }
+        else:
+            PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes  # type: ignore[assignment]
+            StateClass = GlideClientConfiguration.PubSubState  # type: ignore[assignment]
+            mode_map = {
+                "Exact": PubSubChannelModes.Exact,
+                "Pattern": PubSubChannelModes.Pattern,
+            }
+
+        desired_subscriptions = {}
+        actual_subscriptions = {}
+
+        for key_bytes, value_list in desired_dict.items():  # type: ignore[union-attr]
+            key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            if key in mode_map:
+                values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
+                desired_subscriptions[mode_map[key]] = values
+
+        for key_bytes, value_list in actual_dict.items():  # type: ignore[union-attr]
+            key = key_bytes.decode() if isinstance(key_bytes, bytes) else key_bytes
+            if key in mode_map:
+                values = {v.decode() if isinstance(v, bytes) else v for v in value_list}
+                actual_subscriptions[mode_map[key]] = values
+
+        return StateClass(
+            desired_subscriptions=desired_subscriptions,
+            actual_subscriptions=actual_subscriptions,
+        )
+
+    async def close(self, err_message: Optional[str] = None) -> None:
+        if not self._is_closed:
+            self._is_closed = True
+            err_message = "" if err_message is None else err_message
+
+            with self._lock:
+                for fut in self._pending_futures.values():
+                    if not fut.done():
+                        fut.set_exception(ClosingError(err_message))
+                self._pending_futures.clear()
+
+            with self._pubsub_lock:
+                for fut in self._pubsub_futures:
+                    if not fut.done():
+                        fut.set_exception(ClosingError(err_message))
+                self._pubsub_futures.clear()
+
+            _client_registry.pop(getattr(self, "_pipe_client_id", 0), None)
+
+            if self._core_client is not None:
+                self._lib.close_client(self._core_client)
+                self._core_client = None
+
+    async def aclose(self, err_message: Optional[str] = None) -> None:
+        """Alias for close() for compatibility with async context managers."""
+        await self.close(err_message)
+
+    async def __aenter__(self) -> "BaseClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self.close()
 
 
 class GlideClusterClient(BaseClient, ClusterCommands):
@@ -928,69 +914,60 @@ class GlideClusterClient(BaseClient, ClusterCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = CommandRequest()
-        request.callback_idx = self._get_callback_index()
-        # Take out the id string from the wrapping object
-        cursor_string = cursor.get_cursor()
-        request.cluster_scan.cursor = cursor_string
-        request.cluster_scan.allow_non_covered_slots = allow_non_covered_slots
-        if match is not None:
-            request.cluster_scan.match_pattern = (
-                self._encode_arg(match) if isinstance(match, str) else match
-            )
-        if count is not None:
-            request.cluster_scan.count = count
-        if type is not None:
-            request.cluster_scan.object_type = type.value
-        response = await self._write_request_await_response(request)
-        return [ClusterScanCursor(bytes(response[0]).decode()), response[1]]
 
-    def _get_protobuf_conn_request(self) -> ConnectionRequest:
-        request = self.config._create_a_protobuf_conn_request(cluster_mode=True)
-        if self._address_resolver_key is not None:
-            request.address_resolver_key = self._address_resolver_key
-        return request
+        callback_id = self._get_callback_id()
+        fut = _get_new_future_instance()
+
+        self._pending_futures[callback_id] = fut
+
+        # Build scan args
+        args = []
+        if match is not None:
+            encoded_match = match.encode(ENCODING) if isinstance(match, str) else match
+            args.extend([b"MATCH", encoded_match])
+        if count is not None:
+            args.extend([b"COUNT", str(count).encode(ENCODING)])
+        if type is not None:
+            args.extend([b"TYPE", type.value.encode(ENCODING)])
+        if allow_non_covered_slots:
+            args.extend([b"ALLOW_NON_COVERED_SLOTS"])
+
+        cursor_string = cursor.get_cursor()
+        cursor_bytes = cursor_string.encode(ENCODING) + b"\0"
+        cursor_buffer = self._ffi.from_buffer(cursor_bytes)
+
+        if args:
+            args_array, args_len_array, arg_buffers = self._to_c_strings(args)
+            arg_count = len(args)
+        else:
+            args_array = self._ffi.NULL
+            args_len_array = self._ffi.NULL
+            arg_count = 0
+
+        self._lib.request_cluster_scan(
+            self._core_client,
+            callback_id,
+            cursor_buffer,
+            arg_count,
+            args_array,
+            args_len_array,
+        )
+
+        response_data = await fut
+
+        if not isinstance(response_data, list) or len(response_data) != 2:
+            raise RequestError("Unexpected cluster scan response format")
+
+        new_cursor = response_data[0]
+        if isinstance(new_cursor, bytes):
+            new_cursor = new_cursor.decode(ENCODING)
+
+        keys_list = response_data[1] if response_data[1] is not None else []
+        return [ClusterScanCursor(new_cursor), keys_list]
 
     async def get_subscriptions(
         self,
     ) -> GlideClusterClientConfiguration.PubSubState:
-        """
-        Retrieves both the desired and current subscription states as tracked by the client.
-
-        This allows verification of synchronization between what the client intends to be
-        subscribed to (desired) and what it is actually subscribed to on the server (actual).
-
-        Returns:
-            GlideClusterClientConfiguration.PubSubState: An object containing two attributes:
-                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
-                - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
-
-        Examples:
-            >>> from glide import GlideClusterClientConfiguration
-            >>> PubSubChannelModes = GlideClusterClientConfiguration.PubSubChannelModes
-            >>>
-            >>> # Get both subscription states
-            >>> state = await client.get_subscriptions()
-            >>> desired = state.desired_subscriptions
-            >>> actual = state.actual_subscriptions
-            >>>
-            >>> # Check if subscribed to specific channel
-            >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
-            >>>     print("Subscribed to channel1")
-            >>>
-            >>> # Direct comparison with config
-            >>> if client.config.pubsub_subscriptions.channels_and_patterns == desired:
-            >>>     print("Config matches desired state")
-            >>>
-            >>> # Check if synchronized
-            >>> if desired == actual:
-            >>>     print("Subscriptions are synchronized")
-            >>>
-            >>> # Find missing subscriptions
-            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - actual.get(PubSubChannelModes.Exact, set())
-            >>> if missing:
-            >>>     print(f"Not yet subscribed to: {missing}")
-        """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(
             GlideClusterClientConfiguration.PubSubState,
@@ -1009,43 +986,6 @@ class GlideClient(BaseClient, StandaloneCommands):
     async def get_subscriptions(
         self,
     ) -> GlideClientConfiguration.PubSubState:
-        """
-        Retrieves both the desired and current subscription states as tracked by the client.
-
-        This allows verification of synchronization between what the client intends to be
-        subscribed to (desired) and what it is actually subscribed to on the server (actual).
-
-        Returns:
-            GlideClientConfiguration.PubSubState: An object containing two attributes:
-                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
-                - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
-
-        Examples:
-            >>> from glide import GlideClientConfiguration
-            >>> PubSubChannelModes = GlideClientConfiguration.PubSubChannelModes
-            >>>
-            >>> # Get both subscription states
-            >>> state = await client.get_subscriptions()
-            >>> desired = state.desired_subscriptions
-            >>> actual = state.actual_subscriptions
-            >>>
-            >>> # Check if subscribed to specific channel
-            >>> if "channel1" in actual.get(PubSubChannelModes.Exact, set()):
-            >>>     print("Subscribed to channel1")
-            >>>
-            >>> # Direct comparison with config
-            >>> if client.config.pubsub_subscriptions.channels_and_patterns == desired:
-            >>>     print("Config matches desired state")
-            >>>
-            >>> # Check if synchronized
-            >>> if desired == actual:
-            >>>     print("Subscriptions are synchronized")
-            >>>
-            >>> # Find missing subscriptions
-            >>> missing = desired.get(PubSubChannelModes.Exact, set()) - actual.get(PubSubChannelModes.Exact, set())
-            >>> if missing:
-            >>>     print(f"Not yet subscribed to: {missing}")
-        """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(
             GlideClientConfiguration.PubSubState,

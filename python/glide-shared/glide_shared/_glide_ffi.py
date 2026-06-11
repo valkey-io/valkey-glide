@@ -23,7 +23,18 @@ def find_libglide_ffi(lib_dir: Path) -> Path:
 
     lib_path = lib_dir / lib_name
     if not lib_path.exists():
-        raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
+        # Library may be installed alongside glide_sync package
+        try:
+            import importlib.util
+
+            spec = importlib.util.find_spec("glide_sync")
+            if spec and spec.origin:
+                glide_sync_dir = Path(spec.origin).resolve().parent
+                lib_path = glide_sync_dir / lib_name
+        except (ImportError, AttributeError, ValueError):
+            pass
+        if not lib_path.exists():
+            raise FileNotFoundError(f"Could not find {lib_name} in {lib_dir}")
 
     return lib_path
 
@@ -34,17 +45,12 @@ LIB_FILE = find_libglide_ffi(CURR_DIR)
 
 class _GlideFFI:
     """
-    Singleton class that manages the Glide FFI library.
-    Provides access to the FFI instance and loaded library.
+    FFI manager. Creates separate instances per package to avoid
+    cross-thread CFFI state corruption.
     """
 
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(_GlideFFI, cls).__new__(cls)
-            cls._instance._init_ffi()
-        return cls._instance
+    def __init__(self):
+        self._init_ffi()
 
     def _init_ffi(self):
         self._ffi = FFI()
@@ -176,6 +182,10 @@ class _GlideFFI:
             typedef void (*SuccessCallback)(uintptr_t index_ptr, const CommandResponse* message);
             typedef void (*FailureCallback)(uintptr_t index_ptr, const char* error_message, int error_type);
 
+            // No-op callbacks exported from Rust — safe to call from any thread.
+            void noop_success_callback(uintptr_t index_ptr, const CommandResponse* message);
+            void noop_failure_callback(uintptr_t index_ptr, const char* error_message, int error_type);
+
             typedef void (*PubSubCallback)(
                 uintptr_t client_ptr,
                 int kind,
@@ -222,6 +232,10 @@ class _GlideFFI:
                 uintptr_t client_id
             );
             void close_client(const void* client_adapter_ptr);
+            void init_async_pipe(int pipe_write_fd);
+
+            void free_pipe_error_string(char* ptr);
+
             void free_connection_response(ConnectionResponse* connection_response_ptr);
 
             // ============== BATCH EXECUTION ==============
