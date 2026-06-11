@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import redis.clients.jedis.exceptions.JedisException;
 import redis.clients.jedis.params.BitPosParams;
 import redis.clients.jedis.params.MigrateParams;
+import redis.clients.jedis.params.SortingParams;
 import redis.clients.jedis.params.XAddParams;
 import redis.clients.jedis.params.XTrimParams;
 
@@ -101,5 +102,33 @@ public class Jedis4ParamBehaviorTest {
     public void xTrimParams_sharesTrimConversionWithXAdd() {
         XTrimParams trim = XTrimParams.xTrimParams().maxLen(100).limit(3);
         assertNotNull(trim.toStreamTrimOptions());
+    }
+
+    @Test
+    public void sortingParams_orderAlphaAndLimitAreIdempotent() {
+        SortingParams p = new SortingParams().desc().desc().alpha().alpha().limit(0, 2).limit(0, 2);
+        assertArrayEquals(new String[] {"LIMIT", "0", "2", "DESC", "ALPHA"}, p.getParams());
+    }
+
+    @Test
+    public void sortingParams_ascAndDescLastCallWins() {
+        SortingParams ascThenDesc = new SortingParams().asc().desc();
+        assertArrayEquals(new String[] {"DESC"}, ascThenDesc.getParams());
+
+        SortingParams descThenAsc = new SortingParams().desc().asc();
+        assertArrayEquals(new String[] {"ASC"}, descThenAsc.getParams());
+    }
+
+    @Test
+    public void sortingParams_byAndGetReplaceOrDeduplicate() {
+        SortingParams p =
+                new SortingParams()
+                        .by("weight-*")
+                        .by("score-*")
+                        .get("#")
+                        .get("field-*")
+                        .get("#");
+        assertArrayEquals(
+                new String[] {"BY", "score-*", "GET", "#", "GET", "field-*"}, p.getParams());
     }
 }
