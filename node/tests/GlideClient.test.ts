@@ -2177,6 +2177,7 @@ describe("GlideClient", () => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
+
             // FAILOVER succeeds (OK) if replicas exist, or throws if none
             try {
                 const result = await client.failover();
