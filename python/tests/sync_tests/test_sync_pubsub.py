@@ -812,8 +812,17 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # allow the message to propagate
-            time.sleep(1)
+            # Wait for messages to propagate
+            if method == MethodTesting.Callback:
+                # Callback messages arrive asynchronously; poll until all are received
+                wait_for_messages(
+                    len(all_channels_and_messages), callback_messages, timeout=10.0
+                )
+            else:
+                # For Async (blocking read) and Sync (non-blocking read),
+                # allow a brief propagation window for messages to reach the
+                # internal queue before non-blocking try_get_pubsub_message calls
+                time.sleep(1)
 
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
