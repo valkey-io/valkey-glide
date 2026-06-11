@@ -41,7 +41,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::{
     ffi::{CString, c_void},
-    mem,
     os::raw::{c_char, c_double, c_long, c_ulong},
 };
 use tokio::runtime::Builder;
@@ -960,11 +959,20 @@ unsafe fn process_push_notification(
             pattern_ptr,
             pattern_len,
         );
-        // Free memory
-        let _ = Vec::from_raw_parts(message_ptr, message_len as usize, message_len as usize);
-        let _ = Vec::from_raw_parts(channel, channel_len as usize, channel_len as usize);
+        // Free memory — allocated via Box::into_raw(vec.into_boxed_slice())
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+            message_ptr,
+            message_len as usize,
+        ));
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+            channel,
+            channel_len as usize,
+        ));
         if !pattern_ptr.is_null() {
-            let _ = Vec::from_raw_parts(pattern_ptr, pattern_len as usize, pattern_len as usize);
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                pattern_ptr,
+                pattern_len as usize,
+            ));
         }
     }
 }
@@ -2108,12 +2116,12 @@ unsafe fn free_command_response_elements(command_response: CommandResponse) {
     let sets_value_len = command_response.sets_value_len;
     if !string_value.is_null() {
         let len = string_value_len as usize;
-        unsafe { Vec::from_raw_parts(string_value, len, len) };
+        let _ = unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(string_value, len)) };
     }
     if !array_value.is_null() {
         let len = array_value_len as usize;
-        let vec = unsafe { Vec::from_raw_parts(array_value, len, len) };
-        for element in vec.into_iter() {
+        let boxed = unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(array_value, len)) };
+        for element in Vec::from(boxed).into_iter() {
             unsafe { free_command_response_elements(element) };
         }
     }
@@ -2125,8 +2133,8 @@ unsafe fn free_command_response_elements(command_response: CommandResponse) {
     }
     if !sets_value.is_null() {
         let len = sets_value_len as usize;
-        let vec = unsafe { Vec::from_raw_parts(sets_value, len, len) };
-        for element in vec.into_iter() {
+        let boxed = unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(sets_value, len)) };
+        for element in Vec::from(boxed).into_iter() {
             unsafe { free_command_response_elements(element) };
         }
     }
@@ -2167,12 +2175,12 @@ unsafe fn convert_double_pointer_to_vec<'a>(
     result
 }
 
-fn convert_vec_to_pointer<T>(mut vec: Vec<T>) -> (*mut T, c_long) {
-    vec.shrink_to_fit();
-    let vec_ptr = vec.as_mut_ptr();
+fn convert_vec_to_pointer<T>(vec: Vec<T>) -> (*mut T, c_long) {
+    // into_boxed_slice guarantees capacity == len (unlike shrink_to_fit which is a hint).
+    // This is critical because from_raw_parts later uses len as capacity for dealloc.
     let len = vec.len() as c_long;
-    mem::forget(vec);
-    (vec_ptr, len)
+    let ptr = Box::into_raw(vec.into_boxed_slice()) as *mut T;
+    (ptr, len)
 }
 
 // ==================== Arena-based response builder ====================
