@@ -1408,6 +1408,37 @@ func (suite *GlideTestSuite) TestMigrateKeys() {
 	_, err = client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{}, 0, 1000)
 	suite.Error(err)
 	suite.Contains(err.Error(), "keys must not be empty")
+
+	// Success: migrate keys to a second server
+	output, err := startDedicatedValkeyServer(suite, false)
+	suite.NoError(err)
+	clusterFolder := extractClusterFolder(suite, output)
+	defer stopDedicatedValkeyServer(suite, clusterFolder)
+	destAddresses := extractAddresses(suite, output)
+	destHost := destAddresses[0].Host
+	destPort := int64(destAddresses[0].Port)
+
+	srcKey1 := "{migrate}" + uuid.New().String()
+	srcKey2 := "{migrate}" + uuid.New().String()
+	client.Set(ctx, srcKey1, "val1")
+	client.Set(ctx, srcKey2, "val2")
+
+	result, err = client.MigrateKeys(ctx, destHost, destPort, []string{srcKey1, srcKey2}, 0, 5000)
+	suite.NoError(err)
+	suite.Equal("OK", result)
+
+	// Keys should no longer exist on source
+	exists, err := client.Exists(ctx, []string{srcKey1, srcKey2})
+	suite.NoError(err)
+	suite.Equal(int64(0), exists)
+
+	// Keys should exist on destination
+	destClient, err := glide.NewClient(config.NewClientConfiguration().WithAddress(&destAddresses[0]))
+	suite.NoError(err)
+	defer destClient.Close()
+	exists, err = destClient.Exists(ctx, []string{srcKey1, srcKey2})
+	suite.NoError(err)
+	suite.Equal(int64(2), exists)
 }
 
 func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
@@ -1436,4 +1467,36 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 	_, err = client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{}, 0, 1000, *migrateOpts)
 	suite.Error(err)
 	suite.Contains(err.Error(), "keys must not be empty")
+
+	// Success with COPY option: keys remain on source after migration
+	output, err := startDedicatedValkeyServer(suite, false)
+	suite.NoError(err)
+	clusterFolder := extractClusterFolder(suite, output)
+	defer stopDedicatedValkeyServer(suite, clusterFolder)
+	destAddresses := extractAddresses(suite, output)
+	destHost := destAddresses[0].Host
+	destPort := int64(destAddresses[0].Port)
+
+	srcKey1 := "{migrate}" + uuid.New().String()
+	srcKey2 := "{migrate}" + uuid.New().String()
+	client.Set(ctx, srcKey1, "val1")
+	client.Set(ctx, srcKey2, "val2")
+
+	copyOpts := options.NewMigrateOptions().SetCopy()
+	result, err = client.MigrateKeysWithOptions(ctx, destHost, destPort, []string{srcKey1, srcKey2}, 0, 5000, *copyOpts)
+	suite.NoError(err)
+	suite.Equal("OK", result)
+
+	// With COPY, keys should still exist on source
+	exists, err := client.Exists(ctx, []string{srcKey1, srcKey2})
+	suite.NoError(err)
+	suite.Equal(int64(2), exists)
+
+	// Keys should also exist on destination
+	destClient, err := glide.NewClient(config.NewClientConfiguration().WithAddress(&destAddresses[0]))
+	suite.NoError(err)
+	defer destClient.Close()
+	exists, err = destClient.Exists(ctx, []string{srcKey1, srcKey2})
+	suite.NoError(err)
+	suite.Equal(int64(2), exists)
 }

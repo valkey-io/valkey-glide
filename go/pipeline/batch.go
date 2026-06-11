@@ -194,7 +194,6 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 
 // MigrateKeys atomically transfers the specified keys from a source Valkey instance to a
 // destination Valkey instance. On success, keys are deleted from the source.
-// This command is for standalone batches only.
 //
 // See [valkey.io] for details.
 //
@@ -211,7 +210,6 @@ func (b *StandaloneBatch) MigrateKeys(
 
 // MigrateKeysWithOptions atomically transfers the specified keys from a source Valkey instance to a
 // destination Valkey instance with additional options.
-// This command is for standalone batches only.
 //
 // See [valkey.io] for details.
 //
@@ -231,7 +229,7 @@ func (b *StandaloneBatch) MigrateKeysWithOptions(
 	if err != nil {
 		return b.addError("MigrateKeysWithOptions", err)
 	}
-	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
+	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)} // Empty string is required by the MIGRATE wire format when using the KEYS option.
 	args = append(args, optionArgs...)
 	args = append(args, constants.KeysKeyword)
 	args = append(args, keys...)

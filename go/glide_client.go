@@ -1039,7 +1039,6 @@ func (client *Client) Unwatch(ctx context.Context) (string, error) {
 
 // MigrateKeys atomically transfers the specified keys from a source Valkey instance to a
 // destination Valkey instance. On success, keys are deleted from the source.
-// This command is for standalone clients only (not cluster mode).
 //
 // See [valkey.io] for details.
 //
@@ -1070,7 +1069,6 @@ func (client *Client) MigrateKeys(
 
 // MigrateKeysWithOptions atomically transfers the specified keys from a source Valkey instance
 // to a destination Valkey instance with additional options.
-// This command is for standalone clients only (not cluster mode).
 //
 // See [valkey.io] for details.
 //

@@ -25,9 +25,9 @@ type GenericCommands interface {
 
 	RandomKey(ctx context.Context) (models.Result[string], error)
 
-	// MigrateKeys atomically transfers the specified keys from a source Valkey instance to a
-	// destination Valkey instance. On success, keys are deleted from the source.
-	// This command is for standalone clients only (not cluster mode).
+	// MigrateKeys transfers keys to a destination Valkey instance.
+	//
+	// See [valkey.io] for details.
 	//
 	// [valkey.io]: https://valkey.io/commands/migrate/
 	MigrateKeys(
@@ -39,9 +39,9 @@ type GenericCommands interface {
 		timeout int64,
 	) (string, error)
 
-	// MigrateKeysWithOptions atomically transfers the specified keys from a source Valkey instance
-	// to a destination Valkey instance with additional options.
-	// This command is for standalone clients only (not cluster mode).
+	// MigrateKeysWithOptions transfers keys to a destination Valkey instance with additional options.
+	//
+	// See [valkey.io] for details.
 	//
 	// [valkey.io]: https://valkey.io/commands/migrate/
 	MigrateKeysWithOptions(
