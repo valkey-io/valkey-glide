@@ -1326,6 +1326,7 @@ dependencies = [
  "gungraun",
  "http 1.4.2",
  "integer-encoding",
+ "libc",
  "logger_core",
  "lz4",
  "nanoid",
