@@ -19230,7 +19230,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: http:1.4.1
+Package: http:1.4.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24240,7 +24240,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: js-sys:0.3.99
+Package: js-sys:0.3.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -48947,7 +48947,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: uuid:1.23.2
+Package: uuid:1.23.3
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50623,7 +50623,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen:0.2.122
+Package: wasm-bindgen:0.2.123
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -50852,7 +50852,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-futures:0.4.72
+Package: wasm-bindgen-futures:0.4.73
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51081,7 +51081,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro:0.2.122
+Package: wasm-bindgen-macro:0.2.123
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51310,7 +51310,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-macro-support:0.2.122
+Package: wasm-bindgen-macro-support:0.2.123
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -51539,7 +51539,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: wasm-bindgen-shared:0.2.122
+Package: wasm-bindgen-shared:0.2.123
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -53115,7 +53115,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: web-sys:0.3.99
+Package: web-sys:0.3.100
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -62826,7 +62826,7 @@ authorization of the copyright holder.
 
 ----
 
-Package: zerocopy:0.8.50
+Package: zerocopy:0.8.52
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -63078,7 +63078,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: zerocopy-derive:0.8.50
+Package: zerocopy-derive:0.8.52
 
 The following copyrights and licenses were found in the source code of this package:
 
