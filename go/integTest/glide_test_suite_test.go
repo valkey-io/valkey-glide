@@ -562,6 +562,71 @@ func (suite *GlideTestSuite) SkipIfServerVersionLowerThan(version string, t *tes
 	}
 }
 
+// Expected valid responses for BGSAVE and BGSAVE SCHEDULE.
+var bgsaveResponses = []string{
+	"Background saving started",
+	"Background saving scheduled",
+}
+
+// Expected valid responses for BGREWRITEAOF.
+var bgrewriteaofResponses = []string{
+	"Background append only file rewriting started",
+	"Background append only file rewriting scheduled",
+}
+
+// Expected server error response for BGSAVE CANCEL when no save is in progress.
+const bgsaveNotCancelledResponse = "Background saving is currently not in progress or scheduled"
+
+// Route option for routing to a single primary node by slot key.
+var primarySlotRouteOption = options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, "1")}
+
+// waitFor waits until a condition is met.
+func (suite *GlideTestSuite) waitFor(condition func() bool, failure string) {
+	t := suite.T()
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+
+	for time.Now().Before(deadline) {
+		if condition() {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	t.Fatal(failure)
+}
+
+// waitForSaveNotInProgress waits until no save (RDB save or AOF rewrite) is in progress.
+func (suite *GlideTestSuite) waitForSaveNotInProgress(client interfaces.BaseClientCommands) {
+	t := suite.T()
+	t.Helper()
+	suite.waitFor(func() bool {
+		var info string
+		switch c := client.(type) {
+		case *glide.Client:
+			result, err := c.InfoWithOptions(context.Background(), options.InfoOptions{
+				Sections: []constants.Section{constants.Persistence},
+			})
+			require.NoError(t, err)
+			info = result
+		case *glide.ClusterClient:
+			result, err := c.InfoWithOptions(context.Background(), options.ClusterInfoOptions{
+				InfoOptions: &options.InfoOptions{Sections: []constants.Section{constants.Persistence}},
+			})
+			require.NoError(t, err)
+			if result.IsSingleValue() {
+				info = result.SingleValue()
+			} else {
+				for _, v := range result.MultiValue() {
+					info += v
+				}
+			}
+		}
+		return !strings.Contains(info, "rdb_bgsave_in_progress:1") &&
+			!strings.Contains(info, "aof_rewrite_in_progress:1")
+	}, "Timed out waiting for save to complete")
+}
+
 func (suite *GlideTestSuite) GenerateLargeUuid() string {
 	wantedLength := math.Pow(2, 16)
 	id := uuid.New().String()

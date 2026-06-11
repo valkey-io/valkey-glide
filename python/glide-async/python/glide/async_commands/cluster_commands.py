@@ -902,6 +902,133 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.LastSave, [], route),
         )
 
+    async def save(self, route: Optional[Route] = None) -> TOK:
+        """
+        Synchronously saves the dataset to disk.
+
+        See [valkey.io](https://valkey.io/commands/save) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.save()
+                OK
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Save, [], route),
+        )
+
+    async def bgsave(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+        """
+        Asynchronously saves the dataset to disk in the background.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave()
+                "Background saving started"
+            >>> await client.bgsave(AllNodes())
+                {b'addr1': 'Background saving started', b'addr2': 'Background saving started'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, [], route),
+        )
+
+    async def bgsave_schedule(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Schedules a background save of the database.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_schedule()
+                "Background saving scheduled"
+            >>> await client.bgsave_schedule(AllNodes())
+                {b'addr1': 'Background saving scheduled', b'addr2': 'Background saving scheduled'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, ["SCHEDULE"], route),
+        )
+
+    async def bgsave_cancel(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Aborts all in-progress and scheduled background saves.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Note:
+            Since: Valkey 8.1.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_cancel()
+                "Background saving cancelled"
+            >>> await client.bgsave_cancel(AllNodes())
+                {b'addr1': 'Background saving cancelled', b'addr2': 'Background saving cancelled'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, ["CANCEL"], route),
+        )
+
+    async def bgrewriteaof(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Initiates a background rewrite of the append-only file (AOF).
+
+        See [valkey.io](https://valkey.io/commands/bgrewriteaof) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgrewriteaof()
+                "Background append only file rewriting started"
+            >>> await client.bgrewriteaof(AllNodes())
+                {b'addr1': 'Background append only file rewriting started', b'addr2': 'Background append only file rewriting started'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgRewriteAof, [], route),
+        )
+
     async def publish(
         self,
         message: TEncodable,

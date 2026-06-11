@@ -4,7 +4,8 @@ package glide.cluster;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
-import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
+import static glide.TestUtilities.BGSAVE_RESPONSES;
+import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -20,11 +21,10 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getReplicaCount;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
-import static glide.TestUtilities.waitForCondition;
 import static glide.TestUtilities.waitForNotBusy;
+import static glide.TestUtilities.waitForSaveNotInProgress;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -943,60 +943,52 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void save_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
+        waitForSaveNotInProgress(clusterClient);
+        assertEquals(OK, clusterClient.save(PRIMARY_SLOT_ROUTE).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
         clusterClient
                 .bgsave()
                 .get()
                 .getMultiValue()
                 .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+                .forEach(value -> assertTrue(BGSAVE_RESPONSES.contains(value)));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        clusterClient
-                .bgsave(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+        waitForSaveNotInProgress(clusterClient);
+        String result = clusterClient.bgsave(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGSAVE_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
         clusterClient
                 .bgsaveSchedule()
                 .get()
                 .getMultiValue()
                 .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+                .forEach(value -> assertTrue(BGSAVE_RESPONSES.contains(value)));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        clusterClient
-                .bgsaveSchedule(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+        waitForSaveNotInProgress(clusterClient);
+        String result = clusterClient.bgsaveSchedule(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGSAVE_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1004,7 +996,7 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
 
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> clusterClient.bgsaveCancel().get());
@@ -1016,11 +1008,11 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel_with_route(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
 
         ExecutionException e =
                 assertThrows(
-                        ExecutionException.class, () -> clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+                        ExecutionException.class, () -> clusterClient.bgsaveCancel(PRIMARY_SLOT_ROUTE).get());
         assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
     }
 
@@ -1028,7 +1020,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
         clusterClient
                 .bgrewriteaof()
                 .get()
@@ -1041,13 +1033,9 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        clusterClient
-                .bgrewriteaof(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGREWRITEAOF_RESPONSES.contains(value)));
+        waitForSaveNotInProgress(clusterClient);
+        String result = clusterClient.bgrewriteaof(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGREWRITEAOF_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

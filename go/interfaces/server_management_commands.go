@@ -42,6 +42,16 @@ type ServerManagementCommands interface {
 
 	LastSave(ctx context.Context) (int64, error)
 
+	Save(ctx context.Context) (string, error)
+
+	BgSave(ctx context.Context) (string, error)
+
+	BgSaveSchedule(ctx context.Context) (string, error)
+
+	BgSaveCancel(ctx context.Context) (string, error)
+
+	BgRewriteAof(ctx context.Context) (string, error)
+
 	ConfigResetStat(ctx context.Context) (string, error)
 
 	ConfigRewrite(ctx context.Context) (string, error)

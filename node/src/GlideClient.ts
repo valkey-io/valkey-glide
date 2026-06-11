@@ -46,6 +46,9 @@ import {
     createInfo,
     createLastSave,
     createLolwut,
+    createSave,
+    createBgSave,
+    createBgRewriteAof,
     createPing,
     createPublish,
     createRandomKey,
@@ -1000,6 +1003,103 @@ export class GlideClient extends BaseClient {
      */
     public async lastsave(): Promise<number> {
         return this.createWritePromise(createLastSave());
+    }
+
+    /**
+     * Synchronously saves the dataset to disk.
+     *
+     * @see {@link https://valkey.io/commands/save/|valkey.io} for more details.
+     *
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * const result = await client.save();
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async save(): Promise<"OK"> {
+        return this.createWritePromise(createSave(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsave();
+     * console.log(result); // "Background saving started"
+     * ```
+     */
+    public async bgsave(): Promise<string> {
+        return this.createWritePromise(createBgSave(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Schedules a background save of the database.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveSchedule();
+     * console.log(result); // "Background saving scheduled"
+     * ```
+     */
+    public async bgsaveSchedule(): Promise<string> {
+        return this.createWritePromise(createBgSave(["SCHEDULE"]), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Aborts all in-progress and scheduled background saves.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @since Valkey 8.1
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveCancel();
+     * console.log(result); // "Background saving cancelled"
+     * ```
+     */
+    public async bgsaveCancel(): Promise<string> {
+        return this.createWritePromise(createBgSave(["CANCEL"]), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).
+     *
+     * @see {@link https://valkey.io/commands/bgrewriteaof/|valkey.io} for more details.
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgrewriteaof();
+     * console.log(result); // "Background append only file rewriting started"
+     * ```
+     */
+    public async bgrewriteaof(): Promise<string> {
+        return this.createWritePromise(createBgRewriteAof(), {
+            decoder: Decoder.String,
+        });
     }
 
     /**
