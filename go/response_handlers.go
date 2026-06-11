@@ -366,6 +366,20 @@ func handleOkResponse(response *C.struct_CommandResponse) (string, error) {
 	return "OK", nil
 }
 
+func handleOkResponses(response *C.struct_CommandResponse) (string, error) {
+	if response.response_type == uint32(C.Ok) {
+		C.free_command_response(response)
+		return "OK", nil
+	}
+
+	_, err := handleStringToStringMapResponse(response)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+
+	return "OK", nil
+}
+
 func handleOkOrStringOrNilResponse(response *C.struct_CommandResponse) (models.Result[string], error) {
 	defer C.free_command_response(response)
 

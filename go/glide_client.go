@@ -553,6 +553,113 @@ func (client *Client) LastSave(ctx context.Context) (int64, error) {
 	return handleIntResponse(response)
 }
 
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *Client) Save(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.Save, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSave(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Schedules a background save of the database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveSchedule(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"SCHEDULE"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Aborts all in-progress and scheduled background saves.
+//
+// Available since Valkey 8.1.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveCancel(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"CANCEL"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *Client) BgRewriteAof(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgRewriteAof, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.

@@ -1,6 +1,12 @@
 name: Go - Continuous Deployment
 
 on:
+    pull_request:
+        paths:
+            - .github/workflows/go-cd.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
     push:
         tags:
             - "v*.*"
@@ -53,7 +59,6 @@ jobs:
                   echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     validate-release-version:
-        if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish }}
         runs-on: ubuntu-latest
         outputs:
             RELEASE_VERSION: ${{ steps.release-tag.outputs.RELEASE_VERSION }}
@@ -77,21 +82,25 @@ jobs:
             - name: Validate Version Against RegEx and output
               id: release-tag
               run: |
-                  if ${{ github.event_name == 'workflow_dispatch' }}; then
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                    R_VERSION="v0.0.0"
+                  elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                     R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                     R_VERSION="${{ env.TAG_VERSION }}"
                   fi
-                  echo "Releassing version is: ${R_VERSION}"
-                  if ! echo "${R_VERSION}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
-                      echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
-                      exit 1
+                  echo "Release version is: ${R_VERSION}"
+                  if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+                    if ! echo "${R_VERSION}" | grep -Pq '^v\d+\.\d+\.\d+(-rc\d+)?$'; then
+                        echo "Version is not valid, must be v*.*.* or v*.*.*-rc*"
+                        exit 1
+                    fi
                   fi
                   echo "RELEASE_VERSION=${R_VERSION}" >> $GITHUB_OUTPUT
 
     create-binaries:
         needs: [load-platform-matrix, validate-release-version]
-        if: success()
+        if: github.repository_owner == 'valkey-io'
         strategy:
             fail-fast: false
             matrix:
@@ -130,6 +139,9 @@ jobs:
               run: |
                   mkdir -p $GITHUB_WORKSPACE/ffi/target/release
                   cp ffi/target/*/release/libglide_ffi.a $GITHUB_WORKSPACE/ffi/target/release/
+            - name: Smoke test binary
+              run: |
+                  file ffi/target/release/libglide_ffi.a | grep -q "archive"
             - name: Upload artifacts
               continue-on-error: true
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -144,6 +156,7 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.pkg_go_dev_publish == true }}
         needs: [validate-release-version, create-binaries]
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         permissions:
             contents: write
         steps:
@@ -161,14 +174,14 @@ jobs:
                   for dir in */; do
                     target_name=${dir%/}
                     PLATFORMS+=("$target_name")
-                    
+
                     mkdir -p $GITHUB_WORKSPACE/go/rustbin/${target_name}
                     cp ${target_name}/ffi/target/release/libglide_ffi.a $GITHUB_WORKSPACE/go/rustbin/${target_name}/
-                    
+
                     # Create doc.go marker file for vendoring support
                     # Convert platform name to valid Go package name (hyphens to underscores)
                     package_name="rustbin_${target_name//-/_}"
-                    
+
                     cat > "$GITHUB_WORKSPACE/go/rustbin/${target_name}/doc.go" << EOF
                   // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
