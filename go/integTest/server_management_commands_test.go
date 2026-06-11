@@ -186,31 +186,55 @@ func (suite *GlideTestSuite) TestFailoverOptions_ToArgs() {
 
 	// Test ABORT
 	opts := options.FailoverOptions{Abort: true}
-	assert.Equal(t, []string{"ABORT"}, opts.ToArgs())
+	result, err := opts.ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"ABORT"}, result)
 
 	// Test TO host port
 	opts = options.FailoverOptions{Host: "localhost", Port: 6380}
-	assert.Equal(t, []string{"TO", "localhost", "6380"}, opts.ToArgs())
+	result, err = opts.ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"TO", "localhost", "6380"}, result)
 
 	// Test TO host port FORCE
 	opts = options.FailoverOptions{Host: "localhost", Port: 6380, Force: true}
-	assert.Equal(t, []string{"TO", "localhost", "6380", "FORCE"}, opts.ToArgs())
+	result, err = opts.ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"TO", "localhost", "6380", "FORCE"}, result)
 
 	// Test TIMEOUT
 	opts = options.FailoverOptions{TimeoutMs: 5000}
-	assert.Equal(t, []string{"TIMEOUT", "5000"}, opts.ToArgs())
+	result, err = opts.ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"TIMEOUT", "5000"}, result)
 
 	// Test TO + TIMEOUT
 	opts = options.FailoverOptions{Host: "localhost", Port: 6380, TimeoutMs: 5000}
-	assert.Equal(t, []string{"TO", "localhost", "6380", "TIMEOUT", "5000"}, opts.ToArgs())
+	result, err = opts.ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"TO", "localhost", "6380", "TIMEOUT", "5000"}, result)
 
 	// Test TO + FORCE + TIMEOUT
 	opts = options.FailoverOptions{Host: "localhost", Port: 6380, Force: true, TimeoutMs: 5000}
-	assert.Equal(t, []string{"TO", "localhost", "6380", "FORCE", "TIMEOUT", "5000"}, opts.ToArgs())
+	result, err = opts.ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"TO", "localhost", "6380", "FORCE", "TIMEOUT", "5000"}, result)
 
 	// Test nil
 	var nilOpts *options.FailoverOptions
-	assert.Equal(t, []string{}, nilOpts.ToArgs())
+	result, err = nilOpts.ToArgs()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{}, result)
+
+	// Test invalid: FORCE without Host/Port
+	opts = options.FailoverOptions{Force: true}
+	_, err = opts.ToArgs()
+	assert.Error(t, err)
+
+	// Test invalid: ABORT with other options
+	opts = options.FailoverOptions{Abort: true, Host: "localhost", Port: 6380}
+	_, err = opts.ToArgs()
+	assert.Error(t, err)
 }
 
 // Context cancellation tests

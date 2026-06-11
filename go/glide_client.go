@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -679,7 +678,10 @@ func (client *Client) MemoryStats(ctx context.Context) (map[string]any, error) {
 //
 // [valkey.io]: https://valkey.io/commands/shutdown/
 func (client *Client) Shutdown(ctx context.Context) error {
-	_, err := client.executeCommand(ctx, C.ShutDown, []string{})
+	response, err := client.executeCommand(ctx, C.ShutDown, []string{})
+	if response != nil {
+		C.free_command_response(response)
+	}
 	return err
 }
 
@@ -701,7 +703,10 @@ func (client *Client) Shutdown(ctx context.Context) error {
 // [valkey.io]: https://valkey.io/commands/shutdown/
 func (client *Client) ShutdownWithOptions(ctx context.Context, opts options.ShutdownOptions) error {
 	args := opts.ToArgs()
-	_, err := client.executeCommand(ctx, C.ShutDown, args)
+	response, err := client.executeCommand(ctx, C.ShutDown, args)
+	if response != nil {
+		C.free_command_response(response)
+	}
 	return err
 }
 
@@ -763,7 +768,10 @@ func (client *Client) Failover(ctx context.Context) (string, error) {
 //
 // [valkey.io]: https://valkey.io/commands/failover/
 func (client *Client) FailoverWithOptions(ctx context.Context, opts options.FailoverOptions) (string, error) {
-	args := opts.ToArgs()
+	args, err := opts.ToArgs()
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
 	response, err := client.executeCommand(ctx, C.FailOver, args)
 	if err != nil {
 		return models.DefaultStringResponse, err
@@ -771,29 +779,10 @@ func (client *Client) FailoverWithOptions(ctx context.Context, opts options.Fail
 	return handleOkResponse(response)
 }
 
-// Sends a PSYNC command to initiate or resume replication from the server.
-//
-// See [valkey.io] for details.
-//
-// Parameters:
-//
-//	ctx           - The context for controlling the command execution.
-//	replicationID - The replication ID of the primary. Use "?" to request a full resync.
-//	offset        - The replication offset. Use -1 to request a full resync.
-//
-// Return value:
-//
-//	A string containing the replication response, typically starting with "+FULLRESYNC" or
-//	"+CONTINUE".
-//
-// [valkey.io]: https://valkey.io/commands/psync/
-func (client *Client) PSync(ctx context.Context, replicationID string, offset int64) (string, error) {
-	response, err := client.executeCommand(ctx, C.PSync, []string{replicationID, strconv.FormatInt(offset, 10)})
-	if err != nil {
-		return models.DefaultStringResponse, err
-	}
-	return handleStringResponse(response)
-}
+// PSync is intentionally not exposed. After the server responds with +FULLRESYNC or +CONTINUE,
+// it switches the TCP connection into a replication stream. This is incompatible with GLIDE's
+// multiplexed connection model: subsequent frames would be consumed as responses for unrelated
+// requests, corrupting the connection state. Use the Valkey CLI directly for replication operations.
 
 // Gets the name of the current connection.
 //

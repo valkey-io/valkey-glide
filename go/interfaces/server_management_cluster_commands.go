@@ -341,7 +341,7 @@ type ServerManagementClusterCommands interface {
 	// [valkey.io]: https://valkey.io/commands/acl-whoami/
 	AclWhoAmI(ctx context.Context) (string, error)
 
-	// Shutdown shuts down the server. Routes to all primary nodes by default.
+	// Shutdown shuts down the server. Routes to all nodes by default.
 	// Since the server closes connections on shutdown, a connection error is expected
 	// and indicates the command was received successfully.
 	//
@@ -367,8 +367,8 @@ type ServerManagementClusterCommands interface {
 	// [valkey.io]: https://valkey.io/commands/shutdown/
 	ShutdownWithOptions(ctx context.Context, opts options.ShutdownClusterOptions) error
 
-	// ScriptDebug sets the debug mode for Lua scripts.
-	// Routes to all primary nodes by default.
+	// ScriptDebug sets the debug mode for Lua scripts on the current connection.
+	// Routes to a random node by default since debug mode is connection-scoped.
 	//
 	// See [valkey.io] for details.
 	//

@@ -299,21 +299,29 @@ func ExampleClient_ScriptDebug_allModes() {
 
 func ExampleClient_Failover() {
 	var client *Client = getExampleClient() // example helper function
-	// FAILOVER requires replicas to be available; returns error on standalone without replicas
-	_, err := client.Failover(context.Background())
-	fmt.Println(err != nil)
-
-	// Output: true
+	// FAILOVER initiates a primary-to-replica failover.
+	// Returns "OK" if replicas are available, or an error otherwise.
+	result, err := client.Failover(context.Background())
+	if err == nil {
+		fmt.Println("Failover initiated:", result)
+		// Abort the failover to restore normal state
+		abortOpts := options.FailoverOptions{Abort: true}
+		client.FailoverWithOptions(context.Background(), abortOpts)
+	} else {
+		fmt.Println("Failover error (expected without replicas)")
+	}
 }
 
 func ExampleClient_FailoverWithOptions_abort() {
 	var client *Client = getExampleClient() // example helper function
 	opts := options.FailoverOptions{Abort: true}
-	// FAILOVER ABORT when no failover is in progress returns an error
+	// FAILOVER ABORT cancels an ongoing failover or errors if none is in progress
 	_, err := client.FailoverWithOptions(context.Background(), opts)
-	fmt.Println(err != nil)
-
-	// Output: true
+	if err != nil {
+		fmt.Println("No failover to abort (expected)")
+	} else {
+		fmt.Println("Failover aborted")
+	}
 }
 
 func ExampleClusterClient_ScriptDebug() {

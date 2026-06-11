@@ -331,18 +331,4 @@ type ServerManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/failover/
 	FailoverWithOptions(ctx context.Context, opts options.FailoverOptions) (string, error)
-
-	// PSync sends a PSYNC command to initiate or resume replication from the server.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   replicationID - The replication ID of the primary. Use "?" to request a full resync.
-	//   offset        - The replication offset. Use -1 to request a full resync.
-	//
-	// Return value:
-	//   A string containing the replication response, typically "+FULLRESYNC" or "+CONTINUE".
-	//
-	// [valkey.io]: https://valkey.io/commands/psync/
-	PSync(ctx context.Context, replicationID string, offset int64) (string, error)
 }

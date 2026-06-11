@@ -1336,7 +1336,10 @@ func (client *ClusterClient) MemoryStatsWithOptions(
 //
 // [valkey.io]: https://valkey.io/commands/shutdown/
 func (client *ClusterClient) Shutdown(ctx context.Context) error {
-	_, err := client.executeCommand(ctx, C.ShutDown, []string{})
+	response, err := client.executeCommandWithRoute(ctx, C.ShutDown, []string{}, config.AllNodes)
+	if response != nil {
+		C.free_command_response(response)
+	}
 	return err
 }
 
@@ -1361,16 +1364,19 @@ func (client *ClusterClient) ShutdownWithOptions(ctx context.Context, opts optio
 	if opts.ShutdownOptions != nil {
 		args = opts.ShutdownOptions.ToArgs()
 	}
+	route := config.Route(config.AllNodes)
 	if opts.RouteOption != nil && opts.RouteOption.Route != nil {
-		_, err := client.executeCommandWithRoute(ctx, C.ShutDown, args, opts.RouteOption.Route)
-		return err
+		route = opts.RouteOption.Route
 	}
-	_, err := client.executeCommand(ctx, C.ShutDown, args)
+	response, err := client.executeCommandWithRoute(ctx, C.ShutDown, args, route)
+	if response != nil {
+		C.free_command_response(response)
+	}
 	return err
 }
 
-// ScriptDebug sets the debug mode for Lua scripts.
-// Routes to all primary nodes by default.
+// ScriptDebug sets the debug mode for Lua scripts on the current connection.
+// Routes to a random node by default since debug mode is connection-scoped.
 //
 // See [valkey.io] for details.
 //
@@ -1385,7 +1391,7 @@ func (client *ClusterClient) ShutdownWithOptions(ctx context.Context, opts optio
 //
 // [valkey.io]: https://valkey.io/commands/script-debug/
 func (client *ClusterClient) ScriptDebug(ctx context.Context, mode options.ScriptDebugMode) (string, error) {
-	response, err := client.executeCommand(ctx, C.ScriptDebug, []string{string(mode)})
+	response, err := client.executeCommandWithRoute(ctx, C.ScriptDebug, []string{string(mode)}, config.RandomRoute)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
@@ -1412,10 +1418,11 @@ func (client *ClusterClient) ScriptDebugWithOptions(
 	mode options.ScriptDebugMode,
 	opts options.ScriptDebugClusterOptions,
 ) (string, error) {
-	if opts.RouteOption == nil || opts.RouteOption.Route == nil {
-		return client.ScriptDebug(ctx, mode)
+	route := config.Route(config.RandomRoute)
+	if opts.RouteOption != nil && opts.RouteOption.Route != nil {
+		route = opts.RouteOption.Route
 	}
-	response, err := client.executeCommandWithRoute(ctx, C.ScriptDebug, []string{string(mode)}, opts.RouteOption.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.ScriptDebug, []string{string(mode)}, route)
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

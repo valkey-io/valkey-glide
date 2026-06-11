@@ -2,7 +2,10 @@
 
 package options
 
-import "strconv"
+import (
+	"errors"
+	"strconv"
+)
 
 // FailoverOptions provides optional arguments for the FAILOVER command.
 //
@@ -33,13 +36,25 @@ type FailoverOptions struct {
 }
 
 // ToArgs converts FailoverOptions to a command argument slice.
-func (opts *FailoverOptions) ToArgs() []string {
+// Returns an error if option combinations are invalid.
+func (opts *FailoverOptions) ToArgs() ([]string, error) {
 	if opts == nil {
-		return []string{}
+		return []string{}, nil
 	}
 
 	if opts.Abort {
-		return []string{"ABORT"}
+		if opts.Host != "" || opts.Port > 0 || opts.Force || opts.TimeoutMs > 0 {
+			return nil, errors.New("ABORT cannot be combined with other failover options")
+		}
+		return []string{"ABORT"}, nil
+	}
+
+	if opts.Force && (opts.Host == "" || opts.Port <= 0) {
+		return nil, errors.New("FORCE requires both Host and Port to be specified")
+	}
+
+	if (opts.Host != "" && opts.Port <= 0) || (opts.Host == "" && opts.Port > 0) {
+		return nil, errors.New("both Host and Port must be specified together")
 	}
 
 	args := []string{}
@@ -52,5 +67,5 @@ func (opts *FailoverOptions) ToArgs() []string {
 	if opts.TimeoutMs > 0 {
 		args = append(args, "TIMEOUT", strconv.FormatInt(opts.TimeoutMs, 10))
 	}
-	return args
+	return args, nil
 }
