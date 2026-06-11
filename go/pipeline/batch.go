@@ -229,7 +229,8 @@ func (b *StandaloneBatch) MigrateKeysWithOptions(
 	if err != nil {
 		return b.addError("MigrateKeysWithOptions", err)
 	}
-	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)} // Empty string is required by the MIGRATE wire format when using the KEYS option.
+	// Empty string is required by the MIGRATE wire format when using the KEYS option.
+	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
 	args = append(args, optionArgs...)
 	args = append(args, constants.KeysKeyword)
 	args = append(args, keys...)
