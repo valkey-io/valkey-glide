@@ -9,8 +9,9 @@
 
 ### Changes
 
+* Core, Python, Java, Node, Go: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
 * Java: Add `FAILOVER` and `REPLICAOF` command support ([#6170](https://github.com/valkey-io/valkey-glide/pull/6170))
-* CORE, Java, Python, Node, Go: Add client-wide circuit breaker that detects sustained error rates and rejects requests at the FFI boundary before threads park. Opt-in via `ClientCircuitBreakerConfiguration`. Tracks error rate in a sliding window, trips when threshold is exceeded, and recovers automatically via optimistic HalfOpen with consecutive success validation. Java additionally performs a synchronous pre-check to prevent thread explosion under `managedBlock()`. ([#5996](https://github.com/valkey-io/valkey-glide/issues/5996))
+* Core, Java, Python, Node, Go: Add client-wide circuit breaker that detects sustained error rates and rejects requests at the FFI boundary before threads park. Opt-in via `ClientCircuitBreakerConfiguration`. Tracks error rate in a sliding window, trips when threshold is exceeded, and recovers automatically via optimistic HalfOpen with consecutive success validation. Java additionally performs a synchronous pre-check to prevent thread explosion under `managedBlock()`. ([#5996](https://github.com/valkey-io/valkey-glide/issues/5996))
 * Core, Java: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
 * Core, Python, Java, Node, Go: Add `CLIENT PAUSE` and `CLIENT UNPAUSE` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
 * Go: Add RESET command support ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
