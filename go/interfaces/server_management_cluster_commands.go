@@ -340,4 +340,62 @@ type ServerManagementClusterCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/acl-whoami/
 	AclWhoAmI(ctx context.Context) (string, error)
+
+	// Shutdown shuts down the server. Routes to all primary nodes by default.
+	// Since the server closes connections on shutdown, a connection error is expected
+	// and indicates the command was received successfully.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   An error if the command could not be sent. A connection error after sending is
+	//   expected behavior indicating the server is shutting down.
+	//
+	// [valkey.io]: https://valkey.io/commands/shutdown/
+	Shutdown(ctx context.Context) error
+
+	// ShutdownWithOptions shuts down the server with optional behavior modifiers and routing.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   opts - Shutdown behavior options including SAVE/NOSAVE, NOW, FORCE, ABORT, and routing.
+	//
+	// Return value:
+	//   An error if the command could not be sent. Returns nil if ABORT succeeds.
+	//
+	// [valkey.io]: https://valkey.io/commands/shutdown/
+	ShutdownWithOptions(ctx context.Context, opts options.ShutdownClusterOptions) error
+
+	// ScriptDebug sets the debug mode for Lua scripts.
+	// Routes to all primary nodes by default.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   mode - The debug mode: YES (async), SYNC (blocking), or NO (disabled).
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/script-debug/
+	ScriptDebug(ctx context.Context, mode options.ScriptDebugMode) (string, error)
+
+	// ScriptDebugWithOptions sets the debug mode for Lua scripts with routing configuration.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   mode - The debug mode: YES (async), SYNC (blocking), or NO (disabled).
+	//   opts - Routing options.
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/script-debug/
+	ScriptDebugWithOptions(
+		ctx context.Context,
+		mode options.ScriptDebugMode,
+		opts options.ScriptDebugClusterOptions,
+	) (string, error)
 }

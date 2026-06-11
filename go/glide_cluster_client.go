@@ -1319,6 +1319,109 @@ func (client *ClusterClient) MemoryStatsWithOptions(
 	return models.CreateClusterSingleValue[map[string]any](data), nil
 }
 
+// Shuts down the server. Routes to all primary nodes by default.
+// Since the server closes connections on shutdown, a connection error is expected
+// and indicates the command was received successfully.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An error if the command could not be sent. A connection error after sending is expected
+//	and indicates the server is shutting down.
+//
+// [valkey.io]: https://valkey.io/commands/shutdown/
+func (client *ClusterClient) Shutdown(ctx context.Context) error {
+	_, err := client.executeCommand(ctx, C.ShutDown, []string{})
+	return err
+}
+
+// Shuts down the server with optional behavior modifiers and routing configuration.
+// Since the server closes connections on shutdown, a connection error is expected
+// and indicates the command was received successfully.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	opts - Shutdown behavior options including SAVE/NOSAVE, NOW, FORCE, ABORT, and routing.
+//
+// Return value:
+//
+//	An error if the command could not be sent. Returns nil if ABORT succeeds.
+//
+// [valkey.io]: https://valkey.io/commands/shutdown/
+func (client *ClusterClient) ShutdownWithOptions(ctx context.Context, opts options.ShutdownClusterOptions) error {
+	args := []string{}
+	if opts.ShutdownOptions != nil {
+		args = opts.ShutdownOptions.ToArgs()
+	}
+	if opts.RouteOption != nil && opts.RouteOption.Route != nil {
+		_, err := client.executeCommandWithRoute(ctx, C.ShutDown, args, opts.RouteOption.Route)
+		return err
+	}
+	_, err := client.executeCommand(ctx, C.ShutDown, args)
+	return err
+}
+
+// ScriptDebug sets the debug mode for Lua scripts.
+// Routes to all primary nodes by default.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	mode - The debug mode: YES (async), SYNC (blocking), or NO (disabled).
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-debug/
+func (client *ClusterClient) ScriptDebug(ctx context.Context, mode options.ScriptDebugMode) (string, error) {
+	response, err := client.executeCommand(ctx, C.ScriptDebug, []string{string(mode)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// ScriptDebugWithOptions sets the debug mode for Lua scripts with routing configuration.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	mode - The debug mode: YES (async), SYNC (blocking), or NO (disabled).
+//	opts - Routing options.
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-debug/
+func (client *ClusterClient) ScriptDebugWithOptions(
+	ctx context.Context,
+	mode options.ScriptDebugMode,
+	opts options.ScriptDebugClusterOptions,
+) (string, error) {
+	if opts.RouteOption == nil || opts.RouteOption.Route == nil {
+		return client.ScriptDebug(ctx, mode)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.ScriptDebug, []string{string(mode)}, opts.RouteOption.Route)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
 // Sets configuration parameters to the specified values.
 // Starting from server version 7, command supports multiple parameters.
 // The command will be sent to all nodes.

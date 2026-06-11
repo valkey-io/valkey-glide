@@ -269,4 +269,80 @@ type ServerManagementCommands interface {
 	//
 	// [valkey.io]: https://valkey.io/commands/acl-whoami/
 	AclWhoAmI(ctx context.Context) (string, error)
+
+	// Shutdown shuts down the server. Since the server closes the connection on shutdown,
+	// a connection error is expected and indicates the command was received successfully.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   An error if the command could not be sent. A connection error after sending is
+	//   expected behavior indicating the server is shutting down.
+	//
+	// [valkey.io]: https://valkey.io/commands/shutdown/
+	Shutdown(ctx context.Context) error
+
+	// ShutdownWithOptions shuts down the server with optional behavior modifiers such as
+	// SAVE/NOSAVE, NOW, FORCE, or ABORT.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   opts - Shutdown behavior options.
+	//
+	// Return value:
+	//   An error if the command could not be sent. Returns nil if ABORT succeeds.
+	//
+	// [valkey.io]: https://valkey.io/commands/shutdown/
+	ShutdownWithOptions(ctx context.Context, opts options.ShutdownOptions) error
+
+	// ScriptDebug sets the debug mode for Lua scripts.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   mode - The debug mode: YES (async), SYNC (blocking), or NO (disabled).
+	//
+	// Return value:
+	//   "OK" on success.
+	//
+	// [valkey.io]: https://valkey.io/commands/script-debug/
+	ScriptDebug(ctx context.Context, mode options.ScriptDebugMode) (string, error)
+
+	// Failover initiates a manual failover from the current primary to a replica.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   "OK" when the failover was started.
+	//
+	// [valkey.io]: https://valkey.io/commands/failover/
+	Failover(ctx context.Context) (string, error)
+
+	// FailoverWithOptions initiates a manual failover with optional target replica and timeout.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   opts - Optional arguments including target host/port, timeout, FORCE, or ABORT.
+	//
+	// Return value:
+	//   "OK" when the failover was started, or "OK" when ABORT cancels an ongoing failover.
+	//
+	// [valkey.io]: https://valkey.io/commands/failover/
+	FailoverWithOptions(ctx context.Context, opts options.FailoverOptions) (string, error)
+
+	// PSync sends a PSYNC command to initiate or resume replication from the server.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   replicationID - The replication ID of the primary. Use "?" to request a full resync.
+	//   offset        - The replication offset. Use -1 to request a full resync.
+	//
+	// Return value:
+	//   A string containing the replication response, typically "+FULLRESYNC" or "+CONTINUE".
+	//
+	// [valkey.io]: https://valkey.io/commands/psync/
+	PSync(ctx context.Context, replicationID string, offset int64) (string, error)
 }

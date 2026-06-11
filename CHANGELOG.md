@@ -9,6 +9,7 @@
 
 ### Changes
 
+* Go: Add SHUTDOWN, SCRIPT DEBUG, FAILOVER, and PSYNC server management commands with cluster routing support ([#5957](https://github.com/valkey-io/valkey-glide/issues/5957))
 * Java: Add `FAILOVER` and `REPLICAOF` command support ([#6170](https://github.com/valkey-io/valkey-glide/pull/6170))
 * CORE, Java, Python, Node, Go: Add client-wide circuit breaker that detects sustained error rates and rejects requests at the FFI boundary before threads park. Opt-in via `ClientCircuitBreakerConfiguration`. Tracks error rate in a sliding window, trips when threshold is exceeded, and recovers automatically via optimistic HalfOpen with consecutive success validation. Java additionally performs a synchronous pre-check to prevent thread explosion under `managedBlock()`. ([#5996](https://github.com/valkey-io/valkey-glide/issues/5996))
 * Core, Java: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))

@@ -265,3 +265,82 @@ func ExampleClient_ConfigRewrite() {
 	// Output:
 	// OK
 }
+
+func ExampleClient_ScriptDebug() {
+	var client *Client = getExampleClient() // example helper function
+	result, err := client.ScriptDebug(context.Background(), options.ScriptDebugModeNo)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClient_ScriptDebug_allModes() {
+	var client *Client = getExampleClient() // example helper function
+
+	result, err := client.ScriptDebug(context.Background(), options.ScriptDebugModeYes)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+	}
+	fmt.Println("YES mode:", result)
+
+	result, err = client.ScriptDebug(context.Background(), options.ScriptDebugModeNo)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+	}
+	fmt.Println("NO mode:", result)
+
+	// Output:
+	// YES mode: OK
+	// NO mode: OK
+}
+
+func ExampleClient_Failover() {
+	var client *Client = getExampleClient() // example helper function
+	// FAILOVER requires replicas to be available; returns error on standalone without replicas
+	_, err := client.Failover(context.Background())
+	fmt.Println(err != nil)
+
+	// Output: true
+}
+
+func ExampleClient_FailoverWithOptions_abort() {
+	var client *Client = getExampleClient() // example helper function
+	opts := options.FailoverOptions{Abort: true}
+	// FAILOVER ABORT when no failover is in progress returns an error
+	_, err := client.FailoverWithOptions(context.Background(), opts)
+	fmt.Println(err != nil)
+
+	// Output: true
+}
+
+func ExampleClusterClient_ScriptDebug() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	result, err := client.ScriptDebug(context.Background(), options.ScriptDebugModeNo)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}
+
+func ExampleClusterClient_ScriptDebugWithOptions() {
+	var client *ClusterClient = getExampleClusterClient() // example helper function
+	opts := options.ScriptDebugClusterOptions{
+		RouteOption: &options.RouteOption{Route: nil},
+	}
+	result, err := client.ScriptDebugWithOptions(
+		context.Background(),
+		options.ScriptDebugModeNo,
+		opts,
+	)
+	if err != nil {
+		fmt.Println("Glide example failed with an error:", err)
+	}
+	fmt.Println(result)
+
+	// Output: OK
+}

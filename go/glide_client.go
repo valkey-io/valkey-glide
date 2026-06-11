@@ -7,6 +7,7 @@ import "C"
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
@@ -659,6 +660,139 @@ func (client *Client) MemoryStats(ctx context.Context) (map[string]any, error) {
 		return nil, err
 	}
 	return handleStringToAnyMapResponse(response)
+}
+
+// Shuts down the server. Since the server closes the connection on shutdown, the command
+// will return a connection error, which is expected behavior and indicates the server
+// has received the command.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	An error if the command could not be sent. A connection error after sending is expected
+//	and indicates the server is shutting down.
+//
+// [valkey.io]: https://valkey.io/commands/shutdown/
+func (client *Client) Shutdown(ctx context.Context) error {
+	_, err := client.executeCommand(ctx, C.ShutDown, []string{})
+	return err
+}
+
+// Shuts down the server with the specified options. Since the server closes the connection
+// on shutdown, a connection error is expected after the command is sent successfully.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	opts - Optional shutdown behavior such as SAVE/NOSAVE, NOW, FORCE, or ABORT.
+//
+// Return value:
+//
+//	An error if the command could not be sent. A connection error after sending is expected
+//	and indicates the server is shutting down. Returns nil if ABORT succeeds.
+//
+// [valkey.io]: https://valkey.io/commands/shutdown/
+func (client *Client) ShutdownWithOptions(ctx context.Context, opts options.ShutdownOptions) error {
+	args := opts.ToArgs()
+	_, err := client.executeCommand(ctx, C.ShutDown, args)
+	return err
+}
+
+// Sets the debug mode for Lua scripts.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	mode - The debug mode: YES (async), SYNC (blocking), or NO (disabled).
+//
+// Return value:
+//
+//	"OK" on success.
+//
+// [valkey.io]: https://valkey.io/commands/script-debug/
+func (client *Client) ScriptDebug(ctx context.Context, mode options.ScriptDebugMode) (string, error) {
+	response, err := client.executeCommand(ctx, C.ScriptDebug, []string{string(mode)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Initiates a manual failover from the current primary to a replica.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	"OK" when the failover was started, or "OK" when ABORT cancels an ongoing failover.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) Failover(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.FailOver, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Initiates a manual failover with optional target replica and timeout settings.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx  - The context for controlling the command execution.
+//	opts - Optional arguments including target host/port, timeout, FORCE, or ABORT.
+//
+// Return value:
+//
+//	"OK" when the failover was started, or "OK" when ABORT cancels an ongoing failover.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) FailoverWithOptions(ctx context.Context, opts options.FailoverOptions) (string, error) {
+	args := opts.ToArgs()
+	response, err := client.executeCommand(ctx, C.FailOver, args)
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Sends a PSYNC command to initiate or resume replication from the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx           - The context for controlling the command execution.
+//	replicationID - The replication ID of the primary. Use "?" to request a full resync.
+//	offset        - The replication offset. Use -1 to request a full resync.
+//
+// Return value:
+//
+//	A string containing the replication response, typically starting with "+FULLRESYNC" or
+//	"+CONTINUE".
+//
+// [valkey.io]: https://valkey.io/commands/psync/
+func (client *Client) PSync(ctx context.Context, replicationID string, offset int64) (string, error) {
+	response, err := client.executeCommand(ctx, C.PSync, []string{replicationID, strconv.FormatInt(offset, 10)})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
 }
 
 // Gets the name of the current connection.
