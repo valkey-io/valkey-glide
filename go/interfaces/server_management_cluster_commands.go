@@ -114,14 +114,14 @@ type ServerManagementClusterCommands interface {
 	LatencyHistoryWithOptions(
 		ctx context.Context,
 		event string,
-		opts options.RouteOption,
+		route options.RouteOption,
 	) (models.ClusterValue[[]models.LatencyEntry], error)
 
 	LatencyLatest(ctx context.Context) (models.ClusterValue[[]models.LatencyInfo], error)
 
 	LatencyLatestWithOptions(
 		ctx context.Context,
-		opts options.RouteOption,
+		route options.RouteOption,
 	) (models.ClusterValue[[]models.LatencyInfo], error)
 
 	LatencyReset(ctx context.Context, events ...string) (int64, error)

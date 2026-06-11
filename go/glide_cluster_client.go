@@ -1090,16 +1090,16 @@ func (client *ClusterClient) LatencyHistory(
 func (client *ClusterClient) LatencyHistoryWithOptions(
 	ctx context.Context,
 	event string,
-	opts options.RouteOption,
+	route options.RouteOption,
 ) (models.ClusterValue[[]models.LatencyEntry], error) {
-	if opts.Route == nil {
+	if route.Route == nil {
 		return client.LatencyHistory(ctx, event)
 	}
-	response, err := client.executeCommandWithRoute(ctx, C.LatencyHistory, []string{event}, opts.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.LatencyHistory, []string{event}, route.Route)
 	if err != nil {
 		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
 	}
-	if opts.Route.IsMultiNode() {
+	if route.Route.IsMultiNode() {
 		data, err := handleLatencyHistoryClusterResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
@@ -1164,16 +1164,16 @@ func (client *ClusterClient) LatencyLatest(
 // [valkey.io]: https://valkey.io/commands/latency-latest/
 func (client *ClusterClient) LatencyLatestWithOptions(
 	ctx context.Context,
-	opts options.RouteOption,
+	route options.RouteOption,
 ) (models.ClusterValue[[]models.LatencyInfo], error) {
-	if opts.Route == nil {
+	if route.Route == nil {
 		return client.LatencyLatest(ctx)
 	}
-	response, err := client.executeCommandWithRoute(ctx, C.LatencyLatest, []string{}, opts.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.LatencyLatest, []string{}, route.Route)
 	if err != nil {
 		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
 	}
-	if opts.Route.IsMultiNode() {
+	if route.Route.IsMultiNode() {
 		data, err := handleLatencyLatestClusterResponse(response)
 		if err != nil {
 			return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
@@ -1218,7 +1218,7 @@ func (client *ClusterClient) LatencyReset(ctx context.Context, events ...string)
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
-//	opts - Specifies the routing configuration for the command. The client will route the
+//	route - Specifies the routing configuration for the command. The client will route the
 //	        command to the nodes defined by `route`.
 //	events - The latency events to reset (e.g. "command", "fork").
 //
@@ -1229,13 +1229,13 @@ func (client *ClusterClient) LatencyReset(ctx context.Context, events ...string)
 // [valkey.io]: https://valkey.io/commands/latency-reset/
 func (client *ClusterClient) LatencyResetWithOptions(
 	ctx context.Context,
-	opts options.RouteOption,
+	route options.RouteOption,
 	events ...string,
 ) (int64, error) {
-	if opts.Route == nil {
+	if route.Route == nil {
 		return client.LatencyReset(ctx, events...)
 	}
-	response, err := client.executeCommandWithRoute(ctx, C.LatencyReset, events, opts.Route)
+	response, err := client.executeCommandWithRoute(ctx, C.LatencyReset, events, route.Route)
 	if err != nil {
 		return models.DefaultIntResponse, err
 	}
