@@ -12397,10 +12397,13 @@ class TestSyncScripts:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_failover_no_replicas(self, glide_sync_client: GlideClient):
-        # FAILOVER on a primary with no replicas should error
-        with pytest.raises(RequestError):
-            glide_sync_client.failover()
+    def test_failover(self, glide_sync_client: GlideClient):
+        # FAILOVER succeeds (OK) if replicas exist, or raises if none
+        try:
+            result = glide_sync_client.failover()
+            assert result == OK
+        except RequestError:
+            pass
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

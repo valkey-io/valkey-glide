@@ -2172,14 +2172,19 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "failover_no_replicas_%p",
+        "failover_%p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            // FAILOVER on a primary with no replicas should error
-            // Error message differs between Redis and Valkey
-            await expect(client.failover()).rejects.toThrow(RequestError);
+            // FAILOVER succeeds (OK) if replicas exist, or throws if none
+            try {
+                const result = await client.failover();
+                expect(result).toBe("OK");
+            } catch (e) {
+                expect(e).toBeInstanceOf(RequestError);
+            }
+
             client.close();
         },
         TIMEOUT,

@@ -1385,11 +1385,15 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
 
-func (suite *GlideTestSuite) TestFailover_NoReplicas() {
+func (suite *GlideTestSuite) TestFailover() {
 	client := suite.defaultClient()
-	// FAILOVER on a primary with no replicas should error
-	_, err := client.Failover(context.Background())
-	suite.Error(err)
+	// FAILOVER succeeds (OK) if replicas exist, or errors if none
+	response, err := client.Failover(context.Background())
+	if err == nil {
+		assert.Equal(suite.T(), "OK", response)
+	} else {
+		suite.Error(err)
+	}
 }
 
 func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {

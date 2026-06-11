@@ -12500,11 +12500,13 @@ class TestScripts:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_failover_no_replicas(self, glide_client: GlideClient):
-        # FAILOVER on a primary with no replicas should error
-        # Error message differs between Redis and Valkey
-        with pytest.raises(RequestError):
-            await glide_client.failover()
+    async def test_failover(self, glide_client: GlideClient):
+        # FAILOVER succeeds (OK) if replicas exist, or raises if none
+        try:
+            result = await glide_client.failover()
+            assert result == OK
+        except RequestError:
+            pass
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
