@@ -1103,7 +1103,7 @@ func (client *Client) MigrateKeysWithOptions(
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
+	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)} // Empty string is required by the MIGRATE wire format when using the KEYS option.
 	args = append(args, optionArgs...)
 	args = append(args, constants.KeysKeyword)
 	args = append(args, keys...)
@@ -1111,5 +1111,5 @@ func (client *Client) MigrateKeysWithOptions(
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}
-	return handleStringResponse(result)
+	return handleOkOrStringResponse(result)
 }
