@@ -1,3 +1,5 @@
+name: Create Test Matrices
+description: Creates host and language version matrices for CI test jobs
 inputs:
     language-name:
         description: "Language name"
@@ -107,14 +109,14 @@ runs:
               # Swap to self-hosted Linux runners if requested or if PR has ci/use-self-hosted label
               if [[ "$USE_SELF_HOSTED_LINUX" != "true" && "$EVENT_NAME" == "pull_request" ]]; then
                   LABELS=$(jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
-                  if echo "$LABELS" | grep -q "ci/use-self-hosted"; then
+                  if echo "$LABELS" | grep -Fxq 'ci/use-self-hosted'; then
                       USE_SELF_HOSTED_LINUX="true"
                   fi
               fi
               if [[ "$USE_SELF_HOSTED_LINUX" == "true" ]]; then
                   FINAL_MATRIX=$(echo "$FINAL_MATRIX" | jq -c '
                       [.[] | if .SELF_HOSTED_RUNNER
-                       then .RUNNER = .SELF_HOSTED_RUNNER
+                       then .RUNNER = .SELF_HOSTED_RUNNER | del(.SELF_HOSTED_RUNNER)
                        else . end]')
               fi
 
