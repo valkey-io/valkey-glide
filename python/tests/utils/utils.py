@@ -238,7 +238,7 @@ async def wait_for(
     Raises:
         TimeoutError: If the condition is not met within the timeout.
     """
-    import asyncio
+    import anyio
     import time as _time
 
     deadline = _time.monotonic() + _WAIT_FOR_TIMEOUT_SEC
@@ -246,7 +246,7 @@ async def wait_for(
     while _time.monotonic() < deadline:
         if await condition():
             return
-        await asyncio.sleep(_WAIT_FOR_INTERVAL_SEC)
+        await anyio.sleep(_WAIT_FOR_INTERVAL_SEC)
 
     raise TimeoutError(failure)
 
