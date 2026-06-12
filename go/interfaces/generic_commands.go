@@ -25,11 +25,6 @@ type GenericCommands interface {
 
 	RandomKey(ctx context.Context) (models.Result[string], error)
 
-	// MigrateKeys transfers keys to a destination Valkey instance.
-	//
-	// See [valkey.io] for details.
-	//
-	// [valkey.io]: https://valkey.io/commands/migrate/
 	MigrateKeys(
 		ctx context.Context,
 		host string,
@@ -39,11 +34,6 @@ type GenericCommands interface {
 		timeout int64,
 	) (string, error)
 
-	// MigrateKeysWithOptions transfers keys to a destination Valkey instance with additional options.
-	//
-	// See [valkey.io] for details.
-	//
-	// [valkey.io]: https://valkey.io/commands/migrate/
 	MigrateKeysWithOptions(
 		ctx context.Context,
 		host string,
