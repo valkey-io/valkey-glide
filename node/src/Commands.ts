@@ -3449,8 +3449,8 @@ function buildMigrateOptionsArgs(options: MigrateOptions): GlideString[] {
 
     if (options.replace) optArgs.push("REPLACE");
 
-    if (options.username !== undefined && options.password !== undefined) {
-        optArgs.push("AUTH2", options.username, options.password);
+    if (options.username !== undefined) {
+        optArgs.push("AUTH2", options.username, options.password!);
     } else if (options.password !== undefined) {
         optArgs.push("AUTH", options.password);
     }

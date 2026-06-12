@@ -4495,9 +4495,8 @@ export class Batch extends BaseBatch<Batch> {
 
     /**
      * Atomically transfers the specified keys from the current Valkey instance
-     * to a destination Valkey instance. On success, keys are deleted from the source.
-     *
-     * Note: Multi-key `MIGRATE` is only supported on standalone clients.
+     * to a destination Valkey instance. On success, keys are deleted from the source
+     * unless `copy` is set to `true` in options.
      *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
