@@ -3524,4 +3524,49 @@ pub(crate) mod shared_client_tests {
                 .expect("SET should work after RESET (no pubsub resubscription on reconnect)");
         });
     }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_watchdog_timeout_fires_for_slow_command(#[values(false)] use_cluster: bool) {
+        // Verify the watchdog fires a timeout for a command that exceeds the configured
+        // request_timeout. Uses CLIENT PAUSE to make the server stop processing, then
+        // sends a GET that will timeout.
+        block_on_all(async {
+            let mut test_basics = setup_test_basics(
+                use_cluster,
+                TestConfiguration {
+                    request_timeout: Some(100), // 100ms client timeout
+                    shared_server: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+
+            // Pause the server for 2 seconds — all commands will block
+            let mut pause_cmd = redis::Cmd::new();
+            pause_cmd.arg("CLIENT").arg("PAUSE").arg("2000");
+            let _ = test_basics.client.send_command(&mut pause_cmd, None).await;
+
+            // Now send a GET — it will be queued at the server and not processed
+            // until the pause ends, but our 100ms timeout fires first.
+            let mut cmd = redis::Cmd::new();
+            cmd.arg("GET").arg("watchdog_test_key");
+            let result = test_basics.client.send_command(&mut cmd, None).await;
+            assert!(
+                result.is_err(),
+                "Command should have timed out but got: {:?}",
+                result
+            );
+            let err = result.unwrap_err();
+            assert!(
+                err.is_timeout(),
+                "Error should be a timeout, got: {:?}",
+                err
+            );
+
+            // Unpause so we don't affect other tests
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        });
+    }
 }

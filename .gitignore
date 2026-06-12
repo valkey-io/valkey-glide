@@ -18,6 +18,10 @@ dump.rdb
 python/.env*
 benchmarks/results
 
+# Python byte-compiled files
+__pycache__/
+*.py[cod]
+
 # IDE generaged files
 .vs
 .vscode
