@@ -1124,43 +1124,84 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Atomically transfers the specified keys from the current Valkey instance
-     * to a destination Valkey instance. On success, keys are deleted from the source
-     * unless `copy` is set to `true` in options.
+     * Atomically transfers a key or multiple keys from the current Valkey instance
+     * to a destination Valkey instance.
+     * On success, keys are deleted from the source unless `copy` is set to `true` in options.
+     *
+     * @remarks
+     * The multi-key form (passing an array as `keyOrKeys`) is available on standalone
+     * clients only; it is not supported by cluster clients.
      *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param keys - The keys to migrate. Must not be empty.
+     * @param keyOrKeys - The key to migrate (single-key form), or an array of keys to migrate (multi-key form, standalone only). The array must not be empty.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
-     * @param options - Optional settings: `copy`, `replace`, `password`, `username`.
-     * @returns `"OK"` on success, `"NOKEY"` if none of the keys exist.
+     * @param options - Optional migration options.
+     * @returns `"OK"` on success, `"NOKEY"` if the key(s) do not exist.
      *
-     * @example
+     * @example Single-key:
      * ```typescript
-     * const result = await client.migrateKeys("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
-     * console.log(result); // Output: "OK" - "key1" and "key2" were migrated atomically.
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     * @example Single-key with copy and replace:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // "OK"
+     * ```
+     * @example Multi-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
+     * console.log(result); // "OK"
      * ```
      */
-    public async migrateKeys(
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString,
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string>;
+    public async migrate(
         host: string,
         port: number,
         keys: GlideString[],
         destinationDB: number,
         timeout: number,
         options?: MigrateOptions,
+    ): Promise<string>;
+    public async migrate(
+        host: string,
+        port: number,
+        keyOrKeys: GlideString | GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
     ): Promise<string> {
-        return this.createWritePromise(
-            createMigrateKeys(
-                host,
-                port,
-                keys,
-                destinationDB,
-                timeout,
-                options,
-            ),
+        if (Array.isArray(keyOrKeys)) {
+            return this.createWritePromise(
+                createMigrateKeys(
+                    host,
+                    port,
+                    keyOrKeys,
+                    destinationDB,
+                    timeout,
+                    options,
+                ),
+            );
+        }
+
+        return super.migrate(
+            host,
+            port,
+            keyOrKeys,
+            destinationDB,
+            timeout,
+            options,
         );
     }
 
