@@ -1315,6 +1315,10 @@ where
                     return next;
                 }
                 request.retry = request.retry.saturating_add(1);
+                // Notify diagnostic handle of retry
+                if let CmdArg::Cmd { cmd, .. } = &request.info.cmd {
+                    cmd.mark_retry();
+                }
                 // Record retry attempts metric if telemetry is initialized
                 if let Err(e) = GlideOpenTelemetry::record_retry_attempt() {
                     log_error_lazy!(
@@ -3050,6 +3054,10 @@ where
             set_routed_node_on_span(&span, &address);
         }
 
+        // Mark command as sent for watchdog diagnostics
+        cmd.watchdog_phase
+            .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
+
         conn.req_packed_command(&cmd)
             .await
             .map(Response::Single)
@@ -3066,6 +3074,12 @@ where
         let (address, mut conn) = conn.await.map_err(|err| (OperationTarget::NotFound, err))?;
         if let Some(span) = pipeline.span() {
             set_routed_node_on_span(&span, &address);
+        }
+
+        // Mark diagnostic handles on pipeline commands as sent
+        for cmd in pipeline.cmd_iter() {
+            cmd.watchdog_phase
+                .store(crate::cmd::PHASE_SENT, std::sync::atomic::Ordering::Release);
         }
 
         conn.req_packed_commands(&pipeline, offset, count, None)

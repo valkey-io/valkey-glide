@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::runtime::{Builder, Handle};
 pub use types::*;
 
@@ -321,6 +321,8 @@ pub struct Client {
     otel_metadata: types::OTelMetadata,
     // Optional client-side cache
     client_side_cache: Option<Arc<dyn GlideCache>>,
+    // Per-client latency tracker for timeout diagnostics
+    latency_tracker: Arc<crate::timeout_watchdog::LatencyTracker>,
     // Optional Client-wide circuit breaker
     circuit_breaker: Option<Arc<circuit_breaker::ClientCircuitBreaker>>,
 }
@@ -1113,43 +1115,136 @@ impl Client {
                 None
             };
             let self_clone = self.clone();
-            let owned_cmd = Arc::new(cmd.clone());
-
-            let execute = Self::execute_command_owned(
-                self_clone,
-                owned_cmd,
-                routing,
-                client,
-                compression_manager,
-            );
+            let owned_cmd = cmd.clone();
 
             let result = match request_timeout {
                 Some(duration) => {
-                    let timeout_rx =
-                        crate::timeout_watchdog::TimeoutWatchdog::global().register(duration);
+                    // Compute inflight count (cheap atomic load)
+                    let inflight = Some(
+                        (self.inflight_requests_limit
+                            - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                            as usize,
+                    );
+
+                    // Wrap Cmd in Arc so the timeout arm can still read watchdog fields after execute takes ownership
+                    let owned_cmd = Arc::new(owned_cmd);
+
+                    // Single Instant::now() shared between watchdog and latency tracking
+                    let cmd_start = Instant::now();
+
+                    let timeout_rx = crate::timeout_watchdog::TimeoutWatchdog::global()
+                        .register(duration, cmd_start);
+                    let routing_desc = routing
+                        .as_ref()
+                        .map(|r| format!("{:?}", r))
+                        .unwrap_or_else(|| "unknown".to_owned());
+                    let execute = Self::execute_command_owned(
+                        self_clone,
+                        owned_cmd.clone(),
+                        routing,
+                        client,
+                        compression_manager,
+                    );
+
                     tokio::pin!(execute);
                     tokio::select! {
-                        result = &mut execute => result,
+                        result = &mut execute => {
+                            // Record latency into per-client tracker
+                            let elapsed = cmd_start.elapsed();
+                            self.latency_tracker.record(elapsed);
+                            result
+                        }
                         recv_result = timeout_rx => {
-                            if recv_result.is_err() {
-                                // Watchdog thread died (sender dropped). Don't spuriously
-                                // timeout — fall through to let the command complete normally
-                                // via Tokio's timer wheel as a fallback.
-                                execute.await
-                            } else {
-                                // Watchdog fired the timeout
-                                if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
-                                    log_error(
-                                        "OpenTelemetry:timeout_error",
-                                        format!("Failed to record timeout error: {e}"),
-                                    );
+                            match recv_result {
+                                Err(_) => {
+                                    // Watchdog thread died — fall through to let the
+                                    // command complete via Tokio's timer as fallback.
+                                    execute.await
                                 }
-                                Err(io::Error::from(io::ErrorKind::TimedOut).into())
+                                Ok(()) => {
+                                    // Build diagnostic event on the consumer side (rare timeout path)
+                                    let actual_elapsed = cmd_start.elapsed();
+                                    let (phase, node, retry_count, command) = {
+                                        let p = owned_cmd.watchdog_phase.load(Ordering::Acquire);
+                                        let n: String = routing_desc.clone();
+                                        let r = owned_cmd.watchdog_retry_count.load(Ordering::Relaxed);
+                                        let c = owned_cmd.arg_idx(0)
+                                            .map(crate::timeout_watchdog::cmd_name_from_bytes)
+                                            .unwrap_or("UNKNOWN");
+                                        (
+                                            if p == redis::PHASE_SENT {
+                                                crate::timeout_watchdog::CommandPhase::Sent
+                                            } else {
+                                                crate::timeout_watchdog::CommandPhase::Queued
+                                            },
+                                            n,
+                                            r,
+                                            c,
+                                        )
+                                    };
+                                    let pending = crate::timeout_watchdog::pending_count();
+                                    let inflight_now = (self.inflight_requests_limit
+                                        - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                                        as usize;
+                                    let p99 = self.latency_tracker.p99();
+                                    let cause = if phase == crate::timeout_watchdog::CommandPhase::Queued {
+                                        crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
+                                            queue_depth: pending,
+                                            scheduling_delay: actual_elapsed,
+                                        }
+                                    } else if pending > 100 {
+                                        crate::timeout_watchdog::TimeoutCause::SystemOverload {
+                                            pending_total: pending,
+                                        }
+                                    } else {
+                                        crate::timeout_watchdog::TimeoutCause::ServerUnresponsive {
+                                            node: node.clone(),
+                                        }
+                                    };
+                                    let event = crate::timeout_watchdog::TimeoutEvent {
+                                        cause,
+                                        command,
+                                        node,
+                                        phase,
+                                        configured_timeout: duration,
+                                        actual_elapsed,
+                                        pending_commands: pending,
+                                        recent_p99_latency: p99,
+                                        rss_bytes: crate::timeout_watchdog::get_rss(),
+                                        suggested_timeout: p99.map(|p| (p * 3).max(duration)),
+                                        inflight_at_register: inflight,
+                                        inflight_at_timeout: Some(inflight_now),
+                                        retry_count,
+                                    };
+
+                                    log_warn_rate_limited!(
+                                        "timeout_watchdog",
+                                        2,
+                                        event.to_string()
+                                    );
+                                    if let Err(e) = GlideOpenTelemetry::record_timeout_error() {
+                                        log_error(
+                                            "OpenTelemetry:timeout_error",
+                                            format!("Failed to record timeout error: {e}"),
+                                        );
+                                    }
+                                    Err(io::Error::from(io::ErrorKind::TimedOut).into())
+                                }
                             }
                         }
                     }
                 }
-                None => execute.await,
+                None => {
+                    let owned_cmd = Arc::new(owned_cmd);
+                    let execute = Self::execute_command_owned(
+                        self_clone,
+                        owned_cmd,
+                        routing,
+                        client,
+                        compression_manager,
+                    );
+                    execute.await
+                }
             };
 
             // Report result to client-wide circuit breaker
@@ -2285,6 +2380,7 @@ impl Client {
                 pubsub_synchronizer: pubsub_synchronizer.clone(),
                 otel_metadata,
                 client_side_cache,
+                latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(4096)),
                 circuit_breaker: request.client_circuit_breaker.as_ref().map(|config| {
                     let defaults = circuit_breaker::ClientCircuitBreakerConfig::default();
                     Arc::new(circuit_breaker::ClientCircuitBreaker::new(
@@ -2501,6 +2597,7 @@ impl Client {
                 db_namespace: "0".to_string(),
             },
             client_side_cache: None,
+            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
             circuit_breaker: None,
         }
     }
@@ -2799,6 +2896,7 @@ mod tests {
                 db_namespace: "0".to_string(),
             },
             client_side_cache: None,
+            latency_tracker: Arc::new(crate::timeout_watchdog::LatencyTracker::new(64)),
             circuit_breaker: None,
         }
     }
