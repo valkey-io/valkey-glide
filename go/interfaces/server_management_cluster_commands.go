@@ -41,6 +41,26 @@ type ServerManagementClusterCommands interface {
 
 	LastSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[int64], error)
 
+	Save(ctx context.Context) (string, error)
+
+	SaveWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
+
+	BgSave(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	BgSaveSchedule(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgSaveScheduleWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	BgSaveCancel(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgSaveCancelWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	BgRewriteAof(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgRewriteAofWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
 	ConfigResetStat(ctx context.Context) (string, error)
 
 	ConfigResetStatWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
