@@ -92,6 +92,29 @@ impl GlideOpenTelemetry {
     pub unsafe fn span_from_pointer(_ptr: u64) -> Result<GlideSpan, TraceError> {
         Ok(GlideSpan)
     }
+
+    /// Mock of the shared create path: leak a span into a raw `u64` pointer via `Arc::into_raw`
+    /// so the round-trip with `drop_span_ptr` stays sound under Miri.
+    pub fn leak_span(span: GlideSpan) -> u64 {
+        std::sync::Arc::into_raw(std::sync::Arc::new(span)) as u64
+    }
+
+    /// Mock of the shared drop path: reclaim a pointer produced by `leak_span` (`0` is a no-op).
+    /// Mirrors the real helper's validation so obviously invalid pointers are rejected *before*
+    /// any `Arc::from_raw`, matching the behaviour the miri tests exercise (e.g. `0xDEADBEEF`).
+    pub unsafe fn drop_span_ptr(span_ptr: u64) -> Result<(), TraceError> {
+        if span_ptr == 0 {
+            return Ok(());
+        }
+        // Same bounds/alignment checks as the real is_span_pointer_valid.
+        const MIN_VALID_ADDRESS: u64 = 0x1000;
+        const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8;
+        if span_ptr % 8 != 0 || span_ptr < MIN_VALID_ADDRESS || span_ptr > MAX_VALID_ADDRESS {
+            return Err(TraceError);
+        }
+        unsafe { drop(std::sync::Arc::from_raw(span_ptr as *const GlideSpan)) };
+        Ok(())
+    }
 }
 
 pub struct GlideOTELError;

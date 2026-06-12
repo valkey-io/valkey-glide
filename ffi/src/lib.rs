@@ -3872,9 +3872,7 @@ pub extern "C" fn create_otel_span(request_type: RequestType) -> u64 {
 
     // Create span and convert to pointer
     let span = GlideOpenTelemetry::new_span(&command_name);
-    let arc = Arc::new(span);
-    let ptr = Arc::into_raw(arc);
-    let span_ptr = ptr as u64;
+    let span_ptr = GlideOpenTelemetry::leak_span(span);
 
     logger_core::log_debug(
         "ffi_otel",
@@ -3893,9 +3891,7 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
 
     // Create span and convert to pointer
     let span = GlideOpenTelemetry::new_span(command_name);
-    let arc = Arc::new(span);
-    let ptr = Arc::into_raw(arc);
-    let span_ptr = ptr as u64;
+    let span_ptr = GlideOpenTelemetry::leak_span(span);
 
     logger_core::log_debug(
         "ffi_otel",
@@ -3931,9 +3927,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
         );
         // Graceful fallback: create independent batch span
         let span = GlideOpenTelemetry::new_span(command_name);
-        let arc = Arc::new(span);
-        let ptr = Arc::into_raw(arc);
-        let span_ptr = ptr as u64;
+        let span_ptr = GlideOpenTelemetry::leak_span(span);
         logger_core::log_debug(
             "ffi_otel",
             format!(
@@ -3974,9 +3968,7 @@ pub unsafe extern "C" fn create_batch_otel_span_with_parent(parent_span_ptr: u64
     };
 
     // Convert span to pointer and return
-    let arc = Arc::new(span);
-    let ptr = Arc::into_raw(arc);
-    let span_ptr = ptr as u64;
+    let span_ptr = GlideOpenTelemetry::leak_span(span);
 
     logger_core::log_debug(
         "ffi_otel",
@@ -4053,9 +4045,7 @@ pub unsafe extern "C" fn create_named_otel_span(span_name: *const c_char) -> u64
 
     // Create the named span using existing new_span method
     let span = GlideOpenTelemetry::new_span(name_str);
-    let arc = Arc::new(span);
-    let ptr = Arc::into_raw(arc);
-    let span_ptr = ptr as u64;
+    let span_ptr = GlideOpenTelemetry::leak_span(span);
 
     logger_core::log_debug(
         "ffi_otel",
@@ -4097,9 +4087,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
         );
         // Graceful fallback: create independent span
         let span = GlideOpenTelemetry::new_span(&command_name);
-        let arc = Arc::new(span);
-        let ptr = Arc::into_raw(arc);
-        let span_ptr = ptr as u64;
+        let span_ptr = GlideOpenTelemetry::leak_span(span);
         logger_core::log_debug(
             "ffi_otel",
             format!(
@@ -4140,9 +4128,7 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
     };
 
     // Convert span to pointer and return
-    let arc = Arc::new(span);
-    let ptr = Arc::into_raw(arc);
-    let span_ptr = ptr as u64;
+    let span_ptr = GlideOpenTelemetry::leak_span(span);
 
     logger_core::log_debug(
         "ffi_otel",
@@ -4159,66 +4145,22 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
 /// * `span_ptr` must be a valid pointer to a [`Arc<GlideSpan>`] span created by [`create_otel_span`] or `0`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn drop_otel_span(span_ptr: u64) {
-    // Validate span pointer
     if span_ptr == 0 {
         logger_core::log_debug("ffi_otel", "drop_otel_span: Ignoring null span pointer (0)");
         return;
     }
 
-    // Validate pointer alignment and bounds (basic safety checks)
-    if !span_ptr.is_multiple_of(8) {
-        logger_core::log_error(
+    // Pointer validation, panic containment, and Arc reclamation live in the shared
+    // glide_core helper so the C FFI and Java/JNI bindings exercise one tested code path.
+    match unsafe { GlideOpenTelemetry::drop_span_ptr(span_ptr) } {
+        Ok(()) => logger_core::log_debug(
             "ffi_otel",
-            format!("drop_otel_span: Invalid span pointer - misaligned: 0x{span_ptr:x}",),
-        );
-        return;
-    }
-
-    // Check for obviously invalid pointer values
-    const MIN_VALID_ADDRESS: u64 = 0x1000; // 4KB, below this is likely invalid
-    const MAX_VALID_ADDRESS: u64 = 0x7FFF_FFFF_FFFF_FFF8; // Max user space on most 64-bit systems
-
-    if span_ptr < MIN_VALID_ADDRESS {
-        logger_core::log_error(
+            format!("drop_otel_span: Successfully dropped span with pointer 0x{span_ptr:x}"),
+        ),
+        Err(e) => logger_core::log_error(
             "ffi_otel",
-            format!("drop_otel_span: Invalid span pointer - address too low: 0x{span_ptr:x}",),
-        );
-        return;
-    }
-
-    if span_ptr > MAX_VALID_ADDRESS {
-        logger_core::log_error(
-            "ffi_otel",
-            format!("drop_otel_span: Invalid span pointer - address too high: 0x{span_ptr:x}",),
-        );
-        return;
-    }
-
-    // Attempt to safely drop the span
-    unsafe {
-        // Use std::panic::catch_unwind to handle potential panics during Arc::from_raw
-        let result = std::panic::catch_unwind(|| {
-            Arc::from_raw(span_ptr as *const GlideSpan);
-        });
-
-        match result {
-            Ok(_) => {
-                logger_core::log_debug(
-                    "ffi_otel",
-                    format!(
-                        "drop_otel_span: Successfully dropped span with pointer 0x{span_ptr:x}",
-                    ),
-                );
-            }
-            Err(_) => {
-                logger_core::log_error(
-                    "ffi_otel",
-                    format!(
-                        "drop_otel_span: Panic occurred while dropping span pointer 0x{span_ptr:x} - likely invalid pointer",
-                    ),
-                );
-            }
-        }
+            format!("drop_otel_span: Failed to drop span pointer 0x{span_ptr:x}: {e}"),
+        ),
     }
 }
 

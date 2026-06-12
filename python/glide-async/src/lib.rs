@@ -9,7 +9,7 @@ use glide_core::errors::error_message;
 use glide_core::start_socket_listener;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, DEFAULT_TRACE_SAMPLE_PERCENTAGE, GlideOpenTelemetry,
-    GlideOpenTelemetrySignalsExporter, GlideSpan,
+    GlideOpenTelemetrySignalsExporter,
 };
 use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
@@ -669,12 +669,14 @@ fn get_cache_metric_from_registry(
 #[pyfunction]
 pub fn create_otel_span(name: String) -> usize {
     let span = GlideOpenTelemetry::new_span(&name);
-    let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
-    s as usize
+    // Shared create path with the other bindings; see glide_core::GlideOpenTelemetry::leak_span.
+    GlideOpenTelemetry::leak_span(span) as usize
 }
 
 #[pyfunction]
 pub fn drop_otel_span(span_ptr: usize) {
+    // 0 is rejected here (unlike the shared helper, which treats it as a no-op) to preserve
+    // existing behaviour.
     if span_ptr == 0 {
         log(
             Level::Error,
@@ -684,8 +686,13 @@ pub fn drop_otel_span(span_ptr: usize) {
         return;
     }
 
-    unsafe {
-        Arc::from_raw(span_ptr as *const GlideSpan);
+    // Shared validate + reclaim path; see glide_core::GlideOpenTelemetry::drop_span_ptr.
+    if let Err(e) = unsafe { GlideOpenTelemetry::drop_span_ptr(span_ptr as u64) } {
+        log(
+            Level::Error,
+            "OpenTelemetry".to_string(),
+            format!("Failed to drop span. {e}"),
+        );
     }
 }
 

@@ -551,8 +551,8 @@ pub fn create_leaked_double(float: f64) -> [u32; 2] {
 #[napi(ts_return_type = "[number, number]")]
 pub fn create_leaked_otel_span(name: String) -> [u32; 2] {
     let span = GlideOpenTelemetry::new_span(&name);
-    let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
-    split_pointer(s)
+    // Shared create path with the other bindings; see glide_core::GlideOpenTelemetry::leak_span.
+    split_pointer(GlideOpenTelemetry::leak_span(span) as *mut GlideSpan)
 }
 
 /// Creates an open telemetry span with the given name as a child of a remote span context.
@@ -584,13 +584,15 @@ pub fn create_otel_span_with_trace_context(
             GlideOpenTelemetry::new_span(&name)
         }
     };
-    let s = Arc::into_raw(Arc::new(span)) as *mut GlideSpan;
-    split_pointer(s)
+    // Shared create path with the other bindings; see glide_core::GlideOpenTelemetry::leak_span.
+    split_pointer(GlideOpenTelemetry::leak_span(span) as *mut GlideSpan)
 }
 
 #[napi]
 pub fn drop_otel_span(span_ptr: BigInt) {
     let (is_negative, span_ptr, lossless) = span_ptr.get_u64();
+    // The BigInt conversion guards are specific to this binding; 0 is rejected here (unlike the
+    // shared helper, which treats it as a no-op) to preserve existing behaviour.
     let error_msg = if is_negative {
         "Received a negative pointer value."
     } else if !lossless {
@@ -598,7 +600,14 @@ pub fn drop_otel_span(span_ptr: BigInt) {
     } else if span_ptr == 0 {
         "Received a zero pointer value."
     } else {
-        unsafe { Arc::from_raw(span_ptr as *const GlideSpan) };
+        // Shared validate + reclaim path; see glide_core::GlideOpenTelemetry::drop_span_ptr.
+        if let Err(e) = unsafe { GlideOpenTelemetry::drop_span_ptr(span_ptr) } {
+            log(
+                Level::Error,
+                "OpenTelemetry".to_string(),
+                format!("Failed to drop span. {e}"),
+            );
+        }
         return;
     };
 

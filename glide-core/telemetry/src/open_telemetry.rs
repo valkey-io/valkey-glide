@@ -706,6 +706,63 @@ impl GlideOpenTelemetry {
         Ok(span)
     }
 
+    /// Leak a [`GlideSpan`] into a raw `u64` pointer for transfer across an FFI/JNI boundary.
+    ///
+    /// The span is moved into a fresh [`Arc`] and converted to a raw pointer via
+    /// [`Arc::into_raw`], leaving its strong count at 1 (owned by the returned pointer). The
+    /// caller is responsible for eventually passing the pointer to [`drop_span_ptr`] exactly
+    /// once to reclaim it; failing to do so leaks the span.
+    ///
+    /// This is the single shared create path used by both the C FFI (`glide-ffi`) and the
+    /// Java/JNI (`glide-rs`) bindings, so the leak behaviour is exercised by one test.
+    ///
+    /// [`drop_span_ptr`]: GlideOpenTelemetry::drop_span_ptr
+    pub fn leak_span(span: GlideSpan) -> u64 {
+        Arc::into_raw(Arc::new(span)) as u64
+    }
+
+    /// Reclaim and drop a span previously leaked by [`leak_span`].
+    ///
+    /// Validates the pointer with [`is_span_pointer_valid`] before reconstructing the
+    /// [`Arc`] via [`Arc::from_raw`] and dropping it, releasing the span's native
+    /// allocation. A `0` pointer is treated as a no-op success (matching the bindings'
+    /// "ignore null span" behaviour). Any panic during reclamation is contained and
+    /// reported as an error rather than unwinding across the FFI boundary.
+    ///
+    /// This is the single shared drop path used by both the C FFI (`glide-ffi`) and the
+    /// Java/JNI (`glide-rs`) bindings; a missed reclamation in either binding is caught by
+    /// the helper's own test rather than going unobserved.
+    ///
+    /// # Safety
+    /// `span_ptr` must be `0`, or a pointer returned by [`leak_span`] that has not already
+    /// been passed to this function (no double free).
+    ///
+    /// [`leak_span`]: GlideOpenTelemetry::leak_span
+    /// [`is_span_pointer_valid`]: GlideOpenTelemetry::is_span_pointer_valid
+    pub unsafe fn drop_span_ptr(span_ptr: u64) -> Result<(), TraceError> {
+        // A null pointer means "no span was created" (e.g. sampling skipped it); not an error.
+        if span_ptr == 0 {
+            return Ok(());
+        }
+
+        if !unsafe { Self::is_span_pointer_valid(span_ptr) } {
+            return Err(TraceError::from(format!(
+                "Invalid span pointer: 0x{span_ptr:x} failed validation checks"
+            )));
+        }
+
+        // Contain any panic from Arc::from_raw so it never unwinds across the FFI/JNI boundary.
+        let result = std::panic::catch_unwind(|| unsafe {
+            drop(Arc::from_raw(span_ptr as *const GlideSpan));
+        });
+
+        result.map_err(|_| {
+            TraceError::from(format!(
+                "Panic occurred while dropping span pointer 0x{span_ptr:x} - likely invalid pointer"
+            ))
+        })
+    }
+
     /// Initialise the open telemetry library with a file system exporter
     ///
     /// This method should be called once for the given **process**
@@ -1258,6 +1315,62 @@ mod tests {
             assert_eq!(span.get_reference_count(), 2);
             drop(span);
         });
+    }
+
+    /// Leak a span into a raw pointer and reclaim it via the shared `drop_span_ptr` helper,
+    /// asserting the span's `Arc` strong count returns to baseline. This guards the shared
+    /// create/drop path that BOTH the C FFI (`glide-ffi`) and the Java/JNI (`glide-rs`)
+    /// bindings route through: a leak *inside* the helper would leave the count elevated.
+    /// (Whether each binding call site actually invokes the helper is a separate, per-binding
+    /// concern not covered here.)
+    #[test]
+    fn test_leak_and_drop_span_ptr_does_not_leak() {
+        // No init_otel()/exporter needed: this asserts on the Arc strong count, not exported
+        // spans, so it stays independent of the shared global OTel state other tests use.
+        for i in 0..1000 {
+            let span_ptr = GlideOpenTelemetry::leak_span(GlideOpenTelemetry::new_span("loop"));
+            assert_ne!(span_ptr, 0, "leak_span should produce a non-null pointer");
+
+            // Co-own the leaked Arc so we can observe the strong count across drop_span_ptr,
+            // without stealing the reference owned by the leaked pointer.
+            let owner = unsafe {
+                Arc::increment_strong_count(span_ptr as *const GlideSpan);
+                Arc::from_raw(span_ptr as *const GlideSpan)
+            };
+            assert_eq!(
+                Arc::strong_count(&owner),
+                2,
+                "iteration {i}: leaked pointer + test co-owner"
+            );
+
+            unsafe {
+                GlideOpenTelemetry::drop_span_ptr(span_ptr)
+                    .expect("dropping a valid span pointer should succeed");
+            }
+
+            assert_eq!(
+                Arc::strong_count(&owner),
+                1,
+                "iteration {i}: drop_span_ptr must release the leaked reference (no leak)"
+            );
+            // `owner` is dropped here, fully reclaiming the span before the next iteration.
+        }
+    }
+
+    /// `drop_span_ptr` treats a null pointer as a no-op success and rejects obviously invalid
+    /// pointers with an error instead of dereferencing them.
+    #[test]
+    fn test_drop_span_ptr_null_and_invalid() {
+        // Null pointer: "no span was created" — not an error, no allocation touched.
+        assert!(unsafe { GlideOpenTelemetry::drop_span_ptr(0) }.is_ok());
+
+        // Obviously invalid pointers must be rejected without dereferencing them.
+        for invalid in [0x1u64, 0x1001, 0x800, 0xDEAD_BEEF, 0xFFFF_FFFF_FFFF_FFFF] {
+            assert!(
+                unsafe { GlideOpenTelemetry::drop_span_ptr(invalid) }.is_err(),
+                "invalid pointer 0x{invalid:x} should be rejected"
+            );
+        }
     }
 
     #[test]
