@@ -170,20 +170,32 @@ unsafe fn convert(resp: *const CommandResponse) -> *mut ffi::PyObject {
             let msg = ffi::PyUnicode_FromStringAndSize(r.string_value, r.string_value_len as isize);
             if msg.is_null() {
                 ffi::PyErr_Clear();
-                return ffi::Py_None();
+                return {
+                    let n = ffi::Py_None();
+                    ffi::Py_INCREF(n);
+                    n
+                };
             }
             let args = ffi::PyTuple_New(1);
             if args.is_null() {
                 ffi::Py_DECREF(msg);
                 ffi::PyErr_Clear();
-                return ffi::Py_None();
+                return {
+                    let n = ffi::Py_None();
+                    ffi::Py_INCREF(n);
+                    n
+                };
             }
             ffi::PyTuple_SetItem(args, 0, msg); // steals ref to msg
             let obj = ffi::PyObject_CallObject(cls, args);
             ffi::Py_DECREF(args);
             if obj.is_null() {
                 ffi::PyErr_Clear();
-                return ffi::Py_None();
+                return {
+                    let n = ffi::Py_None();
+                    ffi::Py_INCREF(n);
+                    n
+                };
             }
             obj
         },
