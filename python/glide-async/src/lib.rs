@@ -15,6 +15,8 @@ use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
+
+type PyObject = Py<PyAny>;
 use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;
@@ -35,7 +37,7 @@ pub const DEFAULT_TRACE_SAMPLE_RATE: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
 /// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
 ///
 /// At least one of traces or metrics must be provided.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
@@ -85,7 +87,7 @@ impl OpenTelemetryConfig {
 /// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_RATE will be used.
 ///   Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
 ///   It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryTracesConfig {
     /// The endpoint to which trace data will be exported.
@@ -122,7 +124,7 @@ impl OpenTelemetryTracesConfig {
 ///   - For gRPC: `grpc://host:port`
 ///   - For HTTP: `http://host:port` or `https://host:port`
 ///   - For file exporter: `file:///absolute/path/to/folder/file.json`
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryMetricsConfig {
     /// The endpoint to which metrics data will be exported.
@@ -141,7 +143,7 @@ impl OpenTelemetryMetricsConfig {
     }
 }
 
-#[pyclass(eq, eq_int)]
+#[pyclass(eq, eq_int, from_py_object)]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
 pub enum Level {
     Error = 0,
@@ -291,7 +293,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         fn resolve(&self, host: &str, port: u16) -> (String, u16) {
             let callback = Arc::clone(&self.callback);
             let host = host.to_string();
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 match callback.call(py, (host.as_str(), port), None) {
                     Ok(result) => {
                         // Expect a tuple (str, int)
@@ -386,7 +388,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             Telemetry::subscription_last_sync_timestamp().to_string(),
         );
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let py_dict = PyDict::new(py);
 
             for (key, value) in stats_map {
@@ -413,7 +415,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             let init_callback = Arc::clone(&init_callback);
             move |socket_path| {
                 let init_callback = Arc::clone(&init_callback);
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     match socket_path {
                         Ok(path) => {
                             let _ = init_callback.call(py, (path, py.None()), None);
@@ -425,7 +427,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 });
             }
         });
-        Ok(Python::with_gil(|py| {
+        Ok(Python::attach(|py| {
             "OK".into_pyobject(py)
                 .expect("Expected a proper conversion of 'OK' into a Python string.")
                 .into_any()
