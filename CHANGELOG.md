@@ -11,10 +11,10 @@
 ### Changes
 
 * Core, Java, Node, Python: Unify the OpenTelemetry span raw-pointer lifecycle across all bindings into shared `glide_core` helpers (`leak_span` / `drop_span_ptr`), replacing per-binding copies of the `Arc::into_raw` create and `Arc::from_raw` drop logic so the create/drop path is exercised by a single leak-regression test. No public API or behavior change. ([#6232](https://github.com/valkey-io/valkey-glide/pull/6232))
+* CORE: Extend timeout watchdog with structured diagnostics. Timeouts now report classified root cause (ServerUnresponsive, ClientBackpressure, SystemOverload), command phase (Queued vs Sent), inflight trend, per-client p99 latency, and suggested timeout. ([#6044](https://github.com/valkey-io/valkey-glide/pull/6044))
 * Core, Python, Java, Node, Go: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
 * Java: Add `FAILOVER` and `REPLICAOF` command support ([#6170](https://github.com/valkey-io/valkey-glide/pull/6170))
 * Core, Java, Python, Node, Go: Add client-wide circuit breaker that detects sustained error rates and rejects requests at the FFI boundary before threads park. Opt-in via `ClientCircuitBreakerConfiguration`. Tracks error rate in a sliding window, trips when threshold is exceeded, and recovers automatically via optimistic HalfOpen with consecutive success validation. Java additionally performs a synchronous pre-check to prevent thread explosion under `managedBlock()`. ([#5996](https://github.com/valkey-io/valkey-glide/issues/5996))
-* Core, Java: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
 * Core, Python, Java, Node, Go: Add `CLIENT PAUSE` and `CLIENT UNPAUSE` command support ([#6035](https://github.com/valkey-io/valkey-glide/issues/6035))
 * Go: Add RESET command support ([#5946](https://github.com/valkey-io/valkey-glide/pull/5946))
 * Java: Add RESET command support ([#5947](https://github.com/valkey-io/valkey-glide/pull/5947))
