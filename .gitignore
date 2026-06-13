@@ -84,3 +84,5 @@ copilot-instructions.md
 **/benchmark_checkpoint*
 **/polyglot-benchmarks/
 **/performance*
+*.pyc
+__pycache__/

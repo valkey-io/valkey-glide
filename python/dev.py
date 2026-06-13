@@ -196,12 +196,39 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release"]
+    # Don't use zigbuild for glide-shared — it must match the host Python's ABI
+    shared_env = {k: v for k, v in env.items() if k != "CARGO_ZIGBUILD_TARGET"}
     run_command(
         cmd,
         cwd=shared_dir,
-        env=env,
+        env=shared_env,
         label="install glide-shared",
     )
+
+    # Build the FFI library and copy to glide_shared so it can be found
+    # without requiring glide-sync to be installed.
+    ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
+    try:
+        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
+        dest = shared_dir / "glide_shared" / ffi_lib_path.name
+        needs_build = not dest.exists()
+    except FileNotFoundError:
+        needs_build = True
+        dest = None
+
+    if needs_build:
+        ffi_build_cmd = ["cargo", "build"]
+        if release:
+            ffi_build_cmd += ["--release"]
+        run_command(
+            ffi_build_cmd,
+            cwd=FFI_DIR,
+            env=shared_env,
+            label="build FFI library",
+        )
+        ffi_lib_path = find_libglide_ffi(ffi_output_dir)
+        dest = shared_dir / "glide_shared" / ffi_lib_path.name
+        copy2(ffi_lib_path, dest)
 
 
 def build_async_client_wheel(
@@ -271,7 +298,6 @@ def build_async_client(
     env = activate_venv(no_cache)
     env.update(
         {  # Update it with your GLIDE variables
-            "GLIDE_NAME": GLIDE_ASYNC_NAME,
             "GLIDE_VERSION": glide_version,
         }
     )
@@ -337,7 +363,6 @@ def build_sync_client(
     )
     generate_protobuf_files()
     env = activate_venv(no_cache)
-    env["GLIDE_NAME"] = GLIDE_SYNC_NAME
     env["GLIDE_VERSION"] = glide_version
     if release:
         env["RELEASE_MODE"] = "1"
@@ -357,7 +382,6 @@ def build_sync_client(
     install_glide_shared(env, release=release)
     env.update(
         {  # Update it with your GLIDE variables
-            "GLIDE_NAME": GLIDE_SYNC_NAME,
             "GLIDE_VERSION": glide_version,
         }
     )
