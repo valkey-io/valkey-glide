@@ -10,6 +10,7 @@
 
 ### Changes
 
+* Python Async: Replace UDS+protobuf transport with FFI+pipe architecture. Commands go directly through CFFI to Rust; responses return via anonymous pipe with Rust-native parsing. Adds trio/anyio support, address resolver, cache metrics. +19-21% throughput for simple commands, +11-16% for collections vs v2.4.1. ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))
 * CORE: Extend timeout watchdog with structured diagnostics. Timeouts now report classified root cause (ServerUnresponsive, ClientBackpressure, SystemOverload), command phase (Queued vs Sent), inflight trend, per-client p99 latency, and suggested timeout. ([#6044](https://github.com/valkey-io/valkey-glide/pull/6044))
 * Core, Python, Java, Node, Go: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
 * Java: Add `FAILOVER` and `REPLICAOF` command support ([#6170](https://github.com/valkey-io/valkey-glide/pull/6170))
@@ -73,6 +74,7 @@
 * Core: Add adaptive timeout on pipeline send to detect dead connections during half-open TCP scenarios, replace `now_or_never()` with proper `poll()` in recovery to fix busy-spin, remove `loop{}` from `poll_flush`, and fail pending requests immediately during recovery to prevent OOM under sustained partition ([#5715](https://github.com/valkey-io/valkey-glide/issues/5715), [#5716](https://github.com/valkey-io/valkey-glide/issues/5716))
 * Core, Java: Add diagnostic logging for failover, topology refresh, and pipeline issues — lazy and rate-limited logging macros in logger_core, MOVED error scenario identification, topology refresh throttle/overwrite tracking, pipeline send/response timing, inflight slot exhaustion, recovery state transitions, adaptive health snapshots, and Java-side timeout elapsed time. Fix Java Logger Supplier overloads to check level before evaluating ([#5756](https://github.com/valkey-io/valkey-glide/pull/5756), [#5791](https://github.com/valkey-io/valkey-glide/pull/5791))
 * Core: Skip compression/decompression code paths when compression is not configured to eliminate per-command overhead ([#5644](https://github.com/valkey-io/valkey-glide/pull/5644))
+* Python Async: `Logger.logger_level` now returns a `Level` enum instead of an internal PyO3 type, consistent with the sync client ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))
 * Core: Fixed standalone client read strategy AZAffinity including the primary in the read list when it is in the same az as the client.
 * Core: Fixed standalone client read strategy AZAffinityAndPrimary not falling back to primary when there are no local replicas.
 
@@ -87,6 +89,9 @@
 
 * Python Sync: Use `current_thread` tokio runtime for sync FFI clients, eliminating cross-thread condvar wake overhead on every command ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083), [#5624](https://github.com/valkey-io/valkey-glide/issues/5624))
 * Python: Add arena-based response allocator and PyO3 fast response parser to eliminate per-node heap allocations and replace CFFI-based recursive Python traversal for large responses ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083), [#5624](https://github.com/valkey-io/valkey-glide/issues/5624))
+* Python Async: Replace protobuf+UDS transport with direct FFI calls and shared buffered pipe for response delivery, eliminating protobuf overhead, UDS socket I/O, and GIL contention ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083), [#5624](https://github.com/valkey-io/valkey-glide/issues/5624))
+* Python: Move shared code (logger, script, cluster_scan_cursor, request_type, ffi_helpers, opentelemetry) to glide-shared, eliminating circular dependencies between glide-async and glide-sync ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083))
+* Python Async: Add `GLIDE_TOKIO_WORKER_THREADS` env var to control tokio worker thread count for the async client runtime (default 1) ([#5083](https://github.com/valkey-io/valkey-glide/issues/5083))
 
 ## 2.3
 

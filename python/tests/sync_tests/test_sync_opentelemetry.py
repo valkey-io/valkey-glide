@@ -27,7 +27,7 @@ from tests.sync_tests.conftest import create_sync_client
 
 # Constants
 TIMEOUT = 50  # seconds
-VALID_ENDPOINT_TRACES = "/tmp/spans_sync.json"
+VALID_ENDPOINT_TRACES = "/tmp/spans.json"
 VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
 

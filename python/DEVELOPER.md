@@ -2,7 +2,7 @@
 
 This document describes how to set up your development environment to build and test the Valkey GLIDE Python wrapper.
 
-The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [CFFI](https://cffi.readthedocs.io/) for command dispatch and [PyO3](https://github.com/PyO3/pyo3) for response parsing, and the Python packages are built using [maturin](https://github.com/PyO3/maturin) and setuptools. The async client communicates with Rust via an anonymous pipe for response delivery; the sync client uses direct FFI return values.
 
 ## 📁 Python Project Structure
 
@@ -13,8 +13,9 @@ The `python/` directory contains three separate components:
 #### 🔹 glide-async/
 
 - Purpose: Async client for Valkey, implemented as a hybrid Python/Rust project.
-- Rust bindings: via PyO3, defined in `valkey-glide/python/glide-async/src/lib.rs`.
-- Communication Layer: Communicates with Glide's Rust core using a Unix Domain Socket (UDS).
+- Rust bindings: via CFFI (command dispatch) and a compiled Rust response parser (`_fast_response`).
+- Communication Layer: Commands sent via direct FFI calls to Rust. Responses delivered through an anonymous pipe from Rust worker threads to the Python event loop, parsed by the Rust `_fast_response` module.
+- Async frameworks: asyncio, uvloop, trio (via anyio)
 - Import path: `import glide`
 - PyPI package name: `valkey-glide`
 - Build backend: Maturin (Rust-based)
