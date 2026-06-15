@@ -27,10 +27,10 @@ use tokio_rustls::{client::TlsStream, TlsConnector};
 ///
 /// Uses `RwLock` to allow cache invalidation if system certificates change
 /// (e.g., CA rotation requiring a re-read of the trust store).
-static TLS_CONFIG_DEFAULT: RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>> =
-    RwLock::new(None);
-static TLS_CONFIG_INSECURE: RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>> =
-    RwLock::new(None);
+type TlsConfigCache = RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>>;
+
+static TLS_CONFIG_DEFAULT: TlsConfigCache = RwLock::new(None);
+static TLS_CONFIG_INSECURE: TlsConfigCache = RwLock::new(None);
 
 /// Clear cached TLS configurations, forcing a reload of system certificates
 /// on the next connection.
@@ -53,7 +53,7 @@ fn is_tls_cert_error(err: &io::Error) -> bool {
 
 /// Retrieve or initialize a cached TLS configuration.
 fn get_cached_tls_config(
-    cache: &'static RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>>,
+    cache: &'static TlsConfigCache,
     insecure: bool,
     tls_params: &Option<TlsConnParams>,
 ) -> RedisResult<Arc<rustls::ClientConfig>> {
