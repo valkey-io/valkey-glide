@@ -2,7 +2,7 @@
 
 import sys
 import threading
-from typing import List, Mapping, Optional, Tuple, TypeVar, Union
+from typing import List, Literal, Mapping, Optional, Tuple, TypeVar, Union, overload
 
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -2737,6 +2737,28 @@ class BaseBatch:
         if frequency is not None:
             args.extend(["FREQ", str(frequency)])
         return self.append_command(RequestType.Restore, args)
+
+    @overload
+    def migrate(
+        self: TBatch,
+        host: str,
+        port: int,
+        key: TEncodable,
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = ...,
+    ) -> TBatch: ...
+
+    @overload
+    def migrate(
+        self: TBatch,
+        host: str,
+        port: int,
+        key: Union[Literal[""], bytes],
+        destination_db: int,
+        timeout: int,
+        options: MigrateOptions,
+    ) -> TBatch: ...
 
     def migrate(
         self: TBatch,

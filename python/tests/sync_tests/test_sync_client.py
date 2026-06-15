@@ -9520,6 +9520,62 @@ class TestCommands:
         )
         assert result == b"NOKEY"
 
+    @pytest.fixture(scope="class")
+    def second_server(self, request):
+        from tests.utils.cluster import ValkeyCluster
+
+        tls = request.config.getoption("--tls")
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
+        yield cluster
+        del cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_migrate_success(
+        self, glide_sync_client: TGlideClient, second_server, request
+    ):
+        dest_addr = second_server.nodes_addr[0]
+        dest_host = dest_addr.host
+        dest_port = dest_addr.port
+        dest_client = create_sync_client(
+            request, cluster_mode=False, addresses=[NodeAddress(dest_host, dest_port)]
+        )
+        try:
+            # Single-key migrate
+            key = get_random_string(10)
+            value = get_random_string(5)
+            glide_sync_client.set(key, value)
+            result = glide_sync_client.migrate(dest_host, dest_port, key, 0, 5000)
+            assert result == OK or result == b"OK"
+            assert glide_sync_client.exists([key]) == 0
+            assert dest_client.get(key) == value.encode()
+
+            # Multi-key migrate
+            key1 = get_random_string(10)
+            key2 = get_random_string(10)
+            val1 = get_random_string(5)
+            val2 = get_random_string(5)
+            glide_sync_client.set(key1, val1)
+            glide_sync_client.set(key2, val2)
+            result = glide_sync_client.migrate(
+                dest_host,
+                dest_port,
+                "",
+                0,
+                5000,
+                MigrateOptions(keys=[key1, key2]),
+            )
+            assert result == OK or result == b"OK"
+            assert glide_sync_client.exists([key1, key2]) == 0
+            assert dest_client.get(key1) == val1.encode()
+            assert dest_client.get(key2) == val2.encode()
+        finally:
+            glide_sync_client.custom_command(["FLUSHALL"])
+            dest_client.custom_command(["FLUSHALL"])
+            dest_client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_wait(self, glide_sync_client: TGlideClient):

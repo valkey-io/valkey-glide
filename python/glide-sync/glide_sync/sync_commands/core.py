@@ -1,5 +1,17 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
+from typing import (
+    Dict,
+    List,
+    Literal,
+    Mapping,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+    cast,
+    overload,
+)
 
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -6931,6 +6943,28 @@ class CoreCommands(Protocol):
             self._execute_command(RequestType.Restore, args),
         )
 
+    @overload
+    def migrate(
+        self,
+        host: str,
+        port: int,
+        key: TEncodable,
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = ...,
+    ) -> str: ...
+
+    @overload
+    def migrate(
+        self,
+        host: str,
+        port: int,
+        key: Union[Literal[""], bytes],
+        destination_db: int,
+        timeout: int,
+        options: MigrateOptions,
+    ) -> bytes: ...
+
     def migrate(
         self,
         host: str,
@@ -6939,7 +6973,7 @@ class CoreCommands(Protocol):
         destination_db: int,
         timeout: int,
         options: Optional[MigrateOptions] = None,
-    ) -> str:
+    ) -> Union[str, bytes]:
         """
         Atomically transfers a key or multiple keys from a source Valkey instance to a destination
         Valkey instance.
