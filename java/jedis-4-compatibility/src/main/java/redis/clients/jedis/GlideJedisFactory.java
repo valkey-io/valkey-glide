@@ -20,7 +20,7 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
     private final String host;
     private final int port;
     private final JedisClientConfig clientConfig;
-    private JedisPool pool; // Pool reference set after factory creation
+    private volatile JedisPool pool;
 
     /**
      * Create a new factory for Jedis connections.
@@ -37,8 +37,8 @@ public class GlideJedisFactory implements PooledObjectFactory<Jedis> {
     }
 
     /**
-     * Set the pool reference after factory creation. This is called by JedisPool after the factory is
-     * created but before it's used.
+     * Set the pool reference before the pool is initialized. Called by {@link JedisPool} after the
+     * factory is created and before {@code initPool}.
      *
      * @param pool the JedisPool that owns this factory
      */
