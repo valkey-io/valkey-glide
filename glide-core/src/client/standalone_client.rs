@@ -760,6 +760,9 @@ impl StandaloneClient {
         cmd: &redis::Cmd,
         reconnecting_connection: &ReconnectingConnection,
     ) -> RedisResult<Value> {
+        // Mark command as sent for watchdog diagnostics
+        cmd.watchdog_phase
+            .store(redis::PHASE_SENT, std::sync::atomic::Ordering::Release);
         let mut connection = reconnecting_connection.get_connection().await?;
         let result = connection.send_packed_command(cmd).await;
         match result {

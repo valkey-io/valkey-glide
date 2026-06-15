@@ -23,7 +23,21 @@ import glide.api.GlideClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.*;
+import glide.api.models.configuration.AddressResolver;
+import glide.api.models.configuration.AdvancedGlideClientConfiguration;
+import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
+import glide.api.models.configuration.BackoffStrategy;
+import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.PeriodicChecksManualInterval;
+import glide.api.models.configuration.PeriodicChecksStatus;
+import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.ReadFrom;
+import glide.api.models.configuration.RequestRoutingConfiguration;
+import glide.api.models.configuration.ResolvedAddress;
+import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
 import glide.cluster.ValkeyCluster;
 import java.util.ArrayList;
@@ -1142,5 +1156,37 @@ public class ConnectionTests {
             assertEquals(OK, client.clientPause(0).get());
             assertEquals("PONG", client.ping().get());
         }
+    }
+
+    @SneakyThrows
+    @Test
+    public void test_client_circuit_breaker_config_connects_successfully() {
+        // Verify client connects and operates normally with CB enabled
+        GlideClusterClient clusterClient =
+                GlideClusterClient.createClient(
+                                commonClusterClientConfig()
+                                        .clientCircuitBreakerConfiguration(
+                                                ClientCircuitBreakerConfiguration.builder()
+                                                        .windowSizeMs(10000)
+                                                        .failureRateThreshold(0.5f)
+                                                        .minErrors(50)
+                                                        .openTimeoutMs(5000)
+                                                        .countTimeouts(false)
+                                                        .consecutiveSuccesses(3)
+                                                        .build())
+                                        .build())
+                        .get();
+        assertEquals("PONG", clusterClient.ping().get());
+        clusterClient.close();
+
+        GlideClient standaloneClient =
+                GlideClient.createClient(
+                                commonClientConfig()
+                                        .clientCircuitBreakerConfiguration(
+                                                ClientCircuitBreakerConfiguration.builder().build())
+                                        .build())
+                        .get();
+        assertEquals("PONG", standaloneClient.ping().get());
+        standaloneClient.close();
     }
 }

@@ -34,6 +34,7 @@ import {
     DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
     DEFAULT_INFLIGHT_REQUESTS_LIMIT,
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    CircuitBreakerError,
     ExecAbortError,
     ExpireOptions,
     GeoAddOptions,
@@ -967,6 +968,31 @@ export interface BaseClientConfiguration {
      * ```
      */
     addressResolver?: (host: string, port: number) => [string, number];
+    /**
+     * Configuration for the client-wide circuit breaker.
+     * When set, enables the circuit breaker which detects sustained error rates
+     * and rejects requests before they enter the core.
+     * If not set (undefined), the circuit breaker is disabled.
+     */
+    clientCircuitBreaker?: ClientCircuitBreakerConfiguration;
+}
+
+/**
+ * Configuration for the client-wide circuit breaker.
+ */
+export interface ClientCircuitBreakerConfiguration {
+    /** Sliding window duration in milliseconds for error rate calculation. Default: 10000. */
+    windowSizeMs?: number;
+    /** Error rate (0.0-1.0) within the window to trip the breaker. Default: 0.5. */
+    failureRateThreshold?: number;
+    /** Minimum errors within window before rate is evaluated. Default: 50. */
+    minErrors?: number;
+    /** Time in milliseconds in Open state before allowing a probe. Default: 5000. */
+    openTimeoutMs?: number;
+    /** Whether timeouts count toward tripping. Default: false. */
+    countTimeouts?: boolean;
+    /** Consecutive successful probes needed before closing. Default: 3. */
+    consecutiveSuccesses?: number;
 }
 
 /**
@@ -1106,6 +1132,10 @@ function getRequestErrorClass(
 
     if (type === response.RequestErrorType.Timeout) {
         return TimeoutError;
+    }
+
+    if (type === response.RequestErrorType.CircuitBreakerOpen) {
+        return CircuitBreakerError;
     }
 
     if (type === response.RequestErrorType.Unspecified) {
@@ -9452,6 +9482,50 @@ export class BaseClient {
                 options.compression,
                 connection_request,
             );
+        }
+
+        if (options.clientCircuitBreaker) {
+            const cb = options.clientCircuitBreaker;
+
+            if (cb.windowSizeMs !== undefined && cb.windowSizeMs <= 0) {
+                throw new ConfigurationError("windowSizeMs must be positive");
+            }
+
+            if (
+                cb.failureRateThreshold !== undefined &&
+                (cb.failureRateThreshold <= 0.0 ||
+                    cb.failureRateThreshold > 1.0)
+            ) {
+                throw new ConfigurationError(
+                    "failureRateThreshold must be between 0.0 (exclusive) and 1.0 (inclusive)",
+                );
+            }
+
+            if (cb.minErrors !== undefined && cb.minErrors <= 0) {
+                throw new ConfigurationError("minErrors must be positive");
+            }
+
+            if (cb.openTimeoutMs !== undefined && cb.openTimeoutMs <= 0) {
+                throw new ConfigurationError("openTimeoutMs must be positive");
+            }
+
+            if (
+                cb.consecutiveSuccesses !== undefined &&
+                cb.consecutiveSuccesses <= 0
+            ) {
+                throw new ConfigurationError(
+                    "consecutiveSuccesses must be positive",
+                );
+            }
+
+            request.clientCircuitBreaker = {
+                windowSizeMs: cb.windowSizeMs,
+                failureRateThreshold: cb.failureRateThreshold,
+                minErrors: cb.minErrors,
+                openTimeoutMs: cb.openTimeoutMs,
+                countTimeouts: cb.countTimeouts,
+                consecutiveSuccesses: cb.consecutiveSuccesses,
+            };
         }
 
         return request;

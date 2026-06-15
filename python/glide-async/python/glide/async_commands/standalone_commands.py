@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.glide import Script
+from glide.async_commands.core import RequestType
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
 from glide_shared.commands.command_args import ObjectType
@@ -21,7 +21,7 @@ from glide_shared.constants import (
     TFunctionStatsFullResponse,
     TResult,
 )
-from glide_shared.protobuf.command_request_pb2 import RequestType
+from glide_shared.script import Script
 
 from .core import CoreCommands
 
@@ -614,6 +614,99 @@ class StandaloneCommands(CoreCommands):
         return cast(
             int,
             await self._execute_command(RequestType.LastSave, []),
+        )
+
+    async def save(self) -> TOK:
+        """
+        Synchronously saves the dataset to disk.
+
+        See [valkey.io](https://valkey.io/commands/save) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.save()
+                OK
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Save, []),
+        )
+
+    async def bgsave(self) -> str:
+        """
+        Asynchronously saves the dataset to disk in the background.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave()
+                "Background saving started"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgSave, []),
+        )
+
+    async def bgsave_schedule(self) -> str:
+        """
+        Schedules a background save of the database.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_schedule()
+                "Background saving scheduled"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgSave, ["SCHEDULE"]),
+        )
+
+    async def bgsave_cancel(self) -> str:
+        """
+        Aborts all in-progress and scheduled background saves.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Note:
+            Since: Valkey 8.1.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_cancel()
+                "Background saving cancelled"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgSave, ["CANCEL"]),
+        )
+
+    async def bgrewriteaof(self) -> str:
+        """
+        Initiates a background rewrite of the append-only file (AOF).
+
+        See [valkey.io](https://valkey.io/commands/bgrewriteaof) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgrewriteaof()
+                "Background append only file rewriting started"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgRewriteAof, []),
         )
 
     async def publish(self, message: TEncodable, channel: TEncodable) -> int:

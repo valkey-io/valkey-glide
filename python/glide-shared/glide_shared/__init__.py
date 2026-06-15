@@ -124,6 +124,7 @@ from .config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    ClientCircuitBreakerConfiguration,
     CompressionBackend,
     CompressionConfiguration,
     GlideClientConfiguration,
@@ -162,6 +163,7 @@ from .constants import (
     TXInfoStreamResponse,
 )
 from .exceptions import (
+    CircuitBreakerError,
     ClosingError,
     ConfigurationError,
     ConnectionError,
@@ -202,6 +204,7 @@ __all__ = [
     "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
+    "ClientCircuitBreakerConfiguration",
     "CompressionBackend",
     "CompressionConfiguration",
     "GlideClientConfiguration",
@@ -317,6 +320,7 @@ __all__ = [
     "SlotIdRoute",
     "TSingleNodeRoute",
     # Exceptions
+    "CircuitBreakerError",
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",

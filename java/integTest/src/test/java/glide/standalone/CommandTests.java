@@ -4,7 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
-import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
+import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -17,10 +17,10 @@ import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.parseInfoResponseToMap;
-import static glide.TestUtilities.waitForCondition;
+import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
+import static glide.TestUtilities.waitForSaveNotInProgress;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -56,12 +56,14 @@ import glide.api.GlideClient;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
@@ -88,6 +90,7 @@ import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
@@ -535,16 +538,16 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave(GlideClient client) {
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsave().get()));
+        waitForSaveNotInProgress(client);
+        assertTrue(BGSAVE_RESPONSES.contains(client.bgsave().get()));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule(GlideClient client) {
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
-        assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(client.bgsaveSchedule().get()));
+        waitForSaveNotInProgress(client);
+        assertTrue(BGSAVE_RESPONSES.contains(client.bgsaveSchedule().get()));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -552,7 +555,7 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel(GlideClient client) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        waitForSaveNotInProgress(client);
 
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> client.bgsaveCancel().get());
@@ -563,7 +566,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof(GlideClient client) {
-        waitForCondition(() -> !isSaveInProgress(client), "Prior save still in progress");
+        waitForSaveNotInProgress(client);
         assertTrue(BGREWRITEAOF_RESPONSES.contains(client.bgrewriteaof().get()));
     }
 
@@ -2111,6 +2114,97 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void failover_no_replicas(GlideClient regularClient) {
+        // FAILOVER without replicas should fail with an error
+        ExecutionException ex =
+                assertThrows(ExecutionException.class, () -> regularClient.failover().get());
+
+        Throwable cause = ex.getCause();
+        assertInstanceOf(RequestException.class, cause);
+
+        // Error message differs between Redis ("no replica") and Valkey ("FAILOVER requires").
+        String msg = cause.getMessage();
+        assertTrue(
+                msg.contains("no replica") || msg.contains("FAILOVER requires"),
+                "Expected error about no replicas, got: " + msg);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void failover_abort_no_failover_in_progress(GlideClient regularClient) {
+        // FAILOVER ABORT when no failover is in progress should fail
+        ExecutionException ex =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.failover(FailoverOptions.abort()).get());
+
+        Throwable cause = ex.getCause();
+        assertInstanceOf(RequestException.class, cause);
+
+        // Error message differs between Redis ("No failover") and Valkey ("nothing to abort")
+        String msg = cause.getMessage();
+        assertTrue(
+                msg.contains("No failover") || msg.contains("nothing to abort"),
+                "Expected error about no failover in progress, got: " + msg);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    @Timeout(120)
+    public void failover_to_replica(ProtocolVersion protocol) {
+        // Spin up a standalone primary with 1 replica
+        try (ValkeyCluster standalone = new ValkeyCluster(false, false, 1, 1, null, null)) {
+            NodeAddress primaryAddr = standalone.getNodesAddr().get(0);
+            GlideClientConfiguration config =
+                    GlideClientConfiguration.builder().address(primaryAddr).protocol(protocol).build();
+            try (GlideClient client = GlideClient.createClient(config).get()) {
+                // Verify initial role is master
+                waitForRole(client, "master");
+
+                // FAILOVER with a timeout should succeed (returns OK immediately)
+                String result = client.failover().get();
+                assertEquals(OK, result);
+
+                waitForRole(client, "slave");
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ProtocolVersion.class)
+    @SneakyThrows
+    @Timeout(120)
+    public void replicaof_and_replicaofNoOne(ProtocolVersion protocol) {
+        // Spin up two standalone servers: one as the primary, one to make a replica
+        try (ValkeyCluster primary = new ValkeyCluster(false, false, 1, 0, null, null);
+                ValkeyCluster secondary = new ValkeyCluster(false, false, 1, 0, null, null)) {
+            NodeAddress primaryAddr = primary.getNodesAddr().get(0);
+            NodeAddress secondaryAddr = secondary.getNodesAddr().get(0);
+            GlideClientConfiguration config =
+                    GlideClientConfiguration.builder().address(secondaryAddr).protocol(protocol).build();
+            try (GlideClient client = GlideClient.createClient(config).get()) {
+                // Verify initial role is master
+                waitForRole(client, "master");
+
+                // Make it a replica of the primary
+                assertEquals(OK, client.replicaof(primaryAddr.getHost(), primaryAddr.getPort()).get());
+
+                // Verify role changed to slave
+                waitForRole(client, "slave");
+
+                // Promote back to primary
+                assertEquals(OK, client.replicaofNoOne().get());
+
+                // Verify role changed back to master
+                waitForRole(client, "master");
+            }
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void migrate_multi_keys_invalid_host(GlideClient regularClient) {
         String key1 = "{migrate}" + UUID.randomUUID();
         String key2 = "{migrate}" + UUID.randomUUID();
@@ -2167,5 +2261,12 @@ public class CommandTests {
                 regularClient.del(new String[] {key1, key2}).get();
             }
         }
+    }
+
+    private static boolean waitForRole(GlideClient client, String role) throws Exception {
+        waitFor(
+                () -> client.info(new Section[] {Section.REPLICATION}).get().contains("role:" + role),
+                "Timed out waiting for role change to " + role + " to complete.");
+        return true;
     }
 }

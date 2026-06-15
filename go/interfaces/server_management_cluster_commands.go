@@ -41,6 +41,26 @@ type ServerManagementClusterCommands interface {
 
 	LastSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[int64], error)
 
+	Save(ctx context.Context) (string, error)
+
+	SaveWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
+
+	BgSave(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgSaveWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	BgSaveSchedule(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgSaveScheduleWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	BgSaveCancel(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgSaveCancelWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	BgRewriteAof(ctx context.Context) (models.ClusterValue[string], error)
+
+	BgRewriteAofWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
 	ConfigResetStat(ctx context.Context) (string, error)
 
 	ConfigResetStatWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
@@ -60,6 +80,102 @@ type ServerManagementClusterCommands interface {
 	ConfigRewrite(ctx context.Context) (string, error)
 
 	ConfigRewriteWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
+
+	// MemoryDoctor provides memory usage diagnosis report.
+	// Routes to all primary nodes by default.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A ClusterValue containing the memory usage analysis report(s).
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-doctor/
+	MemoryDoctor(ctx context.Context) (models.ClusterValue[string], error)
+
+	// MemoryDoctorWithOptions provides memory usage diagnosis report with routing configuration.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   routeOption - Specifies the routing configuration for the command.
+	//
+	// Return value:
+	//   A ClusterValue containing the memory usage analysis report(s).
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-doctor/
+	MemoryDoctorWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	// MemoryMallocStats returns memory allocator internal statistics.
+	// Routes to all primary nodes by default.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A ClusterValue containing the memory allocator statistics.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+	MemoryMallocStats(ctx context.Context) (models.ClusterValue[string], error)
+
+	// MemoryMallocStatsWithOptions returns memory allocator internal statistics with routing configuration.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   routeOption - Specifies the routing configuration for the command.
+	//
+	// Return value:
+	//   A ClusterValue containing the memory allocator statistics.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+	MemoryMallocStatsWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[string], error)
+
+	// MemoryPurge attempts to purge dirty pages for reclamation by the allocator.
+	// Routes to all nodes by default.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   "OK" to confirm that the purge operation was executed.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-purge/
+	MemoryPurge(ctx context.Context) (string, error)
+
+	// MemoryPurgeWithOptions attempts to purge dirty pages with routing configuration.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   routeOption - Specifies the routing configuration for the command.
+	//
+	// Return value:
+	//   "OK" to confirm that the purge operation was executed.
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-purge/
+	MemoryPurgeWithOptions(ctx context.Context, routeOption options.RouteOption) (string, error)
+
+	// MemoryStats returns memory usage statistics for the server.
+	// Routes to all primary nodes by default.
+	//
+	// See [valkey.io] for details.
+	//
+	// Return value:
+	//   A ClusterValue containing memory usage statistics map(s).
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-stats/
+	MemoryStats(ctx context.Context) (models.ClusterValue[map[string]any], error)
+
+	// MemoryStatsWithOptions returns memory usage statistics with routing configuration.
+	//
+	// See [valkey.io] for details.
+	//
+	// Parameters:
+	//   routeOption - Specifies the routing configuration for the command.
+	//
+	// Return value:
+	//   A ClusterValue containing memory usage statistics map(s).
+	//
+	// [valkey.io]: https://valkey.io/commands/memory-stats/
+	MemoryStatsWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[map[string]any], error)
 
 	// AclCat returns a list of all ACL categories.
 	//

@@ -440,7 +440,7 @@ class TestBasicCompression:
         # Verify compression was applied
         stats = compression_client.get_statistics()
         assert (
-            stats["total_values_compressed"] >= initial_compressed
+            stats["total_values_compressed"] > initial_compressed
         ), "SETEX should compress values above threshold"
 
         # Verify value can be retrieved and decompressed
@@ -476,7 +476,7 @@ class TestBasicCompression:
         # Verify compression was applied
         stats = compression_client.get_statistics()
         assert (
-            stats["total_values_compressed"] >= initial_compressed
+            stats["total_values_compressed"] > initial_compressed
         ), "PSETEX should compress values above threshold"
 
         # Verify value can be retrieved and decompressed
@@ -512,7 +512,7 @@ class TestBasicCompression:
         # Verify compression was applied
         stats = compression_client.get_statistics()
         assert (
-            stats["total_values_compressed"] >= initial_compressed
+            stats["total_values_compressed"] > initial_compressed
         ), "SETNX should compress values above threshold"
 
         # Verify value can be retrieved and decompressed

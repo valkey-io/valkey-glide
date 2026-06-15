@@ -1652,6 +1652,7 @@ dependencies = [
 name = "miri-tests"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "mock-glide-core",
  "mock-logger-core",
  "mock-redis",

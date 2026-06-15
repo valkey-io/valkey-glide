@@ -1,6 +1,12 @@
 name: Java Prepare Deployment
 
 on:
+    pull_request:
+        paths:
+            - .github/workflows/java-cd.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-engine/action.yml
+            - .github/json_matrices/**
     push:
         tags:
             - "v*.*"
@@ -56,7 +62,9 @@ jobs:
               id: release-version
               shell: bash
               run: |
-                  if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                  if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+                      R_VERSION="255.255.255"
+                  elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
                       R_VERSION="${{ env.INPUT_VERSION }}"
                   else
                       R_VERSION=${GITHUB_REF:11}
@@ -204,6 +212,11 @@ jobs:
                   ls -ltr
                   cd -
                   cp $jedis_src_folder/jedis-bundle.jar jedis-bundle-${{ matrix.host.TARGET }}.jar
+
+            - name: Smoke test native library
+              shell: bash
+              run: |
+                  find java/client/build/resources/main/natives -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -q .
 
             - name: Upload artifacts to publish
               continue-on-error: true
@@ -354,6 +367,20 @@ jobs:
                   ls -ltr
                   cd -
                   cp $src_folder/jedis-bundle.jar jedis-bundle-no-classifier.jar
+
+            - name: Smoke test uber JAR
+              working-directory: java
+              shell: bash
+              run: |
+                  # Extract in a temp dir so the working directory is not polluted; clean up on exit.
+                  bundle="$PWD/bundle-uber-jar.jar"
+                  tmp_dir=$(mktemp -d)
+                  trap 'rm -rf "$tmp_dir"' EXIT
+                  cd "$tmp_dir"
+                  jar xf "$bundle"
+                  INNER_JAR=$(find . -maxdepth 1 -name 'valkey-glide-*.jar' ! -name '*sources*' ! -name '*javadoc*' | head -1)
+                  mkdir inner && (cd inner && jar xf "../$INNER_JAR")
+                  find inner/natives -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -q .
 
             - name: Upload uber JAR artifact
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

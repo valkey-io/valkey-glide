@@ -553,6 +553,113 @@ func (client *Client) LastSave(ctx context.Context) (int64, error) {
 	return handleIntResponse(response)
 }
 
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *Client) Save(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.Save, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSave(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Schedules a background save of the database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveSchedule(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"SCHEDULE"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Aborts all in-progress and scheduled background saves.
+//
+// Available since Valkey 8.1.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveCancel(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"CANCEL"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *Client) BgRewriteAof(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgRewriteAof, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.
@@ -572,6 +679,93 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 		return models.DefaultStringResponse, err
 	}
 	return handleOkResponse(response)
+}
+
+// Provides memory usage diagnosis report.
+// The command returns a detailed analysis of memory consumption patterns in the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A string containing the memory usage analysis report.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryDoctor, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Returns memory allocator internal statistics.
+// The output of this command is specific to the allocator being used.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A string containing the memory allocator statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryMallocStats, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Attempts to purge dirty pages for reclamation by the allocator.
+// This command can help reduce memory fragmentation.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	OK to confirm that the purge operation was executed.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.MemoryPurge, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Returns memory usage statistics for the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A map containing memory usage statistics with metric names as keys and values as their corresponding data.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (client *Client) MemoryStats(ctx context.Context) (map[string]any, error) {
+	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleStringToAnyMapResponse(response)
 }
 
 // Gets the name of the current connection.

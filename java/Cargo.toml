@@ -18,7 +18,7 @@ logger_core = { path = "../logger_core" }
 tracing = "0.1"
 tracing-subscriber = "0.3.16"
 jni = "0.21.1"
-log = "0.4.20"
+log = "0.4.30"
 bytes = { version = "1.6.0" }
 serde = "1.0.225"
 # Additional dependencies for JNI implementation
