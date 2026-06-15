@@ -1256,7 +1256,7 @@ public abstract class BaseClient
      */
     public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
         return commandManager.submitNewCommand(
-                ClientTrackingInfo, new String[0], this::parseTrackingInfoResponse);
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleClientTrackingInfoResponse);
     }
 
     /**
@@ -1264,7 +1264,7 @@ public abstract class BaseClient
      * and RESP3 (Map) formats.
      */
     @SuppressWarnings("unchecked")
-    protected Map<String, Object> parseTrackingInfoValue(Object value) {
+    protected Map<String, Object> handleClientTrackingInfoValue(Object value) {
         if (value instanceof Map) {
             return (Map<String, Object>) value;
         }
@@ -1280,8 +1280,9 @@ public abstract class BaseClient
      * Parses a CLIENT TRACKINGINFO response, handling both RESP2 (Object[] flat pairs) and RESP3
      * (Map) formats.
      */
-    protected Map<String, Object> parseTrackingInfoResponse(Response response) throws GlideException {
-        return parseTrackingInfoValue(handleObjectOrNullResponse(response));
+    protected Map<String, Object> handleClientTrackingInfoResponse(Response response)
+            throws GlideException {
+        return handleClientTrackingInfoValue(handleObjectOrNullResponse(response));
     }
 
     @Override

@@ -5163,7 +5163,7 @@ public class GlideClientTest {
         Object[] resp2Response =
                 new Object[] {"flags", new Object[] {"off"}, "redirect", -1L, "prefixes", new Object[0]};
 
-        Map<String, Object> result = service.parseTrackingInfoValue(resp2Response);
+        Map<String, Object> result = service.handleClientTrackingInfoValue(resp2Response);
 
         assertNotNull(result);
         assertTrue(result.containsKey("flags"));

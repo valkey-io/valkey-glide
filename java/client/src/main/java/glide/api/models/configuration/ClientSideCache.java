@@ -58,10 +58,7 @@ public class ClientSideCache {
     /** Whether to enable metrics collection for the cache. Defaults to false. */
     @Builder.Default private final boolean enableMetrics = false;
 
-    /**
-     * Whether to use server-assisted client-side caching (Phase 2). Defaults to false (broadcast
-     * mode).
-     */
+    /** Whether to use server-assisted client-side caching. */
     @Builder.Default private final boolean serverAssisted = false;
 
     /**

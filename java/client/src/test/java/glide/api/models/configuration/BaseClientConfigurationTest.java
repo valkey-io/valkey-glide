@@ -155,11 +155,10 @@ public class BaseClientConfigurationTest {
 
     @Test
     void testServerAssistedCacheConfig() {
-        ClientSideCache cache =
-                ClientSideCache.builder().maxCacheKb(1024).entryTtlMs(0).serverAssisted(true).build();
+        ClientSideCache cache = ClientSideCache.builder().maxCacheKb(1024).serverAssisted(true).build();
         assertTrue(cache.isServerAssisted());
 
-        ClientSideCache cacheDefault = ClientSideCache.builder().maxCacheKb(1024).entryTtlMs(0).build();
+        ClientSideCache cacheDefault = ClientSideCache.builder().maxCacheKb(1024).build();
         assertFalse(cacheDefault.isServerAssisted());
     }
 }

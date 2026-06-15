@@ -491,17 +491,17 @@ public class GlideClusterClient extends BaseClient
             @NonNull Route route) {
         return commandManager.submitNewCommand(
                 ClientTrackingInfo,
-                new String[0],
+                EMPTY_STRING_ARRAY,
                 route,
                 response -> {
                     if (route instanceof SingleNodeRoute) {
-                        return ClusterValue.ofSingleValue(parseTrackingInfoResponse(response));
+                        return ClusterValue.ofSingleValue(handleClientTrackingInfoResponse(response));
                     }
                     // Multi-node: response is Map<nodeAddr, perNodeResponse>
                     Map<String, Object> raw = handleMapResponse(response);
                     Map<String, Map<String, Object>> result = new LinkedHashMap<>();
                     for (Map.Entry<String, Object> entry : raw.entrySet()) {
-                        result.put(entry.getKey(), parseTrackingInfoValue(entry.getValue()));
+                        result.put(entry.getKey(), handleClientTrackingInfoValue(entry.getValue()));
                     }
                     return ClusterValue.ofMultiValue(result);
                 });

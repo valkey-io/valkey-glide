@@ -18734,6 +18734,8 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void clientTrackingInfo(BaseClient client) {
+        assumeTrue(
+                SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
         Map<String, Object> info = client.clientTrackingInfo().get();
         assertNotNull(info);
         assertTrue(info.containsKey("flags"));
@@ -18741,35 +18743,33 @@ public class SharedCommandTests {
         assertTrue(info.containsKey("prefixes"));
     }
 
+    private static ClientSideCache buildTestCache() {
+        return ClientSideCache.builder()
+                .maxCacheKb(1L) // 1 KB - follows the phase-1 pattern in ClientSideCacheTests.java to
+                // force eviction behavior
+                .entryTtlMs(60000L)
+                .enableMetrics(true) // required: getCacheHitRate() will throw RequestException if
+                // metrics are not enabled
+                .serverAssisted(true) // enables server-assisted tracking mode introduced in this PR
+                // (phase 2)
+                .build();
+    }
+
     @SneakyThrows
     public static Stream<Arguments> getClientsWithCache() {
-        ClientSideCache standaloneCache =
-                ClientSideCache.builder()
-                        .maxCacheKb(1L)
-                        .entryTtlMs(60000L)
-                        .enableMetrics(true)
-                        .serverAssisted(true)
-                        .build();
-        ClientSideCache clusterCache =
-                ClientSideCache.builder()
-                        .maxCacheKb(1L)
-                        .entryTtlMs(60000L)
-                        .enableMetrics(true)
-                        .serverAssisted(true)
-                        .build();
         return Stream.of(
                 Arguments.of(
                         GlideClient.createClient(
                                         commonClientConfig()
                                                 .protocol(ProtocolVersion.RESP3)
-                                                .clientSideCache(standaloneCache)
+                                                .clientSideCache(buildTestCache())
                                                 .build())
                                 .get()),
                 Arguments.of(
                         GlideClusterClient.createClient(
                                         commonClusterClientConfig()
                                                 .protocol(ProtocolVersion.RESP3)
-                                                .clientSideCache(clusterCache)
+                                                .clientSideCache(buildTestCache())
                                                 .build())
                                 .get()));
     }
@@ -18778,6 +18778,8 @@ public class SharedCommandTests {
     @MethodSource("getClientsWithCache")
     @SneakyThrows
     public void clientSideCache_set_and_get(BaseClient client) {
+        // Validates the serverAssisted=true configuration introduced in this PR (phase 2), following
+        // the same SET/GET hit-rate pattern as phase-1 tests in ClientSideCacheTests.java.
         String key = UUID.randomUUID().toString();
         String value = "cachedValue";
 
