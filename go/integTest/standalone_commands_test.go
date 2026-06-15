@@ -1387,13 +1387,9 @@ func (suite *GlideTestSuite) TestScriptKill() {
 
 func (suite *GlideTestSuite) TestFailover() {
 	client := suite.defaultClient()
-	// FAILOVER succeeds (OK) if replicas exist, or errors if none
-	response, err := client.Failover(context.Background())
-	if err == nil {
-		assert.Equal(suite.T(), "OK", response)
-	} else {
-		suite.Error(err)
-	}
+	// FAILOVER without replicas should fail with an error (standalone CI has no replicas)
+	_, err := client.Failover(context.Background())
+	suite.Require().Error(err)
 }
 
 func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {

@@ -2178,13 +2178,10 @@ describe("GlideClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            // FAILOVER succeeds (OK) if replicas exist, or throws if none
-            try {
-                const result = await client.failover();
-                expect(result).toBe("OK");
-            } catch (e) {
-                expect(e).toBeInstanceOf(RequestError);
-            }
+            // FAILOVER without replicas should fail with an error
+            await expect(client.failover()).rejects.toThrow(
+                RequestError,
+            );
 
             client.close();
         },

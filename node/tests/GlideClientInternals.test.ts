@@ -1002,7 +1002,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should set arguments according to failover request without options", async () => {
         await testSentValueMatches({
-            sendRequest: (client) => client.failover(),
+            sendRequest: (client) => (client as GlideClient).failover(),
             expectedRequestType: RequestType.FailOver,
             expectedValue: convertStringArrayToBuffer([]),
         });
@@ -1010,7 +1010,8 @@ describe("SocketConnectionInternals", () => {
 
     it("should set arguments according to failover request with abort", async () => {
         await testSentValueMatches({
-            sendRequest: (client) => client.failover({ abort: true }),
+            sendRequest: (client) =>
+                (client as GlideClient).failover({ abort: true }),
             expectedRequestType: RequestType.FailOver,
             expectedValue: convertStringArrayToBuffer(["ABORT"]),
         });
@@ -1019,7 +1020,7 @@ describe("SocketConnectionInternals", () => {
     it("should set arguments according to failover request with to and timeout", async () => {
         await testSentValueMatches({
             sendRequest: (client) =>
-                client.failover({
+                (client as GlideClient).failover({
                     to: { host: "localhost", port: 6380, force: true },
                     timeoutMs: 1000,
                 }),
@@ -1037,7 +1038,8 @@ describe("SocketConnectionInternals", () => {
 
     it("should set arguments according to replicaof request", async () => {
         await testSentValueMatches({
-            sendRequest: (client) => client.replicaof("localhost", 6379),
+            sendRequest: (client) =>
+                (client as GlideClient).replicaof("localhost", 6379),
             expectedRequestType: RequestType.ReplicaOf,
             expectedValue: convertStringArrayToBuffer(["localhost", "6379"]),
         });
@@ -1045,7 +1047,8 @@ describe("SocketConnectionInternals", () => {
 
     it("should set arguments according to replicaofNoOne request", async () => {
         await testSentValueMatches({
-            sendRequest: (client) => client.replicaofNoOne(),
+            sendRequest: (client) =>
+                (client as GlideClient).replicaofNoOne(),
             expectedRequestType: RequestType.ReplicaOf,
             expectedValue: convertStringArrayToBuffer(["NO", "ONE"]),
         });
