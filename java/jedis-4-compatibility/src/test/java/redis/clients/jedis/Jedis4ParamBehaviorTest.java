@@ -83,6 +83,20 @@ public class Jedis4ParamBehaviorTest {
     }
 
     @Test
+    public void clusterNodePoolStub_usesHostPortKeyAndReturnsConnection() {
+        HostAndPort node = new HostAndPort("127.0.0.1", 7000);
+        java.util.Map<String, ConnectionPool> nodeMap = new java.util.LinkedHashMap<>();
+        nodeMap.put(node.toString(), new ConnectionPool(node));
+
+        assertNotNull(nodeMap.get("127.0.0.1:7000"));
+        try (Connection c = nodeMap.get("127.0.0.1:7000").getResource()) {
+            assertNotNull(c);
+            assertEquals("127.0.0.1", c.getHost());
+            assertEquals(7000, c.getPort());
+        }
+    }
+
+    @Test
     public void clusterConnectionProvider_rejectsNullNodes() {
         assertThrows(
                 NullPointerException.class,

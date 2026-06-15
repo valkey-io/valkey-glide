@@ -180,9 +180,7 @@ public class JedisCluster extends UnifiedJedis {
     public Map<String, ConnectionPool> getClusterNodes() {
         Map<String, ConnectionPool> nodeMap = new HashMap<>();
         for (HostAndPort node : clusterNodes) {
-            String nodeKey = node.getHost() + ":" + node.getPort();
-            // Return empty ConnectionPool for compatibility - GLIDE manages connections internally
-            nodeMap.put(nodeKey, null);
+            nodeMap.put(node.toString(), new ConnectionPool(node));
         }
         return nodeMap;
     }
