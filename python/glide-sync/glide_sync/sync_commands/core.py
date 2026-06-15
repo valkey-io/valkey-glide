@@ -6963,7 +6963,7 @@ class CoreCommands(Protocol):
         destination_db: int,
         timeout: int,
         options: MigrateOptions,
-    ) -> bytes: ...
+    ) -> str: ...
 
     def migrate(
         self,
@@ -6973,7 +6973,7 @@ class CoreCommands(Protocol):
         destination_db: int,
         timeout: int,
         options: Optional[MigrateOptions] = None,
-    ) -> Union[str, bytes]:
+    ) -> str:
         """
         Atomically transfers a key or multiple keys from a source Valkey instance to a destination
         Valkey instance.
