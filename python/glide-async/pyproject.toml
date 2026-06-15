@@ -9,6 +9,7 @@ dependencies = [
     # Note: valkey-glide-shared is bundled inside the wheel (not a pip dependency)
     # because it contains platform-specific .so files built alongside this package.
     "anyio>=4.9.0",
+    "cffi>=1.0.0",
     "protobuf>=3.20",
     "sniffio",
     "typing-extensions>=4.8.0; python_version < '3.11'",
@@ -32,4 +33,7 @@ build-backend = "maturin"
 python-source = "python"
 include = [
     "glide_shared/**/*.py",
+    "glide_shared/*.so",
+    "glide_shared/*.dylib",
+    "glide_shared/*.dll",
 ]
