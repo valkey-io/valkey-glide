@@ -320,12 +320,13 @@ jobs:
 
             - name: Build FFI library for async client
               shell: bash
+              working-directory: ./ffi
               run: |
-                  cargo build --manifest-path ffi/Cargo.toml --release --target ${{ matrix.build.TARGET }}
+                  cargo build --release --target ${{ matrix.build.TARGET }}
                   if [[ "${{ matrix.build.NAMED_OS }}" == "linux" ]]; then
-                      cp ffi/target/${{ matrix.build.TARGET }}/release/libglide_ffi.so python/glide-async/python/glide_shared/
+                      cp target/${{ matrix.build.TARGET }}/release/libglide_ffi.so ../python/glide-async/python/glide_shared/
                   elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
-                      cp ffi/target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib python/glide-async/python/glide_shared/
+                      cp target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib ../python/glide-async/python/glide_shared/
                   fi
 
             - name: Build Python Async client wheels (linux)
