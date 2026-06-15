@@ -318,6 +318,16 @@ jobs:
               working-directory: ./python
               run: cp -r glide-shared/glide_shared glide-async/python
 
+            - name: Build FFI library for async client
+              shell: bash
+              run: |
+                  cargo build --manifest-path ffi/Cargo.toml --release --target ${{ matrix.build.TARGET }}
+                  if [[ "${{ matrix.build.NAMED_OS }}" == "linux" ]]; then
+                      cp ffi/target/${{ matrix.build.TARGET }}/release/libglide_ffi.so python/glide-async/python/glide_shared/
+                  elif [[ "${{ matrix.build.NAMED_OS }}" == "darwin" ]]; then
+                      cp ffi/target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib python/glide-async/python/glide_shared/
+                  fi
+
             - name: Build Python Async client wheels (linux)
               if: startsWith(matrix.build.NAMED_OS, 'linux')
               uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1
