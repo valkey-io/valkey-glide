@@ -60,6 +60,9 @@ import {
     createInfo,
     createLastSave,
     createLolwut,
+    createSave,
+    createBgSave,
+    createBgRewriteAof,
     createPing,
     createPubSubShardNumSub,
     createPublish,
@@ -1849,6 +1852,143 @@ export class GlideClusterClient extends BaseClient {
             createLastSave(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+    }
+
+    /**
+     * Synchronously saves the dataset to disk.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/save/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * const result = await client.save();
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async save(options?: RouteOption): Promise<"OK"> {
+        return this.createWritePromise(createSave(), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsave();
+     * console.log(result); // "Background saving started"
+     * ```
+     */
+    public async bgsave(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgSave(),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Schedules a background save of the database.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveSchedule();
+     * console.log(result); // "Background saving scheduled"
+     * ```
+     */
+    public async bgsaveSchedule(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgSave(["SCHEDULE"]),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Aborts all in-progress and scheduled background saves.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @since Valkey 8.1
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveCancel();
+     * console.log(result); // "Background saving cancelled"
+     * ```
+     */
+    public async bgsaveCancel(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgSave(["CANCEL"]),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgrewriteaof/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgrewriteaof();
+     * console.log(result); // "Background append only file rewriting started"
+     * ```
+     */
+    public async bgrewriteaof(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgRewriteAof(),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
     }
 
     /**

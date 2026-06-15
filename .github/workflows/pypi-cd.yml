@@ -41,6 +41,7 @@ permissions:
 jobs:
     load-platform-matrix:
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         outputs:
             PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
             TESTS_PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.TESTS_PLATFORM_MATRIX }}
@@ -62,9 +63,9 @@ jobs:
                   # For building and publishing, replace "ephemeral" with "persistent" in RUNNER
                   export PLATFORM_MATRIX=$(echo "${TESTS_PLATFORM_MATRIX}" | jq 'map(
                       .RUNNER = (
-                          if (.RUNNER | type == "array") 
-                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end)) 
-                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end) 
+                          if (.RUNNER | type == "array")
+                          then (.RUNNER | map(if . == "ephemeral" then "persistent" else . end))
+                          else (if .RUNNER == "ephemeral" then "persistent" else .RUNNER end)
                           end
                       )
                   )' | jq -c .)
@@ -160,8 +161,9 @@ jobs:
                       python3.14 -m pip install --upgrade pip
                   fi
 
-            - name: Set up Python
+            - name: Set up Python 3.14
               if: ${{ !contains(matrix.build.RUNNER, 'self-hosted') }}
+              id: setup_python
               uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
               with:
                   python-version: "3.14"
@@ -274,34 +276,34 @@ jobs:
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_arm64
                     PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_arm64
                     PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_arm64
-                    
+
                     echo "Downloading PyPy 3.9 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.10 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.11 for arm64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                   elif [[ "$ARCH" == "x86_64" ]]; then
                     PYPY_VERSION_3_11=pypy3.11-v7.3.19-macos_x86_64
                     PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
                     PYPY_VERSION_3_9=pypy3.9-v7.3.16-macos_x86_64
-                    
+
                     echo "Downloading PyPy 3.9 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_9}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_9}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.10 for x86_64"
                     curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                    
+
                     echo "Downloading PyPy 3.11 for x86_64"
-                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2" 
+                    curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_11}.tar.bz2"
                     sudo tar -xf "${PYPY_VERSION_3_11}.tar.bz2" --exclude="*/bin/python*" -C /opt
                   fi
 
@@ -404,17 +406,26 @@ jobs:
 
             ### SYNC CLIENT ###
 
-            - name: Determine Python command
+            - name: Determine Python 3.14 path
               id: python_cmd
               run: |
-                  if command -v python3.14 &> /dev/null; then
-                      echo "cmd=python3.14" >> "$GITHUB_OUTPUT"
+                  # Use absolute path so python3.14 is never the default interpreter
+                  if [[ -n "${{ steps.setup_python.outputs.python-path }}" ]]; then
+                      echo "cmd=${{ steps.setup_python.outputs.python-path }}" >> "$GITHUB_OUTPUT"
+                  elif command -v python3.14 &> /dev/null; then
+                      echo "cmd=$(which python3.14)" >> "$GITHUB_OUTPUT"
                   else
-                      echo "cmd=python3" >> "$GITHUB_OUTPUT"
+                      echo "::error::python3.14 not found — required to build and test cp314 wheels"
+                      exit 1
                   fi
 
             - name: Install cibuildwheel
-              run: ${{ steps.python_cmd.outputs.cmd }} -m pip install cibuildwheel
+              run: |
+                  PY="${{ steps.python_cmd.outputs.cmd }}"
+                  # Bootstrap pip via get-pip.py to avoid the broken system pip
+                  # (system pip imports distutils which was removed in Python 3.12+)
+                  curl -sS https://bootstrap.pypa.io/get-pip.py | $PY
+                  $PY -m pip install "cibuildwheel>=4.0.0"
 
             - name: Determine cibuildwheel version and set enable flags
               id: cibw_config
@@ -445,6 +456,26 @@ jobs:
                   CIBW_ENABLE: ${{ steps.cibw_config.outputs.enable_flags }}
                   MACOSX_DEPLOYMENT_TARGET: "10.12"
 
+            - name: Smoke test wheels
+              run: |
+                  # Use the same Python version used to build wheels (3.14) so pip selects
+                  # the local cp314 wheel instead of falling back to a PyPI-published version.
+                  # Create venvs with --without-pip since ensurepip is broken on the
+                  # self-hosted runner, then bootstrap pip via get-pip.py.
+                  PYTHON=${{ steps.python_cmd.outputs.cmd }}
+                  curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+
+                  rm -rf /tmp/smoke-async /tmp/smoke-sync
+                  $PYTHON -m venv --without-pip /tmp/smoke-async
+                  /tmp/smoke-async/bin/python /tmp/get-pip.py
+                  /tmp/smoke-async/bin/pip install --find-links python/glide-async/wheels "valkey-glide==${RELEASE_VERSION}"
+                  /tmp/smoke-async/bin/python -c "from glide import GlideClient; print('Async smoke test passed')"
+
+                  $PYTHON -m venv --without-pip /tmp/smoke-sync
+                  /tmp/smoke-sync/bin/python /tmp/get-pip.py
+                  /tmp/smoke-sync/bin/pip install --find-links python/glide-sync/wheels "valkey-glide-sync==${RELEASE_VERSION}"
+                  /tmp/smoke-sync/bin/python -c "from glide_sync import GlideClient; print('Sync smoke test passed')"
+
             ### UPLOAD WHEELS ###
 
             - name: Upload Python Async client wheels
@@ -464,8 +495,10 @@ jobs:
                   if-no-files-found: error
 
     build-source-dist-and-publish-to-pypi:
+        if: ${{ github.event_name == 'push' || inputs.publish_async == true || inputs.publish_sync == true }}
         name: Publish the base PyPi package
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         needs: publish-binaries
         steps:
             - name: Checkout
@@ -603,7 +636,7 @@ jobs:
                       echo "Downloading PyPy 3.10 for x86_64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     elif [[ "$ARCH" == "aarch64" ]]; then
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-aarch64
                       echo "Downloading PyPy 3.10 for aarch64"
@@ -619,7 +652,7 @@ jobs:
                       echo "Downloading PyPy 3.10 for arm64"
                       curl -LO "https://downloads.python.org/pypy/${PYPY_VERSION_3_10}.tar.bz2"
                       sudo tar -xf "${PYPY_VERSION_3_10}.tar.bz2" --exclude="*/bin/python*" -C /opt
-                      
+
                     else
                       PYPY_VERSION_3_10=pypy3.10-v7.3.19-macos_x86_64
                       echo "Downloading PyPy 3.10 for x86_64"

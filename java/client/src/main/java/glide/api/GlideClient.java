@@ -13,6 +13,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -31,6 +32,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.Save;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
@@ -54,6 +56,7 @@ import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.MigrateOptions;
@@ -393,6 +396,29 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<Long> dbsize() {
         return commandManager.submitNewCommand(DBSize, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> failover() {
+        return commandManager.submitNewCommand(
+                FailOver, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> failover(@NonNull FailoverOptions options) {
+        return commandManager.submitNewCommand(FailOver, options.toArgs(), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaof(@NonNull String host, int port) {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {host, Integer.toString(port)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaofNoOne() {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {"NO", "ONE"}, this::handleStringResponse);
     }
 
     @Override

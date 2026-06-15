@@ -37,6 +37,7 @@ permissions:
 jobs:
     get-build-parameters:
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         outputs:
             release_version: ${{ steps.get-params.outputs.release_version }}
             npm_tag: ${{ steps.get-params.outputs.npm_tag }}
@@ -153,18 +154,18 @@ jobs:
                   export PLATFORM_MATRIX=$(jq 'map(
                       select(.PACKAGE_MANAGERS != null and (.PACKAGE_MANAGERS | contains(["npm"])))
                       | .runner = (
-                          if (.CD_RUNNER != null) 
-                          then .CD_RUNNER 
-                          elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER 
+                          if (.CD_RUNNER != null)
+                          then .CD_RUNNER
+                          elif (.RUNNER != null and (.RUNNER | type != "array")) then .RUNNER
                           else "ubuntu-latest"
                           end
                       )
                       | .build_type = (
-                          if (.TARGET | contains("musl")) 
-                          then "musl" 
-                          elif (.TARGET | contains("gnu")) 
-                          then "gnu" 
-                          else "mac" 
+                          if (.TARGET | contains("musl"))
+                          then "musl"
+                          elif (.TARGET | contains("gnu"))
+                          then "gnu"
+                          else "mac"
                           end
                       )
                       | if .RUNNER == "macos13" then .["test-runner"] = "macos13" else . end
@@ -271,6 +272,10 @@ jobs:
                   # Report what we've built
                   echo "Built native module for ${{ matrix.TARGET }}:"
                   ls -la ../${{ matrix.TARGET }}/
+
+            - name: Smoke test native module
+              working-directory: ./node
+              run: file ${{ matrix.TARGET }}/*.node | grep -qi "shared object\|dynamic\|mach-o"
 
             # Upload the native .node modules as artifacts
             - name: Upload Native Modules
@@ -500,7 +505,7 @@ jobs:
                   if [[ "${{ matrix.build_type }}" == "gnu" ]]; then
                       echo "Installing Valkey on GNU/Linux..."
                       sudo apt update
-                      sudo apt install -y valkey || { 
+                      sudo apt install -y valkey || {
                           echo "Valkey not found in default repos, trying alternative source..."
                           curl -fsSL https://packages.redis.io/valkey/setup-valkey | sudo bash -
                           sudo apt install -y valkey || {
@@ -622,7 +627,7 @@ jobs:
                       elif [[ "$build_type" == "gnu" ]]; then
                         additional_suffix="-gnu"
                       fi
-                      
+
                       package_name="@valkey/valkey-glide-${os}-${arch}${additional_suffix}"
                       attempt_deprecate "${package_name}@${VERSION}" "${DEPRECATION_MESSAGE}"
                     else

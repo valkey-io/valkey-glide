@@ -222,19 +222,20 @@ const (
 type AddressResolver func(host string, port int) (string, int)
 
 type baseClientConfiguration struct {
-	addresses         []NodeAddress
-	useTLS            bool
-	credentials       *ServerCredentials
-	readFrom          ReadFrom
-	requestTimeout    time.Duration
-	clientName        string
-	clientAZ          string
-	reconnectStrategy *BackoffStrategy
-	lazyConnect       bool
-	DatabaseId        *int `json:"database_id,omitempty"`
-	compressionConfig *CompressionConfiguration
-	clientSideCache   *ClientSideCache
-	addressResolver   AddressResolver
+	addresses            []NodeAddress
+	useTLS               bool
+	credentials          *ServerCredentials
+	readFrom             ReadFrom
+	requestTimeout       time.Duration
+	clientName           string
+	clientAZ             string
+	reconnectStrategy    *BackoffStrategy
+	lazyConnect          bool
+	DatabaseId           *int `json:"database_id,omitempty"`
+	compressionConfig    *CompressionConfiguration
+	clientSideCache      *ClientSideCache
+	addressResolver      AddressResolver
+	clientCircuitBreaker *ClientCircuitBreakerConfiguration
 }
 
 func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest, error) {
@@ -299,6 +300,14 @@ func (config *baseClientConfiguration) toProtobuf() (*protobuf.ConnectionRequest
 
 	if config.clientSideCache != nil {
 		request.ClientSideCache = config.clientSideCache.toProtobuf()
+	}
+
+	if config.clientCircuitBreaker != nil {
+		cbPb, err := config.clientCircuitBreaker.toProtobuf()
+		if err != nil {
+			return nil, fmt.Errorf("invalid circuit breaker configuration: %w", err)
+		}
+		request.ClientCircuitBreaker = cbPb
 	}
 
 	return &request, nil
@@ -594,6 +603,14 @@ func (config *ClientConfiguration) WithAddressResolver(resolver AddressResolver)
 	return config
 }
 
+// WithClientCircuitBreaker sets the client-wide circuit breaker configuration.
+func (config *ClientConfiguration) WithClientCircuitBreaker(
+	cb *ClientCircuitBreakerConfiguration,
+) *ClientConfiguration {
+	config.clientCircuitBreaker = cb
+	return config
+}
+
 func (config *ClientConfiguration) GetAddressResolver() AddressResolver {
 	return config.addressResolver
 }
@@ -832,6 +849,14 @@ func (config *ClusterClientConfiguration) WithAddressResolver(resolver AddressRe
 	return config
 }
 
+// WithClientCircuitBreaker sets the client-wide circuit breaker configuration.
+func (config *ClusterClientConfiguration) WithClientCircuitBreaker(
+	cb *ClientCircuitBreakerConfiguration,
+) *ClusterClientConfiguration {
+	config.clientCircuitBreaker = cb
+	return config
+}
+
 func (config *ClusterClientConfiguration) HasSubscription() bool {
 	return config.subscriptionConfig != nil
 }
@@ -845,6 +870,37 @@ func (config *ClusterClientConfiguration) GetSubscription() *ClusterSubscription
 		return config.subscriptionConfig
 	}
 	return nil
+}
+
+// ClientCircuitBreakerConfiguration configures the client-wide circuit breaker.
+// The circuit breaker detects sustained error rates and rejects requests before they enter the core.
+type ClientCircuitBreakerConfiguration struct {
+	// Sliding window duration in milliseconds for error rate calculation. Default: 10000.
+	WindowSizeMs uint32
+	// Error rate (0.0-1.0) within the window to trip the breaker. Default: 0.5.
+	FailureRateThreshold float32
+	// Minimum errors within window before rate is evaluated. Default: 50.
+	MinErrors uint32
+	// Time in milliseconds in Open state before allowing a probe. Default: 5000.
+	OpenTimeoutMs uint32
+	// Whether timeouts count toward tripping. Default: false.
+	CountTimeouts bool
+	// Consecutive successful probes needed before closing. Default: 3.
+	ConsecutiveSuccesses uint32
+}
+
+func (config *ClientCircuitBreakerConfiguration) toProtobuf() (*protobuf.ClientCircuitBreakerConfig, error) {
+	if config.FailureRateThreshold != 0 && (config.FailureRateThreshold <= 0.0 || config.FailureRateThreshold > 1.0) {
+		return nil, errors.New("FailureRateThreshold must be between 0.0 (exclusive) and 1.0 (inclusive)")
+	}
+	return &protobuf.ClientCircuitBreakerConfig{
+		WindowSizeMs:         config.WindowSizeMs,
+		FailureRateThreshold: config.FailureRateThreshold,
+		MinErrors:            config.MinErrors,
+		OpenTimeoutMs:        config.OpenTimeoutMs,
+		CountTimeouts:        config.CountTimeouts,
+		ConsecutiveSuccesses: config.ConsecutiveSuccesses,
+	}, nil
 }
 
 // TlsConfiguration represents TLS-specific configuration settings.

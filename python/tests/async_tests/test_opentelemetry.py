@@ -16,6 +16,7 @@ from glide import (
 from glide.opentelemetry import OpenTelemetry
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.config import ProtocolVersion
+from glide_shared.exceptions import ConfigurationError
 
 from tests.async_tests.conftest import create_client
 from tests.otel_test_utils import (
@@ -77,7 +78,7 @@ async def wait_for_spans_to_be_flushed(
 def test_wrong_opentelemetry_config():
     """Test various invalid OpenTelemetry configurations"""
     # Wrong traces endpoint
-    with pytest.raises(TypeError, match=r".*Parse error.*"):
+    with pytest.raises(ConfigurationError, match=r".*Parse error.*"):
         OpenTelemetry.init(
             OpenTelemetryConfig(
                 traces=OpenTelemetryTracesConfig(
@@ -88,7 +89,7 @@ def test_wrong_opentelemetry_config():
         )
 
     # Wrong metrics endpoint
-    with pytest.raises(TypeError, match=r".*Parse error.*"):
+    with pytest.raises(ConfigurationError, match=r".*Parse error.*"):
         OpenTelemetry.init(
             OpenTelemetryConfig(
                 metrics=OpenTelemetryMetricsConfig(
@@ -99,8 +100,8 @@ def test_wrong_opentelemetry_config():
 
     # Negative flush interval
     with pytest.raises(
-        TypeError,
-        match=r".*InvalidInput: flush_interval_ms must be a positive integer.*",
+        ConfigurationError,
+        match=r".*InvalidInput: flushIntervalMs must be a positive integer.*",
     ):
         OpenTelemetry.init(
             OpenTelemetryConfig(
@@ -115,7 +116,7 @@ def test_wrong_opentelemetry_config():
     # Negative sample percentage
     # TODO: This should be a ValueError: Trace sample percentage must be between 0 and 100
     with pytest.raises(
-        OverflowError, match=r".*out of range integral type conversion attempted*"
+        OverflowError, match=r".*can't convert negative number to unsigned.*"
     ):
         OpenTelemetry.init(
             OpenTelemetryConfig(
@@ -127,7 +128,9 @@ def test_wrong_opentelemetry_config():
         )
 
     # Wrong traces file path
-    with pytest.raises(TypeError, match=r".*File path must start with 'file://'.*"):
+    with pytest.raises(
+        ConfigurationError, match=r".*File path must start with 'file://'.*"
+    ):
         OpenTelemetry.init(
             OpenTelemetryConfig(
                 traces=OpenTelemetryTracesConfig(
@@ -138,7 +141,9 @@ def test_wrong_opentelemetry_config():
         )
 
     # Wrong metrics file path
-    with pytest.raises(TypeError, match=r".*File path must start with 'file://'.*"):
+    with pytest.raises(
+        ConfigurationError, match=r".*File path must start with 'file://'.*"
+    ):
         OpenTelemetry.init(
             OpenTelemetryConfig(
                 traces=None,
@@ -150,7 +155,8 @@ def test_wrong_opentelemetry_config():
 
     # Wrong directory path
     with pytest.raises(
-        TypeError, match=r".*The directory does not exist or is not a directory.*"
+        ConfigurationError,
+        match=r".*The directory does not exist or is not a directory.*",
     ):
         OpenTelemetry.init(
             OpenTelemetryConfig(
@@ -163,7 +169,8 @@ def test_wrong_opentelemetry_config():
 
     # No traces or metrics provided
     with pytest.raises(
-        TypeError, match=r".*At least one of traces or metrics must be provided.*"
+        ConfigurationError,
+        match=r".*At least one of traces or metrics must be provided.*",
     ):
         OpenTelemetry.init(
             OpenTelemetryConfig(

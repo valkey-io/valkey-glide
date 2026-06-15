@@ -9,6 +9,7 @@ pub enum RequestErrorType {
     ExecAbort = 1,
     Timeout = 2,
     Disconnect = 3,
+    CircuitBreakerOpen = 4,
 }
 
 pub fn error_type(error: &RedisError) -> RequestErrorType {
@@ -18,6 +19,8 @@ pub fn error_type(error: &RedisError) -> RequestErrorType {
         RequestErrorType::Disconnect
     } else if matches!(error.kind(), redis::ErrorKind::ExecAbortError) {
         RequestErrorType::ExecAbort
+    } else if matches!(error.kind(), redis::ErrorKind::CircuitBreakerOpen) {
+        RequestErrorType::CircuitBreakerOpen
     } else {
         RequestErrorType::Unspecified
     }
@@ -29,5 +32,19 @@ pub fn error_message(error: &RedisError) -> String {
         format!("Received connection error `{error_message}`. Will attempt to reconnect")
     } else {
         error_message
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn circuit_breaker_rejection_error_type() {
+        let err = redis::RedisError::from((
+            redis::ErrorKind::CircuitBreakerOpen,
+            "Client circuit breaker is open - core unhealthy",
+        ));
+        assert_eq!(error_type(&err), RequestErrorType::CircuitBreakerOpen);
     }
 }
