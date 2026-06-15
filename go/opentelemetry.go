@@ -738,7 +738,8 @@ func isValidTraceStateKeyPart(part string, maxLength int, firstCanBeDigit bool) 
 }
 
 func isTraceStateKeyChar(char byte) bool {
-	return isTraceStateLowercaseAlpha(char) || isTraceStateDigit(char) || char == '_' || char == '-' || char == '*' || char == '/'
+	return isTraceStateLowercaseAlpha(char) || isTraceStateDigit(char) || char == '_' || char == '-' || char == '*' ||
+		char == '/'
 }
 
 func isTraceStateLowercaseAlpha(char byte) bool {
