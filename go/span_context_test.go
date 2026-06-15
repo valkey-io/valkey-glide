@@ -4,6 +4,8 @@ package glide
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -396,9 +398,19 @@ func TestTraceStateKeyValidation(t *testing.T) {
 	}{
 		{name: "simple key", key: "vendor", valid: true},
 		{name: "empty key", key: "", valid: false},
+		{name: "simple key starts with digit", key: "1vendor", valid: false},
+		{name: "simple key with uppercase", key: "Vendor", valid: false},
+		{name: "simple key with unsupported character", key: "vendor.name", valid: false},
+		{name: "simple key with 256 characters", key: "a" + strings.Repeat("b", 255), valid: true},
+		{name: "simple key with 257 characters", key: "a" + strings.Repeat("b", 256), valid: false},
+		{name: "tenant id starts with digit", key: "1tenant@vendor", valid: true},
+		{name: "tenant id with 241 characters", key: "a" + strings.Repeat("b", 240) + "@vendor", valid: true},
+		{name: "tenant id with 242 characters", key: "a" + strings.Repeat("b", 241) + "@vendor", valid: false},
+		{name: "system id starts with digit", key: "tenant@1vendor", valid: false},
 		{name: "system id with fourteen characters", key: "tenant@abcdefghijklmn", valid: true},
 		{name: "system id with fifteen characters", key: "tenant@abcdefghijklmno", valid: false},
 		{name: "empty system id", key: "tenant@", valid: false},
+		{name: "multiple tenant separators", key: "tenant@vendor@other", valid: false},
 	}
 
 	for _, tc := range testCases {
@@ -406,6 +418,34 @@ func TestTraceStateKeyValidation(t *testing.T) {
 			assert.Equal(t, tc.valid, isValidTraceStateKey(tc.key))
 		})
 	}
+}
+
+func TestTraceStateValidation(t *testing.T) {
+	testCases := []struct {
+		name       string
+		traceState string
+		valid      bool
+	}{
+		{name: "thirty two list members", traceState: traceStateWithListMembers(32), valid: true},
+		{name: "thirty three list members", traceState: traceStateWithListMembers(33), valid: false},
+		{name: "spaces and tabs around list members", traceState: "vendor=value, \tother=opaque\t ,third=value", valid: true},
+		{name: "empty list members", traceState: "vendor=value,, \t ,other=opaque", valid: true},
+		{name: "duplicate keys", traceState: "vendor=value,other=opaque,vendor=new", valid: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.valid, isValidTraceState(tc.traceState))
+		})
+	}
+}
+
+func traceStateWithListMembers(count int) string {
+	members := make([]string, count)
+	for i := range members {
+		members[i] = "v" + strconv.Itoa(i) + "=value"
+	}
+	return strings.Join(members, ",")
 }
 
 func TestTraceStateValueValidation(t *testing.T) {

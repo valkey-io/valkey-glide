@@ -659,15 +659,33 @@ func isValidHexID(value string, expectedLength int) bool {
 	return true
 }
 
+const (
+	maxTraceStateListMembers     = 32
+	maxTraceStateSimpleKeyLength = 256
+	maxTraceStateTenantIDLength  = 241
+	maxTraceStateSystemIDLength  = 14
+	maxTraceStateValueLength     = 256
+)
+
 // isValidTraceState validates remote tracestate before passing it through FFI so
 // invalid remote contexts can still fall back to span-pointer parents.
 func isValidTraceState(traceState string) bool {
-	traceState = strings.TrimRight(traceState, ",")
 	if traceState == "" {
 		return true
 	}
 
-	for _, listMember := range strings.Split(traceState, ",") {
+	listMembers := strings.Split(traceState, ",")
+	if len(listMembers) > maxTraceStateListMembers {
+		return false
+	}
+
+	keys := make(map[string]struct{}, len(listMembers))
+	for _, listMember := range listMembers {
+		listMember = strings.Trim(listMember, " \t")
+		if listMember == "" {
+			continue
+		}
+
 		key, value, ok := strings.Cut(listMember, "=")
 		if !ok {
 			return false
@@ -676,44 +694,63 @@ func isValidTraceState(traceState string) bool {
 		if !isValidTraceStateKey(key) || !isValidTraceStateValue(value) {
 			return false
 		}
+		if _, exists := keys[key]; exists {
+			return false
+		}
+		keys[key] = struct{}{}
 	}
 	return true
 }
 
 func isValidTraceStateKey(key string) bool {
-	if len(key) == 0 || len(key) > 256 {
+	tenantID, systemID, hasTenantID := strings.Cut(key, "@")
+	if hasTenantID {
+		return isValidTraceStateTenantID(tenantID) && isValidTraceStateSystemID(systemID)
+	}
+	return isValidTraceStateSimpleKey(key)
+}
+
+func isValidTraceStateSimpleKey(key string) bool {
+	return isValidTraceStateKeyPart(key, maxTraceStateSimpleKeyLength, false)
+}
+
+func isValidTraceStateTenantID(tenantID string) bool {
+	return isValidTraceStateKeyPart(tenantID, maxTraceStateTenantIDLength, true)
+}
+
+func isValidTraceStateSystemID(systemID string) bool {
+	return isValidTraceStateKeyPart(systemID, maxTraceStateSystemIDLength, false)
+}
+
+func isValidTraceStateKeyPart(part string, maxLength int, firstCanBeDigit bool) bool {
+	if len(part) == 0 || len(part) > maxLength {
 		return false
 	}
-
-	vendorStart := -1
-	for i := 0; i < len(key); i++ {
-		char := key[i]
-		isLower := char >= 'a' && char <= 'z'
-		isDigit := char >= '0' && char <= '9'
-		isAt := char == '@'
-		isAllowedSpecial := char == '_' || char == '-' || char == '*' || char == '/'
-
-		if !isLower && !isDigit && !isAllowedSpecial && !isAt {
-			return false
-		}
-
-		switch {
-		case i == 0 && !isLower && !isDigit:
-			return false
-		case isAt:
-			if vendorStart != -1 || i == len(key)-1 || i+15 < len(key) {
-				return false
-			}
-			vendorStart = i
-		case vendorStart != -1 && i == vendorStart+1 && !isLower && !isDigit:
+	if !isTraceStateLowercaseAlpha(part[0]) && (!firstCanBeDigit || !isTraceStateDigit(part[0])) {
+		return false
+	}
+	for i := 1; i < len(part); i++ {
+		if !isTraceStateKeyChar(part[i]) {
 			return false
 		}
 	}
 	return true
 }
 
+func isTraceStateKeyChar(char byte) bool {
+	return isTraceStateLowercaseAlpha(char) || isTraceStateDigit(char) || char == '_' || char == '-' || char == '*' || char == '/'
+}
+
+func isTraceStateLowercaseAlpha(char byte) bool {
+	return char >= 'a' && char <= 'z'
+}
+
+func isTraceStateDigit(char byte) bool {
+	return char >= '0' && char <= '9'
+}
+
 func isValidTraceStateValue(value string) bool {
-	if len(value) == 0 || len(value) > 256 {
+	if len(value) == 0 || len(value) > maxTraceStateValueLength {
 		return false
 	}
 
