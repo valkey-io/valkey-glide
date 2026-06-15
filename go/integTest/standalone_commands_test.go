@@ -857,6 +857,56 @@ func (suite *GlideTestSuite) TestLastSave() {
 	assert.Greater(t, result, int64(0))
 }
 
+func (suite *GlideTestSuite) TestSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.Save(context.Background())
+	assert.Nil(t, err)
+	assert.Equal(t, "OK", result)
+}
+
+func (suite *GlideTestSuite) TestBgSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSave(context.Background())
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result)
+	assert.Contains(t, bgsaveResponses, result)
+}
+
+func (suite *GlideTestSuite) TestBgSaveSchedule() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSaveSchedule(context.Background())
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result)
+	assert.Contains(t, bgsaveResponses, result)
+}
+
+func (suite *GlideTestSuite) TestBgSaveCancel() {
+	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	// When no save is in progress, BGSAVE CANCEL should return an error
+	_, err := client.BgSaveCancel(context.Background())
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), bgsaveNotCancelledResponse)
+}
+
+func (suite *GlideTestSuite) TestBgRewriteAof() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgRewriteAof(context.Background())
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result)
+	assert.Contains(t, bgrewriteaofResponses, result)
+}
+
 func (suite *GlideTestSuite) TestConfigResetStat() {
 	client := suite.defaultClient()
 	suite.verifyOK(client.ConfigResetStat(context.Background()))

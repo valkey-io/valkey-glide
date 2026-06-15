@@ -168,3 +168,4 @@ glide-async/python/glide_shared
 # Copied README files for packaging
 glide-sync/README.md
 glide-async/README.md
+.denv/

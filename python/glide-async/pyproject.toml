@@ -6,6 +6,8 @@ requires-python = ">=3.9"
 dependencies = [
     # Note: If you add a dependency here, make sure to also add it to glide-async/requirements.txt
     # Once issue https://github.com/aboutcode-org/python-inspector/issues/197 is resolved, the requirements.txt file can be removed.
+    # Note: valkey-glide-shared is bundled inside the wheel (not a pip dependency)
+    # because it contains platform-specific .so files built alongside this package.
     "anyio>=4.9.0",
     "protobuf>=3.20",
     "sniffio",

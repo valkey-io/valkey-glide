@@ -54,6 +54,7 @@ strum = "0.26"
 strum_macros = "0.26"
 zstd = { version = "0.13" }
 lz4 = { version = "1.28" }
+libc = "0.2.186"
 
 [features]
 proto = ["protobuf"]
@@ -109,4 +110,8 @@ harness = false
 
 [[bench]]
 name = "memory_benchmark"
+harness = false
+
+[[bench]]
+name = "watchdog_register_bench"
 harness = false
