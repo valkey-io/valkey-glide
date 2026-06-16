@@ -2,11 +2,11 @@
     "devDependencies": {
         "@eslint/js": "9",
         "@types/eslint-config-prettier": "6",
-        "eslint": "9",
+        "eslint": "10",
         "eslint-config-prettier": "10",
         "eslint-plugin-jsdoc": "63",
         "prettier": "3",
-        "prettier-eslint": "16",
+        "prettier-eslint": "17",
         "typescript": "5",
         "typescript-eslint": "8"
     }
