@@ -2721,7 +2721,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
             let redis_connection_info =
                 if let Some(auth) = proto_request.authentication_info.as_ref() {
                     redis::RedisConnectionInfo {
-                        db: 0,
+                        db: proto_request.database_id as i64,
                         username: if auth.username.is_empty() {
                             None
                         } else {
@@ -2732,7 +2732,12 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                         } else {
                             Some(auth.password.to_string())
                         },
-                        protocol: redis::ProtocolVersion::RESP2,
+                        protocol: match proto_request.protocol.enum_value_or_default() {
+                            glide_core::connection_request::ProtocolVersion::RESP3 => {
+                                redis::ProtocolVersion::RESP3
+                            }
+                            _ => redis::ProtocolVersion::RESP2,
+                        },
                         client_name: None,
                         lib_name: None,
                         cache: None,
@@ -2740,10 +2745,15 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                     }
                 } else {
                     redis::RedisConnectionInfo {
-                        db: 0,
+                        db: proto_request.database_id as i64,
                         username: None,
                         password: None,
-                        protocol: redis::ProtocolVersion::RESP2,
+                        protocol: match proto_request.protocol.enum_value_or_default() {
+                            glide_core::connection_request::ProtocolVersion::RESP3 => {
+                                redis::ProtocolVersion::RESP3
+                            }
+                            _ => redis::ProtocolVersion::RESP2,
+                        },
                         client_name: None,
                         lib_name: None,
                         cache: None,
@@ -2790,7 +2800,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                     let Ok(j_args_json) = cb_env.new_string(&args_json) else {
                         return;
                     };
-                    let _ = cb_env.call_method(
+                    let result = cb_env.call_method(
                         &callback_global,
                         "onMonitorMessage",
                         "(DJLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
@@ -2802,6 +2812,10 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient
                             jni::objects::JValue::Object(&j_args_json),
                         ],
                     );
+                    if let Err(e) = result {
+                        log::warn!("MonitorClient: JNI callback failed: {e}");
+                        let _ = cb_env.exception_clear();
+                    }
                 });
 
             let monitor = jni_client::get_runtime()

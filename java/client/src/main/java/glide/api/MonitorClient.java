@@ -39,6 +39,8 @@ import lombok.NonNull;
  *       the callback on a background thread.
  *   <li>Queue mode: use {@link #getMonitorMessage()} / {@link #tryGetMonitorMessage()} to poll.
  * </ul>
+ *
+ * @since 2.4.0
  */
 public class MonitorClient implements AutoCloseable {
 
