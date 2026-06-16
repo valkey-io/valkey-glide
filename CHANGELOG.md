@@ -10,6 +10,7 @@
 
 ### Changes
 
+* Go: Add `LATENCY HISTORY`, `LATENCY LATEST`, and `LATENCY RESET` command support ([#6206](https://github.com/valkey-io/valkey-glide/issues/6206))
 * Python Async: Replace UDS+protobuf transport with FFI+pipe architecture. Commands go directly through CFFI to Rust; responses return via anonymous pipe with Rust-native parsing. Adds trio/anyio support, address resolver, cache metrics. +19-21% throughput for simple commands, +11-16% for collections vs v2.4.1. ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))
 * CORE: Extend timeout watchdog with structured diagnostics. Timeouts now report classified root cause (ServerUnresponsive, ClientBackpressure, SystemOverload), command phase (Queued vs Sent), inflight trend, per-client p99 latency, and suggested timeout. ([#6044](https://github.com/valkey-io/valkey-glide/pull/6044))
 * Core, Python, Java, Node, Go: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
