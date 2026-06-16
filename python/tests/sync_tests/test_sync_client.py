@@ -109,7 +109,12 @@ from glide_sync.sync_commands.script import Script
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
+    BGREWRITEAOF_RESPONSES,
+    BGSAVE_NOT_CANCELLED_RESPONSE,
+    BGSAVE_RESPONSES,
+    PRIMARY_SLOT_ROUTE,
     assert_connected_sync,
+    assert_responses_in,
     check_function_list_response,
     check_function_stats_response,
     compare_maps,
@@ -125,6 +130,7 @@ from tests.utils.utils import (
     run_sync_func_with_timeout_in_thread,
     sync_check_if_server_version_lt,
     sync_get_version,
+    sync_wait_for_save_not_in_progress,
 )
 
 
@@ -5398,6 +5404,74 @@ class TestCommands:
             assert isinstance(result, dict)
             for lastsave_time in result.values():
                 assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_save(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.save()
+        assert result == OK
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.save(route=PRIMARY_SLOT_ROUTE)
+            assert result == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgsave(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.bgsave()
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.bgsave(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGSAVE_RESPONSES)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgsave_schedule(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.bgsave_schedule()
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.bgsave_schedule(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGSAVE_RESPONSES)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgsave_cancel(self, glide_sync_client: TGlideClient):
+        min_version = "8.1.0"
+        if sync_check_if_server_version_lt(glide_sync_client, min_version):
+            return pytest.skip(reason=f"Valkey version required >= {min_version}")
+
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+
+        # When no save is in progress, BGSAVE CANCEL should return an error
+        with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
+            glide_sync_client.bgsave_cancel()
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+
+            # When no save is in progress, BGSAVE CANCEL should return an error
+            with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
+                glide_sync_client.bgsave_cancel(route=PRIMARY_SLOT_ROUTE)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_bgrewriteaof(self, glide_sync_client: TGlideClient):
+        sync_wait_for_save_not_in_progress(glide_sync_client)
+        result = glide_sync_client.bgrewriteaof()
+        assert_responses_in(result, BGREWRITEAOF_RESPONSES)
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            sync_wait_for_save_not_in_progress(glide_sync_client)
+            result = glide_sync_client.bgrewriteaof(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGREWRITEAOF_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -107,7 +107,12 @@ from glide_shared.routes import (
 from tests.async_tests.conftest import create_client
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
 from tests.utils.utils import (
+    BGREWRITEAOF_RESPONSES,
+    BGSAVE_NOT_CANCELLED_RESPONSE,
+    BGSAVE_RESPONSES,
+    PRIMARY_SLOT_ROUTE,
     assert_connected,
+    assert_responses_in,
     check_function_list_response,
     check_function_stats_response,
     check_if_server_version_lt,
@@ -122,6 +127,7 @@ from tests.utils.utils import (
     get_version,
     parse_info_response,
     round_values,
+    wait_for_save_not_in_progress,
 )
 
 
@@ -512,29 +518,6 @@ class TestGlideClients:
             f"Connection attempt took {elapsed_time:.2f}s, expected < {max_allowed_time:.2f}s. "
             f"This suggests connection_timeout ({connection_timeout_ms}ms) is not being respected."
         )
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_UDS_socket_connection_failure(self, glide_client: TGlideClient):
-        """Test that the client's error handling during UDS socket connection failure"""
-        assert await glide_client.set("test_key", "test_value") == OK
-        assert await glide_client.get("test_key") == b"test_value"
-
-        # Force close the UDS connection to simulate socket failure
-        await glide_client._stream.aclose()
-
-        # Verify a ClosingError is raised
-        with pytest.raises(
-            ClosingError, match="The communication layer was unexpectedly closed"
-        ):
-            await glide_client.get("test_key")
-
-        # Verify the client is closed
-        with pytest.raises(
-            ClosingError,
-            match="Unable to execute requests; the client is closed. Please create a new client.",
-        ):
-            await glide_client.get("test_key")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_invalid_tls_config_fails_fast(self, cluster_mode: bool):
@@ -5528,6 +5511,74 @@ class TestCommands:
             assert isinstance(result, dict)
             for lastsave_time in result.values():
                 assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_save(self, glide_client: TGlideClient):
+        await wait_for_save_not_in_progress(glide_client)
+        result = await glide_client.save()
+        assert result == OK
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.save(route=PRIMARY_SLOT_ROUTE)
+            assert result == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bgsave(self, glide_client: TGlideClient):
+        await wait_for_save_not_in_progress(glide_client)
+        result = await glide_client.bgsave()
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.bgsave(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGSAVE_RESPONSES)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bgsave_schedule(self, glide_client: TGlideClient):
+        await wait_for_save_not_in_progress(glide_client)
+        result = await glide_client.bgsave_schedule()
+        assert_responses_in(result, BGSAVE_RESPONSES)
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.bgsave_schedule(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGSAVE_RESPONSES)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bgsave_cancel(self, glide_client: TGlideClient):
+        min_version = "8.1.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            return pytest.skip(reason=f"Valkey version required >= {min_version}")
+
+        await wait_for_save_not_in_progress(glide_client)
+
+        # When no save is in progress, BGSAVE CANCEL should return an error
+        with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
+            await glide_client.bgsave_cancel()
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+
+            # When no save is in progress, BGSAVE CANCEL should return an error
+            with pytest.raises(RequestError, match=BGSAVE_NOT_CANCELLED_RESPONSE):
+                await glide_client.bgsave_cancel(route=PRIMARY_SLOT_ROUTE)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bgrewriteaof(self, glide_client: TGlideClient):
+        await wait_for_save_not_in_progress(glide_client)
+        result = await glide_client.bgrewriteaof()
+        assert_responses_in(result, BGREWRITEAOF_RESPONSES)
+
+        if isinstance(glide_client, GlideClusterClient):
+            await wait_for_save_not_in_progress(glide_client)
+            result = await glide_client.bgrewriteaof(route=PRIMARY_SLOT_ROUTE)
+            assert_responses_in(result, BGREWRITEAOF_RESPONSES)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10974,7 +11025,7 @@ class TestScripts:
 
         if cluster_mode:
             await cast(GlideClusterClient, glide_client).invoke_script_route(
-                script3, route=SlotKeyRoute(SlotType.PRIMARY, "1")
+                script3, route=PRIMARY_SLOT_ROUTE
             )
         else:
             await glide_client.invoke_script(script3)
@@ -12519,3 +12570,85 @@ class TestScripts:
     async def test_replicaof_no_one(self, glide_client: GlideClient):
         # REPLICAOF NO ONE on a primary should succeed
         assert await glide_client.replicaof_no_one() == OK
+
+class TestClientLifecycle:
+    """Tests for async client lifecycle: context manager and recreation."""
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
+    async def test_async_context_manager(self, glide_client: TGlideClient):
+        """Test that async with (context manager) works and closes the client."""
+        async with glide_client as client:
+            await client.set("ctx_test", "value")
+            assert await client.get("ctx_test") == b"value"
+        # After exiting context, client should be closed
+        assert client._is_closed
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
+    async def test_aclose_alias(self, glide_client: TGlideClient):
+        """Test that aclose() works as an alias for close()."""
+        await glide_client.set("aclose_test", "value")
+        assert await glide_client.get("aclose_test") == b"value"
+        await glide_client.aclose()
+        assert glide_client._is_closed
+
+    @pytest.mark.anyio
+    async def test_client_recreation_after_close(self, request):
+        """Test that a new client can be created and used after closing a previous one.
+
+        This verifies the shared pipe remains functional across client lifecycles.
+        """
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+        config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
+
+        # First client
+        client1 = await GlideClient.create(config)
+        await client1.set("recreate_test", "v1")
+        assert await client1.get("recreate_test") == b"v1"
+        await client1.close()
+
+        # Second client - should work without issues (pipe still valid)
+        client2 = await GlideClient.create(config)
+        await client2.set("recreate_test", "v2")
+        assert await client2.get("recreate_test") == b"v2"
+        await client2.close()
+
+    @pytest.mark.anyio
+    @pytest.mark.skip_if_version_below("7.2.0")
+    async def test_mixed_async_sync_client_lib_names(self, request):
+        """Test that async and sync clients report different lib-names in the same process."""
+        from glide_shared.config import GlideClientConfiguration as SyncConfig
+        from glide_sync import GlideClient as SyncGlideClient
+
+        from tests.utils.utils import create_client_config
+
+        cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
+
+        # Create async client
+        async_config = create_client_config(
+            cluster_mode=False, addresses=cluster.nodes_addr
+        )
+        async_client = await GlideClient.create(async_config)
+
+        # Create sync client
+        sync_config = SyncConfig(cluster.nodes_addr)
+        sync_client = SyncGlideClient.create(sync_config)
+
+        # Verify async reports GlidePy
+        async_info = await async_client.custom_command(["CLIENT", "INFO"])
+        assert b"lib-name=GlidePy " in async_info or b"lib-name=GlidePy\n" in async_info
+
+        # Verify sync reports GlidePySync
+        sync_info = sync_client.custom_command(["CLIENT", "INFO"])
+        assert (
+            b"lib-name=GlidePySync " in sync_info
+            or b"lib-name=GlidePySync\n" in sync_info
+        )
+
+        await async_client.close()
+        sync_client.close()

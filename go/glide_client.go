@@ -553,6 +553,113 @@ func (client *Client) LastSave(ctx context.Context) (int64, error) {
 	return handleIntResponse(response)
 }
 
+// Synchronously saves the dataset to disk.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` response on success.
+//
+// [valkey.io]: https://valkey.io/commands/save/
+func (client *Client) Save(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.Save, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(response)
+}
+
+// Asynchronously saves the dataset to disk in the background.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSave(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Schedules a background save of the database.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveSchedule(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"SCHEDULE"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Aborts all in-progress and scheduled background saves.
+//
+// Available since Valkey 8.1.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgsave/
+func (client *Client) BgSaveCancel(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgSave, []string{"CANCEL"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
+// Initiates a background rewrite of the append-only file (AOF).
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A non-empty status string.
+//
+// [valkey.io]: https://valkey.io/commands/bgrewriteaof/
+func (client *Client) BgRewriteAof(ctx context.Context) (string, error) {
+	response, err := client.executeCommand(ctx, C.BgRewriteAof, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleStringResponse(response)
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.
@@ -574,14 +681,74 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// Provides memory usage diagnosis report.
-// The command returns a detailed analysis of memory consumption patterns in the server.
+// Returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The latency entries from the event.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error) {
+	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyHistoryResponse(response)
+}
+
+// Reports the latest latency events logged.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	Latency info for each recorded event.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyInfo, error) {
+	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyLatestResponse(response)
+}
+
+// Resets the latency time series for the specified events.
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	events - The latency events to reset (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LatencyReset, events)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Provides memory usage diagnosis report.
+// The command returns a detailed analysis of memory consumption patterns in the server.
 //
 // Return value:
 //
