@@ -9613,23 +9613,11 @@ class TestCommands:
         await glide_client.set(key2, "value2")
         await glide_client.set(key3, "value3")
         with pytest.raises(RequestError):
-            await glide_client.migrate(
-                "invalid-host", 6379, "", 0, 5000, MigrateOptions(keys=[key2, key3])
-            )
-
-        # Multi-key: error when key is non-empty with keys option
-        with pytest.raises(ValueError):
-            await glide_client.migrate(
-                "invalid-host", 6379, key, 0, 5000, MigrateOptions(keys=[key2])
-            )
+            await glide_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
 
         # Multi-key: empty keys list raises ValueError
         with pytest.raises(ValueError):
-            MigrateOptions(keys=[]).to_args()
-
-        # Empty key without keys option raises ValueError
-        with pytest.raises(ValueError):
-            await glide_client.migrate("invalid-host", 6379, "", 0, 5000)
+            await glide_client.migrate("invalid-host", 6379, [], 0, 5000)
 
         # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
         # Use hash tag {3560} so keys route to slot 0 (same as key="") in cluster mode.
@@ -9638,10 +9626,9 @@ class TestCommands:
         result = await glide_client.migrate(
             "invalid-host",
             6379,
-            "",
+            [non_existent1, non_existent2],
             0,
             5000,
-            MigrateOptions(keys=[non_existent1, non_existent2]),
         )
         assert result == b"NOKEY"
 
@@ -9687,10 +9674,9 @@ class TestCommands:
             result = await glide_client.migrate(
                 dest_host,
                 dest_port,
-                "",
+                [key1, key2],
                 0,
                 5000,
-                MigrateOptions(keys=[key1, key2]),
             )
             assert result == OK or result == b"OK"
             assert await glide_client.exists([key1, key2]) == 0
@@ -11218,13 +11204,15 @@ class TestScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script("""
+        writing_script = Script(
+            """
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """)
+        """
+        )
 
         async def run_writing_script():
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])

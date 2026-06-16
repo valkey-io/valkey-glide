@@ -425,44 +425,17 @@ def _build_sort_args(
 class MigrateOptions:
     """
     Optional arguments for the `migrate` command.
-
     See [valkey.io](https://valkey.io/commands/migrate/) for details.
-
-    When ``keys`` is provided, the multi-key MIGRATE form is used
-    (``MIGRATE host port "" db timeout [options] KEYS key1 key2 ...``).
-    In this case, the ``key`` argument of ``migrate()`` must be ``""``.
     """
 
     copy: bool = False
     replace: bool = False
     password: Optional[str] = None
     username: Optional[str] = None
-    keys: Optional[List[TEncodable]] = None
-
-    @staticmethod
-    def validate_key_and_options(
-        key: TEncodable, options: Optional["MigrateOptions"]
-    ) -> None:
-        """Validate that ``key`` and ``options.keys`` are not used together."""
-        if (options is None or options.keys is None) and (key == "" or key == b""):
-            raise ValueError(
-                "migrate: 'key' must not be empty when 'options.keys' is not provided"
-            )
-        if (
-            options is not None
-            and options.keys is not None
-            and key != ""
-            and key != b""
-        ):
-            raise ValueError(
-                "migrate: 'key' must be empty string when 'options.keys' is provided"
-            )
 
     def to_args(self) -> List[TEncodable]:
         if self.username is not None and self.password is None:
             raise ValueError("MigrateOptions: 'username' requires 'password' to be set")
-        if self.keys is not None and len(self.keys) == 0:
-            raise ValueError("MigrateOptions: 'keys' must not be empty")
         args: List[TEncodable] = []
         if self.copy:
             args.append("COPY")
@@ -472,7 +445,4 @@ class MigrateOptions:
             args.extend(["AUTH2", self.username, self.password])
         elif self.password is not None:
             args.extend(["AUTH", self.password])
-        if self.keys is not None:
-            args.append("KEYS")
-            args.extend(self.keys)
         return args

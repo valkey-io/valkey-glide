@@ -9488,23 +9488,11 @@ class TestCommands:
         glide_sync_client.set(key2, "value2")
         glide_sync_client.set(key3, "value3")
         with pytest.raises(RequestError):
-            glide_sync_client.migrate(
-                "invalid-host", 6379, "", 0, 5000, MigrateOptions(keys=[key2, key3])
-            )
-
-        # Multi-key: error when key is non-empty with keys option
-        with pytest.raises(ValueError):
-            glide_sync_client.migrate(
-                "invalid-host", 6379, key, 0, 5000, MigrateOptions(keys=[key2])
-            )
+            glide_sync_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
 
         # Multi-key: empty keys list raises ValueError
         with pytest.raises(ValueError):
-            MigrateOptions(keys=[]).to_args()
-
-        # Empty key without keys option raises ValueError
-        with pytest.raises(ValueError):
-            glide_sync_client.migrate("invalid-host", 6379, "", 0, 5000)
+            glide_sync_client.migrate("invalid-host", 6379, [], 0, 5000)
 
         # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
         # Use hash tag {3560} so keys route to slot 0 (same as key="") in cluster mode.
@@ -9513,10 +9501,9 @@ class TestCommands:
         result = glide_sync_client.migrate(
             "invalid-host",
             6379,
-            "",
+            [non_existent1, non_existent2],
             0,
             5000,
-            MigrateOptions(keys=[non_existent1, non_existent2]),
         )
         assert result == b"NOKEY"
 
@@ -9562,10 +9549,9 @@ class TestCommands:
             result = glide_sync_client.migrate(
                 dest_host,
                 dest_port,
-                "",
+                [key1, key2],
                 0,
                 5000,
-                MigrateOptions(keys=[key1, key2]),
             )
             assert result == OK or result == b"OK"
             assert glide_sync_client.exists([key1, key2]) == 0
@@ -11096,13 +11082,15 @@ class TestSyncScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script("""
+        writing_script = Script(
+            """
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """)
+        """
+        )
 
         def run_writing_script():
             test_client.invoke_script(writing_script, keys=[get_random_string(5)])

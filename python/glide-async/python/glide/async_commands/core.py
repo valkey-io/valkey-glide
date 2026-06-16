@@ -2,7 +2,6 @@
 from typing import (
     Dict,
     List,
-    Literal,
     Mapping,
     Optional,
     Protocol,
@@ -10,7 +9,6 @@ from typing import (
     Tuple,
     Union,
     cast,
-    overload,
 )
 
 from glide_shared.cluster_scan_cursor import ClusterScanCursor
@@ -6997,76 +6995,53 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Restore, args),
         )
 
-    @overload
     async def migrate(
         self,
         host: str,
         port: int,
-        key: TEncodable,
-        destination_db: int,
-        timeout: int,
-        options: Optional[MigrateOptions] = ...,
-    ) -> str: ...
-
-    @overload
-    async def migrate(
-        self,
-        host: str,
-        port: int,
-        key: Union[Literal[""], bytes],
-        destination_db: int,
-        timeout: int,
-        options: MigrateOptions,
-    ) -> str: ...
-
-    async def migrate(
-        self,
-        host: str,
-        port: int,
-        key: TEncodable,
+        keys: Union[TEncodable, List[TEncodable]],
         destination_db: int,
         timeout: int,
         options: Optional[MigrateOptions] = None,
     ) -> str:
         """
-        Atomically transfers a key or multiple keys from a source Valkey instance to a destination
-        Valkey instance.
+        Atomically transfers one or more keys from a source Valkey instance to a destination
+        Valkey instance. Pass a list to migrate multiple keys in one command.
 
         See [valkey.io](https://valkey.io/commands/migrate/) for details.
-
-        When migrating multiple keys, set ``key`` to ``""`` and provide the keys via
-        ``MigrateOptions.keys``.
 
         Args:
             host (str): The host of the destination Valkey instance.
             port (int): The port of the destination Valkey instance.
-            key (TEncodable): The key to migrate. Use ``""`` when migrating multiple keys via
-                ``MigrateOptions.keys``.
+            keys (Union[TEncodable, List[TEncodable]]): The key or list of keys to migrate.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
-            options (Optional[MigrateOptions]): Additional migration options, including
-                optional ``keys`` for multi-key migration.
+            options (Optional[MigrateOptions]): Additional migration options.
 
         Returns:
             str: "OK" on success, or "NOKEY" if no keys were found.
 
         Examples:
-            >>> await client.set("mykey", "myvalue")
             >>> await client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
-                "OK"
-            >>> await client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
-                "NOKEY"
+            >>> await client.migrate("127.0.0.1", 6380, ["key1", "key2"], 0, 5000)
         """
-        MigrateOptions.validate_key_and_options(key, options)
-        args: List[TEncodable] = [
-            host,
-            str(port),
-            key,
-            str(destination_db),
-            str(timeout),
-        ]
-        if options:
-            args.extend(options.to_args())
+        if isinstance(keys, list):
+            if len(keys) == 0:
+                raise ValueError("migrate: 'keys' list must not be empty")
+            args: List[TEncodable] = [
+                host,
+                str(port),
+                "",
+                str(destination_db),
+                str(timeout),
+            ]
+            if options:
+                args.extend(options.to_args())
+            args += ["KEYS"] + list(keys)
+        else:
+            args = [host, str(port), keys, str(destination_db), str(timeout)]
+            if options:
+                args.extend(options.to_args())
         return cast(
             str,
             await self._execute_command(RequestType.Migrate, args),

@@ -1660,27 +1660,7 @@ class TestBatch:
             ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
         )
         with pytest.raises(ValueError):
-            batch2.migrate(
-                "invalid-host", 6379, key, 0, 5000, MigrateOptions(keys=[key])
-            )
-
-        # Empty key without keys option raises ValueError
-        batch3 = (
-            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
-        )
-        with pytest.raises(ValueError):
-            batch3.migrate("invalid-host", 6379, "", 0, 5000)
-
-        # Empty keys list raises ValueError
-        with pytest.raises(ValueError):
-            batch3.migrate(
-                "invalid-host",
-                6379,
-                "",
-                0,
-                5000,
-                MigrateOptions(keys=[]),
-            )
+            batch2.migrate("invalid-host", 6379, [], 0, 5000)
 
     @pytest.fixture(scope="class")
     def second_server(self, request):
@@ -1714,14 +1694,7 @@ class TestBatch:
 
             batch = Batch(is_atomic=False)
             batch.migrate(dest_host, dest_port, key1, 0, 5000)
-            batch.migrate(
-                dest_host,
-                dest_port,
-                "",
-                0,
-                5000,
-                MigrateOptions(keys=[key2]),
-            )
+            batch.migrate(dest_host, dest_port, [key2], 0, 5000)
             result = await exec_batch(glide_client, batch, raise_on_error=True)
             assert result is not None
             assert result[0] == OK or result[0] == b"OK"

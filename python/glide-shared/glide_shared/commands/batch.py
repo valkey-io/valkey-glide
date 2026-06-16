@@ -2,7 +2,7 @@
 
 import sys
 import threading
-from typing import List, Literal, Mapping, Optional, Tuple, TypeVar, Union, overload
+from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -2738,69 +2738,49 @@ class BaseBatch:
             args.extend(["FREQ", str(frequency)])
         return self.append_command(RequestType.Restore, args)
 
-    @overload
     def migrate(
         self: TBatch,
         host: str,
         port: int,
-        key: TEncodable,
-        destination_db: int,
-        timeout: int,
-        options: Optional[MigrateOptions] = ...,
-    ) -> TBatch: ...
-
-    @overload
-    def migrate(
-        self: TBatch,
-        host: str,
-        port: int,
-        key: Union[Literal[""], bytes],
-        destination_db: int,
-        timeout: int,
-        options: MigrateOptions,
-    ) -> TBatch: ...
-
-    def migrate(
-        self: TBatch,
-        host: str,
-        port: int,
-        key: TEncodable,
+        keys: Union[TEncodable, List[TEncodable]],
         destination_db: int,
         timeout: int,
         options: Optional[MigrateOptions] = None,
     ) -> TBatch:
         """
-        Atomically transfers a key or multiple keys from a source Valkey instance to a destination
-        Valkey instance.
+        Atomically transfers one or more keys from a source Valkey instance to a destination
+        Valkey instance. Pass a list to migrate multiple keys in one command.
 
         See [valkey.io](https://valkey.io/commands/migrate/) for details.
-
-        When migrating multiple keys, set ``key`` to ``""`` and provide the keys via
-        ``MigrateOptions.keys``.
 
         Args:
             host (str): The host of the destination Valkey instance.
             port (int): The port of the destination Valkey instance.
-            key (TEncodable): The key to migrate. Use ``""`` when migrating multiple keys via
-                ``MigrateOptions.keys``.
+            keys (Union[TEncodable, List[TEncodable]]): The key or list of keys to migrate.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
-            options (Optional[MigrateOptions]): Additional migration options, including
-                optional ``keys`` for multi-key migration.
+            options (Optional[MigrateOptions]): Additional migration options.
 
         Returns:
             TBatch: The batch instance for chaining.
         """
-        MigrateOptions.validate_key_and_options(key, options)
-        args: List[TEncodable] = [
-            host,
-            str(port),
-            key,
-            str(destination_db),
-            str(timeout),
-        ]
-        if options:
-            args.extend(options.to_args())
+        if isinstance(keys, list):
+            if len(keys) == 0:
+                raise ValueError("migrate: 'keys' list must not be empty")
+            args: List[TEncodable] = [
+                host,
+                str(port),
+                "",
+                str(destination_db),
+                str(timeout),
+            ]
+            if options:
+                args.extend(options.to_args())
+            args += ["KEYS"] + list(keys)
+        else:
+            args = [host, str(port), keys, str(destination_db), str(timeout)]
+            if options:
+                args.extend(options.to_args())
         return self.append_command(RequestType.Migrate, args)
 
     def xadd(
