@@ -264,6 +264,8 @@ import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
@@ -949,6 +951,46 @@ public abstract class BaseClient
             }
             return ClusterValue.ofMultiValueBinary(data);
         }
+    }
+
+    /**
+     * Process a <code>LATENCY HISTORY</code> response.
+     *
+     * @param response The raw response from the server.
+     * @return An array of latency history entries for an event.
+     */
+    protected static LatencyEntry[] handleLatencyHistoryResponse(Object[] response) {
+        if (response == null) {
+            return new LatencyEntry[0];
+        }
+        LatencyEntry[] result = new LatencyEntry[response.length];
+        for (int i = 0; i < response.length; i++) {
+            Object[] entry = (Object[]) response[i];
+            result[i] = new LatencyEntry((Long) entry[0], (Long) entry[1]);
+        }
+        return result;
+    }
+
+    /**
+     * Process a <code>LATENCY LATEST</code> response.
+     *
+     * @param response The raw response from the server.
+     * @return An array of the latest latency info.
+     */
+    protected static LatencyEventInfo[] handleLatencyLatestResponse(Object[] response) {
+        if (response == null) {
+            return new LatencyEventInfo[0];
+        }
+        LatencyEventInfo[] result = new LatencyEventInfo[response.length];
+        for (int i = 0; i < response.length; i++) {
+            Object[] entry = (Object[]) response[i];
+            Optional<Long> sum = entry.length > 4 ? Optional.of((Long) entry[4]) : Optional.empty();
+            Optional<Long> count = entry.length > 5 ? Optional.of((Long) entry[5]) : Optional.empty();
+            result[i] =
+                    new LatencyEventInfo(
+                            (String) entry[0], (Long) entry[1], (Long) entry[2], (Long) entry[3], sum, count);
+        }
+        return result;
     }
 
     /** Process a <code>LCS key1 key2 IDX</code> response */
