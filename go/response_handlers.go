@@ -1760,8 +1760,224 @@ func handleArrayOfMapsResponse(response *C.struct_CommandResponse) ([]map[string
 	return maps, nil
 }
 
-// handleStringToArrayOfMapsMapResponse handles responses that return a map of node addresses to arrays of maps.
-// Used for cluster commands with multi-node routing.
+// parseLatencyHistoryEntries converts a parsed `LATENCY HISTORY` payload (an array of
+// `[timestamp, latency_ms]` pairs) into a typed slice of [models.LatencyEntry].
+func parseLatencyHistoryEntries(data any) ([]models.LatencyEntry, error) {
+	if data == nil {
+		return []models.LatencyEntry{}, nil
+	}
+	arr, ok := data.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for LATENCY HISTORY response: %T", data)
+	}
+	result := make([]models.LatencyEntry, 0, len(arr))
+	for i, item := range arr {
+		pair, ok := item.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY HISTORY entry at index %d: %T", i, item)
+		}
+		if len(pair) < 2 {
+			return nil, fmt.Errorf("LATENCY HISTORY entry at index %d has %d elements, expected at least 2", i, len(pair))
+		}
+		ts, ok := pair[0].(int64)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY HISTORY timestamp at index %d: %T", i, pair[0])
+		}
+		latency, ok := pair[1].(int64)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY HISTORY latency at index %d: %T", i, pair[1])
+		}
+		result = append(result, models.LatencyEntry{
+			Time:    time.Unix(ts, 0),
+			Latency: time.Duration(latency) * time.Millisecond,
+		})
+	}
+	return result, nil
+}
+
+// parseLatencyLatestEntries converts a parsed `LATENCY LATEST` payload (an array of
+// `[event_name, timestamp, latest_ms, max_ms, ...]`) into a typed slice of
+// [models.LatencyInfo].
+func parseLatencyLatestEntries(data any) ([]models.LatencyInfo, error) {
+	if data == nil {
+		return []models.LatencyInfo{}, nil
+	}
+	arr, ok := data.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for LATENCY LATEST response: %T", data)
+	}
+	result := make([]models.LatencyInfo, 0, len(arr))
+	for i, item := range arr {
+		entry, ok := item.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY LATEST entry at index %d: %T", i, item)
+		}
+		if len(entry) < 4 {
+			return nil, fmt.Errorf("LATENCY LATEST entry at index %d has %d elements, expected at least 4", i, len(entry))
+		}
+		name, ok := entry[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY LATEST event name at index %d: %T", i, entry[0])
+		}
+		ts, ok := entry[1].(int64)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY LATEST timestamp at index %d: %T", i, entry[1])
+		}
+		latest, ok := entry[2].(int64)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY LATEST latest_ms at index %d: %T", i, entry[2])
+		}
+		max, ok := entry[3].(int64)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY LATEST max_ms at index %d: %T", i, entry[3])
+		}
+
+		info := models.LatencyInfo{
+			EventName: name,
+			Time:      time.Unix(ts, 0),
+			Latest:    time.Duration(latest) * time.Millisecond,
+			Maximum:   time.Duration(max) * time.Millisecond,
+			Sum:       models.CreateNilResultOf[time.Duration](),
+			Count:     models.CreateNilResultOf[int64](),
+		}
+
+		// Valkey 8.1+ includes sum and count as the 5th and 6th elements.
+		if len(entry) >= 6 {
+			sumMs, ok := entry[4].(int64)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for LATENCY LATEST sum_ms at index %d: %T", i, entry[4])
+			}
+			count, ok := entry[5].(int64)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for LATENCY LATEST count at index %d: %T", i, entry[5])
+			}
+			info.Sum = models.CreateResultOf(time.Duration(sumMs) * time.Millisecond)
+			info.Count = models.CreateResultOf(count)
+		}
+
+		result = append(result, info)
+	}
+	return result, nil
+}
+
+// handleLatencyHistoryResponse parses a `LATENCY HISTORY` response from a single node.
+func handleLatencyHistoryResponse(response *C.struct_CommandResponse) ([]models.LatencyEntry, error) {
+	defer C.free_command_response(response)
+
+	if response == nil {
+		return []models.LatencyEntry{}, nil
+	}
+	switch response.response_type {
+	case uint32(C.Null):
+		return []models.LatencyEntry{}, nil
+	case uint32(C.Array):
+		if response.array_value == nil {
+			return []models.LatencyEntry{}, nil
+		}
+		data, err := parseArray(response)
+		if err != nil {
+			return nil, err
+		}
+		return parseLatencyHistoryEntries(data)
+	default:
+		return nil, fmt.Errorf(
+			"unexpected return type from Valkey for LATENCY HISTORY: got %s",
+			C.GoString(C.get_response_type_string(response.response_type)),
+		)
+	}
+}
+
+// handleLatencyLatestResponse parses a `LATENCY LATEST` response from a single node.
+func handleLatencyLatestResponse(response *C.struct_CommandResponse) ([]models.LatencyInfo, error) {
+	defer C.free_command_response(response)
+
+	if response == nil {
+		return []models.LatencyInfo{}, nil
+	}
+	switch response.response_type {
+	case uint32(C.Null):
+		return []models.LatencyInfo{}, nil
+	case uint32(C.Array):
+		if response.array_value == nil {
+			return []models.LatencyInfo{}, nil
+		}
+		data, err := parseArray(response)
+		if err != nil {
+			return nil, err
+		}
+		return parseLatencyLatestEntries(data)
+	default:
+		return nil, fmt.Errorf(
+			"unexpected return type from Valkey for LATENCY LATEST: got %s",
+			C.GoString(C.get_response_type_string(response.response_type)),
+		)
+	}
+}
+
+// handleLatencyHistoryClusterResponse parses a cluster multi-node `LATENCY HISTORY` response
+// (a Map<address, [][]int>) into a `map[string][]models.LatencyEntry`.
+func handleLatencyHistoryClusterResponse(response *C.struct_CommandResponse) (map[string][]models.LatencyEntry, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	raw, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return map[string][]models.LatencyEntry{}, nil
+	}
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected map type for cluster LATENCY HISTORY: %T", raw)
+	}
+	result := make(map[string][]models.LatencyEntry, len(rawMap))
+	for node, value := range rawMap {
+		entries, err := parseLatencyHistoryEntries(value)
+		if err != nil {
+			return nil, fmt.Errorf("node %q: %w", node, err)
+		}
+		result[node] = entries
+	}
+	return result, nil
+}
+
+// handleLatencyLatestClusterResponse parses a cluster multi-node `LATENCY LATEST` response
+// (a Map<address, [][]any>) into a `map[string][]models.LatencyInfo`.
+func handleLatencyLatestClusterResponse(response *C.struct_CommandResponse) (map[string][]models.LatencyInfo, error) {
+	defer C.free_command_response(response)
+
+	typeErr := checkResponseType(response, C.Map, false)
+	if typeErr != nil {
+		return nil, typeErr
+	}
+	raw, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		return map[string][]models.LatencyInfo{}, nil
+	}
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected map type for cluster LATENCY LATEST: %T", raw)
+	}
+	result := make(map[string][]models.LatencyInfo, len(rawMap))
+	for node, value := range rawMap {
+		entries, err := parseLatencyLatestEntries(value)
+		if err != nil {
+			return nil, fmt.Errorf("node %q: %w", node, err)
+		}
+		result[node] = entries
+	}
+	return result, nil
+}
+
+// handleStringToArrayOfMapsMapResponse handles responses that return a map of node
+// addresses to arrays of maps. Used for cluster commands with multi-node routing.
 func handleStringToArrayOfMapsMapResponse(
 	response *C.struct_CommandResponse,
 ) (map[string][]map[string]any, error) {
