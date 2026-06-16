@@ -45,7 +45,7 @@ func (o *FailoverOptions) ToArgs() []string {
 		args = append(args, "ABORT")
 		return args
 	}
-	if o.Host != "" {
+	if o.Host != "" && o.Port > 0 {
 		args = append(args, "TO", o.Host, strconv.Itoa(o.Port))
 		if o.Force {
 			args = append(args, "FORCE")
