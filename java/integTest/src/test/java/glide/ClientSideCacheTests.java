@@ -653,28 +653,25 @@ public class ClientSideCacheTests {
                                 .get()));
     }
 
-    @ParameterizedTest(autoCloseArguments = false)
+    @ParameterizedTest(autoCloseArguments = true)
     @MethodSource("getServerAssistedCacheClients")
     @SneakyThrows
     public void clientSideCache_set_and_get(BaseClient client) {
+        // Validates the serverAssisted=true configuration (phase 2), following the same
+        // SET/GET hit-rate pattern as phase-1 tests in this class.
         String key = UUID.randomUUID().toString();
         String value = "cachedValue";
 
-        try {
-            assertEquals(OK, client.set(key, value).get());
+        assertEquals(OK, client.set(key, value).get());
 
-            // First GET: cache miss, populates cache
-            assertEquals(value, client.get(key).get());
+        // First GET: cache miss, populates cache
+        assertEquals(value, client.get(key).get());
 
-            // Second GET: served from local cache
-            assertEquals(value, client.get(key).get());
+        // Second GET: served from local cache
+        assertEquals(value, client.get(key).get());
 
-            // Verify caching was actually used by checking metrics
-            assertTrue(
-                    client.getCacheHitRate().get() > 0, "Expected cache hit rate > 0 after second GET");
-        } finally {
-            client.close();
-        }
+        // Verify caching was actually used by checking metrics
+        assertTrue(client.getCacheHitRate().get() > 0, "Expected cache hit rate > 0 after second GET");
     }
 
     /** Test that only cacheable commands are actually cached. */
