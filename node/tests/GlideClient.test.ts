@@ -2186,6 +2186,13 @@ describe("GlideClient", () => {
                 expect(e).toBeInstanceOf(RequestError);
             }
 
+            // Restore node to primary in case failover succeeded (prevents cascade failures)
+            try {
+                await client.replicaofNoOne();
+            } catch (e) {
+                // ignore
+            }
+
             client.close();
         },
         TIMEOUT,
