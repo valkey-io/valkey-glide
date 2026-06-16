@@ -127,16 +127,16 @@ public class Transaction implements Closeable {
             throw new IllegalStateException("Not in MULTI");
         }
 
-        // Queue the command executor for later execution
         Response<T> response = new Response<>(builder);
-        pipelinedResponses.add(response);
 
-        // Add the command to the batch (GLIDE Batch API)
+        // Add the command to the batch (GLIDE Batch API) before tracking the Response so
+        // pipelinedResponses stays aligned with the GLIDE batch if queuing throws.
         try {
             commandExecutor.execute();
         } catch (Exception e) {
             throw new JedisException("Failed to queue command", e);
         }
+        pipelinedResponses.add(response);
 
         return response;
     }

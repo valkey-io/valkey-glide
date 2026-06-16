@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package redis.clients.jedis;
 
+import glide.api.models.exceptions.GlideException;
+import glide.api.models.exceptions.RequestException;
 import redis.clients.jedis.exceptions.JedisDataException;
 
 /**
@@ -64,6 +66,9 @@ public class Response<T> {
             if (data != null) {
                 if (data instanceof JedisDataException) {
                     throw (JedisDataException) data;
+                }
+                if (data instanceof RequestException || data instanceof GlideException) {
+                    throw new JedisDataException(data.toString(), (Throwable) data);
                 }
                 if (builder == null) {
                     throw new JedisDataException("No builder set for response");
