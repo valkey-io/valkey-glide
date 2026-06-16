@@ -1442,6 +1442,8 @@ func (suite *GlideTestSuite) TestFailover() {
 	// - If CI has no replicas: failover errors, and asserting OK would fail
 	// - A successful failover destabilizes subsequent standalone tests
 	_, _ = client.Failover(context.Background())
+	// Restore node to primary in case failover succeeded (prevents cascade failures)
+	_, _ = client.ReplicaOfNoOne(context.Background())
 }
 
 func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {
@@ -1449,4 +1451,12 @@ func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {
 	// FAILOVER ABORT when no failover is in progress should error
 	_, err := client.FailoverWithOptions(context.Background(), options.NewFailoverOptionsWithAbort())
 	suite.Error(err)
+}
+
+func (suite *GlideTestSuite) TestReplicaOfNoOne() {
+	client := suite.defaultClient()
+	// REPLICAOF NO ONE on a primary should succeed (it's already a primary)
+	result, err := client.ReplicaOfNoOne(context.Background())
+	suite.Require().NoError(err)
+	suite.Equal("OK", result)
 }
