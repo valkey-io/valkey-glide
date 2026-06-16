@@ -4064,6 +4064,109 @@ pub extern "C" fn create_batch_otel_span() -> u64 {
     span_ptr
 }
 
+/// Converts a nullable C string pointer to an optional UTF-8 string slice.
+///
+/// # Safety
+/// * If `ptr` is not null, it must point to a valid, null-terminated C string.
+/// * The pointed-to memory must remain valid for the returned string slice lifetime.
+unsafe fn optional_c_str<'a>(
+    ptr: *const c_char,
+    field_name: &str,
+) -> Result<Option<&'a str>, String> {
+    if ptr.is_null() {
+        return Ok(None);
+    }
+
+    unsafe { CStr::from_ptr(ptr) }
+        .to_str()
+        .map(Some)
+        .map_err(|err| format!("{field_name} is not valid UTF-8: {err}"))
+}
+
+/// Converts a required C string pointer to a UTF-8 string slice.
+///
+/// # Safety
+/// * If `ptr` is not null, it must point to a valid, null-terminated C string.
+/// * The pointed-to memory must remain valid for the returned string slice lifetime.
+unsafe fn required_c_str<'a>(ptr: *const c_char, field_name: &str) -> Result<&'a str, String> {
+    if ptr.is_null() {
+        return Err(format!("{field_name} pointer is null"));
+    }
+
+    unsafe { CStr::from_ptr(ptr) }
+        .to_str()
+        .map_err(|err| format!("{field_name} is not valid UTF-8: {err}"))
+}
+
+fn span_to_ffi_pointer(span: GlideSpan) -> u64 {
+    let arc = Arc::new(span);
+    let ptr = Arc::into_raw(arc);
+    ptr as u64
+}
+
+unsafe fn create_span_with_remote_context(
+    span_name: &str,
+    trace_id: *const c_char,
+    span_id: *const c_char,
+    trace_flags: u8,
+    trace_state: *const c_char,
+    function_name: &str,
+) -> u64 {
+    let trace_id = match unsafe { required_c_str(trace_id, "trace_id") } {
+        Ok(value) => value,
+        Err(err) => {
+            logger_core::log_warn(
+                "ffi_otel",
+                format!("{function_name}: {err}. Creating independent span as fallback."),
+            );
+            return span_to_ffi_pointer(GlideOpenTelemetry::new_span(span_name));
+        }
+    };
+
+    let span_id = match unsafe { required_c_str(span_id, "span_id") } {
+        Ok(value) => value,
+        Err(err) => {
+            logger_core::log_warn(
+                "ffi_otel",
+                format!("{function_name}: {err}. Creating independent span as fallback."),
+            );
+            return span_to_ffi_pointer(GlideOpenTelemetry::new_span(span_name));
+        }
+    };
+
+    let trace_state = match unsafe { optional_c_str(trace_state, "trace_state") } {
+        Ok(value) => value,
+        Err(err) => {
+            logger_core::log_warn(
+                "ffi_otel",
+                format!("{function_name}: {err}. Creating independent span as fallback."),
+            );
+            return span_to_ffi_pointer(GlideOpenTelemetry::new_span(span_name));
+        }
+    };
+
+    let span = match GlideSpan::new_with_remote_context(
+        span_name,
+        trace_id,
+        span_id,
+        trace_flags,
+        trace_state,
+    ) {
+        Ok(span) => span,
+        Err(err) => {
+            logger_core::log_warn(
+                "ffi_otel",
+                format!(
+                    "{function_name}: failed to create span with remote context: {err}. Creating independent span as fallback.",
+                ),
+            );
+            GlideOpenTelemetry::new_span(span_name)
+        }
+    };
+
+    span_to_ffi_pointer(span)
+}
+
 /// Creates an OpenTelemetry batch span with a parent span and returns a pointer to the span as u64.
 /// This function creates a child span with the name "Batch" under the provided parent span.
 /// Returns 0 on failure.
@@ -4309,6 +4412,65 @@ pub unsafe extern "C" fn create_otel_span_with_parent(
         ),
     );
     span_ptr
+}
+
+/// Creates an OpenTelemetry span with the given request type as a child of a remote span context.
+/// Invalid remote context falls back to creating an independent span.
+///
+/// # Safety
+/// * `trace_id`, `span_id`, and `trace_state` may be null.
+/// * Any non-null string pointer must point to a valid, null-terminated UTF-8 C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_otel_span_with_trace_context(
+    request_type: RequestType,
+    trace_id: *const c_char,
+    span_id: *const c_char,
+    trace_flags: u8,
+    trace_state: *const c_char,
+) -> u64 {
+    let command_name =
+        match extract_command_name(request_type, "create_otel_span_with_trace_context") {
+            Some(name) => name,
+            None => return 0,
+        };
+
+    unsafe {
+        create_span_with_remote_context(
+            &command_name,
+            trace_id,
+            span_id,
+            trace_flags,
+            trace_state,
+            "create_otel_span_with_trace_context",
+        )
+    }
+}
+
+/// Creates an OpenTelemetry batch span as a child of a remote span context.
+/// Invalid remote context falls back to creating an independent batch span.
+///
+/// # Safety
+/// * `trace_id`, `span_id`, and `trace_state` may be null.
+/// * Any non-null string pointer must point to a valid, null-terminated UTF-8 C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn create_batch_otel_span_with_trace_context(
+    trace_id: *const c_char,
+    span_id: *const c_char,
+    trace_flags: u8,
+    trace_state: *const c_char,
+) -> u64 {
+    let command_name = "Batch";
+
+    unsafe {
+        create_span_with_remote_context(
+            command_name,
+            trace_id,
+            span_id,
+            trace_flags,
+            trace_state,
+            "create_batch_otel_span_with_trace_context",
+        )
+    }
 }
 
 /// Drops an OpenTelemetry span given its pointer as u64.

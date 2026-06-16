@@ -24,6 +24,16 @@ impl fmt::Display for TraceError {
 }
 
 impl GlideSpan {
+    pub fn new_with_remote_context(
+        _name: &str,
+        _trace_id_hex: &str,
+        _span_id_hex: &str,
+        _trace_flags: u8,
+        _trace_state: Option<&str>,
+    ) -> Result<GlideSpan, TraceError> {
+        Ok(GlideSpan)
+    }
+
     pub fn add_span(&self, _name: &str) -> Result<GlideSpan, TraceError> {
         Ok(GlideSpan)
     }
