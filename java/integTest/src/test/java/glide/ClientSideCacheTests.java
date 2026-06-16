@@ -15,10 +15,12 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.EvictionPolicy;
+import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -621,6 +623,58 @@ public class ClientSideCacheTests {
 
         assertTrue(exception.getCause() instanceof RequestException);
         assertTrue(exception.getCause().getMessage().contains("WRONGTYPE"));
+    }
+
+    private static ClientSideCache buildServerAssistedCache() {
+        return ClientSideCache.builder()
+                .maxCacheKb(1L)
+                .entryTtlMs(60000L)
+                .enableMetrics(true)
+                .serverAssisted(true)
+                .build();
+    }
+
+    @SneakyThrows
+    public static Stream<Arguments> getServerAssistedCacheClients() {
+        return Stream.of(
+                Arguments.of(
+                        GlideClient.createClient(
+                                        commonClientConfig()
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .clientSideCache(buildServerAssistedCache())
+                                                .build())
+                                .get()),
+                Arguments.of(
+                        GlideClusterClient.createClient(
+                                        commonClusterClientConfig()
+                                                .protocol(ProtocolVersion.RESP3)
+                                                .clientSideCache(buildServerAssistedCache())
+                                                .build())
+                                .get()));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getServerAssistedCacheClients")
+    @SneakyThrows
+    public void clientSideCache_set_and_get(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String value = "cachedValue";
+
+        try {
+            assertEquals(OK, client.set(key, value).get());
+
+            // First GET: cache miss, populates cache
+            assertEquals(value, client.get(key).get());
+
+            // Second GET: served from local cache
+            assertEquals(value, client.get(key).get());
+
+            // Verify caching was actually used by checking metrics
+            assertTrue(
+                    client.getCacheHitRate().get() > 0, "Expected cache hit rate > 0 after second GET");
+        } finally {
+            client.close();
+        }
     }
 
     /** Test that only cacheable commands are actually cached. */

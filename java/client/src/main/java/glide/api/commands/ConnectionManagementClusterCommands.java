@@ -395,9 +395,9 @@ public interface ConnectionManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
      * @since Valkey 6.2.0 and above.
      * @param route Specifies the routing configuration for the command.
-     * @return For a single-node route, returns the tracking info map. For a multi-node route, returns
-     *     a map of node addresses to their respective tracking info maps. Each tracking info map
-     *     contains keys: {@code flags}, {@code redirect}, {@code prefixes}.
+     * @return A {@link ClusterValue} which holds a single value if single node route is used or a
+     *     dictionary where each address is the key and its corresponding node response is the value.
+     *     The returned map contains keys: {@code flags}, {@code redirect}, {@code prefixes}.
      * @example
      *     <pre>{@code
      * ClusterValue<Map<String, Object>> info = client.clientTrackingInfo(ALL_NODES).get();

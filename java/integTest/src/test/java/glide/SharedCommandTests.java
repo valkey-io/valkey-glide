@@ -120,7 +120,6 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
-import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.configuration.RequestRoutingConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
@@ -18741,62 +18740,5 @@ public class SharedCommandTests {
         assertTrue(info.containsKey("flags"));
         assertTrue(info.containsKey("redirect"));
         assertTrue(info.containsKey("prefixes"));
-    }
-
-    private static ClientSideCache buildTestCache() {
-        return ClientSideCache.builder()
-                .maxCacheKb(1L) // 1 KB - follows the phase-1 pattern in ClientSideCacheTests.java to
-                // force eviction behavior
-                .entryTtlMs(60000L)
-                .enableMetrics(true) // required: getCacheHitRate() will throw RequestException if
-                // metrics are not enabled
-                .serverAssisted(true) // enables server-assisted tracking mode introduced in this PR
-                // (phase 2)
-                .build();
-    }
-
-    @SneakyThrows
-    public static Stream<Arguments> getClientsWithCache() {
-        return Stream.of(
-                Arguments.of(
-                        GlideClient.createClient(
-                                        commonClientConfig()
-                                                .protocol(ProtocolVersion.RESP3)
-                                                .clientSideCache(buildTestCache())
-                                                .build())
-                                .get()),
-                Arguments.of(
-                        GlideClusterClient.createClient(
-                                        commonClusterClientConfig()
-                                                .protocol(ProtocolVersion.RESP3)
-                                                .clientSideCache(buildTestCache())
-                                                .build())
-                                .get()));
-    }
-
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClientsWithCache")
-    @SneakyThrows
-    public void clientSideCache_set_and_get(BaseClient client) {
-        // Validates the serverAssisted=true configuration introduced in this PR (phase 2), following
-        // the same SET/GET hit-rate pattern as phase-1 tests in ClientSideCacheTests.java.
-        String key = UUID.randomUUID().toString();
-        String value = "cachedValue";
-
-        try {
-            assertEquals(OK, client.set(key, value).get());
-
-            // First GET: cache miss, populates cache
-            assertEquals(value, client.get(key).get());
-
-            // Second GET: served from local cache
-            assertEquals(value, client.get(key).get());
-
-            // Verify caching was actually used by checking metrics
-            assertTrue(
-                    client.getCacheHitRate().get() > 0, "Expected cache hit rate > 0 after second GET");
-        } finally {
-            client.close();
-        }
     }
 }
