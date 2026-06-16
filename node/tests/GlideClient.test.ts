@@ -2187,11 +2187,7 @@ describe("GlideClient", () => {
             }
 
             // Restore node to primary in case failover succeeded (prevents cascade failures)
-            try {
-                await client.replicaofNoOne();
-            } catch (_) {
-                // ignore
-            }
+            await client.replicaofNoOne().catch(() => {});
 
             client.close();
         },
