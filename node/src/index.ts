@@ -23,3 +23,4 @@ export * from "./OpenTelemetry.js";
 export * from "./server-modules/GlideFt.js";
 export * from "./server-modules/GlideFtOptions.js";
 export * from "./server-modules/GlideJson.js";
+export * from "./GlideMonitorClient.js";
