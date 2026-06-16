@@ -32,13 +32,13 @@ public final class LatencyEventInfo {
 
     /**
      * The sum of all latency spike durations in the event's time series, in milliseconds.<br>
-     * Only populated for Valkey 8.1+ servers.
+     * Only populated for Valkey 8.1+.
      */
     private final Optional<Long> sum;
 
     /**
      * The number of latency spikes recorded in the event's time series.<br>
-     * Only populated for Valkey 8.1+ servers.
+     * Only populated for Valkey 8.1+.
      */
     private final Optional<Long> count;
 }

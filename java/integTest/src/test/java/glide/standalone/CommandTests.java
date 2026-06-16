@@ -47,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -59,6 +60,8 @@ import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.ScriptOptionsGlideString;
@@ -532,6 +535,95 @@ public class CommandTests {
         long result = regularClient.lastsave().get();
         Instant yesterday = Instant.now().minus(1, ChronoUnit.DAYS);
         assertTrue(Instant.ofEpochSecond(result).isAfter(yesterday));
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyHistory(GlideClient client) {
+        long beforeSpike = Instant.now().getEpochSecond();
+        triggerLatencySpike(client);
+
+        LatencyEntry[] history = client.latencyHistory("command").get();
+        assertTrue(history.length > 0);
+
+        LatencyEntry entry = history[0];
+        assertTrue(entry.getTime() >= beforeSpike);
+        assertTrue(entry.getLatency() > 0);
+
+        LatencyEntry[] unknown = client.latencyHistory("nonexistent").get();
+        assertEquals(0, unknown.length);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyLatest(GlideClient client) {
+        long beforeSpike = Instant.now().getEpochSecond();
+        triggerLatencySpike(client);
+
+        LatencyEventInfo[] latest = client.latencyLatest().get();
+        assertTrue(latest.length >= 1);
+
+        // Find the "command" event
+        LatencyEventInfo commandInfo = null;
+        for (LatencyEventInfo info : latest) {
+            if ("command".equals(info.getEventName())) {
+                commandInfo = info;
+                break;
+            }
+        }
+        assertNotNull(commandInfo);
+
+        assertTrue(commandInfo.getTime() >= beforeSpike);
+        assertTrue(commandInfo.getLatest() >= 0);
+        assertTrue(commandInfo.getMaximum() >= 0);
+        assertTrue(commandInfo.getMaximum() >= commandInfo.getLatest());
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+            assertTrue(commandInfo.getSum().get() > 0);
+            assertTrue(commandInfo.getCount().get() > 0);
+        } else {
+            assertFalse(commandInfo.getSum().isPresent());
+            assertFalse(commandInfo.getCount().isPresent());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyReset(GlideClient client) {
+
+        // Trigger spike then reset all events.
+        triggerLatencySpike(client);
+        assertTrue(client.latencyHistory("command").get().length > 0);
+
+        assertTrue(client.latencyReset().get() > 0);
+        assertEquals(0, client.latencyHistory("command").get().length);
+
+        // Trigger spike then reset "command" event.
+        triggerLatencySpike(client);
+        assertTrue(client.latencyHistory("command").get().length > 0);
+
+        assertTrue(client.latencyReset(new String[] {"command"}).get() > 0);
+        assertEquals(0, client.latencyHistory("command").get().length);
+
+        // Trigger spike then reset unknown event.
+        triggerLatencySpike(client);
+        assertTrue(client.latencyHistory("command").get().length > 0);
+
+        assertEquals(0, client.latencyReset(new String[] {"unknown-event"}).get());
+        assertTrue(client.latencyHistory("command").get().length > 0);
+    }
+
+    /** Triggers a latency spike for the "command" evemt. */
+    @SneakyThrows
+    private static void triggerLatencySpike(GlideClient client) {
+
+        client.latencyReset();
+        client.configSet(Collections.singletonMap("latency-monitor-threshold", "1")).get();
+        client.customCommand(new String[] {"DEBUG", "SLEEP", "0.05"}).get();
+        client.configSet(Collections.singletonMap("latency-monitor-threshold", "0")).get();
     }
 
     @ParameterizedTest(autoCloseArguments = false)

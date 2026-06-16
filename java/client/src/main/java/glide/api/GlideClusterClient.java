@@ -679,7 +679,7 @@ public class GlideClusterClient extends BaseClient
     private ClusterValue<LatencyEntry[]> handleLatencyHistoryClusterResponse(Response response) {
         Object data = handleObjectOrNullResponse(response);
 
-        if (!data instanceof Map) {
+        if (data instanceof Map) {
             Map<String, LatencyEntry[]> parsed = new LinkedHashMap<>();
             for (Map.Entry<String, Object> entry : ((Map<String, Object>) data).entrySet()) {
                 parsed.put(entry.getKey(), handleLatencyHistoryResponse((Object[]) entry.getValue()));
@@ -701,7 +701,7 @@ public class GlideClusterClient extends BaseClient
     private ClusterValue<LatencyEventInfo[]> handleLatencyLatestClusterResponse(Response response) {
         Object data = handleObjectOrNullResponse(response);
 
-        if (!data instanceof Map) {
+        if (data instanceof Map) {
             Map<String, LatencyEventInfo[]> parsed = new LinkedHashMap<>();
             for (Map.Entry<String, Object> entry : ((Map<String, Object>) data).entrySet()) {
                 parsed.put(entry.getKey(), handleLatencyLatestResponse((Object[]) entry.getValue()));

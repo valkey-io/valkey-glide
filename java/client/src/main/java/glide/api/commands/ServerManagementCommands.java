@@ -641,8 +641,8 @@ public interface ServerManagementCommands {
      * @return An array of the latest latency event info.
      * @example
      *     <pre>{@code
-     * LatencyInfo[] latest = client.latencyLatest().get();
-     * for (LatencyInfo info : latest) {
+     * LatencyEventInfo[] latest = client.latencyLatest().get();
+     * for (LatencyEventInfo info : latest) {
      *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatest());
      * }
      * }</pre>
