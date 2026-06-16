@@ -12478,6 +12478,11 @@ class TestSyncScripts:
             glide_sync_client.failover()
         except RequestError:
             pass
+        # Restore node to primary in case failover succeeded (prevents teardown errors)
+        try:
+            glide_sync_client.replicaof_no_one()
+        except RequestError:
+            pass
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
