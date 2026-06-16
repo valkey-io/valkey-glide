@@ -1300,6 +1300,213 @@ func (client *ClusterClient) ConfigResetStat(ctx context.Context) (string, error
 	return handleOkResponse(response)
 }
 
+// Returns the latency spike time series for the specified event.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//
+// Return value:
+//
+//	A multi-value [models.ClusterValue] mapping node address to the per-node latency entries.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (client *ClusterClient) LatencyHistory(
+	ctx context.Context,
+	event string,
+) (models.ClusterValue[[]models.LatencyEntry], error) {
+	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
+	}
+	if response != nil && response.response_type == uint32(C.Map) {
+		data, err := handleLatencyHistoryClusterResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
+		}
+		return models.CreateClusterMultiValue(data), nil
+	}
+	data, err := handleLatencyHistoryResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
+	}
+	return models.CreateClusterSingleValue(data), nil
+}
+
+// Returns the latency spike time series for the specified event.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	A [models.ClusterValue] containing the latency entries.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (client *ClusterClient) LatencyHistoryWithOptions(
+	ctx context.Context,
+	event string,
+	route options.RouteOption,
+) (models.ClusterValue[[]models.LatencyEntry], error) {
+	if route.Route == nil {
+		return client.LatencyHistory(ctx, event)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.LatencyHistory, []string{event}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
+	}
+	if route.Route.IsMultiNode() {
+		data, err := handleLatencyHistoryClusterResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
+		}
+		return models.CreateClusterMultiValue(data), nil
+	}
+	data, err := handleLatencyHistoryResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyEntry](), err
+	}
+	return models.CreateClusterSingleValue(data), nil
+}
+
+// Reports the latest latency events logged.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A multi-value [models.ClusterValue] mapping node address to the per-node latency info.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (client *ClusterClient) LatencyLatest(
+	ctx context.Context,
+) (models.ClusterValue[[]models.LatencyInfo], error) {
+	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+	}
+	if response != nil && response.response_type == uint32(C.Map) {
+		data, err := handleLatencyLatestClusterResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+		}
+		return models.CreateClusterMultiValue(data), nil
+	}
+	data, err := handleLatencyLatestResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+	}
+	return models.CreateClusterSingleValue(data), nil
+}
+
+// Reports the latest latency events logged.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//
+// Return value:
+//
+//	A [models.ClusterValue] containing the latency info.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (client *ClusterClient) LatencyLatestWithOptions(
+	ctx context.Context,
+	route options.RouteOption,
+) (models.ClusterValue[[]models.LatencyInfo], error) {
+	if route.Route == nil {
+		return client.LatencyLatest(ctx)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.LatencyLatest, []string{}, route.Route)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+	}
+	if route.Route.IsMultiNode() {
+		data, err := handleLatencyLatestClusterResponse(response)
+		if err != nil {
+			return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+		}
+		return models.CreateClusterMultiValue(data), nil
+	}
+	data, err := handleLatencyLatestResponse(response)
+	if err != nil {
+		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+	}
+	return models.CreateClusterSingleValue(data), nil
+}
+
+// Resets the latency time series for the specified events
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	events - The latency events to reset (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (client *ClusterClient) LatencyReset(ctx context.Context, events ...string) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LatencyReset, events)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Resets the latency time series for the specified events
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	route - Specifies the routing configuration for the command. The client will route the
+//	        command to the nodes defined by `route`.
+//	events - The latency events to reset (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (client *ClusterClient) LatencyResetWithOptions(
+	ctx context.Context,
+	route options.RouteOption,
+	events ...string,
+) (int64, error) {
+	if route.Route == nil {
+		return client.LatencyReset(ctx, events...)
+	}
+	response, err := client.executeCommandWithRoute(ctx, C.LatencyReset, events, route.Route)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
 // Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM.
 //
 // See [valkey.io] for details.

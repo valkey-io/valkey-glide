@@ -681,14 +681,74 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// Provides memory usage diagnosis report.
-// The command returns a detailed analysis of memory consumption patterns in the server.
+// Returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The latency entries from the event.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error) {
+	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyHistoryResponse(response)
+}
+
+// Reports the latest latency events logged.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	Latency info for each recorded event.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyInfo, error) {
+	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyLatestResponse(response)
+}
+
+// Resets the latency time series for the specified events.
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	events - The latency events to reset (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LatencyReset, events)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Provides memory usage diagnosis report.
+// The command returns a detailed analysis of memory consumption patterns in the server.
 //
 // Return value:
 //
