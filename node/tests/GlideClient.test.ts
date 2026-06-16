@@ -22,6 +22,7 @@ import {
     GlideClient,
     GlideRecord,
     GlideString,
+    InfoOptions,
     ListDirection,
     ProtocolVersion,
     RequestError,
@@ -2171,9 +2172,60 @@ describe("GlideClient", () => {
         TIMEOUT,
     );
 
-    // Skip: calling failover on CI with replicas triggers a real failover that
-    // destabilizes the standalone server. The command is verified by compilation
-    // and the failover_abort test validates the protocol works.
+    // Spin up a dedicated standalone with 1 replica so the failover
+    // doesn't destabilize the shared test server.
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_to_replica_%p",
+        async (protocol) => {
+            const testCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                1,
+                getServerVersion,
+            );
+
+            try {
+                client = await GlideClient.createClient(
+                    getClientConfigurationOption(
+                        testCluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                // Verify initial role is master
+                let info = await client.info({
+                    sections: [InfoOptions.Replication],
+                });
+                expect(info).toContain("role:master");
+
+                // Execute failover — returns OK immediately
+                const result = await client.failover();
+                expect(result).toBe("OK");
+
+                // Wait for role to change to slave (failover completed)
+                let roleChanged = false;
+
+                for (let i = 0; i < 60; i++) {
+                    info = await client.info({
+                        sections: [InfoOptions.Replication],
+                    });
+
+                    if (info.includes("role:slave")) {
+                        roleChanged = true;
+                        break;
+                    }
+
+                    await sleep(500);
+                }
+
+                expect(roleChanged).toBe(true);
+                client.close();
+            } finally {
+                await testCluster.close();
+            }
+        },
+        TIMEOUT,
+    );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "failover_abort_no_failover_in_progress_%p",

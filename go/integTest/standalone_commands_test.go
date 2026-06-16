@@ -1436,9 +1436,38 @@ func (suite *GlideTestSuite) TestScriptKill() {
 }
 
 func (suite *GlideTestSuite) TestFailover() {
-	// Skip: calling Failover on CI with replicas triggers a real failover that
-	// destabilizes the standalone server. The command is verified by compilation
-	// and the TestFailoverWithOptions_Abort test validates the protocol works.
+	// Spin up a dedicated standalone server with 1 replica so the failover
+	// doesn't destabilize the shared test server.
+	output, err := startDedicatedValkeyServerWithReplicas(suite, false, 1)
+	suite.Require().NoError(err)
+	clusterFolder := extractClusterFolder(suite, output)
+	addresses := extractAddresses(suite, output)
+	defer stopDedicatedValkeyServer(suite, clusterFolder)
+
+	cfg := defaultClientConfig()
+	cfg.WithAddress(&addresses[0])
+	client, err := glide.NewClient(cfg)
+	suite.Require().NoError(err)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Verify initial role is master
+	suite.Require().Eventually(func() bool {
+		info, err := client.InfoWithOptions(ctx, options.InfoOptions{Sections: []constants.Section{constants.Replication}})
+		return err == nil && strings.Contains(info, "role:master")
+	}, 10*time.Second, 100*time.Millisecond, "Timed out waiting for initial master role")
+
+	// Execute failover — returns OK immediately
+	result, err := client.Failover(ctx)
+	suite.Require().NoError(err)
+	suite.Equal("OK", result)
+
+	// Wait for role to change to slave (failover completed)
+	suite.Require().Eventually(func() bool {
+		info, err := client.InfoWithOptions(ctx, options.InfoOptions{Sections: []constants.Section{constants.Replication}})
+		return err == nil && strings.Contains(info, "role:slave")
+	}, 30*time.Second, 500*time.Millisecond, "Timed out waiting for role change to slave")
 }
 
 func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {

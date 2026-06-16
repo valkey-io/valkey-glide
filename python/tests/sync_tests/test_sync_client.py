@@ -108,6 +108,7 @@ from glide_sync.sync_commands.script import Script
 
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
 from tests.sync_tests.conftest import create_sync_client
+from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
@@ -12472,10 +12473,40 @@ class TestSyncScripts:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_failover(self, glide_sync_client: GlideClient):
-        # Skip: calling failover on CI with replicas triggers a real failover that
-        # destabilizes the standalone server. The command is verified by compilation
-        # and the test_failover_abort test validates the protocol works.
-        pass
+        # Spin up a dedicated standalone with 1 replica so the failover
+        # doesn't destabilize the shared test server.
+        dedicated_cluster = ValkeyCluster(
+            tls=False, cluster_mode=False, shard_count=1, replica_count=1
+        )
+        try:
+            client = GlideClient.create(
+                GlideClientConfiguration(
+                    addresses=[dedicated_cluster.nodes_addr[0]],
+                    request_timeout=5000,
+                )
+            )
+            try:
+                # Verify initial role is master
+                info = client.info([InfoSection.REPLICATION])
+                assert "role:master" in info
+
+                # Execute failover — returns OK immediately
+                result = client.failover()
+                assert result == OK
+
+                # Wait for role to change to slave (failover completed)
+                role_changed = False
+                for _ in range(60):
+                    info = client.info([InfoSection.REPLICATION])
+                    if "role:slave" in info:
+                        role_changed = True
+                        break
+                    time.sleep(0.5)
+                assert role_changed, "Timed out waiting for role change to slave"
+            finally:
+                client.close()
+        finally:
+            del dedicated_cluster
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
