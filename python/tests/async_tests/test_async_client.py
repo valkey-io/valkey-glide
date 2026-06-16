@@ -12571,6 +12571,7 @@ class TestScripts:
         # REPLICAOF NO ONE on a primary should succeed
         assert await glide_client.replicaof_no_one() == OK
 
+
 class TestClientLifecycle:
     """Tests for async client lifecycle: context manager and recreation."""
 
