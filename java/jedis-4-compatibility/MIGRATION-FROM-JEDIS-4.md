@@ -340,18 +340,29 @@ try (Jedis jedis = pool.getResource()) {
 
 ### SSL/TLS Configuration
 
-SSL configuration is supported:
+TLS is supported via `DefaultJedisClientConfig.builder().ssl(true)` and `rediss://` URIs. GLIDE uses the system trust store by default.
 
 ```java
+// Supported: enable TLS (system trust store)
 JedisClientConfig config = DefaultJedisClientConfig.builder()
     .ssl(true)
-    .sslSocketFactory(sslSocketFactory)
-    .sslParameters(sslParameters)
-    .hostnameVerifier(hostnameVerifier)
+    .build();
+
+// Supported for testing only: disable certificate verification
+JedisClientConfig insecure = DefaultJedisClientConfig.builder()
+    .ssl(true)
+    .sslOptions(SslOptions.builder().sslVerifyMode(SslVerifyMode.INSECURE).build())
     .build();
 ```
 
-GLIDE maps these settings to its internal SSL configuration.
+**Not supported** (throws `JedisConfigurationException` at client creation):
+
+- Custom `SSLSocketFactory` or `HostnameVerifier`
+- Keystore / truststore resources on `SslOptions`
+- Custom cipher suites, TLS protocol versions, or client-auth flags on `SSLParameters`
+- `AuthXManager` and custom `RedisCredentialsProvider` implementations
+
+If your Jedis 4.x app sets any of the unsupported options above, migrate those call sites to `SslVerifyMode` / system-truststore TLS or to native GLIDE client configuration before swapping the dependency.
 
 ## Troubleshooting
 

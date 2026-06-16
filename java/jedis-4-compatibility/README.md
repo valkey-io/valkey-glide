@@ -10,7 +10,7 @@ This artifact exists because **upstream Jedis 5** changed several public types (
 |-------|----------------------|------------------------|
 | `JedisPooled` pool type | `GenericObjectPoolConfig<Connection>` | Supported here; matches Jedis 4 compile-time types |
 | `JedisPool` | `GenericObjectPoolConfig<Jedis>` | Same as typical Jedis 4 usage |
-| Protocol | RESP2-only surface | Matches Jedis 4 defaults; no `getRedisProtocol()` on this layer |
+| Protocol | RESP2 only (`.protocol()` accepted for source compatibility but ignored at mapping) | Matches Jedis 4 defaults |
 
 If you are already on **Jedis 5.x** APIs, use the separate **`jedis-compatibility`** module instead.
 
@@ -33,8 +33,8 @@ The Jedis 4.x compatibility layer is implemented as a separate Gradle sub-module
 - `JedisPooled` - Pooled client with `GenericObjectPoolConfig<Connection>` (Jedis 4.x style)
 
 ### Configuration
-- `JedisClientConfig` - Client configuration interface (without `getRedisProtocol()`)
-- `DefaultJedisClientConfig` - Default configuration implementation (RESP2 only)
+- `JedisClientConfig` - Client configuration interface (includes `getRedisProtocol()` for shared API surface)
+- `DefaultJedisClientConfig` - Default configuration implementation; `.protocol()` is accepted but **ignored** in this layer (always RESP2)
 - `ConfigurationMapper` - Maps Jedis 4.x config to GLIDE config
 - `ClusterConfigurationMapper` - Maps Jedis 4.x cluster config to GLIDE cluster config
 
@@ -46,7 +46,7 @@ The Jedis 4.x compatibility layer is implemented as a separate Gradle sub-module
 
 ### Use `jedis-4-compatibility` when:
 - The application was built against **Jedis 4.x** (e.g. 4.0.x–4.4.x), especially `JedisPooled` with `GenericObjectPoolConfig<Connection>`.
-- You do not need Jedis 5–only configuration such as `getRedisProtocol()` / RESP3 toggles on the Jedis config surface.
+- You do not need RESP3; protocol selection via `.protocol()` / `getRedisProtocol()` compiles for source compatibility but is forced to RESP2 when connecting.
 
 ### Use `jedis-compatibility` (5.x-oriented) when:
 - The codebase already targets **Jedis 5.x** types and APIs (`GenericObjectPoolConfig<Object>` on `JedisPooled`, RESP3 options, etc.).
@@ -137,9 +137,9 @@ try (UnifiedJedis jedis = new UnifiedJedis("localhost", 6379)) {
 | Feature | jedis-4-compatibility | jedis-compatibility (5.x) |
 |---------|----------------------|--------------------------|
 | JedisPooled generic type | `GenericObjectPoolConfig<Connection>` | `GenericObjectPoolConfig<Object>` |
-| RedisProtocol / `getRedisProtocol()` | Not in this layer | Available in `jedis-compatibility` |
+| RedisProtocol / `getRedisProtocol()` | Present for source compatibility; **ignored** (always RESP2) | Honored in `jedis-compatibility` |
 | Default protocol | RESP2 only | RESP2 (default) or RESP3 |
-| Protocol configuration | Not configurable | Configurable via `DefaultJedisClientConfig.builder().protocol()` |
+| Protocol configuration | `.protocol()` accepted but ignored at GLIDE mapping | Configurable via `DefaultJedisClientConfig.builder().protocol()` |
 | Target Jedis version | 4.0.x - 4.4.x | 5.0.x - 5.2.x |
 
 ## Build Commands
@@ -172,9 +172,8 @@ jedis-4-compatibility
 ## Implementation Notes
 
 - **Pool configuration is ignored**: GLIDE handles connection pooling internally, so Apache Commons Pool settings have no effect
-- **RESP2 only**: The Jedis 4.x layer always uses RESP2 protocol (Jedis 4.x default behavior)
+- **RESP2 only**: The Jedis 4.x layer always negotiates RESP2; `.protocol(RESP3)` and `getRedisProtocol()` exist for compile-time compatibility with shared config types but are ignored when mapping to GLIDE.
 - **Connection type**: The `Connection` class is a compatibility shim; actual connection management is handled by GLIDE
-- **No RedisProtocol API**: The `getRedisProtocol()` method and `RedisProtocol` enum are not present (Jedis 4.x behavior)
 
 ## Support and Compatibility
 
@@ -205,7 +204,7 @@ implementation 'io.valkey:valkey-glide-jedis-4-compatibility:2.1.0:osx-aarch_64'
 
 ### Compilation Error: Cannot find symbol getRedisProtocol()
 
-**Solution**: You're using the Jedis 5.x layer with Jedis 4.x code. Switch to `jedis-4-compatibility`.
+**Solution**: You may be on the wrong compatibility artifact. The Jedis 4.x layer includes `getRedisProtocol()` via `jedis-compat-shared` for source compatibility; if the symbol is missing entirely, ensure you depend on `jedis-4-compatibility` (not a trimmed classpath). RESP3 is still not available in this layer.
 
 ### Need RESP3 support
 
