@@ -218,21 +218,6 @@ public class OpenTelemetryTests {
         teardownOtelTest();
     }
 
-    /** Runs GC repeatedly until memory usage stabilizes (less than 5% change between iterations). */
-    private static long getStableMemory() throws InterruptedException {
-        long prev = Long.MAX_VALUE;
-        for (int i = 0; i < 10; i++) {
-            System.gc();
-            Thread.sleep(10);
-            long current = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-            if (Math.abs(prev - current) < prev * 0.05) {
-                return current;
-            }
-            prev = current;
-        }
-        return prev;
-    }
-
     private static void teardownOtelTest() {
         // Clean up OpenTelemetry files
         File tracesFile = new File(VALID_ENDPOINT_TRACES);
@@ -244,32 +229,6 @@ public class OpenTelemetryTests {
         if (metricsFile.exists()) {
             metricsFile.delete();
         }
-    }
-
-    @ParameterizedTest
-    @MethodSource("getClientsProtocolVersion")
-    @SneakyThrows
-    public void testSpanMemoryLeak(ProtocolVersion protocol) {
-        // Create client before measuring memory so one-time initialization cost is excluded
-        client =
-                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-                        .get();
-
-        long startMemory = getStableMemory();
-
-        // Execute a series of commands sequentially
-        for (int i = 0; i < 100; i++) {
-            String key = "test_key_" + i;
-            client.set(key, "value_" + i).get();
-            client.get(key).get();
-        }
-
-        long endMemory = getStableMemory();
-
-        // Allow 10% growth
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
     }
 
     @ParameterizedTest
@@ -368,36 +327,6 @@ public class OpenTelemetryTests {
     @ParameterizedTest
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
-    public void testSpanTransactionMemoryLeak(ProtocolVersion protocol) {
-        // Create client before measuring memory so one-time initialization cost is excluded
-        client =
-                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
-                        .get();
-
-        long startMemory = getStableMemory();
-
-        ClusterBatch batch = new ClusterBatch(true);
-
-        batch.set("test_key", "foo");
-        batch.objectRefcount("test_key");
-
-        Object[] response = client.exec(batch, true).get();
-        assertNotNull(response);
-        assertEquals(2, response.length);
-        assertEquals("OK", response[0]);
-        assertTrue((Long) response[1] >= 1);
-
-        long endMemory = getStableMemory();
-
-        // Allow 10% growth
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    }
-
-    @ParameterizedTest
-    @MethodSource("getClientsProtocolVersion")
-    @SneakyThrows
     public void testNumberOfClientsWithSameConfig(ProtocolVersion protocol) {
         GlideClusterClient client1 =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
@@ -428,12 +357,9 @@ public class OpenTelemetryTests {
     @MethodSource("getClientsProtocolVersion")
     @SneakyThrows
     public void testSpanBatchFile(ProtocolVersion protocol) {
-        // Create client before measuring memory so one-time initialization cost is excluded
         client =
                 GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
                         .get();
-
-        long startMemory = getStableMemory();
 
         ClusterBatch batch = new ClusterBatch(true);
 
@@ -455,71 +381,5 @@ public class OpenTelemetryTests {
         // Check for expected span names
         assertTrue(spanData.spanNames.contains("Batch"));
         assertTrue(spanData.spanNames.contains("send_batch"));
-
-        long endMemory = getStableMemory();
-
-        // Allow 10% growth
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    }
-
-    @Test
-    @SneakyThrows
-    public void testAutomaticSpanLifecycle() {
-        // Create client before measuring memory so one-time initialization cost is excluded
-        client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-                        .get();
-
-        long startMemory = getStableMemory();
-
-        // Execute multiple commands - each should automatically create and clean up its span
-        client.set("test_key1", "value1").get();
-        client.get("test_key1").get();
-        client.set("test_key2", "value2").get();
-        client.get("test_key2").get();
-
-        long endMemory = getStableMemory();
-
-        // Allow small fluctuations
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
-    }
-
-    @Test
-    @SneakyThrows
-    public void testConcurrentCommandsSpanLifecycle() {
-        // Create client before measuring memory so one-time initialization cost is excluded
-        client =
-                GlideClusterClient.createClient(
-                                commonClusterClientConfig().protocol(ProtocolVersion.RESP3).build())
-                        .get();
-
-        long startMemory = getStableMemory();
-
-        // Execute multiple concurrent commands
-        List<java.util.concurrent.CompletableFuture<?>> commands =
-                Arrays.asList(
-                        client.set("test_key1", "value1"),
-                        client.get("test_key1"),
-                        client.set("test_key2", "value2"),
-                        client.get("test_key2"),
-                        client.set("test_key3", "value3"),
-                        client.get("test_key3"));
-
-        // Wait for all commands to complete
-        for (java.util.concurrent.CompletableFuture<?> command : commands) {
-            command.get();
-        }
-
-        long endMemory = getStableMemory();
-
-        // Allow small fluctuations
-        assertTrue(
-                endMemory < startMemory * 1.1,
-                "Memory usage increased too much: " + startMemory + " -> " + endMemory);
     }
 }

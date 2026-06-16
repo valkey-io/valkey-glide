@@ -48,6 +48,7 @@ pub struct ConnectionRequest {
     pub client_side_cache: Option<ClientSideCache>,
     pub node_discovery_mode: NodeDiscoveryMode,
     pub address_resolver: Option<Arc<dyn AddressResolver>>,
+    pub client_circuit_breaker: Option<ClientCircuitBreakerConfig>,
 }
 
 /// Default connection timeout used when not specified in the request.
@@ -62,6 +63,17 @@ impl ConnectionRequest {
             .map(|val| Duration::from_millis(val as u64))
             .unwrap_or(DEFAULT_CONNECTION_TIMEOUT)
     }
+}
+
+/// Configuration for the client-wide circuit breaker.
+#[derive(Debug, Clone)]
+pub struct ClientCircuitBreakerConfig {
+    pub window_size_ms: u32,
+    pub failure_rate_threshold: f32,
+    pub min_errors: u32,
+    pub open_timeout_ms: u32,
+    pub count_timeouts: bool,
+    pub consecutive_successes: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -448,6 +460,16 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             node_discovery_mode,
             // Address resolver is not set from protobuf - it's set programmatically
             address_resolver: None,
+            client_circuit_breaker: value.client_circuit_breaker.into_option().map(|cb| {
+                ClientCircuitBreakerConfig {
+                    window_size_ms: cb.window_size_ms,
+                    failure_rate_threshold: cb.failure_rate_threshold,
+                    min_errors: cb.min_errors,
+                    open_timeout_ms: cb.open_timeout_ms,
+                    count_timeouts: cb.count_timeouts,
+                    consecutive_successes: cb.consecutive_successes,
+                }
+            }),
         }
     }
 }

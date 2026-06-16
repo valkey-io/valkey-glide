@@ -7,6 +7,7 @@ from types import TracebackType
 from typing import Any, List, Optional, Tuple, Union
 
 from glide_shared._fast_response import parse_response as _fast_parse_response
+from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -34,12 +35,14 @@ from glide_shared.routes import (
     build_protobuf_route,
 )
 
-from ._glide_ffi import _GlideFFI
 from .logger import Level, Logger
 from .sync_commands.cluster_commands import ClusterCommands
 from .sync_commands.cluster_scan_cursor import ClusterScanCursor
 from .sync_commands.core import CoreCommands
 from .sync_commands.standalone_commands import StandaloneCommands
+
+_SYNC_FFI = _GlideFFI()  # Sync client's own FFI instance
+
 
 if sys.version_info >= (3, 11):
     from typing import Self
@@ -61,7 +64,7 @@ class BaseClient(CoreCommands):
         """
         To create a new client, use the `create` classmethod
         """
-        _glide_ffi = _GlideFFI()
+        _glide_ffi = _SYNC_FFI
         self._ffi = _glide_ffi.ffi
         self._lib = _glide_ffi.lib
         self._config: BaseClientConfiguration = config
@@ -99,6 +102,7 @@ class BaseClient(CoreCommands):
         conn_req = self._config._create_a_protobuf_conn_request(
             cluster_mode=type(self._config) is GlideClusterClientConfiguration
         )
+        conn_req.lib_name = "GlidePySync"
         conn_req_bytes = conn_req.SerializeToString()
         client_type = self._ffi.new(
             "ClientType*",
@@ -419,7 +423,7 @@ class BaseClient(CoreCommands):
 
     def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: RequestType.ValueType,  # type: ignore[override]
         args: List[TEncodable],
         route: Optional[Route] = None,
         response_buffer: Optional[memoryview] = None,
@@ -537,7 +541,7 @@ class BaseClient(CoreCommands):
 
     def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],  # type: ignore[override]
         is_atomic: bool,
         raise_on_error: bool,
         retry_server_error: bool = False,

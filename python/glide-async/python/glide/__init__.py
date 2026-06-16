@@ -4,11 +4,6 @@ import sys
 import types
 import warnings
 
-from glide.glide import (
-    ClusterScanCursor,
-    Script,
-    get_min_compressed_size,
-)
 from glide_shared import (
     ALL_CHANNELS,
     ALL_PATTERNS,
@@ -38,6 +33,8 @@ from glide_shared import (
     BitOverflowControl,
     BitwiseOperation,
     ByAddressRoute,
+    CircuitBreakerError,
+    ClientCircuitBreakerConfiguration,
     ClientPauseMode,
     ClientSideCache,
     ClosingError,
@@ -174,6 +171,9 @@ from glide_shared import (
     VectorType,
     json_batch,
 )
+from glide_shared._glide_ffi import _GlideFFI as _FFI
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
+from glide_shared.script import Script
 
 from .async_commands import (
     ft,
@@ -183,6 +183,11 @@ from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
 from .opentelemetry import OpenTelemetry
+
+
+def get_min_compressed_size() -> int:
+    return _FFI().lib.get_min_compressed_size()
+
 
 _glide_module = sys.modules[__name__]
 
@@ -257,6 +262,7 @@ __all__ = [
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
+    "ClientCircuitBreakerConfiguration",
     "CompressionBackend",
     "CompressionConfiguration",
     "ReadFrom",
@@ -379,6 +385,7 @@ __all__ = [
     "SlotIdRoute",
     "TSingleNodeRoute",
     # Exceptions
+    "CircuitBreakerError",
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",
