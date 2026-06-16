@@ -1256,33 +1256,7 @@ public abstract class BaseClient
      */
     public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
         return commandManager.submitNewCommand(
-                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleClientTrackingInfoResponse);
-    }
-
-    /**
-     * Parses a single CLIENT TRACKINGINFO response value, handling both RESP2 (Object[] flat pairs)
-     * and RESP3 (Map) formats.
-     */
-    @SuppressWarnings("unchecked")
-    protected Map<String, Object> handleClientTrackingInfoValue(Object value) {
-        if (value instanceof Map) {
-            return (Map<String, Object>) value;
-        }
-        Object[] pairs = (Object[]) value;
-        Map<String, Object> map = new LinkedHashMap<>();
-        for (int i = 0; pairs != null && i + 1 < pairs.length; i += 2) {
-            if (pairs[i] != null) map.put(pairs[i].toString(), pairs[i + 1]);
-        }
-        return map;
-    }
-
-    /**
-     * Parses a CLIENT TRACKINGINFO response, handling both RESP2 (Object[] flat pairs) and RESP3
-     * (Map) formats.
-     */
-    protected Map<String, Object> handleClientTrackingInfoResponse(Response response)
-            throws GlideException {
-        return handleClientTrackingInfoValue(handleObjectOrNullResponse(response));
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse);
     }
 
     @Override

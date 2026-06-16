@@ -5156,20 +5156,6 @@ public class GlideClientTest {
         assertEquals(info, response.get());
     }
 
-    @Test
-    @SneakyThrows
-    public void clientTrackingInfo_resp2_returns_map() {
-        // RESP2 returns flat Object[] of alternating key-value pairs
-        Object[] resp2Response =
-                new Object[] {"flags", new Object[] {"off"}, "redirect", -1L, "prefixes", new Object[0]};
-
-        Map<String, Object> result = service.handleClientTrackingInfoValue(resp2Response);
-
-        assertNotNull(result);
-        assertTrue(result.containsKey("flags"));
-        assertEquals(-1L, result.get("redirect"));
-    }
-
     @SneakyThrows
     @Test
     public void configRewrite_returns_success() {
