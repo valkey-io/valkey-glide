@@ -8,14 +8,12 @@ import connection_request.ConnectionRequestOuterClass.NodeAddress;
 import connection_request.ConnectionRequestOuterClass.ProtocolVersion;
 import connection_request.ConnectionRequestOuterClass.TlsMode;
 import glide.api.models.commands.MonitorMsg;
-import glide.api.models.configuration.AdvancedBaseClientConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.ServerCredentials;
-import glide.api.models.configuration.TlsAdvancedConfiguration;
-import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.ConnectionException;
 import glide.internal.GlideNativeBridge;
 import glide.internal.MonitorCallback;
+import glide.managers.TlsConfigHelper;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -39,8 +37,6 @@ import lombok.NonNull;
  *       the callback on a background thread.
  *   <li>Queue mode: use {@link #getMonitorMessage()} / {@link #tryGetMonitorMessage()} to poll.
  * </ul>
- *
- * @since 2.4.0
  */
 public class MonitorClient implements AutoCloseable {
 
@@ -165,30 +161,16 @@ public class MonitorClient implements AutoCloseable {
                     NodeAddress.newBuilder().setHost(addr.getHost()).setPort(addr.getPort()).build());
         }
 
-        AdvancedBaseClientConfiguration advanced = config.getAdvancedConfiguration();
-        boolean insecureTls = false;
-        if (advanced != null) {
-            TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-            if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
-                if (!config.isUseTLS()) {
-                    throw new ConfigurationError(
-                            "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
-                }
-                insecureTls = true;
-            }
-        }
-
+        boolean insecureTls = TlsConfigHelper.resolveInsecureTls(config);
         if (config.isUseTLS()) {
             builder.setTlsMode(insecureTls ? TlsMode.InsecureTls : TlsMode.SecureTls);
         } else {
             builder.setTlsMode(TlsMode.NoTls);
         }
 
-        if (advanced != null) {
-            TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-            if (tlsConfig != null && tlsConfig.getRootCertificates() != null) {
-                builder.addRootCerts(ByteString.copyFrom(tlsConfig.getRootCertificates()));
-            }
+        byte[] rootCerts = TlsConfigHelper.extractRootCertificates(config);
+        if (rootCerts != null) {
+            builder.addRootCerts(ByteString.copyFrom(rootCerts));
         }
 
         ServerCredentials creds = config.getCredentials();
