@@ -6,6 +6,7 @@ import glide.api.GlideClusterClient;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Set;
+import redis.clients.jedis.util.JedisURIHelper;
 
 /**
  * Base UnifiedJedis compatibility facade shared between Jedis 4.x and 5.x compatibility layers. All
@@ -186,7 +187,8 @@ public abstract class BaseUnifiedJedis extends AbstractUnifiedJedis {
         }
 
         if (uri.getUserInfo() != null) {
-            String[] userInfo = uri.getUserInfo().split(":", 2);
+            String decodedUserInfo = JedisURIHelper.decodeUserInfo(uri.getUserInfo());
+            String[] userInfo = decodedUserInfo.split(":", 2);
             if (userInfo.length == 2) {
                 builder.user(userInfo[0]);
                 builder.password(userInfo[1]);

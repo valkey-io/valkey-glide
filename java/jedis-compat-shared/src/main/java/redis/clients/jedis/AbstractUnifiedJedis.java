@@ -516,16 +516,26 @@ public abstract class AbstractUnifiedJedis extends JedisCommon {
 
         // Override with URI parameters
         if (uri.getUserInfo() != null) {
-            String[] userInfo = uri.getUserInfo().split(":");
-            if (userInfo.length == 1) {
-                builder.password(userInfo[0]);
-            } else if (userInfo.length == 2) {
+            String decodedUserInfo = JedisURIHelper.decodeUserInfo(uri.getUserInfo());
+            String[] userInfo = decodedUserInfo.split(":", 2);
+            if (userInfo.length == 2) {
                 builder.user(userInfo[0]).password(userInfo[1]);
+            } else {
+                builder.password(userInfo[0]);
             }
         }
 
         if ("rediss".equals(uri.getScheme())) {
             builder.ssl(true);
+        }
+
+        String path = uri.getPath();
+        if (path != null && path.length() > 1) {
+            try {
+                builder.database(Integer.parseInt(path.substring(1)));
+            } catch (NumberFormatException e) {
+                // Ignore invalid database number
+            }
         }
 
         return builder.build();

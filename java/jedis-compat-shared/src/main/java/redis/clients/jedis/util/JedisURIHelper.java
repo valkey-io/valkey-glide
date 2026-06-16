@@ -2,6 +2,9 @@
 package redis.clients.jedis.util;
 
 import java.net.URI;
+import java.net.URLDecoder;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Utility class for handling Jedis URI parsing and validation. This class provides helper methods
@@ -53,5 +56,19 @@ public class JedisURIHelper {
             return 6380; // Common SSL convention (not from original Jedis)
         }
         return 6379; // Official Redis standard + original Jedis default
+    }
+
+    /**
+     * URL-decode Redis URI user-info (credentials segment).
+     *
+     * @param userInfo raw {@link URI#getUserInfo()} value
+     * @return decoded user-info
+     */
+    public static String decodeUserInfo(String userInfo) {
+        try {
+            return URLDecoder.decode(userInfo, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalStateException("UTF-8 charset is required", e);
+        }
     }
 }
