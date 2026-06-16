@@ -4226,7 +4226,7 @@ mod cluster_async {
     fn test_async_cluster_fan_out_and_return_map_of_results_for_special_response_policy() {
         let name = "foo";
         let mut cmd = Cmd::new();
-        cmd.arg("LATENCY").arg("LATEST");
+        cmd.arg("FUNCTION").arg("STATS");
         let MockEnv {
             runtime,
             async_connection: mut connection,
