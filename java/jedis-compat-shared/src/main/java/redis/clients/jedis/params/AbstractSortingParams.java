@@ -59,9 +59,7 @@ public abstract class AbstractSortingParams<T extends AbstractSortingParams<T>> 
 
     /** Get external key pattern. */
     public T get(String pattern) {
-        if (!getPatterns.contains(pattern)) {
-            getPatterns.add(pattern);
-        }
+        getPatterns.add(pattern);
         return self();
     }
 

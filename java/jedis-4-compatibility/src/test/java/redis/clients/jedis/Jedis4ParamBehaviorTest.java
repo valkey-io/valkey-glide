@@ -134,9 +134,11 @@ public class Jedis4ParamBehaviorTest {
     }
 
     @Test
-    public void sortingParams_byAndGetReplaceOrDeduplicate() {
+    public void sortingParams_byReplacesPreviousGetPatternsAccumulate() {
         SortingParams p =
                 new SortingParams().by("weight-*").by("score-*").get("#").get("field-*").get("#");
-        assertArrayEquals(new String[] {"BY", "score-*", "GET", "#", "GET", "field-*"}, p.getParams());
+        assertArrayEquals(
+                new String[] {"BY", "score-*", "GET", "#", "GET", "field-*", "GET", "#"},
+                p.getParams());
     }
 }
