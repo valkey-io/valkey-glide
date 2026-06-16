@@ -657,8 +657,11 @@ public class ClientSideCacheTests {
     @MethodSource("getServerAssistedCacheClients")
     @SneakyThrows
     public void clientSideCache_set_and_get(BaseClient client) {
-        // Validates the serverAssisted=true configuration (phase 2), following the same
-        // SET/GET hit-rate pattern as phase-1 tests in this class.
+        // Tests server-assisted client-side caching using the CLIENT TRACKING protocol.
+        // With serverAssisted=true, the server sends invalidation messages when cached keys change.
+        // The SET/GET pattern validates that: first GET is a cache miss, second GET is served
+        // from the local cache (validated by non-zero hit rate).
+        // See: https://valkey.io/commands/client-tracking/
         String key = UUID.randomUUID().toString();
         String value = "cachedValue";
 

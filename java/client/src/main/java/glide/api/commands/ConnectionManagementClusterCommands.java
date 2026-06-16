@@ -378,6 +378,14 @@ public interface ConnectionManagementClusterCommands {
     /**
      * Returns information about the current client connection's tracking state.
      *
+     * <p>Routes to a random node by default. To specify routing, use {@link
+     * #clientTrackingInfo(Route)}.
+     *
+     * <p>Note: This method is declared separately in the standalone and cluster command interfaces
+     * ({@link ConnectionManagementCommands} and {@link ConnectionManagementClusterCommands}) as there
+     * is no shared base interface. Creating a {@code ConnectionManagementBaseCommands} interface is
+     * tracked in <a href="https://github.com/valkey-io/valkey-glide/issues/6144">issue #6144</a>.
+     *
      * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
      * @since Valkey 6.2.0 and above.
      * @return A map containing the tracking info. The map contains keys: {@code flags}, {@code

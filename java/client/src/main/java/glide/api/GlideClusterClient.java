@@ -487,6 +487,12 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse);
+    }
+
+    @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> clientTrackingInfo(
             @NonNull Route route) {
         return commandManager.submitNewCommand(

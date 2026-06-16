@@ -18729,16 +18729,26 @@ public class SharedCommandTests {
         }
     }
 
+    // This test belongs here because clientTrackingInfo() is available on both GlideClient and
+    // GlideClusterClient. When ConnectionManagementBaseCommands is created (tracked in
+    // https://github.com/valkey-io/valkey-glide/issues/6144), this will be a proper
+    // shared interface method.
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void clientTrackingInfo(BaseClient client) {
         assumeTrue(
                 SERVER_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in version 6.2.0");
-        Map<String, Object> info = client.clientTrackingInfo().get();
+        Map<String, Object> info =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).clientTrackingInfo().get()
+                        : ((GlideClient) client).clientTrackingInfo().get();
         assertNotNull(info);
         assertTrue(info.containsKey("flags"));
         assertTrue(info.containsKey("redirect"));
         assertTrue(info.containsKey("prefixes"));
+        assertInstanceOf(List.class, info.get("flags"), "flags should be a list of tracking flags");
+        assertNotNull(info.get("redirect"), "redirect should not be null");
+        assertInstanceOf(List.class, info.get("prefixes"), "prefixes should be a list of key prefixes");
     }
 }
