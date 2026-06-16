@@ -957,10 +957,13 @@ pub fn create_monitor_client(
             let p = a.password.to_string();
             if p.is_empty() { None } else { Some(p) }
         }),
+        // MONITOR streams plain-text inline responses, which are incompatible with RESP3 push
+        // messages. RESP2 must always be used for monitor connections regardless of user config.
         protocol: redis::ProtocolVersion::RESP2,
         ..Default::default()
     };
-    let tsfn: napi::threadsafe_function::ThreadsafeFunction<
+    let _client_name = conn_req.client_name.to_string(); // TODO: pass to MonitorClient::new once its signature supports it
+    let mut tsfn: napi::threadsafe_function::ThreadsafeFunction<
         MonitorLine,
         napi::threadsafe_function::ErrorStrategy::Fatal,
     > = callback.create_threadsafe_function(
@@ -984,6 +987,8 @@ pub fn create_monitor_client(
             ])
         },
     )?;
+    // Unref so the TSFN does not prevent the Node.js event loop from exiting naturally.
+    tsfn.unref(&env)?;
     let on_line: MonitorLineCallback = Arc::new(move |line: MonitorLine| {
         tsfn.call(
             line,

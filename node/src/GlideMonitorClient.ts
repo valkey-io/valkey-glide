@@ -4,78 +4,91 @@ import { closeMonitorClient, createMonitorClient } from "../build-ts/native";
 import { connection_request } from "../build-ts/ProtobufMessage";
 import { BaseClientConfiguration } from "./BaseClient.js";
 
-/**
- * Represents a single line received from the MONITOR command.
- */
 export interface MonitorLine {
-    /** Unix timestamp of when the command was received. */
     timestamp: number;
-    /** Database index on which the command was executed. */
     db: number;
-    /** Client address (e.g. "127.0.0.1:52345"). */
     clientAddr: string;
-    /** Command name (e.g. "set"). */
     command: string;
-    /** Command arguments. */
     args: string[];
 }
 
-/**
- * A client that listens to all commands processed by the server via the MONITOR command.
- * Standalone-only; cluster mode is not supported.
- *
- * @example
- * ```typescript
- * const monitor = await GlideMonitorClient.create(
- *     { addresses: [{ host: "localhost", port: 6379 }] },
- *     (line) => console.log(line.command, line.args),
- * );
- * // ... use a regular client to run commands ...
- * await monitor.close();
- * ```
- */
 export class GlideMonitorClient {
     private handleId: number | null = null;
     private closed = false;
+    private readonly queue: MonitorLine[] = [];
+    private waiters: { resolve: (line: MonitorLine) => void; reject: (err: Error) => void }[] = [];
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     private constructor() {}
 
     /**
-     * Creates a new GlideMonitorClient connected to a standalone server.
-     *
-     * @param options - Connection options. Must target a standalone server.
-     * @param callback - Called for each received MonitorLine.
-     * @returns A connected GlideMonitorClient.
+     * Creates a GlideMonitorClient that streams server-side commands.
+     * @param options - Connection configuration.
+     * @param callback - Optional callback invoked for each monitor line.
+     *   If omitted, use {@link getNextMessage} or {@link tryGetNextMessage} to poll.
      */
     static async create(
         options: BaseClientConfiguration,
-        callback: (line: MonitorLine) => void,
+        callback?: (line: MonitorLine) => void,
     ): Promise<GlideMonitorClient> {
         const client = new GlideMonitorClient();
         const request = GlideMonitorClient.buildConnectionRequest(options);
-        const bytes =
-            connection_request.ConnectionRequest.encode(request).finish();
+        const bytes = connection_request.ConnectionRequest.encode(request).finish();
         client.handleId = await createMonitorClient(
             Buffer.from(bytes),
-            (
-                timestamp: number,
-                db: number,
-                clientAddr: string,
-                command: string,
-                args: string[],
-            ) => callback({ timestamp, db, clientAddr, command, args }),
+            (timestamp, db, clientAddr, command, args) => {
+                const line: MonitorLine = { timestamp, db, clientAddr, command, args };
+
+                if (callback) {
+                    callback(line);
+                } else {
+                    const waiter = client.waiters.shift();
+
+                    if (waiter) {
+                        waiter.resolve(line);
+                    } else {
+                        client.queue.push(line);
+                    }
+                }
+            },
         );
         return client;
     }
 
     /**
-     * Stops the monitor client and releases its resources.
-     * Idempotent — safe to call multiple times.
+     * Returns the next monitor line, waiting until one arrives.
+     * Only usable when no callback was provided to {@link create}.
+     * Rejects if the client is already closed.
      */
+    getNextMessage(): Promise<MonitorLine> {
+        if (this.closed) {
+            return Promise.reject(new Error("Monitor is closed"));
+        }
+
+        if (this.queue.length > 0) {
+            return Promise.resolve(this.queue.shift()!);
+        }
+
+        return new Promise((resolve, reject) => this.waiters.push({ resolve, reject }));
+    }
+
+    /**
+     * Returns the next monitor line immediately, or `undefined` if none is queued.
+     * Only usable when no callback was provided to {@link create}.
+     */
+    tryGetNextMessage(): MonitorLine | undefined {
+        return this.queue.shift();
+    }
+
+    /** Stops monitoring. Idempotent — safe to call multiple times. */
     async close(): Promise<void> {
         if (this.closed) return;
         this.closed = true;
+
+        // Reject any pending getNextMessage() waiters so callers don't hang.
+        for (const { reject } of this.waiters.splice(0)) {
+            reject(new Error("Monitor is closed"));
+        }
 
         if (this.handleId !== null) {
             const id = this.handleId;
@@ -103,6 +116,7 @@ export class GlideMonitorClient {
                       })
                     : undefined,
             databaseId: options.databaseId ?? 0,
+            clientName: options.clientName,
         });
     }
 }
