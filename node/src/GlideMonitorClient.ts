@@ -16,7 +16,10 @@ export class GlideMonitorClient {
     private handleId: number | null = null;
     private closed = false;
     private readonly queue: MonitorLine[] = [];
-    private waiters: { resolve: (line: MonitorLine) => void; reject: (err: Error) => void }[] = [];
+    private waiters: {
+        resolve: (line: MonitorLine) => void;
+        reject: (err: Error) => void;
+    }[] = [];
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     private constructor() {}
@@ -33,11 +36,18 @@ export class GlideMonitorClient {
     ): Promise<GlideMonitorClient> {
         const client = new GlideMonitorClient();
         const request = GlideMonitorClient.buildConnectionRequest(options);
-        const bytes = connection_request.ConnectionRequest.encode(request).finish();
+        const bytes =
+            connection_request.ConnectionRequest.encode(request).finish();
         client.handleId = await createMonitorClient(
             Buffer.from(bytes),
             (timestamp, db, clientAddr, command, args) => {
-                const line: MonitorLine = { timestamp, db, clientAddr, command, args };
+                const line: MonitorLine = {
+                    timestamp,
+                    db,
+                    clientAddr,
+                    command,
+                    args,
+                };
 
                 if (callback) {
                     callback(line);
@@ -69,7 +79,9 @@ export class GlideMonitorClient {
             return Promise.resolve(this.queue.shift()!);
         }
 
-        return new Promise((resolve, reject) => this.waiters.push({ resolve, reject }));
+        return new Promise((resolve, reject) =>
+            this.waiters.push({ resolve, reject }),
+        );
     }
 
     /**

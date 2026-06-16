@@ -2,23 +2,42 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { ValkeyCluster } from "../../utils/TestUtils.js";
-import { GlideClient, GlideMonitorClient, MonitorLine, ProtocolVersion } from "../build-ts";
-import { getClientConfigurationOption, getServerVersion, parseEndpoints } from "./TestUtilities";
+import {
+    GlideClient,
+    GlideMonitorClient,
+    MonitorLine,
+    ProtocolVersion,
+} from "../build-ts";
+import {
+    getClientConfigurationOption,
+    getServerVersion,
+    parseEndpoints,
+} from "./TestUtilities";
 
 describe("GlideMonitorClient", () => {
     let cluster: ValkeyCluster;
 
     beforeAll(async () => {
-        const standaloneAddresses: string = global.STAND_ALONE_ENDPOINT as string;
+        const standaloneAddresses: string =
+            global.STAND_ALONE_ENDPOINT as string;
         cluster = standaloneAddresses
-            ? await ValkeyCluster.initFromExistingCluster(false, parseEndpoints(standaloneAddresses), getServerVersion)
+            ? await ValkeyCluster.initFromExistingCluster(
+                  false,
+                  parseEndpoints(standaloneAddresses),
+                  getServerVersion,
+              )
             : await ValkeyCluster.createCluster(false, 1, 1, getServerVersion);
     }, 40000);
 
-    afterAll(async () => { await cluster.close(); }, 20000);
+    afterAll(async () => {
+        await cluster.close();
+    }, 20000);
 
     it("monitor receives commands", async () => {
-        const config = getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP2);
+        const config = getClientConfigurationOption(
+            cluster.getAddresses(),
+            ProtocolVersion.RESP2,
+        );
         const monitor = await GlideMonitorClient.create(config);
 
         try {
@@ -33,7 +52,9 @@ describe("GlideMonitorClient", () => {
                 while (Date.now() < deadline) {
                     const next = await Promise.race([
                         monitor.getNextMessage(),
-                        new Promise<undefined>((r) => setTimeout(r, 100, undefined)),
+                        new Promise<undefined>((r) =>
+                            setTimeout(r, 100, undefined),
+                        ),
                     ]);
 
                     if (next && next.command.toLowerCase() === "set") {
@@ -53,7 +74,10 @@ describe("GlideMonitorClient", () => {
     });
 
     it("monitor line has correct field types", async () => {
-        const config = getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP2);
+        const config = getClientConfigurationOption(
+            cluster.getAddresses(),
+            ProtocolVersion.RESP2,
+        );
         const monitor = await GlideMonitorClient.create(config);
 
         try {
@@ -67,7 +91,9 @@ describe("GlideMonitorClient", () => {
                 while (Date.now() < deadline) {
                     const next = await Promise.race([
                         monitor.getNextMessage(),
-                        new Promise<undefined>((r) => setTimeout(r, 100, undefined)),
+                        new Promise<undefined>((r) =>
+                            setTimeout(r, 100, undefined),
+                        ),
                     ]);
 
                     if (next && next.command.toLowerCase() === "ping") {
@@ -96,14 +122,20 @@ describe("GlideMonitorClient", () => {
     });
 
     it("monitor close is idempotent", async () => {
-        const config = getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP2);
+        const config = getClientConfigurationOption(
+            cluster.getAddresses(),
+            ProtocolVersion.RESP2,
+        );
         const monitor = await GlideMonitorClient.create(config);
         await monitor.close();
         await expect(monitor.close()).resolves.not.toThrow();
     });
 
     it("getNextMessage works without callback", async () => {
-        const config = getClientConfigurationOption(cluster.getAddresses(), ProtocolVersion.RESP2);
+        const config = getClientConfigurationOption(
+            cluster.getAddresses(),
+            ProtocolVersion.RESP2,
+        );
         const monitor = await GlideMonitorClient.create(config);
 
         try {
