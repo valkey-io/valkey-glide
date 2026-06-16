@@ -3,6 +3,8 @@ package redis.clients.jedis;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import glide.api.models.configuration.GlideClientConfiguration;
+import glide.api.models.configuration.ProtocolVersion;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +54,7 @@ public class Jedis4ApiCompatibilityTest {
     }
 
     @Test
-    public void testJedisClientConfigNoRedisProtocol() {
-        // Jedis 4.x doesn't have getRedisProtocol() method
+    public void testJedisClientConfigProtocolAcceptedButForcedToResp2() {
         JedisClientConfig config =
                 DefaultJedisClientConfig.builder()
                         .connectionTimeoutMillis(2000)
@@ -63,9 +64,9 @@ public class Jedis4ApiCompatibilityTest {
                         .database(0)
                         .clientName("test-client")
                         .ssl(false)
+                        .protocol(RedisProtocol.RESP3)
                         .build();
 
-        // Verify the config works
         assertEquals(2000, config.getConnectionTimeoutMillis());
         assertEquals(2000, config.getSocketTimeoutMillis());
         assertEquals("testuser", config.getUser());
@@ -73,14 +74,16 @@ public class Jedis4ApiCompatibilityTest {
         assertEquals(0, config.getDatabase());
         assertEquals("test-client", config.getClientName());
         assertFalse(config.isSsl());
+        assertEquals(RedisProtocol.RESP3, config.getRedisProtocol());
 
-        // Note: getRedisProtocol() should not exist in Jedis 4.x
-        // If this method exists, it would be a compilation error when using real Jedis 4.x
+        GlideClientConfiguration glideConfig =
+                ConfigurationMapper.mapToGlideConfig("localhost", 6379, config, false);
+        assertEquals(ProtocolVersion.RESP2, glideConfig.getProtocol());
     }
 
     @Test
     public void testDefaultJedisClientConfigBuilder() {
-        // Test that the builder doesn't have protocol() method (Jedis 4.x behavior)
+        // Builder exposes protocol() for shared API compatibility; Jedis 4 layer ignores it at mapping.
         DefaultJedisClientConfig.Builder builder = DefaultJedisClientConfig.builder();
 
         // These methods should exist
@@ -178,13 +181,14 @@ public class Jedis4ApiCompatibilityTest {
 
     @Test
     public void testProtocolDefaults() {
-        // In Jedis 4.x, there's no protocol configuration
-        // The compatibility layer should always use RESP2
-        JedisClientConfig config = DefaultJedisClientConfig.builder().build();
-
-        // Just verify the config builds successfully
+        JedisClientConfig config =
+                DefaultJedisClientConfig.builder().protocol(RedisProtocol.RESP3).build();
         assertNotNull(config);
-        // The actual protocol is enforced at the GLIDE level (RESP2 only)
+        assertEquals(RedisProtocol.RESP3, config.getRedisProtocol());
+
+        GlideClientConfiguration glideConfig =
+                ConfigurationMapper.mapToGlideConfig("localhost", 6379, config, false);
+        assertEquals(ProtocolVersion.RESP2, glideConfig.getProtocol());
     }
 
     @Test

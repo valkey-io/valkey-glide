@@ -256,6 +256,7 @@ public class Jedis4MethodsTest {
                 });
     }
 
+    @Test
     public void testEvalMethodSignatures() throws NoSuchMethodException {
         Class<Jedis> jedisClass = Jedis.class;
 
