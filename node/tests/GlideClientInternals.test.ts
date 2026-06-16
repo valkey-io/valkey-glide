@@ -1047,8 +1047,7 @@ describe("SocketConnectionInternals", () => {
 
     it("should set arguments according to replicaofNoOne request", async () => {
         await testSentValueMatches({
-            sendRequest: (client) =>
-                (client as GlideClient).replicaofNoOne(),
+            sendRequest: (client) => (client as GlideClient).replicaofNoOne(),
             expectedRequestType: RequestType.ReplicaOf,
             expectedValue: convertStringArrayToBuffer(["NO", "ONE"]),
         });

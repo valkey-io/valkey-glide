@@ -2179,9 +2179,7 @@ describe("GlideClient", () => {
             );
 
             // FAILOVER without replicas should fail with an error
-            await expect(client.failover()).rejects.toThrow(
-                RequestError,
-            );
+            await expect(client.failover()).rejects.toThrow(RequestError);
 
             client.close();
         },
