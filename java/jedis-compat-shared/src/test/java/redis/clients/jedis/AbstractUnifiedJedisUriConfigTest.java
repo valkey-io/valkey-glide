@@ -11,7 +11,8 @@ class AbstractUnifiedJedisUriConfigTest {
 
     @Test
     void buildConfigFromUriSplitsPasswordOnFirstColonOnly() throws Exception {
-        JedisClientConfig config = invokeBuildConfigFromUri(URI.create("redis://user:pass:with:colons@localhost/2"));
+        JedisClientConfig config =
+                invokeBuildConfigFromUri(URI.create("redis://user:pass:with:colons@localhost/2"));
         assertEquals("user", config.getUser());
         assertEquals("pass:with:colons", config.getPassword());
         assertEquals(2, config.getDatabase());
