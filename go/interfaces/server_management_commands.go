@@ -97,27 +97,8 @@ type ServerManagementCommands interface {
 
 	AclWhoAmI(ctx context.Context) (string, error)
 
-	// Failover starts a coordinated failover from the connected primary to one of its replicas.
-	//
-	// See [valkey.io] for details.
-	//
-	// Return value:
-	//   `"OK"` on success.
-	//
-	// [valkey.io]: https://valkey.io/commands/failover/
 	Failover(ctx context.Context) (string, error)
 
-	// FailoverWithOptions starts a coordinated failover with the specified options.
-	//
-	// See [valkey.io] for details.
-	//
-	// Parameters:
-	//   opts - The failover options.
-	//
-	// Return value:
-	//   `"OK"` on success.
-	//
-	// [valkey.io]: https://valkey.io/commands/failover/
 	FailoverWithOptions(ctx context.Context, opts *options.FailoverOptions) (string, error)
 
 	ReplicaOf(ctx context.Context, host string, port int) (string, error)
