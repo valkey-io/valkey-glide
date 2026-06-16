@@ -1,7 +1,7 @@
 maturin==1.13.3
 anyio[trio]>=4.9.0
 uvloop
-pytest
+pytest<9.1
 pytest-html
 pytest-timeout
 black >= 24.3.0

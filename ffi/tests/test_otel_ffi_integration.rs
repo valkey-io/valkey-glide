@@ -1,7 +1,8 @@
 use glide_core::request_type::RequestType;
 use glide_ffi::{
-    create_batch_otel_span, create_batch_otel_span_with_parent, create_named_otel_span,
-    create_otel_span, create_otel_span_with_parent, drop_otel_span,
+    create_batch_otel_span, create_batch_otel_span_with_parent,
+    create_batch_otel_span_with_trace_context, create_named_otel_span, create_otel_span,
+    create_otel_span_with_parent, create_otel_span_with_trace_context, drop_otel_span,
 };
 use std::ffi::CString;
 use std::sync::Arc;
@@ -61,6 +62,115 @@ fn test_create_otel_span_with_valid_inputs() {
         unsafe {
             drop_otel_span(span_ptr);
         }
+    }
+}
+
+#[test]
+fn test_create_otel_span_with_trace_context_valid_inputs() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
+    let span_id = CString::new("b7ad6b7169203331").unwrap();
+    let trace_state = CString::new("vendor=value").unwrap();
+
+    let span_ptr = unsafe {
+        create_otel_span_with_trace_context(
+            RequestType::Get,
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            1,
+            trace_state.as_ptr(),
+        )
+    };
+
+    assert_ne!(span_ptr, 0, "valid remote context should create a span");
+    assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+
+    unsafe {
+        drop_otel_span(span_ptr);
+    }
+}
+
+#[test]
+fn test_create_otel_span_with_trace_context_invalid_context_falls_back() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    let invalid_trace_id = CString::new("not-valid").unwrap();
+    let invalid_span_id = CString::new("zzzzzzzzzzzzzzzz").unwrap();
+    let valid_trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
+    let valid_span_id = CString::new("b7ad6b7169203331").unwrap();
+    let invalid_trace_state = CString::new("bad,tracestate,entry").unwrap();
+
+    let test_cases = [
+        (
+            "invalid trace ID",
+            invalid_trace_id.as_ptr(),
+            valid_span_id.as_ptr(),
+            std::ptr::null(),
+        ),
+        (
+            "invalid span ID",
+            valid_trace_id.as_ptr(),
+            invalid_span_id.as_ptr(),
+            std::ptr::null(),
+        ),
+        (
+            "invalid trace state",
+            valid_trace_id.as_ptr(),
+            valid_span_id.as_ptr(),
+            invalid_trace_state.as_ptr(),
+        ),
+        (
+            "null trace ID",
+            std::ptr::null(),
+            valid_span_id.as_ptr(),
+            std::ptr::null(),
+        ),
+        (
+            "null span ID",
+            valid_trace_id.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+        ),
+    ];
+
+    for (name, trace_id, span_id, trace_state) in test_cases {
+        let span_ptr = unsafe {
+            create_otel_span_with_trace_context(RequestType::Set, trace_id, span_id, 1, trace_state)
+        };
+
+        assert_ne!(span_ptr, 0, "{name} should fall back to standalone span",);
+
+        unsafe {
+            drop_otel_span(span_ptr);
+        }
+    }
+}
+
+#[test]
+fn test_create_batch_otel_span_with_trace_context() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    let trace_id = CString::new("0af7651916cd43dd8448eb211c80319c").unwrap();
+    let span_id = CString::new("b7ad6b7169203331").unwrap();
+
+    let span_ptr = unsafe {
+        create_batch_otel_span_with_trace_context(
+            trace_id.as_ptr(),
+            span_id.as_ptr(),
+            1,
+            std::ptr::null(),
+        )
+    };
+
+    assert_ne!(
+        span_ptr, 0,
+        "valid remote context should create a batch span"
+    );
+    assert_eq!(span_ptr % 8, 0, "span pointer should be 8-byte aligned");
+
+    unsafe {
+        drop_otel_span(span_ptr);
     }
 }
 
