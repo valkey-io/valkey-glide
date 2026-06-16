@@ -236,14 +236,17 @@ class TestOpenTelemetryGlide:
         yield
 
         # Clean up after each test
-        if os.path.exists(VALID_ENDPOINT_TRACES):
-            os.unlink(VALID_ENDPOINT_TRACES)
+        try:
+            if os.path.exists(VALID_ENDPOINT_TRACES):
+                os.unlink(VALID_ENDPOINT_TRACES)
 
-        client = await create_client(
-            request, cluster_mode=cluster_mode, request_timeout=2000
-        )
-        await client.custom_command(["FLUSHALL"])
-        await client.close()
+            client = await create_client(
+                request, cluster_mode=cluster_mode, request_timeout=2000
+            )
+            await client.custom_command(["FLUSHALL"])
+            await client.close()
+        except Exception:
+            pass  # Don't let teardown failure prevent next test setup
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
