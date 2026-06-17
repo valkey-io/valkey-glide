@@ -10248,7 +10248,9 @@ export class BaseClient {
      * @internal
      * Parses a `LATENCY LATEST` response.
      */
-    protected parseLatencyLatestResponse(response: unknown[]): LatencyEventInfo[] {
+    protected parseLatencyLatestResponse(
+        response: unknown[],
+    ): LatencyEventInfo[] {
         if (!response || response.length === 0) {
             return [];
         }

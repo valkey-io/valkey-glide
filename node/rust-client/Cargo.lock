@@ -1113,6 +1113,7 @@ dependencies = [
  "futures-intrusive",
  "http 1.4.0",
  "integer-encoding",
+ "libc",
  "logger_core",
  "lz4",
  "nanoid",

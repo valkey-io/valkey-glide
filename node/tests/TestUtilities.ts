@@ -530,6 +530,7 @@ export async function triggerLatencySpike(
     await client.configSet({ "latency-monitor-threshold": "1" });
 
     const debug_sleep_args = ["DEBUG", "SLEEP", "0.05"];
+
     if (client instanceof GlideClusterClient) {
         await client.customCommand(debug_sleep_args, {
             route: "allNodes",
@@ -551,7 +552,9 @@ export function nowUnixSeconds(): number {
 /**
  * Flattens a latency response into a single array of entries.
  */
-export function getAllLatencyEntries<T>(response: T[] | Record<string, T[]>): T[] {
+export function getAllLatencyEntries<T>(
+    response: T[] | Record<string, T[]>,
+): T[] {
     if (Array.isArray(response)) {
         return response;
     }
