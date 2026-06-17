@@ -66,11 +66,16 @@ runs:
           with:
               python-version: "3.x"
 
-        - name: Install Rust toolchain and protoc
+        - name: Install Rust toolchain
           if: "${{ !contains(inputs.target, 'musl') }}"
-          uses: ./.github/actions/install-rust-and-protoc
+          uses: ./.github/actions/install-rust
           with:
               target: ${{ inputs.target }}
+
+        - name: Install protoc
+          if: "${{ !contains(inputs.target, 'musl') }}"
+          uses: ./.github/actions/install-protoc
+          with:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
