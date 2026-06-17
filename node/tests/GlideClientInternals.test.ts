@@ -4,7 +4,9 @@
 
 import { describe, expect, it } from "@jest/globals";
 import {
+    BaseClient,
     GlideClusterClientConfiguration,
+    Logger,
     MAX_REQUEST_ARGS_LEN,
 } from "../build-ts";
 import {
@@ -104,6 +106,47 @@ describe("GlideClusterClientConfiguration", () => {
         expect(
             config.advancedConfiguration?.refreshTopologyFromInitialNodes,
         ).toBeUndefined();
+    });
+});
+
+describe("BaseClient response handling", () => {
+    class TestBaseClient extends BaseClient {
+        public constructor() {
+            super();
+        }
+    }
+
+    it("continues draining responses after a handler exception", () => {
+        const responses = [{ callbackIdx: 1 }, { callbackIdx: 2 }];
+        const client = new TestBaseClient() as unknown as {
+            clientHandle: { drainResponses: () => unknown[] };
+            handleResponse: ReturnType<typeof jest.fn>;
+            handleResponsesAvailable: () => void;
+        };
+        const logSpy = jest
+            .spyOn(Logger, "log")
+            .mockImplementation(() => undefined);
+
+        client.clientHandle = {
+            drainResponses: () => responses,
+        };
+        client.handleResponse = jest
+            .fn()
+            .mockImplementationOnce(() => {
+                throw new Error("handler failed");
+            })
+            .mockImplementationOnce(() => undefined);
+
+        expect(() => client.handleResponsesAvailable()).not.toThrow();
+        expect(client.handleResponse).toHaveBeenCalledTimes(2);
+        expect(client.handleResponse).toHaveBeenNthCalledWith(2, responses[1]);
+        expect(logSpy).toHaveBeenCalledWith(
+            "error",
+            "Response handling",
+            expect.stringContaining("handler failed"),
+        );
+
+        logSpy.mockRestore();
     });
 });
 

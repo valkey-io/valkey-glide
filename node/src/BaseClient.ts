@@ -9798,6 +9798,9 @@ export class BaseClient {
 
     /**
      * Callback invoked when responses are available.
+     *
+     * Response handling failures must not escape this callback because one
+     * exception would stop the rest of the drained responses from processing.
      * @internal
      */
     private handleResponsesAvailable = (): void => {
@@ -9806,7 +9809,15 @@ export class BaseClient {
         const responses = this.clientHandle.drainResponses();
 
         for (const response of responses) {
-            this.handleResponse(response);
+            try {
+                this.handleResponse(response);
+            } catch (err) {
+                Logger.log(
+                    "error",
+                    "Response handling",
+                    `Unhandled exception while handling response: '${err}'`,
+                );
+            }
         }
     };
 
