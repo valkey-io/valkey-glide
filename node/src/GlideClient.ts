@@ -46,6 +46,7 @@ import {
     createInfo,
     createLastSave,
     createLolwut,
+    createMigrate,
     createSave,
     createBgSave,
     createBgRewriteAof,
@@ -1135,7 +1136,8 @@ export class GlideClient extends BaseClient {
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param keyOrKeys - The key to migrate (single-key form), or an array of keys to migrate (multi-key form, standalone only). The array must not be empty.
+     * @param key - The key to migrate, or an array of keys to migrate. When an array is provided,
+     *     the KEYS subcommand is used and an empty string is sent in the key position per the MIGRATE protocol.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
@@ -1151,7 +1153,7 @@ export class GlideClient extends BaseClient {
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
      * console.log(result); // "OK"
      * ```
-     * @example Multi-key:
+     * @example Multi-key (standalone only):
      * ```typescript
      * const result = await client.migrate("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
      * console.log(result); // "OK"
@@ -1160,18 +1162,13 @@ export class GlideClient extends BaseClient {
     public async migrate(
         host: string,
         port: number,
-        keyOrKeys: GlideString | GlideString[],
+        key: GlideString | GlideString[],
         destinationDB: number,
         timeout: number,
         options?: MigrateOptions,
     ): Promise<string> {
-        return super.migrate(
-            host,
-            port,
-            keyOrKeys,
-            destinationDB,
-            timeout,
-            options,
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
         );
     }
 
