@@ -499,12 +499,31 @@ class TestBatch:
         assert isinstance(response, list)
         assert len(response) == 3
 
-        assert isinstance(response[0], list)
-        assert len(response[0]) > 0
+        # Atomic batches always route to a single node and return a list.
+        # Non-atomic cluster batches route to all primaries and a dictionary.
+        expect_dict = isinstance(glide_client, GlideClusterClient) and not is_atomic
 
-        assert isinstance(response[1], list)
-        assert len(response[1]) > 0
+        # LATENCY HISTORY
+        if expect_dict:
+            assert isinstance(response[0], dict)
+            latency_entries = next(iter(response[0].values()))
+        else:
+            latency_entries = response[0]
 
+        assert isinstance(latency_entries, list)
+        assert len(latency_entries) > 0
+
+        # LATENCY LATEST
+        if expect_dict:
+            assert isinstance(response[1], dict)
+            latency_event_infos = next(iter(response[1].values()))
+        else:
+            latency_event_infos = response[1]
+
+        assert isinstance(latency_event_infos, list)
+        assert len(latency_event_infos) > 0
+
+        # LATENCY RESET
         assert isinstance(response[2], int)
         assert response[2] > 0
 
