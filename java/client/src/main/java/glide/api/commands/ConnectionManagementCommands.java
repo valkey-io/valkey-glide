@@ -198,10 +198,8 @@ public interface ConnectionManagementCommands {
     /**
      * Returns information about the current client connection's tracking state.
      *
-     * <p>Note: This method is declared separately in the standalone and cluster command interfaces
-     * ({@link ConnectionManagementCommands} and {@link ConnectionManagementClusterCommands}) as there
-     * is no shared base interface. Creating a {@code ConnectionManagementBaseCommands} interface is
-     * tracked in <a href="https://github.com/valkey-io/valkey-glide/issues/6144">issue #6144</a>.
+     * <p>TODO: Move to a shared {@code ConnectionManagementBaseCommands} interface once created. See
+     * <a href="https://github.com/valkey-io/valkey-glide/issues/6144">issue #6144</a>.
      *
      * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
      * @since Valkey 6.2.0 and above.

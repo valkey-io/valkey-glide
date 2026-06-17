@@ -18729,10 +18729,8 @@ public class SharedCommandTests {
         }
     }
 
-    // This test belongs here because clientTrackingInfo() is available on both GlideClient and
-    // GlideClusterClient. When ConnectionManagementBaseCommands is created (tracked in
-    // https://github.com/valkey-io/valkey-glide/issues/6144), this will be a proper
-    // shared interface method.
+    // TODO: Move to a shared interface method once ConnectionManagementBaseCommands is created.
+    // See https://github.com/valkey-io/valkey-glide/issues/6144
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
