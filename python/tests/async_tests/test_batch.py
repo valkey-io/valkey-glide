@@ -1655,12 +1655,11 @@ class TestBatch:
         assert isinstance(result[0], RequestError)
         assert isinstance(result[1], RequestError)
 
-        # Multi-key: non-empty key with keys option raises ValueError
-        batch2 = (
-            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
-        )
-        with pytest.raises(ValueError):
-            batch2.migrate("invalid-host", 6379, [], 0, 5000)
+        # Multi-key: empty keys list raises ValueError (standalone Batch only)
+        if not cluster_mode:
+            batch2 = Batch(is_atomic=False)
+            with pytest.raises(ValueError):
+                batch2.migrate("invalid-host", 6379, [], 0, 5000)
 
     @pytest.fixture(scope="class")
     def second_server(self, request):

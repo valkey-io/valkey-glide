@@ -6945,49 +6945,40 @@ class CoreCommands(Protocol):
         self,
         host: str,
         port: int,
-        keys: Union[TEncodable, List[TEncodable]],
+        key: TEncodable,
         destination_db: int,
         timeout: int,
         options: Optional[MigrateOptions] = None,
     ) -> str:
         """
-        Atomically transfers one or more keys from a source Valkey instance to a destination
-        Valkey instance. Pass a list to migrate multiple keys in one command.
+        Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+        On success, the key is deleted from the source instance.
 
         See [valkey.io](https://valkey.io/commands/migrate/) for details.
 
         Args:
             host (str): The host of the destination Valkey instance.
             port (int): The port of the destination Valkey instance.
-            keys (Union[TEncodable, List[TEncodable]]): The key or list of keys to migrate.
+            key (TEncodable): The key to migrate.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
             options (Optional[MigrateOptions]): Additional migration options.
 
         Returns:
-            str: "OK" on success, or "NOKEY" if no keys were found.
+            str: "OK" on success, or "NOKEY" if the key was not found.
 
         Examples:
             >>> client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
-            >>> client.migrate("127.0.0.1", 6380, ["key1", "key2"], 0, 5000)
         """
-        if isinstance(keys, list):
-            if len(keys) == 0:
-                raise ValueError("migrate: 'keys' list must not be empty")
-            args: List[TEncodable] = [
-                host,
-                str(port),
-                "",
-                str(destination_db),
-                str(timeout),
-            ]
-            if options:
-                args.extend(options.to_args())
-            args += ["KEYS"] + list(keys)
-        else:
-            args = [host, str(port), keys, str(destination_db), str(timeout)]
-            if options:
-                args.extend(options.to_args())
+        args: List[TEncodable] = [
+            host,
+            str(port),
+            key,
+            str(destination_db),
+            str(timeout),
+        ]
+        if options:
+            args.extend(options.to_args())
         return cast(
             str,
             self._execute_command(RequestType.Migrate, args),

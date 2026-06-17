@@ -9604,33 +9604,31 @@ class TestCommands:
         with pytest.raises(ValueError):
             MigrateOptions(username="user").to_args()
 
-        # Multi-key: error on invalid host with existing keys.
-        # Use hash tag {3560} so all keys land on slot 0 (same as key=""),
-        # ensuring the migrating node owns these keys in cluster mode.
-        hash_tag = get_random_string(5)
-        key2 = f"{{3560}}{hash_tag}a"
-        key3 = f"{{3560}}{hash_tag}b"
-        await glide_client.set(key2, "value2")
-        await glide_client.set(key3, "value3")
-        with pytest.raises(RequestError):
-            await glide_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
+        # Multi-key: only available on standalone clients
+        if not isinstance(glide_client, GlideClusterClient):
+            hash_tag = get_random_string(5)
+            key2 = f"{hash_tag}a"
+            key3 = f"{hash_tag}b"
+            await glide_client.set(key2, "value2")
+            await glide_client.set(key3, "value3")
+            with pytest.raises(RequestError):
+                await glide_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
 
-        # Multi-key: empty keys list raises ValueError
-        with pytest.raises(ValueError):
-            await glide_client.migrate("invalid-host", 6379, [], 0, 5000)
+            # Multi-key: empty keys list raises ValueError
+            with pytest.raises(ValueError):
+                await glide_client.migrate("invalid-host", 6379, [], 0, 5000)
 
-        # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
-        # Use hash tag {3560} so keys route to slot 0 (same as key="") in cluster mode.
-        non_existent1 = f"{{3560}}{get_random_string(5)}"
-        non_existent2 = f"{{3560}}{get_random_string(5)}"
-        result = await glide_client.migrate(
-            "invalid-host",
-            6379,
-            [non_existent1, non_existent2],
-            0,
-            5000,
-        )
-        assert result == b"NOKEY"
+            # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
+            non_existent1 = get_random_string(5)
+            non_existent2 = get_random_string(5)
+            result = await glide_client.migrate(
+                "invalid-host",
+                6379,
+                [non_existent1, non_existent2],
+                0,
+                5000,
+            )
+            assert result == b"NOKEY"
 
     @pytest.fixture(scope="class")
     def second_server(self, request):
@@ -11204,15 +11202,13 @@ class TestScripts:
         )
 
         # Add test for script_kill with writing script
-        writing_script = Script(
-            """
+        writing_script = Script("""
             redis.call('SET', KEYS[1], 'value')
             local start = redis.call('TIME')[1]
             while redis.call('TIME')[1] - start < 15 do
                 redis.call('SET', KEYS[1], 'value')
             end
-        """
-        )
+        """)
 
         async def run_writing_script():
             await test_client.invoke_script(writing_script, keys=[get_random_string(5)])
