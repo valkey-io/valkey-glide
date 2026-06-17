@@ -4,6 +4,7 @@ uvloop
 pytest<9.1
 pytest-html
 pytest-timeout
+pytest-xdist
 black >= 24.3.0
 mypy == 1.19.1
 mypy-protobuf == 3.6.0
