@@ -13,34 +13,8 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 
 EXCLUDED_API_FUNCTIONS = {
-    "async_only": [
-        # _CompatFuture
-        "done",
-        "result",
-        "set_exception",
-        "set_result",
-        # opentelemetry
-        "create_otel_span",
-        "drop_otel_span",
-        "get_endpoint",
-        "get_metrics",
-        "get_traces",
-        "init_opentelemetry",
-        "set_traces",
-        # Logger
-        "is_lower",
-        "py_init",
-        "py_log",
-        # others
-        "init_callback",
-        "aclose",
-        # cache metrics sync path (PyO3 only, sync client uses FFI)
-        "get_cache_metric_from_registry",
-        # address resolver registry (PyO3 only, sync client passes callback via FFI)
-        "register_address_resolver",
-        "remove_address_resolver",
-    ],
-    "sync_only": [],
+    "async_only": ["aclose", "done", "result", "set_exception", "set_result"],
+    "sync_only": ["get_min_compressed_size"],
 }
 
 EXCLUDED_API_FILENAMES = {
