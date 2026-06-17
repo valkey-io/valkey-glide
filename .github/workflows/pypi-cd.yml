@@ -395,6 +395,44 @@ jobs:
                         exit 1
                       fi
 
+                      # Build FFI library and glide-shared native extension for async wheel
+                      # Note: working directory inside container is python/glide-async
+                      cd ../../ffi && cargo build --release && cd ..
+                      cp ffi/target/release/libglide_ffi.so python/glide-async/python/glide_shared/
+                      cd python/glide-shared
+                      pip install maturin
+                      # Build _fast_response for each Python interpreter available
+                      # maturin-action will later build a separate async wheel per interpreter,
+                      # and each wheel bundles all .so files from the include glob.
+                      # Python will load the one matching its ABI at runtime.
+                      maturin build --release --out /tmp/glide_shared_wheels -i python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11 2>/dev/null || \
+                      maturin build --release --out /tmp/glide_shared_wheels -i python3.14
+                      for WHEEL in /tmp/glide_shared_wheels/*.whl; do
+                        unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
+                      done
+                      cd ../glide-async
+
+            # The macOS maturin-action does not support a before-script hook (unlike
+            # the Linux action's before-script-linux). We must build the FFI library and
+            # glide-shared native extension in a separate step. For Linux these are built
+            # inside the manylinux container via before-script-linux for glibc ABI compat.
+            - name: Build native dependencies for async client (macOS)
+              if: startsWith(matrix.build.NAMED_OS, 'darwin')
+              shell: bash
+              run: |
+                  # Build FFI library
+                  cd ffi && cargo build --release --target ${{ matrix.build.TARGET }}
+                  cp target/${{ matrix.build.TARGET }}/release/libglide_ffi.dylib ../python/glide-async/python/glide_shared/
+                  cd ..
+                  # Build glide-shared native extension (_fast_response) for all target interpreters
+                  cd python/glide-shared
+                  pip install maturin
+                  maturin build --release --target ${{ matrix.build.TARGET }} --out /tmp/glide_shared_wheels \
+                    -i ${{ github.event_name != 'pull_request' && 'python3.9 python3.10 python3.11 python3.12 python3.13 python3.14 pypy3.9 pypy3.10 pypy3.11' || 'python3.14' }}
+                  for WHEEL in /tmp/glide_shared_wheels/*.whl; do
+                    unzip -jo "$WHEEL" "glide_shared/_fast_response*.so" -d ../glide-async/python/glide_shared/ 2>/dev/null || true
+                  done
+
             - name: Build Python Async client wheels (macos)
               if: startsWith(matrix.build.NAMED_OS, 'darwin')
               uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1

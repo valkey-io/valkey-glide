@@ -1,12 +1,18 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAddress, TlsMode};
+use glide_core::connection_request;
 use glide_core::errors::error_message;
 use glide_core::{
     DEFAULT_FLUSH_SIGNAL_INTERVAL_MS, GlideOpenTelemetry, GlideOpenTelemetryConfigBuilder,
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
 use logger_core::log_warn_lazy;
+use protobuf::Message;
 use redis::GlideConnectionOptions;
+use std::collections::HashMap as StdHashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -906,4 +912,113 @@ pub fn register_address_resolver(
 #[napi(js_name = "removeAddressResolver")]
 pub fn remove_address_resolver(key: String) {
     glide_core::address_resolver_registry::remove(&key);
+}
+
+static NEXT_MONITOR_HANDLE: AtomicU64 = AtomicU64::new(1);
+
+fn monitor_store() -> &'static Mutex<StdHashMap<u64, MonitorClient>> {
+    static STORE: OnceLock<Mutex<StdHashMap<u64, MonitorClient>>> = OnceLock::new();
+    STORE.get_or_init(|| Mutex::new(StdHashMap::new()))
+}
+
+#[napi(js_name = "createMonitorClient", ts_return_type = "Promise<number>")]
+pub fn create_monitor_client(
+    env: Env,
+    connection_request_bytes: Uint8Array,
+    #[napi(
+        ts_arg_type = "(timestamp: number, db: number, clientAddr: string, command: string, args: string[]) => void"
+    )]
+    callback: napi::JsFunction,
+) -> Result<JsObject> {
+    let (deferred, promise) = env.create_deferred()?;
+    let conn_req =
+        connection_request::ConnectionRequest::parse_from_bytes(&connection_request_bytes)
+            .map_err(|e| napi::Error::new(Status::InvalidArg, e.to_string()))?;
+    let proto_addr = conn_req
+        .addresses
+        .first()
+        .ok_or_else(|| napi::Error::new(Status::InvalidArg, "No addresses provided"))?;
+    let address = NodeAddress {
+        host: proto_addr.host.to_string(),
+        port: proto_addr.port as u16,
+    };
+    let tls_mode = match conn_req.tls_mode.enum_value_or_default() {
+        connection_request::TlsMode::NoTls => TlsMode::NoTls,
+        connection_request::TlsMode::SecureTls => TlsMode::SecureTls,
+        connection_request::TlsMode::InsecureTls => TlsMode::InsecureTls,
+    };
+    let redis_conn_info = redis::RedisConnectionInfo {
+        db: conn_req.database_id as i64,
+        username: conn_req.authentication_info.as_ref().and_then(|a| {
+            let u = a.username.to_string();
+            if u.is_empty() { None } else { Some(u) }
+        }),
+        password: conn_req.authentication_info.as_ref().and_then(|a| {
+            let p = a.password.to_string();
+            if p.is_empty() { None } else { Some(p) }
+        }),
+        // MONITOR streams plain-text inline responses, which are incompatible with RESP3 push
+        // messages. RESP2 must always be used for monitor connections regardless of user config.
+        protocol: redis::ProtocolVersion::RESP2,
+        ..Default::default()
+    };
+    let _client_name = conn_req.client_name.to_string(); // TODO: pass to MonitorClient::new once its signature supports it
+    let mut tsfn: napi::threadsafe_function::ThreadsafeFunction<
+        MonitorLine,
+        napi::threadsafe_function::ErrorStrategy::Fatal,
+    > = callback.create_threadsafe_function(
+        0,
+        |ctx: napi::threadsafe_function::ThreadSafeCallContext<MonitorLine>| {
+            let line = ctx.value;
+            let ts = ctx.env.create_double(line.timestamp)?;
+            let db = ctx.env.create_int64(line.db)?;
+            let addr = ctx.env.create_string(&line.client_addr)?;
+            let cmd = ctx.env.create_string(&line.command)?;
+            let mut args_arr = ctx.env.create_array_with_length(line.args.len())?;
+            for (i, arg) in line.args.iter().enumerate() {
+                args_arr.set_element(i as u32, ctx.env.create_string(arg)?)?;
+            }
+            Ok(vec![
+                ts.into_unknown(),
+                db.into_unknown(),
+                addr.into_unknown(),
+                cmd.into_unknown(),
+                args_arr.into_unknown(),
+            ])
+        },
+    )?;
+    // Unref so the TSFN does not prevent the Node.js event loop from exiting naturally.
+    tsfn.unref(&env)?;
+    let on_line: MonitorLineCallback = Arc::new(move |line: MonitorLine| {
+        tsfn.call(
+            line,
+            napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+        );
+    });
+    let glide_rt = get_or_init_runtime().map_err(|e| napi::Error::new(Status::Unknown, e))?;
+    glide_rt.runtime.spawn(async move {
+        match MonitorClient::new(&address, redis_conn_info, tls_mode, on_line).await {
+            Ok(client) => {
+                let handle_id = NEXT_MONITOR_HANDLE.fetch_add(1, Ordering::Relaxed);
+                monitor_store().lock().unwrap().insert(handle_id, client);
+                deferred.resolve(move |_| Ok(handle_id as i64));
+            }
+            Err(e) => deferred.reject(napi::Error::new(Status::Unknown, e.to_string())),
+        }
+    });
+    Ok(promise)
+}
+
+#[napi(js_name = "closeMonitorClient", ts_return_type = "Promise<void>")]
+pub fn close_monitor_client(env: Env, handle_id: i64) -> Result<JsObject> {
+    let (deferred, promise) = env.create_deferred()?;
+    let client = monitor_store().lock().unwrap().remove(&(handle_id as u64));
+    let glide_rt = get_or_init_runtime().map_err(|e| napi::Error::new(Status::Unknown, e))?;
+    glide_rt.runtime.spawn(async move {
+        if let Some(c) = client {
+            c.stop_async().await;
+        }
+        deferred.resolve(|_| Ok(()));
+    });
+    Ok(promise)
 }

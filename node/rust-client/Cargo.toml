@@ -21,6 +21,7 @@ bytes = "1"
 num-traits = "0.2"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
+protobuf = { version = "3", default-features = false } # Direct dep required: parse_from_bytes is called directly in the napi layer for MonitorClient
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = { version = "0.6", features = ["disable_initial_exec_tls"] }
