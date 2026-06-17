@@ -9,7 +9,8 @@ This directory contains composite actions shared across valkey-glide language re
   - [install-shared-dependencies](#install-shared-dependencies)
   - [install-engine](#install-engine)
   - [start-valkey-docker](#start-valkey-docker)
-  - [install-rust-and-protoc](#install-rust-and-protoc)
+  - [install-rust](#install-rust)
+  - [install-protoc](#install-protoc)
   - [install-zig](#install-zig)
 - [Platform Support Matrix](#platform-support-matrix)
 - [Submodule Configuration](#submodule-configuration)
@@ -198,18 +199,50 @@ jobs:
 
 ---
 
-### install-rust-and-protoc
+### install-rust
 
-Installs Rust toolchain (stable, with rustfmt and clippy) and protobuf compiler.
+Installs the Rust stable toolchain with rustfmt and clippy components.
 
-**Location:** `.github/actions/install-rust-and-protoc/action.yml`
+**Location:** `.github/actions/install-rust/action.yml`
 
 #### Inputs
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `target` | No | `x86_64-unknown-linux-gnu` | Rust target triple to add (e.g., `x86_64-unknown-linux-gnu`) |
-| `github-token` | Yes | - | GitHub token for protoc installation (typically `${{ secrets.GITHUB_TOKEN }}`) |
+| `target` | No | `x86_64-unknown-linux-gnu` | Rust target triple (e.g., `aarch64-apple-darwin`) |
+
+#### Example Usage
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: ./valkey-glide/.github/actions/install-rust
+        with:
+          target: 'x86_64-unknown-linux-gnu'
+
+      - run: cargo fmt --check
+```
+
+---
+
+### install-protoc
+
+Installs the protobuf compiler (protoc).
+
+**Location:** `.github/actions/install-protoc/action.yml`
+
+#### Inputs
+
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `github-token` | Yes | - | GitHub token for downloading protoc release (typically `${{ secrets.GITHUB_TOKEN }}`) |
 
 #### Example Usage
 
@@ -222,10 +255,9 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Rust and protoc
-        uses: ./valkey-glide/.github/actions/install-rust-and-protoc
+      - name: Install protoc
+        uses: ./valkey-glide/.github/actions/install-protoc
         with:
-          target: 'x86_64-unknown-linux-gnu'
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
@@ -269,14 +301,15 @@ jobs:
 | install-shared-dependencies | ✓ | ✓ | ✓ | ✓ | ✓ |
 | install-engine | ✓ | ✓ | ✓ (WSL) | ✓ | ✓ |
 | start-valkey-docker | ✓ | ✗ | ✗ | ✓ | ✗ |
-| install-rust-and-protoc | ✓ | ✓ | ✓ | ✓ | ✓ |
+| install-rust | ✓ | ✓ | ✓ | ✓ | ✓ |
+| install-protoc | ✓ | ✓ | ✓ | ✓ | ✓ |
 | install-zig | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 **Notes:**
 - **Windows:** Uses WSL (Windows Subsystem for Linux) for Valkey server operations
 - **Windows ARM64:** Valkey server installation is skipped due to platform limitations
 - **start-valkey-docker:** Requires Linux due to Docker host networking requirements
-- **Alpine/MUSL:** Uses `apk` package manager; install-rust-and-protoc is skipped (handled differently)
+- **Alpine/MUSL:** Uses `apk` package manager; install-rust/install-protoc are skipped (handled differently)
 
 ---
 
@@ -420,16 +453,21 @@ jobs:
           server-version: '9.0'
 
       # Option 2: Call individual actions directly (no local wrapper needed)
-      # - name: Install Rust and protoc
-      #   uses: ./valkey-glide/.github/actions/install-rust-and-protoc
+      # - name: Install Rust
+      #   uses: ./valkey-glide/.github/actions/install-rust
       #   with:
       #     target: x86_64-unknown-linux-gnu
+      #
+      # - name: Install protoc
+      #   uses: ./valkey-glide/.github/actions/install-protoc
+      #   with:
       #     github-token: ${{ secrets.GITHUB_TOKEN }}
       #
       # - name: Install Valkey engine
       #   uses: ./valkey-glide/.github/actions/install-engine
       #   with:
       #     engine-version: '9.0'
+      #     target: x86_64-unknown-linux-gnu
 
       - name: Build
         run: dotnet build
@@ -444,10 +482,14 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Rust and protoc
-        uses: ./valkey-glide/.github/actions/install-rust-and-protoc
+      - name: Install Rust
+        uses: ./valkey-glide/.github/actions/install-rust
         with:
           target: x86_64-unknown-linux-gnu
+
+      - name: Install protoc
+        uses: ./valkey-glide/.github/actions/install-protoc
+        with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Valkey engine
@@ -532,10 +574,14 @@ runs:
               additional-packages: python3 python3-pip build-essential git pkg-config libssl-dev
 
         # Delegate to shared actions from valkey-glide submodule
-        - name: Install Rust toolchain and protoc
-          uses: ./valkey-glide/.github/actions/install-rust-and-protoc
+        - name: Install Rust toolchain
+          uses: ./valkey-glide/.github/actions/install-rust
           with:
               target: ${{ inputs.target }}
+
+        - name: Install protoc
+          uses: ./valkey-glide/.github/actions/install-protoc
+          with:
               github-token: ${{ inputs.github-token }}
 
         - name: Install server from source
