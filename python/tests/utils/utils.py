@@ -154,6 +154,13 @@ def get_first_result(
     return cast(bytes, res)
 
 
+def get_all_latency_entries(response) -> List[LatencyEntry]:
+    """Flatten a latency history response into a list of latency entries."""
+    if isinstance(response, dict):
+        return [e for entries in response.values() for e in entries]
+    return response
+
+
 def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:
     res_first = get_first_result(res)
     res_decoded = res_first.decode() if isinstance(res_first, bytes) else res_first

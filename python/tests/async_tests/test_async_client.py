@@ -123,6 +123,7 @@ from tests.utils.utils import (
     create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
+    get_all_latency_entries,
     get_first_result,
     get_random_string,
     get_version,
@@ -10196,7 +10197,7 @@ class TestCommands:
         await self._trigger_latency_spike(glide_client)
 
         history = await glide_client.latency_history("command")
-        all_entries = self._get_all_latency_entries(history)
+        all_entries = get_all_latency_entries(history)
 
         assert len(all_entries) > 0
         for entry in all_entries:
@@ -10206,7 +10207,7 @@ class TestCommands:
 
         # Non-existent event returns empty
         unknown = await glide_client.latency_history("nonexistent")
-        assert len(self._get_all_latency_entries(unknown)) == 0
+        assert len(get_all_latency_entries(unknown)) == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10215,7 +10216,7 @@ class TestCommands:
         await self._trigger_latency_spike(glide_client)
 
         latest = await glide_client.latency_latest()
-        all_entries = self._get_all_latency_entries(latest)
+        all_entries = get_all_latency_entries(latest)
         assert len(all_entries) >= 1
 
         # Find the "command" event
@@ -10245,25 +10246,19 @@ class TestCommands:
         assert await glide_client.latency_reset() > 0
 
         history = await glide_client.latency_history("command")
-        assert len(self._get_all_latency_entries(history)) == 0
+        assert len(get_all_latency_entries(history)) == 0
 
         # Trigger spike then reset specific event.
         await self._trigger_latency_spike(glide_client)
         assert await glide_client.latency_reset("command") > 0
         history = await glide_client.latency_history("command")
-        assert len(self._get_all_latency_entries(history)) == 0
+        assert len(get_all_latency_entries(history)) == 0
 
         # Trigger spike then reset unknown event — "command" data should persist.
         await self._trigger_latency_spike(glide_client)
         assert await glide_client.latency_reset("unknown-event") == 0
         history = await glide_client.latency_history("command")
-        assert len(self._get_all_latency_entries(history)) > 0
-
-    def _get_all_latency_entries(self, response) -> list:
-        """Flatten a latency response into a plain list of entries."""
-        if isinstance(response, dict):
-            return [e for entries in response.values() for e in entries]
-        return response
+        assert len(get_all_latency_entries(history)) > 0
 
     async def _trigger_latency_spike(self, glide_client: TGlideClient):
         """Enable latency monitoring, trigger a spike, then disable monitoring."""
