@@ -113,6 +113,14 @@
             "prettier --write"
         ]
     },
+    "overrides": {
+        "replace": {
+            "minimatch": "3.1.5"
+        },
+        "markdown-it@<14.2.0": "^14.2.0",
+        "@babel/core@<7.29.6": "^7.29.6",
+        "js-yaml@<4.2.0": "^4.2.0"
+    },
     "publishConfig": {
         "registry": "https://registry.npmjs.org/",
         "access": "public"

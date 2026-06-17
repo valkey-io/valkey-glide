@@ -1113,6 +1113,7 @@ dependencies = [
  "redis",
  "scopeguard",
  "serde",
+ "serde_json",
  "telemetrylib",
  "tokio",
  "tracing",
