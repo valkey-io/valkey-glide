@@ -1843,7 +1843,9 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.LatencyLatest, [], route),
         )
 
-    async def latency_reset(self, *events: TEncodable, route: Optional[Route] = None) -> int:
+    async def latency_reset(
+        self, *events: TEncodable, route: Optional[Route] = None
+    ) -> int:
         """
         Resets the latency spike time series for all or specified events.
         If no events are provided, resets the latency spike time series for all events.

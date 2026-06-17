@@ -48,7 +48,7 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     UpdateOptions,
 )
-from glide_shared.commands.latency import LatencyEntry, LatencyEventInfo
+from glide_shared.commands.latency import LatencyEntry
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -10219,7 +10219,9 @@ class TestCommands:
         assert len(all_entries) >= 1
 
         # Find the "command" event
-        command_info = next((info for info in all_entries if info.event_name == "command"), None)
+        command_info = next(
+            (info for info in all_entries if info.event_name == "command"), None
+        )
         assert command_info is not None
 
         assert command_info.time >= before_spike
