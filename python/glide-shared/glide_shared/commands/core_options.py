@@ -24,6 +24,26 @@ class PubSubMsg:
     pattern: Optional[TEncodable]
 
 
+@dataclass
+class MonitorMsg:
+    """
+    Represents a single line received from the MONITOR command.
+
+    Attributes:
+        timestamp (float): Unix timestamp of the command.
+        db (int): Database index on which the command was executed.
+        client_addr (str): Address of the client that issued the command.
+        command (str): The command name.
+        args (List[str]): The command arguments.
+    """
+
+    timestamp: float
+    db: int
+    client_addr: str
+    command: str
+    args: List[str]
+
+
 class ConditionalChange(Enum):
     """
     A condition to the `SET`, `ZADD` and `GEOADD` commands.
