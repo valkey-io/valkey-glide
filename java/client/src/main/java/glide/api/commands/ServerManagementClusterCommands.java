@@ -1082,11 +1082,11 @@ public interface ServerManagementClusterCommands {
 
     /**
      * Returns the latency spike time series for the specified event.<br>
-     * The command will be routed to all nodes.
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., "command").
-     * @return A cluster value containig array(s) of latency entries for the event.
+     * @return A cluster value containing array(s) of latency entries for the event.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command").get();
@@ -1104,7 +1104,7 @@ public interface ServerManagementClusterCommands {
      * @param event The name of the latency event (e.g., "command").
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containig array(s) of latency entries for the event.
+     * @return A cluster value containing array(s) of latency entries for the event.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command", RANDOM).get();
@@ -1118,7 +1118,7 @@ public interface ServerManagementClusterCommands {
 
     /**
      * Reports the latest latency events logged by the server.<br>
-     * The command will be routed to all nodes.
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
      * @return A cluster value containing array(s) of the latest latency info.
@@ -1151,7 +1151,7 @@ public interface ServerManagementClusterCommands {
 
     /**
      * Resets the latency spike time series for all events.<br>
-     * The command will be routed to all nodes.
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
      * @return The total number of event time series that were reset across all nodes.
@@ -1166,7 +1166,7 @@ public interface ServerManagementClusterCommands {
     /**
      * Resets the latency spike time series for the specified events.<br>
      * If {@code events} is empty, resets the latency spike time series for all events.<br>
-     * The command will be routed to all nodes.
+     * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
      * @param events The event names to reset.

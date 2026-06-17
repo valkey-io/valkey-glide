@@ -519,13 +519,13 @@ export async function waitForSaveNotInProgress(
     }, "Timed out waiting for save to complete");
 }
 
-/**
- * Enables latency monitoring, triggers a latency spike, then disables monitoring.
- * Resets existing latency data before triggering.
- */
+/** Triggers a latency spike for the "command" event. */
 export async function triggerLatencySpike(
     client: GlideClient | GlideClusterClient,
 ): Promise<void> {
+    // Resets any existing latency data first so the spike is recorded against a clean baseline,
+    // then enables the server-side latency monitor, triggers a latency spike for the "command"
+    // event, and finally disables latency monitoring.
     await client.latencyReset();
     await client.configSet({ "latency-monitor-threshold": "1" });
 

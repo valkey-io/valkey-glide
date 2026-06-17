@@ -489,8 +489,8 @@ type LatencyEntry struct {
 	Latency time.Duration
 }
 
-// LatencyInfo represents information about an event's latency spike time series.
-type LatencyInfo struct {
+// LatencyEventInfo represents information about an event's latency spike time series.
+type LatencyEventInfo struct {
 	// EventName is the name of the event.
 	EventName string
 	// Time is the time of the latest latency spike.

@@ -547,9 +547,10 @@ public class CommandTests {
         LatencyEntry[] history = client.latencyHistory("command").get();
         assertTrue(history.length > 0);
 
-        LatencyEntry entry = history[0];
-        assertTrue(entry.getTime() >= beforeSpike);
-        assertTrue(entry.getLatency() > 0);
+        for (LatencyEntry entry : history) {
+            assertTrue(entry.getTime() >= beforeSpike);
+            assertTrue(entry.getLatency() > 0);
+        }
 
         LatencyEntry[] unknown = client.latencyHistory("nonexistent").get();
         assertEquals(0, unknown.length);
@@ -576,8 +577,7 @@ public class CommandTests {
         assertNotNull(commandInfo);
 
         assertTrue(commandInfo.getTime() >= beforeSpike);
-        assertTrue(commandInfo.getLatest() >= 0);
-        assertTrue(commandInfo.getMaximum() >= 0);
+        assertTrue(commandInfo.getLatest() > 0);
         assertTrue(commandInfo.getMaximum() >= commandInfo.getLatest());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
@@ -616,11 +616,14 @@ public class CommandTests {
         assertTrue(client.latencyHistory("command").get().length > 0);
     }
 
-    /** Triggers a latency spike for the "command" evemt. */
+    /** Triggers a latency spike for the "command" event. */
     @SneakyThrows
     private static void triggerLatencySpike(GlideClient client) {
 
-        client.latencyReset();
+        // Reset any existing latency data first so the spike is recorded against a clean baseline,
+        // then enable the server-side latency monitor, trigger a latency spike for the "command"
+        // event, and finally disable latency monitoring.
+        client.latencyReset().get();
         client.configSet(Collections.singletonMap("latency-monitor-threshold", "1")).get();
         client.customCommand(new String[] {"DEBUG", "SLEEP", "0.05"}).get();
         client.configSet(Collections.singletonMap("latency-monitor-threshold", "0")).get();

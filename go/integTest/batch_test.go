@@ -2510,7 +2510,7 @@ func CreateServerManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, se
 	})
 	batch.LatencyLatest()
 	testData = append(testData, CommandTestData{
-		ExpectedResponse: []models.LatencyInfo{}, CheckTypeOnly: true, TestName: "LatencyLatest()",
+		ExpectedResponse: []models.LatencyEventInfo{}, CheckTypeOnly: true, TestName: "LatencyLatest()",
 	})
 	batch.LatencyReset()
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "LatencyReset()"})

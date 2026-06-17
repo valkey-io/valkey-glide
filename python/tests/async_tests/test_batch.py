@@ -479,13 +479,16 @@ class TestBatch:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_latency(self, glide_client: TGlideClient, cluster_mode: bool):
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    async def test_transaction_latency(
+        self, glide_client: TGlideClient, cluster_mode: bool, is_atomic: bool
+    ):
         await trigger_latency_spike(glide_client)
 
         transaction = (
-            Batch(is_atomic=True)
+            Batch(is_atomic=is_atomic)
             if isinstance(glide_client, GlideClient)
-            else ClusterBatch(is_atomic=True)
+            else ClusterBatch(is_atomic=is_atomic)
         )
 
         transaction.latency_history("command")

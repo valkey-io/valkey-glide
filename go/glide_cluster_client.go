@@ -1393,21 +1393,21 @@ func (client *ClusterClient) LatencyHistoryWithOptions(
 // [valkey.io]: https://valkey.io/commands/latency-latest/
 func (client *ClusterClient) LatencyLatest(
 	ctx context.Context,
-) (models.ClusterValue[[]models.LatencyInfo], error) {
+) (models.ClusterValue[[]models.LatencyEventInfo], error) {
 	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEventInfo](), err
 	}
 	if response != nil && response.response_type == uint32(C.Map) {
 		data, err := handleLatencyLatestClusterResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+			return models.CreateEmptyClusterValue[[]models.LatencyEventInfo](), err
 		}
 		return models.CreateClusterMultiValue(data), nil
 	}
 	data, err := handleLatencyLatestResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEventInfo](), err
 	}
 	return models.CreateClusterSingleValue(data), nil
 }
@@ -1430,24 +1430,24 @@ func (client *ClusterClient) LatencyLatest(
 func (client *ClusterClient) LatencyLatestWithOptions(
 	ctx context.Context,
 	route options.RouteOption,
-) (models.ClusterValue[[]models.LatencyInfo], error) {
+) (models.ClusterValue[[]models.LatencyEventInfo], error) {
 	if route.Route == nil {
 		return client.LatencyLatest(ctx)
 	}
 	response, err := client.executeCommandWithRoute(ctx, C.LatencyLatest, []string{}, route.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEventInfo](), err
 	}
 	if route.Route.IsMultiNode() {
 		data, err := handleLatencyLatestClusterResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+			return models.CreateEmptyClusterValue[[]models.LatencyEventInfo](), err
 		}
 		return models.CreateClusterMultiValue(data), nil
 	}
 	data, err := handleLatencyLatestResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[[]models.LatencyInfo](), err
+		return models.CreateEmptyClusterValue[[]models.LatencyEventInfo](), err
 	}
 	return models.CreateClusterSingleValue(data), nil
 }

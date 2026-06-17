@@ -955,9 +955,10 @@ public class CommandTests {
         for (LatencyEntry[] multiCommandEntries : multiCommand.getMultiValue().values()) {
             assertTrue(multiCommandEntries.length > 0);
 
-            LatencyEntry entry = multiCommandEntries[0];
-            assertTrue(entry.getTime() >= beforeSpike);
-            assertTrue(entry.getLatency() > 0);
+            for (LatencyEntry entry : multiCommandEntries) {
+                assertTrue(entry.getTime() >= beforeSpike);
+                assertTrue(entry.getLatency() > 0);
+            }
         }
 
         // Single-node route
@@ -967,9 +968,10 @@ public class CommandTests {
         LatencyEntry[] entries = single.getSingleValue();
         assertTrue(entries.length > 0);
 
-        LatencyEntry entry = entries[0];
-        assertTrue(entry.getTime() >= beforeSpike);
-        assertTrue(entry.getLatency() > 0);
+        for (LatencyEntry entry : entries) {
+            assertTrue(entry.getTime() >= beforeSpike);
+            assertTrue(entry.getLatency() > 0);
+        }
 
         // Non-existent event.
         ClusterValue<LatencyEntry[]> multiUnknown = clusterClient.latencyHistory("nonexistent").get();
@@ -1004,8 +1006,7 @@ public class CommandTests {
         assertNotNull(commandInfo);
 
         assertTrue(commandInfo.getTime() >= beforeSpike);
-        assertTrue(commandInfo.getLatest() >= 0);
-        assertTrue(commandInfo.getMaximum() >= 0);
+        assertTrue(commandInfo.getLatest() > 0);
         assertTrue(commandInfo.getMaximum() >= commandInfo.getLatest());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
@@ -1038,17 +1039,23 @@ public class CommandTests {
             assertEquals(0, entries.length);
         }
 
-        // Trigger spike then reset unknown event.
+        // Trigger spike then reset unknown event — "command" data should persist.
         triggerLatencySpike(clusterClient);
         assertEquals(0, clusterClient.latencyReset(new String[] {"unknown-event"}).get());
+        for (LatencyEntry[] entries :
+                clusterClient.latencyHistory("command").get().getMultiValue().values()) {
+            assertTrue(entries.length > 0);
+        }
     }
 
     /** Triggers a latency spike for the "command" event on all cluster nodes. */
     @SneakyThrows
     private static void triggerLatencySpike(GlideClusterClient client) {
 
-        // Enables the server-side latency monitor, triggers a single latency spike, and then disables
-        // latency monitoring.
+        // Reset any existing latency data first so the spike is recorded against a clean baseline,
+        // then enable the server-side latency monitor, trigger a latency spike for the "command"
+        // event, and finally disable latency monitoring.
+        client.latencyReset(ALL_NODES).get();
         client.configSet(Collections.singletonMap("latency-monitor-threshold", "1"), ALL_NODES).get();
         client.customCommand(new String[] {"DEBUG", "SLEEP", "0.05"}, ALL_NODES).get();
         client.configSet(Collections.singletonMap("latency-monitor-threshold", "0"), ALL_NODES).get();

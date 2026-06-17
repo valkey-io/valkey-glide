@@ -59,6 +59,7 @@ import {
     getServerVersion,
     intoArray,
     intoString,
+    nowUnixSeconds,
     parseEndpoints,
     triggerLatencySpike,
     validateBatchResponse,
@@ -3392,6 +3393,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
+            const beforeSpike = nowUnixSeconds();
             await triggerLatencySpike(client);
 
             // Multi-node (default route)
@@ -3400,6 +3402,7 @@ describe("GlideClusterClient", () => {
             expect(allEntries.length).toBeGreaterThan(0);
 
             for (const entry of allEntries) {
+                expect(entry.time).toBeGreaterThanOrEqual(beforeSpike);
                 expect(entry.latency).toBeGreaterThan(0);
             }
 
@@ -3408,9 +3411,18 @@ describe("GlideClusterClient", () => {
                 route: "randomNode",
             });
             expect(Array.isArray(singleHistory)).toBe(true);
-            expect(getAllLatencyEntries(singleHistory).length).toBeGreaterThan(
-                0,
-            );
+
+            const singleEntries = getAllLatencyEntries(singleHistory);
+            expect(singleEntries.length).toBeGreaterThan(0);
+
+            for (const entry of singleEntries) {
+                expect(entry.time).toBeGreaterThanOrEqual(beforeSpike);
+                expect(entry.latency).toBeGreaterThan(0);
+            }
+
+            // Non-existent event returns empty
+            const unknown = await client.latencyHistory("nonexistent");
+            expect(getAllLatencyEntries(unknown).length).toBe(0);
 
             client.close();
         },
@@ -3424,6 +3436,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
+            const beforeSpike = nowUnixSeconds();
             await triggerLatencySpike(client);
 
             // Multi-node (default route)
@@ -3435,15 +3448,29 @@ describe("GlideClusterClient", () => {
                 (info) => info.eventName === "command",
             );
             expect(commandInfo).toBeDefined();
+            expect(commandInfo!.time).toBeGreaterThanOrEqual(beforeSpike);
+            expect(commandInfo!.latest).toBeGreaterThan(0);
+            expect(commandInfo!.maximum).toBeGreaterThanOrEqual(
+                commandInfo!.latest,
+            );
 
             // Single-node route
             const singleLatest = await client.latencyLatest({
                 route: "randomNode",
             });
             expect(Array.isArray(singleLatest)).toBe(true);
-            expect(
-                getAllLatencyEntries(singleLatest).length,
-            ).toBeGreaterThanOrEqual(1);
+
+            const singleEntries = getAllLatencyEntries(singleLatest);
+            expect(singleEntries.length).toBeGreaterThanOrEqual(1);
+
+            const singleCommand = singleEntries.find(
+                (info) => info.eventName === "command",
+            );
+            expect(singleCommand).toBeDefined();
+            expect(singleCommand!.latest).toBeGreaterThan(0);
+            expect(singleCommand!.maximum).toBeGreaterThanOrEqual(
+                singleCommand!.latest,
+            );
 
             client.close();
         },

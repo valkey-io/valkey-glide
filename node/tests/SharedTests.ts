@@ -587,10 +587,13 @@ export function runBaseTests(config: {
                         commandInfo!.latest,
                     );
 
-                    // Valkey 8.1+ populates sum and count
+                    // Only Valkey 8.1+ populates sum and count.
                     if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
                         expect(commandInfo!.sum).toBeGreaterThan(0);
                         expect(commandInfo!.count).toBeGreaterThan(0);
+                    } else {
+                        expect(commandInfo!.sum).toBeUndefined();
+                        expect(commandInfo!.count).toBeUndefined();
                     }
                 },
                 protocol,

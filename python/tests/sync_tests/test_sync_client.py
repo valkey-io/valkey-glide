@@ -133,6 +133,7 @@ from tests.utils.utils import (
     sync_check_if_server_version_lt,
     sync_get_version,
     sync_wait_for_save_not_in_progress,
+    trigger_latency_spike_sync,
 )
 
 
@@ -5411,7 +5412,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_latency_history(self, glide_sync_client: TGlideClient):
         before_spike = int(time.time())
-        self._trigger_latency_spike_sync(glide_sync_client)
+        trigger_latency_spike_sync(glide_sync_client)
 
         history = glide_sync_client.latency_history("command")
         all_entries = get_all_latency_entries(history)
@@ -5430,7 +5431,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_latency_latest(self, glide_sync_client: TGlideClient):
         before_spike = int(time.time())
-        self._trigger_latency_spike_sync(glide_sync_client)
+        trigger_latency_spike_sync(glide_sync_client)
 
         latest = glide_sync_client.latency_latest()
         all_entries = get_all_latency_entries(latest)
@@ -5458,36 +5459,51 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_latency_reset(self, glide_sync_client: TGlideClient):
         # Trigger spike then reset all events.
-        self._trigger_latency_spike_sync(glide_sync_client)
+        trigger_latency_spike_sync(glide_sync_client)
         assert glide_sync_client.latency_reset() > 0
 
         history = glide_sync_client.latency_history("command")
         assert len(get_all_latency_entries(history)) == 0
 
         # Trigger spike then reset specific event.
-        self._trigger_latency_spike_sync(glide_sync_client)
+        trigger_latency_spike_sync(glide_sync_client)
         assert glide_sync_client.latency_reset("command") > 0
         history = glide_sync_client.latency_history("command")
         assert len(get_all_latency_entries(history)) == 0
 
         # Trigger spike then reset unknown event — "command" data should persist.
-        self._trigger_latency_spike_sync(glide_sync_client)
+        trigger_latency_spike_sync(glide_sync_client)
         assert glide_sync_client.latency_reset("unknown-event") == 0
         history = glide_sync_client.latency_history("command")
         assert len(get_all_latency_entries(history)) > 0
 
-    def _trigger_latency_spike_sync(self, glide_sync_client: TGlideClient):
-        """Enable latency monitoring, trigger a spike, then disable monitoring."""
-        glide_sync_client.latency_reset()
-        glide_sync_client.config_set({"latency-monitor-threshold": "1"})
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_latency_routing(self, glide_sync_client: GlideClusterClient):
+        trigger_latency_spike_sync(glide_sync_client)
 
-        debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
-        if isinstance(glide_sync_client, GlideClusterClient):
-            glide_sync_client.custom_command(debug_sleep_args, AllNodes())
-        else:
-            glide_sync_client.custom_command(debug_sleep_args)
+        # Default route (all primary nodes) returns a per-node mapping.
+        multi_history = glide_sync_client.latency_history("command")
+        assert isinstance(multi_history, dict)
+        assert len(get_all_latency_entries(multi_history)) > 0
 
-        glide_sync_client.config_set({"latency-monitor-threshold": "0"})
+        multi_latest = glide_sync_client.latency_latest()
+        assert isinstance(multi_latest, dict)
+        assert len(get_all_latency_entries(multi_latest)) >= 1
+
+        # A single-node route returns a flat list rather than a mapping.
+        single_history = glide_sync_client.latency_history("command", route=RandomNode())
+        assert isinstance(single_history, list)
+        assert len(single_history) > 0
+
+        single_latest = glide_sync_client.latency_latest(route=RandomNode())
+        assert isinstance(single_latest, list)
+        assert len(single_latest) >= 1
+
+        # Reset honors explicit route options and aggregates the count.
+        assert glide_sync_client.latency_reset(route=AllNodes()) > 0
+        trigger_latency_spike_sync(glide_sync_client)
+        assert glide_sync_client.latency_reset("command", route=AllPrimaries()) > 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

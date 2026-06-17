@@ -1779,7 +1779,7 @@ func handleLatencyHistoryResponse(response *C.struct_CommandResponse) ([]models.
 }
 
 // handleLatencyLatestResponse parses a `LATENCY LATEST` response from a single node.
-func handleLatencyLatestResponse(response *C.struct_CommandResponse) ([]models.LatencyInfo, error) {
+func handleLatencyLatestResponse(response *C.struct_CommandResponse) ([]models.LatencyEventInfo, error) {
 	defer C.free_command_response(response)
 
 	if err := checkResponseType(response, C.Array, false); err != nil {
@@ -1793,7 +1793,7 @@ func handleLatencyLatestResponse(response *C.struct_CommandResponse) ([]models.L
 	if err != nil {
 		return nil, err
 	}
-	return res.([]models.LatencyInfo), nil
+	return res.([]models.LatencyEventInfo), nil
 }
 
 // handleLatencyHistoryClusterResponse parses a `LATENCY HISTORY` response from multiple nodes.
@@ -1823,7 +1823,7 @@ func handleLatencyHistoryClusterResponse(response *C.struct_CommandResponse) (ma
 }
 
 // handleLatencyLatestClusterResponse parses a `LATENCY LATEST` response from multiple nodes.
-func handleLatencyLatestClusterResponse(response *C.struct_CommandResponse) (map[string][]models.LatencyInfo, error) {
+func handleLatencyLatestClusterResponse(response *C.struct_CommandResponse) (map[string][]models.LatencyEventInfo, error) {
 	defer C.free_command_response(response)
 
 	if err := checkResponseType(response, C.Map, false); err != nil {
@@ -1837,13 +1837,13 @@ func handleLatencyLatestClusterResponse(response *C.struct_CommandResponse) (map
 	if !ok {
 		return nil, fmt.Errorf("unexpected map type for cluster LATENCY LATEST: %T", raw)
 	}
-	result := make(map[string][]models.LatencyInfo, len(rawMap))
+	result := make(map[string][]models.LatencyEventInfo, len(rawMap))
 	for node, value := range rawMap {
 		res, err := internal.ConvertLatencyLatestEntries(value)
 		if err != nil {
 			return nil, fmt.Errorf("node %q: %w", node, err)
 		}
-		result[node] = res.([]models.LatencyInfo)
+		result[node] = res.([]models.LatencyEventInfo)
 	}
 	return result, nil
 }

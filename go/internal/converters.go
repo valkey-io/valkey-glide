@@ -767,7 +767,7 @@ func ConvertLatencyLatestEntries(data any) (any, error) {
 	if !ok {
 		return nil, fmt.Errorf("unexpected type for LATENCY LATEST response: %T", data)
 	}
-	result := make([]models.LatencyInfo, 0, len(arr))
+	result := make([]models.LatencyEventInfo, 0, len(arr))
 	for i, item := range arr {
 		entry, ok := item.([]any)
 		if !ok {
@@ -793,7 +793,7 @@ func ConvertLatencyLatestEntries(data any) (any, error) {
 			return nil, fmt.Errorf("unexpected type for LATENCY LATEST max_ms at index %d: %T", i, entry[3])
 		}
 
-		info := models.LatencyInfo{
+		info := models.LatencyEventInfo{
 			EventName: name,
 			Time:      time.Unix(ts, 0),
 			Latest:    time.Duration(latest) * time.Millisecond,

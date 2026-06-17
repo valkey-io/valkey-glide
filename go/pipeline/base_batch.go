@@ -7411,7 +7411,7 @@ func (b *BaseBatch[T]) LatencyHistory(event string) *T {
 //
 // Command Response:
 //
-//	A slice of [models.LatencyInfo] for the latest latency events.
+//	A slice of [models.LatencyEventInfo] for the latest latency events.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
 func (b *BaseBatch[T]) LatencyLatest() *T {

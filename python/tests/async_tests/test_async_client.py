@@ -10261,6 +10261,34 @@ class TestCommands:
         history = await glide_client.latency_history("command")
         assert len(get_all_latency_entries(history)) > 0
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_routing(self, glide_client: GlideClusterClient):
+        await trigger_latency_spike(glide_client)
+
+        # Default route (all primary nodes) returns a per-node mapping.
+        multi_history = await glide_client.latency_history("command")
+        assert isinstance(multi_history, dict)
+        assert len(get_all_latency_entries(multi_history)) > 0
+
+        multi_latest = await glide_client.latency_latest()
+        assert isinstance(multi_latest, dict)
+        assert len(get_all_latency_entries(multi_latest)) >= 1
+
+        # A single-node route returns a flat list rather than a mapping.
+        single_history = await glide_client.latency_history("command", route=RandomNode())
+        assert isinstance(single_history, list)
+        assert len(single_history) > 0
+
+        single_latest = await glide_client.latency_latest(route=RandomNode())
+        assert isinstance(single_latest, list)
+        assert len(single_latest) >= 1
+
+        # Reset honors explicit route options and aggregates the count.
+        assert await glide_client.latency_reset(route=AllNodes()) > 0
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command", route=AllPrimaries()) > 0
+
 
 @pytest.mark.anyio
 class TestMultiKeyCommandCrossSlot:

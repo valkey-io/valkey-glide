@@ -716,7 +716,7 @@ func (client *Client) LatencyHistory(ctx context.Context, event string) ([]model
 //	Latency info for each recorded event.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
-func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyInfo, error) {
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyEventInfo, error) {
 	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
 	if err != nil {
 		return nil, err
