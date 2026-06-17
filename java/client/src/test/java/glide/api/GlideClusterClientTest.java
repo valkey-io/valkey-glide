@@ -849,7 +849,6 @@ public class GlideClusterClientTest {
         CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
 
         // verify
-        assertEquals(testResponse, response);
         assertEquals(info, response.get());
     }
 

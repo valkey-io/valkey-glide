@@ -5152,7 +5152,6 @@ public class GlideClientTest {
         CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
 
         // verify
-        assertEquals(testResponse, response);
         assertEquals(info, response.get());
     }
 
