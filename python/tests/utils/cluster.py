@@ -47,7 +47,7 @@ class ValkeyCluster:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            output, err = p.communicate(timeout=80)
+            output, err = p.communicate(timeout=240)
             if p.returncode != 0:
                 raise Exception(
                     f"Failed to create a cluster. Executed: {p}" + ":" + f"\n{err}"
