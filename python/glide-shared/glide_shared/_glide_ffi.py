@@ -55,8 +55,7 @@ class _GlideFFI:
     def _init_ffi(self):
         self._ffi = FFI()
 
-        self._ffi.cdef(
-            """
+        self._ffi.cdef("""
             // ============== SCRIPT MANAGEMENT ==============
             typedef struct {
                 uint8_t* ptr;
@@ -370,9 +369,12 @@ class _GlideFFI:
                 uintptr_t client_ptr,
                 double timestamp,
                 int64_t db,
-                const uint8_t* client_addr, int64_t client_addr_len,
-                const uint8_t* command,     int64_t command_len,
-                const uint8_t* args_json,   int64_t args_json_len
+                const uint8_t* client_addr,
+                int64_t client_addr_len,
+                const uint8_t* command,
+                int64_t command_len,
+                const uint8_t* args_json,
+                int64_t args_json_len
             );
 
             const ConnectionResponse* create_monitor_client(
@@ -386,8 +388,7 @@ class _GlideFFI:
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();
-            """
-        )
+            """)
 
         # Load the shared library
         self._lib = self._ffi.dlopen(str(LIB_FILE.resolve()))
