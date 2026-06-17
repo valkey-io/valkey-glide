@@ -2193,9 +2193,7 @@ describe("GlideClient", () => {
                 );
 
                 // Verify initial role is master
-                let info = await client.info({
-                    sections: [InfoOptions.Replication],
-                });
+                let info = await client.info([InfoOptions.Replication]);
                 expect(info).toContain("role:master");
 
                 // Execute failover — returns OK immediately
@@ -2206,9 +2204,7 @@ describe("GlideClient", () => {
                 let roleChanged = false;
 
                 for (let i = 0; i < 60; i++) {
-                    info = await client.info({
-                        sections: [InfoOptions.Replication],
-                    });
+                    info = await client.info([InfoOptions.Replication]);
 
                     if (info.includes("role:slave")) {
                         roleChanged = true;
