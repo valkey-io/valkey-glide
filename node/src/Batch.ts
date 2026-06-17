@@ -4470,7 +4470,6 @@ export class Batch extends BaseBatch<Batch> {
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
      * Supports migrating a single key or multiple keys (using the KEYS subcommand).
-     * Multi-key migration is not supported in cluster mode.
      *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
