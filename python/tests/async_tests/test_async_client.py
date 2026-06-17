@@ -12567,7 +12567,7 @@ class TestScripts:
             )
             try:
                 # Verify initial role is master
-                info = await client.info([InfoSection.REPLICATION])
+                info = (await client.info([InfoSection.REPLICATION])).decode()
                 assert "role:master" in info
 
                 # Execute failover — returns OK immediately
@@ -12577,7 +12577,7 @@ class TestScripts:
                 # Wait for role to change to slave (failover completed)
                 role_changed = False
                 for _ in range(60):
-                    info = await client.info([InfoSection.REPLICATION])
+                    info = (await client.info([InfoSection.REPLICATION])).decode()
                     if "role:slave" in info:
                         role_changed = True
                         break

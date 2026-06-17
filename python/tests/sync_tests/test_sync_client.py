@@ -12487,7 +12487,7 @@ class TestSyncScripts:
             )
             try:
                 # Verify initial role is master
-                info = client.info([InfoSection.REPLICATION])
+                info = client.info([InfoSection.REPLICATION]).decode()
                 assert "role:master" in info
 
                 # Execute failover — returns OK immediately
@@ -12497,7 +12497,7 @@ class TestSyncScripts:
                 # Wait for role to change to slave (failover completed)
                 role_changed = False
                 for _ in range(60):
-                    info = client.info([InfoSection.REPLICATION])
+                    info = client.info([InfoSection.REPLICATION]).decode()
                     if "role:slave" in info:
                         role_changed = True
                         break
