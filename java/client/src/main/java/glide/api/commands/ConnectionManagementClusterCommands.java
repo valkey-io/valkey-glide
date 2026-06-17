@@ -386,11 +386,23 @@ public interface ConnectionManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
      * @since Valkey 6.2.0 and above.
-     * @return A map containing the tracking info. The map contains keys: {@code flags}, {@code
-     *     redirect}, {@code prefixes}.
+     * @return A {@link Map} with the client's tracking state. The map contains:
+     *     <ul>
+     *       <li>{@code flags}: a {@link java.util.Set} of tracking flags (e.g. {@code "off"}, {@code
+     *           "on"}, {@code "noloop"}, {@code "bcast"}, {@code "optin"}, {@code "optout"})
+     *       <li>{@code redirect}: a {@link Long} with the client ID receiving invalidation messages,
+     *           or {@code -1} if not redirecting
+     *       <li>{@code prefixes}: an {@code Object[]} of key prefixes monitored for invalidation
+     *     </ul>
+     *
      * @example
      *     <pre>{@code
      * Map<String, Object> info = client.clientTrackingInfo().get();
+     * // Example response when tracking is off:
+     * // {"flags": {"off"}, "redirect": -1L, "prefixes": []}
+     * Set<String> flags = (Set<String>) info.get("flags");   // e.g. {"off"}
+     * Long redirect = (Long) info.get("redirect");            // e.g. -1
+     * Object[] prefixes = (Object[]) info.get("prefixes");   // e.g. []
      * }</pre>
      */
     CompletableFuture<Map<String, Object>> clientTrackingInfo();
@@ -401,12 +413,22 @@ public interface ConnectionManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
      * @since Valkey 6.2.0 and above.
      * @param route Specifies the routing configuration for the command.
-     * @return A {@link ClusterValue} which holds a single value if single node route is used or a
-     *     dictionary where each address is the key and its corresponding node response is the value.
-     *     The returned map contains keys: {@code flags}, {@code redirect}, {@code prefixes}.
+     * @return A {@link glide.api.models.ClusterValue} containing the tracking state map per the
+     *     routing. If a {@link
+     *     glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute} is used, holds
+     *     a single {@link Map} with keys {@code flags} ({@link java.util.Set}), {@code redirect}
+     *     ({@link Long}), and {@code prefixes} ({@code Object[]}). If a multi-node route is used,
+     *     holds a {@link Map} of node address to tracking state map.
      * @example
      *     <pre>{@code
-     * ClusterValue<Map<String, Object>> info = client.clientTrackingInfo(ALL_NODES).get();
+     * // Single node:
+     * Map<String, Object> info = client.clientTrackingInfo(RANDOM).get().getSingleValue();
+     * Set<String> flags = (Set<String>) info.get("flags");   // e.g. {"off"}
+     * Long redirect = (Long) info.get("redirect");            // e.g. -1
+     * Object[] prefixes = (Object[]) info.get("prefixes");   // e.g. []
+     *
+     * // Multi-node:
+     * Map<String, Map<String, Object>> allNodes = client.clientTrackingInfo(ALL_NODES).get().getMultiValue();
      * }</pre>
      */
     CompletableFuture<ClusterValue<Map<String, Object>>> clientTrackingInfo(Route route);
