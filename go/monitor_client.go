@@ -64,6 +64,10 @@ func monitorCallback(
 		return
 	}
 
+	if clientAddr == nil || command == nil {
+		return
+	}
+
 	args := []string{}
 	if argsJsonLen > 0 && argsJson != nil {
 		jsonBytes := C.GoBytes(argsJson, C.int(argsJsonLen))
@@ -78,18 +82,10 @@ func monitorCallback(
 		Args:       args,
 	}
 
-	client.mu.Lock()
-	cb := client.callback
-	if cb == nil {
-		client.queue = append(client.queue, line)
-		client.cond.Broadcast()
-		client.mu.Unlock()
-		return
+	select {
+	case client.ch <- line:
+	default:
 	}
-	client.activeCBs.Add(1)
-	client.mu.Unlock()
-	cb(line)
-	client.activeCBs.Done()
 }
 
 // MonitorClient listens to all commands processed by the server via the MONITOR command.
@@ -101,7 +97,36 @@ type MonitorClient struct {
 	callback   func(MonitorLine)
 	queue      []MonitorLine
 	closed     bool
-	activeCBs  sync.WaitGroup
+	ch         chan MonitorLine
+	done       chan struct{}
+	wg         sync.WaitGroup
+}
+
+func (c *MonitorClient) startDispatcher() {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		for {
+			select {
+			case line, ok := <-c.ch:
+				if !ok {
+					return
+				}
+				c.mu.Lock()
+				cb := c.callback
+				if cb == nil {
+					c.queue = append(c.queue, line)
+					c.cond.Broadcast()
+					c.mu.Unlock()
+				} else {
+					c.mu.Unlock()
+					cb(line)
+				}
+			case <-c.done:
+				return
+			}
+		}
+	}()
 }
 
 // NewMonitorClient creates a new MonitorClient connected to a standalone server.
@@ -137,9 +162,12 @@ func NewMonitorClient(cfg *config.ClientConfiguration, callback func(MonitorLine
 	client := &MonitorClient{
 		coreClient: cResponse.conn_ptr,
 		callback:   callback,
+		ch:         make(chan MonitorLine, 512),
+		done:       make(chan struct{}),
 	}
 	client.cond = sync.NewCond(&client.mu)
 	registerMonitorClient(client, uintptr(cResponse.conn_ptr))
+	client.startDispatcher()
 	return client, nil
 }
 
@@ -178,7 +206,6 @@ func (c *MonitorClient) TryGetMonitorMessage() (MonitorLine, bool) {
 }
 
 // Close stops the monitor client and releases its resources.
-// Calling Close from within a MonitorClient callback will deadlock.
 func (c *MonitorClient) Close() {
 	c.mu.Lock()
 	if c.closed {
@@ -188,12 +215,11 @@ func (c *MonitorClient) Close() {
 	c.closed = true
 	c.mu.Unlock()
 
+	close(c.done)
+	c.wg.Wait()
 	c.cond.Broadcast()
-	c.activeCBs.Wait()
 
-	if c.coreClient != nil {
-		unregisterMonitorClient(uintptr(c.coreClient))
-		C.close_monitor_client(c.coreClient)
-		c.coreClient = nil
-	}
+	unregisterMonitorClient(uintptr(c.coreClient))
+	C.close_monitor_client(c.coreClient)
+	c.coreClient = nil
 }

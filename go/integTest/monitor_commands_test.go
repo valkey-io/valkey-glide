@@ -33,15 +33,23 @@ func (suite *GlideTestSuite) TestMonitorReceivesCommands() {
 	_, err = client.Set(context.Background(), key, "value")
 	require.NoError(suite.T(), err)
 
-	time.Sleep(500 * time.Millisecond)
-
-	mu.Lock()
-	defer mu.Unlock()
-	var commands []string
-	for _, line := range received {
-		commands = append(commands, line.Command)
+	deadline := time.Now().Add(5 * time.Second)
+	found := false
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		for _, line := range received {
+			if line.Command == "SET" {
+				found = true
+				break
+			}
+		}
+		mu.Unlock()
+		if found {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	assert.Contains(suite.T(), commands, "SET")
+	assert.True(suite.T(), found, "SET command not found in monitor output")
 }
 
 func (suite *GlideTestSuite) TestMonitorQueue() {
@@ -53,15 +61,21 @@ func (suite *GlideTestSuite) TestMonitorQueue() {
 	_, err = client.Ping(context.Background())
 	require.NoError(suite.T(), err)
 
-	time.Sleep(500 * time.Millisecond)
-
-	line, ok := monitor.TryGetMonitorMessage()
-	assert.True(suite.T(), ok)
+	deadline := time.Now().Add(5 * time.Second)
+	var line glide.MonitorLine
+	var ok bool
+	for time.Now().Before(deadline) {
+		line, ok = monitor.TryGetMonitorMessage()
+		if ok {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.True(suite.T(), ok, "timed out waiting for monitor message")
 	assert.NotEmpty(suite.T(), line.Command)
 	assert.Greater(suite.T(), line.Timestamp, float64(0))
 	assert.GreaterOrEqual(suite.T(), line.DB, int64(0))
 	assert.NotEmpty(suite.T(), line.ClientAddr)
-	assert.NotEmpty(suite.T(), line.Command)
 	assert.NotNil(suite.T(), line.Args)
 }
 
@@ -108,12 +122,12 @@ func (suite *GlideTestSuite) TestMonitorFields() {
 	_, err = client.Set(context.Background(), key, "hello")
 	require.NoError(suite.T(), err)
 
-	time.Sleep(500 * time.Millisecond)
-
-	for i := 0; i < 10; i++ {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
 		line, ok := monitor.TryGetMonitorMessage()
 		if !ok {
-			break
+			time.Sleep(10 * time.Millisecond)
+			continue
 		}
 		if line.Command == "SET" {
 			assert.Greater(suite.T(), line.Timestamp, float64(0))
@@ -123,5 +137,5 @@ func (suite *GlideTestSuite) TestMonitorFields() {
 			return
 		}
 	}
-	suite.T().Fatal("SET command not found in monitor queue within expected messages")
+	suite.T().Fatal("SET command not found in monitor queue within timeout")
 }
