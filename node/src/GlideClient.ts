@@ -1128,16 +1128,11 @@ export class GlideClient extends BaseClient {
      * to a destination Valkey instance.
      * On success, keys are deleted from the source unless `copy` is set to `true` in options.
      *
-     * @remarks
-     * The multi-key form (passing an array as `keyOrKeys`) is available on standalone
-     * clients only; it is not supported by cluster clients.
-     *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param key - The key to migrate, or an array of keys to migrate. When an array is provided,
-     *     the KEYS subcommand is used and an empty string is sent in the key position per the MIGRATE protocol.
+     * @param key - The key to migrate, or an array of keys to migrate.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
@@ -1153,7 +1148,7 @@ export class GlideClient extends BaseClient {
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
      * console.log(result); // "OK"
      * ```
-     * @example Multi-key (standalone only):
+     * @example Multi-key:
      * ```typescript
      * const result = await client.migrate("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
      * console.log(result); // "OK"
