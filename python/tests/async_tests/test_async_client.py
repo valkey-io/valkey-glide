@@ -10277,7 +10277,9 @@ class TestCommands:
         assert len(get_all_latency_entries(multi_latest)) >= 1
 
         # A single-node route returns a flat list rather than a mapping.
-        single_history = await glide_client.latency_history("command", route=RandomNode())
+        single_history = await glide_client.latency_history(
+            "command", route=RandomNode()
+        )
         assert isinstance(single_history, list)
         assert len(single_history) > 0
 
@@ -10287,6 +10289,7 @@ class TestCommands:
 
         # Reset honors explicit route options and aggregates the count.
         assert await glide_client.latency_reset(route=AllNodes()) > 0
+
         await trigger_latency_spike(glide_client)
         assert await glide_client.latency_reset("command", route=AllPrimaries()) > 0
 

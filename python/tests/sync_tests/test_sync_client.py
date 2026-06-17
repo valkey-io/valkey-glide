@@ -5493,7 +5493,9 @@ class TestCommands:
         assert len(get_all_latency_entries(multi_latest)) >= 1
 
         # A single-node route returns a flat list rather than a mapping.
-        single_history = glide_sync_client.latency_history("command", route=RandomNode())
+        single_history = glide_sync_client.latency_history(
+            "command", route=RandomNode()
+        )
         assert isinstance(single_history, list)
         assert len(single_history) > 0
 
@@ -5503,6 +5505,7 @@ class TestCommands:
 
         # Reset honors explicit route options and aggregates the count.
         assert glide_sync_client.latency_reset(route=AllNodes()) > 0
+
         trigger_latency_spike_sync(glide_sync_client)
         assert glide_sync_client.latency_reset("command", route=AllPrimaries()) > 0
 
