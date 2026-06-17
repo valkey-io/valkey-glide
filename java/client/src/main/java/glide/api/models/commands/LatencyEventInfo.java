@@ -8,7 +8,7 @@ import lombok.Getter;
 import lombok.ToString;
 
 /**
- * Represents data about an event's latency spike time series.
+ * Information about an event's latency spike time series.
  *
  * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
  */
@@ -21,13 +21,13 @@ public final class LatencyEventInfo {
     /** The name of the event. */
     private final String eventName;
 
-    /** The time of the latest latency spike for the event, as a Unix timestamp in seconds. */
+    /** The time of the latest latency spike, as a Unix timestamp in seconds. */
     private final long time;
 
-    /** The duration of the latest latency spike for the event, in milliseconds. */
+    /** The duration of the latest latency spike, in milliseconds. */
     private final long latest;
 
-    /** The all-time maximum duration of a latency spike for the event, in milliseconds. */
+    /** The all-time maximum duration of a latency spike, in milliseconds. */
     private final long maximum;
 
     /**

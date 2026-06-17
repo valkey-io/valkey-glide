@@ -48,6 +48,7 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     UpdateOptions,
 )
+from glide_shared.commands.latency import LatencyEntry, LatencyEventInfo
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -10187,6 +10188,93 @@ class TestCommands:
             assert await glide_client.get(key) == b"after"
         finally:
             await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_history(self, glide_client: TGlideClient):
+        before_spike = int(time.time())
+        await self._trigger_latency_spike(glide_client)
+
+        history = await glide_client.latency_history("command")
+        all_entries = self._get_all_latency_entries(history)
+
+        assert len(all_entries) > 0
+        for entry in all_entries:
+            assert isinstance(entry, LatencyEntry)
+            assert entry.time >= before_spike
+            assert entry.latency > 0
+
+        # Non-existent event returns empty
+        unknown = await glide_client.latency_history("nonexistent")
+        assert len(self._get_all_latency_entries(unknown)) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_latest(self, glide_client: TGlideClient):
+        before_spike = int(time.time())
+        await self._trigger_latency_spike(glide_client)
+
+        latest = await glide_client.latency_latest()
+        all_entries = self._get_all_latency_entries(latest)
+        assert len(all_entries) >= 1
+
+        # Find the "command" event
+        command_info = next((info for info in all_entries if info.event_name == "command"), None)
+        assert command_info is not None
+
+        assert command_info.time >= before_spike
+        assert command_info.latest > 0
+        assert command_info.maximum >= command_info.latest
+
+        # Valkey 8.1+ populates sum and count
+        if not await check_if_server_version_lt(glide_client, "8.1.0"):
+            assert command_info.sum is not None and command_info.sum > 0
+            assert command_info.count is not None and command_info.count > 0
+        else:
+            assert command_info.sum is None
+            assert command_info.count is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_reset(self, glide_client: TGlideClient):
+
+        # Trigger spike then reset all events.
+        await self._trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset() > 0
+
+        history = await glide_client.latency_history("command")
+        assert len(self._get_all_latency_entries(history)) == 0
+
+        # Trigger spike then reset specific event.
+        await self._trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command") > 0
+        history = await glide_client.latency_history("command")
+        assert len(self._get_all_latency_entries(history)) == 0
+
+        # Trigger spike then reset unknown event — "command" data should persist.
+        await self._trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("unknown-event") == 0
+        history = await glide_client.latency_history("command")
+        assert len(self._get_all_latency_entries(history)) > 0
+
+    def _get_all_latency_entries(self, response) -> list:
+        """Flatten a latency response into a plain list of entries."""
+        if isinstance(response, dict):
+            return [e for entries in response.values() for e in entries]
+        return response
+
+    async def _trigger_latency_spike(self, glide_client: TGlideClient):
+        """Enable latency monitoring, trigger a spike, then disable monitoring."""
+        await glide_client.latency_reset()
+        await glide_client.config_set({"latency-monitor-threshold": "1"})
+
+        debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
+        if isinstance(glide_client, GlideClusterClient):
+            await glide_client.custom_command(debug_sleep_args, AllNodes())
+        else:
+            await glide_client.custom_command(debug_sleep_args)
+
+        await glide_client.config_set({"latency-monitor-threshold": "0"})
 
 
 @pytest.mark.anyio

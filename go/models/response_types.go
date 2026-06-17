@@ -489,15 +489,15 @@ type LatencyEntry struct {
 	Latency time.Duration
 }
 
-// LatencyInfo represents data about an event's latency spike time series.
+// LatencyInfo represents information about an event's latency spike time series.
 type LatencyInfo struct {
 	// EventName is the name of the event.
 	EventName string
-	// Time is the time of the latest latency spike for the event.
+	// Time is the time of the latest latency spike.
 	Time time.Time
-	// Latest is the duration of the latest latency spike for the event.
+	// Latest is the duration of the latest latency.
 	Latest time.Duration
-	// Maximum is the all-time maximum duration of a latency spike for the event.
+	// Maximum is the all-time maximum duration of a latency spike.
 	Maximum time.Duration
 	// Sum is the duration of all latency spikes in the event's time series.
 	// Only populated for Valkey 8.1+.
