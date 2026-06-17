@@ -49,6 +49,7 @@ from tests.utils.utils import (
     generate_lua_lib_code,
     get_random_string,
     get_version,
+    trigger_latency_spike,
 )
 
 
@@ -475,6 +476,34 @@ class TestBatch:
         lastsave_time = response[0]
         assert isinstance(lastsave_time, int)
         assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_latency(self, glide_client: TGlideClient, cluster_mode: bool):
+        await trigger_latency_spike(glide_client)
+
+        transaction = (
+            Batch(is_atomic=True)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=True)
+        )
+
+        transaction.latency_history("command")
+        transaction.latency_latest()
+        transaction.latency_reset()
+
+        response = await exec_batch(glide_client, transaction)
+        assert isinstance(response, list)
+        assert len(response) == 3
+
+        assert isinstance(response[0], list)
+        assert len(response[0]) > 0
+
+        assert isinstance(response[1], list)
+        assert len(response[1]) > 0
+
+        assert isinstance(response[2], int)
+        assert response[2] > 0
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

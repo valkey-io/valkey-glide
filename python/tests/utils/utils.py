@@ -161,6 +161,20 @@ def get_all_latency_entries(response) -> list:
     return response
 
 
+async def trigger_latency_spike(glide_client: TGlideClient) -> None:
+    """Enable latency monitoring, trigger a latency spike, then disable monitoring."""
+    await glide_client.latency_reset()
+    await glide_client.config_set({"latency-monitor-threshold": "1"})
+
+    debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
+    if isinstance(glide_client, GlideClusterClient):
+        await glide_client.custom_command(debug_sleep_args, AllNodes())
+    else:
+        await glide_client.custom_command(debug_sleep_args)
+
+    await glide_client.config_set({"latency-monitor-threshold": "0"})
+
+
 def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:
     res_first = get_first_result(res)
     res_decoded = res_first.decode() if isinstance(res_first, bytes) else res_first

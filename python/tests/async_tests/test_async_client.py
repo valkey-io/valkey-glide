@@ -129,6 +129,7 @@ from tests.utils.utils import (
     get_version,
     parse_info_response,
     round_values,
+    trigger_latency_spike,
     wait_for_save_not_in_progress,
 )
 
@@ -10194,7 +10195,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_latency_history(self, glide_client: TGlideClient):
         before_spike = int(time.time())
-        await self._trigger_latency_spike(glide_client)
+        await trigger_latency_spike(glide_client)
 
         history = await glide_client.latency_history("command")
         all_entries = get_all_latency_entries(history)
@@ -10213,7 +10214,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_latency_latest(self, glide_client: TGlideClient):
         before_spike = int(time.time())
-        await self._trigger_latency_spike(glide_client)
+        await trigger_latency_spike(glide_client)
 
         latest = await glide_client.latency_latest()
         all_entries = get_all_latency_entries(latest)
@@ -10242,36 +10243,23 @@ class TestCommands:
     async def test_latency_reset(self, glide_client: TGlideClient):
 
         # Trigger spike then reset all events.
-        await self._trigger_latency_spike(glide_client)
+        await trigger_latency_spike(glide_client)
         assert await glide_client.latency_reset() > 0
 
         history = await glide_client.latency_history("command")
         assert len(get_all_latency_entries(history)) == 0
 
         # Trigger spike then reset specific event.
-        await self._trigger_latency_spike(glide_client)
+        await trigger_latency_spike(glide_client)
         assert await glide_client.latency_reset("command") > 0
         history = await glide_client.latency_history("command")
         assert len(get_all_latency_entries(history)) == 0
 
         # Trigger spike then reset unknown event — "command" data should persist.
-        await self._trigger_latency_spike(glide_client)
+        await trigger_latency_spike(glide_client)
         assert await glide_client.latency_reset("unknown-event") == 0
         history = await glide_client.latency_history("command")
         assert len(get_all_latency_entries(history)) > 0
-
-    async def _trigger_latency_spike(self, glide_client: TGlideClient):
-        """Enable latency monitoring, trigger a spike, then disable monitoring."""
-        await glide_client.latency_reset()
-        await glide_client.config_set({"latency-monitor-threshold": "1"})
-
-        debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
-        if isinstance(glide_client, GlideClusterClient):
-            await glide_client.custom_command(debug_sleep_args, AllNodes())
-        else:
-            await glide_client.custom_command(debug_sleep_args)
-
-        await glide_client.config_set({"latency-monitor-threshold": "0"})
 
 
 @pytest.mark.anyio
