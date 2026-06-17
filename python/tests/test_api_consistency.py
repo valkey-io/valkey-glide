@@ -33,19 +33,12 @@ EXCLUDED_API_FUNCTIONS = {
         "py_log",
         # others
         "init_callback",
-        "create_leaked_bytes_vec",
-        "create_leaked_value",
-        "start_socket_listener_external",
-        "value_from_pointer",
         "aclose",
         # cache metrics sync path (PyO3 only, sync client uses FFI)
         "get_cache_metric_from_registry",
         # address resolver registry (PyO3 only, sync client passes callback via FFI)
         "register_address_resolver",
         "remove_address_resolver",
-        # monitor client (PyO3 only, sync client uses CFFI directly)
-        "create_monitor_client_external",
-        "close_monitor_client_external",
     ],
     "sync_only": [],
 }
