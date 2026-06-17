@@ -43,7 +43,7 @@ import {
     connection_request,
     response,
 } from "../build-ts/ProtobufMessage";
-import { createMigrateKeys } from "../build-ts/Commands";
+import { createMigrate } from "../build-ts/Commands";
 import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, CommandRequest } = command_request;
 
@@ -1129,9 +1129,9 @@ describe("Circular Dependency Fix", () => {
     /* eslint-enable @typescript-eslint/no-require-imports */
 });
 
-describe("createMigrateKeys validation", () => {
+describe("createMigrate (multi-key) validation", () => {
     it("builds multi-key KEYS command", () => {
-        const cmd = createMigrateKeys("host", 6379, ["k1", "k2"], 0, 1000);
+        const cmd = createMigrate("host", 6379, ["k1", "k2"], 0, 1000);
         expect(cmd.requestType).toEqual(RequestType.Migrate);
         expect(cmd.argsArray?.args).toEqual(
             convertStringArrayToBuffer([
@@ -1148,21 +1148,21 @@ describe("createMigrateKeys validation", () => {
     });
 
     it("throws when keys array is empty", () => {
-        expect(() => createMigrateKeys("host", 6379, [], 0, 1000)).toThrow(
-            "keys must not be empty",
+        expect(() => createMigrate("host", 6379, [], 0, 1000)).toThrow(
+            "keyOrKeys must not be an empty array",
         );
     });
 
     it("throws when username is set without password", () => {
         expect(() =>
-            createMigrateKeys("host", 6379, ["k"], 0, 1000, {
+            createMigrate("host", 6379, ["k"], 0, 1000, {
                 username: "user",
             }),
         ).toThrow("MigrateOptions: 'username' requires 'password' to be set");
     });
 
     it("builds command with COPY, REPLACE and AUTH options", () => {
-        const cmd = createMigrateKeys("host", 6379, ["k"], 0, 1000, {
+        const cmd = createMigrate("host", 6379, ["k"], 0, 1000, {
             copy: true,
             replace: true,
             password: "pass",
@@ -1185,7 +1185,7 @@ describe("createMigrateKeys validation", () => {
     });
 
     it("builds command with AUTH2 (username + password)", () => {
-        const cmd = createMigrateKeys("host", 6379, ["k"], 0, 1000, {
+        const cmd = createMigrate("host", 6379, ["k"], 0, 1000, {
             username: "user",
             password: "pass",
         });

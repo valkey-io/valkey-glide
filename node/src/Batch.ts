@@ -175,7 +175,6 @@ import {
     createLolwut,
     createMGet,
     createMigrate,
-    createMigrateKeys,
     createMSet,
     createMSetNX,
     createMove,
@@ -465,7 +464,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param key - The key to migrate.
+     * @param keyOrKeys - The key to migrate, or an array of keys to migrate using the KEYS subcommand.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
@@ -473,13 +472,20 @@ export class BaseBatch<T extends BaseBatch<T>> {
     public migrate(
         host: string,
         port: number,
-        key: GlideString,
+        keyOrKeys: GlideString | GlideString[],
         destinationDB: number,
         timeout: number,
         options?: MigrateOptions,
     ): T {
         return this.addAndReturn(
-            createMigrate(host, port, key, destinationDB, timeout, options),
+            createMigrate(
+                host,
+                port,
+                keyOrKeys,
+                destinationDB,
+                timeout,
+                options,
+            ),
         );
     }
 
@@ -4491,73 +4497,6 @@ export class Batch extends BaseBatch<Batch> {
      */
     public select(index: number): Batch {
         return this.addAndReturn(createSelect(index));
-    }
-
-    /**
-     * Atomically transfers a key or multiple keys from the current Valkey instance
-     * to a destination Valkey instance.
-     * On success, keys are deleted from the source unless `copy` is set to `true` in options.
-     *
-     * Multi-key form is available on standalone only (not cluster).
-     *
-     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
-     *
-     * @param host - The host of the destination Valkey instance.
-     * @param port - The port of the destination Valkey instance.
-     * @param keyOrKeys - The key to migrate, or an array of keys to migrate. Must not be empty.
-     * @param destinationDB - The database index on the destination instance.
-     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
-     * @param options - Optional migration options.
-     *
-     * Command Response - `"OK"` on success, `"NOKEY"` if none of the keys exist.
-     */
-    public migrate(
-        host: string,
-        port: number,
-        key: GlideString,
-        destinationDB: number,
-        timeout: number,
-        options?: MigrateOptions,
-    ): Batch;
-    public migrate(
-        host: string,
-        port: number,
-        keys: GlideString[],
-        destinationDB: number,
-        timeout: number,
-        options?: MigrateOptions,
-    ): Batch;
-    public migrate(
-        host: string,
-        port: number,
-        keyOrKeys: GlideString | GlideString[],
-        destinationDB: number,
-        timeout: number,
-        options?: MigrateOptions,
-    ): Batch {
-        if (Array.isArray(keyOrKeys)) {
-            return this.addAndReturn(
-                createMigrateKeys(
-                    host,
-                    port,
-                    keyOrKeys,
-                    destinationDB,
-                    timeout,
-                    options,
-                ),
-            );
-        }
-
-        return this.addAndReturn(
-            createMigrate(
-                host,
-                port,
-                keyOrKeys,
-                destinationDB,
-                timeout,
-                options,
-            ),
-        );
     }
 
     /** Publish a message on pubsub channel.

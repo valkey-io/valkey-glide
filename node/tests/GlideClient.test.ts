@@ -830,7 +830,7 @@ describe("GlideClient", () => {
             // Multi-key: empty keys array throws
             await expect(
                 client.migrate(serverHost, serverPort, [], 0, 1000),
-            ).rejects.toThrow("keys must not be empty");
+            ).rejects.toThrow("keyOrKeys must not be an empty array");
 
             // Multi-key with single key: NOKEY when key does not exist
             const key4 = getRandomKey();

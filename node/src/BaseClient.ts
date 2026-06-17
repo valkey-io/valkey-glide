@@ -2486,7 +2486,7 @@ export class BaseClient {
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param key - The key to migrate.
+     * @param keyOrKeys - The key to migrate, or an array of keys to migrate using the KEYS subcommand.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
@@ -2507,13 +2507,20 @@ export class BaseClient {
     public async migrate(
         host: string,
         port: number,
-        key: GlideString,
+        keyOrKeys: GlideString | GlideString[],
         destinationDB: number,
         timeout: number,
         options?: MigrateOptions,
     ): Promise<string> {
         return this.createWritePromise(
-            createMigrate(host, port, key, destinationDB, timeout, options),
+            createMigrate(
+                host,
+                port,
+                keyOrKeys,
+                destinationDB,
+                timeout,
+                options,
+            ),
         );
     }
 

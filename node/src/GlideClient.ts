@@ -49,7 +49,6 @@ import {
     createSave,
     createBgSave,
     createBgRewriteAof,
-    createMigrateKeys,
     createPing,
     createPublish,
     createRandomKey,
@@ -1161,40 +1160,11 @@ export class GlideClient extends BaseClient {
     public async migrate(
         host: string,
         port: number,
-        key: GlideString,
-        destinationDB: number,
-        timeout: number,
-        options?: MigrateOptions,
-    ): Promise<string>;
-    public async migrate(
-        host: string,
-        port: number,
-        keys: GlideString[],
-        destinationDB: number,
-        timeout: number,
-        options?: MigrateOptions,
-    ): Promise<string>;
-    public async migrate(
-        host: string,
-        port: number,
         keyOrKeys: GlideString | GlideString[],
         destinationDB: number,
         timeout: number,
         options?: MigrateOptions,
     ): Promise<string> {
-        if (Array.isArray(keyOrKeys)) {
-            return this.createWritePromise(
-                createMigrateKeys(
-                    host,
-                    port,
-                    keyOrKeys,
-                    destinationDB,
-                    timeout,
-                    options,
-                ),
-            );
-        }
-
         return super.migrate(
             host,
             port,

@@ -3436,73 +3436,46 @@ export interface MigrateOptions {
     username?: string;
 }
 
-/** @internal */
-function buildMigrateOptionsArgs(options: MigrateOptions): GlideString[] {
-    if (options.username !== undefined && options.password === undefined) {
-        throw new Error(
-            "MigrateOptions: 'username' requires 'password' to be set",
-        );
-    }
-
-    const optArgs: GlideString[] = [];
-    if (options.copy) optArgs.push("COPY");
-
-    if (options.replace) optArgs.push("REPLACE");
-
-    if (options.username !== undefined) {
-        optArgs.push("AUTH2", options.username, options.password!);
-    } else if (options.password !== undefined) {
-        optArgs.push("AUTH", options.password);
-    }
-
-    return optArgs;
-}
-
 export function createMigrate(
     host: string,
     port: number,
-    key: GlideString,
+    keyOrKeys: GlideString | GlideString[],
     destinationDB: number,
     timeout: number,
     options?: MigrateOptions,
 ): command_request.Command {
+    const isArray = Array.isArray(keyOrKeys);
+
+    if (isArray && (keyOrKeys as GlideString[]).length === 0)
+        throw new Error("keyOrKeys must not be an empty array");
+
     const args: GlideString[] = [
         host,
         port.toString(),
-        key,
+        isArray ? "" : (keyOrKeys as GlideString),
         destinationDB.toString(),
         timeout.toString(),
     ];
 
-    if (options) args.push(...buildMigrateOptionsArgs(options));
+    if (options) {
+        if (options.username !== undefined && options.password === undefined) {
+            throw new Error(
+                "MigrateOptions: 'username' requires 'password' to be set",
+            );
+        }
 
-    return createCommand(RequestType.Migrate, args);
-}
+        if (options.copy) args.push("COPY");
+        if (options.replace) args.push("REPLACE");
 
-/** @internal */
-export function createMigrateKeys(
-    host: string,
-    port: number,
-    keys: GlideString[],
-    destinationDB: number,
-    timeout: number,
-    options?: MigrateOptions,
-): command_request.Command {
-    if (keys.length === 0) {
-        throw new Error("keys must not be empty");
+        if (options.username !== undefined && options.password !== undefined) {
+            args.push("AUTH2", options.username, options.password);
+        } else if (options.password !== undefined) {
+            args.push("AUTH", options.password);
+        }
     }
 
-    const args: GlideString[] = [
-        host,
-        port.toString(),
-        "", // empty key slot for multi-key form
-        destinationDB.toString(),
-        timeout.toString(),
-    ];
+    if (isArray) args.push("KEYS", ...(keyOrKeys as GlideString[]));
 
-    if (options) args.push(...buildMigrateOptionsArgs(options));
-
-    args.push("KEYS", ...keys);
     return createCommand(RequestType.Migrate, args);
 }
 
