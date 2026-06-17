@@ -15,13 +15,13 @@ use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyString};
+
+type PyObject = Py<PyAny>;
 use redis::Value;
 use std::collections::HashMap;
 use std::ptr::from_mut;
 use std::str::FromStr;
 use std::sync::Arc;
-
-type PyObject = Py<PyAny>;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
@@ -37,7 +37,7 @@ pub const DEFAULT_TRACE_SAMPLE_RATE: u32 = DEFAULT_TRACE_SAMPLE_PERCENTAGE;
 /// - `flush_interval_ms`: Optional interval in milliseconds between consecutive exports of telemetry data. If `None`, a default value will be used.
 ///
 /// At least one of traces or metrics must be provided.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryConfig {
     /// Optional configuration for exporting trace data. If `None`, trace data will not be exported.
@@ -87,7 +87,7 @@ impl OpenTelemetryConfig {
 /// - `sample_percentage`: The percentage of requests to sample and create a span for, used to measure command duration. If `None`, a default value DEFAULT_TRACE_SAMPLE_RATE will be used.
 ///   Note: There is a tradeoff between sampling percentage and performance. Higher sampling percentages will provide more detailed telemetry data but will impact performance.
 ///   It is recommended to keep this number low (1-5%) in production environments unless you have specific needs for higher sampling rates.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryTracesConfig {
     /// The endpoint to which trace data will be exported.
@@ -124,7 +124,7 @@ impl OpenTelemetryTracesConfig {
 ///   - For gRPC: `grpc://host:port`
 ///   - For HTTP: `http://host:port` or `https://host:port`
 ///   - For file exporter: `file:///absolute/path/to/folder/file.json`
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct OpenTelemetryMetricsConfig {
     /// The endpoint to which metrics data will be exported.
@@ -143,7 +143,7 @@ impl OpenTelemetryMetricsConfig {
     }
 }
 
-#[pyclass(eq, eq_int)]
+#[pyclass(eq, eq_int, from_py_object)]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
 pub enum Level {
     Error = 0,
@@ -230,6 +230,7 @@ impl Script {
     }
 }
 
+/// A Python module implemented in Rust.
 #[pymodule]
 fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Level>()?;
@@ -284,7 +285,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         }
     }
 
-    // SAFETY: PyObject is Send+Sync when accessed only through Python::attach.
+    // SAFETY: PyObject is Send+Sync when accessed only through Python::with_gil.
     unsafe impl Send for PyAddressResolver {}
     unsafe impl Sync for PyAddressResolver {}
 
@@ -407,7 +408,6 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     fn py_init(level: Option<Level>, file_name: Option<&str>) -> Level {
         init(level, file_name)
     }
-
     #[pyfunction]
     fn start_socket_listener_external(init_callback: PyObject) -> PyResult<PyObject> {
         let init_callback = Arc::new(init_callback);
@@ -433,33 +433,6 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 .into_any()
                 .unbind()
         }))
-    }
-
-    #[pyfunction]
-    pub fn value_from_pointer(py: Python, pointer: u64) -> PyResult<PyObject> {
-        let value = unsafe { Box::from_raw(pointer as *mut Value) };
-        resp_value_to_py(py, *value)
-    }
-
-    #[pyfunction]
-    /// This function is for tests that require a value allocated on the heap.
-    /// Should NOT be used in production.
-    pub fn create_leaked_value(message: String) -> usize {
-        let value = Value::SimpleString(message);
-        from_mut(Box::leak(Box::new(value))) as usize
-    }
-
-    #[pyfunction]
-    pub fn create_leaked_bytes_vec(args_vec: Vec<Bound<PyBytes>>) -> usize {
-        // Convert the bytes vec -> Bytes vector
-        let bytes_vec: Vec<Bytes> = args_vec
-            .iter()
-            .map(|v| {
-                let bytes = v.as_bytes();
-                Bytes::from(bytes.to_vec())
-            })
-            .collect();
-        from_mut(Box::leak(Box::new(bytes_vec))) as usize
     }
 
     fn iter_to_value<TIterator>(
@@ -602,6 +575,32 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         }
     }
 
+    #[pyfunction]
+    pub fn value_from_pointer(py: Python, pointer: u64) -> PyResult<PyObject> {
+        let value = unsafe { Box::from_raw(pointer as *mut Value) };
+        resp_value_to_py(py, *value)
+    }
+
+    #[pyfunction]
+    /// This function is for tests that require a value allocated on the heap.
+    /// Should NOT be used in production.
+    pub fn create_leaked_value(message: String) -> usize {
+        let value = Value::SimpleString(message);
+        from_mut(Box::leak(Box::new(value))) as usize
+    }
+
+    #[pyfunction]
+    pub fn create_leaked_bytes_vec(args_vec: Vec<Bound<PyBytes>>) -> usize {
+        // Convert the bytes vec -> Bytes vector
+        let bytes_vec: Vec<Bytes> = args_vec
+            .iter()
+            .map(|v| {
+                let bytes = v.as_bytes();
+                Bytes::from(bytes.to_vec())
+            })
+            .collect();
+        from_mut(Box::leak(Box::new(bytes_vec))) as usize
+    }
     Ok(())
 }
 impl From<logger_core::Level> for Level {
