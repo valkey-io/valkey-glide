@@ -1149,7 +1149,7 @@ describe("createMigrate (multi-key) validation", () => {
 
     it("throws when keys array is empty", () => {
         expect(() => createMigrate("host", 6379, [], 0, 1000)).toThrow(
-            "keyOrKeys must not be an empty array",
+            "key must not be an empty array",
         );
     });
 

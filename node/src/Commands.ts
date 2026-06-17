@@ -3439,20 +3439,20 @@ export interface MigrateOptions {
 export function createMigrate(
     host: string,
     port: number,
-    keyOrKeys: GlideString | GlideString[],
+    key: GlideString | GlideString[],
     destinationDB: number,
     timeout: number,
     options?: MigrateOptions,
 ): command_request.Command {
-    const isArray = Array.isArray(keyOrKeys);
+    const isArray = Array.isArray(key);
 
-    if (isArray && (keyOrKeys as GlideString[]).length === 0)
-        throw new Error("keyOrKeys must not be an empty array");
+    if (isArray && (key as GlideString[]).length === 0)
+        throw new Error("key must not be an empty array");
 
     const args: GlideString[] = [
         host,
         port.toString(),
-        isArray ? "" : (keyOrKeys as GlideString),
+        isArray ? "" : (key as GlideString),
         destinationDB.toString(),
         timeout.toString(),
     ];
@@ -3474,7 +3474,7 @@ export function createMigrate(
         }
     }
 
-    if (isArray) args.push("KEYS", ...(keyOrKeys as GlideString[]));
+    if (isArray) args.push("KEYS", ...(key as GlideString[]));
 
     return createCommand(RequestType.Migrate, args);
 }
