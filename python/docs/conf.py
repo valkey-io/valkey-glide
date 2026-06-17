@@ -77,6 +77,12 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         "count",
         "maximum",
         "sum",
+        # MonitorMsg
+        "timestamp",
+        "db",
+        "client_addr",
+        "command",
+        "args",
     )
     # Check if the attribute name itself is in exclusions
     if name in exclusions:

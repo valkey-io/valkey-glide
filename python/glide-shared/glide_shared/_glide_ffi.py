@@ -364,6 +364,27 @@ class _GlideFFI:
 
             Statistics get_statistics();
 
+            // ============== MONITOR ==============
+            typedef void (*MonitorCallback)(
+                uintptr_t client_ptr,
+                double timestamp,
+                int64_t db,
+                const uint8_t* client_addr,
+                int64_t client_addr_len,
+                const uint8_t* command,
+                int64_t command_len,
+                const uint8_t* args_json,
+                int64_t args_json_len
+            );
+
+            const ConnectionResponse* create_monitor_client(
+                const uint8_t* connection_request_bytes,
+                size_t connection_request_len,
+                MonitorCallback monitor_callback
+            );
+
+            void close_monitor_client(const void* client_ptr);
+
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();

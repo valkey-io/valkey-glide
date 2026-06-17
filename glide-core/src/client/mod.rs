@@ -431,6 +431,18 @@ fn get_timeout_from_cmd_arg(
     }
 }
 
+/// Returns true for commands with user-specified blocking timeouts that
+/// should be excluded from latency tracking (they distort p99).
+fn is_blocking_command(cmd: &Cmd) -> bool {
+    let command = cmd.command().unwrap_or_default();
+    match command.as_slice() {
+        b"BLPOP" | b"BRPOP" | b"BLMOVE" | b"BZPOPMAX" | b"BZPOPMIN" | b"BRPOPLPUSH" | b"BLMPOP"
+        | b"BZMPOP" | b"WAIT" | b"WAITAOF" => true,
+        b"XREAD" | b"XREADGROUP" => cmd.position(b"BLOCK").is_some(),
+        _ => false,
+    }
+}
+
 fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Option<Duration>> {
     let command = cmd.command().unwrap_or_default();
     let timeout = match command.as_slice() {
@@ -1117,6 +1129,12 @@ impl Client {
             let self_clone = self.clone();
             let owned_cmd = cmd.clone();
 
+            // Captured by the timeout path for watchdog-informed CB decisions.
+            let mut timeout_cause: Option<crate::timeout_watchdog::TimeoutCause> = None;
+
+            // Blocking commands have artificially long latencies; exclude from tracker.
+            let is_blocking_cmd = is_blocking_command(cmd);
+
             let result = match request_timeout {
                 Some(duration) => {
                     // Compute inflight count (cheap atomic load)
@@ -1150,8 +1168,10 @@ impl Client {
                     tokio::select! {
                         result = &mut execute => {
                             // Record latency into per-client tracker
-                            let elapsed = cmd_start.elapsed();
-                            self.latency_tracker.record(elapsed);
+                            if !is_blocking_cmd {
+                                let elapsed = cmd_start.elapsed();
+                                self.latency_tracker.record(elapsed);
+                            }
                             result
                         }
                         recv_result = timeout_rx => {
@@ -1201,6 +1221,7 @@ impl Client {
                                             node: node.clone(),
                                         }
                                     };
+                                    timeout_cause = Some(cause.clone());
                                     let event = crate::timeout_watchdog::TimeoutEvent {
                                         cause,
                                         command,
@@ -1263,11 +1284,26 @@ impl Client {
                             ) || e.is_connection_dropped()
                         };
                         if counts {
-                            let kind_str = match e.kind() {
-                                ErrorKind::IoError => "IoError",
-                                ErrorKind::FatalSendError => "FatalSendError",
-                                ErrorKind::FatalReceiveError => "FatalReceiveError",
-                                _ => "Timeout",
+                            let kind_str = if e.is_timeout() {
+                                match &timeout_cause {
+                                    Some(
+                                        crate::timeout_watchdog::TimeoutCause::SystemOverload {
+                                            ..
+                                        },
+                                    ) => "TimeoutSystemOverload",
+                                    Some(
+                                        crate::timeout_watchdog::TimeoutCause::ClientBackpressure {
+                                            ..
+                                        },
+                                    ) => "TimeoutClientBackpressure",
+                                    _ => "TimeoutServerUnresponsive",
+                                }
+                            } else {
+                                match e.kind() {
+                                    ErrorKind::FatalSendError => "FatalSendError",
+                                    ErrorKind::FatalReceiveError => "FatalReceiveError",
+                                    _ => "IoError",
+                                }
                             };
                             (true, Some(kind_str))
                         } else {
@@ -1275,7 +1311,10 @@ impl Client {
                         }
                     }
                 };
-                cb.on_result(is_error, error_kind);
+                let current_inflight = (self.inflight_requests_limit
+                    - self.inflight_requests_allowed.load(Ordering::Relaxed))
+                    as u32;
+                cb.on_result(is_error, error_kind, current_inflight);
             }
 
             result
@@ -2612,6 +2651,7 @@ mod tests {
     use crate::client::types::{ConnectionRequest, NodeAddress, OTelMetadata};
     use crate::client::{
         BLOCKING_CMD_TIMEOUT_EXTENSION, RequestTimeoutOption, TimeUnit, get_request_timeout,
+        is_blocking_command,
     };
 
     use super::{Client, ClientWrapper, LazyClient, get_timeout_from_cmd_arg};
@@ -3229,5 +3269,74 @@ mod tests {
         let mut cmd = Cmd::new();
         cmd.arg("PING");
         assert!(!client.is_reset_command(&cmd));
+    }
+
+    #[test]
+    fn test_is_blocking_command() {
+        // Always-blocking commands
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("key").arg("5");
+        assert!(is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("BRPOP").arg("key").arg("5");
+        assert!(is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("WAIT").arg("1").arg("5000");
+        assert!(is_blocking_command(&cmd));
+
+        // XREAD with BLOCK is blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("BLOCK")
+            .arg("5000")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert!(is_blocking_command(&cmd));
+
+        // XREAD without BLOCK is NOT blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD")
+            .arg("COUNT")
+            .arg("10")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg("$");
+        assert!(!is_blocking_command(&cmd));
+
+        // XREADGROUP with BLOCK is blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREADGROUP")
+            .arg("GROUP")
+            .arg("g1")
+            .arg("c1")
+            .arg("BLOCK")
+            .arg("0")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg(">");
+        assert!(is_blocking_command(&cmd));
+
+        // XREADGROUP without BLOCK is NOT blocking
+        let mut cmd = Cmd::new();
+        cmd.arg("XREADGROUP")
+            .arg("GROUP")
+            .arg("g1")
+            .arg("c1")
+            .arg("STREAMS")
+            .arg("s1")
+            .arg(">");
+        assert!(!is_blocking_command(&cmd));
+
+        // Non-blocking commands
+        let mut cmd = Cmd::new();
+        cmd.arg("GET").arg("key");
+        assert!(!is_blocking_command(&cmd));
+
+        let mut cmd = Cmd::new();
+        cmd.arg("SET").arg("key").arg("value");
+        assert!(!is_blocking_command(&cmd));
     }
 }

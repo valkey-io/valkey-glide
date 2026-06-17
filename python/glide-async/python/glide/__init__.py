@@ -104,6 +104,7 @@ from glide_shared import (
     MaxId,
     MigrateOptions,
     MinId,
+    MonitorMsg,
     NodeAddress,
     NodeDiscoveryMode,
     NumericField,
@@ -184,6 +185,7 @@ from .async_commands import (
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
+from .monitor_client import MonitorClient
 from .opentelemetry import OpenTelemetry
 
 
@@ -369,6 +371,9 @@ __all__ = [
     "ALL_CHANNELS",
     "ALL_PATTERNS",
     "ALL_SHARDED_CHANNELS",
+    # Monitor
+    "MonitorClient",
+    "MonitorMsg",
     # Json
     "glide_json",
     "json_batch",
