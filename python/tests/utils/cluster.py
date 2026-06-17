@@ -23,9 +23,7 @@ SCRIPT_FILE = (
 # daemons past `wait_for_server`'s readiness deadline. Serializing the
 # subprocess invocations halves the peak concurrent daemon count without
 # affecting the test phase, which still runs in parallel after setup.
-_CLUSTER_STARTUP_LOCK_PATH = (
-    Path(tempfile.gettempdir()) / "glide-cluster-startup.lock"
-)
+_CLUSTER_STARTUP_LOCK_PATH = Path(tempfile.gettempdir()) / "glide-cluster-startup.lock"
 
 
 @contextlib.contextmanager
