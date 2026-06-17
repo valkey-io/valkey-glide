@@ -45,7 +45,7 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `os` | Yes | - | The current operating system (e.g., `ubuntu`, `macos`, `windows`, `amazon-linux`) |
-| `target` | No | `''` | Rust target toolchain (e.g., `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`) |
+| `target` | No | `x86_64-unknown-linux-gnu` | Rust target toolchain (e.g., `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`) |
 | `engine-version` | No | `''` | Valkey engine version to install (optional) |
 | `language` | No | - | The language being built (optional, for language-specific setup) |
 | `github-token` | Yes | - | GitHub token for API access (typically `${{ secrets.GITHUB_TOKEN }}`) |
@@ -63,7 +63,7 @@ Installs platform-specific dependencies for valkey-glide builds. This is the pri
 
 ### install-engine
 
-Installs and caches a specific Valkey server version for testing. Uses intelligent caching based on version, git SHA, and platform.
+Installs and caches a specific Valkey server version for testing. Uses intelligent caching based on version, git SHA, and target platform.
 
 **Location:** `.github/actions/install-engine/action.yml`
 
@@ -72,16 +72,11 @@ Installs and caches a specific Valkey server version for testing. Uses intellige
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
 | `engine-version` | Yes | - | Valkey version to install (e.g., `9.0`, `8.1`) |
-
-#### Outputs
-
-| Name | Description |
-|------|-------------|
-| `cache-key` | Cache key used for the installation |
+| `target` | Yes | - | Target toolchain (e.g., `x86_64-unknown-linux-gnu`) |
 
 #### Behavior
 
-- Computes a cache key from version, git SHA, and platform
+- Computes a cache key from version, git SHA, and target
 - Restores from cache if available, otherwise builds from source
 - Creates backward-compatible symlinks (`redis-*` → `valkey-*`)
 - Adds binaries to `PATH`
@@ -90,10 +85,10 @@ Installs and caches a specific Valkey server version for testing. Uses intellige
 #### Cache Key Format
 
 ```
-valkey-{version}-{git-sha-8chars}-{os}-{arch}
+valkey-{version}-{target}
 ```
 
-Example: `valkey-9.0-a1b2c3d4-Linux-X64`
+Example: `valkey-9.0-x86_64-unknown-linux-gnu`
 
 #### Example Usage
 
@@ -110,6 +105,7 @@ jobs:
         uses: ./valkey-glide/.github/actions/install-engine
         with:
           engine-version: '9.0'
+          target: x86_64-unknown-linux-gnu
 
       - name: Verify installation
         run: valkey-server --version
@@ -129,7 +125,7 @@ Starts standalone and cluster Valkey servers with modules (Search, JSON, Bloom, 
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `standalone-port` | No | `6389` | Port for standalone module server |
+| `engine-version` | Yes | - | Valkey engine version (e.g., `9.1`) |
 | `cluster-port-start` | No | `8001` | Starting port for cluster nodes (uses 6 consecutive ports) |
 
 #### Outputs
@@ -167,6 +163,8 @@ jobs:
 
       - name: Start Valkey servers
         uses: ./valkey-glide/.github/actions/start-valkey-docker
+        with:
+          engine-version: '9.1'
 
       - name: Run tests
         run: |
@@ -176,7 +174,7 @@ jobs:
 ```
 
 ```yaml
-# Custom ports example (to avoid conflicts)
+# Custom cluster ports example (to avoid conflicts)
 jobs:
   integration-test:
     runs-on: ubuntu-latest
@@ -188,21 +186,21 @@ jobs:
       - name: Start Valkey servers on custom ports
         uses: ./valkey-glide/.github/actions/start-valkey-docker
         with:
-          standalone-port: '7000'
-          cluster-port-start: '7100'
+          engine-version: '9.1'
+          cluster-port-start: '9001'
 
       - name: Run tests
         run: |
-          # Uses custom ports
-          valkey-cli -p 7000 PING
-          valkey-cli -p 7100 CLUSTER INFO
+          # Cluster uses custom ports, standalone is on default 6389
+          valkey-cli -p 6389 PING
+          valkey-cli -p 9001 CLUSTER INFO
 ```
 
 ---
 
 ### install-rust-and-protoc
 
-Installs Rust toolchain and protobuf compiler for non-MUSL targets.
+Installs Rust toolchain (stable, with rustfmt and clippy) and protobuf compiler.
 
 **Location:** `.github/actions/install-rust-and-protoc/action.yml`
 
@@ -210,8 +208,8 @@ Installs Rust toolchain and protobuf compiler for non-MUSL targets.
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `rust-version` | No | `stable` | Rust version to install |
-| `target` | No | `''` | Rust target triple to add (e.g., `x86_64-unknown-linux-gnu`) |
+| `target` | No | `x86_64-unknown-linux-gnu` | Rust target triple to add (e.g., `x86_64-unknown-linux-gnu`) |
+| `github-token` | Yes | - | GitHub token for protoc installation (typically `${{ secrets.GITHUB_TOKEN }}`) |
 
 #### Example Usage
 
@@ -227,15 +225,15 @@ jobs:
       - name: Install Rust and protoc
         uses: ./valkey-glide/.github/actions/install-rust-and-protoc
         with:
-          rust-version: 'stable'
           target: 'x86_64-unknown-linux-gnu'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ---
 
 ### install-zig
 
-Installs Zig compiler for cross-compilation on linux-gnu targets.
+Installs Zig compiler and cargo-zigbuild for cross-compilation on linux-gnu targets.
 
 **Location:** `.github/actions/install-zig/action.yml`
 
@@ -243,7 +241,7 @@ Installs Zig compiler for cross-compilation on linux-gnu targets.
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `zig-version` | No | `0.11.0` | Zig version to install |
+| `target` | No | `x86_64-unknown-linux-gnu` | Rust target triple (used to set `CARGO_ZIGBUILD_TARGET` env var) |
 
 #### Example Usage
 
@@ -259,7 +257,7 @@ jobs:
       - name: Install Zig
         uses: ./valkey-glide/.github/actions/install-zig
         with:
-          zig-version: '0.11.0'
+          target: 'aarch64-unknown-linux-gnu'
 ```
 
 ---
@@ -461,7 +459,7 @@ jobs:
       - name: Start Valkey servers with modules
         uses: ./valkey-glide/.github/actions/start-valkey-docker
         with:
-          standalone-port: '6389'
+          engine-version: '9.1'
           cluster-port-start: '8001'
 
       - name: Run integration tests
