@@ -387,6 +387,7 @@ import glide.utils.ArgsBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -5137,9 +5138,9 @@ public class GlideClientTest {
     public void clientTrackingInfo_returns_success() {
         // setup
         Map<String, Object> info = new LinkedHashMap<>();
-        info.put("flags", Collections.singletonList("off"));
+        info.put("flags", new HashSet<>(Collections.singletonList("off")));
         info.put("redirect", -1L);
-        info.put("prefixes", Collections.emptyList());
+        info.put("prefixes", new Object[0]);
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(info);
 
@@ -5152,7 +5153,7 @@ public class GlideClientTest {
         CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
 
         // verify
-        assertEquals(info, response.get());
+        assertEquals(testResponse, response);
     }
 
     @SneakyThrows

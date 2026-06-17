@@ -72,7 +72,6 @@ import glide.api.models.configuration.PubSubStateImpl;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
 import glide.utils.ArgsBuilder;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
@@ -269,22 +268,8 @@ public class GlideClient extends BaseClient
 
     @Override
     public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
-        return commandManager
-                .submitNewCommand(ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse)
-                .thenApply(GlideClient::normalizeTrackingInfo);
-    }
-
-    /** Normalizes {@code flags} and {@code prefixes} in a CLIENT TRACKINGINFO response to List. */
-    static Map<String, Object> normalizeTrackingInfo(Map<String, Object> map) {
-        for (String key : new String[] {"flags", "prefixes"}) {
-            Object val = map.get(key);
-            if (val instanceof Set) {
-                map.put(key, new ArrayList<>((Set<?>) val));
-            } else if (val instanceof Object[]) {
-                map.put(key, Arrays.asList((Object[]) val));
-            }
-        }
-        return map;
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse);
     }
 
     @Override

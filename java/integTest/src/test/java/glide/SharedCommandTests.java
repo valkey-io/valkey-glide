@@ -18747,8 +18747,9 @@ public class SharedCommandTests {
         assertTrue(info.containsKey("flags"));
         assertTrue(info.containsKey("redirect"));
         assertTrue(info.containsKey("prefixes"));
-        assertInstanceOf(List.class, info.get("flags"), "flags should be a list of tracking flags");
+        assertInstanceOf(Set.class, info.get("flags"), "flags should be a set of tracking flags");
         assertNotNull(info.get("redirect"), "redirect should not be null");
-        assertInstanceOf(List.class, info.get("prefixes"), "prefixes should be a list of key prefixes");
+        assertInstanceOf(
+                Object[].class, info.get("prefixes"), "prefixes should be an array of key prefixes");
     }
 }

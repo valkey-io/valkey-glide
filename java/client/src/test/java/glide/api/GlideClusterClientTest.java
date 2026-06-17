@@ -115,6 +115,7 @@ import glide.managers.GlideExceptionCheckedFunction;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -834,9 +835,9 @@ public class GlideClusterClientTest {
     public void clientTrackingInfo_returns_success() {
         // setup
         Map<String, Object> info = new HashMap<>();
-        info.put("flags", Collections.singletonList("off"));
+        info.put("flags", new HashSet<>(Collections.singletonList("off")));
         info.put("redirect", -1L);
-        info.put("prefixes", Collections.emptyList());
+        info.put("prefixes", new Object[0]);
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(info);
 
@@ -849,7 +850,7 @@ public class GlideClusterClientTest {
         CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
 
         // verify
-        assertEquals(info, response.get());
+        assertEquals(testResponse, response);
     }
 
     @Test
@@ -858,9 +859,9 @@ public class GlideClusterClientTest {
         TestCommandManager commandManager = new TestCommandManager(null);
 
         Map<String, Object> info = new HashMap<>();
-        info.put("flags", Collections.singletonList("off"));
+        info.put("flags", new HashSet<>(Collections.singletonList("off")));
         info.put("redirect", -1L);
-        info.put("prefixes", Collections.emptyList());
+        info.put("prefixes", new Object[0]);
         try (TestClient client = new TestClient(commandManager, info)) {
             ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(RANDOM).get();
             assertEquals(info, value.getSingleValue());
@@ -873,9 +874,9 @@ public class GlideClusterClientTest {
         TestCommandManager commandManager = new TestCommandManager(null);
 
         Map<String, Object> info = new HashMap<>();
-        info.put("flags", Collections.singletonList("off"));
+        info.put("flags", new HashSet<>(Collections.singletonList("off")));
         info.put("redirect", -1L);
-        info.put("prefixes", Collections.emptyList());
+        info.put("prefixes", new Object[0]);
         Map<String, Map<String, Object>> data = createMap("n1", info);
         try (TestClient client = new TestClient(commandManager, data)) {
             ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(ALL_NODES).get();

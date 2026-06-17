@@ -488,9 +488,8 @@ public class GlideClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
-        return commandManager
-                .submitNewCommand(ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse)
-                .thenApply(GlideClient::normalizeTrackingInfo);
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse);
     }
 
     @Override
@@ -502,21 +501,8 @@ public class GlideClusterClient extends BaseClient
                 route,
                 response ->
                         route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(
-                                        GlideClient.normalizeTrackingInfo(handleMapResponse(response)))
-                                : ClusterValue.of(normalizeMultiNodeTrackingInfo(handleMapResponse(response))));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Map<String, Object>> normalizeMultiNodeTrackingInfo(
-            Map<String, Object> raw) {
-        Map<String, Map<String, Object>> result = new java.util.LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : raw.entrySet()) {
-            result.put(
-                    entry.getKey(),
-                    GlideClient.normalizeTrackingInfo((Map<String, Object>) entry.getValue()));
-        }
-        return result;
+                                ? ClusterValue.ofSingleValue(handleMapResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
