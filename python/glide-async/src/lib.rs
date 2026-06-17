@@ -21,6 +21,8 @@ use std::ptr::from_mut;
 use std::str::FromStr;
 use std::sync::Arc;
 
+type PyObject = Py<PyAny>;
+
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
 pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
@@ -282,7 +284,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         }
     }
 
-    // SAFETY: PyObject is Send+Sync when accessed only through Python::with_gil.
+    // SAFETY: PyObject is Send+Sync when accessed only through Python::attach.
     unsafe impl Send for PyAddressResolver {}
     unsafe impl Sync for PyAddressResolver {}
 
@@ -290,7 +292,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
         fn resolve(&self, host: &str, port: u16) -> (String, u16) {
             let callback = Arc::clone(&self.callback);
             let host = host.to_string();
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 match callback.call(py, (host.as_str(), port), None) {
                     Ok(result) => {
                         // Expect a tuple (str, int)
@@ -385,7 +387,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             Telemetry::subscription_last_sync_timestamp().to_string(),
         );
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let py_dict = PyDict::new(py);
 
             for (key, value) in stats_map {
@@ -413,7 +415,7 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
             let init_callback = Arc::clone(&init_callback);
             move |socket_path| {
                 let init_callback = Arc::clone(&init_callback);
-                Python::with_gil(|py| {
+                Python::attach(|py| {
                     match socket_path {
                         Ok(path) => {
                             let _ = init_callback.call(py, (path, py.None()), None);
@@ -425,9 +427,8 @@ fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
                 });
             }
         });
-        Ok(Python::with_gil(|py| {
-            "OK"
-                .into_pyobject(py)
+        Ok(Python::attach(|py| {
+            "OK".into_pyobject(py)
                 .expect("Expected a proper conversion of 'OK' into a Python string.")
                 .into_any()
                 .unbind()

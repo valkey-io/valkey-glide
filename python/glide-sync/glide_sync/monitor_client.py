@@ -5,9 +5,9 @@ import threading
 import time
 from typing import Callable, List, Optional
 
+from glide_shared._glide_ffi import GlideFFI
 from glide_shared.commands.core_options import MonitorMsg
 from glide_shared.config import GlideClientConfiguration
-from glide_sync._glide_ffi import GlideFFI
 
 
 class MonitorClient:
