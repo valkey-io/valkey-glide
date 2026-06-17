@@ -54,6 +54,8 @@ import {
     InsertPosition,
     KeyWeight,
     LPosOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -10225,6 +10227,48 @@ export class BaseClient {
         parseSubscriptionData(response[3], actualSubscriptions);
 
         return { desiredSubscriptions, actualSubscriptions };
+    }
+
+    /**
+     * @internal
+     * Parses a `LATENCY HISTORY` response.
+     */
+    protected parseLatencyHistoryResponse(response: unknown[]): LatencyEntry[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => ({
+            time: entry[0] as number,
+            latency: entry[1] as number,
+        }));
+    }
+
+    /**
+     * @internal
+     * Parses a `LATENCY LATEST` response.
+     */
+    protected parseLatencyLatestResponse(response: unknown[]): LatencyEventInfo[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => {
+            const info: LatencyEventInfo = {
+                eventName: entry[0] as string,
+                time: entry[1] as number,
+                latest: entry[2] as number,
+                maximum: entry[3] as number,
+            };
+
+            // Valkey 8.1+ returns 6-element arrays with sum and count
+            if (entry.length >= 6) {
+                info.sum = entry[4] as number;
+                info.count = entry[5] as number;
+            }
+
+            return info;
+        });
     }
 
     /**

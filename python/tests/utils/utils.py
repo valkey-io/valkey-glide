@@ -154,7 +154,7 @@ def get_first_result(
     return cast(bytes, res)
 
 
-def get_all_latency_entries(response) -> List[LatencyEntry]:
+def get_all_latency_entries(response) -> list:
     """Flatten a latency history response into a list of latency entries."""
     if isinstance(response, dict):
         return [e for entries in response.values() for e in entries]

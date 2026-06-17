@@ -51,6 +51,7 @@ import {
     createLuaLibWithLongRunningFunction,
     flushAndCloseClient,
     generateLuaLibCode,
+    getAllLatencyEntries,
     getClientConfigurationOption,
     getClientCount,
     getFirstResult,
@@ -59,6 +60,7 @@ import {
     intoArray,
     intoString,
     parseEndpoints,
+    triggerLatencySpike,
     validateBatchResponse,
     waitForNotBusy,
 } from "./TestUtilities";
@@ -3379,6 +3381,97 @@ describe("GlideClusterClient", () => {
             expect(await clientFalse.set("key3", "value3")).toBe("OK");
             expect(await clientFalse.get("key3")).toBe("value3");
             clientFalse.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "latencyHistory with route_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            await triggerLatencySpike(client);
+
+            // Multi-node (default route)
+            const multiHistory = await client.latencyHistory("command");
+            const allEntries = getAllLatencyEntries(multiHistory);
+            expect(allEntries.length).toBeGreaterThan(0);
+
+            for (const entry of allEntries) {
+                expect(entry.latency).toBeGreaterThan(0);
+            }
+
+            // Single-node route
+            const singleHistory = await client.latencyHistory("command", {
+                route: "randomNode",
+            });
+            expect(Array.isArray(singleHistory)).toBe(true);
+            expect(getAllLatencyEntries(singleHistory).length).toBeGreaterThan(
+                0,
+            );
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "latencyLatest with route_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            await triggerLatencySpike(client);
+
+            // Multi-node (default route)
+            const multiLatest = await client.latencyLatest();
+            const allEntries = getAllLatencyEntries(multiLatest);
+            expect(allEntries.length).toBeGreaterThanOrEqual(1);
+
+            const commandInfo = allEntries.find(
+                (info) => info.eventName === "command",
+            );
+            expect(commandInfo).toBeDefined();
+
+            // Single-node route
+            const singleLatest = await client.latencyLatest({
+                route: "randomNode",
+            });
+            expect(Array.isArray(singleLatest)).toBe(true);
+            expect(
+                getAllLatencyEntries(singleLatest).length,
+            ).toBeGreaterThanOrEqual(1);
+
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "latencyReset with route_%p",
+        async (protocol) => {
+            client = await GlideClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            // Trigger spike then reset with route
+            await triggerLatencySpike(client);
+            const resetResult = await client.latencyReset(undefined, {
+                route: "allNodes",
+            });
+            expect(resetResult).toBeGreaterThan(0);
+
+            // Trigger spike then reset specific event with route
+            await triggerLatencySpike(client);
+            const specificReset = await client.latencyReset(["command"], {
+                route: "allNodes",
+            });
+            expect(specificReset).toBeGreaterThan(0);
+
+            client.close();
         },
         TIMEOUT,
     );

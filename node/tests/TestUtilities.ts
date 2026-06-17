@@ -520,6 +520,46 @@ export async function waitForSaveNotInProgress(
 }
 
 /**
+ * Enables latency monitoring, triggers a latency spike, then disables monitoring.
+ * Resets existing latency data before triggering.
+ */
+export async function triggerLatencySpike(
+    client: GlideClient | GlideClusterClient,
+): Promise<void> {
+    await client.latencyReset();
+    await client.configSet({ "latency-monitor-threshold": "1" });
+
+    const debug_sleep_args = ["DEBUG", "SLEEP", "0.05"];
+    if (client instanceof GlideClusterClient) {
+        await client.customCommand(debug_sleep_args, {
+            route: "allNodes",
+        });
+    } else {
+        await client.customCommand(debug_sleep_args);
+    }
+
+    await client.configSet({ "latency-monitor-threshold": "0" });
+}
+
+/**
+ * Returns the current time as a Unix timestamp in seconds.
+ */
+export function nowUnixSeconds(): number {
+    return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Flattens a latency response into a single array of entries.
+ */
+export function getAllLatencyEntries<T>(response: T[] | Record<string, T[]>): T[] {
+    if (Array.isArray(response)) {
+        return response;
+    }
+
+    return Object.values(response).flat();
+}
+
+/**
  * Create a lua script which runs an endless loop up to timeout sec.
  * Execution takes at least 5 sec regardless of the timeout
  */
