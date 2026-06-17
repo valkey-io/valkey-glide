@@ -5036,8 +5036,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Reports the latest latency events logged by the server.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return Command Response - An array of {@link LatencyEventInfo} representing the latest
-     *     latency events.
+     * @return Command Response - An array of {@link LatencyEventInfo} representing the latest latency
+     *     events.
      */
     public T latencyLatest() {
         protobufBatch.addCommands(buildCommand(LatencyLatest));

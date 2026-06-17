@@ -1186,7 +1186,7 @@ public class BatchTests {
         results.add(Pair.of(LatencyReset, buildArgs()));
 
         batch.latencyReset(new String[] {"command"});
-        results.add(Pair.of(LatencyReset, buildArgs("command" )));
+        results.add(Pair.of(LatencyReset, buildArgs("command")));
 
         batch.flushall().flushall(ASYNC);
         results.add(Pair.of(FlushAll, buildArgs()));
