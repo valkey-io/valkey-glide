@@ -108,6 +108,7 @@ from glide_sync.sync_commands.script import Script
 
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
 from tests.sync_tests.conftest import create_sync_client
+from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
@@ -12468,3 +12469,56 @@ class TestSyncScripts:
             thread.join(timeout=4)
 
         test_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_failover(self, glide_sync_client: GlideClient):
+        # Spin up a dedicated standalone with 1 replica so the failover
+        # doesn't destabilize the shared test server.
+        dedicated_cluster = ValkeyCluster(
+            tls=False, cluster_mode=False, shard_count=1, replica_count=1
+        )
+        try:
+            client = GlideClient.create(
+                GlideClientConfiguration(
+                    addresses=[dedicated_cluster.nodes_addr[0]],
+                    request_timeout=5000,
+                )
+            )
+            try:
+                # Verify initial role is master
+                info = client.info([InfoSection.REPLICATION]).decode()
+                assert "role:master" in info
+
+                # Execute failover — returns OK immediately
+                result = client.failover()
+                assert result == OK
+
+                # Wait for role to change to slave (failover completed)
+                role_changed = False
+                for _ in range(60):
+                    info = client.info([InfoSection.REPLICATION]).decode()
+                    if "role:slave" in info:
+                        role_changed = True
+                        break
+                    time.sleep(0.5)
+                assert role_changed, "Timed out waiting for role change to slave"
+            finally:
+                client.close()
+        finally:
+            del dedicated_cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_failover_abort_no_failover_in_progress(
+        self, glide_sync_client: GlideClient
+    ):
+        # FAILOVER ABORT when no failover is in progress should error
+        with pytest.raises(RequestError):
+            glide_sync_client.failover(abort=True)
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_replicaof_no_one(self, glide_sync_client: GlideClient):
+        # REPLICAOF NO ONE on a primary should succeed
+        assert glide_sync_client.replicaof_no_one() == OK

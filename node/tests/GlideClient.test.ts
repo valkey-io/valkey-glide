@@ -22,6 +22,7 @@ import {
     GlideClient,
     GlideRecord,
     GlideString,
+    InfoOptions,
     ListDirection,
     ProtocolVersion,
     RequestError,
@@ -2170,6 +2171,86 @@ describe("GlideClient", () => {
             });
 
             await assertConnected(client);
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    // Spin up a dedicated standalone with 1 replica so the failover
+    // doesn't destabilize the shared test server.
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_to_replica_%p",
+        async (protocol) => {
+            const testCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                1,
+                getServerVersion,
+            );
+
+            try {
+                client = await GlideClient.createClient(
+                    getClientConfigurationOption(
+                        testCluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                // Verify initial role is master
+                let info = await client.info([InfoOptions.Replication]);
+                expect(info).toContain("role:master");
+
+                // Execute failover — returns OK immediately
+                const result = await client.failover();
+                expect(result).toBe("OK");
+
+                // Wait for role to change to slave (failover completed)
+                let roleChanged = false;
+
+                for (let i = 0; i < 60; i++) {
+                    info = await client.info([InfoOptions.Replication]);
+
+                    if (info.includes("role:slave")) {
+                        roleChanged = true;
+                        break;
+                    }
+
+                    await sleep(500);
+                }
+
+                expect(roleChanged).toBe(true);
+                client.close();
+            } finally {
+                await testCluster.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_abort_no_failover_in_progress_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // FAILOVER ABORT when no failover is in progress should error
+            await expect(client.failover({ abort: true })).rejects.toThrow(
+                RequestError,
+            );
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "replicaofNoOne_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // REPLICAOF NO ONE on a primary should succeed
+            const result = await client.replicaofNoOne();
+            expect(result).toBe("OK");
             client.close();
         },
         TIMEOUT,

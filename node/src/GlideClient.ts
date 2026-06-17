@@ -56,8 +56,12 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createFailover,
+    createReplicaOf,
+    createReplicaOfNoOne,
     createTime,
     createUnWatch,
+    FailoverOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -1320,5 +1324,66 @@ export class GlideClient extends BaseClient {
      */
     public async clientUnpause(options?: DecoderOption): Promise<"OK"> {
         return this.createWritePromise(createClientUnpause(), options);
+    }
+
+    /**
+     * Starts a coordinated failover from the connected primary to one of its replicas.
+     * This is the standalone equivalent of `CLUSTER FAILOVER`.
+     *
+     * @see {@link https://valkey.io/commands/failover/|valkey.io} for details.
+     *
+     * @param options - (Optional) Failover options. See {@link FailoverOptions}.
+     * @returns `"OK"` if the failover was successfully initiated.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.failover();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async failover(options?: FailoverOptions): Promise<"OK"> {
+        return this.createWritePromise(createFailover(options), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @param host - The host of the primary to replicate.
+     * @param port - The port of the primary to replicate.
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaof("localhost", 6379);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaof(host: string, port: number): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOf(host, port), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaofNoOne();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaofNoOne(): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOfNoOne(), {
+            decoder: Decoder.String,
+        });
     }
 }

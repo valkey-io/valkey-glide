@@ -1289,3 +1289,90 @@ func (client *Client) Unwatch(ctx context.Context) (string, error) {
 	}
 	return handleOkResponse(result)
 }
+
+// Failover starts a coordinated failover from the connected primary to one of its replicas.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) Failover(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// FailoverWithOptions starts a coordinated failover with the specified options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - The failover options.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) FailoverWithOptions(ctx context.Context, opts *options.FailoverOptions) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, opts.ToArgs())
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOf makes the server a replica of the specified primary.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	host - The host of the primary to replicate.
+//	port - The port of the primary to replicate.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOf(ctx context.Context, host string, port int) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{host, utils.IntToString(int64(port))})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOfNoOne promotes the current server to a primary by stopping replication.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOfNoOne(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{"NO", "ONE"})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}

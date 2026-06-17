@@ -1126,3 +1126,85 @@ class StandaloneCommands(CoreCommands):
                 OK
         """
         return cast(TOK, self._execute_command(RequestType.ClientUnpause, []))
+
+    def failover(
+        self,
+        host: Optional[TEncodable] = None,
+        port: Optional[int] = None,
+        force: bool = False,
+        abort: bool = False,
+        timeout_ms: Optional[int] = None,
+    ) -> TOK:
+        """
+        Starts a coordinated failover from the connected primary to one of its replicas.
+        This is the standalone equivalent of CLUSTER FAILOVER.
+
+        See [valkey.io](https://valkey.io/commands/failover/) for more details.
+
+        Args:
+            host (Optional[TEncodable]): The host of the target replica (requires port).
+            port (Optional[int]): The port of the target replica (requires host).
+            force (bool): If True, forces failover after timeout (requires host, port, and timeout_ms).
+            abort (bool): If True, aborts an ongoing failover.
+            timeout_ms (Optional[int]): Timeout in milliseconds.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.failover()
+                OK
+            >>> client.failover(abort=True)
+                OK
+        """
+        args: List[TEncodable] = []
+        if (host is None) != (port is None):
+            raise ValueError("Both host and port must be provided together")
+        if force and (host is None or port is None):
+            raise ValueError("force requires host and port to be specified")
+        if abort:
+            args.append("ABORT")
+        else:
+            if host is not None and port is not None:
+                args.extend(["TO", host, str(port)])
+                if force:
+                    args.append("FORCE")
+            if timeout_ms is not None:
+                args.extend(["TIMEOUT", str(timeout_ms)])
+        return cast(TOK, self._execute_command(RequestType.FailOver, args))
+
+    def replicaof(self, host: TEncodable, port: int) -> TOK:
+        """
+        Makes the server a replica of the specified primary.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Args:
+            host (TEncodable): The host of the primary to replicate.
+            port (int): The port of the primary to replicate.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.replicaof("localhost", 6379)
+                OK
+        """
+        return cast(
+            TOK, self._execute_command(RequestType.ReplicaOf, [host, str(port)])
+        )
+
+    def replicaof_no_one(self) -> TOK:
+        """
+        Promotes the current server to a primary by stopping replication.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> client.replicaof_no_one()
+                OK
+        """
+        return cast(TOK, self._execute_command(RequestType.ReplicaOf, ["NO", "ONE"]))

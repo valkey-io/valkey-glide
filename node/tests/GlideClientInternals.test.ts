@@ -999,6 +999,59 @@ describe("SocketConnectionInternals", () => {
             expectedValue: convertStringArrayToBuffer([]),
         });
     });
+
+    it("should set arguments according to failover request without options", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) => (client as GlideClient).failover(),
+            expectedRequestType: RequestType.FailOver,
+            expectedValue: convertStringArrayToBuffer([]),
+        });
+    });
+
+    it("should set arguments according to failover request with abort", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) =>
+                (client as GlideClient).failover({ abort: true }),
+            expectedRequestType: RequestType.FailOver,
+            expectedValue: convertStringArrayToBuffer(["ABORT"]),
+        });
+    });
+
+    it("should set arguments according to failover request with to and timeout", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) =>
+                (client as GlideClient).failover({
+                    to: { host: "localhost", port: 6380, force: true },
+                    timeoutMs: 1000,
+                }),
+            expectedRequestType: RequestType.FailOver,
+            expectedValue: convertStringArrayToBuffer([
+                "TO",
+                "localhost",
+                "6380",
+                "FORCE",
+                "TIMEOUT",
+                "1000",
+            ]),
+        });
+    });
+
+    it("should set arguments according to replicaof request", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) =>
+                (client as GlideClient).replicaof("localhost", 6379),
+            expectedRequestType: RequestType.ReplicaOf,
+            expectedValue: convertStringArrayToBuffer(["localhost", "6379"]),
+        });
+    });
+
+    it("should set arguments according to replicaofNoOne request", async () => {
+        await testSentValueMatches({
+            sendRequest: (client) => (client as GlideClient).replicaofNoOne(),
+            expectedRequestType: RequestType.ReplicaOf,
+            expectedValue: convertStringArrayToBuffer(["NO", "ONE"]),
+        });
+    });
 });
 
 describe("GlideClusterClientConfiguration", () => {

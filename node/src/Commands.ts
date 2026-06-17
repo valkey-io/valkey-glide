@@ -4930,6 +4930,57 @@ export function createScriptKill(): command_request.Command {
 }
 
 /**
+ * Options for the FAILOVER command.
+ * @see {@link https://valkey.io/commands/failover/|valkey.io} for details.
+ */
+export interface FailoverOptions {
+    /** Target replica to failover to. If `force` is true, forces failover after timeout. */
+    to?: { host: string; port: number; force?: boolean };
+    /** Abort an ongoing failover. */
+    abort?: boolean;
+    /** Timeout in milliseconds. */
+    timeoutMs?: number;
+}
+
+/** @internal */
+export function createFailover(
+    options?: FailoverOptions,
+): command_request.Command {
+    const args: string[] = [];
+
+    if (options?.abort) {
+        args.push("ABORT");
+    } else {
+        if (options?.to) {
+            args.push("TO", options.to.host, options.to.port.toString());
+
+            if (options.to.force) {
+                args.push("FORCE");
+            }
+        }
+
+        if (options?.timeoutMs !== undefined) {
+            args.push("TIMEOUT", options.timeoutMs.toString());
+        }
+    }
+
+    return createCommand(RequestType.FailOver, args);
+}
+
+/** @internal */
+export function createReplicaOf(
+    host: string,
+    port: number,
+): command_request.Command {
+    return createCommand(RequestType.ReplicaOf, [host, port.toString()]);
+}
+
+/** @internal */
+export function createReplicaOfNoOne(): command_request.Command {
+    return createCommand(RequestType.ReplicaOf, ["NO", "ONE"]);
+}
+
+/**
  * Base options settings class for sending a batch request. Shared settings for standalone and
  * cluster batch requests.
  *
