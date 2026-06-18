@@ -22,12 +22,16 @@ use std::sync::{Arc, RwLock};
 use tokio_rustls::{client::TlsStream, TlsConnector};
 
 /// Cached TLS configurations to avoid repeatedly loading system certificates.
-/// On Linux, loading native certs can involve reading and parsing ~300KB of cert files,
-/// which adds ~6ms per connection when done repeatedly.
+/// On Linux, `load_native_certs()` parses ~300KB of cert files, adding ~6ms
+/// per connection when run for every connection.
 ///
-/// Uses `RwLock` to allow cache invalidation if system certificates change
-/// (e.g., CA rotation requiring a re-read of the trust store).
-type TlsConfigCache = RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind, String)>>>;
+/// Wrapped in `RwLock<Option<…>>` so the entry can be invalidated when the
+/// system trust store changes (e.g. CA rotation). Only successful configs
+/// are cached; a config-build failure propagates to the caller without being
+/// stored, so a transient failure isn't pinned for the rest of the process.
+/// The connect-time cert-error retry path doesn't re-run config build, so
+/// caching `Err` here would be unrecoverable until process restart.
+type TlsConfigCache = RwLock<Option<Arc<rustls::ClientConfig>>>;
 
 static TLS_CONFIG_DEFAULT: TlsConfigCache = RwLock::new(None);
 static TLS_CONFIG_INSECURE: TlsConfigCache = RwLock::new(None);
@@ -39,7 +43,7 @@ static TLS_CONFIG_INSECURE: TlsConfigCache = RwLock::new(None);
 /// clobber the peer's refresh and trigger another `load_native_certs()`.
 fn invalidate_if_stale(cache: &'static TlsConfigCache, expected: &Arc<rustls::ClientConfig>) {
     if let Ok(mut guard) = cache.write() {
-        if matches!(guard.as_ref(), Some(Ok(cached)) if Arc::ptr_eq(cached, expected)) {
+        if matches!(guard.as_ref(), Some(cached) if Arc::ptr_eq(cached, expected)) {
             *guard = None;
         }
     }
@@ -54,6 +58,9 @@ fn is_tls_cert_error(err: &io::Error) -> bool {
 }
 
 /// Retrieve or initialize a cached TLS configuration.
+///
+/// Errors from `create_rustls_config` are returned directly via `?` and are
+/// **not** cached, so a transient failure can be retried by the next caller.
 fn get_cached_tls_config(
     cache: &'static TlsConfigCache,
     insecure: bool,
@@ -61,13 +68,8 @@ fn get_cached_tls_config(
 ) -> RedisResult<Arc<rustls::ClientConfig>> {
     // Fast path: read lock
     if let Ok(guard) = cache.read() {
-        if let Some(result) = guard.as_ref() {
-            return result
-                .as_ref()
-                .map_err(|(kind, msg)| {
-                    RedisError::from((*kind, "TLS configuration error", msg.clone()))
-                })
-                .cloned();
+        if let Some(cached) = guard.as_ref() {
+            return Ok(cached.clone());
         }
     }
 
@@ -81,26 +83,15 @@ fn get_cached_tls_config(
     })?;
 
     // Double-check after acquiring write lock
-    if let Some(result) = guard.as_ref() {
-        return result
-            .as_ref()
-            .map_err(|(kind, msg)| {
-                RedisError::from((*kind, "TLS configuration error", msg.clone()))
-            })
-            .cloned();
+    if let Some(cached) = guard.as_ref() {
+        return Ok(cached.clone());
     }
 
-    let result = create_rustls_config(insecure, tls_params.clone())
-        .map(Arc::new)
-        .map_err(|e| (e.kind(), e.to_string()));
-
-    let ret = result
-        .as_ref()
-        .map_err(|(kind, msg)| RedisError::from((*kind, "TLS configuration error", msg.clone())))
-        .cloned();
-
-    *guard = Some(result);
-    ret
+    // Build, then cache only on success — `?` propagates the original error
+    // (with its original `ErrorKind`) without storing it.
+    let config = Arc::new(create_rustls_config(insecure, tls_params.clone())?);
+    *guard = Some(config.clone());
+    Ok(config)
 }
 
 /// Execute a TLS connection attempt with optional retry on certificate errors.
@@ -108,10 +99,15 @@ fn get_cached_tls_config(
 /// If the first attempt fails with a certificate verification error and
 /// `has_custom_params` is false, conditionally invalidates the cached TLS
 /// config (only if it still matches the one we used) and retries exactly
-/// once. This handles the case where system certificates were updated
-/// (e.g., CA rotation) while the process was running, while avoiding
-/// redundant `load_native_certs()` reloads when a concurrent peer has
-/// already refreshed the cache.
+/// once. This is a best-effort recovery for cases where system certificates
+/// were updated (e.g., CA rotation) while the process was running. Recovery
+/// is not guaranteed under adversarial concurrency or for non-rotation cert
+/// errors (clock skew, intermediate-CA expiry, etc.); in those cases the
+/// retried attempt may surface the same error to the caller.
+///
+/// Compare-and-invalidate via `Arc::ptr_eq` keeps a concurrent peer's fresh
+/// config in place, so stragglers do not trigger redundant
+/// `load_native_certs()` reloads.
 async fn tls_connect_with_cert_retry<T, F, Fut>(
     connect: F,
     has_custom_params: bool,
@@ -349,6 +345,38 @@ mod tests {
         assert!(!is_tls_cert_error(&io_err));
     }
 
+    // --- get_cached_tls_config tests ---
+
+    #[test]
+    #[serial]
+    fn test_cached_config_returns_same_arc() {
+        reset_tls_caches();
+        let first = get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, &None).unwrap();
+        let second = get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, &None).unwrap();
+
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "second call must return the same Arc the first call cached \
+             — this is the performance invariant the cache exists for"
+        );
+        reset_tls_caches();
+    }
+
+    // Note: a test that exercises the `create_rustls_config` failure path
+    // (e.g. insecure mode without the `tls-rustls-insecure` feature) was
+    // considered, but is unreachable in any currently-buildable config:
+    //
+    //   * With the `tls-rustls-insecure` feature on (the default), insecure
+    //     mode succeeds and the failure branch isn't hit.
+    //   * With it off, `connection.rs::create_rustls_config` itself fails
+    //     to compile due to a pre-existing non-exhaustive-match bug
+    //     unrelated to this PR.
+    //
+    // After the cache-only-Ok change, the properties such a test would
+    // guard (correct `ErrorKind` propagation and no error caching) are
+    // structurally guaranteed: errors flow through `?` and never enter
+    // the cache.
+
     // --- invalidate_if_stale tests ---
 
     #[test]
@@ -374,17 +402,13 @@ mod tests {
 
         // Simulate a concurrent peer's refresh by swapping in a fresh Arc.
         let fresh = Arc::new(create_rustls_config(false, None).unwrap());
-        *TLS_CONFIG_DEFAULT.write().unwrap() = Some(Ok(fresh.clone()));
+        *TLS_CONFIG_DEFAULT.write().unwrap() = Some(fresh.clone());
 
         // Straggler comes in with the old `stale` Arc — should NOT wipe.
         invalidate_if_stale(&TLS_CONFIG_DEFAULT, &stale);
 
         let guard = TLS_CONFIG_DEFAULT.read().unwrap();
-        let still_cached = guard
-            .as_ref()
-            .expect("cache should still be populated")
-            .as_ref()
-            .expect("cache should still hold Ok");
+        let still_cached = guard.as_ref().expect("cache should still be populated");
         assert!(
             Arc::ptr_eq(still_cached, &fresh),
             "peer's refresh must be preserved"
@@ -405,23 +429,6 @@ mod tests {
             TLS_CONFIG_DEFAULT.read().unwrap().is_none(),
             "empty cache must remain empty"
         );
-    }
-
-    #[test]
-    #[serial]
-    fn test_invalidate_if_stale_preserves_cached_error() {
-        reset_tls_caches();
-        *TLS_CONFIG_DEFAULT.write().unwrap() =
-            Some(Err((ErrorKind::IoError, "previous failure".into())));
-        let arc = Arc::new(create_rustls_config(false, None).unwrap());
-
-        invalidate_if_stale(&TLS_CONFIG_DEFAULT, &arc);
-
-        assert!(
-            matches!(*TLS_CONFIG_DEFAULT.read().unwrap(), Some(Err(_))),
-            "cached error must not be wiped — `matches!` only fires on Some(Ok(_))"
-        );
-        reset_tls_caches();
     }
 
     // --- Retry semantics tests (exercises tls_connect_with_cert_retry directly) ---
@@ -554,6 +561,43 @@ mod tests {
             call_count.load(Ordering::SeqCst),
             1,
             "Success should not retry"
+        );
+        reset_tls_caches();
+    }
+
+    /// Recovery path: first attempt fails with a cert error, second attempt
+    /// succeeds — caller must see `Ok` and exactly two closure invocations.
+    /// This is the scenario the retry feature exists for.
+    #[tokio::test]
+    #[serial]
+    async fn test_retry_succeeds_when_second_attempt_ok() {
+        reset_tls_caches();
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        let result: RedisResult<u8> = tls_connect_with_cert_retry(
+            |_config| {
+                let cc = call_count_clone.clone();
+                async move {
+                    let n = cc.fetch_add(1, Ordering::SeqCst);
+                    if n == 0 {
+                        Err(make_cert_error())
+                    } else {
+                        Ok(7u8)
+                    }
+                }
+            },
+            false,
+            false,
+            &None,
+        )
+        .await;
+
+        assert_eq!(result.unwrap(), 7, "second attempt should surface as Ok");
+        assert_eq!(
+            call_count.load(Ordering::SeqCst),
+            2,
+            "retry should run exactly once after the first cert error"
         );
         reset_tls_caches();
     }
