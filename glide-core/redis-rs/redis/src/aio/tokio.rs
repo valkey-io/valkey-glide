@@ -32,14 +32,16 @@ type TlsConfigCache = RwLock<Option<Result<Arc<rustls::ClientConfig>, (ErrorKind
 static TLS_CONFIG_DEFAULT: TlsConfigCache = RwLock::new(None);
 static TLS_CONFIG_INSECURE: TlsConfigCache = RwLock::new(None);
 
-/// Clear cached TLS configurations, forcing a reload of system certificates
-/// on the next connection.
-fn invalidate_tls_config_cache() {
-    if let Ok(mut guard) = TLS_CONFIG_DEFAULT.write() {
-        *guard = None;
-    }
-    if let Ok(mut guard) = TLS_CONFIG_INSECURE.write() {
-        *guard = None;
+/// Drop the cached config only if it still holds `expected`.
+///
+/// If a concurrent peer has already replaced the cache with a fresh `Arc`
+/// (staggered storm during cert rotation), this is a no-op so we don't
+/// clobber the peer's refresh and trigger another `load_native_certs()`.
+fn invalidate_if_stale(cache: &'static TlsConfigCache, expected: &Arc<rustls::ClientConfig>) {
+    if let Ok(mut guard) = cache.write() {
+        if matches!(guard.as_ref(), Some(Ok(cached)) if Arc::ptr_eq(cached, expected)) {
+            *guard = None;
+        }
     }
 }
 
@@ -104,9 +106,12 @@ fn get_cached_tls_config(
 /// Execute a TLS connection attempt with optional retry on certificate errors.
 ///
 /// If the first attempt fails with a certificate verification error and
-/// `has_custom_params` is false, invalidates the TLS config cache and retries
-/// exactly once. This handles the case where system certificates were updated
-/// (e.g., CA rotation) while the process was running.
+/// `has_custom_params` is false, conditionally invalidates the cached TLS
+/// config (only if it still matches the one we used) and retries exactly
+/// once. This handles the case where system certificates were updated
+/// (e.g., CA rotation) while the process was running, while avoiding
+/// redundant `load_native_certs()` reloads when a concurrent peer has
+/// already refreshed the cache.
 async fn tls_connect_with_cert_retry<T, F, Fut>(
     connect: F,
     has_custom_params: bool,
@@ -117,28 +122,32 @@ where
     F: Fn(Arc<rustls::ClientConfig>) -> Fut,
     Fut: Future<Output = io::Result<T>>,
 {
-    let config = if has_custom_params {
-        Arc::new(create_rustls_config(insecure, tls_params.clone())?)
-    } else if insecure {
-        get_cached_tls_config(&TLS_CONFIG_INSECURE, true, tls_params)?
+    let cache: &'static TlsConfigCache = if insecure {
+        &TLS_CONFIG_INSECURE
     } else {
-        get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, tls_params)?
+        &TLS_CONFIG_DEFAULT
     };
 
-    let result = connect(config).await;
+    let config = if has_custom_params {
+        Arc::new(create_rustls_config(insecure, tls_params.clone())?)
+    } else {
+        get_cached_tls_config(cache, insecure, tls_params)?
+    };
+
+    // Keep our own clone of the Arc so we can compare it against the cache
+    // contents after the connect attempt completes.
+    let result = connect(config.clone()).await;
 
     match result {
         Ok(val) => Ok(val),
         Err(err) if !has_custom_params && is_tls_cert_error(&err) => {
-            // Note: has_custom_params=true can never reach here due to the guard above.
-            // Only the cached config path (default/insecure) is retried after invalidation.
-            invalidate_tls_config_cache();
-            let config = if insecure {
-                get_cached_tls_config(&TLS_CONFIG_INSECURE, true, tls_params)?
-            } else {
-                get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, tls_params)?
-            };
-            Ok(connect(config).await?)
+            // Compare-and-invalidate: drop the cache only if it still holds
+            // the Arc we used. If a concurrent peer already refreshed it
+            // (staggered storm during cert rotation), leave their fresh
+            // config in place — `get_cached_tls_config` below will pick it
+            // up via the read fast path and skip the file I/O.
+            invalidate_if_stale(cache, &config);
+            Ok(connect(get_cached_tls_config(cache, insecure, tls_params)?).await?)
         }
         Err(err) => Err(err.into()),
     }
@@ -308,6 +317,13 @@ mod tests {
     use serial_test::serial;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    /// Test fixture: clear both caches so each `#[serial]` test starts from
+    /// a known state. Not part of the production API.
+    fn reset_tls_caches() {
+        *TLS_CONFIG_DEFAULT.write().unwrap() = None;
+        *TLS_CONFIG_INSECURE.write().unwrap() = None;
+    }
+
     // --- is_tls_cert_error tests ---
 
     #[test]
@@ -333,41 +349,79 @@ mod tests {
         assert!(!is_tls_cert_error(&io_err));
     }
 
-    // --- Cache invalidation tests ---
+    // --- invalidate_if_stale tests ---
 
     #[test]
     #[serial]
-    fn test_invalidate_clears_cache_and_allows_reinitialization() {
-        {
-            let mut guard = TLS_CONFIG_DEFAULT.write().unwrap();
-            *guard = Some(Err((ErrorKind::IoError, "stale".into())));
-        }
-        assert!(TLS_CONFIG_DEFAULT.read().unwrap().is_some());
+    fn test_invalidate_if_stale_wipes_when_arc_matches() {
+        reset_tls_caches();
+        let arc = get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, &None).unwrap();
 
-        invalidate_tls_config_cache();
-        assert!(TLS_CONFIG_DEFAULT.read().unwrap().is_none());
+        invalidate_if_stale(&TLS_CONFIG_DEFAULT, &arc);
 
-        // Re-initialization: get_cached_tls_config should repopulate
-        let _ = get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, &None);
         assert!(
-            TLS_CONFIG_DEFAULT.read().unwrap().is_some(),
-            "Cache should be repopulated after invalidation"
+            TLS_CONFIG_DEFAULT.read().unwrap().is_none(),
+            "cache should be wiped when its Arc matches `expected`"
         );
-
-        // Clean up
-        invalidate_tls_config_cache();
+        reset_tls_caches();
     }
 
     #[test]
     #[serial]
-    fn test_invalidate_clears_both_caches() {
-        {
-            *TLS_CONFIG_DEFAULT.write().unwrap() = Some(Err((ErrorKind::IoError, "x".into())));
-            *TLS_CONFIG_INSECURE.write().unwrap() = Some(Err((ErrorKind::IoError, "x".into())));
-        }
-        invalidate_tls_config_cache();
-        assert!(TLS_CONFIG_DEFAULT.read().unwrap().is_none());
-        assert!(TLS_CONFIG_INSECURE.read().unwrap().is_none());
+    fn test_invalidate_if_stale_preserves_peer_refresh() {
+        reset_tls_caches();
+        let stale = get_cached_tls_config(&TLS_CONFIG_DEFAULT, false, &None).unwrap();
+
+        // Simulate a concurrent peer's refresh by swapping in a fresh Arc.
+        let fresh = Arc::new(create_rustls_config(false, None).unwrap());
+        *TLS_CONFIG_DEFAULT.write().unwrap() = Some(Ok(fresh.clone()));
+
+        // Straggler comes in with the old `stale` Arc — should NOT wipe.
+        invalidate_if_stale(&TLS_CONFIG_DEFAULT, &stale);
+
+        let guard = TLS_CONFIG_DEFAULT.read().unwrap();
+        let still_cached = guard
+            .as_ref()
+            .expect("cache should still be populated")
+            .as_ref()
+            .expect("cache should still hold Ok");
+        assert!(
+            Arc::ptr_eq(still_cached, &fresh),
+            "peer's refresh must be preserved"
+        );
+        drop(guard);
+        reset_tls_caches();
+    }
+
+    #[test]
+    #[serial]
+    fn test_invalidate_if_stale_is_noop_on_empty_cache() {
+        reset_tls_caches();
+        let arc = Arc::new(create_rustls_config(false, None).unwrap());
+
+        invalidate_if_stale(&TLS_CONFIG_DEFAULT, &arc);
+
+        assert!(
+            TLS_CONFIG_DEFAULT.read().unwrap().is_none(),
+            "empty cache must remain empty"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_invalidate_if_stale_preserves_cached_error() {
+        reset_tls_caches();
+        *TLS_CONFIG_DEFAULT.write().unwrap() =
+            Some(Err((ErrorKind::IoError, "previous failure".into())));
+        let arc = Arc::new(create_rustls_config(false, None).unwrap());
+
+        invalidate_if_stale(&TLS_CONFIG_DEFAULT, &arc);
+
+        assert!(
+            matches!(*TLS_CONFIG_DEFAULT.read().unwrap(), Some(Err(_))),
+            "cached error must not be wiped — `matches!` only fires on Some(Ok(_))"
+        );
+        reset_tls_caches();
     }
 
     // --- Retry semantics tests (exercises tls_connect_with_cert_retry directly) ---
@@ -386,7 +440,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_retry_on_cert_error_calls_connect_twice() {
-        invalidate_tls_config_cache();
+        reset_tls_caches();
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
@@ -411,13 +465,13 @@ mod tests {
             2,
             "Should retry exactly once"
         );
-        invalidate_tls_config_cache();
+        reset_tls_caches();
     }
 
     #[tokio::test]
     #[serial]
     async fn test_no_retry_on_non_cert_error() {
-        invalidate_tls_config_cache();
+        reset_tls_caches();
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
@@ -441,13 +495,13 @@ mod tests {
             1,
             "Should not retry on non-cert error"
         );
-        invalidate_tls_config_cache();
+        reset_tls_caches();
     }
 
     #[tokio::test]
     #[serial]
     async fn test_no_retry_with_custom_params_even_on_cert_error() {
-        invalidate_tls_config_cache();
+        reset_tls_caches();
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
@@ -471,13 +525,13 @@ mod tests {
             1,
             "Custom params should skip retry"
         );
-        invalidate_tls_config_cache();
+        reset_tls_caches();
     }
 
     #[tokio::test]
     #[serial]
     async fn test_successful_connect_does_not_retry() {
-        invalidate_tls_config_cache();
+        reset_tls_caches();
         let call_count = Arc::new(AtomicUsize::new(0));
         let call_count_clone = call_count.clone();
 
@@ -501,6 +555,6 @@ mod tests {
             1,
             "Success should not retry"
         );
-        invalidate_tls_config_cache();
+        reset_tls_caches();
     }
 }
