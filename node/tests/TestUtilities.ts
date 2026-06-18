@@ -555,11 +555,18 @@ export async function triggerLatencySpike(
     await client.configSet({ "latency-monitor-threshold": prevThreshold });
 }
 
-/**
- * Returns the current time as a Unix timestamp in seconds.
- */
-export function nowUnixSeconds(): number {
-    return Math.floor(Date.now() / 1000);
+/** Returns the current server time as a Unix timestamp in seconds. */
+export async function getUnixSeconds(client: BaseClient): Promise<number> {
+    // TODO #6166: Use a base client method to call time() directly.
+    if (client instanceof GlideClusterClient) {
+        const result = (await client.time({
+            route: "randomNode",
+        })) as [string, string];
+        return Number(result[0]);
+    }
+
+    const result = await (client as GlideClient).time();
+    return Number(result[0]);
 }
 
 /**

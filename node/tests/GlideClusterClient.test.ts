@@ -56,10 +56,10 @@ import {
     getClientCount,
     getFirstResult,
     getRandomKey,
+    getUnixSeconds,
     getServerVersion,
     intoArray,
     intoString,
-    nowUnixSeconds,
     parseEndpoints,
     PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
@@ -3394,7 +3394,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const beforeSpike = nowUnixSeconds();
+            const beforeSpike = await getUnixSeconds(client);
             await triggerLatencySpike(client);
 
             // Multi-node (default route)
@@ -3438,7 +3438,7 @@ describe("GlideClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const beforeSpike = nowUnixSeconds();
+            const beforeSpike = await getUnixSeconds(client);
             await triggerLatencySpike(client);
 
             // Multi-node (default route)

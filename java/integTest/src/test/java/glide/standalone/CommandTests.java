@@ -16,6 +16,7 @@ import static glide.TestUtilities.createLongRunningLuaScript;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.generateLuaLibCodeBinary;
+import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.TestUtilities.waitFor;
@@ -541,7 +542,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void latencyHistory(GlideClient client) {
-        long beforeSpike = Instant.now().getEpochSecond();
+        long beforeSpike = getUnixSeconds(client);
         triggerLatencySpike(client);
 
         LatencyEntry[] history = client.latencyHistory("command").get();
@@ -560,7 +561,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void latencyLatest(GlideClient client) {
-        long beforeSpike = Instant.now().getEpochSecond();
+        long beforeSpike = getUnixSeconds(client);
         triggerLatencySpike(client);
 
         LatencyEventInfo[] latest = client.latencyLatest().get();

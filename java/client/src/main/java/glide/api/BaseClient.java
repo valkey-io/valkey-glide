@@ -980,8 +980,7 @@ public abstract class BaseClient
             Object[] entry = (Object[]) response[i];
             result[i] =
                     new LatencyEntry(
-                            (Long) entry[LATENCY_ENTRY_TIME_INDEX],
-                            (Long) entry[LATENCY_ENTRY_LATENCY_INDEX]);
+                            (Long) entry[LATENCY_ENTRY_TIME_INDEX], (Long) entry[LATENCY_ENTRY_LATENCY_INDEX]);
         }
         return result;
     }

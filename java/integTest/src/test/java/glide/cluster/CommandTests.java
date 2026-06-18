@@ -20,6 +20,7 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getReplicaCount;
+import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -945,7 +946,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void latencyHistory(GlideClusterClient clusterClient) {
-        long beforeSpike = Instant.now().getEpochSecond();
+        long beforeSpike = getUnixSeconds(clusterClient);
         triggerLatencySpike(clusterClient);
 
         // Multi-node route (default).
@@ -987,17 +988,18 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void latencyLatest(GlideClusterClient clusterClient) {
-        long beforeSpike = Instant.now().getEpochSecond();
+        long beforeSpike = getUnixSeconds(clusterClient);
         triggerLatencySpike(clusterClient);
 
         ClusterValue<LatencyEventInfo[]> result = clusterClient.latencyLatest().get();
         assertTrue(result.hasMultiData());
 
         // Find the "command" event on any node
-        LatencyEventInfo commandInfo = flattenLatencyEventInfos(result).stream()
-                .filter(info -> "command".equals(info.getEventName()))
-                .findFirst()
-                .orElse(null);
+        LatencyEventInfo commandInfo =
+                flattenLatencyEventInfos(result).stream()
+                        .filter(info -> "command".equals(info.getEventName()))
+                        .findFirst()
+                        .orElse(null);
         assertNotNull(commandInfo);
 
         assertTrue(commandInfo.getLatestTime() >= beforeSpike);

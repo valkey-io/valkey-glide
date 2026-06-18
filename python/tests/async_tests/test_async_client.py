@@ -127,6 +127,7 @@ from tests.utils.utils import (
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
+    get_unix_seconds,
     get_version,
     parse_info_response,
     round_values,
@@ -10195,7 +10196,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_latency_history(self, glide_client: TGlideClient):
-        before_spike = int(time.time())
+        before_spike = await get_unix_seconds(glide_client)
         await trigger_latency_spike(glide_client)
 
         history = await glide_client.latency_history("command")
@@ -10214,7 +10215,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_latency_latest(self, glide_client: TGlideClient):
-        before_spike = int(time.time())
+        before_spike = await get_unix_seconds(glide_client)
         await trigger_latency_spike(glide_client)
 
         latest = await glide_client.latency_latest()

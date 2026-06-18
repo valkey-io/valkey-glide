@@ -4,10 +4,12 @@ package integTest
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -15,6 +17,24 @@ import (
 
 // debugSleepArgs is the command used to trigger a latency spike for the "command" event.
 var debugSleepArgs = []string{"DEBUG", "SLEEP", "0.05"}
+
+// getUnixSeconds returns the current server time as a Unix timestamp in seconds.
+func getUnixSeconds(ctx context.Context, client any) (int64, error) {
+	var result []string
+	var err error
+
+	// TODO #6166: Use a base client method to call Time() directly.
+	if c, ok := client.(*glide.Client); ok {
+		result, err = c.Time(ctx)
+	} else if c, ok := client.(*glide.ClusterClient); ok {
+		result, err = c.Time(ctx)
+	}
+
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(result[0], 10, 64)
+}
 
 // flattenLatencyEntries flattens a ClusterValue of LatencyEntry slices.
 func flattenLatencyEntries(val models.ClusterValue[[]models.LatencyEntry]) []models.LatencyEntry {
@@ -119,7 +139,8 @@ func (suite *GlideTestSuite) TestLatencyHistory() {
 	t := suite.T()
 	ctx := context.Background()
 
-	beforeSpike := time.Now().Unix()
+	beforeSpike, err := getUnixSeconds(ctx, client)
+	require.NoError(t, err)
 	suite.triggerLatencySpikeStandalone(ctx)
 
 	entries, err := client.LatencyHistory(ctx, "command")
@@ -141,7 +162,8 @@ func (suite *GlideTestSuite) TestLatencyLatest() {
 	t := suite.T()
 	ctx := context.Background()
 
-	beforeSpike := time.Now().Unix()
+	beforeSpike, err := getUnixSeconds(ctx, client)
+	require.NoError(t, err)
 	suite.triggerLatencySpikeStandalone(ctx)
 
 	entries, err := client.LatencyLatest(ctx)
@@ -222,7 +244,8 @@ func (suite *GlideTestSuite) TestLatencyHistory_Cluster() {
 	t := suite.T()
 	ctx := context.Background()
 
-	beforeSpike := time.Now().Unix()
+	beforeSpike, err := getUnixSeconds(ctx, client)
+	require.NoError(t, err)
 	suite.triggerLatencySpikeCluster(ctx)
 
 	val, err := client.LatencyHistory(ctx, "command")
@@ -277,7 +300,8 @@ func (suite *GlideTestSuite) TestLatencyLatest_Cluster() {
 	t := suite.T()
 	ctx := context.Background()
 
-	beforeSpike := time.Now().Unix()
+	beforeSpike, err := getUnixSeconds(ctx, client)
+	require.NoError(t, err)
 	suite.triggerLatencySpikeCluster(ctx)
 
 	val, err := client.LatencyLatest(ctx)

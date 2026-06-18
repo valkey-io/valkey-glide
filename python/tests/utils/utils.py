@@ -161,6 +161,18 @@ def flatten_cluster_response_lists(response) -> list:
     return response
 
 
+async def get_unix_seconds(glide_client: TGlideClient) -> int:
+    """Returns the current server time as a Unix timestamp in seconds."""
+    # TODO #6166: Use a base client method to call time() directly.
+    return int((await glide_client.time())[0])
+
+
+def get_unix_seconds_sync(glide_client: TSyncGlideClient) -> int:
+    """Returns the current server time as a Unix timestamp in seconds."""
+    # TODO #6166: Use a base client method to call time() directly.
+    return int(glide_client.time()[0])
+
+
 async def trigger_latency_spike(glide_client: TGlideClient) -> None:
     """Triggers a latency spike for the "command" event."""
 

@@ -66,7 +66,7 @@ import {
     flattenClusterResponseArrays,
     getFirstResult,
     getRandomKey,
-    nowUnixSeconds,
+    getUnixSeconds,
     PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
     waitForSaveNotInProgress,
@@ -536,7 +536,7 @@ export function runBaseTests(config: {
         "latencyHistory %p",
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                const beforeSpike = nowUnixSeconds();
+                const beforeSpike = await getUnixSeconds(client);
                 await triggerLatencySpike(client);
 
                 const history = await client.latencyHistory("command");
@@ -562,7 +562,7 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const beforeSpike = nowUnixSeconds();
+                    const beforeSpike = await getUnixSeconds(client);
                     await triggerLatencySpike(client);
 
                     const latest = await client.latencyLatest();
