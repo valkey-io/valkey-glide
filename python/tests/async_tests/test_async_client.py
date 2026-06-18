@@ -9681,8 +9681,6 @@ class TestCommands:
             assert await dest_client.get(key1) == val1.encode()
             assert await dest_client.get(key2) == val2.encode()
         finally:
-            await glide_client.custom_command(["FLUSHALL"])
-            await dest_client.custom_command(["FLUSHALL"])
             await dest_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
