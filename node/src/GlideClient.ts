@@ -1047,7 +1047,7 @@ export class GlideClient extends BaseClient {
      * ```typescript
      * const latest = await client.latencyLatest();
      * for (const info of latest) {
-     *     console.log(`Event: ${info.eventName}, Latest: ${info.latest}`);
+     *     console.log(`Event: ${info.eventName}, Latest: ${info.latestDuration}`);
      * }
      * ```
      */

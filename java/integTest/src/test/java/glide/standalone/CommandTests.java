@@ -576,9 +576,9 @@ public class CommandTests {
         }
         assertNotNull(commandInfo);
 
-        assertTrue(commandInfo.getTime() >= beforeSpike);
-        assertTrue(commandInfo.getLatest() > 0);
-        assertTrue(commandInfo.getMaximum() >= commandInfo.getLatest());
+        assertTrue(commandInfo.getLatestTime() >= beforeSpike);
+        assertTrue(commandInfo.getLatestDuration() > 0);
+        assertTrue(commandInfo.getMaxDuration() >= commandInfo.getLatestDuration());
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
             assertTrue(commandInfo.getSum().get() > 0);
@@ -625,8 +625,7 @@ public class CommandTests {
         // event, and finally restore the original threshold.
         client.latencyReset().get();
 
-        Map<String, String> prev =
-                client.configGet(new String[] {"latency-monitor-threshold"}).get();
+        Map<String, String> prev = client.configGet(new String[] {"latency-monitor-threshold"}).get();
         String prevThreshold = prev.getOrDefault("latency-monitor-threshold", "0");
 
         client.configSet(Collections.singletonMap("latency-monitor-threshold", "1")).get();

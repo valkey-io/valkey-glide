@@ -563,9 +563,9 @@ export function nowUnixSeconds(): number {
 }
 
 /**
- * Flattens a latency response into a single array of entries.
+ * Flattens a cluster response of arrays.
  */
-export function getAllLatencyEntries<T>(
+export function flattenClusterResponseArrays<T>(
     response: T[] | Record<string, T[]>,
 ): T[] {
     if (Array.isArray(response)) {

@@ -4399,11 +4399,11 @@ export interface LatencyEventInfo {
     /** The name of the event. */
     eventName: string;
     /** The time of the latest latency spike, as a Unix timestamp in seconds. */
-    time: number;
+    latestTime: number;
     /** The duration of the latest latency spike, in milliseconds. */
-    latest: number;
+    latestDuration: number;
     /** The all-time maximum duration of a latency spike, in milliseconds. */
-    maximum: number;
+    maxDuration: number;
     /** The sum of all latency spike durations in the event's time series, in milliseconds. Only populated for Valkey 8.1+. */
     sum?: number;
     /** The number of latency spikes recorded in the event's time series. Only populated for Valkey 8.1+. */

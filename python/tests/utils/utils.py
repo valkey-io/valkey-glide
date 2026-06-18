@@ -154,8 +154,8 @@ def get_first_result(
     return cast(bytes, res)
 
 
-def get_all_latency_entries(response) -> list:
-    """Flatten a latency history response into a list of latency entries."""
+def flatten_cluster_response_lists(response) -> list:
+    """Flatten a cluster response of lists."""
     if isinstance(response, dict):
         return [e for entries in response.values() for e in entries]
     return response

@@ -1170,7 +1170,7 @@ class StandaloneCommands(CoreCommands):
         Examples:
             >>> latest = client.latency_latest()
             >>> for info in latest:
-            ...     print(f"Event: {info.event_name}, Latest: {info.latest}")
+            ...     print(f"Event: {info.event_name}, Latest: {info.latest_duration}")
         """
         return _parse_latency_latest(
             cast(

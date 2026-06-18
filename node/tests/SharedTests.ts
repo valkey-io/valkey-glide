@@ -63,7 +63,7 @@ import {
 import {
     Client,
     GetAndSetRandomValue,
-    getAllLatencyEntries,
+    flattenClusterResponseArrays,
     getFirstResult,
     getRandomKey,
     nowUnixSeconds,
@@ -540,7 +540,7 @@ export function runBaseTests(config: {
                 await triggerLatencySpike(client);
 
                 const history = await client.latencyHistory("command");
-                const allEntries = getAllLatencyEntries(history);
+                const allEntries = flattenClusterResponseArrays(history);
 
                 expect(allEntries.length).toBeGreaterThan(0);
 
@@ -551,7 +551,7 @@ export function runBaseTests(config: {
 
                 // Non-existent event returns empty
                 const unknown = await client.latencyHistory("nonexistent");
-                expect(getAllLatencyEntries(unknown).length).toBe(0);
+                expect(flattenClusterResponseArrays(unknown).length).toBe(0);
             }, protocol);
         },
         config.timeout,
@@ -566,7 +566,7 @@ export function runBaseTests(config: {
                     await triggerLatencySpike(client);
 
                     const latest = await client.latencyLatest();
-                    const allEntries = getAllLatencyEntries(latest);
+                    const allEntries = flattenClusterResponseArrays(latest);
                     expect(allEntries.length).toBeGreaterThanOrEqual(1);
 
                     // Find the "command" event
@@ -574,12 +574,12 @@ export function runBaseTests(config: {
                         (info) => info.eventName === "command",
                     );
                     expect(commandInfo).toBeDefined();
-                    expect(commandInfo!.time).toBeGreaterThanOrEqual(
+                    expect(commandInfo!.latestTime).toBeGreaterThanOrEqual(
                         beforeSpike,
                     );
-                    expect(commandInfo!.latest).toBeGreaterThan(0);
-                    expect(commandInfo!.maximum).toBeGreaterThanOrEqual(
-                        commandInfo!.latest,
+                    expect(commandInfo!.latestDuration).toBeGreaterThan(0);
+                    expect(commandInfo!.maxDuration).toBeGreaterThanOrEqual(
+                        commandInfo!.latestDuration,
                     );
 
                     // Only Valkey 8.1+ populates sum and count.
@@ -607,7 +607,7 @@ export function runBaseTests(config: {
                 expect(resetCount).toBeGreaterThan(0);
 
                 const history = await client.latencyHistory("command");
-                expect(getAllLatencyEntries(history).length).toBe(0);
+                expect(flattenClusterResponseArrays(history).length).toBe(0);
 
                 // Trigger spike then reset specific event
                 await triggerLatencySpike(client);
@@ -615,7 +615,9 @@ export function runBaseTests(config: {
                 expect(specificReset).toBeGreaterThan(0);
 
                 const historyAfter = await client.latencyHistory("command");
-                expect(getAllLatencyEntries(historyAfter).length).toBe(0);
+                expect(flattenClusterResponseArrays(historyAfter).length).toBe(
+                    0,
+                );
 
                 // Trigger spike then reset unknown event — "command" data should persist
                 await triggerLatencySpike(client);
@@ -627,7 +629,7 @@ export function runBaseTests(config: {
                 const historyStillPresent =
                     await client.latencyHistory("command");
                 expect(
-                    getAllLatencyEntries(historyStillPresent).length,
+                    flattenClusterResponseArrays(historyStillPresent).length,
                 ).toBeGreaterThan(0);
             }, protocol);
         },

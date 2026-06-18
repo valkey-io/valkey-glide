@@ -29,10 +29,10 @@ class LatencyEventInfo:
 
     Attributes:
         event_name (str): The name of the event.
-        time (int): The time of the latest latency spike, as a Unix
+        latest_time (int): The time of the latest latency spike, as a Unix
             timestamp in seconds.
-        latest (int): The duration of the latest latency spike, in milliseconds.
-        maximum (int): The all-time maximum duration of a latency spike, in milliseconds.
+        latest_duration (int): The duration of the latest latency spike, in milliseconds.
+        max_duration (int): The all-time maximum duration of a latency spike, in milliseconds.
         sum (Optional[int]): The sum of all latency spike durations in the event's
             time series, in milliseconds. Only populated for Valkey 8.1+.
         count (Optional[int]): The number of latency spikes recorded in the event's
@@ -40,9 +40,9 @@ class LatencyEventInfo:
     """
 
     event_name: str
-    time: int
-    latest: int
-    maximum: int
+    latest_time: int
+    latest_duration: int
+    max_duration: int
     sum: Optional[int] = None
     count: Optional[int] = None
 
@@ -65,9 +65,9 @@ def _parse_latency_latest(response: List) -> List[LatencyEventInfo]:
                 event_name=(
                     entry[0].decode() if isinstance(entry[0], bytes) else entry[0]
                 ),
-                time=int(entry[1]),
-                latest=int(entry[2]),
-                maximum=int(entry[3]),
+                latest_time=int(entry[1]),
+                latest_duration=int(entry[2]),
+                max_duration=int(entry[3]),
                 sum=sum_value,
                 count=count_value,
             )

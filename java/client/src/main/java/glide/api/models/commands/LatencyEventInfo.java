@@ -22,13 +22,13 @@ public final class LatencyEventInfo {
     private final String eventName;
 
     /** The time of the latest latency spike, as a Unix timestamp in seconds. */
-    private final long time;
+    private final long latestTime;
 
     /** The duration of the latest latency spike, in milliseconds. */
-    private final long latest;
+    private final long latestDuration;
 
     /** The all-time maximum duration of a latency spike, in milliseconds. */
-    private final long maximum;
+    private final long maxDuration;
 
     /**
      * The sum of all latency spike durations in the event's time series, in milliseconds.<br>

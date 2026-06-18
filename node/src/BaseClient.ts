@@ -10258,9 +10258,9 @@ export class BaseClient {
         return (response as unknown[][]).map((entry) => {
             const info: LatencyEventInfo = {
                 eventName: entry[0] as string,
-                time: entry[1] as number,
-                latest: entry[2] as number,
-                maximum: entry[3] as number,
+                latestTime: entry[1] as number,
+                latestDuration: entry[2] as number,
+                maxDuration: entry[3] as number,
             };
 
             // Valkey 8.1+ returns 6-element arrays with sum and count

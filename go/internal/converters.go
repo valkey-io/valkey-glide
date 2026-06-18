@@ -754,8 +754,8 @@ func ConvertLatencyHistoryEntries(data any) (any, error) {
 			return nil, fmt.Errorf("unexpected type for LATENCY HISTORY latency at index %d: %T", i, pair[1])
 		}
 		result = append(result, models.LatencyEntry{
-			Time:    time.Unix(ts, 0),
-			Latency: time.Duration(latency) * time.Millisecond,
+			Time:     time.Unix(ts, 0),
+			Duration: time.Duration(latency) * time.Millisecond,
 		})
 	}
 	return result, nil
@@ -794,12 +794,12 @@ func ConvertLatencyLatestEntries(data any) (any, error) {
 		}
 
 		info := models.LatencyEventInfo{
-			EventName: name,
-			Time:      time.Unix(ts, 0),
-			Latest:    time.Duration(latest) * time.Millisecond,
-			Maximum:   time.Duration(max) * time.Millisecond,
-			Sum:       models.CreateNilResultOf[time.Duration](),
-			Count:     models.CreateNilResultOf[int64](),
+			EventName:      name,
+			LatestTime:     time.Unix(ts, 0),
+			LatestDuration: time.Duration(latest) * time.Millisecond,
+			MaxDuration:    time.Duration(max) * time.Millisecond,
+			Sum:            models.CreateNilResultOf[time.Duration](),
+			Count:          models.CreateNilResultOf[int64](),
 		}
 
 		// Valkey 8.1+ includes sum and count as the 5th and 6th elements.

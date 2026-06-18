@@ -5024,8 +5024,8 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., <code>"command"</code>).
-     * @return Command Response - An array of {@link LatencyEntry} for the event, or an empty
-     *     array if the event doesn't exist.
+     * @return Command Response - An array of {@link LatencyEntry} for the event, or an empty array if
+     *     the event doesn't exist.
      */
     public T latencyHistory(@NonNull String event) {
         protobufBatch.addCommands(buildCommand(LatencyHistory, newArgsBuilder().add(event)));
@@ -5036,8 +5036,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Reports the latest latency events logged by the server.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return Command Response - An array of {@link LatencyEventInfo} for the latest latency
-     *     events.
+     * @return Command Response - An array of {@link LatencyEventInfo} for the latest latency events.
      */
     public T latencyLatest() {
         protobufBatch.addCommands(buildCommand(LatencyLatest));

@@ -1121,8 +1121,8 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest
-     *     latency events.
+     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest latency
+     *     events.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest().get();
@@ -1139,13 +1139,13 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest
-     *     latency events.
+     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest latency
+     *     events.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest(RANDOM).get();
      * for (LatencyEventInfo info : latest.getSingleValue()) {
-     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatest());
+     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatestDuration());
      * }
      * }</pre>
      */

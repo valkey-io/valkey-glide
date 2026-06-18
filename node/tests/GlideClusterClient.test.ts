@@ -51,7 +51,7 @@ import {
     createLuaLibWithLongRunningFunction,
     flushAndCloseClient,
     generateLuaLibCode,
-    getAllLatencyEntries,
+    flattenClusterResponseArrays,
     getClientConfigurationOption,
     getClientCount,
     getFirstResult,
@@ -3399,7 +3399,7 @@ describe("GlideClusterClient", () => {
 
             // Multi-node (default route)
             const multiHistory = await client.latencyHistory("command");
-            const allEntries = getAllLatencyEntries(multiHistory);
+            const allEntries = flattenClusterResponseArrays(multiHistory);
             expect(allEntries.length).toBeGreaterThan(0);
 
             for (const entry of allEntries) {
@@ -3414,7 +3414,7 @@ describe("GlideClusterClient", () => {
             );
             expect(Array.isArray(singleHistory)).toBe(true);
 
-            const singleEntries = getAllLatencyEntries(singleHistory);
+            const singleEntries = flattenClusterResponseArrays(singleHistory);
             expect(singleEntries.length).toBeGreaterThan(0);
 
             for (const entry of singleEntries) {
@@ -3424,7 +3424,7 @@ describe("GlideClusterClient", () => {
 
             // Non-existent event returns empty
             const unknown = await client.latencyHistory("nonexistent");
-            expect(getAllLatencyEntries(unknown).length).toBe(0);
+            expect(flattenClusterResponseArrays(unknown).length).toBe(0);
 
             client.close();
         },
@@ -3443,17 +3443,17 @@ describe("GlideClusterClient", () => {
 
             // Multi-node (default route)
             const multiLatest = await client.latencyLatest();
-            const allEntries = getAllLatencyEntries(multiLatest);
+            const allEntries = flattenClusterResponseArrays(multiLatest);
             expect(allEntries.length).toBeGreaterThanOrEqual(1);
 
             const commandInfo = allEntries.find(
                 (info) => info.eventName === "command",
             );
             expect(commandInfo).toBeDefined();
-            expect(commandInfo!.time).toBeGreaterThanOrEqual(beforeSpike);
-            expect(commandInfo!.latest).toBeGreaterThan(0);
-            expect(commandInfo!.maximum).toBeGreaterThanOrEqual(
-                commandInfo!.latest,
+            expect(commandInfo!.latestTime).toBeGreaterThanOrEqual(beforeSpike);
+            expect(commandInfo!.latestDuration).toBeGreaterThan(0);
+            expect(commandInfo!.maxDuration).toBeGreaterThanOrEqual(
+                commandInfo!.latestDuration,
             );
 
             // Single-node route (primary node)
@@ -3462,16 +3462,16 @@ describe("GlideClusterClient", () => {
             );
             expect(Array.isArray(singleLatest)).toBe(true);
 
-            const singleEntries = getAllLatencyEntries(singleLatest);
+            const singleEntries = flattenClusterResponseArrays(singleLatest);
             expect(singleEntries.length).toBeGreaterThanOrEqual(1);
 
             const singleCommand = singleEntries.find(
                 (info) => info.eventName === "command",
             );
             expect(singleCommand).toBeDefined();
-            expect(singleCommand!.latest).toBeGreaterThan(0);
-            expect(singleCommand!.maximum).toBeGreaterThanOrEqual(
-                singleCommand!.latest,
+            expect(singleCommand!.latestDuration).toBeGreaterThan(0);
+            expect(singleCommand!.maxDuration).toBeGreaterThanOrEqual(
+                singleCommand!.latestDuration,
             );
 
             client.close();
