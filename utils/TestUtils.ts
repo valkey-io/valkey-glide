@@ -7,6 +7,16 @@ import { lt } from "semver";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
 
+const isWindows = process.platform === "win32";
+
+function toWslPath(p: string): string {
+    return p
+        .replace(/^([A-Za-z]):/, (_, d) => `/mnt/${d.toLowerCase()}`)
+        .replace(/\\/g, "/");
+}
+
+const wslScriptPath = isWindows ? toWslPath(PY_SCRIPT_PATH) : PY_SCRIPT_PATH;
+
 function parseOutput(input: string): {
     clusterFolder: string;
     addresses: [string, number][];
@@ -87,10 +97,12 @@ export class ValkeyCluster {
         loadModule?: string[],
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
+            const effectiveReplicaCount =
+                isWindows && replicaCount > 0 ? 0 : replicaCount;
             const commandArgs = [
                 "start",
                 "-r",
-                `${replicaCount}`,
+                `${effectiveReplicaCount}`,
                 "-n",
                 `${shardCount}`,
             ];
@@ -115,9 +127,13 @@ export class ValkeyCluster {
                 }
             }
 
+            const [cmd, cmdArgs] = isWindows
+                ? ["wsl", ["python3", wslScriptPath, ...commandArgs]]
+                : ["python3", [PY_SCRIPT_PATH, ...commandArgs]];
+
             execFile(
-                "python3",
-                [PY_SCRIPT_PATH, ...commandArgs],
+                cmd,
+                cmdArgs,
                 (error, stdout) => {
                     if (error) {
                         reject(error);
@@ -198,7 +214,18 @@ export class ValkeyCluster {
                     commandArgs.push(`--keep-folder`);
                 }
 
-                execFile("python3", commandArgs, (error, _, stderr) => {
+                const [cmd, cmdArgs] = isWindows
+                    ? [
+                          "wsl",
+                          [
+                              "python3",
+                              wslScriptPath,
+                              ...commandArgs.slice(1),
+                          ],
+                      ]
+                    : ["python3", commandArgs];
+
+                execFile(cmd, cmdArgs, (error, _, stderr) => {
                     if (error) {
                         console.error(stderr);
                         reject(error);
