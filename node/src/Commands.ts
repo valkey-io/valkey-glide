@@ -3436,19 +3436,23 @@ export interface MigrateOptions {
     username?: string;
 }
 
-/** @internal */
 export function createMigrate(
     host: string,
     port: number,
-    key: GlideString,
+    key: GlideString | GlideString[],
     destinationDB: number,
     timeout: number,
     options?: MigrateOptions,
 ): command_request.Command {
+    const isArray = Array.isArray(key);
+
+    if (isArray && (key as GlideString[]).length === 0)
+        throw new Error("key must not be an empty array");
+
     const args: GlideString[] = [
         host,
         port.toString(),
-        key,
+        isArray ? "" : (key as GlideString),
         destinationDB.toString(),
         timeout.toString(),
     ];
@@ -3461,7 +3465,6 @@ export function createMigrate(
         }
 
         if (options.copy) args.push("COPY");
-
         if (options.replace) args.push("REPLACE");
 
         if (options.username !== undefined && options.password !== undefined) {
@@ -3470,6 +3473,8 @@ export function createMigrate(
             args.push("AUTH", options.password);
         }
     }
+
+    if (isArray) args.push("KEYS", ...(key as GlideString[]));
 
     return createCommand(RequestType.Migrate, args);
 }

@@ -802,9 +802,108 @@ describe("GlideClient", () => {
                 }),
             ).rejects.toThrow();
 
+            // Multi-key: NOKEY when keys do not exist
+            const key2 = getRandomKey();
+            const key3 = getRandomKey();
+            expect(
+                await client.migrate(
+                    serverHost,
+                    serverPort,
+                    [key2, key3],
+                    0,
+                    1000,
+                ),
+            ).toEqual("NOKEY");
+
+            // Multi-key: error on invalid host
+            await client.set(key2, "value2");
+            await client.set(key3, "value3");
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000),
+            ).rejects.toThrow();
+
+            // Multi-key: error with options
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000, {
+                    copy: true,
+                    replace: true,
+                }),
+            ).rejects.toThrow();
+
+            // Multi-key: empty keys array throws
+            await expect(
+                client.migrate(serverHost, serverPort, [], 0, 1000),
+            ).rejects.toThrow("key must not be an empty array");
+
+            // Multi-key with single key: NOKEY when key does not exist
+            const key4 = getRandomKey();
+            expect(
+                await client.migrate(serverHost, serverPort, [key4], 0, 1000),
+            ).toEqual("NOKEY");
+
+            // Multi-key with AUTH: error on invalid host
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000, {
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
+
             client.close();
         },
         TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "migrate multi-key success test_%p",
+        async (protocol) => {
+            const destCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                0,
+                getServerVersion,
+            );
+            const sourceClient = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const destClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    destCluster.getAddresses(),
+                    protocol,
+                ),
+            );
+
+            try {
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                await sourceClient.set(key1, "value1");
+                await sourceClient.set(key2, "value2");
+
+                const [destHost, destPort] = destCluster.getAddresses()[0];
+                expect(
+                    await sourceClient.migrate(
+                        destHost,
+                        destPort,
+                        [key1, key2],
+                        0,
+                        5000,
+                    ),
+                ).toEqual("OK");
+
+                expect(await destClient.mget([key1, key2])).toEqual([
+                    "value1",
+                    "value2",
+                ]);
+                expect(await sourceClient.mget([key1, key2])).toEqual([
+                    null,
+                    null,
+                ]);
+            } finally {
+                sourceClient.close();
+                destClient.close();
+                await destCluster.close();
+            }
+        },
+        60000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(

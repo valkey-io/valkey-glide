@@ -46,6 +46,7 @@ import {
     createInfo,
     createLastSave,
     createLolwut,
+    createMigrate,
     createSave,
     createBgSave,
     createBgRewriteAof,
@@ -69,6 +70,7 @@ import {
     FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
+    MigrateOptions,
     ScanOptions,
 } from "./Commands";
 
@@ -1123,6 +1125,50 @@ export class GlideClient extends BaseClient {
         options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createRandomKey(), options);
+    }
+
+    /**
+     * Atomically transfers a key or multiple keys from the current Valkey instance
+     * to a destination Valkey instance.
+     * On success, keys are deleted from the source unless `copy` is set to `true` in options.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate, or an array of keys to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns `"OK"` on success, `"NOKEY"` if the key(s) do not exist.
+     *
+     * @example Single-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     * @example Single-key with copy and replace:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // "OK"
+     * ```
+     * @example Multi-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString | GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
+        );
     }
 
     /**
