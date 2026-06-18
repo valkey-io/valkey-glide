@@ -61,6 +61,7 @@ import {
     intoString,
     nowUnixSeconds,
     parseEndpoints,
+    PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
     validateBatchResponse,
     waitForNotBusy,
@@ -3406,10 +3407,11 @@ describe("GlideClusterClient", () => {
                 expect(entry.latency).toBeGreaterThan(0);
             }
 
-            // Single-node route
-            const singleHistory = await client.latencyHistory("command", {
-                route: "randomNode",
-            });
+            // Single-node route (primary node)
+            const singleHistory = await client.latencyHistory(
+                "command",
+                PRIMARY_SLOT_ROUTE_OPTION,
+            );
             expect(Array.isArray(singleHistory)).toBe(true);
 
             const singleEntries = getAllLatencyEntries(singleHistory);
@@ -3454,10 +3456,10 @@ describe("GlideClusterClient", () => {
                 commandInfo!.latest,
             );
 
-            // Single-node route
-            const singleLatest = await client.latencyLatest({
-                route: "randomNode",
-            });
+            // Single-node route (primary node)
+            const singleLatest = await client.latencyLatest(
+                PRIMARY_SLOT_ROUTE_OPTION,
+            );
             expect(Array.isArray(singleLatest)).toBe(true);
 
             const singleEntries = getAllLatencyEntries(singleLatest);

@@ -10276,14 +10276,14 @@ class TestCommands:
         assert isinstance(multi_latest, dict)
         assert len(get_all_latency_entries(multi_latest)) >= 1
 
-        # A single-node route returns a flat list rather than a mapping.
+        # A single primary node route returns a flat list rather than a mapping.
         single_history = await glide_client.latency_history(
-            "command", route=RandomNode()
+            "command", route=PRIMARY_SLOT_ROUTE
         )
         assert isinstance(single_history, list)
         assert len(single_history) > 0
 
-        single_latest = await glide_client.latency_latest(route=RandomNode())
+        single_latest = await glide_client.latency_latest(route=PRIMARY_SLOT_ROUTE)
         assert isinstance(single_latest, list)
         assert len(single_latest) >= 1
 

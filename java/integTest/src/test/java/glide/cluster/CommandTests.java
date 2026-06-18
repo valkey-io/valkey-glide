@@ -961,8 +961,9 @@ public class CommandTests {
             }
         }
 
-        // Single-node route
-        ClusterValue<LatencyEntry[]> single = clusterClient.latencyHistory("command", RANDOM).get();
+        // Single-node route (primary)
+        ClusterValue<LatencyEntry[]> single =
+                clusterClient.latencyHistory("command", PRIMARY_SLOT_ROUTE).get();
         assertTrue(single.hasSingleData());
 
         LatencyEntry[] entries = single.getSingleValue();

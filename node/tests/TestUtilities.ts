@@ -519,6 +519,11 @@ export async function waitForSaveNotInProgress(
     }, "Timed out waiting for save to complete");
 }
 
+/** Route to a single primary node. */
+export const PRIMARY_SLOT_ROUTE_OPTION = {
+    route: { type: "primarySlotKey" as const, key: "1" },
+};
+
 /** Triggers a latency spike for the "command" event. */
 export async function triggerLatencySpike(
     client: GlideClient | GlideClusterClient,

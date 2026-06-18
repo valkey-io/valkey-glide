@@ -100,7 +100,7 @@ func (suite *GlideTestSuite) TestLatencyHistory() {
 
 	entries, err := client.LatencyHistory(ctx, "command")
 	require.NoError(t, err)
-	require.NotEmpty(t, entries, "expected at least one 'command' latency entry")
+	require.NotEmpty(t, entries)
 	for _, e := range entries {
 		assert.GreaterOrEqual(t, e.Time.Unix(), beforeSpike)
 		assert.Greater(t, e.Latency, time.Duration(0))
@@ -131,7 +131,7 @@ func (suite *GlideTestSuite) TestLatencyLatest() {
 			break
 		}
 	}
-	require.NotNil(t, commandInfo, "expected a 'command' event in LATENCY LATEST")
+	require.NotNil(t, commandInfo)
 
 	assert.GreaterOrEqual(t, commandInfo.Time.Unix(), beforeSpike)
 	assert.Greater(t, commandInfo.Latest, time.Duration(0))
@@ -139,13 +139,13 @@ func (suite *GlideTestSuite) TestLatencyLatest() {
 
 	// Only Valkey 8.1+ populates Sum and Count.
 	if suite.serverVersion >= "8.1.0" {
-		assert.False(t, commandInfo.Sum.IsNil(), "Sum should be populated for Valkey 8.1+")
-		assert.False(t, commandInfo.Count.IsNil(), "Count should be populated for Valkey 8.1+")
+		assert.False(t, commandInfo.Sum.IsNil())
+		assert.False(t, commandInfo.Count.IsNil())
 		assert.Greater(t, commandInfo.Sum.Value(), time.Duration(0))
 		assert.Greater(t, commandInfo.Count.Value(), int64(0))
 	} else {
-		assert.True(t, commandInfo.Sum.IsNil(), "Sum should be nil before Valkey 8.1")
-		assert.True(t, commandInfo.Count.IsNil(), "Count should be nil before Valkey 8.1")
+		assert.True(t, commandInfo.Sum.IsNil())
+		assert.True(t, commandInfo.Count.IsNil())
 	}
 }
 
@@ -245,17 +245,18 @@ func (suite *GlideTestSuite) TestLatencyHistoryWithOptions_Cluster() {
 
 	suite.triggerLatencySpikeCluster(ctx)
 
+	// Multi-node (all nodes)
 	val, err := client.LatencyHistoryWithOptions(ctx, "command", options.RouteOption{Route: config.AllNodes})
 	require.NoError(t, err)
-	require.True(t, val.IsMultiValue(), "AllNodes should produce a multi-value response")
+	require.True(t, val.IsMultiValue())
 	for addr := range val.MultiValue() {
 		assert.NotEmpty(t, addr)
 	}
 
-	// Random route resolves to a single node.
-	single, err := client.LatencyHistoryWithOptions(ctx, "command", options.RouteOption{Route: config.RandomRoute})
+	// Single-node (primary node)
+	single, err := client.LatencyHistoryWithOptions(ctx, "command", primarySlotRouteOption)
 	require.NoError(t, err)
-	assert.True(t, single.IsSingleValue(), "RandomRoute should resolve to a single-value ClusterValue")
+	assert.True(t, single.IsSingleValue())
 	for _, e := range single.SingleValue() {
 		assert.False(t, e.Time.IsZero())
 		assert.GreaterOrEqual(t, e.Latency, time.Duration(0))
@@ -264,7 +265,7 @@ func (suite *GlideTestSuite) TestLatencyHistoryWithOptions_Cluster() {
 	// Nil route should match the no-options method (default routing → multi-value).
 	nilRoute, err := client.LatencyHistoryWithOptions(ctx, "command", options.RouteOption{})
 	require.NoError(t, err)
-	assert.True(t, nilRoute.IsMultiValue(), "nil route should fall back to default multi-value behavior")
+	assert.True(t, nilRoute.IsMultiValue())
 }
 
 func (suite *GlideTestSuite) TestLatencyLatest_Cluster() {
@@ -329,7 +330,7 @@ func (suite *GlideTestSuite) TestLatencyLatestWithOptions_Cluster() {
 
 	val, err := client.LatencyLatestWithOptions(ctx, options.RouteOption{Route: config.AllPrimaries})
 	require.NoError(t, err)
-	require.True(t, val.IsMultiValue(), "AllPrimaries should produce a multi-value response")
+	require.True(t, val.IsMultiValue())
 }
 
 func (suite *GlideTestSuite) TestLatencyReset_Cluster() {

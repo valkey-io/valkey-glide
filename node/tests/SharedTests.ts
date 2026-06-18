@@ -44,7 +44,6 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
-    RouteOption,
     Score,
     ScoreFilter,
     Script,
@@ -68,6 +67,7 @@ import {
     getFirstResult,
     getRandomKey,
     nowUnixSeconds,
+    PRIMARY_SLOT_ROUTE_OPTION,
     triggerLatencySpike,
     waitForSaveNotInProgress,
 } from "./TestUtilities";
@@ -128,11 +128,6 @@ export function runBaseTests(config: {
     // Expected error response for BGSAVE CANCEL when no save is in progress
     const BGSAVE_NOT_CANCELLED_RESPONSE =
         "Background saving is currently not in progress or scheduled";
-
-    // Route option for routing to a single primary node by slot key.
-    const PRIMARY_SLOT_ROUTE_OPTION: RouteOption = {
-        route: { type: "primarySlotKey", key: "1" },
-    };
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,

@@ -1326,7 +1326,9 @@ class TestSyncBatch:
 
         # Atomic batches always route to a single node and return a list.
         # Non-atomic cluster batches route to all primaries and a dictionary.
-        expect_dict = isinstance(glide_sync_client, GlideClusterClient) and not is_atomic
+        expect_dict = (
+            isinstance(glide_sync_client, GlideClusterClient) and not is_atomic
+        )
 
         # LATENCY HISTORY
         if expect_dict:
