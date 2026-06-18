@@ -851,6 +851,52 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "migrate multi-key success test_%p",
+        async (protocol) => {
+            const sourceClient = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const destClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    azCluster.getAddresses(),
+                    protocol,
+                ),
+            );
+
+            try {
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                await sourceClient.set(key1, "value1");
+                await sourceClient.set(key2, "value2");
+
+                const [destHost, destPort] = azCluster.getAddresses()[0];
+                expect(
+                    await sourceClient.migrate(
+                        destHost,
+                        destPort,
+                        [key1, key2],
+                        0,
+                        5000,
+                    ),
+                ).toEqual("OK");
+
+                expect(await destClient.mget([key1, key2])).toEqual([
+                    "value1",
+                    "value2",
+                ]);
+                expect(await sourceClient.mget([key1, key2])).toEqual([
+                    null,
+                    null,
+                ]);
+            } finally {
+                sourceClient.close();
+                destClient.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "move test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(

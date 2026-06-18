@@ -4502,8 +4502,7 @@ export class Batch extends BaseBatch<Batch> {
      *
      * @param host - The host of the destination Valkey instance.
      * @param port - The port of the destination Valkey instance.
-     * @param key - The key to migrate, or an array of keys to migrate. When an array is provided,
-     *     the KEYS subcommand is used and an empty string is sent in the key position per the MIGRATE protocol.
+     * @param key - The key to migrate, or an array of keys to migrate.
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
