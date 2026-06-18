@@ -853,12 +853,18 @@ describe("GlideClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "migrate multi-key success test_%p",
         async (protocol) => {
+            const destCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                0,
+                getServerVersion,
+            );
             const sourceClient = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const destClient = await GlideClient.createClient(
                 getClientConfigurationOption(
-                    azCluster.getAddresses(),
+                    destCluster.getAddresses(),
                     protocol,
                 ),
             );
@@ -869,7 +875,7 @@ describe("GlideClient", () => {
                 await sourceClient.set(key1, "value1");
                 await sourceClient.set(key2, "value2");
 
-                const [destHost, destPort] = azCluster.getAddresses()[0];
+                const [destHost, destPort] = destCluster.getAddresses()[0];
                 expect(
                     await sourceClient.migrate(
                         destHost,
@@ -891,9 +897,10 @@ describe("GlideClient", () => {
             } finally {
                 sourceClient.close();
                 destClient.close();
+                await destCluster.close();
             }
         },
-        TIMEOUT,
+        60000,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
