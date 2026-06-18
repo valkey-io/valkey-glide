@@ -17,6 +17,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -715,6 +716,9 @@ public class BatchTests {
 
         batch.clientUnpause();
         results.add(Pair.of(ClientUnpause, buildArgs()));
+
+        batch.clientTrackingInfo();
+        results.add(Pair.of(ClientTrackingInfo, buildArgs()));
 
         batch.configRewrite();
         results.add(Pair.of(ConfigRewrite, buildArgs()));

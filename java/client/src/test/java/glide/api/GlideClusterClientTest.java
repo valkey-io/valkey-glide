@@ -5,6 +5,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
@@ -114,6 +115,7 @@ import glide.managers.GlideExceptionCheckedFunction;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -134,6 +136,15 @@ public class GlideClusterClientTest {
     CommandManager commandManager;
 
     private final String[] TEST_ARGS = new String[0];
+
+    private static final Map<String, Object> TRACKING_INFO;
+
+    static {
+        TRACKING_INFO = new HashMap<>();
+        TRACKING_INFO.put("flags", new HashSet<>(Collections.singletonList("off")));
+        TRACKING_INFO.put("redirect", -1L);
+        TRACKING_INFO.put("prefixes", new Object[0]);
+    }
 
     @BeforeEach
     public void setUp() {
@@ -824,6 +835,48 @@ public class GlideClusterClientTest {
         Map<String, String> data = createMap("n1", "TEST");
         try (TestClient client = new TestClient(commandManager, data)) {
             ClusterValue<String> value = client.clientGetName(ALL_NODES).get();
+            assertEquals(data, value.getMultiValue());
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientTrackingInfo_returns_success() {
+        // setup
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(TRACKING_INFO);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(ClientTrackingInfo), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
+
+        // verify
+        assertEquals(testResponse, response);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientTrackingInfo_with_single_node_route_returns_success() {
+        TestCommandManager commandManager = new TestCommandManager(null);
+
+        try (TestClient client = new TestClient(commandManager, TRACKING_INFO)) {
+            ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(RANDOM).get();
+            assertEquals(TRACKING_INFO, value.getSingleValue());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientTrackingInfo_with_multi_node_route_returns_success() {
+        TestCommandManager commandManager = new TestCommandManager(null);
+
+        Map<String, Map<String, Object>> data = createMap("n1", TRACKING_INFO);
+        try (TestClient client = new TestClient(commandManager, data)) {
+            ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(ALL_NODES).get();
             assertEquals(data, value.getMultiValue());
         }
     }

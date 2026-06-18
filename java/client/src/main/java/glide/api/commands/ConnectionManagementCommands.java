@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.ClientPauseMode;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -193,4 +194,38 @@ public interface ConnectionManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> reset();
+
+    /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * <p>TODO: Move to a shared {@code ConnectionManagementBaseCommands} interface once created. See
+     * <a href="https://github.com/valkey-io/valkey-glide/issues/6144">issue #6144</a>.
+     *
+     * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
+     * @since Valkey 6.2.0 and above.
+     * @return A {@link Map} with the client's tracking state. The map contains:
+     *     <ul>
+     *       <li>{@code flags}: a {@link java.util.Set} of tracking flags. See <a
+     *           href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for the full
+     *           list.
+     *       <li>{@code redirect}: a {@link Long} with the client ID receiving invalidation messages,
+     *           or {@code -1} if not redirecting
+     *       <li>{@code prefixes}: an {@code Object[]} of key prefixes monitored for invalidation
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * // Tracking off (default):
+     * Map<String, Object> info = client.clientTrackingInfo().get();
+     * Set<String> flags = (Set<String>) info.get("flags");     // e.g. {"off"}
+     * Long redirect = (Long) info.get("redirect");              // e.g. -1L
+     * Object[] prefixes = (Object[]) info.get("prefixes");     // e.g. []
+     * // Tracking on with prefix:
+     * // {"flags": {"on", "noloop"}, "redirect": -1L, "prefixes": ["key:"]}
+     * for (Object prefix : (Object[]) info.get("prefixes")) {
+     *     System.out.println((String) prefix);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> clientTrackingInfo();
 }
