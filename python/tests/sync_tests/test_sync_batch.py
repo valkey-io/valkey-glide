@@ -1339,8 +1339,6 @@ class TestSyncBatch:
             assert dest_client.get(key1) == val1.encode()
             assert dest_client.get(key2) == val2.encode()
         finally:
-            glide_sync_client.custom_command(["FLUSHALL"])
-            dest_client.custom_command(["FLUSHALL"])
             dest_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [False])
