@@ -18741,6 +18741,7 @@ public class SharedCommandTests {
                 client instanceof GlideClusterClient
                         ? ((GlideClusterClient) client).clientTrackingInfo().get()
                         : ((GlideClient) client).clientTrackingInfo().get();
+        // TODO #6144: simplify once clientTrackingInfo is moved to base class
         assertNotNull(info);
         assertTrue(info.containsKey("flags"));
         assertTrue(info.containsKey("redirect"));

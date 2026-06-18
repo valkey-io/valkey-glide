@@ -137,6 +137,15 @@ public class GlideClusterClientTest {
 
     private final String[] TEST_ARGS = new String[0];
 
+    private static final Map<String, Object> TRACKING_INFO;
+
+    static {
+        TRACKING_INFO = new HashMap<>();
+        TRACKING_INFO.put("flags", new HashSet<>(Collections.singletonList("off")));
+        TRACKING_INFO.put("redirect", -1L);
+        TRACKING_INFO.put("prefixes", new Object[0]);
+    }
+
     @BeforeEach
     public void setUp() {
         commandManager = mock(CommandManager.class);
@@ -834,12 +843,8 @@ public class GlideClusterClientTest {
     @Test
     public void clientTrackingInfo_returns_success() {
         // setup
-        Map<String, Object> info = new HashMap<>();
-        info.put("flags", new HashSet<>(Collections.singletonList("off")));
-        info.put("redirect", -1L);
-        info.put("prefixes", new Object[0]);
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
-        testResponse.complete(info);
+        testResponse.complete(TRACKING_INFO);
 
         // match on protobuf request
         when(commandManager.<Map<String, Object>>submitNewCommand(
@@ -858,13 +863,9 @@ public class GlideClusterClientTest {
     public void clientTrackingInfo_with_single_node_route_returns_success() {
         TestCommandManager commandManager = new TestCommandManager(null);
 
-        Map<String, Object> info = new HashMap<>();
-        info.put("flags", new HashSet<>(Collections.singletonList("off")));
-        info.put("redirect", -1L);
-        info.put("prefixes", new Object[0]);
-        try (TestClient client = new TestClient(commandManager, info)) {
+        try (TestClient client = new TestClient(commandManager, TRACKING_INFO)) {
             ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(RANDOM).get();
-            assertEquals(info, value.getSingleValue());
+            assertEquals(TRACKING_INFO, value.getSingleValue());
         }
     }
 
@@ -873,11 +874,7 @@ public class GlideClusterClientTest {
     public void clientTrackingInfo_with_multi_node_route_returns_success() {
         TestCommandManager commandManager = new TestCommandManager(null);
 
-        Map<String, Object> info = new HashMap<>();
-        info.put("flags", new HashSet<>(Collections.singletonList("off")));
-        info.put("redirect", -1L);
-        info.put("prefixes", new Object[0]);
-        Map<String, Map<String, Object>> data = createMap("n1", info);
+        Map<String, Map<String, Object>> data = createMap("n1", TRACKING_INFO);
         try (TestClient client = new TestClient(commandManager, data)) {
             ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(ALL_NODES).get();
             assertEquals(data, value.getMultiValue());
