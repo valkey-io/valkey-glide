@@ -10229,6 +10229,18 @@ export class BaseClient {
         return { desiredSubscriptions, actualSubscriptions };
     }
 
+    // Indices for LATENCY HISTORY response.
+    private static readonly LATENCY_ENTRY_TIME_INDEX = 0;
+    private static readonly LATENCY_ENTRY_LATENCY_INDEX = 1;
+
+    // Indices for LATENCY LATEST response.
+    private static readonly LATENCY_EVENT_INFO_NAME_INDEX = 0;
+    private static readonly LATENCY_EVENT_INFO_TIME_INDEX = 1;
+    private static readonly LATENCY_EVENT_INFO_LATEST_DURATION_INDEX = 2;
+    private static readonly LATENCY_EVENT_INFO_MAX_DURATION_INDEX = 3;
+    private static readonly LATENCY_EVENT_INFO_SUM_INDEX = 4;
+    private static readonly LATENCY_EVENT_INFO_COUNT_INDEX = 5;
+
     /**
      * @internal
      * Parses a `LATENCY HISTORY` response.
@@ -10239,8 +10251,8 @@ export class BaseClient {
         }
 
         return (response as unknown[][]).map((entry) => ({
-            time: entry[0] as number,
-            latency: entry[1] as number,
+            time: entry[BaseClient.LATENCY_ENTRY_TIME_INDEX] as number,
+            latency: entry[BaseClient.LATENCY_ENTRY_LATENCY_INDEX] as number,
         }));
     }
 
@@ -10257,16 +10269,28 @@ export class BaseClient {
 
         return (response as unknown[][]).map((entry) => {
             const info: LatencyEventInfo = {
-                eventName: entry[0] as string,
-                latestTime: entry[1] as number,
-                latestDuration: entry[2] as number,
-                maxDuration: entry[3] as number,
+                eventName: entry[
+                    BaseClient.LATENCY_EVENT_INFO_NAME_INDEX
+                ] as string,
+                latestTime: entry[
+                    BaseClient.LATENCY_EVENT_INFO_TIME_INDEX
+                ] as number,
+                latestDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_LATEST_DURATION_INDEX
+                ] as number,
+                maxDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_MAX_DURATION_INDEX
+                ] as number,
             };
 
             // Valkey 8.1+ returns 6-element arrays with sum and count
-            if (entry.length >= 6) {
-                info.sum = entry[4] as number;
-                info.count = entry[5] as number;
+            if (entry.length > BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX) {
+                info.sum = entry[
+                    BaseClient.LATENCY_EVENT_INFO_SUM_INDEX
+                ] as number;
+                info.count = entry[
+                    BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX
+                ] as number;
             }
 
             return info;

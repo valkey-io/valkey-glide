@@ -47,10 +47,27 @@ class LatencyEventInfo:
     count: Optional[int] = None
 
 
+# Indices for LATENCY HISTORY response.
+_LATENCY_ENTRY_TIME_INDEX = 0
+_LATENCY_ENTRY_LATENCY_INDEX = 1
+
+# Indices for LATENCY LATEST response.
+_LATENCY_EVENT_INFO_NAME_INDEX = 0
+_LATENCY_EVENT_INFO_TIME_INDEX = 1
+_LATENCY_EVENT_INFO_LATEST_DURATION_INDEX = 2
+_LATENCY_EVENT_INFO_MAX_DURATION_INDEX = 3
+_LATENCY_EVENT_INFO_SUM_INDEX = 4
+_LATENCY_EVENT_INFO_COUNT_INDEX = 5
+
+
 def _parse_latency_history(response: List) -> List[LatencyEntry]:
     """Parses a ``LATENCY HISTORY`` response."""
     return [
-        LatencyEntry(time=int(entry[0]), latency=int(entry[1])) for entry in response
+        LatencyEntry(
+            time=int(entry[_LATENCY_ENTRY_TIME_INDEX]),
+            latency=int(entry[_LATENCY_ENTRY_LATENCY_INDEX]),
+        )
+        for entry in response
     ]
 
 
@@ -58,16 +75,26 @@ def _parse_latency_latest(response: List) -> List[LatencyEventInfo]:
     """Parses a ``LATENCY LATEST`` response."""
     result: List[LatencyEventInfo] = []
     for entry in response:
-        sum_value = int(entry[4]) if len(entry) > 4 else None
-        count_value = int(entry[5]) if len(entry) > 5 else None
+        sum_value = (
+            int(entry[_LATENCY_EVENT_INFO_SUM_INDEX])
+            if len(entry) > _LATENCY_EVENT_INFO_SUM_INDEX
+            else None
+        )
+        count_value = (
+            int(entry[_LATENCY_EVENT_INFO_COUNT_INDEX])
+            if len(entry) > _LATENCY_EVENT_INFO_COUNT_INDEX
+            else None
+        )
         result.append(
             LatencyEventInfo(
                 event_name=(
-                    entry[0].decode() if isinstance(entry[0], bytes) else entry[0]
+                    entry[_LATENCY_EVENT_INFO_NAME_INDEX].decode()
+                    if isinstance(entry[_LATENCY_EVENT_INFO_NAME_INDEX], bytes)
+                    else entry[_LATENCY_EVENT_INFO_NAME_INDEX]
                 ),
-                latest_time=int(entry[1]),
-                latest_duration=int(entry[2]),
-                max_duration=int(entry[3]),
+                latest_time=int(entry[_LATENCY_EVENT_INFO_TIME_INDEX]),
+                latest_duration=int(entry[_LATENCY_EVENT_INFO_LATEST_DURATION_INDEX]),
+                max_duration=int(entry[_LATENCY_EVENT_INFO_MAX_DURATION_INDEX]),
                 sum=sum_value,
                 count=count_value,
             )

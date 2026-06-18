@@ -953,6 +953,18 @@ public abstract class BaseClient
         }
     }
 
+    // Indices for LATENCY HISTORY response.
+    private static final int LATENCY_ENTRY_TIME_INDEX = 0;
+    private static final int LATENCY_ENTRY_LATENCY_INDEX = 1;
+
+    // Indices for LATENCY LATEST response entries.
+    private static final int LATENCY_EVENT_INFO_NAME_INDEX = 0;
+    private static final int LATENCY_EVENT_INFO_TIME_INDEX = 1;
+    private static final int LATENCY_EVENT_INFO_LATEST_DURATION_INDEX = 2;
+    private static final int LATENCY_EVENT_INFO_MAX_DURATION_INDEX = 3;
+    private static final int LATENCY_EVENT_INFO_SUM_INDEX = 4;
+    private static final int LATENCY_EVENT_INFO_COUNT_INDEX = 5;
+
     /**
      * Process a <code>LATENCY HISTORY</code> response.
      *
@@ -966,7 +978,10 @@ public abstract class BaseClient
         LatencyEntry[] result = new LatencyEntry[response.length];
         for (int i = 0; i < response.length; i++) {
             Object[] entry = (Object[]) response[i];
-            result[i] = new LatencyEntry((Long) entry[0], (Long) entry[1]);
+            result[i] =
+                    new LatencyEntry(
+                            (Long) entry[LATENCY_ENTRY_TIME_INDEX],
+                            (Long) entry[LATENCY_ENTRY_LATENCY_INDEX]);
         }
         return result;
     }
@@ -984,11 +999,22 @@ public abstract class BaseClient
         LatencyEventInfo[] result = new LatencyEventInfo[response.length];
         for (int i = 0; i < response.length; i++) {
             Object[] entry = (Object[]) response[i];
-            Optional<Long> sum = entry.length > 4 ? Optional.of((Long) entry[4]) : Optional.empty();
-            Optional<Long> count = entry.length > 5 ? Optional.of((Long) entry[5]) : Optional.empty();
+            Optional<Long> sum =
+                    entry.length > LATENCY_EVENT_INFO_SUM_INDEX
+                            ? Optional.of((Long) entry[LATENCY_EVENT_INFO_SUM_INDEX])
+                            : Optional.empty();
+            Optional<Long> count =
+                    entry.length > LATENCY_EVENT_INFO_COUNT_INDEX
+                            ? Optional.of((Long) entry[LATENCY_EVENT_INFO_COUNT_INDEX])
+                            : Optional.empty();
             result[i] =
                     new LatencyEventInfo(
-                            (String) entry[0], (Long) entry[1], (Long) entry[2], (Long) entry[3], sum, count);
+                            (String) entry[LATENCY_EVENT_INFO_NAME_INDEX],
+                            (Long) entry[LATENCY_EVENT_INFO_TIME_INDEX],
+                            (Long) entry[LATENCY_EVENT_INFO_LATEST_DURATION_INDEX],
+                            (Long) entry[LATENCY_EVENT_INFO_MAX_DURATION_INDEX],
+                            sum,
+                            count);
         }
         return result;
     }
