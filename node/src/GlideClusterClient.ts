@@ -1923,7 +1923,7 @@ export class GlideClusterClient extends BaseClient {
      * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
      *
      * @param options - (Optional) See {@link RouteOption}.
-     * @returns A {@link ClusterResponse} containing array(s) of the latest {@link LatencyEventInfo}.
+     * @returns A {@link ClusterResponse} containing array(s) of {@link LatencyEventInfo} for the latest latency events.
      *
      * @example
      * ```typescript

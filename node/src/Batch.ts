@@ -4169,7 +4169,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
      *
-     * Command Response - An array of the latest {@link LatencyEventInfo}.
+     * Command Response - An array of {@link LatencyEventInfo} for the latest latency events.
      */
     public latencyLatest(): T {
         return this.addAndReturn(createLatencyLatest());

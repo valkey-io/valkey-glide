@@ -1301,6 +1301,7 @@ func (client *ClusterClient) ConfigResetStat(ctx context.Context) (string, error
 }
 
 // Returns the latency spike time series for the specified event.
+// The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
 //
@@ -1378,7 +1379,8 @@ func (client *ClusterClient) LatencyHistoryWithOptions(
 	return models.CreateClusterSingleValue(data), nil
 }
 
-// Reports the latest latency events logged.
+// Reports the latest latency events logged by the server.
+// The command will be routed to all primary nodes.
 //
 // See [valkey.io] for details.
 //
@@ -1388,7 +1390,7 @@ func (client *ClusterClient) LatencyHistoryWithOptions(
 //
 // Return value:
 //
-//	A multi-value [models.ClusterValue] mapping node address to the per-node latency info.
+//	A [models.ClusterValue] containing slice(s) of [models.LatencyEventInfo] for the latest latency events.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
 func (client *ClusterClient) LatencyLatest(
@@ -1424,7 +1426,7 @@ func (client *ClusterClient) LatencyLatest(
 //
 // Return value:
 //
-//	A [models.ClusterValue] containing the latency info.
+//	A [models.ClusterValue] containing slice(s) of [models.LatencyEventInfo] for the latest latency events.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
 func (client *ClusterClient) LatencyLatestWithOptions(

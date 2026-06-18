@@ -622,8 +622,8 @@ public interface ServerManagementCommands {
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., "command").
-     * @return An array of latency entries for the event, or an empty array if the event doesn't
-     *     exist.
+     * @return An array of {@link LatencyEntry} for the event, or an empty array if the event
+     *     doesn't exist.
      * @example
      *     <pre>{@code
      * LatencyEntry[] history = client.latencyHistory("command").get();
@@ -638,7 +638,7 @@ public interface ServerManagementCommands {
      * Reports the latest latency events logged by the server.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return An array of the latest latency event info.
+     * @return An array of {@link LatencyEventInfo} for the latest latency events.
      * @example
      *     <pre>{@code
      * LatencyEventInfo[] latest = client.latencyLatest().get();

@@ -1807,8 +1807,8 @@ class ClusterCommands(CoreCommands):
             route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
 
         Returns:
-            TClusterResponse[List[LatencyEntry]]: A cluster value containing array(s)
-                of latency entries for the event.
+            TClusterResponse[List[LatencyEntry]]: A cluster value containing list(s)
+                of LatencyEntry for the event.
 
         Examples:
             >>> history = await client.latency_history("command")
@@ -1831,8 +1831,8 @@ class ClusterCommands(CoreCommands):
             route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
 
         Returns:
-            TClusterResponse[List[LatencyEventInfo]]: A cluster value containing array(s)
-                of the latest latency info.
+            TClusterResponse[List[LatencyEventInfo]]: A cluster value containing list(s)
+                of LatencyEventInfo for the latest latency events.
 
         Examples:
             >>> latest = await client.latency_latest()

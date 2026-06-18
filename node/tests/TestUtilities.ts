@@ -530,8 +530,15 @@ export async function triggerLatencySpike(
 ): Promise<void> {
     // Resets any existing latency data first so the spike is recorded against a clean baseline,
     // then enables the server-side latency monitor, triggers a latency spike for the "command"
-    // event, and finally disables latency monitoring.
+    // event, and finally restores the original threshold.
     await client.latencyReset();
+
+    // Save the current threshold so we can restore it after the spike.
+    const prev = (await client.configGet([
+        "latency-monitor-threshold",
+    ])) as Record<string, GlideString>;
+    const prevThreshold = prev["latency-monitor-threshold"]?.toString() ?? "0";
+
     await client.configSet({ "latency-monitor-threshold": "1" });
 
     const debug_sleep_args = ["DEBUG", "SLEEP", "0.05"];
@@ -544,7 +551,8 @@ export async function triggerLatencySpike(
         await client.customCommand(debug_sleep_args);
     }
 
-    await client.configSet({ "latency-monitor-threshold": "0" });
+    // Restore the original latency-monitor-threshold value.
+    await client.configSet({ "latency-monitor-threshold": prevThreshold });
 }
 
 /**

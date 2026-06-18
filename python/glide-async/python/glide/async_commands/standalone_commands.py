@@ -1151,8 +1151,8 @@ class StandaloneCommands(CoreCommands):
             event (TEncodable): The name of the latency event (e.g., ``"command"``).
 
         Returns:
-            List[LatencyEntry]: An array of latency entries for the event, or an empty
-                list if the event doesn't exist.
+            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty list
+                if the event doesn't exist.
 
         Examples:
             >>> history = await client.latency_history("command")
@@ -1173,7 +1173,7 @@ class StandaloneCommands(CoreCommands):
         See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
 
         Returns:
-            List[LatencyEventInfo]: An array of the latest latency event info.
+            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
 
         Examples:
             >>> latest = await client.latency_latest()

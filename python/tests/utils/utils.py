@@ -166,8 +166,13 @@ async def trigger_latency_spike(glide_client: TGlideClient) -> None:
 
     # Resets any existing latency data first so the spike is recorded against a clean baseline,
     # then enables the server-side latency monitor, triggers a latency spike for the "command"
-    # event, and finally disables latency monitoring.
+    # event, and finally restores the original latency monitoring threshold.
     await glide_client.latency_reset()
+
+    # Save the current threshold so we can restore it after the spike.
+    prev = await glide_client.config_get(["latency-monitor-threshold"])
+    prev_threshold = prev.get(b"latency-monitor-threshold", b"0").decode()
+
     await glide_client.config_set({"latency-monitor-threshold": "1"})
 
     debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
@@ -176,7 +181,7 @@ async def trigger_latency_spike(glide_client: TGlideClient) -> None:
     else:
         await glide_client.custom_command(debug_sleep_args)
 
-    await glide_client.config_set({"latency-monitor-threshold": "0"})
+    await glide_client.config_set({"latency-monitor-threshold": prev_threshold})
 
 
 def trigger_latency_spike_sync(glide_client: TSyncGlideClient) -> None:
@@ -184,8 +189,13 @@ def trigger_latency_spike_sync(glide_client: TSyncGlideClient) -> None:
 
     # Resets any existing latency data first so the spike is recorded against a clean baseline,
     # then enables the server-side latency monitor, triggers a latency spike for the "command"
-    # event, and finally disables latency monitoring.
+    # event, and finally restores the original latency monitoring threshold.
     glide_client.latency_reset()
+
+    # Save the current threshold so we can restore it after the spike.
+    prev = glide_client.config_get(["latency-monitor-threshold"])
+    prev_threshold = prev.get(b"latency-monitor-threshold", b"0").decode()
+
     glide_client.config_set({"latency-monitor-threshold": "1"})
 
     debug_sleep_args = ["DEBUG", "SLEEP", "0.05"]
@@ -194,7 +204,7 @@ def trigger_latency_spike_sync(glide_client: TSyncGlideClient) -> None:
     else:
         glide_client.custom_command(debug_sleep_args)
 
-    glide_client.config_set({"latency-monitor-threshold": "0"})
+    glide_client.config_set({"latency-monitor-threshold": prev_threshold})
 
 
 def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:

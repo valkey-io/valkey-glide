@@ -1041,7 +1041,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
      *
-     * @returns An array of the latest {@link LatencyEventInfo}.
+     * @returns An array of {@link LatencyEventInfo} for the latest latency events.
      *
      * @example
      * ```typescript

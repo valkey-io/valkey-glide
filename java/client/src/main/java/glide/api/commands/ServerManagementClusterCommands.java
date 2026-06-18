@@ -1086,7 +1086,7 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., "command").
-     * @return A cluster value containing array(s) of latency entries for the event.
+     * @return A cluster value containing array(s) of {@link LatencyEntry} for the event.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command").get();
@@ -1104,7 +1104,7 @@ public interface ServerManagementClusterCommands {
      * @param event The name of the latency event (e.g., "command").
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containing array(s) of latency entries for the event.
+     * @return A cluster value containing array(s) of {@link LatencyEntry} for the event.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command", RANDOM).get();
@@ -1121,7 +1121,8 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return A cluster value containing array(s) of the latest latency info.
+     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest
+     *     latency events.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest().get();
@@ -1138,7 +1139,8 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containing array(s) of the latest latency info.
+     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest
+     *     latency events.
      * @example
      *     <pre>{@code
      * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest(RANDOM).get();

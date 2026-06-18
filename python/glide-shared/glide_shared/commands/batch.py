@@ -2456,7 +2456,7 @@ class BaseBatch:
             event (TEncodable): The name of the latency event (e.g., ``"command"``).
 
         Command response:
-            List[LatencyEntry]: An array of latency entries for the event, or an empty
+            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty
                 list if the event doesn't exist.
         """
         return self.append_command(RequestType.LatencyHistory, [event])
@@ -2468,7 +2468,7 @@ class BaseBatch:
         See [valkey.io](https://valkey.io/commands/latency-latest/) for more details.
 
         Command response:
-            List[LatencyEventInfo]: An array of the latest latency event info.
+            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
         """
         return self.append_command(RequestType.LatencyLatest, [])
 
