@@ -622,11 +622,17 @@ public class CommandTests {
 
         // Reset any existing latency data first so the spike is recorded against a clean baseline,
         // then enable the server-side latency monitor, trigger a latency spike for the "command"
-        // event, and finally disable latency monitoring.
+        // event, and finally restore the original threshold.
         client.latencyReset().get();
+
+        Map<String, String> prev =
+                client.configGet(new String[] {"latency-monitor-threshold"}).get();
+        String prevThreshold = prev.getOrDefault("latency-monitor-threshold", "0");
+
         client.configSet(Collections.singletonMap("latency-monitor-threshold", "1")).get();
         client.customCommand(new String[] {"DEBUG", "SLEEP", "0.05"}).get();
-        client.configSet(Collections.singletonMap("latency-monitor-threshold", "0")).get();
+
+        client.configSet(Collections.singletonMap("latency-monitor-threshold", prevThreshold)).get();
     }
 
     @ParameterizedTest(autoCloseArguments = false)
