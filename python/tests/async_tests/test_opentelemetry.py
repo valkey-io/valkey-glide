@@ -28,13 +28,6 @@ from tests.otel_test_utils import (
 # Constants
 TIMEOUT = 50  # seconds
 VALID_ENDPOINT_TRACES = "/tmp/spans.json"
-
-# See the matching note in tests/sync_tests/test_sync_opentelemetry.py:
-# OpenTelemetry tests share global Rust state and a fixed `/tmp/spans.json`
-# exporter target, so they cannot run concurrently with each other under
-# pytest-xdist. Pin every test in this module to the same `opentelemetry`
-# xdist group so they execute serially on a single worker.
-pytestmark = pytest.mark.xdist_group("opentelemetry")
 VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"  # noqa: E231
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
 

@@ -28,17 +28,6 @@ from tests.sync_tests.conftest import create_sync_client
 # Constants
 TIMEOUT = 50  # seconds
 VALID_ENDPOINT_TRACES = "/tmp/spans.json"
-
-# OpenTelemetry tests share two pieces of process- and host-wide state: the
-# global `OpenTelemetry.init/set_sample_percentage` Rust singleton and the
-# fixed `/tmp/spans.json` exporter target. Under pytest-xdist they cannot run
-# concurrently with each other or with their async counterpart without races
-# on those shared resources. Pin every test in this module to a single xdist
-# worker via the `opentelemetry` group; combined with `--dist=loadgroup` in
-# `pytest.ini`, all OTel tests across the sync and async modules execute
-# serially on the same worker, while the rest of the suite still distributes
-# normally.
-pytestmark = pytest.mark.xdist_group("opentelemetry")
 VALID_FILE_ENDPOINT_TRACES = f"file://{VALID_ENDPOINT_TRACES}"
 VALID_ENDPOINT_METRICS = "https://valid-endpoint/v1/metrics"
 
