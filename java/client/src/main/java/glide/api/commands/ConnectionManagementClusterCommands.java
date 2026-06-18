@@ -419,11 +419,23 @@ public interface ConnectionManagementClusterCommands {
      * @since Valkey 6.2.0 and above.
      * @param route Specifies the routing configuration for the command.
      * @return A {@link glide.api.models.ClusterValue} containing the tracking state map per the
-     *     routing. If a {@link
-     *     glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute} is used, holds
-     *     a single {@link Map} with keys {@code flags} ({@link java.util.Set}), {@code redirect}
-     *     ({@link Long}), and {@code prefixes} ({@code Object[]}). If a multi-node route is used,
-     *     holds a {@link Map} of node address to tracking state map.
+     *     routing.
+     *     <ul>
+     *       <li>For a {@link
+     *           glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute}: a single
+     *           {@link Map} where:
+     *           <ul>
+     *             <li>{@code flags}: a {@link java.util.Set} of tracking flags. See <a
+     *                 href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for the
+     *                 full list.
+     *             <li>{@code redirect}: a {@link Long} with the client ID receiving invalidation
+     *                 messages, or {@code -1} if not redirecting
+     *             <li>{@code prefixes}: an {@code Object[]} of key prefixes monitored for
+     *                 invalidation
+     *           </ul>
+     *       <li>For a multi-node route: a {@link Map} of node address to tracking state map.
+     *     </ul>
+     *
      * @example
      *     <pre>{@code
      * // Single node:
