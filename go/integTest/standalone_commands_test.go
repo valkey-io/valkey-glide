@@ -1435,7 +1435,7 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
 
-func (suite *GlideTestSuite) TestMigrateKeysSuccessStandalone() {
+func (suite *GlideTestSuite) TestMigrateKeys() {
 	client := suite.defaultClient()
 	ctx := context.Background()
 	key1 := "{migrate}" + uuid.New().String()
@@ -1491,7 +1491,7 @@ func (suite *GlideTestSuite) TestMigrateKeysSuccessStandalone() {
 	suite.Equal(int64(2), exists)
 }
 
-func (suite *GlideTestSuite) TestMigrateKeysWithOptionsSuccessStandalone() {
+func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 	client := suite.defaultClient()
 	ctx := context.Background()
 	key1 := "{migrate}" + uuid.New().String()

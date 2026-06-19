@@ -6,9 +6,11 @@ package pipeline
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
+	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -188,6 +190,51 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 		false,
 		internal.ConvertScanResult,
 	)
+}
+
+// MigrateKeys atomically transfers the specified keys from a source Valkey instance to a
+// destination Valkey instance. On success, keys are deleted from the source.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *StandaloneBatch) MigrateKeys(
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+) *StandaloneBatch {
+	return b.MigrateKeysWithOptions(host, port, keys, destinationDB, timeout, options.MigrateOptions{})
+}
+
+// MigrateKeysWithOptions atomically transfers the specified keys from a source Valkey instance to a
+// destination Valkey instance with additional options.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (b *StandaloneBatch) MigrateKeysWithOptions(
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) *StandaloneBatch {
+	if len(keys) == 0 {
+		return b.addError("MigrateKeysWithOptions", errors.New("keys must not be empty"))
+	}
+	optionArgs, err := migrateOptions.ToArgs()
+	if err != nil {
+		return b.addError("MigrateKeysWithOptions", err)
+	}
+	// Empty string is required by the MIGRATE wire format when using the KEYS option.
+	args := []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
+	args = append(args, optionArgs...)
+	args = append(args, constants.KeysKeyword)
+	args = append(args, keys...)
+	return b.addCmdAndTypeChecker(C.Migrate, args, reflect.String, false)
 }
 
 // Posts a message to the specified sharded channel. Returns the number of clients that received the message.

@@ -24,4 +24,23 @@ type GenericCommands interface {
 	ScanWithOptions(ctx context.Context, cursor models.Cursor, scanOptions options.ScanOptions) (models.ScanResult, error)
 
 	RandomKey(ctx context.Context) (models.Result[string], error)
+
+	MigrateKeys(
+		ctx context.Context,
+		host string,
+		port int64,
+		keys []string,
+		destinationDB int64,
+		timeout int64,
+	) (string, error)
+
+	MigrateKeysWithOptions(
+		ctx context.Context,
+		host string,
+		port int64,
+		keys []string,
+		destinationDB int64,
+		timeout int64,
+		migrateOptions options.MigrateOptions,
+	) (string, error)
 }
