@@ -2517,6 +2517,19 @@ func CreateServerManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, se
 	batch.ConfigResetStat()
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ConfigResetStat()"})
 	// ConfigRewrite skipped, because depends on config
+	batch.MemoryDoctor()
+	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "MemoryDoctor()"})
+	batch.MemoryMallocStats()
+	testData = append(
+		testData,
+		CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "MemoryMallocStats()"},
+	)
+	batch.MemoryPurge()
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "MemoryPurge()"})
+	batch.MemoryStats()
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: models.MemoryStats{}, CheckTypeOnly: true, TestName: "MemoryStats()",
+	})
 
 	return BatchTestData{CommandTestData: testData, TestName: "Server Management commands"}
 }
