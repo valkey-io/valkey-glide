@@ -7,7 +7,9 @@ import (
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
+	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 func ExampleClient_MemoryDoctor() {
@@ -52,19 +54,13 @@ func ExampleClient_MemoryStats() {
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	}
-	// Verify we get expected keys in the stats map
-	hasExpectedKeys := false
-	if result != nil {
-		// Check for common memory stats keys
-		_, hasPeakAllocated := result["peak.allocated"]
-		_, hasTotalAllocated := result["total.allocated"]
-		_, hasUsedMemory := result["used_memory"]
-		hasExpectedKeys = hasPeakAllocated || hasTotalAllocated || hasUsedMemory
-	}
-	fmt.Println(hasExpectedKeys)
+
+	fmt.Println("TotalAllocated > 0:", result.TotalAllocated > 0)
+	fmt.Println("PeakAllocated > 0:", result.PeakAllocated > 0)
 
 	// Output:
-	// true
+	// TotalAllocated > 0: true
+	// PeakAllocated > 0: true
 }
 
 func ExampleClusterClient_MemoryDoctor() {
