@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
