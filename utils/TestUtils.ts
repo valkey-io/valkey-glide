@@ -28,17 +28,16 @@ async function waitForReplicasReady(
     timeoutMs = 15000,
 ): Promise<void> {
     const deadline = Date.now() + timeoutMs;
+    const startTime = Date.now();
 
     async function getInfo(host: string, port: number): Promise<string> {
         return new Promise<string>((resolve, reject) => {
             const sock = createConnection({ host, port }, () => {
-                // Send INFO replication as inline RESP
                 sock.write("*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n");
             });
             let buf = "";
             sock.on("data", (d: Buffer) => {
                 buf += d.toString();
-                // INFO response ends with \r\n\r\n
                 if (buf.includes("\r\n\r\n")) {
                     sock.destroy();
                     resolve(buf);
@@ -51,23 +50,38 @@ async function waitForReplicasReady(
 
     await Promise.all(
         addresses.map(async ([host, port]) => {
+            const nodeStart = Date.now();
             while (Date.now() < deadline) {
                 try {
                     const info = await getInfo(host, port);
-                    // Only replicas need to be checked
                     if (!info.includes("role:slave")) return;
-                    // Replica is ready when link is up and no sync in progress
                     if (
                         info.includes("master_link_status:up") &&
                         info.includes("master_sync_in_progress:0")
-                    ) return;
+                    ) {
+                        const waited = Date.now() - nodeStart;
+                        if (waited > 100) {
+                            console.log(
+                                `[waitForReplicasReady] ${host}:${port} replica ready after ${waited}ms`,
+                            );
+                        }
+                        return;
+                    }
                 } catch {
-                    // node not reachable yet, keep polling
+                    // node not reachable yet
                 }
                 await new Promise((r) => setTimeout(r, 200));
             }
+            console.warn(
+                `[waitForReplicasReady] ${host}:${port} timed out after ${timeoutMs}ms`,
+            );
         }),
     );
+
+    const total = Date.now() - startTime;
+    if (total > 100) {
+        console.log(`[waitForReplicasReady] total wait: ${total}ms for ${addresses.length} nodes`);
+    }
 }
 
 function parseOutput(input: string): {
