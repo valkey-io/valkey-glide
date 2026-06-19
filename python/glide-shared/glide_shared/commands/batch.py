@@ -2488,6 +2488,51 @@ class BaseBatch:
         """
         return self.append_command(RequestType.LatencyReset, list(events))
 
+    def memory_doctor(self: TBatch) -> TBatch:
+        """
+        Returns a report about memory problems detected by the server.
+
+        See [valkey.io](https://valkey.io/commands/memory-doctor/) for details.
+
+        Command response:
+            str: The memory diagnostic report.
+        """
+        return self.append_command(RequestType.MemoryDoctor, [])
+
+    def memory_malloc_stats(self: TBatch) -> TBatch:
+        """
+        Returns the internal statistics of the memory allocator.
+
+        See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
+
+        Command response:
+            str: A string containing the memory allocator statistics.
+        """
+        return self.append_command(RequestType.MemoryMallocStats, [])
+
+    def memory_purge(self: TBatch) -> TBatch:
+        """
+        Asks the server to reclaim memory from the allocator back to the operating system.
+
+        See [valkey.io](https://valkey.io/commands/memory-purge/) for details.
+
+        Command response:
+            TOK: A simple ``"OK"`` response.
+        """
+        return self.append_command(RequestType.MemoryPurge, [])
+
+    def memory_stats(self: TBatch) -> TBatch:
+        """
+        Returns detailed memory consumption statistics of the server.
+
+        See [valkey.io](https://valkey.io/commands/memory-stats/) for details.
+
+        Command response:
+            MemoryStats: A ``MemoryStats`` object containing detailed memory usage
+                statistics.
+        """
+        return self.append_command(RequestType.MemoryStats, [])
+
     def type(self: TBatch, key: TEncodable) -> TBatch:
         """
          Returns the string representation of the type of the value stored at `key`.
