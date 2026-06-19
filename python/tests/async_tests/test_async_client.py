@@ -9608,6 +9608,85 @@ class TestCommands:
         with pytest.raises(ValueError):
             MigrateOptions(username="user").to_args()
 
+        # Multi-key: only available on standalone clients
+        if not isinstance(glide_client, GlideClusterClient):
+            hash_tag = get_random_string(5)
+            key2 = f"{hash_tag}a"
+            key3 = f"{hash_tag}b"
+            await glide_client.set(key2, "value2")
+            await glide_client.set(key3, "value3")
+            with pytest.raises(RequestError):
+                await glide_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
+
+            # Multi-key: empty keys list raises ValueError
+            with pytest.raises(ValueError):
+                await glide_client.migrate("invalid-host", 6379, [], 0, 5000)
+
+            # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
+            non_existent1 = get_random_string(5)
+            non_existent2 = get_random_string(5)
+            result = await glide_client.migrate(
+                "invalid-host",
+                6379,
+                [non_existent1, non_existent2],
+                0,
+                5000,
+            )
+            assert result == b"NOKEY"
+
+    @pytest.fixture(scope="class")
+    def second_server(self, request):
+        from tests.utils.cluster import ValkeyCluster
+
+        tls = request.config.getoption("--tls")
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
+        yield cluster
+        del cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_migrate_success(
+        self, glide_client: TGlideClient, second_server, request
+    ):
+        dest_addr = second_server.nodes_addr[0]
+        dest_host = dest_addr.host
+        dest_port = dest_addr.port
+        dest_client = await create_client(
+            request, cluster_mode=False, addresses=[NodeAddress(dest_host, dest_port)]
+        )
+        try:
+            # Single-key migrate
+            key = get_random_string(10)
+            value = get_random_string(5)
+            await glide_client.set(key, value)
+            result = await glide_client.migrate(dest_host, dest_port, key, 0, 5000)
+            assert result == OK or result == b"OK"
+            assert await glide_client.exists([key]) == 0
+            assert await dest_client.get(key) == value.encode()
+
+            # Multi-key migrate
+            key1 = get_random_string(10)
+            key2 = get_random_string(10)
+            val1 = get_random_string(5)
+            val2 = get_random_string(5)
+            await glide_client.set(key1, val1)
+            await glide_client.set(key2, val2)
+            result = await glide_client.migrate(
+                dest_host,
+                dest_port,
+                [key1, key2],
+                0,
+                5000,
+            )
+            assert result == OK or result == b"OK"
+            assert await glide_client.exists([key1, key2]) == 0
+            assert await dest_client.get(key1) == val1.encode()
+            assert await dest_client.get(key2) == val2.encode()
+        finally:
+            await dest_client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_wait(self, glide_client: TGlideClient):
