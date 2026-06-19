@@ -507,7 +507,7 @@ type LatencyEventInfo struct {
 	Count Result[int64]
 }
 
-// MemoryStatsDb represents per-database memory overhead statistics from MEMORY STATS.
+// MemoryStatsDb represents database memory overhead statistics from MEMORY STATS.
 type MemoryStatsDb struct {
 	OverheadHashtableMain              int64
 	OverheadHashtableExpires           int64
