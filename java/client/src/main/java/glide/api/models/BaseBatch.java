@@ -109,6 +109,10 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
@@ -5077,6 +5081,50 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T latencyReset(@NonNull String[] events) {
         protobufBatch.addCommands(buildCommand(LatencyReset, newArgsBuilder().add(events)));
+        return getThis();
+    }
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @return Command Response - The memory diagnostic report.
+     */
+    public T memoryDoctor() {
+        protobufBatch.addCommands(buildCommand(MemoryDoctor));
+        return getThis();
+    }
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @return Command Response - The allocator statistics.
+     */
+    public T memoryMallocStats() {
+        protobufBatch.addCommands(buildCommand(MemoryMallocStats));
+        return getThis();
+    }
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @return Command Response - <code>"OK"</code> response on success.
+     */
+    public T memoryPurge() {
+        protobufBatch.addCommands(buildCommand(MemoryPurge));
+        return getThis();
+    }
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @return Command Response - A <code>Map</code> of memory statistics.
+     */
+    public T memoryStats() {
+        protobufBatch.addCommands(buildCommand(MemoryStats));
         return getThis();
     }
 
