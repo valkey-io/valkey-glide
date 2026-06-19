@@ -60,6 +60,10 @@ import static command_request.CommandRequestOuterClass.RequestType.LatencyHistor
 import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
@@ -731,6 +735,95 @@ public class GlideClusterClient extends BaseClient
         }
 
         return ClusterValue.ofSingleValue(handleLatencyLatestResponse((Object[]) data));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryDoctor() {
+        return commandManager.submitNewCommand(
+                MemoryDoctor, EMPTY_STRING_ARRAY, response -> ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryDoctor(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryDoctor,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryMallocStats() {
+        return commandManager.submitNewCommand(
+                MemoryMallocStats,
+                EMPTY_STRING_ARRAY,
+                response -> ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<String>> memoryMallocStats(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryMallocStats,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleStringResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> memoryPurge() {
+        return commandManager.submitNewCommand(
+                MemoryPurge, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryPurge(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryPurge, EMPTY_STRING_ARRAY, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats() {
+        return commandManager.submitNewCommand(
+                MemoryStats, EMPTY_STRING_ARRAY, this::handleMemoryStatsClusterResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                MemoryStats, EMPTY_STRING_ARRAY, route, this::handleMemoryStatsClusterResponse);
+    }
+
+    /**
+     * Process a <code>MEMORY STATS</code> cluster response.
+     *
+     * @param response The raw response from the server.
+     * @return A cluster value containing memory statistics map(s).
+     */
+    @SuppressWarnings("unchecked")
+    private ClusterValue<Map<String, Object>> handleMemoryStatsClusterResponse(Response response) {
+        Object data = handleObjectOrNullResponse(response);
+
+        if (data instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) data;
+            // Check if this is a per-node map (multi-value) or a single stats map.
+            boolean isMultiNode = !map.isEmpty() && map.values().stream().allMatch(v -> v instanceof Map);
+            if (isMultiNode) {
+                Map<String, Map<String, Object>> parsed = new LinkedHashMap<>();
+                for (Map.Entry<String, Object> entry : map.entrySet()) {
+                    parsed.put(entry.getKey(), (Map<String, Object>) entry.getValue());
+                }
+                return ClusterValue.ofMultiValue(parsed);
+            }
+            return ClusterValue.ofSingleValue(map);
+        }
+
+        return ClusterValue.ofSingleValue((Map<String, Object>) data);
     }
 
     @Override

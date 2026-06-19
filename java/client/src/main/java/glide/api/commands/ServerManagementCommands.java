@@ -676,4 +676,64 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<Long> latencyReset(@NonNull String[] events);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @return The memory diagnostic report.
+     * @example
+     *     <pre>{@code
+     * String report = client.memoryDoctor().get();
+     * System.out.println("Memory report: " + report);
+     * }</pre>
+     */
+    CompletableFuture<String> memoryDoctor();
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @return The allocator statistics.
+     * @example
+     *     <pre>{@code
+     * String stats = client.memoryMallocStats().get();
+     * System.out.println("Allocator stats: " + stats);
+     * }</pre>
+     */
+    CompletableFuture<String> memoryMallocStats();
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = client.memoryPurge().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge();
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @return A <code>Map</code> of memory statistics.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object> stats = client.memoryStats().get();
+     * System.out.println("Total allocated: " + stats.get("total.allocated"));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> memoryStats();
 }

@@ -33,6 +33,10 @@ import static command_request.CommandRequestOuterClass.RequestType.LatencyHistor
 import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
@@ -876,5 +880,29 @@ public class GlideClient extends BaseClient
                         .add(keys)
                         .toArray(),
                 this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryDoctor() {
+        return commandManager.submitNewCommand(
+                MemoryDoctor, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryMallocStats() {
+        return commandManager.submitNewCommand(
+                MemoryMallocStats, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> memoryPurge() {
+        return commandManager.submitNewCommand(
+                MemoryPurge, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> memoryStats() {
+        return commandManager.submitNewCommand(
+                MemoryStats, EMPTY_STRING_ARRAY, this::handleMapResponse);
     }
 }

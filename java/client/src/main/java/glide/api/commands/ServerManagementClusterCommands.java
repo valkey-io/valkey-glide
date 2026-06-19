@@ -1212,4 +1212,137 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<Long> latencyReset(@NonNull String[] events, @NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns a report about memory problems detected by the server.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @return A cluster value containing the memory diagnostic report(s).
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> report = clusterClient.memoryDoctor().get();
+     * for (Map.Entry<String, String> entry : report.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryDoctor();
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-doctor/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing the memory diagnostic report(s).
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> report = clusterClient.memoryDoctor(RANDOM).get();
+     * String singleReport = report.getSingleValue();
+     * System.out.println("Memory report: " + singleReport);
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryDoctor(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns the internal statistics of the memory allocator.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @return A cluster value containing the allocator statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> stats = clusterClient.memoryMallocStats().get();
+     * for (Map.Entry<String, String> entry : stats.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: " + entry.getValue());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryMallocStats();
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing the allocator statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<String> stats = clusterClient.memoryMallocStats(RANDOM).get();
+     * String singleStats = stats.getSingleValue();
+     * System.out.println("Allocator stats: " + singleStats);
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<String>> memoryMallocStats(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.memoryPurge().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge();
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see <a href="https://valkey.io/commands/memory-purge/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>"OK"</code> response on success.
+     * @example
+     *     <pre>{@code
+     * String response = clusterClient.memoryPurge(ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> memoryPurge(@NonNull Route route);
+
+    // TODO #6166: move shared signatures to ServerManagementBaseCommands
+
+    /**
+     * Returns detailed memory consumption statistics of the server.<br>
+     * The command will be routed to all primary nodes by default.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @return A cluster value containing a map of memory statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>> stats = clusterClient.memoryStats().get();
+     * for (Map.Entry<String, Map<String, Object>> entry : stats.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + entry.getKey() + "]: total.allocated=" + entry.getValue().get("total.allocated"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats();
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see <a href="https://valkey.io/commands/memory-stats/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing a map of memory statistics.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>> stats = clusterClient.memoryStats(RANDOM).get();
+     * Map<String, Object> singleStats = stats.getSingleValue();
+     * System.out.println("Total allocated: " + singleStats.get("total.allocated"));
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats(@NonNull Route route);
 }
