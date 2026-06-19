@@ -72,11 +72,11 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         "latency",
         # LatencyEventInfo
         "event_name",
-        "time",
-        "latest",
-        "count",
-        "maximum",
+        "latest_time",
+        "latest_duration",
+        "max_duration",
         "sum",
+        "count",
         # MonitorMsg
         "timestamp",
         "db",
