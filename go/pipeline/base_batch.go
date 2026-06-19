@@ -7435,3 +7435,55 @@ func (b *BaseBatch[T]) LatencyLatest() *T {
 func (b *BaseBatch[T]) LatencyReset(events ...string) *T {
 	return b.addCmdAndTypeChecker(C.LatencyReset, events, reflect.Int64, false)
 }
+
+// Returns a report about memory problems detected by the server.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A string containing the memory diagnostic report.
+//
+// [valkey.io]: https://valkey.io/commands/memory-doctor/
+func (b *BaseBatch[T]) MemoryDoctor() *T {
+	return b.addCmdAndTypeChecker(C.MemoryDoctor, []string{}, reflect.String, false)
+}
+
+// Returns the internal statistics of the memory allocator.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A string containing the memory allocator statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
+func (b *BaseBatch[T]) MemoryMallocStats() *T {
+	return b.addCmdAndTypeChecker(C.MemoryMallocStats, []string{}, reflect.String, false)
+}
+
+// Asks the server to reclaim memory from the allocator back to the operating system.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	OK to confirm that the purge operation was executed.
+//
+// [valkey.io]: https://valkey.io/commands/memory-purge/
+func (b *BaseBatch[T]) MemoryPurge() *T {
+	return b.addCmdAndTypeChecker(C.MemoryPurge, []string{}, reflect.String, false)
+}
+
+// Returns detailed memory consumption statistics of the server.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A [models.MemoryStats] containing detailed memory usage statistics.
+//
+// [valkey.io]: https://valkey.io/commands/memory-stats/
+func (b *BaseBatch[T]) MemoryStats() *T {
+	return b.addCmdAndConverter(C.MemoryStats, []string{}, reflect.Map, false, internal.ConvertMemoryStats)
+}
