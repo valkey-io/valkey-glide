@@ -97,12 +97,10 @@ export class ValkeyCluster {
         loadModule?: string[],
     ): Promise<ValkeyCluster> {
         return new Promise<ValkeyCluster>((resolve, reject) => {
-            const effectiveReplicaCount =
-                isWindows && replicaCount > 0 ? 0 : replicaCount;
             const commandArgs = [
                 "start",
                 "-r",
-                `${effectiveReplicaCount}`,
+                `${replicaCount}`,
                 "-n",
                 `${shardCount}`,
             ];
@@ -145,15 +143,24 @@ export class ValkeyCluster {
                                 addresses,
                                 cluster_mode,
                                 tlsConfig,
-                            ).then(
-                                (ver) =>
-                                    new ValkeyCluster(
-                                        ver,
-                                        addresses,
-                                        tls,
-                                        clusterFolder,
-                                    ),
-                            ),
+                            )
+                                .then(
+                                    (ver) =>
+                                        new ValkeyCluster(
+                                            ver,
+                                            addresses,
+                                            tls,
+                                            clusterFolder,
+                                        ),
+                                )
+                                .then(async (cluster) => {
+                                    if (isWindows && replicaCount > 0) {
+                                        await new Promise((r) =>
+                                            setTimeout(r, 3000),
+                                        );
+                                    }
+                                    return cluster;
+                                }),
                         );
                     }
                 },
