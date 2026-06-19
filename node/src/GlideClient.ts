@@ -46,6 +46,10 @@ import {
     createInfo,
     createLastSave,
     createLolwut,
+    createMigrate,
+    createSave,
+    createBgSave,
+    createBgRewriteAof,
     createPing,
     createPublish,
     createRandomKey,
@@ -53,8 +57,12 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createFailover,
+    createReplicaOf,
+    createReplicaOfNoOne,
     createTime,
     createUnWatch,
+    FailoverOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
@@ -62,6 +70,7 @@ import {
     FunctionStatsFullResponse,
     InfoOptions,
     LolwutOptions,
+    MigrateOptions,
     ScanOptions,
 } from "./Commands";
 
@@ -1003,6 +1012,103 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Synchronously saves the dataset to disk.
+     *
+     * @see {@link https://valkey.io/commands/save/|valkey.io} for more details.
+     *
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * const result = await client.save();
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async save(): Promise<"OK"> {
+        return this.createWritePromise(createSave(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsave();
+     * console.log(result); // "Background saving started"
+     * ```
+     */
+    public async bgsave(): Promise<string> {
+        return this.createWritePromise(createBgSave(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Schedules a background save of the database.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveSchedule();
+     * console.log(result); // "Background saving scheduled"
+     * ```
+     */
+    public async bgsaveSchedule(): Promise<string> {
+        return this.createWritePromise(createBgSave(["SCHEDULE"]), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Aborts all in-progress and scheduled background saves.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @since Valkey 8.1
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveCancel();
+     * console.log(result); // "Background saving cancelled"
+     * ```
+     */
+    public async bgsaveCancel(): Promise<string> {
+        return this.createWritePromise(createBgSave(["CANCEL"]), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).
+     *
+     * @see {@link https://valkey.io/commands/bgrewriteaof/|valkey.io} for more details.
+     *
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgrewriteaof();
+     * console.log(result); // "Background append only file rewriting started"
+     * ```
+     */
+    public async bgrewriteaof(): Promise<string> {
+        return this.createWritePromise(createBgRewriteAof(), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
      * Returns a random existing key name from the currently selected database.
      *
      * @see {@link https://valkey.io/commands/randomkey/|valkey.io} for more details.
@@ -1019,6 +1125,50 @@ export class GlideClient extends BaseClient {
         options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createRandomKey(), options);
+    }
+
+    /**
+     * Atomically transfers a key or multiple keys from the current Valkey instance
+     * to a destination Valkey instance.
+     * On success, keys are deleted from the source unless `copy` is set to `true` in options.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate, or an array of keys to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns `"OK"` on success, `"NOKEY"` if the key(s) do not exist.
+     *
+     * @example Single-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     * @example Single-key with copy and replace:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // "OK"
+     * ```
+     * @example Multi-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString | GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
+        );
     }
 
     /**
@@ -1220,5 +1370,66 @@ export class GlideClient extends BaseClient {
      */
     public async clientUnpause(options?: DecoderOption): Promise<"OK"> {
         return this.createWritePromise(createClientUnpause(), options);
+    }
+
+    /**
+     * Starts a coordinated failover from the connected primary to one of its replicas.
+     * This is the standalone equivalent of `CLUSTER FAILOVER`.
+     *
+     * @see {@link https://valkey.io/commands/failover/|valkey.io} for details.
+     *
+     * @param options - (Optional) Failover options. See {@link FailoverOptions}.
+     * @returns `"OK"` if the failover was successfully initiated.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.failover();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async failover(options?: FailoverOptions): Promise<"OK"> {
+        return this.createWritePromise(createFailover(options), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @param host - The host of the primary to replicate.
+     * @param port - The port of the primary to replicate.
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaof("localhost", 6379);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaof(host: string, port: number): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOf(host, port), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaofNoOne();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaofNoOne(): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOfNoOne(), {
+            decoder: Decoder.String,
+        });
     }
 }

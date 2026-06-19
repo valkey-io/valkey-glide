@@ -13,38 +13,8 @@ TESTS_SYNC_DIR = PYTHON_DIR / "tests" / "sync_tests"
 
 
 EXCLUDED_API_FUNCTIONS = {
-    "async_only": [
-        # _CompatFuture
-        "done",
-        "result",
-        "set_exception",
-        "set_result",
-        # opentelemetry
-        "create_otel_span",
-        "drop_otel_span",
-        "get_endpoint",
-        "get_metrics",
-        "get_traces",
-        "init_opentelemetry",
-        "set_traces",
-        # Logger
-        "is_lower",
-        "py_init",
-        "py_log",
-        # others
-        "init_callback",
-        "create_leaked_bytes_vec",
-        "create_leaked_value",
-        "start_socket_listener_external",
-        "value_from_pointer",
-        "aclose",
-        # cache metrics sync path (PyO3 only, sync client uses FFI)
-        "get_cache_metric_from_registry",
-        # address resolver registry (PyO3 only, sync client passes callback via FFI)
-        "register_address_resolver",
-        "remove_address_resolver",
-    ],
-    "sync_only": [],
+    "async_only": ["aclose", "done", "result", "set_exception", "set_result"],
+    "sync_only": ["get_min_compressed_size"],
 }
 
 EXCLUDED_API_FILENAMES = {
@@ -60,6 +30,10 @@ EXCLUDED_TESTS = {
         "test_client_usable_after_cancelled_commands",
         "test_connection_timeout_on_unavailable_host",
         "test_invalid_tls_config_fails_fast",
+        "test_aclose_alias",
+        "test_async_context_manager",
+        "test_client_recreation_after_close",
+        "test_mixed_async_sync_client_lib_names",
         # Dynamic PubSub tests helper functions
         "unsubscribe_by_method",
         "psubscribe_by_method",
@@ -78,6 +52,7 @@ EXCLUDED_TESTS = {
     "sync_only": [
         "test_sync_fork",
         "sync_poll_for_timestamp_change",
+        "get_min_compressed_size",
         # get() with buffer — sync-only FFI path, no async equivalent
         "test_sync_get_into_buffer",
         "test_sync_get_into_buffer_nonexistent_key",

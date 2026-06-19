@@ -857,6 +857,56 @@ func (suite *GlideTestSuite) TestLastSave() {
 	assert.Greater(t, result, int64(0))
 }
 
+func (suite *GlideTestSuite) TestSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.Save(context.Background())
+	assert.Nil(t, err)
+	assert.Equal(t, "OK", result)
+}
+
+func (suite *GlideTestSuite) TestBgSave() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSave(context.Background())
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result)
+	assert.Contains(t, bgsaveResponses, result)
+}
+
+func (suite *GlideTestSuite) TestBgSaveSchedule() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgSaveSchedule(context.Background())
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result)
+	assert.Contains(t, bgsaveResponses, result)
+}
+
+func (suite *GlideTestSuite) TestBgSaveCancel() {
+	suite.SkipIfServerVersionLowerThan("8.1.0", suite.T())
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	// When no save is in progress, BGSAVE CANCEL should return an error
+	_, err := client.BgSaveCancel(context.Background())
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), bgsaveNotCancelledResponse)
+}
+
+func (suite *GlideTestSuite) TestBgRewriteAof() {
+	client := suite.defaultClient()
+	t := suite.T()
+	suite.waitForSaveNotInProgress(client)
+	result, err := client.BgRewriteAof(context.Background())
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result)
+	assert.Contains(t, bgrewriteaofResponses, result)
+}
+
 func (suite *GlideTestSuite) TestConfigResetStat() {
 	client := suite.defaultClient()
 	suite.verifyOK(client.ConfigResetStat(context.Background()))
@@ -1499,4 +1549,54 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 	exists, err = destClient.Exists(ctx, []string{srcKey1, srcKey2})
 	suite.NoError(err)
 	suite.Equal(int64(2), exists)
+}
+=======
+func (suite *GlideTestSuite) TestFailover() {
+	// Spin up a dedicated standalone server with 1 replica so the failover
+	// doesn't destabilize the shared test server.
+	output, err := startDedicatedValkeyServerWithReplicas(suite, false, 1)
+	suite.Require().NoError(err)
+	clusterFolder := extractClusterFolder(suite, output)
+	addresses := extractAddresses(suite, output)
+	defer stopDedicatedValkeyServer(suite, clusterFolder)
+
+	cfg := defaultClientConfig()
+	cfg.WithAddress(&addresses[0])
+	client, err := glide.NewClient(cfg)
+	suite.Require().NoError(err)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Verify initial role is master
+	suite.Require().Eventually(func() bool {
+		info, err := client.InfoWithOptions(ctx, options.InfoOptions{Sections: []constants.Section{constants.Replication}})
+		return err == nil && strings.Contains(info, "role:master")
+	}, 10*time.Second, 100*time.Millisecond, "Timed out waiting for initial master role")
+
+	// Execute failover — returns OK immediately
+	result, err := client.Failover(ctx)
+	suite.Require().NoError(err)
+	suite.Equal("OK", result)
+
+	// Wait for role to change to slave (failover completed)
+	suite.Require().Eventually(func() bool {
+		info, err := client.InfoWithOptions(ctx, options.InfoOptions{Sections: []constants.Section{constants.Replication}})
+		return err == nil && strings.Contains(info, "role:slave")
+	}, 30*time.Second, 500*time.Millisecond, "Timed out waiting for role change to slave")
+}
+
+func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {
+	client := suite.defaultClient()
+	// FAILOVER ABORT when no failover is in progress should error
+	_, err := client.FailoverWithOptions(context.Background(), options.NewFailoverOptionsWithAbort())
+	suite.Error(err)
+}
+
+func (suite *GlideTestSuite) TestReplicaOfNoOne() {
+	client := suite.defaultClient()
+	// REPLICAOF NO ONE on a primary should succeed (it's already a primary)
+	result, err := client.ReplicaOfNoOne(context.Background())
+	suite.Require().NoError(err)
+	suite.Equal("OK", result)
 }

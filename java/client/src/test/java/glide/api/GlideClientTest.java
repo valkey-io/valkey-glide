@@ -17,6 +17,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -35,6 +36,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ExpireAt;
 import static command_request.CommandRequestOuterClass.RequestType.ExpireTime;
 import static command_request.CommandRequestOuterClass.RequestType.FCall;
 import static command_request.CommandRequestOuterClass.RequestType.FCallReadOnly;
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -121,6 +123,7 @@ import static command_request.CommandRequestOuterClass.RequestType.RPushX;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
 import static command_request.CommandRequestOuterClass.RequestType.Rename;
 import static command_request.CommandRequestOuterClass.RequestType.RenameNX;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Restore;
 import static command_request.CommandRequestOuterClass.RequestType.SAdd;
 import static command_request.CommandRequestOuterClass.RequestType.SCard;
@@ -304,6 +307,7 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions.Section;
@@ -383,6 +387,7 @@ import glide.utils.ArgsBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -5126,6 +5131,29 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientTrackingInfo_returns_success() {
+        // setup
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("flags", new HashSet<>(Collections.singletonList("off")));
+        info.put("redirect", -1L);
+        info.put("prefixes", new Object[0]);
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(info);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(ClientTrackingInfo), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
+
+        // verify
+        assertEquals(testResponse, response);
     }
 
     @SneakyThrows
@@ -16360,6 +16388,25 @@ public class GlideClientTest {
         assertNull(response.get());
     }
 
+    @SneakyThrows
+    @Test
+    public void failover_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(eq(FailOver), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.failover();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
     @Test
     public void migrate_keys_throws_on_invalid_keys() {
         assertThrows(
@@ -16371,6 +16418,27 @@ public class GlideClientTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> service.migrate("host", 6379L, (GlideString[]) null, 0L, 5000L));
+    }
+
+    @SneakyThrows
+    @Test
+    public void failover_with_options_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(
+                        eq(FailOver),
+                        eq(new String[] {"TO", "localhost", "6380", "FORCE", "TIMEOUT", "1000"}),
+                        any()))
+                .thenReturn(testResponse);
+        FailoverOptions options = FailoverOptions.forced("localhost", 6380, 1000);
+        CompletableFuture<String> response = service.failover(options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
@@ -16395,7 +16463,6 @@ public class GlideClientTest {
                                 }),
                         any()))
                 .thenReturn(testResponse);
-
         // exercise
         CompletableFuture<String> response =
                 service.migrate(
@@ -16409,5 +16476,64 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void failover_abort_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(eq(FailOver), eq(new String[] {"ABORT"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.failover(FailoverOptions.abort());
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void replicaof_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(
+                        eq(ReplicaOf), eq(new String[] {"localhost", "6379"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.replicaof("localhost", 6379);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void replicaofNoOne_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        when(commandManager.<String>submitNewCommand(
+                        eq(ReplicaOf), eq(new String[] {"NO", "ONE"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.replicaofNoOne();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }

@@ -17,6 +17,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BitPos;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -2534,6 +2535,19 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T clientUnpause() {
         protobufBatch.addCommands(buildCommand(ClientUnpause));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the current client connection's tracking state.
+     *
+     * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
+     * @return Command response - A {@link Map} with keys: {@code flags} ({@link java.util.Set} of
+     *     tracking flag strings), {@code redirect} ({@link Long}, {@code -1} if not redirecting), and
+     *     {@code prefixes} ({@code Object[]} of monitored key prefixes).
+     */
+    public T clientTrackingInfo() {
+        protobufBatch.addCommands(buildCommand(ClientTrackingInfo));
         return getThis();
     }
 

@@ -39,6 +39,7 @@ from .commands.core_options import (
     InfoSection,
     InsertPosition,
     MigrateOptions,
+    MonitorMsg,
     OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
@@ -124,6 +125,7 @@ from .config import (
     AdvancedGlideClientConfiguration,
     AdvancedGlideClusterClientConfiguration,
     BackoffStrategy,
+    ClientCircuitBreakerConfiguration,
     CompressionBackend,
     CompressionConfiguration,
     GlideClientConfiguration,
@@ -162,6 +164,7 @@ from .constants import (
     TXInfoStreamResponse,
 )
 from .exceptions import (
+    CircuitBreakerError,
     ClosingError,
     ConfigurationError,
     ConnectionError,
@@ -202,6 +205,7 @@ __all__ = [
     "AddressResolver",
     "AdvancedGlideClientConfiguration",
     "AdvancedGlideClusterClientConfiguration",
+    "ClientCircuitBreakerConfiguration",
     "CompressionBackend",
     "CompressionConfiguration",
     "GlideClientConfiguration",
@@ -301,6 +305,8 @@ __all__ = [
     "ALL_CHANNELS",
     "ALL_PATTERNS",
     "ALL_SHARDED_CHANNELS",
+    # Monitor
+    "MonitorMsg",
     # Json
     "json_batch",
     "JsonGetOptions",
@@ -317,6 +323,7 @@ __all__ = [
     "SlotIdRoute",
     "TSingleNodeRoute",
     # Exceptions
+    "CircuitBreakerError",
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",

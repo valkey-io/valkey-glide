@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide.glide import Script
+from glide.async_commands.core import RequestType
 from glide_shared.commands.batch import Batch
 from glide_shared.commands.batch_options import BatchOptions
 from glide_shared.commands.command_args import ObjectType
@@ -21,7 +21,7 @@ from glide_shared.constants import (
     TFunctionStatsFullResponse,
     TResult,
 )
-from glide_shared.protobuf.command_request_pb2 import RequestType
+from glide_shared.script import Script
 
 from .core import CoreCommands
 
@@ -616,6 +616,99 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.LastSave, []),
         )
 
+    async def save(self) -> TOK:
+        """
+        Synchronously saves the dataset to disk.
+
+        See [valkey.io](https://valkey.io/commands/save) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.save()
+                OK
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Save, []),
+        )
+
+    async def bgsave(self) -> str:
+        """
+        Asynchronously saves the dataset to disk in the background.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave()
+                "Background saving started"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgSave, []),
+        )
+
+    async def bgsave_schedule(self) -> str:
+        """
+        Schedules a background save of the database.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_schedule()
+                "Background saving scheduled"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgSave, ["SCHEDULE"]),
+        )
+
+    async def bgsave_cancel(self) -> str:
+        """
+        Aborts all in-progress and scheduled background saves.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Note:
+            Since: Valkey 8.1.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_cancel()
+                "Background saving cancelled"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgSave, ["CANCEL"]),
+        )
+
+    async def bgrewriteaof(self) -> str:
+        """
+        Initiates a background rewrite of the append-only file (AOF).
+
+        See [valkey.io](https://valkey.io/commands/bgrewriteaof) for more details.
+
+        Returns:
+            str: A non-empty status string.
+
+        Examples:
+            >>> await client.bgrewriteaof()
+                "Background append only file rewriting started"
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.BgRewriteAof, []),
+        )
+
     async def publish(self, message: TEncodable, channel: TEncodable) -> int:
         """
         Publish a message on pubsub channel.
@@ -1041,3 +1134,89 @@ class StandaloneCommands(CoreCommands):
                 OK
         """
         return cast(TOK, await self._execute_command(RequestType.ClientUnpause, []))
+
+    async def failover(
+        self,
+        host: Optional[TEncodable] = None,
+        port: Optional[int] = None,
+        force: bool = False,
+        abort: bool = False,
+        timeout_ms: Optional[int] = None,
+    ) -> TOK:
+        """
+        Starts a coordinated failover from the connected primary to one of its replicas.
+        This is the standalone equivalent of CLUSTER FAILOVER.
+
+        See [valkey.io](https://valkey.io/commands/failover/) for more details.
+
+        Args:
+            host (Optional[TEncodable]): The host of the target replica (requires port).
+            port (Optional[int]): The port of the target replica (requires host).
+            force (bool): If True, forces failover after timeout (requires host, port, and timeout_ms).
+            abort (bool): If True, aborts an ongoing failover.
+            timeout_ms (Optional[int]): Timeout in milliseconds.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.failover()
+                OK
+            >>> await client.failover(abort=True)
+                OK
+            >>> await client.failover(host="localhost", port=6380, timeout_ms=1000)
+                OK
+        """
+        args: List[TEncodable] = []
+        if (host is None) != (port is None):
+            raise ValueError("Both host and port must be provided together")
+        if force and (host is None or port is None):
+            raise ValueError("force requires host and port to be specified")
+        if abort:
+            args.append("ABORT")
+        else:
+            if host is not None and port is not None:
+                args.extend(["TO", host, str(port)])
+                if force:
+                    args.append("FORCE")
+            if timeout_ms is not None:
+                args.extend(["TIMEOUT", str(timeout_ms)])
+        return cast(TOK, await self._execute_command(RequestType.FailOver, args))
+
+    async def replicaof(self, host: TEncodable, port: int) -> TOK:
+        """
+        Makes the server a replica of the specified primary.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Args:
+            host (TEncodable): The host of the primary to replicate.
+            port (int): The port of the primary to replicate.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.replicaof("localhost", 6379)
+                OK
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.ReplicaOf, [host, str(port)])
+        )
+
+    async def replicaof_no_one(self) -> TOK:
+        """
+        Promotes the current server to a primary by stopping replication.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.replicaof_no_one()
+                OK
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.ReplicaOf, ["NO", "ONE"])
+        )

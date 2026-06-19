@@ -253,6 +253,9 @@ async fn write_result(
                     RequestErrorType::ExecAbort => response::RequestErrorType::ExecAbort,
                     RequestErrorType::Timeout => response::RequestErrorType::Timeout,
                     RequestErrorType::Disconnect => response::RequestErrorType::Disconnect,
+                    RequestErrorType::CircuitBreakerOpen => {
+                        response::RequestErrorType::CircuitBreakerOpen
+                    }
                 }
                 .into(),
                 message: error_message.into(),

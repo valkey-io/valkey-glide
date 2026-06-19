@@ -35,3 +35,5 @@ export class ConnectionError extends RequestError {}
 
 /// Errors that are thrown when a request cannot be completed in current configuration settings.
 export class ConfigurationError extends RequestError {}
+
+export class CircuitBreakerError extends RequestError {}

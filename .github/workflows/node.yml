@@ -48,15 +48,27 @@ on:
                     - use-self-hosted
                     - use-github
                 default: false
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
+                default: false
             name:
                 required: false
                 type: string
                 description: "(Optional) Test run name"
     workflow_call:
         inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
                 type: string
+                default: "false"
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
                 default: false
 
 concurrency:
@@ -84,13 +96,24 @@ jobs:
               uses: ./.github/workflows/create-test-matrices
               with:
                   language-name: node
-                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+                  run-full-matrix: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
                   run-with-macos: ${{ github.event.inputs.run-with-macos }}
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        needs: get-matrices
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
 
     test-node:
         name: Node Tests - ${{ matrix.node }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-matrices]
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 40
         strategy:
             fail-fast: false
@@ -302,7 +325,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' }}
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -316,10 +339,12 @@ jobs:
                   language-name: node
                   run-full-matrix: true
                   containers: true
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     test-node-container:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-containers]
+        needs: [get-containers, approve-self-hosted]
+        if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 35
         strategy:
             fail-fast: false

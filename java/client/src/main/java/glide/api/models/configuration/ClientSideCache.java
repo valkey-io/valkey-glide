@@ -58,6 +58,9 @@ public class ClientSideCache {
     /** Whether to enable metrics collection for the cache. Defaults to false. */
     @Builder.Default private final boolean enableMetrics = false;
 
+    /** Whether to use server-assisted client-side caching. */
+    @Builder.Default private final boolean serverAssisted = false;
+
     /**
      * Creates a ClientSideCache with auto-generated cache ID and default settings.
      *
@@ -97,7 +100,8 @@ public class ClientSideCache {
             long maxCacheKb,
             long entryTtlMs,
             EvictionPolicy evictionPolicy,
-            boolean enableMetrics) {
+            boolean enableMetrics,
+            boolean serverAssisted) {
         if (maxCacheKb <= 0) {
             throw new IllegalArgumentException("maxCacheKb must be positive");
         }
@@ -109,5 +113,6 @@ public class ClientSideCache {
         this.entryTtlMs = entryTtlMs;
         this.evictionPolicy = evictionPolicy;
         this.enableMetrics = enableMetrics;
+        this.serverAssisted = serverAssisted;
     }
 }
