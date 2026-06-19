@@ -4796,6 +4796,20 @@ public class CommandTests {
         assertNotNull(stats.get("rss-overhead.ratio"));
         assertNotNull(stats.get("fragmentation"));
 
+        // Validate db map entry.
+        assertTrue(stats.containsKey("db.0"));
+        Object db0 = stats.get("db.0");
+        assertInstanceOf(Map.class, db0);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> db0Map = (Map<String, Object>) db0;
+        assertInstanceOf(Long.class, db0Map.get("overhead.hashtable.main"));
+        assertInstanceOf(Long.class, db0Map.get("overhead.hashtable.expires"));
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertInstanceOf(Long.class, db0Map.get("overhead.hashtable.slot-to-keyspace-map"));
+        }
+
         // Validate optional fields (Valkey 8.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             assertTrue(
