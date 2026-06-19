@@ -1550,7 +1550,7 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 	suite.NoError(err)
 	suite.Equal(int64(2), exists)
 }
-=======
+
 func (suite *GlideTestSuite) TestFailover() {
 	// Spin up a dedicated standalone server with 1 replica so the failover
 	// doesn't destabilize the shared test server.
