@@ -44,6 +44,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     GeoSearchReturnType,
     SimpleString,
     XAutoClaimReturnType,
+    ClientTrackingInfoReturnType,
     XInfoStreamFullReturnType,
 }
 
@@ -1131,6 +1132,37 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into())
         },
+        ExpectedReturnType::ClientTrackingInfoReturnType => match value {
+            Value::Array(_) => {
+                // RESP2: flat [k,v,...] -> Map, then convert "flags" Array -> Set
+                let Value::Map(mut map) = convert_to_expected_type(
+                    value,
+                    Some(ExpectedReturnType::Map {
+                        key_type: &None,
+                        value_type: &None,
+                    }),
+                )? else {
+                    unreachable!()
+                };
+                if let Some(pair) = map.iter_mut().find(|(k, _)| {
+                    matches!(k, Value::BulkString(b) if b == b"flags")
+                }) {
+                    let val = std::mem::replace(&mut pair.1, Value::Nil);
+                    pair.1 = convert_to_expected_type(val, Some(ExpectedReturnType::Set))?;
+                }
+                Ok(Value::Map(map))
+            }
+            Value::Map(_) => {
+                // RESP3: already a map, "flags" is already Value::Set — pass through
+                Ok(value)
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted for CLIENT TRACKINGINFO",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
+        },
         ExpectedReturnType::FTInfoReturnType => match value {
             /*
             Example of the response
@@ -1535,6 +1567,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
+        b"CLIENT TRACKINGINFO" => Some(ExpectedReturnType::ClientTrackingInfoReturnType),
         b"HGETALL" | b"FT.CONFIG GET" | b"FT._ALIASLIST" | b"HELLO" => {
             Some(ExpectedReturnType::Map {
                 key_type: &None,
@@ -3749,5 +3782,77 @@ mod tests {
         .unwrap();
 
         assert_eq!(converted_count, Value::Array(vec![Value::Int(5)]));
+    }
+
+    #[test]
+    fn test_client_tracking_info_resp2() {
+        // RESP2: flat array with BulkString keys, flags as Array -> should become Map with flags as Set
+        let input = Value::Array(vec![
+            Value::BulkString(b"flags".to_vec()),
+            Value::Array(vec![Value::BulkString(b"off".to_vec())]),
+            Value::BulkString(b"redirect".to_vec()),
+            Value::Int(-1),
+            Value::BulkString(b"prefixes".to_vec()),
+            Value::Array(vec![]),
+        ]);
+        let result = convert_to_expected_type(
+            input,
+            Some(ExpectedReturnType::ClientTrackingInfoReturnType),
+        )
+        .unwrap();
+        let Value::Map(map) = result else {
+            panic!("expected Map")
+        };
+        let flags = map
+            .iter()
+            .find(|(k, _)| *k == Value::BulkString(b"flags".to_vec()))
+            .map(|(_, v)| v);
+        assert!(
+            matches!(flags, Some(Value::Set(_))),
+            "flags should be Set, got {:?}",
+            flags
+        );
+        let prefixes = map
+            .iter()
+            .find(|(k, _)| *k == Value::BulkString(b"prefixes".to_vec()))
+            .map(|(_, v)| v);
+        assert!(
+            matches!(prefixes, Some(Value::Array(_))),
+            "prefixes should be Array, got {:?}",
+            prefixes
+        );
+    }
+
+    #[test]
+    fn test_client_tracking_info_resp3() {
+        // RESP3: already a map with flags as Set -> should pass through unchanged
+        let input = Value::Map(vec![
+            (
+                Value::BulkString(b"flags".to_vec()),
+                Value::Set(vec![Value::BulkString(b"off".to_vec())]),
+            ),
+            (Value::BulkString(b"redirect".to_vec()), Value::Int(-1)),
+            (
+                Value::BulkString(b"prefixes".to_vec()),
+                Value::Array(vec![]),
+            ),
+        ]);
+        let result = convert_to_expected_type(
+            input,
+            Some(ExpectedReturnType::ClientTrackingInfoReturnType),
+        )
+        .unwrap();
+        let Value::Map(map) = result else {
+            panic!("expected Map")
+        };
+        let flags = map
+            .iter()
+            .find(|(k, _)| *k == Value::BulkString(b"flags".to_vec()))
+            .map(|(_, v)| v);
+        assert!(
+            matches!(flags, Some(Value::Set(_))),
+            "flags should be Set, got {:?}",
+            flags
+        );
     }
 }

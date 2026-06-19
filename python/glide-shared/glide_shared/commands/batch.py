@@ -95,13 +95,13 @@ class BaseBatch:
                 If `True`, the batch will be executed as an atomic transaction.
                 If `False`, the batch will be executed as a non-atomic pipeline.
         """
-        self.commands: List[Tuple[RequestType.ValueType, List[TEncodable]]] = []
+        self.commands: List[Tuple[int, List[TEncodable]]] = []
         self.lock = threading.Lock()
         self.is_atomic = is_atomic
 
     def append_command(
         self: TBatch,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
     ) -> TBatch:
         self.lock.acquire()
@@ -2445,6 +2445,48 @@ class BaseBatch:
             int: The Unix time of the last successful DB save.
         """
         return self.append_command(RequestType.LastSave, [])
+
+    def latency_history(self: TBatch, event: TEncodable) -> TBatch:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for more details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+
+        Command response:
+            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty
+                list if the event doesn't exist.
+        """
+        return self.append_command(RequestType.LatencyHistory, [event])
+
+    def latency_latest(self: TBatch) -> TBatch:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for more details.
+
+        Command response:
+            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
+        """
+        return self.append_command(RequestType.LatencyLatest, [])
+
+    def latency_reset(self: TBatch, *events: TEncodable) -> TBatch:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for more details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+
+        Command response:
+            int: The number of event time series that were reset.
+        """
+        return self.append_command(RequestType.LatencyReset, list(events))
 
     def type(self: TBatch, key: TEncodable) -> TBatch:
         """

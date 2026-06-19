@@ -47,6 +47,7 @@ from tests.utils.utils import (
     get_random_string,
     sync_check_if_server_version_lt,
     sync_get_version,
+    trigger_latency_spike_sync,
 )
 
 
@@ -1300,3 +1301,55 @@ class TestSyncBatch:
         result = exec_batch(glide_sync_client, batch, raise_on_error=True)
         assert result is not None
         assert result[0] == b"RESET"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    def test_transaction_latency(
+        self, glide_sync_client: TGlideClient, cluster_mode: bool, is_atomic: bool
+    ):
+        trigger_latency_spike_sync(glide_sync_client)
+
+        transaction = (
+            Batch(is_atomic=is_atomic)
+            if isinstance(glide_sync_client, GlideClient)
+            else ClusterBatch(is_atomic=is_atomic)
+        )
+
+        transaction.latency_history("command")
+        transaction.latency_latest()
+        transaction.latency_reset()
+
+        response = exec_batch(glide_sync_client, transaction)
+        assert isinstance(response, list)
+        assert len(response) == 3
+
+        # Atomic batches always route to a single node and return a list.
+        # Non-atomic cluster batches route to all primaries and a dictionary.
+        expect_dict = (
+            isinstance(glide_sync_client, GlideClusterClient) and not is_atomic
+        )
+
+        # LATENCY HISTORY
+        if expect_dict:
+            assert isinstance(response[0], dict)
+            latency_entries = next(iter(response[0].values()))
+        else:
+            latency_entries = response[0]
+
+        assert isinstance(latency_entries, list)
+        assert len(latency_entries) > 0
+
+        # LATENCY LATEST
+        if expect_dict:
+            assert isinstance(response[1], dict)
+            latency_event_infos = next(iter(response[1].values()))
+        else:
+            latency_event_infos = response[1]
+
+        assert isinstance(latency_event_infos, list)
+        assert len(latency_event_infos) > 0
+
+        # LATENCY RESET
+        assert isinstance(response[2], int)
+        assert response[2] > 0

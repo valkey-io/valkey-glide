@@ -7,6 +7,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BgSave;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlots;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterAddSlotsRange;
@@ -55,6 +56,9 @@ import static command_request.CommandRequestOuterClass.RequestType.GetSubscripti
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
@@ -108,6 +112,8 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.batch.ClusterBatchOptions;
@@ -117,6 +123,7 @@ import glide.api.models.commands.cluster.ClusterSetSlotOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.scan.ClusterScanCursor;
 import glide.api.models.commands.scan.ScanOptions;
+import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -486,6 +493,25 @@ public class GlideClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>>> clientTrackingInfo(
+            @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleMapResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
     public CompletableFuture<String> configRewrite() {
         return commandManager.submitNewCommand(
                 ConfigRewrite, EMPTY_STRING_ARRAY, this::handleStringResponse);
@@ -614,6 +640,97 @@ public class GlideClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.of(handleLongResponse(response))
                                 : ClusterValue.of(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(@NonNull String event) {
+        return commandManager.submitNewCommand(
+                LatencyHistory, new String[] {event}, this::handleLatencyHistoryClusterResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(
+            @NonNull String event, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                LatencyHistory, new String[] {event}, route, this::handleLatencyHistoryClusterResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest() {
+        return commandManager.submitNewCommand(
+                LatencyLatest, EMPTY_STRING_ARRAY, this::handleLatencyLatestClusterResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                LatencyLatest, EMPTY_STRING_ARRAY, route, this::handleLatencyLatestClusterResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset() {
+        return commandManager.submitNewCommand(
+                LatencyReset, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset(@NonNull String[] events) {
+        return commandManager.submitNewCommand(LatencyReset, events, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                LatencyReset, EMPTY_STRING_ARRAY, route, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset(@NonNull String[] events, @NonNull Route route) {
+        return commandManager.submitNewCommand(LatencyReset, events, route, this::handleLongResponse);
+    }
+
+    /**
+     * Process a <code>LATENCY HISTORY</code> cluster response.
+     *
+     * @param response The raw response from the server.
+     * @return A cluster value containing array(s) of latency history entries for an event.
+     */
+    @SuppressWarnings("unchecked")
+    private ClusterValue<LatencyEntry[]> handleLatencyHistoryClusterResponse(Response response) {
+        Object data = handleObjectOrNullResponse(response);
+
+        if (data instanceof Map) {
+            Map<String, LatencyEntry[]> parsed = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : ((Map<String, Object>) data).entrySet()) {
+                parsed.put(entry.getKey(), handleLatencyHistoryResponse((Object[]) entry.getValue()));
+            }
+
+            return ClusterValue.ofMultiValue(parsed);
+        }
+
+        return ClusterValue.ofSingleValue(handleLatencyHistoryResponse((Object[]) data));
+    }
+
+    /**
+     * Process a <code>LATENCY LATEST</code> response.
+     *
+     * @param response The raw response from the server.
+     * @return A cluster value containing array(s) of the latest latency info.
+     */
+    @SuppressWarnings("unchecked")
+    private ClusterValue<LatencyEventInfo[]> handleLatencyLatestClusterResponse(Response response) {
+        Object data = handleObjectOrNullResponse(response);
+
+        if (data instanceof Map) {
+            Map<String, LatencyEventInfo[]> parsed = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> entry : ((Map<String, Object>) data).entrySet()) {
+                parsed.put(entry.getKey(), handleLatencyLatestResponse((Object[]) entry.getValue()));
+            }
+
+            return ClusterValue.ofMultiValue(parsed);
+        }
+
+        return ClusterValue.ofSingleValue(handleLatencyLatestResponse((Object[]) data));
     }
 
     @Override

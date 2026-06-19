@@ -681,14 +681,74 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// Provides memory usage diagnosis report.
-// The command returns a detailed analysis of memory consumption patterns in the server.
+// Returns the latency spike time series for the specified event.
 //
 // See [valkey.io] for details.
 //
 // Parameters:
 //
 //	ctx - The context for controlling the command execution.
+//	event - The latency event to fetch (e.g. "command", "fork").
+//
+// Return value:
+//
+//	A slice of [models.LatencyEntry] for the event, or an empty slice if the event doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error) {
+	response, err := client.executeCommand(ctx, C.LatencyHistory, []string{event})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyHistoryResponse(response)
+}
+
+// Reports the latest latency events logged by the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	A slice of [models.LatencyEventInfo] for the latest latency events.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyEventInfo, error) {
+	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
+	if err != nil {
+		return nil, err
+	}
+	return handleLatencyLatestResponse(response)
+}
+
+// Resets the latency time series for the specified events.
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	events - The latency events to reset (e.g. "command", "fork").
+//
+// Return value:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64, error) {
+	response, err := client.executeCommand(ctx, C.LatencyReset, events)
+	if err != nil {
+		return models.DefaultIntResponse, err
+	}
+	return handleIntResponse(response)
+}
+
+// Provides memory usage diagnosis report.
+// The command returns a detailed analysis of memory consumption patterns in the server.
 //
 // Return value:
 //
@@ -1224,6 +1284,93 @@ func (client *Client) Publish(ctx context.Context, channel string, message strin
 // [Valkey GLIDE Documentation]: https://valkey.io/topics/transactions/#cas
 func (client *Client) Unwatch(ctx context.Context) (string, error) {
 	result, err := client.executeCommand(ctx, C.UnWatch, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// Failover starts a coordinated failover from the connected primary to one of its replicas.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) Failover(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, []string{})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// FailoverWithOptions starts a coordinated failover with the specified options.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	opts - The failover options.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/failover/
+func (client *Client) FailoverWithOptions(ctx context.Context, opts *options.FailoverOptions) (string, error) {
+	result, err := client.executeCommand(ctx, C.FailOver, opts.ToArgs())
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOf makes the server a replica of the specified primary.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//	host - The host of the primary to replicate.
+//	port - The port of the primary to replicate.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOf(ctx context.Context, host string, port int) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{host, utils.IntToString(int64(port))})
+	if err != nil {
+		return models.DefaultStringResponse, err
+	}
+	return handleOkResponse(result)
+}
+
+// ReplicaOfNoOne promotes the current server to a primary by stopping replication.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	`"OK"` on success.
+//
+// [valkey.io]: https://valkey.io/commands/replicaof/
+func (client *Client) ReplicaOfNoOne(ctx context.Context) (string, error) {
+	result, err := client.executeCommand(ctx, C.ReplicaOf, []string{"NO", "ONE"})
 	if err != nil {
 		return models.DefaultStringResponse, err
 	}

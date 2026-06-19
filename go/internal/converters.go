@@ -729,3 +729,142 @@ func ConvertXInfoStreamFullResponse(data any) (any, error) {
 
 	return streamInfo, nil
 }
+
+// Indices for LATENCY HISTORY response.
+const (
+	latencyEntryTimeIndex    = 0
+	latencyEntryLatencyIndex = 1
+)
+
+// Indices for LATENCY LATEST response.
+const (
+	latencyEventInfoNameIndex           = 0
+	latencyEventInfoTimeIndex           = 1
+	latencyEventInfoLatestDurationIndex = 2
+	latencyEventInfoMaxDurationIndex    = 3
+	latencyEventInfoSumIndex            = 4
+	latencyEventInfoCountIndex          = 5
+)
+
+// ConvertLatencyHistoryEntries converts a LATENCY HISTORY response.
+func ConvertLatencyHistoryEntries(data any) (any, error) {
+	arr, ok := data.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for LATENCY HISTORY response: %T", data)
+	}
+	result := make([]models.LatencyEntry, 0, len(arr))
+	for i, item := range arr {
+		pair, ok := item.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY HISTORY entry at index %d: %T", i, item)
+		}
+		if len(pair) < latencyEntryLatencyIndex+1 {
+			return nil, fmt.Errorf("LATENCY HISTORY entry at index %d has %d elements, expected at least 2", i, len(pair))
+		}
+		ts, ok := pair[latencyEntryTimeIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY HISTORY timestamp at index %d: %T",
+				i,
+				pair[latencyEntryTimeIndex],
+			)
+		}
+		latency, ok := pair[latencyEntryLatencyIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY HISTORY latency at index %d: %T",
+				i,
+				pair[latencyEntryLatencyIndex],
+			)
+		}
+		result = append(result, models.LatencyEntry{
+			Time:     time.Unix(ts, 0),
+			Duration: time.Duration(latency) * time.Millisecond,
+		})
+	}
+	return result, nil
+}
+
+// ConvertLatencyLatestEntries converts a LATENCY LATEST response.
+func ConvertLatencyLatestEntries(data any) (any, error) {
+	arr, ok := data.([]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for LATENCY LATEST response: %T", data)
+	}
+	result := make([]models.LatencyEventInfo, 0, len(arr))
+	for i, item := range arr {
+		entry, ok := item.([]any)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for LATENCY LATEST entry at index %d: %T", i, item)
+		}
+		if len(entry) < latencyEventInfoMaxDurationIndex+1 {
+			return nil, fmt.Errorf("LATENCY LATEST entry at index %d has %d elements, expected at least 4", i, len(entry))
+		}
+		name, ok := entry[latencyEventInfoNameIndex].(string)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST event name at index %d: %T",
+				i,
+				entry[latencyEventInfoNameIndex],
+			)
+		}
+		ts, ok := entry[latencyEventInfoTimeIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST timestamp at index %d: %T",
+				i,
+				entry[latencyEventInfoTimeIndex],
+			)
+		}
+		latest, ok := entry[latencyEventInfoLatestDurationIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST latest_ms at index %d: %T",
+				i,
+				entry[latencyEventInfoLatestDurationIndex],
+			)
+		}
+		max, ok := entry[latencyEventInfoMaxDurationIndex].(int64)
+		if !ok {
+			return nil, fmt.Errorf(
+				"unexpected type for LATENCY LATEST max_ms at index %d: %T",
+				i,
+				entry[latencyEventInfoMaxDurationIndex],
+			)
+		}
+
+		info := models.LatencyEventInfo{
+			EventName:      name,
+			LatestTime:     time.Unix(ts, 0),
+			LatestDuration: time.Duration(latest) * time.Millisecond,
+			MaxDuration:    time.Duration(max) * time.Millisecond,
+			Sum:            models.CreateNilResultOf[time.Duration](),
+			Count:          models.CreateNilResultOf[int64](),
+		}
+
+		// Valkey 8.1+ includes sum and count as the 5th and 6th elements.
+		if len(entry) > latencyEventInfoCountIndex {
+			sumMs, ok := entry[latencyEventInfoSumIndex].(int64)
+			if !ok {
+				return nil, fmt.Errorf(
+					"unexpected type for LATENCY LATEST sum_ms at index %d: %T",
+					i,
+					entry[latencyEventInfoSumIndex],
+				)
+			}
+			count, ok := entry[latencyEventInfoCountIndex].(int64)
+			if !ok {
+				return nil, fmt.Errorf(
+					"unexpected type for LATENCY LATEST count at index %d: %T",
+					i,
+					entry[latencyEventInfoCountIndex],
+				)
+			}
+			info.Sum = models.CreateResultOf(time.Duration(sumMs) * time.Millisecond)
+			info.Count = models.CreateResultOf(count)
+		}
+
+		result = append(result, info)
+	}
+	return result, nil
+}

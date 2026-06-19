@@ -1434,3 +1434,53 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.Error(suite.T(), err)
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
+
+func (suite *GlideTestSuite) TestFailover() {
+	// Spin up a dedicated standalone server with 1 replica so the failover
+	// doesn't destabilize the shared test server.
+	output, err := startDedicatedValkeyServerWithReplicas(suite, false, 1)
+	suite.Require().NoError(err)
+	clusterFolder := extractClusterFolder(suite, output)
+	addresses := extractAddresses(suite, output)
+	defer stopDedicatedValkeyServer(suite, clusterFolder)
+
+	cfg := defaultClientConfig()
+	cfg.WithAddress(&addresses[0])
+	client, err := glide.NewClient(cfg)
+	suite.Require().NoError(err)
+	defer client.Close()
+
+	ctx := context.Background()
+
+	// Verify initial role is master
+	suite.Require().Eventually(func() bool {
+		info, err := client.InfoWithOptions(ctx, options.InfoOptions{Sections: []constants.Section{constants.Replication}})
+		return err == nil && strings.Contains(info, "role:master")
+	}, 10*time.Second, 100*time.Millisecond, "Timed out waiting for initial master role")
+
+	// Execute failover — returns OK immediately
+	result, err := client.Failover(ctx)
+	suite.Require().NoError(err)
+	suite.Equal("OK", result)
+
+	// Wait for role to change to slave (failover completed)
+	suite.Require().Eventually(func() bool {
+		info, err := client.InfoWithOptions(ctx, options.InfoOptions{Sections: []constants.Section{constants.Replication}})
+		return err == nil && strings.Contains(info, "role:slave")
+	}, 30*time.Second, 500*time.Millisecond, "Timed out waiting for role change to slave")
+}
+
+func (suite *GlideTestSuite) TestFailoverWithOptions_Abort() {
+	client := suite.defaultClient()
+	// FAILOVER ABORT when no failover is in progress should error
+	_, err := client.FailoverWithOptions(context.Background(), options.NewFailoverOptionsWithAbort())
+	suite.Error(err)
+}
+
+func (suite *GlideTestSuite) TestReplicaOfNoOne() {
+	client := suite.defaultClient()
+	// REPLICAOF NO ONE on a primary should succeed (it's already a primary)
+	result, err := client.ReplicaOfNoOne(context.Background())
+	suite.Require().NoError(err)
+	suite.Equal("OK", result)
+}

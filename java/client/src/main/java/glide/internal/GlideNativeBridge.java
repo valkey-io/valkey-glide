@@ -102,4 +102,11 @@ public class GlideNativeBridge {
 
     /** Get cache metrics */
     public static native void getCacheMetrics(long clientPtr, long callbackId, int metricsType);
+
+    /** Create a MONITOR client; returns a native monitor ID, or 0 on failure. */
+    public static native long createMonitorClient(
+            byte[] connectionRequestBytes, MonitorCallback callback);
+
+    /** Close a MONITOR client by the ID returned from {@link #createMonitorClient}. */
+    public static native void closeMonitorClient(long monitorId);
 }

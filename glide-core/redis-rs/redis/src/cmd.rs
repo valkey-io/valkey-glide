@@ -6,6 +6,7 @@ use futures_util::{
 };
 #[cfg(feature = "aio")]
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::{borrow::Borrow, fmt, io};
 
 use crate::pipeline::Pipeline;
@@ -22,8 +23,12 @@ pub enum Arg<D> {
     Cursor,
 }
 
+/// Atomic phase value: command is queued but not yet sent.
+pub const PHASE_QUEUED: u8 = 0;
+/// Atomic phase value: command has been sent to a node.
+pub const PHASE_SENT: u8 = 1;
+
 /// Represents redis commands.
-#[derive(Clone)]
 pub struct Cmd {
     data: Vec<u8>,
     // Arg::Simple contains the offset that marks the end of the argument
@@ -44,6 +49,33 @@ pub struct Cmd {
     /// timeout from internal pipeline cleanup.
     #[cfg(feature = "cluster-async")]
     inflight_tracker: Option<crate::cluster_async::InflightRequestTracker>,
+    /// Inline watchdog phase: 0 = Queued, 1 = Sent. Updated atomically by the
+    /// routing layer after connection resolution.
+    pub watchdog_phase: AtomicU8,
+    /// Number of retries attempted. Incremented by the routing layer.
+    pub watchdog_retry_count: AtomicU8,
+}
+
+// Manual Clone implementation: AtomicU8 and OnceLock don't implement Clone,
+// and watchdog state should reset to defaults on clone (each clone represents
+// a new command attempt).
+impl Clone for Cmd {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            args: self.args.clone(),
+            cursor: self.cursor,
+            no_response: self.no_response,
+            span: self.span.clone(),
+            is_fenced: self.is_fenced,
+            response_timeout: self.response_timeout,
+            #[cfg(feature = "cluster-async")]
+            inflight_tracker: self.inflight_tracker.clone(),
+            // Reset watchdog fields — each clone is a fresh command attempt
+            watchdog_phase: AtomicU8::new(PHASE_QUEUED),
+            watchdog_retry_count: AtomicU8::new(0),
+        }
+    }
 }
 
 /// The PING command used to fence other commands for ordering guarantees
@@ -97,6 +129,7 @@ struct AsyncIterInner<'a, T: FromRedisValue + 'a> {
 
 /// Represents the state of AsyncIter
 #[cfg(feature = "aio")]
+#[allow(clippy::large_enum_variant)]
 enum IterOrFuture<'a, T: FromRedisValue + 'a> {
     Iter(AsyncIterInner<'a, T>),
     Future(BoxFuture<'a, (AsyncIterInner<'a, T>, Option<T>)>),
@@ -367,6 +400,8 @@ impl Cmd {
             response_timeout: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
+            watchdog_phase: AtomicU8::new(PHASE_QUEUED),
+            watchdog_retry_count: AtomicU8::new(0),
         }
     }
 
@@ -382,6 +417,8 @@ impl Cmd {
             response_timeout: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
+            watchdog_phase: AtomicU8::new(PHASE_QUEUED),
+            watchdog_retry_count: AtomicU8::new(0),
         }
     }
 
@@ -617,9 +654,9 @@ impl Cmd {
         })
     }
 
-    // Get a reference to the argument at `idx`
+    /// Get a reference to the argument at `idx`.
     #[cfg(feature = "cluster")]
-    pub(crate) fn arg_idx(&self, idx: usize) -> Option<&[u8]> {
+    pub fn arg_idx(&self, idx: usize) -> Option<&[u8]> {
         if idx >= self.args.len() {
             return None;
         }
@@ -693,6 +730,15 @@ impl Cmd {
     #[inline]
     pub fn set_inflight_tracker(&mut self, tracker: crate::cluster_async::InflightRequestTracker) {
         self.inflight_tracker = Some(tracker);
+    }
+
+    /// Mark the command as sent and record the resolved node address.
+    /// Called from the routing layer after connection resolution.
+    /// Zero heap allocation for addresses ≤63 bytes (inline storage).
+    /// Record a retry attempt on this command.
+    #[inline]
+    pub fn mark_retry(&self) {
+        self.watchdog_retry_count.fetch_add(1, Ordering::Relaxed);
     }
 }
 

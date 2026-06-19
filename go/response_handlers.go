@@ -1760,8 +1760,96 @@ func handleArrayOfMapsResponse(response *C.struct_CommandResponse) ([]map[string
 	return maps, nil
 }
 
-// handleStringToArrayOfMapsMapResponse handles responses that return a map of node addresses to arrays of maps.
-// Used for cluster commands with multi-node routing.
+// handleLatencyHistoryResponse parses a `LATENCY HISTORY` response from a single node.
+func handleLatencyHistoryResponse(response *C.struct_CommandResponse) ([]models.LatencyEntry, error) {
+	defer C.free_command_response(response)
+
+	if err := checkResponseType(response, C.Array, false); err != nil {
+		return nil, err
+	}
+	data, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	res, err := internal.ConvertLatencyHistoryEntries(data)
+	if err != nil {
+		return nil, err
+	}
+	return res.([]models.LatencyEntry), nil
+}
+
+// handleLatencyLatestResponse parses a `LATENCY LATEST` response from a single node.
+func handleLatencyLatestResponse(response *C.struct_CommandResponse) ([]models.LatencyEventInfo, error) {
+	defer C.free_command_response(response)
+
+	if err := checkResponseType(response, C.Array, false); err != nil {
+		return nil, err
+	}
+	data, err := parseArray(response)
+	if err != nil {
+		return nil, err
+	}
+	res, err := internal.ConvertLatencyLatestEntries(data)
+	if err != nil {
+		return nil, err
+	}
+	return res.([]models.LatencyEventInfo), nil
+}
+
+// handleLatencyHistoryClusterResponse parses a `LATENCY HISTORY` response from multiple nodes.
+func handleLatencyHistoryClusterResponse(response *C.struct_CommandResponse) (map[string][]models.LatencyEntry, error) {
+	defer C.free_command_response(response)
+
+	if err := checkResponseType(response, C.Map, false); err != nil {
+		return nil, err
+	}
+	raw, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected map type for cluster LATENCY HISTORY: %T", raw)
+	}
+	result := make(map[string][]models.LatencyEntry, len(rawMap))
+	for node, value := range rawMap {
+		res, err := internal.ConvertLatencyHistoryEntries(value)
+		if err != nil {
+			return nil, fmt.Errorf("node %q: %w", node, err)
+		}
+		result[node] = res.([]models.LatencyEntry)
+	}
+	return result, nil
+}
+
+// handleLatencyLatestClusterResponse parses a `LATENCY LATEST` response from multiple nodes.
+func handleLatencyLatestClusterResponse(response *C.struct_CommandResponse) (map[string][]models.LatencyEventInfo, error) {
+	defer C.free_command_response(response)
+
+	if err := checkResponseType(response, C.Map, false); err != nil {
+		return nil, err
+	}
+	raw, err := parseMap(response)
+	if err != nil {
+		return nil, err
+	}
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected map type for cluster LATENCY LATEST: %T", raw)
+	}
+	result := make(map[string][]models.LatencyEventInfo, len(rawMap))
+	for node, value := range rawMap {
+		res, err := internal.ConvertLatencyLatestEntries(value)
+		if err != nil {
+			return nil, fmt.Errorf("node %q: %w", node, err)
+		}
+		result[node] = res.([]models.LatencyEventInfo)
+	}
+	return result, nil
+}
+
+// handleStringToArrayOfMapsMapResponse handles responses that return a map of node
+// addresses to arrays of maps. Used for cluster commands with multi-node routing.
 func handleStringToArrayOfMapsMapResponse(
 	response *C.struct_CommandResponse,
 ) (map[string][]map[string]any, error) {

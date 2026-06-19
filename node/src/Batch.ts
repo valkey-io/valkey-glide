@@ -172,6 +172,9 @@ import {
     createLSet,
     createLTrim,
     createLastSave,
+    createLatencyHistory,
+    createLatencyLatest,
+    createLatencyReset,
     createLolwut,
     createMGet,
     createMigrate,
@@ -468,6 +471,8 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
+     *
+     * Command Response - "OK" on success, or "NOKEY" if the key was not found.
      */
     public migrate(
         host: string,
@@ -4149,6 +4154,44 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see {@link https://valkey.io/commands/latency-history/|valkey.io} for details.
+     *
+     * @param event - The name of the latency event (e.g., `"command"`).
+     *
+     * Command Response - An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't exist.
+     */
+    public latencyHistory(event: GlideString): T {
+        return this.addAndReturn(createLatencyHistory(event));
+    }
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
+     *
+     * Command Response - An array of {@link LatencyEventInfo} for the latest latency events.
+     */
+    public latencyLatest(): T {
+        return this.addAndReturn(createLatencyLatest());
+    }
+
+    /**
+     * Resets the latency spike time series for all or specified events.
+     * If no events are provided, resets the latency spike time series for all events.
+     *
+     * @see {@link https://valkey.io/commands/latency-reset/|valkey.io} for details.
+     *
+     * @param events - The event names to reset. If not provided, resets all events.
+     *
+     * Command Response - The number of event time series that were reset.
+     */
+    public latencyReset(events?: GlideString[]): T {
+        return this.addAndReturn(createLatencyReset(events));
+    }
+
+    /**
      * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for details.
@@ -4490,6 +4533,34 @@ export class Batch extends BaseBatch<Batch> {
      */
     public select(index: number): Batch {
         return this.addAndReturn(createSelect(index));
+    }
+
+    /**
+     * Atomically transfers one or more keys from a source Valkey instance to a destination Valkey instance.
+     * Extends {@link BaseBatch.migrate} with multi-key support using the KEYS subcommand.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate, or an array of keys to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     *
+     * Command Response - "OK" on success, or "NOKEY" if no keys were found.
+     */
+    public migrate(
+        host: string,
+        port: number,
+        key: GlideString | GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Batch {
+        return this.addAndReturn(
+            createMigrate(host, port, key, destinationDB, timeout, options),
+        );
     }
 
     /** Publish a message on pubsub channel.

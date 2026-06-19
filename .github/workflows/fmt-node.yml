@@ -13,6 +13,11 @@ on:
     schedule:
         - cron: "30 3 * * *"
     workflow_dispatch:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
 
 concurrency:
     group: fmt-node-${{ github.ref }}
@@ -24,5 +29,6 @@ jobs:
         uses: ./.github/workflows/node.yml
         with:
             run-with-macos: use-self-hosted
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
         name: FMT - Node
         secrets: inherit

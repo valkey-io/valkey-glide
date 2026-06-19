@@ -5,6 +5,7 @@ import static command_request.CommandRequestOuterClass.RequestType.Asking;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterBumpEpoch;
 import static command_request.CommandRequestOuterClass.RequestType.ClusterCountFailureReports;
@@ -39,6 +40,9 @@ import static command_request.CommandRequestOuterClass.RequestType.FunctionResto
 import static command_request.CommandRequestOuterClass.RequestType.FunctionStats;
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
@@ -91,6 +95,8 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.ScriptOptions;
@@ -114,6 +120,7 @@ import glide.managers.GlideExceptionCheckedFunction;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -134,6 +141,15 @@ public class GlideClusterClientTest {
     CommandManager commandManager;
 
     private final String[] TEST_ARGS = new String[0];
+
+    private static final Map<String, Object> TRACKING_INFO;
+
+    static {
+        TRACKING_INFO = new HashMap<>();
+        TRACKING_INFO.put("flags", new HashSet<>(Collections.singletonList("off")));
+        TRACKING_INFO.put("redirect", -1L);
+        TRACKING_INFO.put("prefixes", new Object[0]);
+    }
 
     @BeforeEach
     public void setUp() {
@@ -824,6 +840,48 @@ public class GlideClusterClientTest {
         Map<String, String> data = createMap("n1", "TEST");
         try (TestClient client = new TestClient(commandManager, data)) {
             ClusterValue<String> value = client.clientGetName(ALL_NODES).get();
+            assertEquals(data, value.getMultiValue());
+        }
+    }
+
+    @SneakyThrows
+    @Test
+    public void clientTrackingInfo_returns_success() {
+        // setup
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(TRACKING_INFO);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(ClientTrackingInfo), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.clientTrackingInfo();
+
+        // verify
+        assertEquals(testResponse, response);
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientTrackingInfo_with_single_node_route_returns_success() {
+        TestCommandManager commandManager = new TestCommandManager(null);
+
+        try (TestClient client = new TestClient(commandManager, TRACKING_INFO)) {
+            ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(RANDOM).get();
+            assertEquals(TRACKING_INFO, value.getSingleValue());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void clientTrackingInfo_with_multi_node_route_returns_success() {
+        TestCommandManager commandManager = new TestCommandManager(null);
+
+        Map<String, Map<String, Object>> data = createMap("n1", TRACKING_INFO);
+        try (TestClient client = new TestClient(commandManager, data)) {
+            ClusterValue<Map<String, Object>> value = client.clientTrackingInfo(ALL_NODES).get();
             assertEquals(data, value.getMultiValue());
         }
     }
@@ -2762,6 +2820,204 @@ public class GlideClusterClientTest {
         CompletableFuture<ClusterValue<Map<GlideString, Map<GlideString, Object>>>> response =
                 service.functionStatsBinary(RANDOM);
         ClusterValue<Map<GlideString, Map<GlideString, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyHistory_returns_success() {
+        // setup
+        String event = "command";
+        String[] args = new String[] {event};
+        LatencyEntry[] entries =
+                new LatencyEntry[] {new LatencyEntry(1709062230L, 50L), new LatencyEntry(1709062231L, 42L)};
+        ClusterValue<LatencyEntry[]> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", entries));
+        CompletableFuture<ClusterValue<LatencyEntry[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<LatencyEntry[]>>submitNewCommand(
+                        eq(LatencyHistory), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<LatencyEntry[]>> response = service.latencyHistory(event);
+        ClusterValue<LatencyEntry[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyHistory_with_route_returns_success() {
+        // setup
+        String event = "command";
+        String[] args = new String[] {event};
+        LatencyEntry[] entries = new LatencyEntry[] {new LatencyEntry(1709062230L, 50L)};
+        ClusterValue<LatencyEntry[]> value = ClusterValue.ofSingleValue(entries);
+        CompletableFuture<ClusterValue<LatencyEntry[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<LatencyEntry[]>>submitNewCommand(
+                        eq(LatencyHistory), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<LatencyEntry[]>> response =
+                service.latencyHistory(event, RANDOM);
+        ClusterValue<LatencyEntry[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyLatest_returns_success() {
+        // setup
+        String[] args = new String[0];
+        LatencyEventInfo[] infos =
+                new LatencyEventInfo[] {
+                    new LatencyEventInfo(
+                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
+                };
+        ClusterValue<LatencyEventInfo[]> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", infos));
+        CompletableFuture<ClusterValue<LatencyEventInfo[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<LatencyEventInfo[]>>submitNewCommand(
+                        eq(LatencyLatest), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<LatencyEventInfo[]>> response = service.latencyLatest();
+        ClusterValue<LatencyEventInfo[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyLatest_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        LatencyEventInfo[] infos =
+                new LatencyEventInfo[] {
+                    new LatencyEventInfo(
+                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
+                };
+        ClusterValue<LatencyEventInfo[]> value = ClusterValue.ofSingleValue(infos);
+        CompletableFuture<ClusterValue<LatencyEventInfo[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<LatencyEventInfo[]>>submitNewCommand(
+                        eq(LatencyLatest), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<LatencyEventInfo[]>> response = service.latencyLatest(RANDOM);
+        ClusterValue<LatencyEventInfo[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_returns_success() {
+        // setup
+        String[] args = new String[0];
+        Long value = 4L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset();
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_with_events_returns_success() {
+        // setup
+        String[] events = new String[] {"command"};
+        Long value = 2L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(events), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset(events);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        Long value = 4L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset(RANDOM);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_with_events_and_route_returns_success() {
+        // setup
+        String[] events = new String[] {"command"};
+        Long value = 2L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(events), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset(events, RANDOM);
+        Long payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

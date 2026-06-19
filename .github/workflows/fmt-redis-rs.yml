@@ -13,6 +13,11 @@ on:
     schedule:
         - cron: "30 5 * * *"
     workflow_dispatch:
+        inputs:
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
+                default: false
 
 concurrency:
     group: fmt-redis-rs-${{ github.ref }}
@@ -22,5 +27,7 @@ jobs:
     run-fmt-redis-rs:
         if: github.repository_owner == 'valkey-io'
         uses: ./.github/workflows/redis-rs.yml
+        with:
+            use-self-hosted-linux: ${{ inputs.use-self-hosted-linux || false }}
         name: FMT - Redis-RS
         secrets: inherit

@@ -1077,6 +1077,7 @@ dependencies = [
  "futures",
  "futures-intrusive",
  "http 1.4.0",
+ "libc",
  "logger_core",
  "lz4",
  "nanoid",
@@ -1108,6 +1109,7 @@ version = "0.1.0"
 dependencies = [
  "glide-core",
  "lazy_static",
+ "libc",
  "logger_core",
  "protobuf",
  "redis",
