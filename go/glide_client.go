@@ -1290,7 +1290,6 @@ func (client *Client) Unwatch(ctx context.Context) (string, error) {
 	return handleOkResponse(result)
 }
 
-
 // Failover starts a coordinated failover from the connected primary to one of its replicas.
 //
 // See [valkey.io] for details.
