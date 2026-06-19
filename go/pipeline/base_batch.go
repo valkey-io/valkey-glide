@@ -5130,19 +5130,14 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 func (b *BaseBatch[T]) Migrate(
 	host string,
 	port int64,
-	key string,
+	keys []string,
 	destinationDB int64,
 	timeout int64,
 ) *T {
-	return b.addCmdAndTypeChecker(
-		C.Migrate,
-		[]string{host, utils.IntToString(port), key, utils.IntToString(destinationDB), utils.IntToString(timeout)},
-		reflect.String,
-		false,
-	)
+	return b.MigrateWithOptions(host, port, keys, destinationDB, timeout, options.MigrateOptions{})
 }
 
-// MigrateWithOptions atomically transfers a key from a source Valkey instance to a destination Valkey instance
+// MigrateWithOptions atomically transfers keys from a source Valkey instance to a destination Valkey instance
 // with additional options.
 //
 // See [valkey.io] for details.
@@ -5151,22 +5146,29 @@ func (b *BaseBatch[T]) Migrate(
 func (b *BaseBatch[T]) MigrateWithOptions(
 	host string,
 	port int64,
-	key string,
+	keys []string,
 	destinationDB int64,
 	timeout int64,
 	migrateOptions options.MigrateOptions,
 ) *T {
+	if len(keys) == 0 {
+		return b.addError("MigrateWithOptions", errors.New("keys must not be empty"))
+	}
 	optionArgs, err := migrateOptions.ToArgs()
 	if err != nil {
 		return b.addError("MigrateWithOptions", err)
 	}
-	args := []string{host, utils.IntToString(port), key, utils.IntToString(destinationDB), utils.IntToString(timeout)}
-	return b.addCmdAndTypeChecker(
-		C.Migrate,
-		append(args, optionArgs...),
-		reflect.String,
-		false,
-	)
+	var args []string
+	if len(keys) == 1 {
+		args = []string{host, utils.IntToString(port), keys[0], utils.IntToString(destinationDB), utils.IntToString(timeout)}
+		args = append(args, optionArgs...)
+	} else {
+		args = []string{host, utils.IntToString(port), "", utils.IntToString(destinationDB), utils.IntToString(timeout)}
+		args = append(args, optionArgs...)
+		args = append(args, constants.KeysKeyword)
+		args = append(args, keys...)
+	}
+	return b.addCmdAndTypeChecker(C.Migrate, args, reflect.String, false)
 }
 
 // Returns stream entries matching a given range of IDs.

@@ -1435,7 +1435,7 @@ func (suite *GlideTestSuite) TestScriptKill() {
 	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "notbusy"))
 }
 
-func (suite *GlideTestSuite) TestMigrateKeys() {
+func (suite *GlideTestSuite) TestMigrateMultiKey() {
 	client := suite.defaultClient()
 	ctx := context.Background()
 	key1 := "{migrate}" + uuid.New().String()
@@ -1444,18 +1444,18 @@ func (suite *GlideTestSuite) TestMigrateKeys() {
 	nonExistentKey2 := "{migrate}" + uuid.New().String()
 
 	// Non-existent keys return "NOKEY" (not an error)
-	result, err := client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{nonExistentKey1, nonExistentKey2}, 0, 1000)
+	result, err := client.Migrate(ctx, "nonexistent.host", 6379, []string{nonExistentKey1, nonExistentKey2}, 0, 1000)
 	suite.NoError(err)
 	suite.Equal("NOKEY", result)
 
 	// Existing keys migrated to unreachable host returns an error
 	client.Set(ctx, key1, "value1")
 	client.Set(ctx, key2, "value2")
-	_, err = client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
+	_, err = client.Migrate(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
 	suite.Error(err)
 
 	// Empty keys returns error
-	_, err = client.MigrateKeys(ctx, "nonexistent.host", 6379, []string{}, 0, 1000)
+	_, err = client.Migrate(ctx, "nonexistent.host", 6379, []string{}, 0, 1000)
 	suite.Error(err)
 	suite.Contains(err.Error(), "keys must not be empty")
 
@@ -1473,7 +1473,7 @@ func (suite *GlideTestSuite) TestMigrateKeys() {
 	client.Set(ctx, srcKey1, "val1")
 	client.Set(ctx, srcKey2, "val2")
 
-	result, err = client.MigrateKeys(ctx, destHost, destPort, []string{srcKey1, srcKey2}, 0, 5000)
+	result, err = client.Migrate(ctx, destHost, destPort, []string{srcKey1, srcKey2}, 0, 5000)
 	suite.NoError(err)
 	suite.Equal("OK", result)
 
@@ -1491,7 +1491,7 @@ func (suite *GlideTestSuite) TestMigrateKeys() {
 	suite.Equal(int64(2), exists)
 }
 
-func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
+func (suite *GlideTestSuite) TestMigrateMultiKeyWithOptions() {
 	client := suite.defaultClient()
 	ctx := context.Background()
 	key1 := "{migrate}" + uuid.New().String()
@@ -1501,7 +1501,7 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 	migrateOpts := options.NewMigrateOptions().SetCopy().SetReplace()
 
 	// Non-existent keys return "NOKEY" (not an error)
-	result, err := client.MigrateKeysWithOptions(
+	result, err := client.MigrateWithOptions(
 		ctx, "nonexistent.host", 6379, []string{nonExistentKey1, nonExistentKey2}, 0, 1000, *migrateOpts,
 	)
 	suite.NoError(err)
@@ -1510,11 +1510,11 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 	// Existing keys migrated to unreachable host returns an error
 	client.Set(ctx, key1, "value1")
 	client.Set(ctx, key2, "value2")
-	_, err = client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts)
+	_, err = client.MigrateWithOptions(ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts)
 	suite.Error(err)
 
 	// Empty keys returns error
-	_, err = client.MigrateKeysWithOptions(ctx, "nonexistent.host", 6379, []string{}, 0, 1000, *migrateOpts)
+	_, err = client.MigrateWithOptions(ctx, "nonexistent.host", 6379, []string{}, 0, 1000, *migrateOpts)
 	suite.Error(err)
 	suite.Contains(err.Error(), "keys must not be empty")
 
@@ -1533,7 +1533,7 @@ func (suite *GlideTestSuite) TestMigrateKeysWithOptions() {
 	client.Set(ctx, srcKey2, "val2")
 
 	copyOpts := options.NewMigrateOptions().SetCopy()
-	result, err = client.MigrateKeysWithOptions(ctx, destHost, destPort, []string{srcKey1, srcKey2}, 0, 5000, *copyOpts)
+	result, err = client.MigrateWithOptions(ctx, destHost, destPort, []string{srcKey1, srcKey2}, 0, 5000, *copyOpts)
 	suite.NoError(err)
 	suite.Equal("OK", result)
 
