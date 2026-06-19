@@ -53,7 +53,7 @@ func (suite *GlideTestSuite) TestMemoryStats_Standalone() {
 	result, err := client.MemoryStats(context.Background())
 	assert.NoError(t, err)
 
-	suite.assertMemoryStatsFields(result)
+	suite.assertMemoryStatsFields(result, false)
 }
 
 func (suite *GlideTestSuite) TestMemoryDoctor_Cluster() {
@@ -120,7 +120,7 @@ func (suite *GlideTestSuite) TestMemoryStats_Cluster() {
 
 	for addr, stats := range multiValue {
 		assert.NotEmpty(t, addr)
-		suite.assertMemoryStatsFields(stats)
+		suite.assertMemoryStatsFields(stats, true)
 	}
 }
 
@@ -182,7 +182,7 @@ func (suite *GlideTestSuite) TestMemoryStatsWithOptions_ClusterAllNodes() {
 
 	for addr, stats := range multiValue {
 		assert.NotEmpty(t, addr)
-		suite.assertMemoryStatsFields(stats)
+		suite.assertMemoryStatsFields(stats, true)
 	}
 }
 
@@ -232,7 +232,7 @@ func (suite *GlideTestSuite) TestMemoryStatsWithOptions_ClusterSingleNode() {
 	assert.True(t, result.IsSingleValue(), "RandomRoute should return single value")
 
 	stats := result.SingleValue()
-	suite.assertMemoryStatsFields(stats)
+	suite.assertMemoryStatsFields(stats, true)
 }
 
 func (suite *GlideTestSuite) TestMemoryCommands_BatchTransaction_Cluster() {
@@ -271,7 +271,7 @@ func (suite *GlideTestSuite) TestMemoryCommands_BatchTransaction_Cluster() {
 	// Result 3: MemoryStats — models.MemoryStats
 	stats, ok := results[3].(models.MemoryStats)
 	assert.True(t, ok)
-	suite.assertMemoryStatsFields(stats)
+	suite.assertMemoryStatsFields(stats, true)
 }
 
 func (suite *GlideTestSuite) TestMemoryCommands_BatchPipeline_Standalone() {
@@ -343,11 +343,11 @@ func (suite *GlideTestSuite) TestMemoryCommands_StandaloneSequentialExecution() 
 
 	result4, err4 := client.MemoryStats(context.Background())
 	assert.NoError(t, err4)
-	suite.assertMemoryStatsFields(result4)
+	suite.assertMemoryStatsFields(result4, false)
 }
 
 // assertMemoryStatsFields validates all expected fields in a MemoryStats result.
-func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) {
+func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats, isCluster bool) {
 	t := suite.T()
 
 	assert.Greater(t, result.PeakAllocated, int64(0))
@@ -393,6 +393,11 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	for _, dbStats := range result.Db {
 		assert.GreaterOrEqual(t, dbStats.OverheadHashtableMain, int64(0))
 		assert.GreaterOrEqual(t, dbStats.OverheadHashtableExpires, int64(0))
-		assert.True(t, dbStats.OverheadHashtableSlotToKeyspaceMap.IsNil())
+		if isCluster {
+			assert.NotNil(t, dbStats.OverheadHashtableSlotToKeyspaceMap)
+			assert.GreaterOrEqual(t, dbStats.OverheadHashtableSlotToKeyspaceMap.Value(), int64(0))
+		} else {
+			assert.Nil(t, dbStats.OverheadHashtableSlotToKeyspaceMap)
+		}
 	}
 }
