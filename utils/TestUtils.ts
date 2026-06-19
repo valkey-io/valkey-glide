@@ -35,18 +35,24 @@ async function waitForReplicasReady(
     async function getInfo(host: string, port: number): Promise<string> {
         return new Promise<string>((resolve, reject) => {
             const sock = createConnection({ host, port }, () => {
-                sock.write("*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n");
+                sock.write("INFO replication\r\n");
             });
             let buf = "";
+            const timer = setTimeout(() => {
+                sock.destroy();
+                resolve(buf); // return whatever we got
+            }, 1000);
             sock.on("data", (d: Buffer) => {
                 buf += d.toString();
-                if (buf.includes("\r\n\r\n")) {
+                // Resolve as soon as we have enough to determine sync state
+                if (buf.includes("master_link_status") || buf.includes("role:master")) {
+                    clearTimeout(timer);
                     sock.destroy();
                     resolve(buf);
                 }
             });
-            sock.on("error", reject);
-            setTimeout(() => { sock.destroy(); reject(new Error("timeout")); }, 1000);
+            sock.on("error", (e) => { clearTimeout(timer); reject(e); });
+            sock.on("close", () => { clearTimeout(timer); resolve(buf); });
         });
     }
 
