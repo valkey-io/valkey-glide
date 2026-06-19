@@ -1763,3 +1763,30 @@ class TestBatch:
         result = await exec_batch(glide_client, batch, raise_on_error=True)
         assert result is not None
         assert result[0] == b"RESET"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("is_atomic", [True, False])
+    async def test_memory_batch(self, glide_client: TGlideClient, is_atomic: bool):
+        from glide_shared.commands.memory import MemoryStats
+
+        key = get_random_string(10)
+        await glide_client.set(key, "value")
+
+        batch = (
+            Batch(is_atomic=is_atomic)
+            if isinstance(glide_client, GlideClient)
+            else ClusterBatch(is_atomic=is_atomic)
+        )
+        batch.memory_doctor()
+        batch.memory_malloc_stats()
+        batch.memory_purge()
+        batch.memory_stats()
+
+        result = await exec_batch(glide_client, batch)
+        assert result is not None
+        assert len(result) == 4
+        assert isinstance(result[0], str) and len(result[0]) > 0
+        assert isinstance(result[1], str) and len(result[1]) > 0
+        assert result[2] == OK
+        assert isinstance(result[3], MemoryStats)
