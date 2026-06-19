@@ -284,6 +284,26 @@ func ConvertToInt64(value any) (int64, error) {
 	}
 }
 
+// ConvertToFloat64 converts any numeric value to float64.
+func ConvertToFloat64(value any) (float64, error) {
+	switch v := value.(type) {
+	case float64:
+		return v, nil
+	case int64:
+		return float64(v), nil
+	case int:
+		return float64(v), nil
+	case string:
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return 0, fmt.Errorf("cannot convert string %q to float64: %w", v, err)
+		}
+		return parsed, nil
+	default:
+		return 0, fmt.Errorf("cannot convert %T to float64", value)
+	}
+}
+
 // Parse entry - it's an array where first element is ID and second is array of field-value pairs
 func CreateStreamEntry(infoMap map[string]any, entryKey string) models.StreamEntry {
 	entry := models.StreamEntry{}

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -867,4 +868,117 @@ func ConvertLatencyLatestEntries(data any) (any, error) {
 		result = append(result, info)
 	}
 	return result, nil
+}
+
+const memoryStatsDbPrefix = "db."
+
+// ConvertMemoryStats converts a raw map[string]any response from glide-core into a typed models.MemoryStats.
+func ConvertMemoryStats(data any) (any, error) {
+	rawMap, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for MEMORY STATS response: %T, expected map[string]any", data)
+	}
+
+	stats := models.MemoryStats{
+		Db:                           make(map[int64]models.MemoryStatsDb),
+		OverheadDbHashtableLut:       models.CreateNilInt64Result(),
+		OverheadDbHashtableRehashing: models.CreateNilInt64Result(),
+		DbDictRehashingCount:         models.CreateNilInt64Result(),
+	}
+
+	ReadValue(rawMap, "peak.allocated", &stats.PeakAllocated)
+	ReadValue(rawMap, "total.allocated", &stats.TotalAllocated)
+	ReadValue(rawMap, "startup.allocated", &stats.StartupAllocated)
+	ReadValue(rawMap, "replication.backlog", &stats.ReplicationBacklog)
+	ReadValue(rawMap, "clients.slaves", &stats.ClientsSlaves)
+	ReadValue(rawMap, "clients.normal", &stats.ClientsNormal)
+	ReadValue(rawMap, "cluster.links", &stats.ClusterLinks)
+	ReadValue(rawMap, "aof.buffer", &stats.AofBuffer)
+	ReadValue(rawMap, "lua.caches", &stats.LuaCaches)
+	ReadValue(rawMap, "functions.caches", &stats.FunctionsCaches)
+	ReadValue(rawMap, "overhead.total", &stats.OverheadTotal)
+	ReadValue(rawMap, "keys.count", &stats.KeysCount)
+	ReadValue(rawMap, "keys.bytes-per-key", &stats.KeysBytesPerKey)
+	ReadValue(rawMap, "dataset.bytes", &stats.DatasetBytes)
+	ReadValue(rawMap, "allocator.allocated", &stats.AllocatorAllocated)
+	ReadValue(rawMap, "allocator.active", &stats.AllocatorActive)
+	ReadValue(rawMap, "allocator.resident", &stats.AllocatorResident)
+	ReadValue(rawMap, "allocator.muzzy", &stats.AllocatorMuzzy)
+	ReadValue(rawMap, "allocator-fragmentation.bytes", &stats.AllocatorFragmentationBytes)
+	ReadValue(rawMap, "allocator-rss.bytes", &stats.AllocatorRssBytes)
+	ReadValue(rawMap, "rss-overhead.bytes", &stats.RssOverheadBytes)
+	ReadValue(rawMap, "fragmentation.bytes", &stats.FragmentationBytes)
+
+	ReadValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
+	ReadValue(rawMap, "peak.percentage", &stats.PeakPercentage)
+	ReadValue(rawMap, "allocator-fragmentation.ratio", &stats.AllocatorFragmentationRatio)
+	ReadValue(rawMap, "allocator-rss.ratio", &stats.AllocatorRssRatio)
+	ReadValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
+	ReadValue(rawMap, "fragmentation", &stats.Fragmentation)
+
+	// Optional Valkey 8.0+ fields
+	ReadResult(rawMap, "overhead.db.hashtable.lut", &stats.OverheadDbHashtableLut)
+	ReadResult(rawMap, "overhead.db.hashtable.rehashing", &stats.OverheadDbHashtableRehashing)
+	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
+
+	// Parse db.<N> entries
+	for key, value := range rawMap {
+		if strings.HasPrefix(key, memoryStatsDbPrefix) && key != "db.dict.rehashing.count" {
+			suffix := key[len(memoryStatsDbPrefix):]
+			dbIndex, err := strconv.ParseInt(suffix, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("unexpected db key format: %s", key)
+			}
+			dbEntry, err := convertMemoryStatsDb(value)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing db.%d: %w", dbIndex, err)
+			}
+			stats.Db[dbIndex] = dbEntry
+		}
+	}
+
+	return stats, nil
+}
+
+// convertMemoryStatsDb parses a nested map into a MemoryStatsDb struct.
+func convertMemoryStatsDb(data any) (models.MemoryStatsDb, error) {
+	rawMap, ok := data.(map[string]any)
+	if !ok {
+		return models.MemoryStatsDb{}, fmt.Errorf("unexpected type for db entry: %T, expected map[string]any", data)
+	}
+
+	db := models.MemoryStatsDb{
+		OverheadHashtableSlotToKeyspaceMap: models.CreateNilInt64Result(),
+	}
+
+	val, exists := rawMap["overhead.hashtable.main"]
+	if !exists || val == nil {
+		return db, fmt.Errorf("missing required field overhead.hashtable.main in db entry")
+	}
+	v, err := ConvertToInt64(val)
+	if err != nil {
+		return db, fmt.Errorf("error parsing overhead.hashtable.main: %w", err)
+	}
+	db.OverheadHashtableMain = v
+
+	val, exists = rawMap["overhead.hashtable.expires"]
+	if !exists || val == nil {
+		return db, fmt.Errorf("missing required field overhead.hashtable.expires in db entry")
+	}
+	v, err = ConvertToInt64(val)
+	if err != nil {
+		return db, fmt.Errorf("error parsing overhead.hashtable.expires: %w", err)
+	}
+	db.OverheadHashtableExpires = v
+
+	// Cluster-only field
+	if val, exists := rawMap["overhead.hashtable.slot-to-keyspace-map"]; exists && val != nil {
+		v, err := ConvertToInt64(val)
+		if err != nil {
+			return db, fmt.Errorf("error parsing overhead.hashtable.slot-to-keyspace-map: %w", err)
+		}
+		db.OverheadHashtableSlotToKeyspaceMap = models.CreateInt64Result(v)
+	}
+
+	return db, nil
 }
