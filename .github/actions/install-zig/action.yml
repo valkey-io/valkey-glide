@@ -1,9 +1,9 @@
 name: Install zig compiler and ziglang
+description: Install Zig compiler and cargo-zigbuild for cross-compilation
 
 inputs:
     target:
         description: "Specified target for rust toolchain, ex. x86_64-unknown-linux-gnu"
-        type: string
         required: false
         default: "x86_64-unknown-linux-gnu"
 

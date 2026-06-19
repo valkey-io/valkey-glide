@@ -37,7 +37,7 @@ runs:
     using: "composite"
     steps:
         - name: Install shared software dependencies
-          uses: ./.github/workflows/install-shared-dependencies
+          uses: ./.github/actions/install-shared-dependencies
           with:
               os: ${{ inputs.os }}
               target: ${{ inputs.target }}
