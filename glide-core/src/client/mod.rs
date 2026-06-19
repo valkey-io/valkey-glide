@@ -1134,6 +1134,9 @@ impl Client {
 
             // Blocking commands have artificially long latencies; exclude from tracker.
             let is_blocking_cmd = is_blocking_command(cmd);
+            // Propagate blocking flag into the Cmd so the multiplexed connection
+            // can suppress false-positive response-wait warnings (#6283).
+            cmd.set_is_blocking(is_blocking_cmd);
 
             let result = match request_timeout {
                 Some(duration) => {

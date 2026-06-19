@@ -636,8 +636,10 @@ where
         item: SinkItem,
         timeout: Duration,
         is_fenced: bool,
+        is_blocking: bool,
     ) -> RedisResult<Value> {
-        self.send_recv(item, None, timeout, true, is_fenced).await
+        self.send_recv(item, None, timeout, true, is_fenced, is_blocking)
+            .await
     }
 
     async fn send_recv(
@@ -648,6 +650,7 @@ where
         timeout: Duration,
         is_atomic: bool,
         is_fenced: bool,
+        is_blocking: bool,
     ) -> Result<Value, RedisError> {
         let (sender, receiver) = oneshot::channel();
 
@@ -732,7 +735,16 @@ where
         let recv_start = std::time::Instant::now();
         let recv_result = Runtime::locate().timeout(timeout, receiver).await;
         let recv_elapsed = recv_start.elapsed();
-        let recv_warn_threshold = std::cmp::min(timeout / 2, std::time::Duration::from_secs(5));
+        // For blocking commands (e.g. XREAD BLOCK, BLPOP) the client intentionally
+        // waits for a server-side event, so a long receive time is expected and not
+        // indicative of a slow connection.  Use the full timeout as the threshold so
+        // the warning only fires when the response is genuinely late.  For non-blocking
+        // commands, keep the original heuristic (min(timeout/2, 5s)).
+        let recv_warn_threshold = if is_blocking {
+            timeout
+        } else {
+            std::cmp::min(timeout / 2, std::time::Duration::from_secs(5))
+        };
         if recv_elapsed > recv_warn_threshold {
             logger_core::log_warn_rate_limited!(
                 "pipeline",
@@ -895,7 +907,12 @@ impl MultiplexedConnection {
         let timeout = cmd.response_timeout().unwrap_or(self.response_timeout);
         let result = self
             .pipeline
-            .send_single(cmd.get_packed_command(), timeout, cmd.is_fenced())
+            .send_single(
+                cmd.get_packed_command(),
+                timeout,
+                cmd.is_fenced(),
+                cmd.is_blocking(),
+            )
             .await;
         if self.protocol != ProtocolVersion::RESP2 {
             if let Err(e) = &result {
@@ -936,6 +953,7 @@ impl MultiplexedConnection {
                 Some(offset + count),
                 self.response_timeout,
                 cmd.is_atomic(),
+                false,
                 false,
             )
             .await;
@@ -1415,6 +1433,7 @@ mod tests {
                         crate::cmd("PING").get_packed_command(),
                         Duration::from_secs(60),
                         false,
+                        false,
                     )
                     .await;
             });
@@ -1428,7 +1447,7 @@ mod tests {
         let timeout = Duration::from_secs(2);
         let start = std::time::Instant::now();
         let result = pipeline
-            .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+            .send_single(crate::cmd("PING").get_packed_command(), timeout, false, false)
             .await;
         let elapsed = start.elapsed();
 
@@ -1556,6 +1575,7 @@ mod tests {
                     crate::cmd("GET").arg("key1").get_packed_command(),
                     Duration::from_secs(5),
                     false,
+                    false,
                 )
                 .await
         });
@@ -1576,6 +1596,7 @@ mod tests {
                         .arg("value")
                         .get_packed_command(),
                     Duration::from_secs(5),
+                    false,
                     false,
                 )
                 .await
@@ -1657,6 +1678,7 @@ mod tests {
                         crate::cmd("PING").get_packed_command(),
                         Duration::from_secs(60),
                         false,
+                        false,
                     )
                     .await;
             });
@@ -1667,7 +1689,7 @@ mod tests {
         let timeout = Duration::from_millis(200);
         let start = std::time::Instant::now();
         let result = pipeline
-            .send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+            .send_single(crate::cmd("PING").get_packed_command(), timeout, false, false)
             .await;
         let elapsed = start.elapsed();
 
@@ -1703,6 +1725,7 @@ mod tests {
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(5),
                     false,
+                    false,
                 )
                 .await
             }));
@@ -1736,6 +1759,7 @@ mod tests {
                 p.send_single(
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(30),
+                    false,
                     false,
                 )
                 .await
@@ -1783,7 +1807,7 @@ mod tests {
         for _ in 0..300 {
             let mut p = pipeline.clone();
             handles.push(tokio::spawn(async move {
-                p.send_single(crate::cmd("PING").get_packed_command(), timeout, false)
+                p.send_single(crate::cmd("PING").get_packed_command(), timeout, false, false)
                     .await
             }));
         }
@@ -1840,6 +1864,7 @@ mod tests {
                 crate::cmd("PING").get_packed_command(),
                 Duration::from_secs(5),
                 false,
+                false,
             )
             .await;
         let elapsed = start.elapsed();
@@ -1891,7 +1916,7 @@ mod tests {
             let mut p = pipeline.clone();
             let packed = packed.clone();
             handles.push(tokio::spawn(async move {
-                p.send_single(packed, Duration::from_secs(60), false).await
+                p.send_single(packed, Duration::from_secs(60), false, false).await
             }));
         }
         let mut ok = 0usize;
@@ -2079,6 +2104,7 @@ mod tests {
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(3600),
                     false,
+                    false,
                 )
                 .await
             }));
@@ -2091,6 +2117,7 @@ mod tests {
                 .send_single(
                     crate::cmd("PING").get_packed_command(),
                     Duration::from_secs(3600),
+                    false,
                     false,
                 )
                 .await
