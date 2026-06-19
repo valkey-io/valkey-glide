@@ -16,6 +16,7 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 	"github.com/valkey-io/valkey-glide/go/v2/internal/utils"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
@@ -1667,7 +1668,7 @@ func (client *ClusterClient) MemoryMallocStatsWithOptions(
 }
 
 // Asks the server to reclaim memory from the allocator back to the operating system.
-// The command will be routed to all nodes.
+// Routes to all primary nodes by default.
 //
 // See [valkey.io] for details.
 //
@@ -1724,16 +1725,24 @@ func (client *ClusterClient) MemoryPurgeWithOptions(ctx context.Context, opts op
 //	A ClusterValue containing memory usage statistics.
 //
 // [valkey.io]: https://valkey.io/commands/memory-stats/
-func (client *ClusterClient) MemoryStats(ctx context.Context) (models.ClusterValue[map[string]any], error) {
+func (client *ClusterClient) MemoryStats(ctx context.Context) (models.ClusterValue[models.MemoryStats], error) {
 	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
 	if err != nil {
-		return models.CreateEmptyClusterValue[map[string]any](), err
+		return models.CreateEmptyClusterValue[models.MemoryStats](), err
 	}
 	data, err := handleStringToStringAnyMapMapResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[map[string]any](), err
+		return models.CreateEmptyClusterValue[models.MemoryStats](), err
 	}
-	return models.CreateClusterMultiValue(data), nil
+	result := make(map[string]models.MemoryStats, len(data))
+	for nodeAddr, nodeMap := range data {
+		converted, convErr := internal.ConvertMemoryStats(nodeMap)
+		if convErr != nil {
+			return models.CreateEmptyClusterValue[models.MemoryStats](), convErr
+		}
+		result[nodeAddr] = converted.(models.MemoryStats)
+	}
+	return models.CreateClusterMultiValue(result), nil
 }
 
 // Returns detailed memory consumption statistics of the server.
@@ -1753,28 +1762,40 @@ func (client *ClusterClient) MemoryStats(ctx context.Context) (models.ClusterVal
 func (client *ClusterClient) MemoryStatsWithOptions(
 	ctx context.Context,
 	opts options.RouteOption,
-) (models.ClusterValue[map[string]any], error) {
+) (models.ClusterValue[models.MemoryStats], error) {
 	if opts.Route == nil {
 		return client.MemoryStats(ctx)
 	}
 	response, err := client.executeCommandWithRoute(ctx, C.MemoryStats, []string{}, opts.Route)
 	if err != nil {
-		return models.CreateEmptyClusterValue[map[string]any](), err
+		return models.CreateEmptyClusterValue[models.MemoryStats](), err
 	}
 
 	if opts.Route.IsMultiNode() {
 		data, err := handleStringToStringAnyMapMapResponse(response)
 		if err != nil {
-			return models.CreateEmptyClusterValue[map[string]any](), err
+			return models.CreateEmptyClusterValue[models.MemoryStats](), err
 		}
-		return models.CreateClusterMultiValue(data), nil
+		result := make(map[string]models.MemoryStats, len(data))
+		for nodeAddr, nodeMap := range data {
+			converted, convErr := internal.ConvertMemoryStats(nodeMap)
+			if convErr != nil {
+				return models.CreateEmptyClusterValue[models.MemoryStats](), convErr
+			}
+			result[nodeAddr] = converted.(models.MemoryStats)
+		}
+		return models.CreateClusterMultiValue(result), nil
 	}
 
-	data, err := handleStringToAnyMapResponse(response)
+	rawMap, err := handleStringToAnyMapResponse(response)
 	if err != nil {
-		return models.CreateEmptyClusterValue[map[string]any](), err
+		return models.CreateEmptyClusterValue[models.MemoryStats](), err
 	}
-	return models.CreateClusterSingleValue(data), nil
+	converted, err := internal.ConvertMemoryStats(rawMap)
+	if err != nil {
+		return models.CreateEmptyClusterValue[models.MemoryStats](), err
+	}
+	return models.CreateClusterSingleValue(converted.(models.MemoryStats)), nil
 }
 
 // Sets configuration parameters to the specified values.

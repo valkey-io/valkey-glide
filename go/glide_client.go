@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
+	"github.com/valkey-io/valkey-glide/go/v2/internal"
 
 	"github.com/valkey-io/valkey-glide/go/v2/constants"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
@@ -820,15 +821,23 @@ func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A map containing memory usage statistics with metric names as keys and values as their corresponding data.
+//	A [models.MemoryStats] containing detailed memory usage statistics.
 //
 // [valkey.io]: https://valkey.io/commands/memory-stats/
-func (client *Client) MemoryStats(ctx context.Context) (map[string]any, error) {
+func (client *Client) MemoryStats(ctx context.Context) (models.MemoryStats, error) {
 	response, err := client.executeCommand(ctx, C.MemoryStats, []string{})
 	if err != nil {
-		return nil, err
+		return models.MemoryStats{}, err
 	}
-	return handleStringToAnyMapResponse(response)
+	rawMap, err := handleStringToAnyMapResponse(response)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	result, err := internal.ConvertMemoryStats(rawMap)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	return result.(models.MemoryStats), nil
 }
 
 // Gets the name of the current connection.
