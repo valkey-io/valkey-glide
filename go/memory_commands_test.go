@@ -7,9 +7,7 @@ import (
 	"fmt"
 
 	"github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
-	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 func ExampleClient_MemoryDoctor() {
