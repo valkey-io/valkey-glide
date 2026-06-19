@@ -1593,22 +1593,19 @@ public class BatchTestUtilities {
         /** Matches any non-empty {@code String}. */
         static ResponseMatcher nonEmptyString(String context) {
             return new ResponseMatcher(
-                    obj -> obj instanceof String && !((String) obj).isEmpty(),
-                    context + " non-empty string");
+                    obj -> obj instanceof String && !((String) obj).isEmpty(), context + " non-empty string");
         }
 
         /** Matches any non-empty {@code Map}. */
         static ResponseMatcher nonEmptyMap(String context) {
             return new ResponseMatcher(
-                    obj -> obj instanceof Map && !((Map<?, ?>) obj).isEmpty(),
-                    context + " non-empty map");
+                    obj -> obj instanceof Map && !((Map<?, ?>) obj).isEmpty(), context + " non-empty map");
         }
 
         /** Matches a {@code Long} that is greater than or equal to {@code min}. */
         static ResponseMatcher longGreaterThanOrEqualTo(String context, long min) {
             return new ResponseMatcher(
-                    obj -> obj instanceof Long && (Long) obj >= min,
-                    context + " >= " + min);
+                    obj -> obj instanceof Long && (Long) obj >= min, context + " >= " + min);
         }
     }
 }

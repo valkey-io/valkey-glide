@@ -4608,4 +4608,208 @@ public class CommandTests {
             assertTrue(countWithRoute.getSingleValue() >= 0);
         }
     }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor_default_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryDoctor().get();
+        assertTrue(result.hasMultiData());
+        for (String diagnostic : result.getMultiValue().values()) {
+            assertNotNull(diagnostic);
+            assertFalse(diagnostic.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryDoctor(ALL_NODES).get();
+        assertTrue(result.hasMultiData());
+        assertTrue(result.getMultiValue().size() > 1);
+        for (String diagnostic : result.getMultiValue().values()) {
+            assertNotNull(diagnostic);
+            assertFalse(diagnostic.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor_single_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryDoctor(RANDOM).get();
+        assertTrue(result.hasSingleData());
+        String diagnostic = result.getSingleValue();
+        assertNotNull(diagnostic);
+        assertFalse(diagnostic.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats_default_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryMallocStats().get();
+        assertTrue(result.hasMultiData());
+        for (String allocStats : result.getMultiValue().values()) {
+            assertNotNull(allocStats);
+            assertFalse(allocStats.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryMallocStats(ALL_NODES).get();
+        assertTrue(result.hasMultiData());
+        assertTrue(result.getMultiValue().size() > 1);
+        for (String allocStats : result.getMultiValue().values()) {
+            assertNotNull(allocStats);
+            assertFalse(allocStats.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats_single_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryMallocStats(RANDOM).get();
+        assertTrue(result.hasSingleData());
+        String allocStats = result.getSingleValue();
+        assertNotNull(allocStats);
+        assertFalse(allocStats.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge_default_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.memoryPurge().get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge_multi_node_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.memoryPurge(ALL_NODES).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge_single_node_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.memoryPurge(RANDOM).get();
+        assertEquals(OK, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats_default_route(GlideClusterClient clusterClient) {
+        // Write a key to ensure at least one db entry exists on some node
+        clusterClient.set("memoryStats_test_key", "value").get();
+
+        // Default route (AllPrimaries) returns per-node map
+        ClusterValue<Map<String, Object>> result = clusterClient.memoryStats().get();
+        assertTrue(result.hasMultiData());
+        for (Map<String, Object> nodeStats : result.getMultiValue().values()) {
+            assertNotNull(nodeStats);
+            assertFalse(
+                    nodeStats.isEmpty()); // Additional validation performed in memoryStats_field_validation
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<Map<String, Object>> result = clusterClient.memoryStats(ALL_NODES).get();
+        assertTrue(result.hasMultiData());
+        assertTrue(result.getMultiValue().size() > 1, "Expected responses from multiple nodes");
+        for (Map<String, Object> nodeStats : result.getMultiValue().values()) {
+            assertNotNull(nodeStats);
+            assertFalse(
+                    nodeStats.isEmpty()); // Additional validation performed in memoryStats_field_validation
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats_single_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<Map<String, Object>> result = clusterClient.memoryStats(RANDOM).get();
+        assertTrue(result.hasSingleData());
+        Map<String, Object> stats = result.getSingleValue();
+        assertNotNull(stats);
+        assertFalse(stats.isEmpty()); // Additional validation performed in memoryStats_field_validation
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats_field_validation(GlideClusterClient clusterClient) {
+        // Write a key to ensure at least one db entry exists
+        String key = "memoryStats_field_test_key";
+        clusterClient.set(key, "value").get();
+
+        // Route to the same node that owns the key we just wrote
+        SlotKeyRoute route = new SlotKeyRoute(key, PRIMARY);
+        ClusterValue<Map<String, Object>> result = clusterClient.memoryStats(route).get();
+        assertTrue(result.hasSingleData());
+        Map<String, Object> stats = result.getSingleValue();
+
+        assertInstanceOf(Long.class, stats.get("peak.allocated"));
+        assertInstanceOf(Long.class, stats.get("total.allocated"));
+        assertInstanceOf(Long.class, stats.get("startup.allocated"));
+        assertInstanceOf(Long.class, stats.get("replication.backlog"));
+        assertInstanceOf(Long.class, stats.get("clients.slaves"));
+        assertInstanceOf(Long.class, stats.get("clients.normal"));
+        assertInstanceOf(Long.class, stats.get("cluster.links"));
+        assertInstanceOf(Long.class, stats.get("aof.buffer"));
+        assertInstanceOf(Long.class, stats.get("lua.caches"));
+        assertInstanceOf(Long.class, stats.get("functions.caches"));
+        assertInstanceOf(Long.class, stats.get("overhead.total"));
+        assertInstanceOf(Long.class, stats.get("keys.count"));
+        assertInstanceOf(Long.class, stats.get("keys.bytes-per-key"));
+        assertInstanceOf(Long.class, stats.get("dataset.bytes"));
+        assertInstanceOf(Long.class, stats.get("allocator.allocated"));
+        assertInstanceOf(Long.class, stats.get("allocator.active"));
+        assertInstanceOf(Long.class, stats.get("allocator.resident"));
+        assertInstanceOf(Long.class, stats.get("allocator.muzzy"));
+        assertInstanceOf(Long.class, stats.get("allocator-fragmentation.bytes"));
+        assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
+        assertInstanceOf(Long.class, stats.get("rss-overhead.bytes"));
+        assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
+
+        // Ratio/percentage fields: type varies by protocol (RESP3=Double, RESP2=String)
+        assertNotNull(stats.get("dataset.percentage"));
+        assertNotNull(stats.get("peak.percentage"));
+        assertNotNull(stats.get("allocator-fragmentation.ratio"));
+        assertNotNull(stats.get("allocator-rss.ratio"));
+        assertNotNull(stats.get("rss-overhead.ratio"));
+        assertNotNull(stats.get("fragmentation"));
+
+        // Validate optional fields (Valkey 8.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            assertTrue(
+                    stats.containsKey("overhead.db.hashtable.lut"),
+                    "Valkey 8.0+ should have overhead.db.hashtable.lut");
+            assertInstanceOf(Long.class, stats.get("overhead.db.hashtable.lut"));
+            assertTrue(
+                    stats.containsKey("overhead.db.hashtable.rehashing"),
+                    "Valkey 8.0+ should have overhead.db.hashtable.rehashing");
+            assertInstanceOf(Long.class, stats.get("overhead.db.hashtable.rehashing"));
+            assertTrue(
+                    stats.containsKey("db.dict.rehashing.count"),
+                    "Valkey 8.0+ should have db.dict.rehashing.count");
+            assertInstanceOf(Long.class, stats.get("db.dict.rehashing.count"));
+        }
+    }
 }

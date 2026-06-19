@@ -2370,4 +2370,91 @@ public class CommandTests {
                 "Timed out waiting for role change to " + role + " to complete.");
         return true;
     }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor(GlideClient client) {
+        String result = client.memoryDoctor().get();
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats(GlideClient client) {
+        String result = client.memoryMallocStats().get();
+        assertNotNull(result);
+        assertFalse(result.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge(GlideClient client) {
+        String result = client.memoryPurge().get();
+        assertEquals(OK, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats(GlideClient client) {
+        // Write a key to ensure at least one db entry exists
+        String key = "memoryStats_test_key";
+        client.set(key, "value").get();
+
+        Map<String, Object> stats = client.memoryStats().get();
+        assertNotNull(stats);
+        assertFalse(stats.isEmpty());
+
+        assertInstanceOf(Long.class, stats.get("peak.allocated"));
+        assertInstanceOf(Long.class, stats.get("total.allocated"));
+        assertInstanceOf(Long.class, stats.get("startup.allocated"));
+        assertInstanceOf(Long.class, stats.get("replication.backlog"));
+        assertInstanceOf(Long.class, stats.get("clients.slaves"));
+        assertInstanceOf(Long.class, stats.get("clients.normal"));
+        assertInstanceOf(Long.class, stats.get("cluster.links"));
+        assertInstanceOf(Long.class, stats.get("aof.buffer"));
+        assertInstanceOf(Long.class, stats.get("lua.caches"));
+        assertInstanceOf(Long.class, stats.get("functions.caches"));
+        assertInstanceOf(Long.class, stats.get("overhead.total"));
+        assertInstanceOf(Long.class, stats.get("keys.count"));
+        assertInstanceOf(Long.class, stats.get("keys.bytes-per-key"));
+        assertInstanceOf(Long.class, stats.get("dataset.bytes"));
+        assertInstanceOf(Long.class, stats.get("allocator.allocated"));
+        assertInstanceOf(Long.class, stats.get("allocator.active"));
+        assertInstanceOf(Long.class, stats.get("allocator.resident"));
+        assertInstanceOf(Long.class, stats.get("allocator.muzzy"));
+        assertInstanceOf(Long.class, stats.get("allocator-fragmentation.bytes"));
+        assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
+        assertInstanceOf(Long.class, stats.get("rss-overhead.bytes"));
+        assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
+
+        // Ratio/percentage fields: type varies by protocol (RESP3=Double, RESP2=String)
+        assertNotNull(stats.get("dataset.percentage"));
+        assertNotNull(stats.get("peak.percentage"));
+        assertNotNull(stats.get("allocator-fragmentation.ratio"));
+        assertNotNull(stats.get("allocator-rss.ratio"));
+        assertNotNull(stats.get("rss-overhead.ratio"));
+        assertNotNull(stats.get("fragmentation"));
+
+        // Validate version-dependent optional fields (Valkey 8.0+)
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            assertTrue(
+                    stats.containsKey("overhead.db.hashtable.lut"),
+                    "Valkey 8.0+ should have overhead.db.hashtable.lut");
+            assertInstanceOf(Long.class, stats.get("overhead.db.hashtable.lut"));
+            assertTrue(
+                    stats.containsKey("overhead.db.hashtable.rehashing"),
+                    "Valkey 8.0+ should have overhead.db.hashtable.rehashing");
+            assertInstanceOf(Long.class, stats.get("overhead.db.hashtable.rehashing"));
+            assertTrue(
+                    stats.containsKey("db.dict.rehashing.count"),
+                    "Valkey 8.0+ should have db.dict.rehashing.count");
+            assertInstanceOf(Long.class, stats.get("db.dict.rehashing.count"));
+        }
+    }
 }
