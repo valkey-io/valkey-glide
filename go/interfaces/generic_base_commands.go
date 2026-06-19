@@ -127,6 +127,25 @@ type GenericBaseCommands interface {
 		migrateOptions options.MigrateOptions,
 	) (string, error)
 
+	MigrateKeys(
+		ctx context.Context,
+		host string,
+		port int64,
+		keys []string,
+		destinationDB int64,
+		timeout int64,
+	) (string, error)
+
+	MigrateKeysWithOptions(
+		ctx context.Context,
+		host string,
+		port int64,
+		keys []string,
+		destinationDB int64,
+		timeout int64,
+		migrateOptions options.MigrateOptions,
+	) (string, error)
+
 	UpdateConnectionPassword(ctx context.Context, password string, immediateAuth bool) (string, error)
 
 	ResetConnectionPassword(ctx context.Context) (string, error)
