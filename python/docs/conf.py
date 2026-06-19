@@ -45,30 +45,44 @@ suppress_warnings = ["autodoc"]
 
 
 def avoid_duplicate(app, what, name, obj, skip, options):
-    # We skip some special refs and PubSub/MonitorMsg duplicate warning messages that
-    # weren't captured in ignore-module-all. These attributes
-    # will still appear in the documentation.
+    # Skip special attributes and dataclass fields from re-exported classes
+    # that cause duplicate object description warnings. These attributes
+    # will still appear in the documentation at their canonical location.
     exclusions = (
         "__weakref__",
         "__doc__",
         "__module__",
         "__dict__",
-        "callback",
+        # PubSubSubscriptions
         "channels_and_patterns",
+        "callback",
         "context",
-        "channel",
+        # PubSubMsg
         "message",
+        "channel",
         "pattern",
+        # CompressionConfiguration
         "enabled",
         "backend",
         "compression_level",
         "min_compression_size",
         "max_decompressed_size",
-        "args",
+        # LatencyEntry
+        "time",
+        "latency",
+        # LatencyEventInfo
+        "event_name",
+        "latest_time",
+        "latest_duration",
+        "max_duration",
+        "sum",
+        "count",
+        # MonitorMsg
+        "timestamp",
+        "db",
         "client_addr",
         "command",
-        "db",
-        "timestamp",
+        "args",
     )
     # Check if the attribute name itself is in exclusions
     if name in exclusions:

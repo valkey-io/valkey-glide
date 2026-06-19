@@ -44,7 +44,6 @@ import {
     ListDirection,
     ProtocolVersion,
     RequestError,
-    RouteOption,
     Score,
     ScoreFilter,
     Script,
@@ -64,8 +63,12 @@ import {
 import {
     Client,
     GetAndSetRandomValue,
+    flattenClusterResponseArrays,
     getFirstResult,
     getRandomKey,
+    getUnixSeconds,
+    PRIMARY_SLOT_ROUTE_OPTION,
+    triggerLatencySpike,
     waitForSaveNotInProgress,
 } from "./TestUtilities";
 
@@ -125,11 +128,6 @@ export function runBaseTests(config: {
     // Expected error response for BGSAVE CANCEL when no save is in progress
     const BGSAVE_NOT_CANCELLED_RESPONSE =
         "Background saving is currently not in progress or scheduled";
-
-    // Route option for routing to a single primary node by slot key.
-    const PRIMARY_SLOT_ROUTE_OPTION: RouteOption = {
-        route: { type: "primarySlotKey", key: "1" },
-    };
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `should register client library name and version_%p`,
@@ -528,6 +526,144 @@ export function runBaseTests(config: {
                 } else {
                     const result = await client.bgrewriteaof();
                     expect(BGREWRITEAOF_RESPONSES).toContain(result);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "latencyHistory %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const beforeSpike = await getUnixSeconds(client);
+                await triggerLatencySpike(client);
+
+                const history = await client.latencyHistory("command");
+                const allEntries = flattenClusterResponseArrays(history);
+
+                expect(allEntries.length).toBeGreaterThan(0);
+
+                for (const entry of allEntries) {
+                    expect(entry.time).toBeGreaterThanOrEqual(beforeSpike);
+                    expect(entry.latency).toBeGreaterThan(0);
+                }
+
+                // Non-existent event returns empty
+                const unknown = await client.latencyHistory("nonexistent");
+                expect(flattenClusterResponseArrays(unknown).length).toBe(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "latencyLatest %p",
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const beforeSpike = await getUnixSeconds(client);
+                    await triggerLatencySpike(client);
+
+                    const latest = await client.latencyLatest();
+                    const allEntries = flattenClusterResponseArrays(latest);
+                    expect(allEntries.length).toBeGreaterThanOrEqual(1);
+
+                    // Find the "command" event
+                    const commandInfo = allEntries.find(
+                        (info) => info.eventName === "command",
+                    );
+                    expect(commandInfo).toBeDefined();
+                    expect(commandInfo!.latestTime).toBeGreaterThanOrEqual(
+                        beforeSpike,
+                    );
+                    expect(commandInfo!.latestDuration).toBeGreaterThan(0);
+                    expect(commandInfo!.maxDuration).toBeGreaterThanOrEqual(
+                        commandInfo!.latestDuration,
+                    );
+
+                    // Only Valkey 8.1+ populates sum and count.
+                    if (!cluster.checkIfServerVersionLessThan("8.1.0")) {
+                        expect(commandInfo!.sum).toBeGreaterThan(0);
+                        expect(commandInfo!.count).toBeGreaterThan(0);
+                    } else {
+                        expect(commandInfo!.sum).toBeUndefined();
+                        expect(commandInfo!.count).toBeUndefined();
+                    }
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "latencyReset %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                // Trigger spike then reset all events
+                await triggerLatencySpike(client);
+                const resetCount = await client.latencyReset();
+                expect(resetCount).toBeGreaterThan(0);
+
+                const history = await client.latencyHistory("command");
+                expect(flattenClusterResponseArrays(history).length).toBe(0);
+
+                // Trigger spike then reset specific event
+                await triggerLatencySpike(client);
+                const specificReset = await client.latencyReset(["command"]);
+                expect(specificReset).toBeGreaterThan(0);
+
+                const historyAfter = await client.latencyHistory("command");
+                expect(flattenClusterResponseArrays(historyAfter).length).toBe(
+                    0,
+                );
+
+                // Trigger spike then reset unknown event — "command" data should persist
+                await triggerLatencySpike(client);
+                const unknownReset = await client.latencyReset([
+                    "unknown-event",
+                ]);
+                expect(unknownReset).toBe(0);
+
+                const historyStillPresent =
+                    await client.latencyHistory("command");
+                expect(
+                    flattenClusterResponseArrays(historyStillPresent).length,
+                ).toBeGreaterThan(0);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "latency batch commands %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await triggerLatencySpike(client);
+
+                for (const isAtomic of [true, false]) {
+                    const response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(isAtomic)
+                                      .latencyHistory("command")
+                                      .latencyLatest()
+                                      .latencyReset(),
+                                  isAtomic,
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(isAtomic)
+                                      .latencyHistory("command")
+                                      .latencyLatest()
+                                      .latencyReset(),
+                                  isAtomic,
+                              );
+
+                    expect(response).not.toBeNull();
+                    expect(response!.length).toBe(3);
+                    // latencyReset returns a number
+                    expect(typeof response![2]).toBe("number");
                 }
             }, protocol);
         },

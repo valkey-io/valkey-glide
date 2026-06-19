@@ -107,7 +107,7 @@ type ServerManagementCommands interface {
 
 	LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error)
 
-	LatencyLatest(ctx context.Context) ([]models.LatencyInfo, error)
+	LatencyLatest(ctx context.Context) ([]models.LatencyEventInfo, error)
 
 	LatencyReset(ctx context.Context, events ...string) (int64, error)
 }

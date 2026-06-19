@@ -137,12 +137,12 @@ type ServerManagementClusterCommands interface {
 		route options.RouteOption,
 	) (models.ClusterValue[[]models.LatencyEntry], error)
 
-	LatencyLatest(ctx context.Context) (models.ClusterValue[[]models.LatencyInfo], error)
+	LatencyLatest(ctx context.Context) (models.ClusterValue[[]models.LatencyEventInfo], error)
 
 	LatencyLatestWithOptions(
 		ctx context.Context,
 		route options.RouteOption,
-	) (models.ClusterValue[[]models.LatencyInfo], error)
+	) (models.ClusterValue[[]models.LatencyEventInfo], error)
 
 	LatencyReset(ctx context.Context, events ...string) (int64, error)
 

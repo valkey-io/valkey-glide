@@ -4387,6 +4387,53 @@ export function createBgRewriteAof(): command_request.Command {
     return createCommand(RequestType.BgRewriteAof, []);
 }
 
+/**
+ * Represents the time and latency for a latency spike.
+ */
+export interface LatencyEntry {
+    /** The time of the latency spike, as a Unix timestamp in seconds. */
+    time: number;
+    /** The duration of the latency spike, in milliseconds. */
+    latency: number;
+}
+
+/**
+ * Represents information about an event's latency spike time series.
+ */
+export interface LatencyEventInfo {
+    /** The name of the event. */
+    eventName: string;
+    /** The time of the latest latency spike, as a Unix timestamp in seconds. */
+    latestTime: number;
+    /** The duration of the latest latency spike, in milliseconds. */
+    latestDuration: number;
+    /** The all-time maximum duration of a latency spike, in milliseconds. */
+    maxDuration: number;
+    /** The sum of all latency spike durations in the event's time series, in milliseconds. Only populated for Valkey 8.1+. */
+    sum?: number;
+    /** The number of latency spikes recorded in the event's time series. Only populated for Valkey 8.1+. */
+    count?: number;
+}
+
+/** @internal */
+export function createLatencyHistory(
+    event: GlideString,
+): command_request.Command {
+    return createCommand(RequestType.LatencyHistory, [event]);
+}
+
+/** @internal */
+export function createLatencyLatest(): command_request.Command {
+    return createCommand(RequestType.LatencyLatest, []);
+}
+
+/** @internal */
+export function createLatencyReset(
+    events?: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.LatencyReset, events ?? []);
+}
+
 /** @internal */
 export function createLCS(
     key1: GlideString,

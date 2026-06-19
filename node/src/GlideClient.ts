@@ -45,6 +45,9 @@ import {
     createGetSubscriptions,
     createInfo,
     createLastSave,
+    createLatencyHistory,
+    createLatencyLatest,
+    createLatencyReset,
     createLolwut,
     createMigrate,
     createSave,
@@ -69,6 +72,8 @@ import {
     FunctionRestorePolicy,
     FunctionStatsFullResponse,
     InfoOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     LolwutOptions,
     MigrateOptions,
     ScanOptions,
@@ -1009,6 +1014,68 @@ export class GlideClient extends BaseClient {
      */
     public async lastsave(): Promise<number> {
         return this.createWritePromise(createLastSave());
+    }
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see {@link https://valkey.io/commands/latency-history/|valkey.io} for details.
+     *
+     * @param event - The name of the latency event (e.g., `"command"`).
+     * @returns An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't exist.
+     *
+     * @example
+     * ```typescript
+     * const history = await client.latencyHistory("command");
+     * for (const entry of history) {
+     *     console.log(`Time: ${entry.time}, Latency: ${entry.latency}`);
+     * }
+     * ```
+     */
+    public async latencyHistory(event: GlideString): Promise<LatencyEntry[]> {
+        return this.createWritePromise<unknown[]>(
+            createLatencyHistory(event),
+        ).then((res) => this.parseLatencyHistoryResponse(res));
+    }
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
+     *
+     * @returns An array of {@link LatencyEventInfo} for the latest latency events.
+     *
+     * @example
+     * ```typescript
+     * const latest = await client.latencyLatest();
+     * for (const info of latest) {
+     *     console.log(`Event: ${info.eventName}, Latest: ${info.latestDuration}`);
+     * }
+     * ```
+     */
+    public async latencyLatest(): Promise<LatencyEventInfo[]> {
+        return this.createWritePromise<unknown[]>(createLatencyLatest()).then(
+            (res) => this.parseLatencyLatestResponse(res),
+        );
+    }
+
+    /**
+     * Resets the latency spike time series for all or specified events.
+     * If no events are provided, resets the latency spike time series for all events.
+     *
+     * @see {@link https://valkey.io/commands/latency-reset/|valkey.io} for details.
+     *
+     * @param events - The event names to reset. If not provided, resets all events.
+     * @returns The number of event time series that were reset.
+     *
+     * @example
+     * ```typescript
+     * await client.latencyReset(); // Resets all events
+     * await client.latencyReset(["command"]); // Resets only "command"
+     * ```
+     */
+    public async latencyReset(events?: GlideString[]): Promise<number> {
+        return this.createWritePromise(createLatencyReset(events));
     }
 
     /**

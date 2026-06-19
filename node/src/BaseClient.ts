@@ -54,6 +54,8 @@ import {
     InsertPosition,
     KeyWeight,
     LPosOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -10228,6 +10230,74 @@ export class BaseClient {
         parseSubscriptionData(response[3], actualSubscriptions);
 
         return { desiredSubscriptions, actualSubscriptions };
+    }
+
+    // Indices for LATENCY HISTORY response.
+    private static readonly LATENCY_ENTRY_TIME_INDEX = 0;
+    private static readonly LATENCY_ENTRY_LATENCY_INDEX = 1;
+
+    // Indices for LATENCY LATEST response.
+    private static readonly LATENCY_EVENT_INFO_NAME_INDEX = 0;
+    private static readonly LATENCY_EVENT_INFO_TIME_INDEX = 1;
+    private static readonly LATENCY_EVENT_INFO_LATEST_DURATION_INDEX = 2;
+    private static readonly LATENCY_EVENT_INFO_MAX_DURATION_INDEX = 3;
+    private static readonly LATENCY_EVENT_INFO_SUM_INDEX = 4;
+    private static readonly LATENCY_EVENT_INFO_COUNT_INDEX = 5;
+
+    /**
+     * @internal
+     * Parses a `LATENCY HISTORY` response.
+     */
+    protected parseLatencyHistoryResponse(response: unknown[]): LatencyEntry[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => ({
+            time: entry[BaseClient.LATENCY_ENTRY_TIME_INDEX] as number,
+            latency: entry[BaseClient.LATENCY_ENTRY_LATENCY_INDEX] as number,
+        }));
+    }
+
+    /**
+     * @internal
+     * Parses a `LATENCY LATEST` response.
+     */
+    protected parseLatencyLatestResponse(
+        response: unknown[],
+    ): LatencyEventInfo[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => {
+            const info: LatencyEventInfo = {
+                eventName: entry[
+                    BaseClient.LATENCY_EVENT_INFO_NAME_INDEX
+                ] as string,
+                latestTime: entry[
+                    BaseClient.LATENCY_EVENT_INFO_TIME_INDEX
+                ] as number,
+                latestDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_LATEST_DURATION_INDEX
+                ] as number,
+                maxDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_MAX_DURATION_INDEX
+                ] as number,
+            };
+
+            // Valkey 8.1+ returns 6-element arrays with sum and count
+            if (entry.length > BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX) {
+                info.sum = entry[
+                    BaseClient.LATENCY_EVENT_INFO_SUM_INDEX
+                ] as number;
+                info.count = entry[
+                    BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX
+                ] as number;
+            }
+
+            return info;
+        });
     }
 
     /**

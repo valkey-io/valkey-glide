@@ -7387,3 +7387,51 @@ func (b *BaseBatch[T]) RandomKey() *T {
 func (b *BaseBatch[T]) FunctionStats() *T {
 	return b.addCmdAndConverter(C.FunctionStats, []string{}, reflect.Map, false, internal.ConvertFunctionStatsResponse)
 }
+
+// Returns the latency spike time series for the specified event.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	event - The name of the latency event (e.g., "command").
+//
+// Command Response:
+//
+//	A slice of [models.LatencyEntry] for the event, or an empty slice if the event doesn't exist.
+//
+// [valkey.io]: https://valkey.io/commands/latency-history/
+func (b *BaseBatch[T]) LatencyHistory(event string) *T {
+	return b.addCmdAndConverter(C.LatencyHistory, []string{event}, reflect.Slice, false, internal.ConvertLatencyHistoryEntries)
+}
+
+// Reports the latest latency events logged by the server.
+//
+// See [valkey.io] for details.
+//
+// Command Response:
+//
+//	A slice of [models.LatencyEventInfo] for the latest latency events.
+//
+// [valkey.io]: https://valkey.io/commands/latency-latest/
+func (b *BaseBatch[T]) LatencyLatest() *T {
+	return b.addCmdAndConverter(C.LatencyLatest, []string{}, reflect.Slice, false, internal.ConvertLatencyLatestEntries)
+}
+
+// Resets the latency spike time series for the specified events.
+// If no events are specified, all events are reset.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	events - The latency events to reset. If empty, resets all events.
+//
+// Command Response:
+//
+//	The number of event time series that were reset.
+//
+// [valkey.io]: https://valkey.io/commands/latency-reset/
+func (b *BaseBatch[T]) LatencyReset(events ...string) *T {
+	return b.addCmdAndTypeChecker(C.LatencyReset, events, reflect.Int64, false)
+}

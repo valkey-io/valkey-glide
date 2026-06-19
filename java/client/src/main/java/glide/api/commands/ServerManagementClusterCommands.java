@@ -5,6 +5,8 @@ import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -1077,4 +1079,137 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> aclWhoami();
+
+    /**
+     * Returns the latency spike time series for the specified event.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @return A cluster value containing array(s) of {@link LatencyEntry} for the event.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command").get();
+     * for (Map.Entry<String, LatencyEntry[]> node : history.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " entries");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(@NonNull String event);
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing array(s) of {@link LatencyEntry} for the event.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command", RANDOM).get();
+     * for (LatencyEntry entry : history.getSingleValue()) {
+     *     System.out.println("Time: " + entry.getTime() + ", Latency: " + entry.getLatency());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(
+            @NonNull String event, @NonNull Route route);
+
+    /**
+     * Reports the latest latency events logged by the server.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest latency
+     *     events.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest().get();
+     * for (Map.Entry<String, LatencyEventInfo[]> node : latest.getMultiValue().entrySet()) {
+     *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " events");
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest();
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest latency
+     *     events.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest(RANDOM).get();
+     * for (LatencyEventInfo info : latest.getSingleValue()) {
+     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatestDuration());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest(@NonNull Route route);
+
+    /**
+     * Resets the latency spike time series for all events.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @return The total number of event time series that were reset across all nodes.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset().get();
+     * System.out.println("Reset " + count + " events across the cluster");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset();
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @return The total number of event time series that were reset across all nodes.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(new String[] {"command"}).get();
+     * System.out.println("Reset " + count + " events across the cluster");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events);
+
+    /**
+     * Resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The total number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(ALL_PRIMARIES).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull Route route);
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The total number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = clusterClient.latencyReset(new String[] {"command"}, ALL_PRIMARIES).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events, @NonNull Route route);
 }

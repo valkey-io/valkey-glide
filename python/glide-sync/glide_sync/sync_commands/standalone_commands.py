@@ -13,6 +13,12 @@ from glide_shared.commands.core_options import (
     FunctionRestorePolicy,
     InfoSection,
 )
+from glide_shared.commands.latency import (
+    LatencyEntry,
+    LatencyEventInfo,
+    _parse_latency_history,
+    _parse_latency_latest,
+)
 from glide_shared.constants import (
     TOK,
     TEncodable,
@@ -1126,6 +1132,77 @@ class StandaloneCommands(CoreCommands):
                 OK
         """
         return cast(TOK, self._execute_command(RequestType.ClientUnpause, []))
+
+    def latency_history(self, event: TEncodable) -> List[LatencyEntry]:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+
+        Returns:
+            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty list
+                if the event doesn't exist.
+
+        Examples:
+            >>> history = client.latency_history("command")
+            >>> for entry in history:
+            ...     print(f"Time: {entry.time}, Latency: {entry.latency}")
+        """
+        return _parse_latency_history(
+            cast(
+                List,
+                self._execute_command(RequestType.LatencyHistory, [event]),
+            ),
+        )
+
+    def latency_latest(self) -> List[LatencyEventInfo]:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
+
+        Returns:
+            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
+
+        Examples:
+            >>> latest = client.latency_latest()
+            >>> for info in latest:
+            ...     print(f"Event: {info.event_name}, Latest: {info.latest_duration}")
+        """
+        return _parse_latency_latest(
+            cast(
+                List,
+                self._execute_command(RequestType.LatencyLatest, []),
+            ),
+        )
+
+    def latency_reset(self, *events: TEncodable) -> int:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+
+        Returns:
+            int: The number of event time series that were reset.
+
+        Examples:
+            >>> client.latency_reset()
+                2
+            >>> client.latency_reset("command")
+                1
+        """
+        return cast(
+            int,
+            self._execute_command(RequestType.LatencyReset, list(events)),
+        )
 
     def failover(
         self,

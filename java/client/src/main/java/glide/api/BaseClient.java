@@ -264,6 +264,8 @@ import glide.api.models.commands.HSetExOptions;
 import glide.api.models.commands.HashFieldExpirationConditionOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
@@ -949,6 +951,71 @@ public abstract class BaseClient
             }
             return ClusterValue.ofMultiValueBinary(data);
         }
+    }
+
+    // Indices for LATENCY HISTORY response.
+    private static final int LATENCY_ENTRY_TIME_INDEX = 0;
+    private static final int LATENCY_ENTRY_LATENCY_INDEX = 1;
+
+    // Indices for LATENCY LATEST response entries.
+    private static final int LATENCY_EVENT_INFO_NAME_INDEX = 0;
+    private static final int LATENCY_EVENT_INFO_TIME_INDEX = 1;
+    private static final int LATENCY_EVENT_INFO_LATEST_DURATION_INDEX = 2;
+    private static final int LATENCY_EVENT_INFO_MAX_DURATION_INDEX = 3;
+    private static final int LATENCY_EVENT_INFO_SUM_INDEX = 4;
+    private static final int LATENCY_EVENT_INFO_COUNT_INDEX = 5;
+
+    /**
+     * Process a <code>LATENCY HISTORY</code> response.
+     *
+     * @param response The raw response from the server.
+     * @return An array of latency history entries for an event.
+     */
+    protected static LatencyEntry[] handleLatencyHistoryResponse(Object[] response) {
+        if (response == null) {
+            return new LatencyEntry[0];
+        }
+        LatencyEntry[] result = new LatencyEntry[response.length];
+        for (int i = 0; i < response.length; i++) {
+            Object[] entry = (Object[]) response[i];
+            result[i] =
+                    new LatencyEntry(
+                            (Long) entry[LATENCY_ENTRY_TIME_INDEX], (Long) entry[LATENCY_ENTRY_LATENCY_INDEX]);
+        }
+        return result;
+    }
+
+    /**
+     * Process a <code>LATENCY LATEST</code> response.
+     *
+     * @param response The raw response from the server.
+     * @return An array of the latest latency info.
+     */
+    protected static LatencyEventInfo[] handleLatencyLatestResponse(Object[] response) {
+        if (response == null) {
+            return new LatencyEventInfo[0];
+        }
+        LatencyEventInfo[] result = new LatencyEventInfo[response.length];
+        for (int i = 0; i < response.length; i++) {
+            Object[] entry = (Object[]) response[i];
+            Optional<Long> sum =
+                    entry.length > LATENCY_EVENT_INFO_SUM_INDEX
+                            ? Optional.of((Long) entry[LATENCY_EVENT_INFO_SUM_INDEX])
+                            : Optional.empty();
+            Optional<Long> count =
+                    entry.length > LATENCY_EVENT_INFO_COUNT_INDEX
+                            ? Optional.of((Long) entry[LATENCY_EVENT_INFO_COUNT_INDEX])
+                            : Optional.empty();
+            result[i] =
+                    new LatencyEventInfo(
+                            (String) entry[LATENCY_EVENT_INFO_NAME_INDEX],
+                            (Long) entry[LATENCY_EVENT_INFO_TIME_INDEX],
+                            (Long) entry[LATENCY_EVENT_INFO_LATEST_DURATION_INDEX],
+                            (Long) entry[LATENCY_EVENT_INFO_MAX_DURATION_INDEX],
+                            sum,
+                            count);
+        }
+        return result;
     }
 
     /** Process a <code>LCS key1 key2 IDX</code> response */

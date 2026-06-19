@@ -44,6 +44,7 @@ from .commands.core_options import (
     PubSubMsg,
     UpdateOptions,
 )
+from .commands.latency import LatencyEntry, LatencyEventInfo
 from .commands.server_modules import json_batch
 from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
@@ -275,6 +276,8 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
+    "LatencyEntry",
+    "LatencyEventInfo",
     "MigrateOptions",
     "LexBoundary",
     "Limit",

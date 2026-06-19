@@ -48,6 +48,7 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     UpdateOptions,
 )
+from glide_shared.commands.latency import LatencyEntry
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -122,12 +123,15 @@ from tests.utils.utils import (
     convert_string_to_bytes_object,
     create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
+    flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
+    get_unix_seconds,
     get_version,
     parse_info_response,
     round_values,
+    trigger_latency_spike,
     wait_for_save_not_in_progress,
 )
 
@@ -10188,6 +10192,107 @@ class TestCommands:
             assert await glide_client.get(key) == b"after"
         finally:
             await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_history(self, glide_client: TGlideClient):
+        before_spike = await get_unix_seconds(glide_client)
+        await trigger_latency_spike(glide_client)
+
+        history = await glide_client.latency_history("command")
+        all_entries = flatten_cluster_response_lists(history)
+
+        assert len(all_entries) > 0
+        for entry in all_entries:
+            assert isinstance(entry, LatencyEntry)
+            assert entry.time >= before_spike
+            assert entry.latency > 0
+
+        # Non-existent event returns empty
+        unknown = await glide_client.latency_history("nonexistent")
+        assert len(flatten_cluster_response_lists(unknown)) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_latest(self, glide_client: TGlideClient):
+        before_spike = await get_unix_seconds(glide_client)
+        await trigger_latency_spike(glide_client)
+
+        latest = await glide_client.latency_latest()
+        all_entries = flatten_cluster_response_lists(latest)
+        assert len(all_entries) >= 1
+
+        # Find the "command" event
+        command_info = next(
+            (info for info in all_entries if info.event_name == "command"), None
+        )
+        assert command_info is not None
+
+        assert command_info.latest_time >= before_spike
+        assert command_info.latest_duration > 0
+        assert command_info.max_duration >= command_info.latest_duration
+
+        # Valkey 8.1+ populates sum and count
+        if not await check_if_server_version_lt(glide_client, "8.1.0"):
+            assert command_info.sum is not None and command_info.sum > 0
+            assert command_info.count is not None and command_info.count > 0
+        else:
+            assert command_info.sum is None
+            assert command_info.count is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_reset(self, glide_client: TGlideClient):
+
+        # Trigger spike then reset all events.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset() > 0
+
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset specific event.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command") > 0
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset unknown event — "command" data should persist.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("unknown-event") == 0
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_routing(self, glide_client: GlideClusterClient):
+        await trigger_latency_spike(glide_client)
+
+        # Default route (all primary nodes) returns a per-node mapping.
+        multi_history = await glide_client.latency_history("command")
+        assert isinstance(multi_history, dict)
+        assert len(flatten_cluster_response_lists(multi_history)) > 0
+
+        multi_latest = await glide_client.latency_latest()
+        assert isinstance(multi_latest, dict)
+        assert len(flatten_cluster_response_lists(multi_latest)) >= 1
+
+        # A single primary node route returns a flat list rather than a mapping.
+        single_history = await glide_client.latency_history(
+            "command", route=PRIMARY_SLOT_ROUTE
+        )
+        assert isinstance(single_history, list)
+        assert len(single_history) > 0
+
+        single_latest = await glide_client.latency_latest(route=PRIMARY_SLOT_ROUTE)
+        assert isinstance(single_latest, list)
+        assert len(single_latest) >= 1
+
+        # Reset honors explicit route options and aggregates the count.
+        assert await glide_client.latency_reset(route=AllNodes()) > 0
+
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command", route=AllPrimaries()) > 0
 
 
 @pytest.mark.anyio

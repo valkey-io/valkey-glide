@@ -92,6 +92,9 @@ import static command_request.CommandRequestOuterClass.RequestType.LRem;
 import static command_request.CommandRequestOuterClass.RequestType.LSet;
 import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
@@ -313,6 +316,8 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
@@ -16535,5 +16540,94 @@ public class GlideClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyHistory_returns_success() {
+        // setup
+        LatencyEntry[] value = new LatencyEntry[] {new LatencyEntry(1709062230L, 50L)};
+        CompletableFuture<LatencyEntry[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<LatencyEntry[]>submitNewCommand(
+                        eq(LatencyHistory), eq(new String[] {"command"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<LatencyEntry[]> response = service.latencyHistory("command");
+        LatencyEntry[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyLatest_returns_success() {
+        // setup
+        LatencyEventInfo[] value =
+                new LatencyEventInfo[] {
+                    new LatencyEventInfo(
+                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
+                };
+        CompletableFuture<LatencyEventInfo[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<LatencyEventInfo[]>submitNewCommand(
+                        eq(LatencyLatest), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<LatencyEventInfo[]> response = service.latencyLatest();
+        LatencyEventInfo[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_returns_success() {
+        // setup
+        Long value = 2L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void latencyReset_with_events_returns_success() {
+        // setup
+        String[] events = new String[] {"command"};
+        Long value = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LatencyReset), eq(events), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.latencyReset(events);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
     }
 }

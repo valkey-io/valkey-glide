@@ -966,7 +966,10 @@ public class BatchTestUtilities {
                 .flushall(ASYNC)
                 .flushdb()
                 .flushdb(ASYNC)
-                .dbsize();
+                .dbsize()
+                .latencyReset()
+                .latencyHistory("command")
+                .latencyLatest();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
@@ -999,6 +1002,19 @@ public class BatchTestUtilities {
                     OK, // flushdb()
                     OK, // flushdb(ASYNC)
                     0L, // dbsize()
+                    new Object() {
+                        @Override
+                        public boolean equals(Object obj) {
+                            return obj instanceof Long && (Long) obj >= 0;
+                        }
+
+                        @Override
+                        public String toString() {
+                            return "latencyReset() >= 0";
+                        }
+                    }, // latencyReset()
+                    new Object[0], // latencyHistory("command") - empty after reset
+                    new Object[0], // latencyLatest() - empty after reset
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
