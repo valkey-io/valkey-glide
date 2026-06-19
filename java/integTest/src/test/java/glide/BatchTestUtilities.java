@@ -969,7 +969,11 @@ public class BatchTestUtilities {
                 .dbsize()
                 .latencyReset()
                 .latencyHistory("command")
-                .latencyLatest();
+                .latencyLatest()
+                .memoryDoctor()
+                .memoryMallocStats()
+                .memoryPurge()
+                .memoryStats();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
@@ -1002,19 +1006,13 @@ public class BatchTestUtilities {
                     OK, // flushdb()
                     OK, // flushdb(ASYNC)
                     0L, // dbsize()
-                    new Object() {
-                        @Override
-                        public boolean equals(Object obj) {
-                            return obj instanceof Long && (Long) obj >= 0;
-                        }
-
-                        @Override
-                        public String toString() {
-                            return "latencyReset() >= 0";
-                        }
-                    }, // latencyReset()
+                    ResponseMatcher.longGreaterThanOrEqualTo("latencyReset()", 0), // latencyReset()
                     new Object[0], // latencyHistory("command") - empty after reset
                     new Object[0], // latencyLatest() - empty after reset
+                    ResponseMatcher.nonEmptyString("memoryDoctor()"), // memoryDoctor()
+                    ResponseMatcher.nonEmptyString("memoryMallocStats()"), // memoryMallocStats()
+                    OK, // memoryPurge()
+                    ResponseMatcher.nonEmptyMap("memoryStats()"), // memoryStats()
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -1567,5 +1565,50 @@ public class BatchTestUtilities {
         return new Object[] {
             0L, // publish("message", "Tchannel")
         };
+    }
+
+    /**
+     * A reusable comparison object for batch test assertions. Overrides {@code equals} to perform
+     * type-checked validation against actual command responses.
+     */
+    private static class ResponseMatcher {
+        private final java.util.function.Predicate<Object> predicate;
+        private final String description;
+
+        private ResponseMatcher(java.util.function.Predicate<Object> predicate, String description) {
+            this.predicate = predicate;
+            this.description = description;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return predicate.test(obj);
+        }
+
+        @Override
+        public String toString() {
+            return description;
+        }
+
+        /** Matches any non-empty {@code String}. */
+        static ResponseMatcher nonEmptyString(String context) {
+            return new ResponseMatcher(
+                    obj -> obj instanceof String && !((String) obj).isEmpty(),
+                    context + " non-empty string");
+        }
+
+        /** Matches any non-empty {@code Map}. */
+        static ResponseMatcher nonEmptyMap(String context) {
+            return new ResponseMatcher(
+                    obj -> obj instanceof Map && !((Map<?, ?>) obj).isEmpty(),
+                    context + " non-empty map");
+        }
+
+        /** Matches a {@code Long} that is greater than or equal to {@code min}. */
+        static ResponseMatcher longGreaterThanOrEqualTo(String context, long min) {
+            return new ResponseMatcher(
+                    obj -> obj instanceof Long && (Long) obj >= min,
+                    context + " >= " + min);
+        }
     }
 }
