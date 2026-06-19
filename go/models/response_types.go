@@ -506,3 +506,46 @@ type LatencyEventInfo struct {
 	// Only populated for Valkey 8.1+.
 	Count Result[int64]
 }
+
+// MemoryStatsDb represents per-database memory overhead statistics from MEMORY STATS.
+type MemoryStatsDb struct {
+	OverheadHashtableMain              int64
+	OverheadHashtableExpires           int64
+	OverheadHashtableSlotToKeyspaceMap Result[int64] // cluster only; 7.2+
+}
+
+// MemoryStats represents memory statistics from MEMORY STATS.
+type MemoryStats struct {
+	PeakAllocated               int64
+	TotalAllocated              int64
+	StartupAllocated            int64
+	ReplicationBacklog          int64
+	ClientsSlaves               int64
+	ClientsNormal               int64
+	AofBuffer                   int64
+	LuaCaches                   int64
+	OverheadTotal               int64
+	KeysCount                   int64
+	KeysBytesPerKey             int64
+	DatasetBytes                int64
+	DatasetPercentage           float64
+	PeakPercentage              float64
+	AllocatorAllocated          int64
+	AllocatorActive             int64
+	AllocatorResident           int64
+	AllocatorFragmentationRatio float64
+	AllocatorFragmentationBytes int64
+	AllocatorRssRatio           float64
+	AllocatorRssBytes           int64
+	RssOverheadRatio            float64
+	RssOverheadBytes            int64
+	Fragmentation               float64
+	FragmentationBytes          int64
+	ClusterLinks                int64
+	FunctionsCaches             int64
+	AllocatorMuzzy              int64
+	OverheadDbHashtableLut       Result[int64] // Valkey 8.0+
+	OverheadDbHashtableRehashing Result[int64] // Valkey 8.0+
+	DbDictRehashingCount         Result[int64] // Valkey 8.0+
+	Db map[int64]MemoryStatsDb
+}

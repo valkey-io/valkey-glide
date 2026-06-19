@@ -747,12 +747,17 @@ func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64
 	return handleIntResponse(response)
 }
 
-// Provides memory usage diagnosis report.
-// The command returns a detailed analysis of memory consumption patterns in the server.
+// Returns a report about memory problems detected by the server.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
 //
 // Return value:
 //
-//	A string containing the memory usage analysis report.
+//	A string containing the memory diagnostic report.
 //
 // [valkey.io]: https://valkey.io/commands/memory-doctor/
 func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
@@ -763,8 +768,7 @@ func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
 	return handleStringResponse(response)
 }
 
-// Returns memory allocator internal statistics.
-// The output of this command is specific to the allocator being used.
+// Returns the internal statistics of the memory allocator.
 //
 // See [valkey.io] for details.
 //
@@ -785,8 +789,7 @@ func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
 	return handleStringResponse(response)
 }
 
-// Attempts to purge dirty pages for reclamation by the allocator.
-// This command can help reduce memory fragmentation.
+// Asks the server to reclaim memory from the allocator back to the operating system.
 //
 // See [valkey.io] for details.
 //
@@ -807,7 +810,7 @@ func (client *Client) MemoryPurge(ctx context.Context) (string, error) {
 	return handleOkResponse(response)
 }
 
-// Returns memory usage statistics for the server.
+// Returns detailed memory consumption statistics of the server.
 //
 // See [valkey.io] for details.
 //
