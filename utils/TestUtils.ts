@@ -3,6 +3,7 @@
  */
 
 import { execFile } from "child_process";
+import { createConnection } from "net";
 import { lt } from "semver";
 
 const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
@@ -16,6 +17,58 @@ function toWslPath(p: string): string {
 }
 
 const wslScriptPath = isWindows ? toWslPath(PY_SCRIPT_PATH) : PY_SCRIPT_PATH;
+
+/**
+ * On Windows/WSL, replica sync can lag after cluster_manager.py exits.
+ * Poll each address: if it reports role:slave, wait until master_link_status:up
+ * and master_sync_in_progress:0 before returning.
+ */
+async function waitForReplicasReady(
+    addresses: [string, number][],
+    timeoutMs = 15000,
+): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+
+    async function getInfo(host: string, port: number): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
+            const sock = createConnection({ host, port }, () => {
+                // Send INFO replication as inline RESP
+                sock.write("*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n");
+            });
+            let buf = "";
+            sock.on("data", (d: Buffer) => {
+                buf += d.toString();
+                // INFO response ends with \r\n\r\n
+                if (buf.includes("\r\n\r\n")) {
+                    sock.destroy();
+                    resolve(buf);
+                }
+            });
+            sock.on("error", reject);
+            setTimeout(() => { sock.destroy(); reject(new Error("timeout")); }, 1000);
+        });
+    }
+
+    await Promise.all(
+        addresses.map(async ([host, port]) => {
+            while (Date.now() < deadline) {
+                try {
+                    const info = await getInfo(host, port);
+                    // Only replicas need to be checked
+                    if (!info.includes("role:slave")) return;
+                    // Replica is ready when link is up and no sync in progress
+                    if (
+                        info.includes("master_link_status:up") &&
+                        info.includes("master_sync_in_progress:0")
+                    ) return;
+                } catch {
+                    // node not reachable yet, keep polling
+                }
+                await new Promise((r) => setTimeout(r, 200));
+            }
+        }),
+    );
+}
 
 function parseOutput(input: string): {
     clusterFolder: string;
@@ -155,8 +208,8 @@ export class ValkeyCluster {
                                 )
                                 .then(async (cluster) => {
                                     if (isWindows && replicaCount > 0) {
-                                        await new Promise((r) =>
-                                            setTimeout(r, 3000),
+                                        await waitForReplicasReady(
+                                            cluster.getAddresses(),
                                         );
                                     }
                                     return cluster;
