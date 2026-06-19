@@ -445,7 +445,6 @@ def _build_sort_args(
 class MigrateOptions:
     """
     Optional arguments for the `migrate` command.
-
     See [valkey.io](https://valkey.io/commands/migrate/) for details.
     """
 

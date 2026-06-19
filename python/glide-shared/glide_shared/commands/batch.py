@@ -2790,7 +2790,8 @@ class BaseBatch:
         options: Optional[MigrateOptions] = None,
     ) -> TBatch:
         """
-        Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+        Atomically transfers a key from a source Valkey instance to a destination
+        Valkey instance. On success, the key is deleted from the source instance.
 
         See [valkey.io](https://valkey.io/commands/migrate/) for details.
 
@@ -2800,7 +2801,7 @@ class BaseBatch:
             key (TEncodable): The key to migrate.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
-            options (Optional[MigrateOptions]): Optional migration options.
+            options (Optional[MigrateOptions]): Additional migration options.
 
         Returns:
             TBatch: The batch instance for chaining.
@@ -5914,6 +5915,51 @@ class Batch(BaseBatch):
             args.append("REPLACE")
 
         return self.append_command(RequestType.Copy, args)
+
+    def migrate(
+        self,
+        host: str,
+        port: int,
+        keys: Union[TEncodable, List[TEncodable]],
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = None,
+    ) -> "Batch":
+        """
+        Atomically transfers one or more keys from a source Valkey instance to a destination
+        Valkey instance. Pass a list to migrate multiple keys in one command.
+
+        See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        Args:
+            host (str): The host of the destination Valkey instance.
+            port (int): The port of the destination Valkey instance.
+            keys (Union[TEncodable, List[TEncodable]]): The key or list of keys to migrate.
+            destination_db (int): The database index on the destination instance.
+            timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
+            options (Optional[MigrateOptions]): Additional migration options.
+
+        Returns:
+            Batch: The batch instance for chaining.
+        """
+        if isinstance(keys, list):
+            if len(keys) == 0:
+                raise ValueError("migrate: 'keys' list must not be empty")
+            args: List[TEncodable] = [
+                host,
+                str(port),
+                "",
+                str(destination_db),
+                str(timeout),
+            ]
+            if options:
+                args.extend(options.to_args())
+            args += ["KEYS"] + list(keys)
+        else:
+            args = [host, str(port), keys, str(destination_db), str(timeout)]
+            if options:
+                args.extend(options.to_args())
+        return self.append_command(RequestType.Migrate, args)
 
     def publish(self, message: TEncodable, channel: TEncodable) -> "Batch":
         """
