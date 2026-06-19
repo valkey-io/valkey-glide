@@ -3,6 +3,7 @@
  */
 
 import { execFile } from "child_process";
+import { appendFileSync } from "fs";
 import { createConnection } from "net";
 import { lt } from "semver";
 
@@ -27,6 +28,7 @@ async function waitForReplicasReady(
     addresses: [string, number][],
     timeoutMs = 15000,
 ): Promise<void> {
+    const logFile = process.env.REPLICA_TIMING_LOG ?? "C:\\dev\\valkey-glide\\node\\replica-timing.log";
     const deadline = Date.now() + timeoutMs;
     const startTime = Date.now();
 
@@ -61,9 +63,7 @@ async function waitForReplicasReady(
                     ) {
                         const waited = Date.now() - nodeStart;
                         if (waited > 100) {
-                            console.log(
-                                `[waitForReplicasReady] ${host}:${port} replica ready after ${waited}ms`,
-                            );
+                            appendFileSync(logFile, `[waitForReplicasReady] ${host}:${port} ready after ${waited}ms\n`);
                         }
                         return;
                     }
@@ -72,15 +72,13 @@ async function waitForReplicasReady(
                 }
                 await new Promise((r) => setTimeout(r, 200));
             }
-            console.warn(
-                `[waitForReplicasReady] ${host}:${port} timed out after ${timeoutMs}ms`,
-            );
+            appendFileSync(logFile, `[waitForReplicasReady] ${host}:${port} TIMEOUT after ${timeoutMs}ms\n`);
         }),
     );
 
     const total = Date.now() - startTime;
     if (total > 100) {
-        console.log(`[waitForReplicasReady] total wait: ${total}ms for ${addresses.length} nodes`);
+        appendFileSync(logFile, `[waitForReplicasReady] total=${total}ms nodes=${addresses.length} ts=${new Date().toISOString()}\n`);
     }
 }
 
