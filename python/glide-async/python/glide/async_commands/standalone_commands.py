@@ -1377,7 +1377,7 @@ class StandaloneCommands(CoreCommands):
         See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
 
         Returns:
-            str: A string containing the memory allocator statistics.
+            str: The memory allocator statistics.
 
         Examples:
             >>> report = await client.memory_malloc_stats()
@@ -1392,7 +1392,7 @@ class StandaloneCommands(CoreCommands):
         See [valkey.io](https://valkey.io/commands/memory-purge/) for details.
 
         Returns:
-            TOK: A simple "OK" response..
+            TOK: A simple "OK" response.
 
         Examples:
             >>> await client.memory_purge()
