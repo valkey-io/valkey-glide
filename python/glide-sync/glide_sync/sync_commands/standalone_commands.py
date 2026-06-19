@@ -20,6 +20,7 @@ from glide_shared.commands.latency import (
     _parse_latency_history,
     _parse_latency_latest,
 )
+from glide_shared.commands.memory import MemoryStats, _parse_memory_stats
 from glide_shared.constants import (
     TOK,
     TEncodable,
