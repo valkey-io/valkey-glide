@@ -7442,7 +7442,7 @@ func (b *BaseBatch[T]) LatencyReset(events ...string) *T {
 //
 // Command Response:
 //
-//	A string containing the memory diagnostic report.
+//	The memory diagnostic report.
 //
 // [valkey.io]: https://valkey.io/commands/memory-doctor/
 func (b *BaseBatch[T]) MemoryDoctor() *T {
@@ -7455,7 +7455,7 @@ func (b *BaseBatch[T]) MemoryDoctor() *T {
 //
 // Command Response:
 //
-//	A string containing the memory allocator statistics.
+//	The memory allocator statistics.
 //
 // [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
 func (b *BaseBatch[T]) MemoryMallocStats() *T {

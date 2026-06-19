@@ -758,7 +758,7 @@ func (client *Client) LatencyReset(ctx context.Context, events ...string) (int64
 //
 // Return value:
 //
-//	A string containing the memory diagnostic report.
+//	The memory diagnostic report.
 //
 // [valkey.io]: https://valkey.io/commands/memory-doctor/
 func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
@@ -779,7 +779,7 @@ func (client *Client) MemoryDoctor(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	A string containing the memory allocator statistics.
+//	The memory allocator statistics.
 //
 // [valkey.io]: https://valkey.io/commands/memory-malloc-stats/
 func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
