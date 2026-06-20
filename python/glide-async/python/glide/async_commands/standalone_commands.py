@@ -1368,7 +1368,8 @@ class StandaloneCommands(CoreCommands):
             >>> report = await client.memory_doctor()
             >>> print("Memory report:", report)
         """
-        return cast(str, await self._execute_command(RequestType.MemoryDoctor, []))
+        response = await self._execute_command(RequestType.MemoryDoctor, [])
+        return cast(bytes, response).decode()
 
     async def memory_malloc_stats(self) -> str:
         """
@@ -1383,7 +1384,8 @@ class StandaloneCommands(CoreCommands):
             >>> report = await client.memory_malloc_stats()
             >>> print("Allocator stats:", report)
         """
-        return cast(str, await self._execute_command(RequestType.MemoryMallocStats, []))
+        response = await self._execute_command(RequestType.MemoryMallocStats, [])
+        return cast(bytes, response).decode()
 
     async def memory_purge(self) -> TOK:
         """
