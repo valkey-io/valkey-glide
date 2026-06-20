@@ -4390,29 +4390,58 @@ export function createBgRewriteAof(): command_request.Command {
 /**
  * Represents the time and latency for a latency spike.
  */
-export interface LatencyEntry {
+export class LatencyEntry {
     /** The time of the latency spike, as a Unix timestamp in seconds. */
-    time: number;
+    readonly time: number;
+
     /** The duration of the latency spike, in milliseconds. */
-    latency: number;
+    readonly latency: number;
+
+    /** @internal */
+    constructor(time: number, latency: number) {
+        this.time = time;
+        this.latency = latency;
+    }
 }
 
 /**
  * Represents information about an event's latency spike time series.
  */
-export interface LatencyEventInfo {
+export class LatencyEventInfo {
     /** The name of the event. */
-    eventName: string;
+    readonly eventName: string;
+
     /** The time of the latest latency spike, as a Unix timestamp in seconds. */
-    latestTime: number;
+    readonly latestTime: number;
+
     /** The duration of the latest latency spike, in milliseconds. */
-    latestDuration: number;
+    readonly latestDuration: number;
+
     /** The all-time maximum duration of a latency spike, in milliseconds. */
-    maxDuration: number;
+    readonly maxDuration: number;
+
     /** The sum of all latency spike durations in the event's time series, in milliseconds. Only populated for Valkey 8.1+. */
-    sum?: number;
+    readonly sum?: number;
+
     /** The number of latency spikes recorded in the event's time series. Only populated for Valkey 8.1+. */
-    count?: number;
+    readonly count?: number;
+
+    /** @internal */
+    constructor(
+        eventName: string,
+        latestTime: number,
+        latestDuration: number,
+        maxDuration: number,
+        sum?: number,
+        count?: number,
+    ) {
+        this.eventName = eventName;
+        this.latestTime = latestTime;
+        this.latestDuration = latestDuration;
+        this.maxDuration = maxDuration;
+        this.sum = sum;
+        this.count = count;
+    }
 }
 
 /** @internal */
@@ -4432,6 +4461,26 @@ export function createLatencyReset(
     events?: GlideString[],
 ): command_request.Command {
     return createCommand(RequestType.LatencyReset, events ?? []);
+}
+
+/** @internal */
+export function createMemoryDoctor(): command_request.Command {
+    return createCommand(RequestType.MemoryDoctor, []);
+}
+
+/** @internal */
+export function createMemoryMallocStats(): command_request.Command {
+    return createCommand(RequestType.MemoryMallocStats, []);
+}
+
+/** @internal */
+export function createMemoryPurge(): command_request.Command {
+    return createCommand(RequestType.MemoryPurge, []);
+}
+
+/** @internal */
+export function createMemoryStats(): command_request.Command {
+    return createCommand(RequestType.MemoryStats, []);
 }
 
 /** @internal */
@@ -5210,4 +5259,234 @@ export interface ClusterBatchRetryStrategy {
      * the server might have already received and processed the request before the error occurred.
      */
     retryConnectionError: boolean;
+}
+
+/**
+ * Database memory overhead statistics from MEMORY STATS.
+ */
+export interface MemoryStatsDb {
+
+    /** Overhead of the main dictionary hashtable. */
+    overheadHashtableMain: number;
+
+    /** Overhead of the expires dictionary hashtable. */
+    overheadHashtableExpires: number;
+
+    /**
+     * Overhead of the slot-to-keyspace-map hashtable.
+     * @remarks Cluster mode only.
+     */
+    overheadHashtableSlotToKeyspaceMap?: number;
+}
+
+/**
+ * Represents a MEMORY STATS response.
+ */
+export interface MemoryStats {
+
+    /** Peak memory consumed by the server in bytes. */
+    peakAllocated: number;
+
+    /** Total bytes allocated by the server. */
+    totalAllocated: number;
+
+    /** Memory consumed at startup in bytes. */
+    startupAllocated: number;
+
+    /** Memory used for replication backlog in bytes. */
+    replicationBacklog: number;
+
+    /** Memory used by replica clients in bytes. */
+    clientsSlaves: number;
+
+    /** Memory used by normal clients in bytes. */
+    clientsNormal: number;
+
+    /** Memory used for AOF buffer in bytes. */
+    aofBuffer: number;
+
+    /** Memory used by Lua caches in bytes. */
+    luaCaches: number;
+
+    /** Total memory overhead in bytes. */
+    overheadTotal: number;
+
+    /** Total number of keys across all databases. */
+    keysCount: number;
+
+    /** Average bytes per key. */
+    keysBytesPerKey: number;
+
+    /** Memory used to store dataset in bytes. */
+    datasetBytes: number;
+
+    /** Percentage of net memory used for dataset. */
+    datasetPercentage: number;
+
+    /** Percentage of peak.allocated out of total.allocated. */
+    peakPercentage: number;
+
+    /** Bytes allocated by the allocator. */
+    allocatorAllocated: number;
+
+    /** Bytes active (in use) by the allocator. */
+    allocatorActive: number;
+
+    /** Bytes resident (RSS) by the allocator. */
+    allocatorResident: number;
+
+    /** Ratio of allocator fragmentation. */
+    allocatorFragmentationRatio: number;
+
+    /** Bytes of allocator fragmentation. */
+    allocatorFragmentationBytes: number;
+
+    /** Ratio of allocator RSS overhead. */
+    allocatorRssRatio: number;
+
+    /** Bytes of allocator RSS overhead. */
+    allocatorRssBytes: number;
+
+    /** Ratio of RSS overhead. */
+    rssOverheadRatio: number;
+
+    /** Bytes of RSS overhead. */
+    rssOverheadBytes: number;
+
+    /** Overall memory fragmentation ratio. */
+    fragmentation: number;
+
+    /** Bytes of overall fragmentation. */
+    fragmentationBytes: number;
+
+    /** Memory used by cluster links in bytes. */
+    clusterLinks: number;
+
+    /** Memory used by functions caches in bytes. */
+    functionsCaches: number;
+
+    /** Memory used by allocator muzzy pages in bytes. */
+    allocatorMuzzy: number;
+
+    /**
+     * Overhead of db hashtable LUT in bytes.
+     * @remarks Valkey 8.0+ only.
+     */
+    overheadDbHashtableLut?: number;
+
+    /**
+     * Overhead of db hashtable rehashing in bytes.
+     * @remarks Valkey 8.0+ only.
+     */
+    overheadDbHashtableRehashing?: number;
+
+    /**
+     * Count of db dictionaries currently rehashing.
+     * @remarks Valkey 8.0+ only.
+     */
+    dbDictRehashingCount?: number;
+
+    /** Per-database overhead keyed by database index. */
+    db: Record<number, MemoryStatsDb>;
+}
+
+/** @internal */
+const _MEMORY_STATS_DB_PREFIX = "db.";
+
+/** @internal */
+function _parseMemoryStatsDb(raw: Record<string, unknown>): MemoryStatsDb {
+    return {
+        overheadHashtableMain: Number(raw["overhead.hashtable.main"]),
+        overheadHashtableExpires: Number(raw["overhead.hashtable.expires"]),
+        overheadHashtableSlotToKeyspaceMap:
+            "overhead.hashtable.slot-to-keyspace-map" in raw
+                ? Number(raw["overhead.hashtable.slot-to-keyspace-map"])
+                : undefined,
+    };
+}
+
+/** @internal */
+export function parseMemoryStatsResponse(raw: Record<string, unknown>): MemoryStats {
+    const db: Record<number, MemoryStatsDb> = {};
+
+    for (const [key, value] of Object.entries(raw)) {
+        if (key.startsWith(_MEMORY_STATS_DB_PREFIX) && key !== "db.dict.rehashing.count") {
+            const dbIndex = parseInt(key.slice(_MEMORY_STATS_DB_PREFIX.length), 10);
+            db[dbIndex] = _parseMemoryStatsDb(value as Record<string, unknown>);
+        }
+    }
+
+    return {
+        peakAllocated: Number(raw["peak.allocated"]),
+        totalAllocated: Number(raw["total.allocated"]),
+        startupAllocated: Number(raw["startup.allocated"]),
+        replicationBacklog: Number(raw["replication.backlog"]),
+        clientsSlaves: Number(raw["clients.slaves"]),
+        clientsNormal: Number(raw["clients.normal"]),
+        aofBuffer: Number(raw["aof.buffer"]),
+        luaCaches: Number(raw["lua.caches"]),
+        overheadTotal: Number(raw["overhead.total"]),
+        keysCount: Number(raw["keys.count"]),
+        keysBytesPerKey: Number(raw["keys.bytes-per-key"]),
+        datasetBytes: Number(raw["dataset.bytes"]),
+        datasetPercentage: Number(raw["dataset.percentage"]),
+        peakPercentage: Number(raw["peak.percentage"]),
+        allocatorAllocated: Number(raw["allocator.allocated"]),
+        allocatorActive: Number(raw["allocator.active"]),
+        allocatorResident: Number(raw["allocator.resident"]),
+        allocatorFragmentationRatio: Number(raw["allocator-fragmentation.ratio"]),
+        allocatorFragmentationBytes: Number(raw["allocator-fragmentation.bytes"]),
+        allocatorRssRatio: Number(raw["allocator-rss.ratio"]),
+        allocatorRssBytes: Number(raw["allocator-rss.bytes"]),
+        rssOverheadRatio: Number(raw["rss-overhead.ratio"]),
+        rssOverheadBytes: Number(raw["rss-overhead.bytes"]),
+        fragmentation: Number(raw["fragmentation"]),
+        fragmentationBytes: Number(raw["fragmentation.bytes"]),
+        clusterLinks: Number(raw["cluster.links"]),
+        functionsCaches: Number(raw["functions.caches"]),
+        allocatorMuzzy: Number(raw["allocator.muzzy"]),
+        overheadDbHashtableLut:
+            "overhead.db.hashtable.lut" in raw
+                ? Number(raw["overhead.db.hashtable.lut"])
+                : undefined,
+        overheadDbHashtableRehashing:
+            "overhead.db.hashtable.rehashing" in raw
+                ? Number(raw["overhead.db.hashtable.rehashing"])
+                : undefined,
+        dbDictRehashingCount:
+            "db.dict.rehashing.count" in raw
+                ? Number(raw["db.dict.rehashing.count"])
+                : undefined,
+        db,
+    };
+}
+
+/**
+ * Parses a `LATENCY HISTORY` response.
+ * @internal
+ */
+export function parseLatencyHistoryResponse(response: unknown[]): LatencyEntry[] {
+    return (response as unknown[][]).map(
+        (entry) => new LatencyEntry(entry[0] as number, entry[1] as number),
+    );
+}
+
+/**
+ * Parses a `LATENCY LATEST` response.
+ * @internal
+ */
+export function parseLatencyLatestResponse(response: unknown[]): LatencyEventInfo[] {
+    return (response as unknown[][]).map((entry) => {
+        const sum = entry.length >= 6 ? (entry[4] as number) : undefined;
+        const count = entry.length >= 6 ? (entry[5] as number) : undefined;
+
+        return new LatencyEventInfo(
+            entry[0] as string,
+            entry[1] as number,
+            entry[2] as number,
+            entry[3] as number,
+            sum,
+            count,
+        );
+    });
 }

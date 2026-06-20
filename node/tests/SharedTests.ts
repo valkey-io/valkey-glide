@@ -53,16 +53,19 @@ import {
     SortedSetDataType,
     TimeUnit,
     TimeoutError,
-    Transaction,
     UnsignedEncoding,
     UpdateByScore,
     convertElementsAndScores,
     convertGlideRecordToRecord,
+    LatencyEntry,
+    LatencyEventInfo,
+    MemoryStats,
     parseInfoResponse,
 } from "../build-ts";
 import {
     Client,
     GetAndSetRandomValue,
+    assertMemoryStatsFields,
     flattenClusterResponseArrays,
     getFirstResult,
     getRandomKey,
@@ -662,6 +665,19 @@ export function runBaseTests(config: {
 
                     expect(response).not.toBeNull();
                     expect(response!.length).toBe(3);
+
+                    expect(
+                        (response![0] as unknown[]).every(
+                            (e) => e instanceof LatencyEntry,
+                        ),
+                    ).toBe(true);
+
+                    expect(
+                        (response![1] as unknown[]).every(
+                            (e) => e instanceof LatencyEventInfo,
+                        ),
+                    ).toBe(true);
+
                     // latencyReset returns a number
                     expect(typeof response![2]).toBe("number");
                 }
@@ -13861,6 +13877,140 @@ export function runBaseTests(config: {
                     );
                 }
             }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryDoctor %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const result = await client.memoryDoctor();
+                const reports =
+                    client instanceof GlideClient
+                        ? [result as string]
+                        : Object.values(result as Record<string, string>);
+
+                expect(reports.length).toBeGreaterThan(0);
+
+                for (const report of reports) {
+                    expect(typeof report).toBe("string");
+                    expect(report.length).toBeGreaterThan(0);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryMallocStats %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const result = await client.memoryMallocStats();
+                const reports =
+                    client instanceof GlideClient
+                        ? [result as string]
+                        : Object.values(result as Record<string, string>);
+
+                expect(reports.length).toBeGreaterThan(0);
+
+                for (const report of reports) {
+                    expect(typeof report).toBe("string");
+                    expect(report.length).toBeGreaterThan(0);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryPurge %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                expect(await client.memoryPurge()).toBe("OK");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryStats %p",
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    // Write a key to ensure at least one db has entries
+                    const key = getRandomKey();
+                    await client.set(key, "memoryTestValue");
+
+                    const statsResult = await client.memoryStats();
+                    const statsList =
+                        client instanceof GlideClient
+                            ? [statsResult as MemoryStats]
+                            : Object.values(
+                                  statsResult as Record<string, MemoryStats>,
+                              );
+
+                    expect(statsList.length).toBeGreaterThan(0);
+
+                    for (const stats of statsList) {
+                        assertMemoryStatsFields(stats, cluster);
+                    }
+                },
+                protocol,
+            );
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memory commands — batch %p",
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    const key = getRandomKey();
+                    await client.set(key, "batchMemTest");
+
+                    for (const isAtomic of [true, false]) {
+                        const response =
+                            client instanceof GlideClient
+                                ? await client.exec(
+                                      new Batch(isAtomic)
+                                          .memoryDoctor()
+                                          .memoryMallocStats()
+                                          .memoryPurge()
+                                          .memoryStats(),
+                                      isAtomic,
+                                  )
+                                : await client.exec(
+                                      new ClusterBatch(isAtomic)
+                                          .memoryDoctor()
+                                          .memoryMallocStats()
+                                          .memoryPurge()
+                                          .memoryStats(),
+                                      isAtomic,
+                                  );
+
+                        expect(response).not.toBeNull();
+                        expect(response!.length).toBe(4);
+
+                        expect(typeof response![0]).toBe("string");
+                        expect((response![0] as string).length).toBeGreaterThan(
+                            0,
+                        );
+
+                        expect(typeof response![1]).toBe("string");
+                        expect((response![1] as string).length).toBeGreaterThan(
+                            0,
+                        );
+
+                        expect(response![2]).toBe("OK");
+
+                        const stats = response![3] as unknown as MemoryStats;
+                        assertMemoryStatsFields(stats, cluster);
+                    }
+                },
+                protocol,
+            );
         },
         config.timeout,
     );

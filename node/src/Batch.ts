@@ -288,6 +288,13 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
+    createMemoryDoctor,
+    createMemoryMallocStats,
+    createMemoryPurge,
+    createMemoryStats,
+    parseMemoryStatsResponse,
+    parseLatencyHistoryResponse,
+    parseLatencyLatestResponse,
 } from ".";
 import { command_request } from "../build-ts/ProtobufMessage";
 
@@ -314,6 +321,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @internal
      */
     readonly setCommandsIndexes: number[] = [];
+    /**
+     * Map of command indexes to result converter functions that transform raw responses into typed objects.
+     * @internal
+     */
+    readonly commandConverters = new Map<number, (raw: unknown) => unknown>();
 
     /**
      * @param isAtomic - Determines whether the batch is atomic or non-atomic. If `true`, the
@@ -326,15 +338,21 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Adds a command to the batch and returns the batch instance.
      * @param command - The command to add.
      * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
+     * @param converter - Optional result converter function for this command.
      * @returns The updated batch instance.
      */
     protected addAndReturn(
         command: command_request.Command,
         shouldConvertToSet = false,
+        converter?: (raw: unknown) => unknown,
     ): T {
         if (shouldConvertToSet) {
             // The command's index within the batch is saved for later conversion of its response to a Set type.
             this.setCommandsIndexes.push(this.commands.length);
+        }
+
+        if (converter) {
+            this.commandConverters.set(this.commands.length, converter);
         }
 
         this.commands.push(command);
@@ -4163,7 +4181,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Command Response - An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't exist.
      */
     public latencyHistory(event: GlideString): T {
-        return this.addAndReturn(createLatencyHistory(event));
+        return this.addAndReturn(
+            createLatencyHistory(event),
+            false,
+            parseLatencyHistoryResponse as (raw: unknown) => unknown,
+        );
     }
 
     /**
@@ -4174,7 +4196,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Command Response - An array of {@link LatencyEventInfo} for the latest latency events.
      */
     public latencyLatest(): T {
-        return this.addAndReturn(createLatencyLatest());
+        return this.addAndReturn(
+            createLatencyLatest(),
+            false,
+            parseLatencyLatestResponse as (raw: unknown) => unknown,
+        );
     }
 
     /**
@@ -4469,6 +4495,54 @@ export class BaseBatch<T extends BaseBatch<T>> {
         options?: SortOptions,
     ): T {
         return this.addAndReturn(createSort(key, options, destination));
+    }
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * @see {@link https://valkey.io/commands/memory-doctor/|valkey.io} for details.
+     *
+     * Command Response - The memory diagnostic report.
+     */
+    public memoryDoctor(): T {
+        return this.addAndReturn(createMemoryDoctor());
+    }
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
+     *
+     * Command Response - A string containing the memory allocator statistics.
+     */
+    public memoryMallocStats(): T {
+        return this.addAndReturn(createMemoryMallocStats());
+    }
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * @see {@link https://valkey.io/commands/memory-purge/|valkey.io} for details.
+     *
+     * Command Response - "OK".
+     */
+    public memoryPurge(): T {
+        return this.addAndReturn(createMemoryPurge());
+    }
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * @see {@link https://valkey.io/commands/memory-stats/|valkey.io} for details.
+     *
+     * Command Response - A {@link MemoryStats} object containing detailed memory usage statistics.
+     */
+    public memoryStats(): T {
+        return this.addAndReturn(
+            createMemoryStats(),
+            false,
+            parseMemoryStatsResponse as (raw: unknown) => unknown,
+        );
     }
 }
 

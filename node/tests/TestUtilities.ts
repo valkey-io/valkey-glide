@@ -36,6 +36,7 @@ import {
     JsonBatch,
     ListDirection,
     Logger,
+    MemoryStats,
     ProtocolVersion,
     ReturnTypeMap,
     ScoreFilter,
@@ -2622,4 +2623,75 @@ export async function assertConnected(
 ): Promise<void> {
     const result = await client.ping();
     expect(result).toBe("PONG");
+}
+
+/**
+ * Validates that a MemoryStats object has expected field types and values.
+ * @param stats - The MemoryStats object to validate.
+ * @param cluster - The ValkeyCluster instance.
+ */
+export function assertMemoryStatsFields(
+    stats: MemoryStats,
+    cluster: ValkeyCluster,
+): void {
+    expect(stats.peakAllocated).toBeGreaterThan(0);
+    expect(stats.totalAllocated).toBeGreaterThan(0);
+    expect(stats.startupAllocated).toBeGreaterThan(0);
+    expect(stats.allocatorAllocated).toBeGreaterThan(0);
+    expect(stats.allocatorActive).toBeGreaterThan(0);
+    expect(stats.allocatorResident).toBeGreaterThan(0);
+    expect(stats.overheadTotal).toBeGreaterThan(0);
+
+    expect(typeof stats.replicationBacklog).toBe("number");
+    expect(typeof stats.clientsSlaves).toBe("number");
+    expect(typeof stats.clientsNormal).toBe("number");
+    expect(typeof stats.aofBuffer).toBe("number");
+    expect(typeof stats.luaCaches).toBe("number");
+    expect(typeof stats.keysCount).toBe("number");
+    expect(typeof stats.keysBytesPerKey).toBe("number");
+    expect(typeof stats.datasetBytes).toBe("number");
+    expect(typeof stats.allocatorFragmentationBytes).toBe("number");
+    expect(typeof stats.allocatorRssBytes).toBe("number");
+    expect(typeof stats.rssOverheadBytes).toBe("number");
+    expect(typeof stats.fragmentationBytes).toBe("number");
+    expect(typeof stats.clusterLinks).toBe("number");
+    expect(typeof stats.functionsCaches).toBe("number");
+    expect(typeof stats.allocatorMuzzy).toBe("number");
+
+    expect(typeof stats.datasetPercentage).toBe("number");
+    expect(typeof stats.peakPercentage).toBe("number");
+    expect(typeof stats.allocatorFragmentationRatio).toBe("number");
+    expect(typeof stats.allocatorRssRatio).toBe("number");
+    expect(typeof stats.rssOverheadRatio).toBe("number");
+    expect(typeof stats.fragmentation).toBe("number");
+
+    // Valkey 8.0+ optional fields
+    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
+        expect(typeof stats.overheadDbHashtableLut).toBe("number");
+        expect(typeof stats.overheadDbHashtableRehashing).toBe("number");
+        expect(typeof stats.dbDictRehashingCount).toBe("number");
+    } else {
+        expect(stats.overheadDbHashtableLut).toBeUndefined();
+        expect(stats.overheadDbHashtableRehashing).toBeUndefined();
+        expect(stats.dbDictRehashingCount).toBeUndefined();
+    }
+
+    expect(stats.db).toBeDefined();
+    expect(typeof stats.db).toBe("object");
+
+    for (const dbEntry of Object.values(stats.db)) {
+        expect(dbEntry.overheadHashtableMain).toBeGreaterThanOrEqual(0);
+        expect(dbEntry.overheadHashtableExpires).toBeGreaterThanOrEqual(0);
+
+        if (cluster.isCluster()) {
+            expect(typeof dbEntry.overheadHashtableSlotToKeyspaceMap).toBe(
+                "number",
+            );
+            expect(
+                dbEntry.overheadHashtableSlotToKeyspaceMap as number,
+            ).toBeGreaterThanOrEqual(0);
+        } else {
+            expect(dbEntry.overheadHashtableSlotToKeyspaceMap).toBeUndefined();
+        }
+    }
 }

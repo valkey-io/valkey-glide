@@ -1763,6 +1763,7 @@ export class BaseClient {
     protected processResultWithSetCommands(
         result: GlideReturnType[] | null,
         setCommandsIndexes: number[],
+        commandConverters?: Map<number, (raw: unknown) => unknown>,
     ): GlideReturnType[] | null {
         if (result === null) {
             return null;
@@ -1773,6 +1774,15 @@ export class BaseClient {
                 result[setCommandsIndexes[i]] = new Set<GlideReturnType>(
                     result[setCommandsIndexes[i]] as GlideReturnType[],
                 );
+            }
+        }
+
+        // Apply per-command result converters.
+        if (commandConverters) {
+            for (const [index, converter] of commandConverters) {
+                if (result[index] !== undefined && result[index] !== null) {
+                    result[index] = converter(result[index]) as GlideReturnType;
+                }
             }
         }
 
