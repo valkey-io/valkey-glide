@@ -877,7 +877,10 @@ mod tests {
     #[test]
     fn test_is_blocking_defaults_to_false() {
         let cmd = Cmd::new();
-        assert!(!cmd.is_blocking(), "new Cmd must default to is_blocking=false");
+        assert!(
+            !cmd.is_blocking(),
+            "new Cmd must default to is_blocking=false"
+        );
     }
 
     #[test]
@@ -900,9 +903,6 @@ mod tests {
         cmd.set_is_blocking(true);
 
         let cloned = cmd.clone();
-        assert!(
-            cloned.is_blocking(),
-            "clone must preserve is_blocking=true"
-        );
+        assert!(cloned.is_blocking(), "clone must preserve is_blocking=true");
     }
 }

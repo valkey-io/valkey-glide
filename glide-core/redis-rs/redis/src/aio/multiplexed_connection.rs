@@ -1447,7 +1447,12 @@ mod tests {
         let timeout = Duration::from_secs(2);
         let start = std::time::Instant::now();
         let result = pipeline
-            .send_single(crate::cmd("PING").get_packed_command(), timeout, false, false)
+            .send_single(
+                crate::cmd("PING").get_packed_command(),
+                timeout,
+                false,
+                false,
+            )
             .await;
         let elapsed = start.elapsed();
 
@@ -1689,7 +1694,12 @@ mod tests {
         let timeout = Duration::from_millis(200);
         let start = std::time::Instant::now();
         let result = pipeline
-            .send_single(crate::cmd("PING").get_packed_command(), timeout, false, false)
+            .send_single(
+                crate::cmd("PING").get_packed_command(),
+                timeout,
+                false,
+                false,
+            )
             .await;
         let elapsed = start.elapsed();
 
@@ -1807,8 +1817,13 @@ mod tests {
         for _ in 0..300 {
             let mut p = pipeline.clone();
             handles.push(tokio::spawn(async move {
-                p.send_single(crate::cmd("PING").get_packed_command(), timeout, false, false)
-                    .await
+                p.send_single(
+                    crate::cmd("PING").get_packed_command(),
+                    timeout,
+                    false,
+                    false,
+                )
+                .await
             }));
         }
 
@@ -1916,7 +1931,8 @@ mod tests {
             let mut p = pipeline.clone();
             let packed = packed.clone();
             handles.push(tokio::spawn(async move {
-                p.send_single(packed, Duration::from_secs(60), false, false).await
+                p.send_single(packed, Duration::from_secs(60), false, false)
+                    .await
             }));
         }
         let mut ok = 0usize;
