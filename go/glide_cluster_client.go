@@ -4064,3 +4064,44 @@ func (client *ClusterClient) ClusterLinksWithRoute(
 	}
 	return models.CreateClusterSingleValue[[]map[string]any](data), nil
 }
+
+// Migrate atomically transfers a key from the source Valkey instance to a destination Valkey instance.
+// In cluster mode, only a single key is allowed.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *ClusterClient) Migrate(
+	ctx context.Context,
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+) (string, error) {
+	if len(keys) > 1 {
+		return models.DefaultStringResponse, errors.New("MIGRATE in cluster mode only supports a single key")
+	}
+	return client.baseClient.Migrate(ctx, host, port, keys, destinationDB, timeout)
+}
+
+// MigrateWithOptions atomically transfers a key from the source Valkey instance to a destination
+// Valkey instance with additional options. In cluster mode, only a single key is allowed.
+//
+// See [valkey.io] for details.
+//
+// [valkey.io]: https://valkey.io/commands/migrate/
+func (client *ClusterClient) MigrateWithOptions(
+	ctx context.Context,
+	host string,
+	port int64,
+	keys []string,
+	destinationDB int64,
+	timeout int64,
+	migrateOptions options.MigrateOptions,
+) (string, error) {
+	if len(keys) > 1 {
+		return models.DefaultStringResponse, errors.New("MIGRATE in cluster mode only supports a single key")
+	}
+	return client.baseClient.MigrateWithOptions(ctx, host, port, keys, destinationDB, timeout, migrateOptions)
+}
