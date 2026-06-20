@@ -737,11 +737,15 @@ where
         let recv_elapsed = recv_start.elapsed();
         // For blocking commands (e.g. XREAD BLOCK, BLPOP) the client intentionally
         // waits for a server-side event, so a long receive time is expected and not
-        // indicative of a slow connection.  Use the full timeout as the threshold so
-        // the warning only fires when the response is genuinely late.  For non-blocking
+        // indicative of a slow connection.  Use the request timeout plus a small
+        // latency margin as the threshold so transient network latency near the
+        // timeout boundary does not trigger a spurious warning; the warning then
+        // only fires when the response is genuinely late.  For non-blocking
         // commands, keep the original heuristic (min(timeout/2, 5s)).
+        const BLOCKING_RECV_WARN_MARGIN: std::time::Duration =
+            std::time::Duration::from_millis(250);
         let recv_warn_threshold = if is_blocking {
-            timeout
+            timeout.saturating_add(BLOCKING_RECV_WARN_MARGIN)
         } else {
             std::cmp::min(timeout / 2, std::time::Duration::from_secs(5))
         };
