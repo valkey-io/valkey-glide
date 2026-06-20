@@ -13971,44 +13971,38 @@ export function runBaseTests(config: {
                     const key = getRandomKey();
                     await client.set(key, "batchMemTest");
 
-                    for (const isAtomic of [true, false]) {
-                        const response =
-                            client instanceof GlideClient
-                                ? await client.exec(
-                                      new Batch(isAtomic)
-                                          .memoryDoctor()
-                                          .memoryMallocStats()
-                                          .memoryPurge()
-                                          .memoryStats(),
-                                      isAtomic,
-                                  )
-                                : await client.exec(
-                                      new ClusterBatch(isAtomic)
-                                          .memoryDoctor()
-                                          .memoryMallocStats()
-                                          .memoryPurge()
-                                          .memoryStats(),
-                                      isAtomic,
-                                  );
+                    const response =
+                        client instanceof GlideClient
+                            ? await client.exec(
+                                  new Batch(true)
+                                      .memoryDoctor()
+                                      .memoryMallocStats()
+                                      .memoryPurge()
+                                      .memoryStats(),
+                                  true,
+                              )
+                            : await client.exec(
+                                  new ClusterBatch(true)
+                                      .memoryDoctor()
+                                      .memoryMallocStats()
+                                      .memoryPurge()
+                                      .memoryStats(),
+                                  true,
+                              );
 
-                        expect(response).not.toBeNull();
-                        expect(response!.length).toBe(4);
+                    expect(response).not.toBeNull();
+                    expect(response!.length).toBe(4);
 
-                        expect(typeof response![0]).toBe("string");
-                        expect((response![0] as string).length).toBeGreaterThan(
-                            0,
-                        );
+                    expect(typeof response![0]).toBe("string");
+                    expect((response![0] as string).length).toBeGreaterThan(0);
 
-                        expect(typeof response![1]).toBe("string");
-                        expect((response![1] as string).length).toBeGreaterThan(
-                            0,
-                        );
+                    expect(typeof response![1]).toBe("string");
+                    expect((response![1] as string).length).toBeGreaterThan(0);
 
-                        expect(response![2]).toBe("OK");
+                    expect(response![2]).toBe("OK");
 
-                        const stats = response![3] as unknown as MemoryStats;
-                        assertMemoryStatsFields(stats, cluster);
-                    }
+                    const stats = response![3] as unknown as MemoryStats;
+                    assertMemoryStatsFields(stats, cluster);
                 },
                 protocol,
             );

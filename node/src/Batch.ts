@@ -297,6 +297,7 @@ import {
     parseLatencyLatestResponse,
 } from ".";
 import { command_request } from "../build-ts/ProtobufMessage";
+import { convertGlideRecordToRecord } from "./BaseClient";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.
@@ -4538,10 +4539,12 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Command Response - A {@link MemoryStats} object containing detailed memory usage statistics.
      */
     public memoryStats(): T {
-        return this.addAndReturn(
-            createMemoryStats(),
-            false,
-            parseMemoryStatsResponse as (raw: unknown) => unknown,
+        return this.addAndReturn(createMemoryStats(), false, (raw: unknown) =>
+            parseMemoryStatsResponse(
+                convertGlideRecordToRecord(
+                    raw as GlideRecord<unknown>,
+                ) as Record<string, unknown>,
+            ),
         );
     }
 }

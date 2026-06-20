@@ -5395,12 +5395,20 @@ function _parseMemoryStatsDb(raw: Record<string, unknown>): MemoryStatsDb {
 }
 
 /** @internal */
-export function parseMemoryStatsResponse(raw: Record<string, unknown>): MemoryStats {
+export function parseMemoryStatsResponse(
+    raw: Record<string, unknown>,
+): MemoryStats {
     const db: Record<number, MemoryStatsDb> = {};
 
     for (const [key, value] of Object.entries(raw)) {
-        if (key.startsWith(_MEMORY_STATS_DB_PREFIX) && key !== "db.dict.rehashing.count") {
-            const dbIndex = parseInt(key.slice(_MEMORY_STATS_DB_PREFIX.length), 10);
+        if (
+            key.startsWith(_MEMORY_STATS_DB_PREFIX) &&
+            key !== "db.dict.rehashing.count"
+        ) {
+            const dbIndex = parseInt(
+                key.slice(_MEMORY_STATS_DB_PREFIX.length),
+                10,
+            );
             db[dbIndex] = _parseMemoryStatsDb(value as Record<string, unknown>);
         }
     }
@@ -5423,8 +5431,12 @@ export function parseMemoryStatsResponse(raw: Record<string, unknown>): MemorySt
         allocatorAllocated: Number(raw["allocator.allocated"]),
         allocatorActive: Number(raw["allocator.active"]),
         allocatorResident: Number(raw["allocator.resident"]),
-        allocatorFragmentationRatio: Number(raw["allocator-fragmentation.ratio"]),
-        allocatorFragmentationBytes: Number(raw["allocator-fragmentation.bytes"]),
+        allocatorFragmentationRatio: Number(
+            raw["allocator-fragmentation.ratio"],
+        ),
+        allocatorFragmentationBytes: Number(
+            raw["allocator-fragmentation.bytes"],
+        ),
         allocatorRssRatio: Number(raw["allocator-rss.ratio"]),
         allocatorRssBytes: Number(raw["allocator-rss.bytes"]),
         rssOverheadRatio: Number(raw["rss-overhead.ratio"]),

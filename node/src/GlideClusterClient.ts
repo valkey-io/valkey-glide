@@ -2630,13 +2630,20 @@ export class GlideClusterClient extends BaseClient {
     ): Promise<ClusterResponse<MemoryStats>> {
         return this.createWritePromise<
             ClusterGlideRecord<Record<string, unknown>>
-        >(createMemoryStats(), options).then((res) =>
-            convertAndParseClusterResponse(
+        >(createMemoryStats(), options).then((res) => {
+            if (isSingleNodeRoute(false, options?.route)) {
+                const record = convertGlideRecordToRecord(
+                    res as unknown as GlideRecord<unknown>,
+                ) as Record<string, unknown>;
+                return parseMemoryStatsResponse(record);
+            }
+
+            return convertAndParseClusterResponse(
                 res,
-                isSingleNodeRoute(false, options?.route),
+                false,
                 (raw) =>
                     parseMemoryStatsResponse(raw as Record<string, unknown>),
-            ),
-        );
+            );
+        });
     }
 }
