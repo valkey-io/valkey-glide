@@ -54,8 +54,6 @@ import {
     InsertPosition,
     KeyWeight,
     LPosOptions,
-    LatencyEntry,
-    LatencyEventInfo,
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars

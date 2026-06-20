@@ -947,9 +947,7 @@ func convertMemoryStatsDb(data any) (models.MemoryStatsDb, error) {
 		return models.MemoryStatsDb{}, fmt.Errorf("unexpected type for db entry: %T, expected map[string]any", data)
 	}
 
-	db := models.MemoryStatsDb{
-		OverheadHashtableSlotToKeyspaceMap: models.CreateNilInt64Result(),
-	}
+	db := models.MemoryStatsDb{}
 
 	val, exists := rawMap["overhead.hashtable.main"]
 	if !exists || val == nil {
@@ -970,15 +968,6 @@ func convertMemoryStatsDb(data any) (models.MemoryStatsDb, error) {
 		return db, fmt.Errorf("error parsing overhead.hashtable.expires: %w", err)
 	}
 	db.OverheadHashtableExpires = v
-
-	// Cluster-only field
-	if val, exists := rawMap["overhead.hashtable.slot-to-keyspace-map"]; exists && val != nil {
-		v, err := ConvertToInt64(val)
-		if err != nil {
-			return db, fmt.Errorf("error parsing overhead.hashtable.slot-to-keyspace-map: %w", err)
-		}
-		db.OverheadHashtableSlotToKeyspaceMap = models.CreateInt64Result(v)
-	}
 
 	return db, nil
 }

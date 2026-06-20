@@ -2117,8 +2117,3 @@ def assert_memory_stats_fields(stats: "MemoryStats", server_version: str, is_clu
         assert isinstance(db_entry, MemoryStatsDb)
         assert db_entry.overhead_hashtable_main >= 0
         assert db_entry.overhead_hashtable_expires >= 0
-        if is_cluster:
-            assert db_entry.overhead_hashtable_slot_to_keyspace_map is not None
-            assert db_entry.overhead_hashtable_slot_to_keyspace_map >= 0
-        else:
-            assert db_entry.overhead_hashtable_slot_to_keyspace_map is None

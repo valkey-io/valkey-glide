@@ -80,7 +80,6 @@ def avoid_duplicate(app, what, name, obj, skip, options):
         # MemoryStatsDb
         "overhead_hashtable_main",
         "overhead_hashtable_expires",
-        "overhead_hashtable_slot_to_keyspace_map",
         # MemoryStats
         "peak_allocated",
         "total_allocated",

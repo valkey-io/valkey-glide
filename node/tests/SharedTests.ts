@@ -53,6 +53,7 @@ import {
     SortedSetDataType,
     TimeUnit,
     TimeoutError,
+    Transaction,
     UnsignedEncoding,
     UpdateByScore,
     convertElementsAndScores,

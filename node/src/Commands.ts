@@ -5265,18 +5265,11 @@ export interface ClusterBatchRetryStrategy {
  * Database memory overhead statistics from MEMORY STATS.
  */
 export interface MemoryStatsDb {
-
     /** Overhead of the main dictionary hashtable. */
     overheadHashtableMain: number;
 
     /** Overhead of the expires dictionary hashtable. */
     overheadHashtableExpires: number;
-
-    /**
-     * Overhead of the slot-to-keyspace-map hashtable.
-     * @remarks Cluster mode only.
-     */
-    overheadHashtableSlotToKeyspaceMap?: number;
 }
 
 /**
@@ -5398,10 +5391,6 @@ function _parseMemoryStatsDb(raw: Record<string, unknown>): MemoryStatsDb {
     return {
         overheadHashtableMain: Number(raw["overhead.hashtable.main"]),
         overheadHashtableExpires: Number(raw["overhead.hashtable.expires"]),
-        overheadHashtableSlotToKeyspaceMap:
-            "overhead.hashtable.slot-to-keyspace-map" in raw
-                ? Number(raw["overhead.hashtable.slot-to-keyspace-map"])
-                : undefined,
     };
 }
 

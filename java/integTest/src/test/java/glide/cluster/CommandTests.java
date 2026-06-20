@@ -4806,10 +4806,6 @@ public class CommandTests {
         assertInstanceOf(Long.class, db0Map.get("overhead.hashtable.main"));
         assertInstanceOf(Long.class, db0Map.get("overhead.hashtable.expires"));
 
-        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            assertInstanceOf(Long.class, db0Map.get("overhead.hashtable.slot-to-keyspace-map"));
-        }
-
         // Validate optional fields (Valkey 8.0+)
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             assertTrue(

@@ -2682,16 +2682,5 @@ export function assertMemoryStatsFields(
     for (const dbEntry of Object.values(stats.db)) {
         expect(dbEntry.overheadHashtableMain).toBeGreaterThanOrEqual(0);
         expect(dbEntry.overheadHashtableExpires).toBeGreaterThanOrEqual(0);
-
-        if (cluster.isCluster()) {
-            expect(typeof dbEntry.overheadHashtableSlotToKeyspaceMap).toBe(
-                "number",
-            );
-            expect(
-                dbEntry.overheadHashtableSlotToKeyspaceMap as number,
-            ).toBeGreaterThanOrEqual(0);
-        } else {
-            expect(dbEntry.overheadHashtableSlotToKeyspaceMap).toBeUndefined();
-        }
     }
 }

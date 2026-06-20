@@ -14,7 +14,6 @@ class MemoryStatsDb:
 
     overhead_hashtable_main: int
     overhead_hashtable_expires: int
-    overhead_hashtable_slot_to_keyspace_map: Optional[int] = None  # cluster only
 
 
 @dataclass
@@ -66,11 +65,6 @@ def _parse_memory_stats_db(map: Mapping[bytes, Any]) -> MemoryStatsDb:
     return MemoryStatsDb(
         overhead_hashtable_main=int(map[b"overhead.hashtable.main"]),
         overhead_hashtable_expires=int(map[b"overhead.hashtable.expires"]),
-        overhead_hashtable_slot_to_keyspace_map=(
-            int(map[b"overhead.hashtable.slot-to-keyspace-map"])
-            if b"overhead.hashtable.slot-to-keyspace-map" in map
-            else None
-        ),
     )
 
 

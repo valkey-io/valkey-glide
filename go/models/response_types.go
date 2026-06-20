@@ -509,9 +509,8 @@ type LatencyEventInfo struct {
 
 // MemoryStatsDb represents database memory overhead statistics from MEMORY STATS.
 type MemoryStatsDb struct {
-	OverheadHashtableMain              int64
-	OverheadHashtableExpires           int64
-	OverheadHashtableSlotToKeyspaceMap Result[int64] // cluster mode only
+	OverheadHashtableMain    int64
+	OverheadHashtableExpires int64
 }
 
 // MemoryStats represents memory statistics from MEMORY STATS.

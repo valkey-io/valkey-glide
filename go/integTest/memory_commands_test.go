@@ -393,11 +393,5 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats, 
 	for _, dbStats := range result.Db {
 		assert.GreaterOrEqual(t, dbStats.OverheadHashtableMain, int64(0))
 		assert.GreaterOrEqual(t, dbStats.OverheadHashtableExpires, int64(0))
-		if isCluster {
-			assert.NotNil(t, dbStats.OverheadHashtableSlotToKeyspaceMap)
-			assert.GreaterOrEqual(t, dbStats.OverheadHashtableSlotToKeyspaceMap.Value(), int64(0))
-		} else {
-			assert.Nil(t, dbStats.OverheadHashtableSlotToKeyspaceMap)
-		}
 	}
 }
