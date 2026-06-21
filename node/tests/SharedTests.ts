@@ -47,6 +47,7 @@ import {
     Score,
     ScoreFilter,
     Script,
+    ScriptDebugMode,
     SignedEncoding,
     SingleNodeRoute,
     SortOrder,
@@ -5369,6 +5370,26 @@ export function runBaseTests(config: {
                         await client.scriptExists([script.getHash()]),
                     ).toEqual([false]);
                     script.release();
+                }, protocol);
+            },
+            config.timeout,
+        );
+    });
+
+    describe("script debug test", () => {
+        it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+            "script debug test_%p",
+            async (protocol) => {
+                await runTest(async (client: BaseClient) => {
+                    expect(
+                        await client.scriptDebug(ScriptDebugMode.YES),
+                    ).toEqual("OK");
+                    expect(
+                        await client.scriptDebug(ScriptDebugMode.SYNC),
+                    ).toEqual("OK");
+                    expect(
+                        await client.scriptDebug(ScriptDebugMode.NO),
+                    ).toEqual("OK");
                 }, protocol);
             },
             config.timeout,

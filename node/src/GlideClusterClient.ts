@@ -28,6 +28,7 @@ import {
     ClusterScanOptions,
     FlushMode,
     FunctionListOptions,
+    ScriptDebugMode,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
@@ -76,6 +77,7 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createScriptDebug,
     createSSubscribeLazy,
     createSSubscribe,
     createSUnsubscribeLazy,
@@ -2361,6 +2363,31 @@ export class GlideClusterClient extends BaseClient {
      */
     public async scriptKill(options?: RouteOption): Promise<"OK"> {
         return this.createWritePromise(createScriptKill(), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Set the debugging mode for executed scripts.
+     *
+     * @see {@link https://valkey.io/commands/script-debug/|valkey.io} for more details.
+     *
+     * @param mode - The debugging mode to set.
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A simple `"OK"` response.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.scriptDebug(ScriptDebugMode.YES);
+     * console.log(result); // Output: "OK"
+     * ```
+     */
+    public async scriptDebug(
+        mode: ScriptDebugMode,
+        options?: RouteOption,
+    ): Promise<"OK"> {
+        return this.createWritePromise(createScriptDebug(mode), {
             decoder: Decoder.String,
             ...options,
         });

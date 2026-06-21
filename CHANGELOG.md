@@ -10,6 +10,7 @@
 
 ### Changes
 
+* Node: Add SCRIPT DEBUG command ([#6294](https://github.com/valkey-io/valkey-glide/pull/6294))
 * Core, Java, Python, Node, Go: Add `LATENCY HISTORY`, `LATENCY LATEST`, and `LATENCY RESET` command support ([#6206](https://github.com/valkey-io/valkey-glide/issues/6206))
 * Node, Python, Go: Add `FAILOVER` and `REPLICAOF` command support ([#6222](https://github.com/valkey-io/valkey-glide/pull/6222))
 * Python Async: Replace UDS+protobuf transport with FFI+pipe architecture. Commands go directly through CFFI to Rust; responses return via anonymous pipe with Rust-native parsing. Adds trio/anyio support, address resolver, cache metrics. +19-21% throughput for simple commands, +11-16% for collections vs v2.4.1. ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))

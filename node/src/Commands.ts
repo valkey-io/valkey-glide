@@ -2952,6 +2952,28 @@ export enum FlushMode {
 }
 
 /**
+ * Defines the debugging mode for executed scripts.
+ *
+ * See https://valkey.io/commands/script-debug/ for details.
+ */
+export enum ScriptDebugMode {
+    /**
+     * Enable non-blocking asynchronous debugging mode. The server will fork a debugging session that
+     * won't block the server.
+     */
+    YES = "YES",
+
+    /**
+     * Enable blocking synchronous debugging mode. The server will block and wait for commands from
+     * the debugging client.
+     */
+    SYNC = "SYNC",
+
+    /** Disable script debugging mode. */
+    NO = "NO",
+}
+
+/**
  * @internal
  * This function converts an input from Record or GlideRecord types to GlideRecord.
  *
@@ -4979,6 +5001,13 @@ export function createScriptFlush(mode?: FlushMode): command_request.Command {
 /** @internal */
 export function createScriptKill(): command_request.Command {
     return createCommand(RequestType.ScriptKill, []);
+}
+
+/** @internal */
+export function createScriptDebug(
+    mode: ScriptDebugMode,
+): command_request.Command {
+    return createCommand(RequestType.ScriptDebug, [mode.toString()]);
 }
 
 /**
