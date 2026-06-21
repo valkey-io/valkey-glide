@@ -5277,3 +5277,334 @@ pub unsafe extern "C-unwind" fn close_monitor_client(client_ptr: *const c_void) 
         let _ = unsafe { Box::from_raw(client_ptr as *mut MonitorAdapter) };
     }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLIENT-INSTANCE POOL FFI (Feature 1)
+//
+// These functions expose glide-core's ClientPool to all language bindings.
+// The pool manages GlideClient lifecycle (creation, LIFO reuse, bounded size).
+// Language bindings call these via their FFI mechanism (CFFI, Ruby FFI, JNI, CGO).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+use glide_core::pool::{self, ClientPool, ClientState, PoolConfig, PooledClient, POOL_RUNNING};
+use std::sync::atomic::Ordering as AtomicOrdering;
+
+/// Shared Tokio runtime for pool background operations (client creation, eviction).
+/// All pooled clients share this runtime rather than each getting their own.
+static POOL_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+/// Maps client_id → (ClientAdapter raw pointer, PooledClient).
+/// When a client is acquired, the entry moves here. On release, it moves back to pool.idle.
+static POOL_CLIENTS: std::sync::OnceLock<dashmap::DashMap<u64, PoolClientEntry>> =
+    std::sync::OnceLock::new();
+
+struct PoolClientEntry {
+    adapter_ptr: usize,  // *const ClientAdapter as usize (for command dispatch)
+    client: glide_core::client::Client,
+    created_at: std::time::Instant,
+}
+
+fn get_pool_runtime() -> &'static tokio::runtime::Runtime {
+    POOL_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(2)
+            .thread_name("glide-pool")
+            .build()
+            .expect("Failed to create pool runtime")
+    })
+}
+
+fn get_pool_clients() -> &'static dashmap::DashMap<u64, PoolClientEntry> {
+    POOL_CLIENTS.get_or_init(dashmap::DashMap::new)
+}
+
+/// Create a GlideClient + ClientAdapter for the pool.
+/// Runs on a dedicated thread (not inside an existing runtime) to avoid nesting.
+fn create_pool_client_sync(
+    connection_request_bytes: &[u8],
+) -> Result<(usize, glide_core::client::Client), String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| format!("Runtime creation failed: {}", e))?;
+
+    let bg_runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(1)
+        .thread_name("glide-pool-client")
+        .build()
+        .map_err(|e| format!("BG runtime creation failed: {}", e))?;
+
+    // Parse and create client on background runtime
+    let client = {
+        let _guard = bg_runtime.enter();
+        bg_runtime.block_on(async {
+            let proto = glide_core::connection_request::ConnectionRequest::parse_from_bytes(
+                connection_request_bytes,
+            )
+            .map_err(|e| format!("Protobuf parse error: {}", e))?;
+            let req = glide_core::client::ConnectionRequest::from(proto);
+            glide_core::client::Client::new(req, None)
+                .await
+                .map_err(|e| format!("Client creation failed: {}", e))
+        })?
+    };
+
+    // Build ClientAdapter (sync mode: current_thread main + multi_thread background)
+    let core = Arc::new(CommandExecutionCore {
+        client: client.clone(),
+        client_type: ClientType::SyncClient,
+    });
+    let adapter = Arc::new(ClientAdapter {
+        runtime,
+        pipe_client_id: std::sync::atomic::AtomicU64::new(0),
+        background_runtime: Some(bg_runtime),
+        core,
+        pubsub_callback: Arc::new(std::sync::RwLock::new(None)),
+    });
+    let ptr = Arc::into_raw(adapter) as usize;
+
+    Ok((ptr, client))
+}
+
+/// Create a new client-instance pool.
+///
+/// Spawns `min_idle` background client creation tasks. Returns pool_id (positive)
+/// on success, -1 on invalid config, -2 on other errors.
+///
+/// # Safety
+/// `connection_request_ptr` must point to `connection_request_len` valid bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_pool_create(
+    max_size: u32,
+    min_idle: u32,
+    idle_timeout_ms: u64,
+    request_timeout_ms: u64,
+    connection_request_ptr: *const u8,
+    connection_request_len: usize,
+) -> i64 {
+    let connection_request = if connection_request_ptr.is_null() || connection_request_len == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(connection_request_ptr, connection_request_len) }.to_vec()
+    };
+
+    let config = PoolConfig {
+        max_size,
+        min_idle,
+        idle_timeout: std::time::Duration::from_millis(idle_timeout_ms),
+        request_timeout: std::time::Duration::from_millis(request_timeout_ms),
+        connection_request: connection_request.clone(),
+    };
+
+    let pool = match ClientPool::new(config) {
+        Ok(p) => p,
+        Err(_) => return -1,
+    };
+
+    let pool_id = pool::register_pool(pool);
+
+    // Spawn min_idle background client creation
+    if min_idle > 0 {
+        let pool_arc = pool::get_pool(pool_id).unwrap();
+        for _ in 0..min_idle {
+            let pool_clone = pool_arc.clone();
+            let bytes = connection_request.clone();
+            std::thread::spawn(move || {
+                match create_pool_client_sync(&bytes) {
+                    Ok((adapter_ptr, client)) => {
+                        let rt = get_pool_runtime();
+                        rt.block_on(async {
+                            let mut pool = pool_clone.lock().await;
+                            if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
+                                return;
+                            }
+                            let client_id = pool.next_id();
+                            let entry = PooledClient {
+                                client_id,
+                                client: client.clone(),
+                                created_at: std::time::Instant::now(),
+                                last_idle_at: std::time::Instant::now(),
+                                borrowed_at: None,
+                                state: ClientState::Idle,
+                            };
+                            pool.idle.push_back(entry);
+                            pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
+                            // Store adapter mapping
+                            get_pool_clients().insert(client_id, PoolClientEntry {
+                                adapter_ptr,
+                                client,
+                                created_at: std::time::Instant::now(),
+                            });
+                        });
+                    }
+                    Err(e) => {
+                        logger_core::log_error_lazy!("pool", format!("Background client creation failed: {}", e));
+                    }
+                }
+            });
+        }
+    }
+
+    pool_id as i64
+}
+
+/// Non-blocking acquire. Returns client_id >= 0, -1 if exhausted, -2 if invalid pool.
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
+    let pool_arc = match pool::get_pool(pool_id) {
+        Some(arc) => arc,
+        None => return -2,
+    };
+
+    match pool_arc.try_lock() {
+        Ok(mut pool) => {
+            let result = pool.try_acquire();
+            if result == -1 && pool.should_create() {
+                // Trigger background creation
+                pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
+                let pool_clone = pool_arc.clone();
+                let bytes = pool.config.connection_request.clone();
+                drop(pool);
+                std::thread::spawn(move || {
+                    match create_pool_client_sync(&bytes) {
+                        Ok((adapter_ptr, client)) => {
+                            let rt = get_pool_runtime();
+                            rt.block_on(async {
+                                let mut pool = pool_clone.lock().await;
+                                if pool.state.load(AtomicOrdering::Acquire) != POOL_RUNNING {
+                                    pool.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                                    return;
+                                }
+                                let client_id = pool.next_id();
+                                let entry = PooledClient {
+                                    client_id,
+                                    client: client.clone(),
+                                    created_at: std::time::Instant::now(),
+                                    last_idle_at: std::time::Instant::now(),
+                                    borrowed_at: None,
+                                    state: ClientState::Idle,
+                                };
+                                pool.idle.push_back(entry);
+                                get_pool_clients().insert(client_id, PoolClientEntry {
+                                    adapter_ptr,
+                                    client,
+                                    created_at: std::time::Instant::now(),
+                                });
+                            });
+                        }
+                        Err(e) => {
+                            logger_core::log_error_lazy!("pool", format!("Background creation failed: {}", e));
+                            let rt = get_pool_runtime();
+                            rt.block_on(async {
+                                let pool = pool_clone.lock().await;
+                                pool.total_count.fetch_sub(1, AtomicOrdering::AcqRel);
+                            });
+                        }
+                    }
+                });
+            }
+            result
+        }
+        Err(_) => -1,
+    }
+}
+
+/// Release a borrowed client back to the pool. Fire-and-forget.
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_pool_release(pool_id: u64, client_id: u64) -> i32 {
+    let pool_arc = match pool::get_pool(pool_id) {
+        Some(arc) => arc,
+        None => return -1,
+    };
+
+    // Get the client entry to return to pool
+    let entry = get_pool_clients().get(&client_id);
+    let Some(entry) = entry else { return -1; };
+    let client = entry.client.clone();
+    let created_at = entry.created_at;
+    drop(entry);
+
+    match pool_arc.try_lock() {
+        Ok(mut pool) => {
+            let pooled = PooledClient {
+                client_id,
+                client,
+                created_at,
+                last_idle_at: std::time::Instant::now(),
+                borrowed_at: None,
+                state: ClientState::Idle,
+            };
+            pool.release(client_id, pooled);
+            0
+        }
+        Err(_) => {
+            // Lock contended — async release
+            let pool_clone = pool_arc.clone();
+            let rt = get_pool_runtime();
+            rt.spawn(async move {
+                let mut pool = pool_clone.lock().await;
+                let pooled = PooledClient {
+                    client_id,
+                    client,
+                    created_at,
+                    last_idle_at: std::time::Instant::now(),
+                    borrowed_at: None,
+                    state: ClientState::Idle,
+                };
+                pool.release(client_id, pooled);
+            });
+            0
+        }
+    }
+}
+
+/// Destroy a pool.
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_pool_destroy(pool_id: u64) -> i32 {
+    let pool_arc = match pool::unregister_pool(pool_id) {
+        Some(arc) => arc,
+        None => return -1,
+    };
+    if let Ok(mut pool) = pool_arc.try_lock() {
+        pool.destroy();
+    }
+    0
+}
+
+/// Get the ClientAdapter pointer for a borrowed client_id.
+/// Language bindings pass this to `command()` for dispatch.
+#[unsafe(no_mangle)]
+pub extern "C" fn glide_pool_get_client_ptr(client_id: u64) -> usize {
+    get_pool_clients()
+        .get(&client_id)
+        .map(|e| e.adapter_ptr)
+        .unwrap_or(0)
+}
+
+/// Query pool metrics. Writes idle/active/total to out pointers.
+///
+/// # Safety
+/// Out pointers must be valid for writing a u32.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn glide_pool_metrics(
+    pool_id: u64,
+    idle_out: *mut u32,
+    active_out: *mut u32,
+    total_out: *mut u32,
+) -> i32 {
+    let pool_arc = match pool::get_pool(pool_id) {
+        Some(arc) => arc,
+        None => return -1,
+    };
+    match pool_arc.try_lock() {
+        Ok(pool) => {
+            if !idle_out.is_null() { unsafe { *idle_out = pool.idle_count(); } }
+            if !active_out.is_null() { unsafe { *active_out = pool.active_count(); } }
+            if !total_out.is_null() { unsafe { *total_out = pool.total_count.load(AtomicOrdering::Acquire); } }
+            0
+        }
+        Err(_) => -1,
+    }
+}

@@ -10,6 +10,7 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 
 [dependencies]
 libc = "0.2"
+dashmap = "5"
 protobuf = { version = "3", features = [] }
 redis = { path = "../glide-core/redis-rs/redis", features = ["aio", "tokio-comp", "tokio-rustls-comp"] }
 glide-core = { path = "../glide-core", features = ["proto"] }
