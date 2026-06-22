@@ -141,13 +141,20 @@ impl ClientPool {
 
     /// Non-blocking acquire. Returns client_id on success.
     /// Returns -1 if pool is closed/closing, -3 if no idle client available.
-    pub fn try_acquire(&mut self) -> i64 {
+    /// Evicts idle connections past idle_timeout before returning.
+    /// Evicted client_ids are appended to `evicted` for caller cleanup.
+    pub fn try_acquire(&mut self, evicted: &mut Vec<u64>) -> i64 {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
-            return -1; // Pool not running
+            return -1;
         }
 
-        // LIFO pop from idle stack
-        if let Some(mut entry) = self.idle.pop_back() {
+        while let Some(mut entry) = self.idle.pop_back() {
+            let idle_duration = Instant::now().duration_since(entry.last_idle_at);
+            if idle_duration > self.config.idle_timeout {
+                evicted.push(entry.client_id);
+                self.total_count.fetch_sub(1, Ordering::AcqRel);
+                continue;
+            }
             let client_id = entry.client_id;
             entry.state = ClientState::InUse;
             entry.borrowed_at = Some(Instant::now());
@@ -155,7 +162,7 @@ impl ClientPool {
             return client_id as i64;
         }
 
-        -3 // No idle client available (distinct from -1=closed, -2=invalid pool)
+        -3
     }
 
     /// Whether background creation should be triggered (room below max_size).

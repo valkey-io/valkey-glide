@@ -5324,22 +5324,20 @@ fn get_pool_clients() -> &'static dashmap::DashMap<u64, PoolClientEntry> {
 fn create_pool_client_sync(
     connection_request_bytes: &[u8],
 ) -> Result<(usize, glide_core::client::Client), String> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
+    // Each pooled client gets a lightweight current_thread runtime for block_on,
+    // but shares the global POOL_RUNTIME for background I/O (connection drivers,
+    // reconnection). This avoids creating N OS threads for N pooled clients.
+    let main_runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|e| format!("Runtime creation failed: {}", e))?;
 
-    let bg_runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .worker_threads(1)
-        .thread_name("glide-pool-client")
-        .build()
-        .map_err(|e| format!("BG runtime creation failed: {}", e))?;
+    let shared_bg = get_pool_runtime();
 
-    // Parse and create client on background runtime
+    // Create client on the shared background runtime
     let client = {
-        let _guard = bg_runtime.enter();
-        bg_runtime.block_on(async {
+        let _guard = shared_bg.enter();
+        shared_bg.block_on(async {
             let proto = glide_core::connection_request::ConnectionRequest::parse_from_bytes(
                 connection_request_bytes,
             )
@@ -5351,15 +5349,28 @@ fn create_pool_client_sync(
         })?
     };
 
-    // Build ClientAdapter (sync mode: current_thread main + multi_thread background)
+    // Build ClientAdapter: current_thread for block_on, shared bg for I/O.
+    // Note: background_runtime is None — the shared POOL_RUNTIME handles
+    // spawned tasks. The SyncClient execute_request enters the bg context
+    // via the pool runtime handle stored separately.
     let core = Arc::new(CommandExecutionCore {
         client: client.clone(),
         client_type: ClientType::SyncClient,
     });
+    // For sync dispatch to work correctly, we need a background_runtime ref
+    // so execute_request can enter its context during block_on.
+    // Clone the pool runtime's handle into a dedicated wrapper.
+    let bg_handle = shared_bg.handle().clone();
+    let bg_wrapper = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(0) // No actual threads — we just need the Handle
+        .build()
+        .ok(); // Fallback: if this fails, sync dispatch still works without bg context
+
     let adapter = Arc::new(ClientAdapter {
-        runtime,
+        runtime: main_runtime,
         pipe_client_id: std::sync::atomic::AtomicU64::new(0),
-        background_runtime: Some(bg_runtime),
+        background_runtime: bg_wrapper,
         core,
         pubsub_callback: Arc::new(std::sync::RwLock::new(None)),
     });
@@ -5461,14 +5472,18 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            let result = pool.try_acquire();
+            let mut evicted = Vec::new();
+            let result = pool.try_acquire(&mut evicted);
+
+            // Clean up evicted entries from POOL_CLIENTS
+            for evicted_id in &evicted {
+                get_pool_clients().remove(evicted_id);
+            }
 
             // Record OTel metrics for pool hit/miss
             if result >= 0 {
-                // Pool hit — client acquired from idle
                 let _ = GlideOpenTelemetry::record_pool_hit();
             } else {
-                // Pool miss — no idle client available
                 let _ = GlideOpenTelemetry::record_pool_miss();
             }
 

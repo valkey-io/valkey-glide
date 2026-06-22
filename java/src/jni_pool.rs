@@ -97,7 +97,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            let result = pool.try_acquire();
+            let mut evicted = Vec::new();
+            let result = pool.try_acquire(&mut evicted);
+            // Clean up evicted entries from JNI handle table
+            let handle_table = get_handle_table();
+            for eid in &evicted { handle_table.remove(eid); }
             if result < 0 && pool.should_create() {
                 pool.total_count.fetch_add(1, Ordering::AcqRel);
                 let pool_clone = pool_arc.clone();
