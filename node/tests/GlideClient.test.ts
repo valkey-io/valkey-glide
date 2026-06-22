@@ -22,6 +22,7 @@ import {
     GlideClient,
     GlideRecord,
     GlideString,
+    InfoOptions,
     ListDirection,
     ProtocolVersion,
     RequestError,
@@ -765,7 +766,9 @@ describe("GlideClient", () => {
         "migrate test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 5000,
+                }),
             );
 
             const key = getRandomKey();
@@ -799,16 +802,117 @@ describe("GlideClient", () => {
                 }),
             ).rejects.toThrow();
 
+            // Multi-key: NOKEY when keys do not exist
+            const key2 = getRandomKey();
+            const key3 = getRandomKey();
+            expect(
+                await client.migrate(
+                    serverHost,
+                    serverPort,
+                    [key2, key3],
+                    0,
+                    1000,
+                ),
+            ).toEqual("NOKEY");
+
+            // Multi-key: error on invalid host
+            await client.set(key2, "value2");
+            await client.set(key3, "value3");
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000),
+            ).rejects.toThrow();
+
+            // Multi-key: error with options
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000, {
+                    copy: true,
+                    replace: true,
+                }),
+            ).rejects.toThrow();
+
+            // Multi-key: empty keys array throws
+            await expect(
+                client.migrate(serverHost, serverPort, [], 0, 1000),
+            ).rejects.toThrow("key must not be an empty array");
+
+            // Multi-key with single key: NOKEY when key does not exist
+            const key4 = getRandomKey();
+            expect(
+                await client.migrate(serverHost, serverPort, [key4], 0, 1000),
+            ).toEqual("NOKEY");
+
+            // Multi-key with AUTH: error on invalid host
+            await expect(
+                client.migrate("invalid-host", 6379, [key2, key3], 0, 1000, {
+                    password: "secret",
+                }),
+            ).rejects.toThrow();
+
             client.close();
         },
         TIMEOUT,
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "migrate multi-key success test_%p",
+        async (protocol) => {
+            const destCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                0,
+                getServerVersion,
+            );
+            const sourceClient = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const destClient = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    destCluster.getAddresses(),
+                    protocol,
+                ),
+            );
+
+            try {
+                const key1 = getRandomKey();
+                const key2 = getRandomKey();
+                await sourceClient.set(key1, "value1");
+                await sourceClient.set(key2, "value2");
+
+                const [destHost, destPort] = destCluster.getAddresses()[0];
+                expect(
+                    await sourceClient.migrate(
+                        destHost,
+                        destPort,
+                        [key1, key2],
+                        0,
+                        5000,
+                    ),
+                ).toEqual("OK");
+
+                expect(await destClient.mget([key1, key2])).toEqual([
+                    "value1",
+                    "value2",
+                ]);
+                expect(await sourceClient.mget([key1, key2])).toEqual([
+                    null,
+                    null,
+                ]);
+            } finally {
+                sourceClient.close();
+                destClient.close();
+                await destCluster.close();
+            }
+        },
+        60000,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "move test_%p",
         async (protocol) => {
             const client = await GlideClient.createClient(
-                getClientConfigurationOption(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol, {
+                    requestTimeout: 5000,
+                }),
             );
 
             const key1 = "{key}-1" + getRandomKey();
@@ -2166,6 +2270,86 @@ describe("GlideClient", () => {
             });
 
             await assertConnected(client);
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    // Spin up a dedicated standalone with 1 replica so the failover
+    // doesn't destabilize the shared test server.
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_to_replica_%p",
+        async (protocol) => {
+            const testCluster = await ValkeyCluster.createCluster(
+                false,
+                1,
+                1,
+                getServerVersion,
+            );
+
+            try {
+                client = await GlideClient.createClient(
+                    getClientConfigurationOption(
+                        testCluster.getAddresses(),
+                        protocol,
+                    ),
+                );
+
+                // Verify initial role is master
+                let info = await client.info([InfoOptions.Replication]);
+                expect(info).toContain("role:master");
+
+                // Execute failover — returns OK immediately
+                const result = await client.failover();
+                expect(result).toBe("OK");
+
+                // Wait for role to change to slave (failover completed)
+                let roleChanged = false;
+
+                for (let i = 0; i < 60; i++) {
+                    info = await client.info([InfoOptions.Replication]);
+
+                    if (info.includes("role:slave")) {
+                        roleChanged = true;
+                        break;
+                    }
+
+                    await sleep(500);
+                }
+
+                expect(roleChanged).toBe(true);
+                client.close();
+            } finally {
+                await testCluster.close();
+            }
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "failover_abort_no_failover_in_progress_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // FAILOVER ABORT when no failover is in progress should error
+            await expect(client.failover({ abort: true })).rejects.toThrow(
+                RequestError,
+            );
+            client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "replicaofNoOne_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            // REPLICAOF NO ONE on a primary should succeed
+            const result = await client.replicaofNoOne();
+            expect(result).toBe("OK");
             client.close();
         },
         TIMEOUT,

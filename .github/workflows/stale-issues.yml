@@ -1,0 +1,29 @@
+name: Stale Issues Management
+
+on:
+    workflow_call:
+        inputs:
+            days-before-stale:
+                description: "Days before marking as stale"
+                type: number
+                default: 60
+            days-before-close:
+                description: "Days before closing stale items"
+                type: number
+                default: 7
+
+jobs:
+    stale:
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+            pull-requests: write
+        steps:
+            - name: Mark stale issues
+              uses: actions/stale@28ca1036281a5e5922ead5184a1bbf96e5fc984e # v9.0.0
+              with:
+                  stale-issue-message: >
+                      This issue has been marked as stale due to inactivity.
+                      It will be closed in ${{ inputs.days-before-close }} days if no further activity occurs.
+                  days-before-stale: ${{ inputs.days-before-stale }}
+                  days-before-close: ${{ inputs.days-before-close }}

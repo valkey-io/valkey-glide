@@ -2,6 +2,8 @@
 
 package models
 
+import "time"
+
 // A value to return alongside with error in case if command failed
 var (
 	DefaultFloatResponse  float64
@@ -477,4 +479,30 @@ type LCSPosition struct {
 	Start int64
 	// End is the ending index of the match.
 	End int64
+}
+
+// LatencyEntry represents the time and latency for a latency spike.
+type LatencyEntry struct {
+	// Time is the time of latency spike.
+	Time time.Time
+	// Duration is the duration of the latency spike.
+	Duration time.Duration
+}
+
+// LatencyEventInfo represents information about an event's latency spike time series.
+type LatencyEventInfo struct {
+	// EventName is the name of the event.
+	EventName string
+	// LatestTime is the time of the latest latency spike.
+	LatestTime time.Time
+	// LatestDuration is the duration of the latest latency spike.
+	LatestDuration time.Duration
+	// MaxDuration is the all-time maximum duration of a latency spike.
+	MaxDuration time.Duration
+	// Sum is the duration of all latency spikes in the event's time series.
+	// Only populated for Valkey 8.1+.
+	Sum Result[time.Duration]
+	// Count is the number of latency spikes recorded in the event's time series.
+	// Only populated for Valkey 8.1+.
+	Count Result[int64]
 }

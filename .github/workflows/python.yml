@@ -13,10 +13,10 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/python.yml
             - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
@@ -29,10 +29,10 @@ on:
             - utils/cluster_manager.py
             - .github/workflows/python.yml
             - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
@@ -50,6 +50,10 @@ on:
                     - false
                     - use-self-hosted
                     - use-github
+                default: false
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64 (for release-day runs)"
+                type: boolean
                 default: false
             name:
                 required: false
@@ -76,9 +80,17 @@ on:
 
     workflow_call:
         inputs:
+            full-matrix:
+                description: "Run the full engine, host, and language version matrix"
+                type: boolean
+                default: false
             run-with-macos:
                 description: "Run with macos included (only when necessary)"
                 type: string
+                default: "false"
+            use-self-hosted-linux:
+                description: "Use self-hosted runners for Linux x64"
+                type: boolean
                 default: false
 
 concurrency:
@@ -96,7 +108,7 @@ run-name:
 
 env:
     # Run full test matrix if job started by cron or it was explictly specified by a person who triggered the workflow
-    RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule') }}
+    RUN_FULL_MATRIX: ${{ (github.event.inputs.full-matrix == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true) }}
     RUN_WITH_MACOS: ${{ (github.event.inputs.run-with-macos) }}
     RUN_SYNC_ONLY: ${{ (github.event.inputs.run_sync_tests == 'true' && github.event.inputs.run_async_tests == 'false') }}
     RUN_ASYNC_ONLY: ${{ (github.event.inputs.run_async_tests == 'true' && github.event.inputs.run_sync_tests == 'false') }}
@@ -116,12 +128,22 @@ jobs:
                   language-name: python
                   run-full-matrix: ${{ env.RUN_FULL_MATRIX == 'true' }}
                   run-with-macos: ${{ env.RUN_WITH_MACOS }}
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
+
+    approve-self-hosted:
+        if: inputs.use-self-hosted-linux == true || contains(github.event.pull_request.labels.*.name, 'ci/use-self-hosted')
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        needs: get-matrices
+        steps:
+            - name: Approval gate
+              run: echo "Self-hosted Linux runner usage approved"
 
     test-python:
         name: Python Tests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: get-matrices
-        if: ${{ github.event.inputs.containers-only != 'true' }}
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped') && github.event.inputs.containers-only != 'true'
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -233,8 +255,8 @@ jobs:
     test-pubsub-python:
         name: Python PubSubTests - ${{ matrix.python }}, EngineVersion - ${{ matrix.engine.version }}, Target - ${{ matrix.host.TARGET }}
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: get-matrices
-        if: ${{ github.event.inputs.containers-only != 'true' }}
+        needs: [get-matrices, approve-self-hosted]
+        if: always() && needs.get-matrices.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped') && github.event.inputs.containers-only != 'true'
         timeout-minutes: 120
         strategy:
             fail-fast: false
@@ -277,7 +299,7 @@ jobs:
               if: ${{ env.RUN_FULL_MATRIX != 'true' && env.RUN_SYNC_ONLY == 'false' && env.RUN_ASYNC_ONLY == 'false' }}
               working-directory: ./python
               run: |
-                  python3 dev.py test --args -k 'pubsub' --html=pytest_report.html --self-contained-html
+                  .env/bin/python3 -m pytest -k 'pubsub' -v --timeout=300 --html=pytest_report.html --self-contained-html
 
             - name: Test pubsub with pytest (full matrix)
               if: ${{ env.RUN_FULL_MATRIX == 'true' }}
@@ -383,7 +405,7 @@ jobs:
 
     get-containers:
         runs-on: ubuntu-latest
-        if: ${{ github.event.inputs.full-matrix == 'true' || github.event.inputs.containers-only == 'true' || github.event_name == 'schedule' }}
+        if: ${{ github.event.inputs.full-matrix == 'true' || github.event.inputs.containers-only == 'true' || github.event_name == 'schedule' || inputs.full-matrix == true }}
         outputs:
             engine-matrix-output: ${{ steps.get-matrices.outputs.engine-matrix-output }}
             host-matrix-output: ${{ steps.get-matrices.outputs.host-matrix-output }}
@@ -397,10 +419,12 @@ jobs:
                   language-name: python
                   run-full-matrix: true
                   containers: true
+                  use-self-hosted-linux: ${{ inputs.use-self-hosted-linux }}
 
     test-python-container:
         runs-on: ${{ matrix.host.RUNNER }}
-        needs: [get-containers]
+        needs: [get-containers, approve-self-hosted]
+        if: always() && needs.get-containers.result == 'success' && (needs.approve-self-hosted.result == 'success' || needs.approve-self-hosted.result == 'skipped')
         timeout-minutes: 90
         strategy:
             fail-fast: false

@@ -1,10 +1,14 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Supports commands for the "Server Management" group for a standalone client.
@@ -179,7 +183,7 @@ public interface ServerManagementCommands {
      *
      * @since Valkey 8.1
      * @see <a href="https://valkey.io/commands/bgsave/">valkey.io</a> for details.
-     * @return A status string.
+     * @return A non-empty status string.
      * @example
      *     <pre>{@code
      * String response = client.bgsaveCancel().get();
@@ -553,4 +557,123 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> aclWhoami();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     * This command must be sent to a primary node. This is the standalone equivalent of {@link
+     * glide.api.commands.ClusterOperationsCommands#clusterFailover()}.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover();
+
+    /**
+     * Starts a coordinated failover from the currently-connected-to primary to one of its replicas.
+     * This command must be sent to a primary node. This is the standalone equivalent of {@link
+     * glide.api.commands.ClusterOperationsCommands#clusterFailover()}.
+     *
+     * @see <a href="https://valkey.io/commands/failover/">valkey.io</a> for details.
+     * @param options The failover options.
+     * @return <code>OK</code> if the failover was successfully initiated.
+     * @example
+     *     <pre>{@code
+     * String result = client.failover(FailoverOptions.to("localhost", 6380, 1000)).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> failover(FailoverOptions options);
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @param host The host of the primary to replicate.
+     * @param port The port of the primary to replicate.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaof("localhost", 6379).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaof(@NonNull String host, int port);
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see <a href="https://valkey.io/commands/replicaof/">valkey.io</a> for details.
+     * @return <code>OK</code> on success.
+     * @example
+     *     <pre>{@code
+     * String result = client.replicaofNoOne().get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> replicaofNoOne();
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @return An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't
+     *     exist.
+     * @example
+     *     <pre>{@code
+     * LatencyEntry[] history = client.latencyHistory("command").get();
+     * for (LatencyEntry entry : history) {
+     *     System.out.println("Time: " + entry.getTime() + ", Latency: " + entry.getLatency());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<LatencyEntry[]> latencyHistory(@NonNull String event);
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @return An array of {@link LatencyEventInfo} for the latest latency events.
+     * @example
+     *     <pre>{@code
+     * LatencyEventInfo[] latest = client.latencyLatest().get();
+     * for (LatencyEventInfo info : latest) {
+     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatestDuration());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<LatencyEventInfo[]> latencyLatest();
+
+    /**
+     * Resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @return The number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = client.latencyReset().get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset();
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @return The number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = client.latencyReset(new String[] {"command"}).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events);
 }

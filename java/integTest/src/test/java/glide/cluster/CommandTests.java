@@ -4,7 +4,8 @@ package glide.cluster;
 import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
-import static glide.TestUtilities.BGSAVE_SCHEDULE_RESPONSES;
+import static glide.TestUtilities.BGSAVE_RESPONSES;
+import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -19,12 +20,12 @@ import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getFirstKeyFromMultiValue;
 import static glide.TestUtilities.getReplicaCount;
+import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
-import static glide.TestUtilities.isSaveInProgress;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
-import static glide.TestUtilities.waitForCondition;
 import static glide.TestUtilities.waitForNotBusy;
+import static glide.TestUtilities.waitForSaveNotInProgress;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
@@ -69,6 +70,8 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.ScriptOptions;
@@ -942,61 +945,193 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
+    public void latencyHistory(GlideClusterClient clusterClient) {
+        long beforeSpike = getUnixSeconds(clusterClient);
+        triggerLatencySpike(clusterClient);
+
+        // Multi-node route (default).
+        ClusterValue<LatencyEntry[]> multiCommand = clusterClient.latencyHistory("command").get();
+        assertTrue(multiCommand.hasMultiData());
+
+        for (LatencyEntry[] multiCommandEntries : multiCommand.getMultiValue().values()) {
+            assertTrue(multiCommandEntries.length > 0);
+
+            for (LatencyEntry entry : multiCommandEntries) {
+                assertTrue(entry.getTime() >= beforeSpike);
+                assertTrue(entry.getLatency() > 0);
+            }
+        }
+
+        // Single-node route (primary)
+        ClusterValue<LatencyEntry[]> single =
+                clusterClient.latencyHistory("command", PRIMARY_SLOT_ROUTE).get();
+        assertTrue(single.hasSingleData());
+
+        LatencyEntry[] entries = single.getSingleValue();
+        assertTrue(entries.length > 0);
+
+        for (LatencyEntry entry : entries) {
+            assertTrue(entry.getTime() >= beforeSpike);
+            assertTrue(entry.getLatency() > 0);
+        }
+
+        // Non-existent event.
+        ClusterValue<LatencyEntry[]> multiUnknown = clusterClient.latencyHistory("nonexistent").get();
+        assertTrue(multiUnknown.hasMultiData());
+
+        for (LatencyEntry[] multiUnknownEntries : multiUnknown.getMultiValue().values()) {
+            assertEquals(0, multiUnknownEntries.length);
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyLatest(GlideClusterClient clusterClient) {
+        long beforeSpike = getUnixSeconds(clusterClient);
+        triggerLatencySpike(clusterClient);
+
+        ClusterValue<LatencyEventInfo[]> result = clusterClient.latencyLatest().get();
+        assertTrue(result.hasMultiData());
+
+        // Find the "command" event on any node
+        LatencyEventInfo commandInfo =
+                flattenLatencyEventInfos(result).stream()
+                        .filter(info -> "command".equals(info.getEventName()))
+                        .findFirst()
+                        .orElse(null);
+        assertNotNull(commandInfo);
+
+        assertTrue(commandInfo.getLatestTime() >= beforeSpike);
+        assertTrue(commandInfo.getLatestDuration() > 0);
+        assertTrue(commandInfo.getMaxDuration() >= commandInfo.getLatestDuration());
+
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
+            assertTrue(commandInfo.getSum().get() > 0);
+            assertTrue(commandInfo.getCount().get() > 0);
+        } else {
+            assertFalse(commandInfo.getSum().isPresent());
+            assertFalse(commandInfo.getCount().isPresent());
+        }
+
+        // Single-node route (primary)
+        ClusterValue<LatencyEventInfo[]> single = clusterClient.latencyLatest(PRIMARY_SLOT_ROUTE).get();
+        assertTrue(single.hasSingleData());
+        assertTrue(single.getSingleValue().length >= 1);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void latencyReset(GlideClusterClient clusterClient) {
+
+        // Trigger spike then reset all events.
+        triggerLatencySpike(clusterClient);
+        assertTrue(clusterClient.latencyReset().get() > 0);
+        assertTrue(flattenLatencyEntries(clusterClient.latencyHistory("command").get()).isEmpty());
+
+        // Trigger spike then reset "command" event.
+        triggerLatencySpike(clusterClient);
+        assertTrue(clusterClient.latencyReset(new String[] {"command"}).get() > 0);
+        assertTrue(flattenLatencyEntries(clusterClient.latencyHistory("command").get()).isEmpty());
+
+        // Trigger spike then reset unknown event — "command" data should persist.
+        triggerLatencySpike(clusterClient);
+        assertEquals(0, clusterClient.latencyReset(new String[] {"unknown-event"}).get());
+        assertFalse(flattenLatencyEntries(clusterClient.latencyHistory("command").get()).isEmpty());
+    }
+
+    /** Flattens a ClusterValue of LatencyEntry arrays. */
+    private static List<LatencyEntry> flattenLatencyEntries(ClusterValue<LatencyEntry[]> val) {
+        if (val.hasSingleData()) {
+            return Arrays.asList(val.getSingleValue());
+        }
+        return val.getMultiValue().values().stream()
+                .flatMap(Arrays::stream)
+                .collect(Collectors.toList());
+    }
+
+    /** Flattens a ClusterValue of LatencyEventInfo arrays. */
+    private static List<LatencyEventInfo> flattenLatencyEventInfos(
+            ClusterValue<LatencyEventInfo[]> val) {
+        if (val.hasSingleData()) {
+            return Arrays.asList(val.getSingleValue());
+        }
+        return val.getMultiValue().values().stream()
+                .flatMap(Arrays::stream)
+                .collect(Collectors.toList());
+    }
+
+    /** Triggers a latency spike for the "command" event on all cluster nodes. */
+    @SneakyThrows
+    private static void triggerLatencySpike(GlideClusterClient client) {
+
+        // Reset any existing latency data first so the spike is recorded against a clean baseline,
+        // then enable the server-side latency monitor, trigger a latency spike for the "command"
+        // event, and finally restore the original threshold.
+        client.latencyReset(ALL_NODES).get();
+
+        Map<String, String> prev = client.configGet(new String[] {"latency-monitor-threshold"}).get();
+        String prevThreshold = prev.getOrDefault("latency-monitor-threshold", "0");
+
+        client.configSet(Collections.singletonMap("latency-monitor-threshold", "1"), ALL_NODES).get();
+        client.customCommand(new String[] {"DEBUG", "SLEEP", "0.05"}, ALL_NODES).get();
+
+        client
+                .configSet(Collections.singletonMap("latency-monitor-threshold", prevThreshold), ALL_NODES)
+                .get();
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
     public void save_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        assertEquals(OK, clusterClient.save(ALL_PRIMARIES).get());
+        waitForSaveNotInProgress(clusterClient);
+        assertEquals(OK, clusterClient.save(PRIMARY_SLOT_ROUTE).get());
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
         clusterClient
                 .bgsave()
                 .get()
                 .getMultiValue()
                 .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+                .forEach(value -> assertTrue(BGSAVE_RESPONSES.contains(value)));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsave_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        clusterClient
-                .bgsave(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+        waitForSaveNotInProgress(clusterClient);
+        String result = clusterClient.bgsave(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGSAVE_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
         clusterClient
                 .bgsaveSchedule()
                 .get()
                 .getMultiValue()
                 .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+                .forEach(value -> assertTrue(BGSAVE_RESPONSES.contains(value)));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
     public void bgsaveSchedule_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        clusterClient
-                .bgsaveSchedule(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGSAVE_SCHEDULE_RESPONSES.contains(value)));
+        waitForSaveNotInProgress(clusterClient);
+        String result = clusterClient.bgsaveSchedule(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGSAVE_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)
@@ -1004,7 +1139,7 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
 
         ExecutionException e =
                 assertThrows(ExecutionException.class, () -> clusterClient.bgsaveCancel().get());
@@ -1016,11 +1151,11 @@ public class CommandTests {
     @SneakyThrows
     public void bgsaveCancel_with_route(GlideClusterClient clusterClient) {
         assumeTrue(SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0"));
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
 
         ExecutionException e =
                 assertThrows(
-                        ExecutionException.class, () -> clusterClient.bgsaveCancel(ALL_PRIMARIES).get());
+                        ExecutionException.class, () -> clusterClient.bgsaveCancel(PRIMARY_SLOT_ROUTE).get());
         assertTrue(e.getCause().getMessage().contains(BGSAVE_NOT_CANCELLED_RESPONSE));
     }
 
@@ -1028,7 +1163,7 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
+        waitForSaveNotInProgress(clusterClient);
         clusterClient
                 .bgrewriteaof()
                 .get()
@@ -1041,13 +1176,9 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void bgrewriteaof_with_route(GlideClusterClient clusterClient) {
-        waitForCondition(() -> !isSaveInProgress(clusterClient), "Prior save still in progress");
-        clusterClient
-                .bgrewriteaof(ALL_PRIMARIES)
-                .get()
-                .getMultiValue()
-                .values()
-                .forEach(value -> assertTrue(BGREWRITEAOF_RESPONSES.contains(value)));
+        waitForSaveNotInProgress(clusterClient);
+        String result = clusterClient.bgrewriteaof(PRIMARY_SLOT_ROUTE).get().getSingleValue();
+        assertTrue(BGREWRITEAOF_RESPONSES.contains(result));
     }
 
     @ParameterizedTest(autoCloseArguments = false)

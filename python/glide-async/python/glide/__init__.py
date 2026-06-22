@@ -4,11 +4,6 @@ import sys
 import types
 import warnings
 
-from glide.glide import (
-    ClusterScanCursor,
-    Script,
-    get_min_compressed_size,
-)
 from glide_shared import (
     ALL_CHANNELS,
     ALL_PATTERNS,
@@ -38,6 +33,8 @@ from glide_shared import (
     BitOverflowControl,
     BitwiseOperation,
     ByAddressRoute,
+    CircuitBreakerError,
+    ClientCircuitBreakerConfiguration,
     ClientPauseMode,
     ClientSideCache,
     ClosingError,
@@ -99,12 +96,15 @@ from glide_shared import (
     JsonArrIndexOptions,
     JsonArrPopOptions,
     JsonGetOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     LexBoundary,
     Limit,
     ListDirection,
     MaxId,
     MigrateOptions,
     MinId,
+    MonitorMsg,
     NodeAddress,
     NodeDiscoveryMode,
     NumericField,
@@ -174,6 +174,9 @@ from glide_shared import (
     VectorType,
     json_batch,
 )
+from glide_shared._glide_ffi import _GlideFFI as _FFI
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
+from glide_shared.script import Script
 
 from .async_commands import (
     ft,
@@ -182,7 +185,13 @@ from .async_commands import (
 from .glide_client import GlideClient, GlideClusterClient, TGlideClient
 from .logger import Level as LogLevel
 from .logger import Logger
+from .monitor_client import MonitorClient
 from .opentelemetry import OpenTelemetry
+
+
+def get_min_compressed_size() -> int:
+    return _FFI().lib.get_min_compressed_size()
+
 
 _glide_module = sys.modules[__name__]
 
@@ -257,6 +266,7 @@ __all__ = [
     "GlideClientConfiguration",
     "GlideClusterClientConfiguration",
     "BackoffStrategy",
+    "ClientCircuitBreakerConfiguration",
     "CompressionBackend",
     "CompressionConfiguration",
     "ReadFrom",
@@ -328,6 +338,8 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
+    "LatencyEntry",
+    "LatencyEventInfo",
     "MigrateOptions",
     "LexBoundary",
     "Limit",
@@ -359,6 +371,9 @@ __all__ = [
     "ALL_CHANNELS",
     "ALL_PATTERNS",
     "ALL_SHARDED_CHANNELS",
+    # Monitor
+    "MonitorClient",
+    "MonitorMsg",
     # Json
     "glide_json",
     "json_batch",
@@ -379,6 +394,7 @@ __all__ = [
     "SlotIdRoute",
     "TSingleNodeRoute",
     # Exceptions
+    "CircuitBreakerError",
     "ClosingError",
     "ConfigurationError",
     "ConnectionError",

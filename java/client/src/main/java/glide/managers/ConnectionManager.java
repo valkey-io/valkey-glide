@@ -10,6 +10,7 @@ import glide.api.models.configuration.AdvancedGlideClusterClientConfiguration;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.configuration.ClientCircuitBreakerConfiguration;
 import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration;
 import glide.api.models.configuration.CompressionBackend;
@@ -23,9 +24,7 @@ import glide.api.models.configuration.PeriodicChecksManualInterval;
 import glide.api.models.configuration.PeriodicChecksStatus;
 import glide.api.models.configuration.ServerCredentials;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration;
-import glide.api.models.configuration.TlsAdvancedConfiguration;
 import glide.api.models.exceptions.ClosingException;
-import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.GlideException;
 import glide.internal.AsyncRegistry;
 import glide.internal.GlideNativeBridge;
@@ -276,6 +275,39 @@ public class ConnectionManager {
                         requestBuilder.setConnectionTimeout(connectionTimeoutMs);
                         requestBuilder.setInflightRequestsLimit(maxInflightRequests);
 
+                        // Set client circuit breaker configuration
+                        if (configuration.getClientCircuitBreakerConfiguration() != null) {
+                            ClientCircuitBreakerConfiguration cbConfig =
+                                    configuration.getClientCircuitBreakerConfiguration();
+                            if (cbConfig.getWindowSizeMs() <= 0) {
+                                throw new IllegalArgumentException("windowSizeMs must be positive");
+                            }
+                            if (cbConfig.getFailureRateThreshold() <= 0.0f
+                                    || cbConfig.getFailureRateThreshold() > 1.0f) {
+                                throw new IllegalArgumentException(
+                                        "failureRateThreshold must be between 0.0 (exclusive) and 1.0 (inclusive)");
+                            }
+                            if (cbConfig.getMinErrors() <= 0) {
+                                throw new IllegalArgumentException("minErrors must be positive");
+                            }
+                            if (cbConfig.getOpenTimeoutMs() <= 0) {
+                                throw new IllegalArgumentException("openTimeoutMs must be positive");
+                            }
+                            if (cbConfig.getConsecutiveSuccesses() <= 0) {
+                                throw new IllegalArgumentException("consecutiveSuccesses must be positive");
+                            }
+                            requestBuilder.setClientCircuitBreaker(
+                                    connection_request.ConnectionRequestOuterClass.ClientCircuitBreakerConfig
+                                            .newBuilder()
+                                            .setWindowSizeMs(cbConfig.getWindowSizeMs())
+                                            .setFailureRateThreshold(cbConfig.getFailureRateThreshold())
+                                            .setMinErrors(cbConfig.getMinErrors())
+                                            .setOpenTimeoutMs(cbConfig.getOpenTimeoutMs())
+                                            .setCountTimeouts(cbConfig.isCountTimeouts())
+                                            .setConsecutiveSuccesses(cbConfig.getConsecutiveSuccesses())
+                                            .build());
+                        }
+
                         // Set read from strategy
                         String readFromName = configuration.getReadFrom().name();
                         if ("PRIMARY".equals(readFromName)) {
@@ -435,6 +467,7 @@ public class ConnectionManager {
                             cacheBuilder.setCacheId(clientSideCache.getCacheId());
                             cacheBuilder.setMaxCacheKb(clientSideCache.getMaxCacheKb());
                             cacheBuilder.setEnableMetrics(clientSideCache.isEnableMetrics());
+                            cacheBuilder.setServerAssisted(clientSideCache.isServerAssisted());
 
                             // Set TTL (0 = no expiration)
                             cacheBuilder.setEntryTtlMs(clientSideCache.getEntryTtlMs());
@@ -597,30 +630,10 @@ public class ConnectionManager {
     }
 
     private static boolean resolveInsecureTls(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return false;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig != null && tlsConfig.isUseInsecureTLS()) {
-            if (!configuration.isUseTLS()) {
-                throw new ConfigurationError(
-                        "`useInsecureTLS` cannot be enabled when `useTLS` is disabled.");
-            }
-            return true;
-        }
-        return false;
+        return TlsConfigHelper.resolveInsecureTls(configuration);
     }
 
     private static byte[] extractRootCertificates(BaseClientConfiguration configuration) {
-        AdvancedBaseClientConfiguration advanced = configuration.getAdvancedConfiguration();
-        if (advanced == null) {
-            return null;
-        }
-        TlsAdvancedConfiguration tlsConfig = advanced.getTlsAdvancedConfiguration();
-        if (tlsConfig == null) {
-            return null;
-        }
-        return tlsConfig.getRootCertificates();
+        return TlsConfigHelper.extractRootCertificates(configuration);
     }
 }

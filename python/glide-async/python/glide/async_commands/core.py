@@ -1,7 +1,17 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from typing import Dict, List, Mapping, Optional, Protocol, Set, Tuple, Union, cast
+from typing import (
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
-from glide.glide import ClusterScanCursor
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.bitmap import (
     BitFieldGet,
     BitFieldSubCommands,
@@ -61,21 +71,22 @@ from glide_shared.constants import (
     TXInfoStreamResponse,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import CacheMetricsType, RequestType
+from glide_shared.protobuf.command_request_pb2 import CacheMetricsType
+from glide_shared.request_type import RequestType
 from glide_shared.routes import Route
 
 
 class CoreCommands(Protocol):
     async def _execute_command(
         self,
-        request_type: RequestType.ValueType,
+        request_type: int,
         args: List[TEncodable],
         route: Optional[Route] = ...,
     ) -> TResult: ...
 
     async def _execute_batch(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
+        commands: List[Tuple[int, List[TEncodable]]],
         is_atomic: bool,
         raise_on_error: bool,
         retry_server_error: bool = False,
@@ -6995,6 +7006,7 @@ class CoreCommands(Protocol):
     ) -> str:
         """
         Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+        On success, the key is deleted from the source instance.
 
         See [valkey.io](https://valkey.io/commands/migrate/) for details.
 
@@ -7004,17 +7016,13 @@ class CoreCommands(Protocol):
             key (TEncodable): The key to migrate.
             destination_db (int): The database index on the destination instance.
             timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
-            options (Optional[MigrateOptions]): Optional migration options.
+            options (Optional[MigrateOptions]): Additional migration options.
 
         Returns:
-            str: "OK" on success, or "NOKEY" if the key does not exist.
+            str: "OK" on success, or "NOKEY" if the key was not found.
 
         Examples:
-            >>> await client.set("mykey", "myvalue")
             >>> await client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
-                "OK"
-            >>> await client.migrate("127.0.0.1", 6380, "nonexistent", 0, 5000)
-                "NOKEY"
         """
         args: List[TEncodable] = [
             host,

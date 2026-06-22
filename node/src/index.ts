@@ -18,6 +18,7 @@ export * from "./Errors.js";
 export * from "./EvictionPolicy.js";
 export * from "./GlideClient.js";
 export * from "./GlideClusterClient.js";
+export * from "./GlideMonitorClient.js";
 export * from "./Logger.js";
 export * from "./OpenTelemetry.js";
 export * from "./server-modules/GlideFt.js";

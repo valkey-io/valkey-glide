@@ -34,6 +34,7 @@ import {
     DEFAULT_CONNECTION_TIMEOUT_IN_MILLISECONDS,
     DEFAULT_INFLIGHT_REQUESTS_LIMIT,
     DEFAULT_REQUEST_TIMEOUT_IN_MILLISECONDS,
+    CircuitBreakerError,
     ExecAbortError,
     ExpireOptions,
     GeoAddOptions,
@@ -53,6 +54,8 @@ import {
     InsertPosition,
     KeyWeight,
     LPosOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -967,6 +970,31 @@ export interface BaseClientConfiguration {
      * ```
      */
     addressResolver?: (host: string, port: number) => [string, number];
+    /**
+     * Configuration for the client-wide circuit breaker.
+     * When set, enables the circuit breaker which detects sustained error rates
+     * and rejects requests before they enter the core.
+     * If not set (undefined), the circuit breaker is disabled.
+     */
+    clientCircuitBreaker?: ClientCircuitBreakerConfiguration;
+}
+
+/**
+ * Configuration for the client-wide circuit breaker.
+ */
+export interface ClientCircuitBreakerConfiguration {
+    /** Sliding window duration in milliseconds for error rate calculation. Default: 10000. */
+    windowSizeMs?: number;
+    /** Error rate (0.0-1.0) within the window to trip the breaker. Default: 0.5. */
+    failureRateThreshold?: number;
+    /** Minimum errors within window before rate is evaluated. Default: 50. */
+    minErrors?: number;
+    /** Time in milliseconds in Open state before allowing a probe. Default: 5000. */
+    openTimeoutMs?: number;
+    /** Whether timeouts count toward tripping. Default: false. */
+    countTimeouts?: boolean;
+    /** Consecutive successful probes needed before closing. Default: 3. */
+    consecutiveSuccesses?: number;
 }
 
 /**
@@ -1106,6 +1134,10 @@ function getRequestErrorClass(
 
     if (type === response.RequestErrorType.Timeout) {
         return TimeoutError;
+    }
+
+    if (type === response.RequestErrorType.CircuitBreakerOpen) {
+        return CircuitBreakerError;
     }
 
     if (type === response.RequestErrorType.Unspecified) {
@@ -2449,7 +2481,8 @@ export class BaseClient {
 
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-     * Once the key is successfully transferred, it is deleted from the source instance.
+     * Once the key is successfully transferred, it is deleted from the source instance
+     * unless `copy` is set to `true` in options.
      *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
@@ -2459,16 +2492,18 @@ export class BaseClient {
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
-     * @returns "OK" on success, or "NOKEY" if the key does not exist.
+     * @returns `"OK"` on success, or `"NOKEY"` if the key does not exist.
      *
      * @example
      * ```typescript
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
      * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
      * ```
+     * @example
      * ```typescript
+     * // Migrate with copy (keep source key) and replace (overwrite destination)
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
-     * console.log(result); // Output: "OK" - "mykey" was copied to the destination, replacing any existing key.
+     * console.log(result); // Output: "OK" - "mykey" was copied to the destination instance.
      * ```
      */
     public async migrate(
@@ -9454,6 +9489,50 @@ export class BaseClient {
             );
         }
 
+        if (options.clientCircuitBreaker) {
+            const cb = options.clientCircuitBreaker;
+
+            if (cb.windowSizeMs !== undefined && cb.windowSizeMs <= 0) {
+                throw new ConfigurationError("windowSizeMs must be positive");
+            }
+
+            if (
+                cb.failureRateThreshold !== undefined &&
+                (cb.failureRateThreshold <= 0.0 ||
+                    cb.failureRateThreshold > 1.0)
+            ) {
+                throw new ConfigurationError(
+                    "failureRateThreshold must be between 0.0 (exclusive) and 1.0 (inclusive)",
+                );
+            }
+
+            if (cb.minErrors !== undefined && cb.minErrors <= 0) {
+                throw new ConfigurationError("minErrors must be positive");
+            }
+
+            if (cb.openTimeoutMs !== undefined && cb.openTimeoutMs <= 0) {
+                throw new ConfigurationError("openTimeoutMs must be positive");
+            }
+
+            if (
+                cb.consecutiveSuccesses !== undefined &&
+                cb.consecutiveSuccesses <= 0
+            ) {
+                throw new ConfigurationError(
+                    "consecutiveSuccesses must be positive",
+                );
+            }
+
+            request.clientCircuitBreaker = {
+                windowSizeMs: cb.windowSizeMs,
+                failureRateThreshold: cb.failureRateThreshold,
+                minErrors: cb.minErrors,
+                openTimeoutMs: cb.openTimeoutMs,
+                countTimeouts: cb.countTimeouts,
+                consecutiveSuccesses: cb.consecutiveSuccesses,
+            };
+        }
+
         return request;
     }
 
@@ -10151,6 +10230,74 @@ export class BaseClient {
         parseSubscriptionData(response[3], actualSubscriptions);
 
         return { desiredSubscriptions, actualSubscriptions };
+    }
+
+    // Indices for LATENCY HISTORY response.
+    private static readonly LATENCY_ENTRY_TIME_INDEX = 0;
+    private static readonly LATENCY_ENTRY_LATENCY_INDEX = 1;
+
+    // Indices for LATENCY LATEST response.
+    private static readonly LATENCY_EVENT_INFO_NAME_INDEX = 0;
+    private static readonly LATENCY_EVENT_INFO_TIME_INDEX = 1;
+    private static readonly LATENCY_EVENT_INFO_LATEST_DURATION_INDEX = 2;
+    private static readonly LATENCY_EVENT_INFO_MAX_DURATION_INDEX = 3;
+    private static readonly LATENCY_EVENT_INFO_SUM_INDEX = 4;
+    private static readonly LATENCY_EVENT_INFO_COUNT_INDEX = 5;
+
+    /**
+     * @internal
+     * Parses a `LATENCY HISTORY` response.
+     */
+    protected parseLatencyHistoryResponse(response: unknown[]): LatencyEntry[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => ({
+            time: entry[BaseClient.LATENCY_ENTRY_TIME_INDEX] as number,
+            latency: entry[BaseClient.LATENCY_ENTRY_LATENCY_INDEX] as number,
+        }));
+    }
+
+    /**
+     * @internal
+     * Parses a `LATENCY LATEST` response.
+     */
+    protected parseLatencyLatestResponse(
+        response: unknown[],
+    ): LatencyEventInfo[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => {
+            const info: LatencyEventInfo = {
+                eventName: entry[
+                    BaseClient.LATENCY_EVENT_INFO_NAME_INDEX
+                ] as string,
+                latestTime: entry[
+                    BaseClient.LATENCY_EVENT_INFO_TIME_INDEX
+                ] as number,
+                latestDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_LATEST_DURATION_INDEX
+                ] as number,
+                maxDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_MAX_DURATION_INDEX
+                ] as number,
+            };
+
+            // Valkey 8.1+ returns 6-element arrays with sum and count
+            if (entry.length > BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX) {
+                info.sum = entry[
+                    BaseClient.LATENCY_EVENT_INFO_SUM_INDEX
+                ] as number;
+                info.count = entry[
+                    BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX
+                ] as number;
+            }
+
+            return info;
+        });
     }
 
     /**

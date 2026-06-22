@@ -32,6 +32,8 @@ import {
     FunctionRestorePolicy,
     FunctionStatsSingleResponse,
     InfoOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     LolwutOptions,
     createClientGetName,
     createClientId,
@@ -59,7 +61,13 @@ import {
     createGetSubscriptions,
     createInfo,
     createLastSave,
+    createLatencyHistory,
+    createLatencyLatest,
+    createLatencyReset,
     createLolwut,
+    createSave,
+    createBgSave,
+    createBgRewriteAof,
     createPing,
     createPubSubShardNumSub,
     createPublish,
@@ -316,6 +324,26 @@ type ClusterGlideRecord<T> = GlideRecord<T> | T;
 
 /**
  * @internal
+ * Determines whether a command response is from a single node based on routing.
+ *
+ * @param isRoutedToSingleNodeByDefault - Whether the command defaults to a single node.
+ * @param route - The route option provided by the caller.
+ * @returns `true` if the response is from a single node.
+ */
+function isSingleNodeRoute(
+    isRoutedToSingleNodeByDefault: boolean,
+    route?: Routes,
+): boolean {
+    return (
+        // route not given and command is routed by default to a random node
+        (!route && isRoutedToSingleNodeByDefault) ||
+        // or route is given and it is a single node route
+        (Boolean(route) && route !== "allPrimaries" && route !== "allNodes")
+    );
+}
+
+/**
+ * @internal
  * Convert {@link ClusterGlideRecord} to {@link ClusterResponse}.
  *
  * @param res - Value received from Glide core.
@@ -328,13 +356,7 @@ function convertClusterGlideRecord<T>(
     isRoutedToSingleNodeByDefault: boolean,
     route?: Routes,
 ): ClusterResponse<T> {
-    const isSingleNodeResponse =
-        // route not given and command is routed by default to a random node
-        (!route && isRoutedToSingleNodeByDefault) ||
-        // or route is given and it is a single node route
-        (Boolean(route) && route !== "allPrimaries" && route !== "allNodes");
-
-    return isSingleNodeResponse
+    return isSingleNodeRoute(isRoutedToSingleNodeByDefault, route)
         ? (res as T)
         : convertGlideRecordToRecord(res as GlideRecord<T>);
 }
@@ -1849,6 +1871,250 @@ export class GlideClusterClient extends BaseClient {
             createLastSave(),
             options,
         ).then((res) => convertClusterGlideRecord(res, true, options?.route));
+    }
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/latency-history/|valkey.io} for details.
+     *
+     * @param event - The name of the latency event (e.g., `"command"`).
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A {@link ClusterResponse} containing array(s) of {@link LatencyEntry} for the event.
+     *
+     * @example
+     * ```typescript
+     * const history = await client.latencyHistory("command");
+     * // history is Record<string, LatencyEntry[]> (multi-node) or LatencyEntry[] (single-node)
+     * ```
+     */
+    public async latencyHistory(
+        event: GlideString,
+        options?: RouteOption,
+    ): Promise<ClusterResponse<LatencyEntry[]>> {
+        return this.createWritePromise<ClusterGlideRecord<unknown[]>>(
+            createLatencyHistory(event),
+            options,
+        ).then((res) => {
+            if (isSingleNodeRoute(false, options?.route)) {
+                return this.parseLatencyHistoryResponse(res as unknown[]);
+            }
+
+            const record = convertGlideRecordToRecord(
+                res as GlideRecord<unknown[]>,
+            ) as Record<string, unknown[]>;
+            const result: Record<string, LatencyEntry[]> = {};
+
+            for (const [node, entries] of Object.entries(record)) {
+                result[node] = this.parseLatencyHistoryResponse(entries);
+            }
+
+            return result;
+        });
+    }
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A {@link ClusterResponse} containing array(s) of {@link LatencyEventInfo} for the latest latency events.
+     *
+     * @example
+     * ```typescript
+     * const latest = await client.latencyLatest();
+     * // latest is Record<string, LatencyEventInfo[]> (multi-node) or LatencyEventInfo[] (single-node)
+     * ```
+     */
+    public async latencyLatest(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<LatencyEventInfo[]>> {
+        return this.createWritePromise<ClusterGlideRecord<unknown[]>>(
+            createLatencyLatest(),
+            options,
+        ).then((res) => {
+            if (isSingleNodeRoute(false, options?.route)) {
+                return this.parseLatencyLatestResponse(res as unknown[]);
+            }
+
+            const record = convertGlideRecordToRecord(
+                res as GlideRecord<unknown[]>,
+            ) as Record<string, unknown[]>;
+            const result: Record<string, LatencyEventInfo[]> = {};
+
+            for (const [node, entries] of Object.entries(record)) {
+                result[node] = this.parseLatencyLatestResponse(entries);
+            }
+
+            return result;
+        });
+    }
+
+    /**
+     * Resets the latency spike time series for all or specified events.
+     * If no events are provided, resets the latency spike time series for all events.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/latency-reset/|valkey.io} for details.
+     *
+     * @param events - The event names to reset. If not provided, resets all events.
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns The total number of event time series that were reset across all nodes.
+     *
+     * @example
+     * ```typescript
+     * await client.latencyReset(); // Resets all events
+     * await client.latencyReset(["command"], { route: "allNodes" });
+     * ```
+     */
+    public async latencyReset(
+        events?: GlideString[],
+        options?: RouteOption,
+    ): Promise<number> {
+        return this.createWritePromise(createLatencyReset(events), options);
+    }
+
+    /**
+     * Synchronously saves the dataset to disk.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/save/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns `"OK"`
+     *
+     * @example
+     * ```typescript
+     * const result = await client.save();
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async save(options?: RouteOption): Promise<"OK"> {
+        return this.createWritePromise(createSave(), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Asynchronously saves the dataset to disk in the background.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsave();
+     * console.log(result); // "Background saving started"
+     * ```
+     */
+    public async bgsave(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgSave(),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Schedules a background save of the database.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveSchedule();
+     * console.log(result); // "Background saving scheduled"
+     * ```
+     */
+    public async bgsaveSchedule(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgSave(["SCHEDULE"]),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Aborts all in-progress and scheduled background saves.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgsave/|valkey.io} for more details.
+     *
+     * @since Valkey 8.1
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgsaveCancel();
+     * console.log(result); // "Background saving cancelled"
+     * ```
+     */
+    public async bgsaveCancel(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgSave(["CANCEL"]),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Initiates a background rewrite of the append-only file (AOF).
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/bgrewriteaof/|valkey.io} for more details.
+     *
+     * @param options - (Optional) See {@link RouteOption}.
+     * @returns A non-empty status string.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.bgrewriteaof();
+     * console.log(result); // "Background append only file rewriting started"
+     * ```
+     */
+    public async bgrewriteaof(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createBgRewriteAof(),
+            {
+                decoder: Decoder.String,
+                ...options,
+            },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
     }
 
     /**

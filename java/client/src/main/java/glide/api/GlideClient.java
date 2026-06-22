@@ -6,6 +6,7 @@ import static command_request.CommandRequestOuterClass.RequestType.BgSave;
 import static command_request.CommandRequestOuterClass.RequestType.ClientGetName;
 import static command_request.CommandRequestOuterClass.RequestType.ClientId;
 import static command_request.CommandRequestOuterClass.RequestType.ClientPause;
+import static command_request.CommandRequestOuterClass.RequestType.ClientTrackingInfo;
 import static command_request.CommandRequestOuterClass.RequestType.ClientUnpause;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigGet;
 import static command_request.CommandRequestOuterClass.RequestType.ConfigResetStat;
@@ -13,6 +14,7 @@ import static command_request.CommandRequestOuterClass.RequestType.ConfigRewrite
 import static command_request.CommandRequestOuterClass.RequestType.ConfigSet;
 import static command_request.CommandRequestOuterClass.RequestType.DBSize;
 import static command_request.CommandRequestOuterClass.RequestType.Echo;
+import static command_request.CommandRequestOuterClass.RequestType.FailOver;
 import static command_request.CommandRequestOuterClass.RequestType.FlushAll;
 import static command_request.CommandRequestOuterClass.RequestType.FlushDB;
 import static command_request.CommandRequestOuterClass.RequestType.FunctionDelete;
@@ -27,10 +29,14 @@ import static command_request.CommandRequestOuterClass.RequestType.GetSubscripti
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.RandomKey;
+import static command_request.CommandRequestOuterClass.RequestType.ReplicaOf;
 import static command_request.CommandRequestOuterClass.RequestType.Reset;
 import static command_request.CommandRequestOuterClass.RequestType.Save;
 import static command_request.CommandRequestOuterClass.RequestType.Scan;
@@ -54,8 +60,11 @@ import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.ClientPauseMode;
+import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
@@ -263,6 +272,12 @@ public class GlideClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, Object>> clientTrackingInfo() {
+        return commandManager.submitNewCommand(
+                ClientTrackingInfo, EMPTY_STRING_ARRAY, this::handleMapResponse);
+    }
+
+    @Override
     public CompletableFuture<String> configRewrite() {
         return commandManager.submitNewCommand(
                 ConfigRewrite, EMPTY_STRING_ARRAY, this::handleStringResponse);
@@ -393,6 +408,56 @@ public class GlideClient extends BaseClient
     @Override
     public CompletableFuture<Long> dbsize() {
         return commandManager.submitNewCommand(DBSize, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> failover() {
+        return commandManager.submitNewCommand(
+                FailOver, EMPTY_STRING_ARRAY, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> failover(@NonNull FailoverOptions options) {
+        return commandManager.submitNewCommand(FailOver, options.toArgs(), this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaof(@NonNull String host, int port) {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {host, Integer.toString(port)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> replicaofNoOne() {
+        return commandManager.submitNewCommand(
+                ReplicaOf, new String[] {"NO", "ONE"}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<LatencyEntry[]> latencyHistory(@NonNull String event) {
+        return commandManager.submitNewCommand(
+                LatencyHistory,
+                new String[] {event},
+                response -> handleLatencyHistoryResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<LatencyEventInfo[]> latencyLatest() {
+        return commandManager.submitNewCommand(
+                LatencyLatest,
+                EMPTY_STRING_ARRAY,
+                response -> handleLatencyLatestResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset() {
+        return commandManager.submitNewCommand(
+                LatencyReset, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset(@NonNull String[] events) {
+        return commandManager.submitNewCommand(LatencyReset, events, this::handleLongResponse);
     }
 
     @Override

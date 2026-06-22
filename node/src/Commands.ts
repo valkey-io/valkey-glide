@@ -3436,19 +3436,23 @@ export interface MigrateOptions {
     username?: string;
 }
 
-/** @internal */
 export function createMigrate(
     host: string,
     port: number,
-    key: GlideString,
+    key: GlideString | GlideString[],
     destinationDB: number,
     timeout: number,
     options?: MigrateOptions,
 ): command_request.Command {
+    const isArray = Array.isArray(key);
+
+    if (isArray && (key as GlideString[]).length === 0)
+        throw new Error("key must not be an empty array");
+
     const args: GlideString[] = [
         host,
         port.toString(),
-        key,
+        isArray ? "" : (key as GlideString),
         destinationDB.toString(),
         timeout.toString(),
     ];
@@ -3461,7 +3465,6 @@ export function createMigrate(
         }
 
         if (options.copy) args.push("COPY");
-
         if (options.replace) args.push("REPLACE");
 
         if (options.username !== undefined && options.password !== undefined) {
@@ -3470,6 +3473,8 @@ export function createMigrate(
             args.push("AUTH", options.password);
         }
     }
+
+    if (isArray) args.push("KEYS", ...(key as GlideString[]));
 
     return createCommand(RequestType.Migrate, args);
 }
@@ -4368,6 +4373,68 @@ export function createLastSave(): command_request.Command {
 }
 
 /** @internal */
+export function createSave(): command_request.Command {
+    return createCommand(RequestType.Save, []);
+}
+
+/** @internal */
+export function createBgSave(args?: string[]): command_request.Command {
+    return createCommand(RequestType.BgSave, args ?? []);
+}
+
+/** @internal */
+export function createBgRewriteAof(): command_request.Command {
+    return createCommand(RequestType.BgRewriteAof, []);
+}
+
+/**
+ * Represents the time and latency for a latency spike.
+ */
+export interface LatencyEntry {
+    /** The time of the latency spike, as a Unix timestamp in seconds. */
+    time: number;
+    /** The duration of the latency spike, in milliseconds. */
+    latency: number;
+}
+
+/**
+ * Represents information about an event's latency spike time series.
+ */
+export interface LatencyEventInfo {
+    /** The name of the event. */
+    eventName: string;
+    /** The time of the latest latency spike, as a Unix timestamp in seconds. */
+    latestTime: number;
+    /** The duration of the latest latency spike, in milliseconds. */
+    latestDuration: number;
+    /** The all-time maximum duration of a latency spike, in milliseconds. */
+    maxDuration: number;
+    /** The sum of all latency spike durations in the event's time series, in milliseconds. Only populated for Valkey 8.1+. */
+    sum?: number;
+    /** The number of latency spikes recorded in the event's time series. Only populated for Valkey 8.1+. */
+    count?: number;
+}
+
+/** @internal */
+export function createLatencyHistory(
+    event: GlideString,
+): command_request.Command {
+    return createCommand(RequestType.LatencyHistory, [event]);
+}
+
+/** @internal */
+export function createLatencyLatest(): command_request.Command {
+    return createCommand(RequestType.LatencyLatest, []);
+}
+
+/** @internal */
+export function createLatencyReset(
+    events?: GlideString[],
+): command_request.Command {
+    return createCommand(RequestType.LatencyReset, events ?? []);
+}
+
+/** @internal */
 export function createLCS(
     key1: GlideString,
     key2: GlideString,
@@ -4912,6 +4979,57 @@ export function createScriptFlush(mode?: FlushMode): command_request.Command {
 /** @internal */
 export function createScriptKill(): command_request.Command {
     return createCommand(RequestType.ScriptKill, []);
+}
+
+/**
+ * Options for the FAILOVER command.
+ * @see {@link https://valkey.io/commands/failover/|valkey.io} for details.
+ */
+export interface FailoverOptions {
+    /** Target replica to failover to. If `force` is true, forces failover after timeout. */
+    to?: { host: string; port: number; force?: boolean };
+    /** Abort an ongoing failover. */
+    abort?: boolean;
+    /** Timeout in milliseconds. */
+    timeoutMs?: number;
+}
+
+/** @internal */
+export function createFailover(
+    options?: FailoverOptions,
+): command_request.Command {
+    const args: string[] = [];
+
+    if (options?.abort) {
+        args.push("ABORT");
+    } else {
+        if (options?.to) {
+            args.push("TO", options.to.host, options.to.port.toString());
+
+            if (options.to.force) {
+                args.push("FORCE");
+            }
+        }
+
+        if (options?.timeoutMs !== undefined) {
+            args.push("TIMEOUT", options.timeoutMs.toString());
+        }
+    }
+
+    return createCommand(RequestType.FailOver, args);
+}
+
+/** @internal */
+export function createReplicaOf(
+    host: string,
+    port: number,
+): command_request.Command {
+    return createCommand(RequestType.ReplicaOf, [host, port.toString()]);
+}
+
+/** @internal */
+export function createReplicaOfNoOne(): command_request.Command {
+    return createCommand(RequestType.ReplicaOf, ["NO", "ONE"]);
 }
 
 /**

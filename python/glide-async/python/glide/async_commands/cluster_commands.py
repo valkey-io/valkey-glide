@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Set, Union, cast
 
-from glide.glide import ClusterScanCursor, Script
+from glide.async_commands.core import RequestType
+from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.batch import ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.command_args import ObjectType
@@ -13,6 +14,12 @@ from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
+)
+from glide_shared.commands.latency import (
+    LatencyEntry,
+    LatencyEventInfo,
+    _parse_latency_history_cluster,
+    _parse_latency_latest_cluster,
 )
 from glide_shared.constants import (
     TOK,
@@ -23,8 +30,8 @@ from glide_shared.constants import (
     TResult,
 )
 from glide_shared.exceptions import RequestError
-from glide_shared.protobuf.command_request_pb2 import RequestType
 from glide_shared.routes import Route
+from glide_shared.script import Script
 
 from .core import CoreCommands
 
@@ -902,6 +909,133 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.LastSave, [], route),
         )
 
+    async def save(self, route: Optional[Route] = None) -> TOK:
+        """
+        Synchronously saves the dataset to disk.
+
+        See [valkey.io](https://valkey.io/commands/save) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.save()
+                OK
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Save, [], route),
+        )
+
+    async def bgsave(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+        """
+        Asynchronously saves the dataset to disk in the background.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave()
+                "Background saving started"
+            >>> await client.bgsave(AllNodes())
+                {b'addr1': 'Background saving started', b'addr2': 'Background saving started'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, [], route),
+        )
+
+    async def bgsave_schedule(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Schedules a background save of the database.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_schedule()
+                "Background saving scheduled"
+            >>> await client.bgsave_schedule(AllNodes())
+                {b'addr1': 'Background saving scheduled', b'addr2': 'Background saving scheduled'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, ["SCHEDULE"], route),
+        )
+
+    async def bgsave_cancel(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Aborts all in-progress and scheduled background saves.
+
+        See [valkey.io](https://valkey.io/commands/bgsave) for more details.
+
+        Note:
+            Since: Valkey 8.1.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgsave_cancel()
+                "Background saving cancelled"
+            >>> await client.bgsave_cancel(AllNodes())
+                {b'addr1': 'Background saving cancelled', b'addr2': 'Background saving cancelled'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgSave, ["CANCEL"], route),
+        )
+
+    async def bgrewriteaof(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Initiates a background rewrite of the append-only file (AOF).
+
+        See [valkey.io](https://valkey.io/commands/bgrewriteaof) for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A non-empty status string.
+
+        Examples:
+            >>> await client.bgrewriteaof()
+                "Background append only file rewriting started"
+            >>> await client.bgrewriteaof(AllNodes())
+                {b'addr1': 'Background append only file rewriting started', b'addr2': 'Background append only file rewriting started'}
+        """
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.BgRewriteAof, [], route),
+        )
+
     async def publish(
         self,
         message: TEncodable,
@@ -1658,4 +1792,81 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TOK, await self._execute_command(RequestType.ClientUnpause, [], route)
+        )
+
+    async def latency_history(
+        self, event: TEncodable, route: Optional[Route] = None
+    ) -> TClusterResponse[List[LatencyEntry]]:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[List[LatencyEntry]]: A cluster value containing list(s)
+                of LatencyEntry for the event.
+
+        Examples:
+            >>> history = await client.latency_history("command")
+            >>> for node, entries in history.items():
+            ...     print(f"Node [{node}]: {len(entries)} entries")
+        """
+        return _parse_latency_history_cluster(
+            await self._execute_command(RequestType.LatencyHistory, [event], route),
+        )
+
+    async def latency_latest(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[List[LatencyEventInfo]]:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[List[LatencyEventInfo]]: A cluster value containing list(s)
+                of LatencyEventInfo for the latest latency events.
+
+        Examples:
+            >>> latest = await client.latency_latest()
+            >>> for node, entries in latest.items():
+            ...     print(f"Node [{node}]: {len(entries)} events")
+        """
+        return _parse_latency_latest_cluster(
+            await self._execute_command(RequestType.LatencyLatest, [], route),
+        )
+
+    async def latency_reset(
+        self, *events: TEncodable, route: Optional[Route] = None
+    ) -> int:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            int: The total number of event time series that were reset across all nodes.
+
+        Examples:
+            >>> await client.latency_reset()
+                4
+            >>> await client.latency_reset("command", route=AllNodes())
+                2
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.LatencyReset, list(events), route),
         )
