@@ -5265,37 +5265,66 @@ export interface ClusterBatchRetryStrategy {
  * Database memory overhead statistics from MEMORY STATS.
  */
 export interface MemoryStatsDb {
-    /** Overhead of the main dictionary hashtable. */
-    overheadHashtableMain: number;
-
     /** Overhead of the expires dictionary hashtable. */
     overheadHashtableExpires: number;
+
+    /** Overhead of the main dictionary hashtable. */
+    overheadHashtableMain: number;
 }
 
 /**
  * Represents a MEMORY STATS response.
  */
 export interface MemoryStats {
-    /** Peak memory consumed by the server in bytes. */
-    peakAllocated: number;
+    /** Per-database overhead keyed by database index. */
+    db: Record<number, MemoryStatsDb>;
 
-    /** Total bytes allocated by the server. */
-    totalAllocated: number;
+    // Required int fields (alphabetical).
 
-    /** Memory consumed at startup in bytes. */
-    startupAllocated: number;
+    /** Bytes active (in use) by the allocator. */
+    allocatorActive: number;
 
-    /** Memory used for replication backlog in bytes. */
-    replicationBacklog: number;
+    /** Bytes allocated by the allocator. */
+    allocatorAllocated: number;
 
-    /** Memory used by replica clients in bytes. */
-    clientsSlaves: number;
+    /** Bytes of allocator fragmentation. */
+    allocatorFragmentationBytes: number;
+
+    /** Memory used by allocator muzzy pages in bytes. */
+    allocatorMuzzy: number;
+
+    /** Bytes resident (RSS) by the allocator. */
+    allocatorResident: number;
+
+    /** Bytes of allocator RSS overhead. */
+    allocatorRssBytes: number;
+
+    /** Memory used for AOF buffer in bytes. */
+    aofBuffer: number;
 
     /** Memory used by normal clients in bytes. */
     clientsNormal: number;
 
-    /** Memory used for AOF buffer in bytes. */
-    aofBuffer: number;
+    /** Memory used by replica clients in bytes. */
+    clientsSlaves: number;
+
+    /** Memory used by cluster links in bytes. */
+    clusterLinks: number;
+
+    /** Memory used to store dataset in bytes. */
+    datasetBytes: number;
+
+    /** Bytes of overall fragmentation. */
+    fragmentationBytes: number;
+
+    /** Memory used by functions caches in bytes. */
+    functionsCaches: number;
+
+    /** Average bytes per key. */
+    keysBytesPerKey: number;
+
+    /** Total number of keys across all databases. */
+    keysCount: number;
 
     /** Memory used by Lua caches in bytes. */
     luaCaches: number;
@@ -5303,62 +5332,48 @@ export interface MemoryStats {
     /** Total memory overhead in bytes. */
     overheadTotal: number;
 
-    /** Total number of keys across all databases. */
-    keysCount: number;
+    /** Peak memory consumed by the server in bytes. */
+    peakAllocated: number;
 
-    /** Average bytes per key. */
-    keysBytesPerKey: number;
-
-    /** Memory used to store dataset in bytes. */
-    datasetBytes: number;
-
-    /** Percentage of net memory used for dataset. */
-    datasetPercentage: number;
-
-    /** Percentage of peak.allocated out of total.allocated. */
-    peakPercentage: number;
-
-    /** Bytes allocated by the allocator. */
-    allocatorAllocated: number;
-
-    /** Bytes active (in use) by the allocator. */
-    allocatorActive: number;
-
-    /** Bytes resident (RSS) by the allocator. */
-    allocatorResident: number;
-
-    /** Ratio of allocator fragmentation. */
-    allocatorFragmentationRatio: number;
-
-    /** Bytes of allocator fragmentation. */
-    allocatorFragmentationBytes: number;
-
-    /** Ratio of allocator RSS overhead. */
-    allocatorRssRatio: number;
-
-    /** Bytes of allocator RSS overhead. */
-    allocatorRssBytes: number;
-
-    /** Ratio of RSS overhead. */
-    rssOverheadRatio: number;
+    /** Memory used for replication backlog in bytes. */
+    replicationBacklog: number;
 
     /** Bytes of RSS overhead. */
     rssOverheadBytes: number;
 
+    /** Memory consumed at startup in bytes. */
+    startupAllocated: number;
+
+    /** Total bytes allocated by the server. */
+    totalAllocated: number;
+
+    // Required float fields (alphabetical).
+
+    /** Ratio of allocator fragmentation. */
+    allocatorFragmentationRatio: number;
+
+    /** Ratio of allocator RSS overhead. */
+    allocatorRssRatio: number;
+
+    /** Percentage of net memory used for dataset. */
+    datasetPercentage: number;
+
     /** Overall memory fragmentation ratio. */
     fragmentation: number;
 
-    /** Bytes of overall fragmentation. */
-    fragmentationBytes: number;
+    /** Percentage of peak.allocated out of total.allocated. */
+    peakPercentage: number;
 
-    /** Memory used by cluster links in bytes. */
-    clusterLinks: number;
+    /** Ratio of RSS overhead. */
+    rssOverheadRatio: number;
 
-    /** Memory used by functions caches in bytes. */
-    functionsCaches: number;
+    // Optional fields – Valkey 8.0+ (alphabetical).
 
-    /** Memory used by allocator muzzy pages in bytes. */
-    allocatorMuzzy: number;
+    /**
+     * Count of db dictionaries currently rehashing.
+     * @remarks Valkey 8.0+ only.
+     */
+    dbDictRehashingCount?: number;
 
     /**
      * Overhead of db hashtable LUT in bytes.
@@ -5371,15 +5386,6 @@ export interface MemoryStats {
      * @remarks Valkey 8.0+ only.
      */
     overheadDbHashtableRehashing?: number;
-
-    /**
-     * Count of db dictionaries currently rehashing.
-     * @remarks Valkey 8.0+ only.
-     */
-    dbDictRehashingCount?: number;
-
-    /** Per-database overhead keyed by database index. */
-    db: Record<number, MemoryStatsDb>;
 }
 
 /** @internal */
@@ -5388,8 +5394,8 @@ const _MEMORY_STATS_DB_PREFIX = "db.";
 /** @internal */
 function _parseMemoryStatsDb(raw: Record<string, unknown>): MemoryStatsDb {
     return {
-        overheadHashtableMain: Number(raw["overhead.hashtable.main"]),
         overheadHashtableExpires: Number(raw["overhead.hashtable.expires"]),
+        overheadHashtableMain: Number(raw["overhead.hashtable.main"]),
     };
 }
 
@@ -5413,38 +5419,46 @@ export function parseMemoryStatsResponse(
     }
 
     return {
-        peakAllocated: Number(raw["peak.allocated"]),
-        totalAllocated: Number(raw["total.allocated"]),
-        startupAllocated: Number(raw["startup.allocated"]),
-        replicationBacklog: Number(raw["replication.backlog"]),
-        clientsSlaves: Number(raw["clients.slaves"]),
-        clientsNormal: Number(raw["clients.normal"]),
-        aofBuffer: Number(raw["aof.buffer"]),
-        luaCaches: Number(raw["lua.caches"]),
-        overheadTotal: Number(raw["overhead.total"]),
-        keysCount: Number(raw["keys.count"]),
-        keysBytesPerKey: Number(raw["keys.bytes-per-key"]),
-        datasetBytes: Number(raw["dataset.bytes"]),
-        datasetPercentage: Number(raw["dataset.percentage"]),
-        peakPercentage: Number(raw["peak.percentage"]),
-        allocatorAllocated: Number(raw["allocator.allocated"]),
+        db,
+        // Required int fields (alphabetical)
         allocatorActive: Number(raw["allocator.active"]),
-        allocatorResident: Number(raw["allocator.resident"]),
-        allocatorFragmentationRatio: Number(
-            raw["allocator-fragmentation.ratio"],
-        ),
+        allocatorAllocated: Number(raw["allocator.allocated"]),
         allocatorFragmentationBytes: Number(
             raw["allocator-fragmentation.bytes"],
         ),
-        allocatorRssRatio: Number(raw["allocator-rss.ratio"]),
-        allocatorRssBytes: Number(raw["allocator-rss.bytes"]),
-        rssOverheadRatio: Number(raw["rss-overhead.ratio"]),
-        rssOverheadBytes: Number(raw["rss-overhead.bytes"]),
-        fragmentation: Number(raw["fragmentation"]),
-        fragmentationBytes: Number(raw["fragmentation.bytes"]),
-        clusterLinks: Number(raw["cluster.links"]),
-        functionsCaches: Number(raw["functions.caches"]),
         allocatorMuzzy: Number(raw["allocator.muzzy"]),
+        allocatorResident: Number(raw["allocator.resident"]),
+        allocatorRssBytes: Number(raw["allocator-rss.bytes"]),
+        aofBuffer: Number(raw["aof.buffer"]),
+        clientsNormal: Number(raw["clients.normal"]),
+        clientsSlaves: Number(raw["clients.slaves"]),
+        clusterLinks: Number(raw["cluster.links"]),
+        datasetBytes: Number(raw["dataset.bytes"]),
+        fragmentationBytes: Number(raw["fragmentation.bytes"]),
+        functionsCaches: Number(raw["functions.caches"]),
+        keysBytesPerKey: Number(raw["keys.bytes-per-key"]),
+        keysCount: Number(raw["keys.count"]),
+        luaCaches: Number(raw["lua.caches"]),
+        overheadTotal: Number(raw["overhead.total"]),
+        peakAllocated: Number(raw["peak.allocated"]),
+        replicationBacklog: Number(raw["replication.backlog"]),
+        rssOverheadBytes: Number(raw["rss-overhead.bytes"]),
+        startupAllocated: Number(raw["startup.allocated"]),
+        totalAllocated: Number(raw["total.allocated"]),
+        // Required float fields (alphabetical)
+        allocatorFragmentationRatio: Number(
+            raw["allocator-fragmentation.ratio"],
+        ),
+        allocatorRssRatio: Number(raw["allocator-rss.ratio"]),
+        datasetPercentage: Number(raw["dataset.percentage"]),
+        fragmentation: Number(raw["fragmentation"]),
+        peakPercentage: Number(raw["peak.percentage"]),
+        rssOverheadRatio: Number(raw["rss-overhead.ratio"]),
+        // Optional fields – Valkey 8.0+ (alphabetical)
+        dbDictRehashingCount:
+            "db.dict.rehashing.count" in raw
+                ? Number(raw["db.dict.rehashing.count"])
+                : undefined,
         overheadDbHashtableLut:
             "overhead.db.hashtable.lut" in raw
                 ? Number(raw["overhead.db.hashtable.lut"])
@@ -5453,11 +5467,6 @@ export function parseMemoryStatsResponse(
             "overhead.db.hashtable.rehashing" in raw
                 ? Number(raw["overhead.db.hashtable.rehashing"])
                 : undefined,
-        dbDictRehashingCount:
-            "db.dict.rehashing.count" in raw
-                ? Number(raw["db.dict.rehashing.count"])
-                : undefined,
-        db,
     };
 }
 

@@ -20,41 +20,45 @@ class MemoryStatsDb:
 class MemoryStats:
     """Represents a MEMORY STATS response."""
 
-    peak_allocated: int
-    total_allocated: int
-    startup_allocated: int
-    replication_backlog: int
-    clients_slaves: int
-    clients_normal: int
-    aof_buffer: int
-    lua_caches: int
-    overhead_total: int
-    keys_count: int
-    keys_bytes_per_key: int
-    dataset_bytes: int
-    dataset_percentage: float
-    peak_percentage: float
-    allocator_allocated: int
-    allocator_active: int
-    allocator_resident: int
-    allocator_fragmentation_ratio: float
-    allocator_fragmentation_bytes: int
-    allocator_rss_ratio: float
-    allocator_rss_bytes: int
-    rss_overhead_ratio: float
-    rss_overhead_bytes: int
-    fragmentation: float
-    fragmentation_bytes: int
-    cluster_links: int
-    functions_caches: int
-    allocator_muzzy: int
+    # Per-database overhead keyed by database index.
+    db: Dict[int, MemoryStatsDb] = field(default_factory=dict)
 
-    # Valkey 8.0+
+    # Required int fields (alphabetical).
+    allocator_active: int = 0
+    allocator_allocated: int = 0
+    allocator_fragmentation_bytes: int = 0
+    allocator_muzzy: int = 0
+    allocator_resident: int = 0
+    allocator_rss_bytes: int = 0
+    aof_buffer: int = 0
+    clients_normal: int = 0
+    clients_slaves: int = 0
+    cluster_links: int = 0
+    dataset_bytes: int = 0
+    fragmentation_bytes: int = 0
+    functions_caches: int = 0
+    keys_bytes_per_key: int = 0
+    keys_count: int = 0
+    lua_caches: int = 0
+    overhead_total: int = 0
+    peak_allocated: int = 0
+    replication_backlog: int = 0
+    rss_overhead_bytes: int = 0
+    startup_allocated: int = 0
+    total_allocated: int = 0
+
+    # Required float fields (alphabetical).
+    allocator_fragmentation_ratio: float = 0.0
+    allocator_rss_ratio: float = 0.0
+    dataset_percentage: float = 0.0
+    fragmentation: float = 0.0
+    peak_percentage: float = 0.0
+    rss_overhead_ratio: float = 0.0
+
+    # Optional fields – Valkey 8.0+ (alphabetical).
+    db_dict_rehashing_count: Optional[int] = None
     overhead_db_hashtable_lut: Optional[int] = None
     overhead_db_hashtable_rehashing: Optional[int] = None
-    db_dict_rehashing_count: Optional[int] = None
-
-    db: Dict[int, MemoryStatsDb] = field(default_factory=dict)
 
 
 _MEMORY_STATS_DB_PREFIX = b"db."
@@ -81,34 +85,43 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
             db_map[int(suffix)] = _parse_memory_stats_db(value)
 
     return MemoryStats(
-        peak_allocated=int(response[b"peak.allocated"]),
-        total_allocated=int(response[b"total.allocated"]),
-        startup_allocated=int(response[b"startup.allocated"]),
-        replication_backlog=int(response[b"replication.backlog"]),
-        clients_slaves=int(response[b"clients.slaves"]),
-        clients_normal=int(response[b"clients.normal"]),
+        db=db_map,
+        # Required int fields (alphabetical)
+        allocator_active=int(response[b"allocator.active"]),
+        allocator_allocated=int(response[b"allocator.allocated"]),
+        allocator_fragmentation_bytes=int(response[b"allocator-fragmentation.bytes"]),
+        allocator_muzzy=int(response[b"allocator.muzzy"]),
+        allocator_resident=int(response[b"allocator.resident"]),
+        allocator_rss_bytes=int(response[b"allocator-rss.bytes"]),
         aof_buffer=int(response[b"aof.buffer"]),
+        clients_normal=int(response[b"clients.normal"]),
+        clients_slaves=int(response[b"clients.slaves"]),
+        cluster_links=int(response[b"cluster.links"]),
+        dataset_bytes=int(response[b"dataset.bytes"]),
+        fragmentation_bytes=int(response[b"fragmentation.bytes"]),
+        functions_caches=int(response[b"functions.caches"]),
+        keys_bytes_per_key=int(response[b"keys.bytes-per-key"]),
+        keys_count=int(response[b"keys.count"]),
         lua_caches=int(response[b"lua.caches"]),
         overhead_total=int(response[b"overhead.total"]),
-        keys_count=int(response[b"keys.count"]),
-        keys_bytes_per_key=int(response[b"keys.bytes-per-key"]),
-        dataset_bytes=int(response[b"dataset.bytes"]),
-        dataset_percentage=float(response[b"dataset.percentage"]),
-        peak_percentage=float(response[b"peak.percentage"]),
-        allocator_allocated=int(response[b"allocator.allocated"]),
-        allocator_active=int(response[b"allocator.active"]),
-        allocator_resident=int(response[b"allocator.resident"]),
-        allocator_fragmentation_ratio=float(response[b"allocator-fragmentation.ratio"]),
-        allocator_fragmentation_bytes=int(response[b"allocator-fragmentation.bytes"]),
-        allocator_rss_ratio=float(response[b"allocator-rss.ratio"]),
-        allocator_rss_bytes=int(response[b"allocator-rss.bytes"]),
-        rss_overhead_ratio=float(response[b"rss-overhead.ratio"]),
+        peak_allocated=int(response[b"peak.allocated"]),
+        replication_backlog=int(response[b"replication.backlog"]),
         rss_overhead_bytes=int(response[b"rss-overhead.bytes"]),
+        startup_allocated=int(response[b"startup.allocated"]),
+        total_allocated=int(response[b"total.allocated"]),
+        # Required float fields (alphabetical)
+        allocator_fragmentation_ratio=float(response[b"allocator-fragmentation.ratio"]),
+        allocator_rss_ratio=float(response[b"allocator-rss.ratio"]),
+        dataset_percentage=float(response[b"dataset.percentage"]),
         fragmentation=float(response[b"fragmentation"]),
-        fragmentation_bytes=int(response[b"fragmentation.bytes"]),
-        cluster_links=int(response[b"cluster.links"]),
-        functions_caches=int(response[b"functions.caches"]),
-        allocator_muzzy=int(response[b"allocator.muzzy"]),
+        peak_percentage=float(response[b"peak.percentage"]),
+        rss_overhead_ratio=float(response[b"rss-overhead.ratio"]),
+        # Optional fields – Valkey 8.0+ (alphabetical)
+        db_dict_rehashing_count=(
+            int(response[b"db.dict.rehashing.count"])
+            if b"db.dict.rehashing.count" in response
+            else None
+        ),
         overhead_db_hashtable_lut=(
             int(response[b"overhead.db.hashtable.lut"])
             if b"overhead.db.hashtable.lut" in response
@@ -119,12 +132,6 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
             if b"overhead.db.hashtable.rehashing" in response
             else None
         ),
-        db_dict_rehashing_count=(
-            int(response[b"db.dict.rehashing.count"])
-            if b"db.dict.rehashing.count" in response
-            else None
-        ),
-        db=db_map,
     )
 
 

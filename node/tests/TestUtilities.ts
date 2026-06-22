@@ -2634,53 +2634,55 @@ export function assertMemoryStatsFields(
     stats: MemoryStats,
     cluster: ValkeyCluster,
 ): void {
-    expect(stats.peakAllocated).toBeGreaterThan(0);
-    expect(stats.totalAllocated).toBeGreaterThan(0);
-    expect(stats.startupAllocated).toBeGreaterThan(0);
-    expect(stats.allocatorAllocated).toBeGreaterThan(0);
-    expect(stats.allocatorActive).toBeGreaterThan(0);
-    expect(stats.allocatorResident).toBeGreaterThan(0);
-    expect(stats.overheadTotal).toBeGreaterThan(0);
-
-    expect(typeof stats.replicationBacklog).toBe("number");
-    expect(typeof stats.clientsSlaves).toBe("number");
-    expect(typeof stats.clientsNormal).toBe("number");
-    expect(typeof stats.aofBuffer).toBe("number");
-    expect(typeof stats.luaCaches).toBe("number");
-    expect(typeof stats.keysCount).toBe("number");
-    expect(typeof stats.keysBytesPerKey).toBe("number");
-    expect(typeof stats.datasetBytes).toBe("number");
-    expect(typeof stats.allocatorFragmentationBytes).toBe("number");
-    expect(typeof stats.allocatorRssBytes).toBe("number");
-    expect(typeof stats.rssOverheadBytes).toBe("number");
-    expect(typeof stats.fragmentationBytes).toBe("number");
-    expect(typeof stats.clusterLinks).toBe("number");
-    expect(typeof stats.functionsCaches).toBe("number");
-    expect(typeof stats.allocatorMuzzy).toBe("number");
-
-    expect(typeof stats.datasetPercentage).toBe("number");
-    expect(typeof stats.peakPercentage).toBe("number");
-    expect(typeof stats.allocatorFragmentationRatio).toBe("number");
-    expect(typeof stats.allocatorRssRatio).toBe("number");
-    expect(typeof stats.rssOverheadRatio).toBe("number");
-    expect(typeof stats.fragmentation).toBe("number");
-
-    // Valkey 8.0+ optional fields
-    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
-        expect(typeof stats.overheadDbHashtableLut).toBe("number");
-        expect(typeof stats.overheadDbHashtableRehashing).toBe("number");
-        expect(typeof stats.dbDictRehashingCount).toBe("number");
-    } else {
-        expect(stats.overheadDbHashtableLut).toBeUndefined();
-        expect(stats.overheadDbHashtableRehashing).toBeUndefined();
-        expect(stats.dbDictRehashingCount).toBeUndefined();
-    }
-
+    // db
     expect(stats.db).toBeDefined();
     expect(typeof stats.db).toBe("object");
 
     for (const dbEntry of Object.values(stats.db)) {
-        expect(dbEntry.overheadHashtableMain).toBeGreaterThanOrEqual(0);
         expect(dbEntry.overheadHashtableExpires).toBeGreaterThanOrEqual(0);
+        expect(dbEntry.overheadHashtableMain).toBeGreaterThanOrEqual(0);
+    }
+
+    // Required int fields (alphabetical)
+    expect(stats.allocatorActive).toBeGreaterThan(0);
+    expect(stats.allocatorAllocated).toBeGreaterThan(0);
+    expect(typeof stats.allocatorFragmentationBytes).toBe("number");
+    expect(typeof stats.allocatorMuzzy).toBe("number");
+    expect(stats.allocatorResident).toBeGreaterThan(0);
+    expect(typeof stats.allocatorRssBytes).toBe("number");
+    expect(typeof stats.aofBuffer).toBe("number");
+    expect(typeof stats.clientsNormal).toBe("number");
+    expect(typeof stats.clientsSlaves).toBe("number");
+    expect(typeof stats.clusterLinks).toBe("number");
+    expect(typeof stats.datasetBytes).toBe("number");
+    expect(typeof stats.fragmentationBytes).toBe("number");
+    expect(typeof stats.functionsCaches).toBe("number");
+    expect(typeof stats.keysBytesPerKey).toBe("number");
+    expect(typeof stats.keysCount).toBe("number");
+    expect(typeof stats.luaCaches).toBe("number");
+    expect(stats.overheadTotal).toBeGreaterThan(0);
+    expect(stats.peakAllocated).toBeGreaterThan(0);
+    expect(typeof stats.replicationBacklog).toBe("number");
+    expect(typeof stats.rssOverheadBytes).toBe("number");
+    expect(stats.startupAllocated).toBeGreaterThan(0);
+    expect(stats.totalAllocated).toBeGreaterThan(0);
+
+    // Required float fields (alphabetical)
+    expect(typeof stats.allocatorFragmentationRatio).toBe("number");
+    expect(typeof stats.allocatorRssRatio).toBe("number");
+    expect(typeof stats.datasetPercentage).toBe("number");
+    expect(typeof stats.fragmentation).toBe("number");
+    expect(typeof stats.peakPercentage).toBe("number");
+    expect(typeof stats.rssOverheadRatio).toBe("number");
+
+    // Optional fields – Valkey 8.0+ (alphabetical)
+    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
+        expect(typeof stats.dbDictRehashingCount).toBe("number");
+        expect(typeof stats.overheadDbHashtableLut).toBe("number");
+        expect(typeof stats.overheadDbHashtableRehashing).toBe("number");
+    } else {
+        expect(stats.dbDictRehashingCount).toBeUndefined();
+        expect(stats.overheadDbHashtableLut).toBeUndefined();
+        expect(stats.overheadDbHashtableRehashing).toBeUndefined();
     }
 }

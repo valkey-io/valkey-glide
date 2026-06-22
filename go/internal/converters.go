@@ -886,40 +886,42 @@ func ConvertMemoryStats(data any) (any, error) {
 		DbDictRehashingCount:         models.CreateNilInt64Result(),
 	}
 
-	ReadValue(rawMap, "peak.allocated", &stats.PeakAllocated)
-	ReadValue(rawMap, "total.allocated", &stats.TotalAllocated)
-	ReadValue(rawMap, "startup.allocated", &stats.StartupAllocated)
-	ReadValue(rawMap, "replication.backlog", &stats.ReplicationBacklog)
-	ReadValue(rawMap, "clients.slaves", &stats.ClientsSlaves)
-	ReadValue(rawMap, "clients.normal", &stats.ClientsNormal)
-	ReadValue(rawMap, "cluster.links", &stats.ClusterLinks)
-	ReadValue(rawMap, "aof.buffer", &stats.AofBuffer)
-	ReadValue(rawMap, "lua.caches", &stats.LuaCaches)
-	ReadValue(rawMap, "functions.caches", &stats.FunctionsCaches)
-	ReadValue(rawMap, "overhead.total", &stats.OverheadTotal)
-	ReadValue(rawMap, "keys.count", &stats.KeysCount)
-	ReadValue(rawMap, "keys.bytes-per-key", &stats.KeysBytesPerKey)
-	ReadValue(rawMap, "dataset.bytes", &stats.DatasetBytes)
-	ReadValue(rawMap, "allocator.allocated", &stats.AllocatorAllocated)
+	// Required int fields (alphabetical)
 	ReadValue(rawMap, "allocator.active", &stats.AllocatorActive)
-	ReadValue(rawMap, "allocator.resident", &stats.AllocatorResident)
-	ReadValue(rawMap, "allocator.muzzy", &stats.AllocatorMuzzy)
+	ReadValue(rawMap, "allocator.allocated", &stats.AllocatorAllocated)
 	ReadValue(rawMap, "allocator-fragmentation.bytes", &stats.AllocatorFragmentationBytes)
+	ReadValue(rawMap, "allocator.muzzy", &stats.AllocatorMuzzy)
+	ReadValue(rawMap, "allocator.resident", &stats.AllocatorResident)
 	ReadValue(rawMap, "allocator-rss.bytes", &stats.AllocatorRssBytes)
-	ReadValue(rawMap, "rss-overhead.bytes", &stats.RssOverheadBytes)
+	ReadValue(rawMap, "aof.buffer", &stats.AofBuffer)
+	ReadValue(rawMap, "clients.normal", &stats.ClientsNormal)
+	ReadValue(rawMap, "clients.slaves", &stats.ClientsSlaves)
+	ReadValue(rawMap, "cluster.links", &stats.ClusterLinks)
+	ReadValue(rawMap, "dataset.bytes", &stats.DatasetBytes)
 	ReadValue(rawMap, "fragmentation.bytes", &stats.FragmentationBytes)
+	ReadValue(rawMap, "functions.caches", &stats.FunctionsCaches)
+	ReadValue(rawMap, "keys.bytes-per-key", &stats.KeysBytesPerKey)
+	ReadValue(rawMap, "keys.count", &stats.KeysCount)
+	ReadValue(rawMap, "lua.caches", &stats.LuaCaches)
+	ReadValue(rawMap, "overhead.total", &stats.OverheadTotal)
+	ReadValue(rawMap, "peak.allocated", &stats.PeakAllocated)
+	ReadValue(rawMap, "replication.backlog", &stats.ReplicationBacklog)
+	ReadValue(rawMap, "rss-overhead.bytes", &stats.RssOverheadBytes)
+	ReadValue(rawMap, "startup.allocated", &stats.StartupAllocated)
+	ReadValue(rawMap, "total.allocated", &stats.TotalAllocated)
 
-	ReadValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
-	ReadValue(rawMap, "peak.percentage", &stats.PeakPercentage)
+	// Required float fields (alphabetical)
 	ReadValue(rawMap, "allocator-fragmentation.ratio", &stats.AllocatorFragmentationRatio)
 	ReadValue(rawMap, "allocator-rss.ratio", &stats.AllocatorRssRatio)
-	ReadValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
+	ReadValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
 	ReadValue(rawMap, "fragmentation", &stats.Fragmentation)
+	ReadValue(rawMap, "peak.percentage", &stats.PeakPercentage)
+	ReadValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
 
-	// Optional Valkey 8.0+ fields
+	// Optional Valkey 8.0+ fields (alphabetical)
+	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
 	ReadResult(rawMap, "overhead.db.hashtable.lut", &stats.OverheadDbHashtableLut)
 	ReadResult(rawMap, "overhead.db.hashtable.rehashing", &stats.OverheadDbHashtableRehashing)
-	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
 
 	// Parse db.<N> entries
 	for key, value := range rawMap {
@@ -944,8 +946,8 @@ func convertMemoryStatsDb(data any) models.MemoryStatsDb {
 		return db
 	}
 
-	ReadValue(rawMap, "overhead.hashtable.main", &db.OverheadHashtableMain)
 	ReadValue(rawMap, "overhead.hashtable.expires", &db.OverheadHashtableExpires)
+	ReadValue(rawMap, "overhead.hashtable.main", &db.OverheadHashtableMain)
 
 	return db
 }
