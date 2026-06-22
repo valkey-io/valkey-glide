@@ -4,7 +4,7 @@
 Client-instance pool for the synchronous GLIDE client (Feature 1).
 
 Backed by the shared Rust pool in glide-core via FFI. The Rust pool owns
-client lifecycle (creation, LIFO reuse, bounded size, eviction). This Python
+client lifecycle (creation, LIFO reuse, bounded size). This Python
 class provides the acquire-with-timeout retry loop and maps client_id handles
 to usable GlideClient wrappers for command dispatch.
 
@@ -59,7 +59,7 @@ class ClientPool:
     """
     Client-instance pool backed by the Rust core.
 
-    The Rust pool owns all client lifecycle (creation, health checks, eviction).
+    The Rust pool owns client lifecycle (creation, bounded size).
     This Python class provides:
     - acquire-with-timeout retry loop (exponential backoff)
     - Cached GlideClient wrappers (one per client_id, reused across borrows)

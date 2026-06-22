@@ -97,7 +97,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
     match pool_arc.try_lock() {
         Ok(mut pool) => {
             let result = pool.try_acquire();
-            if result == -1 && pool.should_create() {
+            if result < 0 && pool.should_create() {
                 pool.total_count.fetch_add(1, Ordering::AcqRel);
                 let pool_clone = pool_arc.clone();
                 let bytes = pool.config.connection_request.clone();
