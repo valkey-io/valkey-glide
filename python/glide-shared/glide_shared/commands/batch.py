@@ -2,7 +2,7 @@
 
 import sys
 import threading
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, List, Mapping, Optional, Tuple, TypeVar, Union
 
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -27,6 +27,8 @@ from glide_shared.commands.core_options import (
     UpdateOptions,
     _build_sort_args,
 )
+from glide_shared.commands.latency import _parse_latency_history, _parse_latency_latest
+from glide_shared.commands.memory import _parse_memory_stats
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -59,9 +61,6 @@ from glide_shared.commands.stream import (
 from glide_shared.constants import TEncodable
 from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
-
-from glide_shared.commands.latency import _parse_latency_history, _parse_latency_latest
-from glide_shared.commands.memory import _parse_memory_stats
 
 if sys.version_info >= (3, 13):
     from warnings import deprecated

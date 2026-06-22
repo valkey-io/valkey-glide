@@ -2526,21 +2526,21 @@ func CreateMemoryTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer st
 
 	// Write a key to ensure MEMORY STATS has db entries.
 	batch.Set("{batch_memory_key}", "value")
-    testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(batch_memory_key)"})
+	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(batch_memory_key)"})
 
-    batch.MemoryDoctor()
+	batch.MemoryDoctor()
 	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "MemoryDoctor()"})
 
-    batch.MemoryMallocStats()
+	batch.MemoryMallocStats()
 	testData = append(
 		testData,
 		CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "MemoryMallocStats()"},
 	)
 
-    batch.MemoryPurge()
+	batch.MemoryPurge()
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "MemoryPurge()"})
 
-    batch.MemoryStats()
+	batch.MemoryStats()
 	testData = append(testData, CommandTestData{
 		ExpectedResponse: models.MemoryStats{}, CheckTypeOnly: true, TestName: "MemoryStats()",
 	})

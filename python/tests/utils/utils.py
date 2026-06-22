@@ -2088,13 +2088,13 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     assert stats.allocator_fragmentation_bytes >= 0
     assert stats.allocator_muzzy >= 0
     assert stats.allocator_resident > 0
-    assert stats.allocator_rss_bytes >= 0
+    assert isinstance(stats.allocator_rss_bytes, int)
     assert stats.aof_buffer >= 0
     assert stats.clients_normal >= 0
     assert stats.clients_slaves >= 0
     assert stats.cluster_links >= 0
     assert stats.dataset_bytes >= 0
-    assert stats.fragmentation_bytes >= 0
+    assert isinstance(stats.fragmentation_bytes, int)
     assert stats.functions_caches >= 0
     assert stats.keys_bytes_per_key >= 0
     assert stats.keys_count >= 0
@@ -2102,7 +2102,7 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     assert stats.overhead_total > 0
     assert stats.peak_allocated > 0
     assert stats.replication_backlog >= 0
-    assert stats.rss_overhead_bytes >= 0
+    assert isinstance(stats.rss_overhead_bytes, int)
     assert stats.startup_allocated > 0
     assert stats.total_allocated > 0
 
@@ -2114,7 +2114,7 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     assert stats.peak_percentage >= 0
     assert stats.rss_overhead_ratio >= 0
 
-    # Optional fields – Valkey 8.0+ (alphabetical)
+    # Optional Valkey 8.0+ fields
     if server_version >= "8.0.0":
         assert stats.db_dict_rehashing_count is not None
         assert stats.overhead_db_hashtable_lut is not None

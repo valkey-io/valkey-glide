@@ -10472,7 +10472,9 @@ class TestCommands:
         await glide_client.set(key, "value")
 
         version = await get_version(glide_client)
-        stats = await glide_client.memory_stats(route=SlotKeyRoute(SlotType.PRIMARY, key))
+        stats = await glide_client.memory_stats(
+            route=SlotKeyRoute(SlotType.PRIMARY, key)
+        )
 
         assert isinstance(stats, MemoryStats)
         assert_memory_stats_fields(stats, version)

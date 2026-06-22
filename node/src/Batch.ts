@@ -297,7 +297,7 @@ import {
     parseLatencyLatestResponse,
 } from ".";
 import { command_request } from "../build-ts/ProtobufMessage";
-import { convertGlideRecordToRecord } from "./BaseClient";
+import { convertGlideRecordToRecord, isGlideRecord } from "./BaseClient";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.
@@ -4540,9 +4540,11 @@ export class BaseBatch<T extends BaseBatch<T>> {
     public memoryStats(): T {
         return this.addAndReturn(createMemoryStats(), false, (raw: unknown) =>
             parseMemoryStatsResponse(
-                convertGlideRecordToRecord(
-                    raw as GlideRecord<unknown>,
-                ) as Record<string, unknown>,
+                isGlideRecord(raw)
+                    ? (convertGlideRecordToRecord(
+                          raw as GlideRecord<unknown>,
+                      ) as Record<string, unknown>)
+                    : (raw as Record<string, unknown>),
             ),
         );
     }

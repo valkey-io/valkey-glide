@@ -790,9 +790,7 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats() {
         return commandManager.submitNewCommand(
-                MemoryStats,
-                EMPTY_STRING_ARRAY,
-                response -> ClusterValue.of(handleMapResponse(response)));
+                MemoryStats, EMPTY_STRING_ARRAY, response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override

@@ -10325,7 +10325,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_memory_stats_cluster_multi_node(self, glide_sync_client: TGlideClient):
+    def test_sync_memory_stats_cluster_multi_node(
+        self, glide_sync_client: TGlideClient
+    ):
         result = glide_sync_client.memory_stats(route=AllNodes())
         assert isinstance(result, dict)
 
@@ -10335,13 +10337,17 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_memory_stats_cluster_single_node(self, glide_sync_client: TGlideClient):
+    def test_sync_memory_stats_cluster_single_node(
+        self, glide_sync_client: TGlideClient
+    ):
         # Write a key and route to its node to ensure db entry exists
         key = get_random_string(10)
         glide_sync_client.set(key, "value")
 
         version = sync_get_version(glide_sync_client)
-        stats = glide_sync_client.memory_stats(route=SlotKeyRoute(SlotType.PRIMARY, key))
+        stats = glide_sync_client.memory_stats(
+            route=SlotKeyRoute(SlotType.PRIMARY, key)
+        )
 
         assert isinstance(stats, MemoryStats)
         assert_memory_stats_fields(stats, version)

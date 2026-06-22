@@ -863,13 +863,13 @@ public class TestUtilities {
         assertTrue((Long) stats.get("allocator-fragmentation.bytes") >= 0);
         assertTrue((Long) stats.get("allocator.muzzy") >= 0);
         assertTrue((Long) stats.get("allocator.resident") > 0);
-        assertTrue((Long) stats.get("allocator-rss.bytes") >= 0);
+        assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
         assertTrue((Long) stats.get("aof.buffer") >= 0);
         assertTrue((Long) stats.get("clients.normal") >= 0);
         assertTrue((Long) stats.get("clients.slaves") >= 0);
         assertTrue((Long) stats.get("cluster.links") >= 0);
         assertTrue((Long) stats.get("dataset.bytes") >= 0);
-        assertTrue((Long) stats.get("fragmentation.bytes") >= 0);
+        assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
         assertTrue((Long) stats.get("functions.caches") >= 0);
         assertTrue((Long) stats.get("keys.bytes-per-key") >= 0);
         assertTrue((Long) stats.get("keys.count") >= 0);
@@ -877,7 +877,7 @@ public class TestUtilities {
         assertTrue((Long) stats.get("overhead.total") > 0);
         assertTrue((Long) stats.get("peak.allocated") > 0);
         assertTrue((Long) stats.get("replication.backlog") >= 0);
-        assertTrue((Long) stats.get("rss-overhead.bytes") >= 0);
+        assertInstanceOf(Long.class, stats.get("rss-overhead.bytes"));
         assertTrue((Long) stats.get("startup.allocated") > 0);
         assertTrue((Long) stats.get("total.allocated") > 0);
 

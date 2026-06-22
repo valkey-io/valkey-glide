@@ -36,13 +36,12 @@ from glide_shared.commands.core_options import (
     InfoSection,
     MigrateOptions,
 )
+from glide_shared.commands.latency import LatencyEntry, LatencyEventInfo
+from glide_shared.commands.memory import MemoryStats
 from glide_shared.commands.stream import StreamAddOptions
 from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
 from glide_shared.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
-
-from glide_shared.commands.latency import LatencyEntry, LatencyEventInfo
-from glide_shared.commands.memory import MemoryStats
 
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
@@ -1716,7 +1715,9 @@ class TestBatch:
         from tests.utils.cluster import ValkeyCluster
 
         tls = request.config.getoption("--tls")
-        cluster = ValkeyCluster(tls=tls, cluster_mode=False, shard_count=1, replica_count=0)
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
         yield cluster
         del cluster
 

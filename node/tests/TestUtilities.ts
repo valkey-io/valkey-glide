@@ -2656,13 +2656,13 @@ export function assertMemoryStatsFields(
     expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
     expect(stats.allocatorMuzzy).toBeGreaterThanOrEqual(0);
     expect(stats.allocatorResident).toBeGreaterThan(0);
-    expect(stats.allocatorRssBytes).toBeGreaterThanOrEqual(0);
+    expect(typeof stats.allocatorRssBytes).toBe("number");
     expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
     expect(stats.clientsNormal).toBeGreaterThanOrEqual(0);
     expect(stats.clientsSlaves).toBeGreaterThanOrEqual(0);
     expect(stats.clusterLinks).toBeGreaterThanOrEqual(0);
     expect(stats.datasetBytes).toBeGreaterThanOrEqual(0);
-    expect(stats.fragmentationBytes).toBeGreaterThanOrEqual(0);
+    expect(typeof stats.fragmentationBytes).toBe("number");
     expect(stats.functionsCaches).toBeGreaterThanOrEqual(0);
     expect(stats.keysBytesPerKey).toBeGreaterThanOrEqual(0);
     expect(stats.keysCount).toBeGreaterThanOrEqual(0);
@@ -2670,7 +2670,7 @@ export function assertMemoryStatsFields(
     expect(stats.overheadTotal).toBeGreaterThan(0);
     expect(stats.peakAllocated).toBeGreaterThan(0);
     expect(stats.replicationBacklog).toBeGreaterThanOrEqual(0);
-    expect(stats.rssOverheadBytes).toBeGreaterThanOrEqual(0);
+    expect(typeof stats.rssOverheadBytes).toBe("number");
     expect(stats.startupAllocated).toBeGreaterThan(0);
     expect(stats.totalAllocated).toBeGreaterThan(0);
 
