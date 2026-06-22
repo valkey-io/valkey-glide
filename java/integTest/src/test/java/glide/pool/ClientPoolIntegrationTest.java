@@ -83,7 +83,7 @@ public class ClientPoolIntegrationTest {
         assertEquals(0, pool.getActiveCount());
 
         long clientId = pool.acquire().get(10, TimeUnit.SECONDS);
-        // After acquire: idle decreases, active not tracked in metrics (tracked by in_use map)
+        // After acquire: idle decreases, active increases.
         pool.release(clientId);
 
         assertTrue(pool.getIdleCount() >= 1, "After release, idle should be >= 1");

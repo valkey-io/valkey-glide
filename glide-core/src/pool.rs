@@ -4,8 +4,9 @@
 //!
 //! A shared, cross-language connection pool that manages `GlideClient` instances.
 //! Callers borrow a client via `try_acquire`, use it for commands, and return it
-//! via `release`. The pool handles creation, LIFO reuse, bounded size, background
-//! creation, and idle eviction.
+//! via `release`. The pool handles LIFO reuse and bounded size; background creation
+//! is implemented by the embedding FFI/JNI layer. Idle eviction and health checks
+//! are deferred to follow-up work.
 //!
 //! This module lives in `glide-core` so all language bindings (Java JNI, Python CFFI,
 //! Ruby FFI, Go CGO, Node N-API) share the same Rust implementation.
@@ -103,8 +104,6 @@ pub struct ClientPool {
     pub idle: VecDeque<PooledClient>,
     /// Currently borrowed clients (client_id → placeholder for tracking).
     pub in_use: DashMap<u64, ()>,
-    /// Counter for unique client_id generation.
-    next_client_id: AtomicU64,
     /// Current total count (idle + in_use + creating).
     pub total_count: AtomicU32,
     /// Pool lifecycle state.
@@ -128,21 +127,21 @@ impl ClientPool {
             config,
             idle: VecDeque::new(),
             in_use: DashMap::new(),
-            next_client_id: AtomicU64::new(1),
             total_count: AtomicU32::new(0),
             state: AtomicU8::new(POOL_RUNNING),
         })
     }
 
-    /// Generate a unique client_id.
+    /// Generate a globally unique client_id (unique across all pools).
     pub fn next_id(&self) -> u64 {
-        self.next_client_id.fetch_add(1, Ordering::Relaxed)
+        NEXT_CLIENT_ID.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Non-blocking acquire. Returns client_id on success, -1 if no client available.
+    /// Non-blocking acquire. Returns client_id on success.
+    /// Returns -1 if pool is closed/closing, -3 if no idle client available.
     pub fn try_acquire(&mut self) -> i64 {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
-            return -1;
+            return -1; // Pool not running
         }
 
         // LIFO pop from idle stack
@@ -151,14 +150,10 @@ impl ClientPool {
             entry.state = ClientState::InUse;
             entry.borrowed_at = Some(Instant::now());
             self.in_use.insert(client_id, ());
-            // Re-store the entry — the binding layer will track it via client_id
-            // For the pool we just need to know it's in_use
-            // (The actual PooledClient is not stored in in_use DashMap to avoid
-            // double-ownership; it's tracked by client_id only)
             return client_id as i64;
         }
 
-        -1 // No idle client available
+        -3 // No idle client available (distinct from -1=closed, -2=invalid pool)
     }
 
     /// Whether background creation should be triggered (room below max_size).
@@ -211,6 +206,8 @@ impl ClientPool {
 /// Global pool registry: pool_id → Pool instance.
 static POOL_REGISTRY: OnceLock<DashMap<u64, Arc<TokioMutex<ClientPool>>>> = OnceLock::new();
 static NEXT_POOL_ID: AtomicU64 = AtomicU64::new(1);
+/// Global client_id allocator — ensures uniqueness across all pools.
+static NEXT_CLIENT_ID: AtomicU64 = AtomicU64::new(1);
 
 pub fn get_pool_registry() -> &'static DashMap<u64, Arc<TokioMutex<ClientPool>>> {
     POOL_REGISTRY.get_or_init(DashMap::new)

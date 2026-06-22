@@ -5461,7 +5461,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
     match pool_arc.try_lock() {
         Ok(mut pool) => {
             let result = pool.try_acquire();
-            if result == -1 && pool.should_create() {
+            if result < 0 && pool.should_create() {
                 // Trigger background creation
                 pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
                 let pool_clone = pool_arc.clone();
