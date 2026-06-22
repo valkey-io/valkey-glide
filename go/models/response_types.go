@@ -515,10 +515,8 @@ type MemoryStatsDb struct {
 
 // MemoryStats represents memory statistics from MEMORY STATS.
 type MemoryStats struct {
-	// Per-database overhead keyed by database index.
 	Db map[int64]MemoryStatsDb
 
-	// Required int fields (alphabetical).
 	AllocatorActive             int64
 	AllocatorAllocated          int64
 	AllocatorFragmentationBytes int64
@@ -542,7 +540,6 @@ type MemoryStats struct {
 	StartupAllocated            int64
 	TotalAllocated              int64
 
-	// Required float fields (alphabetical).
 	AllocatorFragmentationRatio float64
 	AllocatorRssRatio           float64
 	DatasetPercentage           float64
@@ -550,7 +547,7 @@ type MemoryStats struct {
 	PeakPercentage              float64
 	RssOverheadRatio            float64
 
-	// Optional fields – Valkey 8.0+ (alphabetical).
+	// Optional Valkey 8.0+ fields
 	DbDictRehashingCount         Result[int64]
 	OverheadDbHashtableLut       Result[int64]
 	OverheadDbHashtableRehashing Result[int64]
