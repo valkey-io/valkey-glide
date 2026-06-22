@@ -10321,7 +10321,7 @@ class TestCommands:
 
         for stats in result.values():
             assert isinstance(stats, MemoryStats)
-            assert_memory_stats_fields(stats, version)
+            assert_memory_stats_fields(stats, sync_get_version(glide_sync_client))
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10333,7 +10333,7 @@ class TestCommands:
 
         for stats in result.values():
             assert isinstance(stats, MemoryStats)
-            assert_memory_stats_fields(stats, version)
+            assert_memory_stats_fields(stats, sync_get_version(glide_sync_client))
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

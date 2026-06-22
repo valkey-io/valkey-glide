@@ -10424,7 +10424,7 @@ class TestCommands:
         result = await glide_client.memory_purge()
         assert result == OK
 
-        if is_cluster:
+        if isinstance(glide_client, GlideClusterClient):
             # Single-node route.
             assert await glide_client.memory_purge(route=RandomNode()) == OK
             # Multi-node route.
@@ -10452,7 +10452,7 @@ class TestCommands:
 
         for stats in result.values():
             assert isinstance(stats, MemoryStats)
-            assert_memory_stats_fields(stats, version)
+            assert_memory_stats_fields(stats, await get_version(glide_client))
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10462,7 +10462,7 @@ class TestCommands:
 
         for stats in result.values():
             assert isinstance(stats, MemoryStats)
-            assert_memory_stats_fields(stats, version)
+            assert_memory_stats_fields(stats, await get_version(glide_client))
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
