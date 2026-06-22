@@ -833,11 +833,7 @@ func (client *Client) MemoryStats(ctx context.Context) (models.MemoryStats, erro
 	if err != nil {
 		return models.MemoryStats{}, err
 	}
-	result, err := internal.ConvertMemoryStats(rawMap)
-	if err != nil {
-		return models.MemoryStats{}, err
-	}
-	return result.(models.MemoryStats), nil
+	return internal.ConvertMemoryStatsTyped(rawMap)
 }
 
 // Gets the name of the current connection.

@@ -936,6 +936,16 @@ func ConvertMemoryStats(data any) (any, error) {
 	return stats, nil
 }
 
+// ConvertMemoryStatsTyped is a typed wrapper around ConvertMemoryStats for use outside of batch
+// converters. It avoids unsafe type assertions at call sites.
+func ConvertMemoryStatsTyped(data any) (models.MemoryStats, error) {
+	result, err := ConvertMemoryStats(data)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	return result.(models.MemoryStats), nil
+}
+
 // convertMemoryStatsDb parses a nested map into a MemoryStatsDb struct.
 func convertMemoryStatsDb(data any) models.MemoryStatsDb {
 	db := models.MemoryStatsDb{}
