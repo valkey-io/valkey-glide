@@ -1330,9 +1330,9 @@ pub(crate) fn convert_to_expected_type(
                             Value::Array(arr) => convert_array_to_map_by_type(arr, None, None)
                                 .unwrap_or(Value::Nil),
                             // Convert RESP2 bulk strings to doubles.
-                            Value::BulkString(_) => {
-                                convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Double))
-                                    .unwrap_or(v)
+                            bulk @ Value::BulkString(_) => {
+                                convert_to_expected_type(bulk, Some(ExpectedReturnType::Double))
+                                    .unwrap_or(Value::Nil)
                             }
                             other => other,
                         };
