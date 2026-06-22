@@ -886,7 +886,6 @@ func ConvertMemoryStats(data any) (any, error) {
 		DbDictRehashingCount:         models.CreateNilInt64Result(),
 	}
 
-	// Required int fields (alphabetical)
 	ReadValue(rawMap, "allocator.active", &stats.AllocatorActive)
 	ReadValue(rawMap, "allocator.allocated", &stats.AllocatorAllocated)
 	ReadValue(rawMap, "allocator-fragmentation.bytes", &stats.AllocatorFragmentationBytes)
@@ -910,7 +909,6 @@ func ConvertMemoryStats(data any) (any, error) {
 	ReadValue(rawMap, "startup.allocated", &stats.StartupAllocated)
 	ReadValue(rawMap, "total.allocated", &stats.TotalAllocated)
 
-	// Required float fields (alphabetical)
 	ReadValue(rawMap, "allocator-fragmentation.ratio", &stats.AllocatorFragmentationRatio)
 	ReadValue(rawMap, "allocator-rss.ratio", &stats.AllocatorRssRatio)
 	ReadValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
@@ -918,7 +916,7 @@ func ConvertMemoryStats(data any) (any, error) {
 	ReadValue(rawMap, "peak.percentage", &stats.PeakPercentage)
 	ReadValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
 
-	// Optional Valkey 8.0+ fields (alphabetical)
+	// Optional Valkey 8.0+
 	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
 	ReadResult(rawMap, "overhead.db.hashtable.lut", &stats.OverheadDbHashtableLut)
 	ReadResult(rawMap, "overhead.db.hashtable.rehashing", &stats.OverheadDbHashtableRehashing)
