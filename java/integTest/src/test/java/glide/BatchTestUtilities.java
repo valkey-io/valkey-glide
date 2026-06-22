@@ -158,6 +158,9 @@ public class BatchTestUtilities {
                         "Server Management Commands",
                         (BatchBuilder) BatchTestUtilities::serverManagementCommands),
                 Arguments.of(
+                        "Memory Commands",
+                        (BatchBuilder) BatchTestUtilities::memoryCommands),
+                Arguments.of(
                         "Scripting and Function Commands",
                         (BatchBuilder) BatchTestUtilities::scriptingAndFunctionsCommands));
     }
@@ -970,11 +973,7 @@ public class BatchTestUtilities {
                 .dbsize()
                 .latencyReset()
                 .latencyHistory("command")
-                .latencyLatest()
-                .memoryDoctor()
-                .memoryMallocStats()
-                .memoryPurge()
-                .memoryStats();
+                .latencyLatest();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
@@ -1011,13 +1010,6 @@ public class BatchTestUtilities {
                     ResponseMatcher.longGreaterThanOrEqualTo("latencyReset()", 0), // latencyReset()
                     new Object[0],                                                 // latencyHistory("command")
                     new Object[0],                                                 // latencyLatest()
-                    ResponseMatcher.nonEmptyString("memoryDoctor()"),              // memoryDoctor()
-                    ResponseMatcher.nonEmptyString("memoryMallocStats()"),         // memoryMallocStats()
-                    OK,                                                            // memoryPurge()
-                    new ResponseMatcher(obj -> {                                   // memoryStats()
-                        assertMemoryStatsFields((Map<String, Object>) obj);
-                        return true;
-                    }, "memoryStats()"),
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -1035,6 +1027,28 @@ public class BatchTestUtilities {
         }
 
         return expectedResults;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object[] memoryCommands(BaseBatch<?> batch, boolean isAtomic) {
+        // Write a key to ensure MEMORY STATS has db entries.
+        batch.set("{batch_memory_key}", "value");
+
+        batch.memoryDoctor()
+             .memoryMallocStats()
+             .memoryPurge()
+             .memoryStats();
+
+        return new Object[] {
+            OK,                                                            // set("{batch_memory_key}", "value")
+            ResponseMatcher.nonEmptyString("memoryDoctor()"),              // memoryDoctor()
+            ResponseMatcher.nonEmptyString("memoryMallocStats()"),         // memoryMallocStats()
+            OK,                                                            // memoryPurge()
+            new ResponseMatcher(obj -> {                                   // memoryStats()
+                assertMemoryStatsFields((Map<String, Object>) obj);
+                return true;
+            }, "memoryStats()"),
+        };
     }
 
     private static Object[] connectionManagementCommands(BaseBatch<?> batch, boolean isAtomic) {

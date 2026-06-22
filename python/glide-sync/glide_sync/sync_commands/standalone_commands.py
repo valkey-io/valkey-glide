@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Union, cast
 
-from glide_shared.commands.batch import Batch
+from glide_shared.commands.batch import Batch, apply_batch_converters
 from glide_shared.commands.batch_options import BatchOptions
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
@@ -164,12 +164,13 @@ class StandaloneCommands(CoreCommands):
         """
         commands = batch.commands[:]
         timeout = options.timeout if options else None
-        return self._execute_batch(
+        result = self._execute_batch(
             commands,
             is_atomic=batch.is_atomic,
             raise_on_error=raise_on_error,
             timeout=timeout,
         )
+        return apply_batch_converters(result, batch.converters)
 
     def config_resetstat(self) -> TOK:
         """

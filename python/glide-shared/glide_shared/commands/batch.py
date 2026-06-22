@@ -2,7 +2,7 @@
 
 import sys
 import threading
-from typing import List, Mapping, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypeVar, Union
 
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -60,12 +60,36 @@ from glide_shared.constants import TEncodable
 from glide_shared.exceptions import RequestError
 from glide_shared.protobuf.command_request_pb2 import RequestType
 
+from glide_shared.commands.latency import _parse_latency_history, _parse_latency_latest
+from glide_shared.commands.memory import _parse_memory_stats
+
 if sys.version_info >= (3, 13):
     from warnings import deprecated
 else:
     from typing_extensions import deprecated
 
 TBatch = TypeVar("TBatch", bound="BaseBatch")
+
+
+def apply_batch_converters(
+    result: Optional[List[Any]],
+    converters: List[Optional[Callable[[Any], Any]]],
+) -> Optional[List[Any]]:
+    """Apply per-command converters to batch results.
+
+    Args:
+        result: The raw result list from batch execution, or None.
+        converters: A parallel list of converter functions (None for commands that need no conversion).
+
+    Returns:
+        The result list with converters applied in-place, or None.
+    """
+    if result is None:
+        return result
+    for idx, converter in enumerate(converters):
+        if converter is not None and idx < len(result) and result[idx] is not None:
+            result[idx] = converter(result[idx])
+    return result
 
 
 class BaseBatch:
@@ -96,6 +120,7 @@ class BaseBatch:
                 If `False`, the batch will be executed as a non-atomic pipeline.
         """
         self.commands: List[Tuple[int, List[TEncodable]]] = []
+        self.converters: List[Optional[Callable[[Any], Any]]] = []
         self.lock = threading.Lock()
         self.is_atomic = is_atomic
 
@@ -103,10 +128,12 @@ class BaseBatch:
         self: TBatch,
         request_type: int,
         args: List[TEncodable],
+        converter: Optional[Callable[[Any], Any]] = None,
     ) -> TBatch:
         self.lock.acquire()
         try:
             self.commands.append((request_type, args))
+            self.converters.append(converter)
         finally:
             self.lock.release()
         return self
@@ -114,6 +141,7 @@ class BaseBatch:
     def clear(self):
         with self.lock:
             self.commands.clear()
+            self.converters.clear()
 
     def get(self: TBatch, key: TEncodable) -> TBatch:
         """
@@ -2459,7 +2487,9 @@ class BaseBatch:
             List[LatencyEntry]: A list of LatencyEntry for the event, or an empty
                 list if the event doesn't exist.
         """
-        return self.append_command(RequestType.LatencyHistory, [event])
+        return self.append_command(
+            RequestType.LatencyHistory, [event], converter=_parse_latency_history
+        )
 
     def latency_latest(self: TBatch) -> TBatch:
         """
@@ -2470,7 +2500,7 @@ class BaseBatch:
         Command response:
             List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
         """
-        return self.append_command(RequestType.LatencyLatest, [])
+        return self.append_command(RequestType.LatencyLatest, [], converter=_parse_latency_latest)
 
     def latency_reset(self: TBatch, *events: TEncodable) -> TBatch:
         """
@@ -2497,7 +2527,11 @@ class BaseBatch:
         Command response:
             str: The memory diagnostic report.
         """
-        return self.append_command(RequestType.MemoryDoctor, [])
+        return self.append_command(
+            RequestType.MemoryDoctor,
+            [],
+            converter=lambda r: r.decode() if isinstance(r, bytes) else r,
+        )
 
     def memory_malloc_stats(self: TBatch) -> TBatch:
         """
@@ -2508,7 +2542,11 @@ class BaseBatch:
         Command response:
             str: The memory allocator statistics.
         """
-        return self.append_command(RequestType.MemoryMallocStats, [])
+        return self.append_command(
+            RequestType.MemoryMallocStats,
+            [],
+            converter=lambda r: r.decode() if isinstance(r, bytes) else r,
+        )
 
     def memory_purge(self: TBatch) -> TBatch:
         """
@@ -2531,7 +2569,7 @@ class BaseBatch:
             MemoryStats: A ``MemoryStats`` object containing detailed memory usage
                 statistics.
         """
-        return self.append_command(RequestType.MemoryStats, [])
+        return self.append_command(RequestType.MemoryStats, [], converter=_parse_memory_stats)
 
     def type(self: TBatch, key: TEncodable) -> TBatch:
         """

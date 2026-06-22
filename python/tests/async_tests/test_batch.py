@@ -41,6 +41,9 @@ from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
 from glide_shared.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 
+from glide_shared.commands.latency import LatencyEntry, LatencyEventInfo
+from glide_shared.commands.memory import MemoryStats
+
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
     assert_memory_stats_fields,
@@ -496,33 +499,28 @@ class TestBatch:
         transaction.latency_latest()
         transaction.latency_reset()
 
-        response = await exec_batch(glide_client, transaction)
+        # Route to a single node for cluster.
+        route = (
+            SlotKeyRoute(SlotType.PRIMARY, "latency_key")
+            if isinstance(glide_client, GlideClusterClient)
+            else None
+        )
+
+        response = await exec_batch(glide_client, transaction, route=route)
         assert isinstance(response, list)
         assert len(response) == 3
 
-        # Atomic batches always route to a single node and return a list.
-        # Non-atomic cluster batches route to all primaries and a dictionary.
-        expect_dict = isinstance(glide_client, GlideClusterClient) and not is_atomic
-
         # LATENCY HISTORY
-        if expect_dict:
-            assert isinstance(response[0], dict)
-            latency_entries = next(iter(response[0].values()))
-        else:
-            latency_entries = response[0]
-
+        latency_entries = response[0]
         assert isinstance(latency_entries, list)
         assert len(latency_entries) > 0
+        assert all(isinstance(e, LatencyEntry) for e in latency_entries)
 
         # LATENCY LATEST
-        if expect_dict:
-            assert isinstance(response[1], dict)
-            latency_event_infos = next(iter(response[1].values()))
-        else:
-            latency_event_infos = response[1]
-
+        latency_event_infos = response[1]
         assert isinstance(latency_event_infos, list)
         assert len(latency_event_infos) > 0
+        assert all(isinstance(e, LatencyEventInfo) for e in latency_event_infos)
 
         # LATENCY RESET
         assert isinstance(response[2], int)
@@ -1767,6 +1765,7 @@ class TestBatch:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
     async def test_memory_batch(self, glide_client: TGlideClient, is_atomic: bool):
+        # Write a key and route to its node to ensure db entry exists
         key = get_random_string(10)
         await glide_client.set(key, "value")
 
@@ -1782,7 +1781,14 @@ class TestBatch:
         batch.memory_purge()
         batch.memory_stats()
 
-        result = await exec_batch(glide_client, batch)
+        # Route to a single node for cluster.
+        route = (
+            SlotKeyRoute(SlotType.PRIMARY, key)
+            if isinstance(glide_client, GlideClusterClient)
+            else None
+        )
+
+        result = await exec_batch(glide_client, batch, route=route)
         assert result is not None
         assert len(result) == 4
         assert isinstance(result[0], str) and len(result[0]) > 0

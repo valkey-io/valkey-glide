@@ -13971,9 +13971,14 @@ export function runBaseTests(config: {
         config.timeout,
     );
 
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "memory commands — batch %p",
-        async (protocol) => {
+    it.each([
+        [ProtocolVersion.RESP2, true],
+        [ProtocolVersion.RESP2, false],
+        [ProtocolVersion.RESP3, true],
+        [ProtocolVersion.RESP3, false],
+    ])(
+        "memory commands — batch protocol=%p isAtomic=%p",
+        async (protocol, isAtomic) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
                     const key = getRandomKey();
@@ -13982,7 +13987,7 @@ export function runBaseTests(config: {
                     const response =
                         client instanceof GlideClient
                             ? await client.exec(
-                                  new Batch(true)
+                                  new Batch(isAtomic)
                                       .memoryDoctor()
                                       .memoryMallocStats()
                                       .memoryPurge()
@@ -13990,12 +13995,18 @@ export function runBaseTests(config: {
                                   true,
                               )
                             : await client.exec(
-                                  new ClusterBatch(true)
+                                  new ClusterBatch(isAtomic)
                                       .memoryDoctor()
                                       .memoryMallocStats()
                                       .memoryPurge()
                                       .memoryStats(),
                                   true,
+                                  {
+                                      route: {
+                                          type: "primarySlotKey",
+                                          key,
+                                      },
+                                  },
                               );
 
                     expect(response).not.toBeNull();

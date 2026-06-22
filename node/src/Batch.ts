@@ -323,10 +323,12 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     readonly setCommandsIndexes: number[] = [];
     /**
-     * Map of command indexes to result converter functions that transform raw responses into typed objects.
+     * Per-command result converter functions that transform raw responses into typed objects.
+     * Entries are `undefined` for commands that need no conversion.
      * @internal
      */
-    readonly commandConverters = new Map<number, (raw: unknown) => unknown>();
+    readonly commandConverters: (((raw: unknown) => unknown) | undefined)[] =
+        [];
 
     /**
      * @param isAtomic - Determines whether the batch is atomic or non-atomic. If `true`, the
@@ -352,10 +354,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
             this.setCommandsIndexes.push(this.commands.length);
         }
 
-        if (converter) {
-            this.commandConverters.set(this.commands.length, converter);
-        }
-
+        this.commandConverters.push(converter);
         this.commands.push(command);
         return this as unknown as T;
     }
