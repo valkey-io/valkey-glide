@@ -189,7 +189,13 @@ where
 /// underlying connections maintained for each node in the cluster, as well
 /// as common parameters for connecting to nodes and executing commands.
 #[derive(Clone)]
-pub struct ClusterConnection<C = MultiplexedConnection>(mpsc::Sender<Message<C>>);
+pub struct ClusterConnection<C = MultiplexedConnection> {
+    sender: mpsc::Sender<Message<C>>,
+    /// Direct access to the cluster's slot map for address resolution.
+    /// Used by isolated execution (Feature 2) to determine which node
+    /// to open a scoped connection to.
+    inner_core: Arc<InnerCore<C>>,
+}
 
 impl<C> ClusterConnection<C>
 where
@@ -211,6 +217,7 @@ where
         )
         .await
         .map(|inner| {
+            let inner_core = inner.inner.clone();
             let (tx, mut rx) = mpsc::channel::<Message<_>>(100);
             let stream = async move {
                 let _ = stream::poll_fn(move |cx| rx.poll_recv(cx))
@@ -220,7 +227,7 @@ where
             };
             #[cfg(feature = "tokio-comp")]
             tokio::spawn(stream);
-            ClusterConnection(tx)
+            ClusterConnection { sender: tx, inner_core }
         })
     }
 
@@ -288,7 +295,7 @@ where
         cluster_scan_args: ClusterScanArgs,
     ) -> RedisResult<(ScanStateRC, Vec<Value>)> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::ClusterScan { cluster_scan_args },
                 sender,
@@ -322,7 +329,7 @@ where
     ) -> RedisResult<Value> {
         log_trace_lazy!("cluster", "route_command");
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Cmd {
                     cmd: Arc::new(cmd.clone()),
@@ -367,7 +374,7 @@ where
         pipeline_retry_strategy: Option<PipelineRetryStrategy>,
     ) -> RedisResult<Vec<Value>> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::Pipeline {
                     pipeline: Arc::new(pipeline.clone()),
@@ -460,13 +467,22 @@ where
         self.route_operation_request(Operation::GetUsername).await
     }
 
+    /// Get the primary node address for a given hash slot.
+    /// Used by isolated execution to open scoped connections to the correct node.
+    /// Returns None if the slot is not mapped to any known node.
+    pub fn address_for_slot(&self, slot: u16) -> Option<String> {
+        use crate::cluster_routing::{Route, SlotAddr};
+        let route = Route::new(slot, SlotAddr::Master);
+        self.inner_core.conn_lock.read().address_for_route(&route)
+    }
+
     /// Routes an operation request to the appropriate handler.
     async fn route_operation_request(
         &mut self,
         operation_request: Operation,
     ) -> RedisResult<Value> {
         let (sender, receiver) = oneshot::channel();
-        self.0
+        self.sender
             .send(Message {
                 cmd: CmdArg::OperationRequest(operation_request),
                 sender,

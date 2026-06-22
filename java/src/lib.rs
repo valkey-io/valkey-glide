@@ -31,6 +31,7 @@ mod address_resolver;
 mod errors;
 mod jni_client;
 mod jni_pool;
+mod jni_scope;
 mod linked_hashmap;
 mod protobuf_bridge;
 

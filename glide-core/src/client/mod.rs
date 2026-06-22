@@ -1321,6 +1321,94 @@ impl Client {
         })
     }
 
+    /// Execute a command on a provided dedicated connection (for isolated execution).
+    ///
+    /// Applies the same timeout, decompression, and IAM token refresh logic as
+    /// `send_command`, but routes the command to the given `MultiplexedConnection`
+    /// instead of the client's internal managed connection.
+    ///
+    /// IAM handling: if the token has rotated since the connection was last
+    /// authenticated, sends AUTH with the fresh token before executing the command.
+    /// This ensures scoped connections don't fail mid-transaction due to token expiry.
+    pub async fn send_command_on_connection(
+        &self,
+        cmd: &Cmd,
+        connection: &mut redis::aio::MultiplexedConnection,
+    ) -> RedisResult<Value> {
+        // IAM token refresh: if token rotated, re-authenticate this connection
+        if let Some(iam_manager) = &self.iam_token_manager {
+            if iam_manager.token_changed() {
+                let current_token = iam_manager.get_token().await;
+                if !current_token.is_empty() {
+                    iam_manager.clear_token_changed();
+                    // Re-authenticate the scoped connection with fresh token
+                    let auth_cmd = redis::cmd("AUTH").arg(current_token.as_str()).to_owned();
+                    connection.send_packed_command(&auth_cmd).await?;
+                }
+            }
+        }
+
+        let request_timeout = Some(self.request_timeout);
+
+        // Send with timeout
+        let raw_value = match request_timeout {
+            Some(duration) => {
+                match tokio::time::timeout(duration, connection.send_packed_command(cmd)).await {
+                    Ok(result) => result?,
+                    Err(_) => {
+                        return Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into());
+                    }
+                }
+            }
+            None => connection.send_packed_command(cmd).await?,
+        };
+
+        // Apply decompression if compression is enabled
+        let processed_value = if let Some(ref compression_manager) = self.compression_manager {
+            if let Some(request_type) = extract_request_type_from_cmd(cmd) {
+                match crate::compression::process_response_for_decompression(
+                    raw_value.clone(),
+                    request_type,
+                    Some(compression_manager.as_ref()),
+                ) {
+                    Ok(decompressed) => decompressed,
+                    Err(e) => {
+                        if e.should_propagate() {
+                            return Err(redis::RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Decompression error",
+                                e.to_string(),
+                            )));
+                        }
+                        raw_value
+                    }
+                }
+            } else {
+                raw_value
+            }
+        } else {
+            raw_value
+        };
+
+        // Type conversion
+        let expected_type = expected_type_for_cmd(cmd);
+        convert_to_expected_type(processed_value, expected_type)
+    }
+
+    /// Get the primary node address for a given hash slot (cluster mode).
+    /// Returns the host:port string for the primary that owns the slot.
+    /// Returns None in standalone mode or if the slot is unmapped.
+    ///
+    /// Used by isolated execution (Feature 2) to open scoped connections
+    /// directly to the correct node, avoiding MOVED redirects.
+    pub async fn address_for_slot(&self, slot: u16) -> Option<String> {
+        let client = self.internal_client.read().await;
+        match &*client {
+            ClientWrapper::Cluster { client } => client.address_for_slot(slot),
+            _ => None,
+        }
+    }
+
     /// Returns the cache hit rate (hits / total requests).
     /// Returns an error if caching is not enabled or metrics are disabled.
     pub fn cache_hit_rate(&self) -> RedisResult<Value> {
