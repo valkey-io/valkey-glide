@@ -5276,7 +5276,6 @@ export interface MemoryStatsDb {
  * Represents a MEMORY STATS response.
  */
 export interface MemoryStats {
-
     /** Peak memory consumed by the server in bytes. */
     peakAllocated: number;
 
@@ -5466,7 +5465,9 @@ export function parseMemoryStatsResponse(
  * Parses a `LATENCY HISTORY` response.
  * @internal
  */
-export function parseLatencyHistoryResponse(response: unknown[]): LatencyEntry[] {
+export function parseLatencyHistoryResponse(
+    response: unknown[],
+): LatencyEntry[] {
     return (response as unknown[][]).map(
         (entry) => new LatencyEntry(entry[0] as number, entry[1] as number),
     );
@@ -5476,7 +5477,9 @@ export function parseLatencyHistoryResponse(response: unknown[]): LatencyEntry[]
  * Parses a `LATENCY LATEST` response.
  * @internal
  */
-export function parseLatencyLatestResponse(response: unknown[]): LatencyEventInfo[] {
+export function parseLatencyLatestResponse(
+    response: unknown[],
+): LatencyEventInfo[] {
     return (response as unknown[][]).map((entry) => {
         const sum = entry.length >= 6 ? (entry[4] as number) : undefined;
         const count = entry.length >= 6 ? (entry[5] as number) : undefined;

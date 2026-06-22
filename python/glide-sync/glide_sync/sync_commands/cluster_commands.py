@@ -1819,7 +1819,9 @@ class ClusterCommands(CoreCommands):
             self._execute_command(RequestType.MemoryDoctor, [], route),
         )
 
-    def memory_malloc_stats(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+    def memory_malloc_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
         """
         Returns the internal statistics of the memory allocator.
         Routes to all primary nodes by default.
@@ -1863,7 +1865,9 @@ class ClusterCommands(CoreCommands):
         """
         return cast(TOK, self._execute_command(RequestType.MemoryPurge, [], route))
 
-    def memory_stats(self, route: Optional[Route] = None) -> TClusterResponse[MemoryStats]:
+    def memory_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[MemoryStats]:
         """
         Returns detailed memory consumption statistics of the server.
         Routes to all primary nodes by default.
@@ -1885,4 +1889,4 @@ class ClusterCommands(CoreCommands):
             ...     print(f"Node [{node}]: peak={node_stats.peak_allocated}")
         """
         response = self._execute_command(RequestType.MemoryStats, [], route)
-        return _parse_memory_stats_cluster(response)
+        return _parse_memory_stats_cluster(cast(Mapping, response))

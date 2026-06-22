@@ -41,6 +41,7 @@ from glide_shared.commands.core_options import (
     InfoSection,
     InsertPosition,
 )
+from glide_shared.commands.memory import MemoryStats, MemoryStatsDb
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -2063,7 +2064,9 @@ def assert_connected_sync(client: TSyncGlideClient) -> None:
     assert result == b"PONG"
 
 
-def assert_memory_stats_fields(stats: "MemoryStats", server_version: str, is_cluster: bool) -> None:
+def assert_memory_stats_fields(
+    stats: MemoryStats, server_version: str, is_cluster: bool
+) -> None:
     """Validate that a MemoryStats instance has expected field types and values.
 
     Args:
@@ -2071,8 +2074,6 @@ def assert_memory_stats_fields(stats: "MemoryStats", server_version: str, is_clu
         server_version: The server version string (e.g. "8.1.0").
         is_cluster: Whether the server is running in cluster mode.
     """
-    from glide_shared.commands.memory import MemoryStatsDb
-
     assert stats.peak_allocated > 0
     assert stats.total_allocated > 0
     assert stats.startup_allocated > 0

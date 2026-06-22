@@ -1872,7 +1872,9 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.LatencyReset, list(events), route),
         )
 
-    async def memory_doctor(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+    async def memory_doctor(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
         """
         Returns a report about memory problems detected by the server.
         Routes to all primary nodes by default.
@@ -1897,7 +1899,9 @@ class ClusterCommands(CoreCommands):
             return response.decode()
         return {k: cast(bytes, v).decode() for k, v in cast(dict, response).items()}
 
-    async def memory_malloc_stats(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+    async def memory_malloc_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
         """
         Returns the internal statistics of the memory allocator.
         Routes to all primary nodes by default.
@@ -1939,9 +1943,13 @@ class ClusterCommands(CoreCommands):
             >>> await client.memory_purge()
                 "OK"
         """
-        return cast(TOK, await self._execute_command(RequestType.MemoryPurge, [], route))
+        return cast(
+            TOK, await self._execute_command(RequestType.MemoryPurge, [], route)
+        )
 
-    async def memory_stats(self, route: Optional[Route] = None) -> TClusterResponse[MemoryStats]:
+    async def memory_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[MemoryStats]:
         """
         Returns detailed memory consumption statistics of the server.
         Routes to all primary nodes by default.
@@ -1963,4 +1971,4 @@ class ClusterCommands(CoreCommands):
             ...     print(f"Node [{node}]: peak={node_stats.peak_allocated}")
         """
         response = await self._execute_command(RequestType.MemoryStats, [], route)
-        return _parse_memory_stats_cluster(response)
+        return _parse_memory_stats_cluster(cast(Mapping, response))

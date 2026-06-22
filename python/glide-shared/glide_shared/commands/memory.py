@@ -73,8 +73,11 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
 
     db_map: Dict[int, MemoryStatsDb] = {}
     for raw_key, value in response.items():
-        if raw_key.startswith(_MEMORY_STATS_DB_PREFIX) and raw_key != b"db.dict.rehashing.count":
-            suffix = raw_key[len(_MEMORY_STATS_DB_PREFIX):]
+        if (
+            raw_key.startswith(_MEMORY_STATS_DB_PREFIX)
+            and raw_key != b"db.dict.rehashing.count"
+        ):
+            suffix = raw_key[len(_MEMORY_STATS_DB_PREFIX) :]
             db_map[int(suffix)] = _parse_memory_stats_db(value)
 
     return MemoryStats(

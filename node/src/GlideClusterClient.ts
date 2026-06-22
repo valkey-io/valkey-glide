@@ -2638,11 +2638,8 @@ export class GlideClusterClient extends BaseClient {
                 return parseMemoryStatsResponse(record);
             }
 
-            return convertAndParseClusterResponse(
-                res,
-                false,
-                (raw) =>
-                    parseMemoryStatsResponse(raw as Record<string, unknown>),
+            return convertAndParseClusterResponse(res, false, (raw) =>
+                parseMemoryStatsResponse(raw as Record<string, unknown>),
             );
         });
     }
