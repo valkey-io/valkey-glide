@@ -85,23 +85,22 @@ public class ClientPool implements AutoCloseable {
     }
 
     /**
-     * Acquire a client_id from the pool with default timeout.
-     *
-     * @return CompletableFuture resolving to a client_id
+     * Acquire a pooled client with default timeout. Returns a pool-aware wrapper
+     * that returns the client to the pool on close() (try-with-resources safe).
      */
-    public CompletableFuture<Long> acquire() {
+    public CompletableFuture<PooledGlideClient> acquire() {
         return acquire(config.getAcquireTimeout());
     }
 
     /**
-     * Acquire a client_id with custom timeout. Retries with exponential backoff.
+     * Acquire a pooled client with custom timeout. Retries with exponential backoff.
      *
-     * @param timeout max wait time
-     * @return CompletableFuture resolving to a client_id
+     * <p>The returned {@link PooledGlideClient} implements AutoCloseable — its close()
+     * returns the client to the pool instead of destroying the native connection.
      */
-    public CompletableFuture<Long> acquire(Duration timeout) {
+    public CompletableFuture<PooledGlideClient> acquire(Duration timeout) {
         if (state.get() != RUNNING) {
-            CompletableFuture<Long> f = new CompletableFuture<>();
+            CompletableFuture<PooledGlideClient> f = new CompletableFuture<>();
             f.completeExceptionally(new ClosingException("Pool is closed"));
             return f;
         }
@@ -128,7 +127,7 @@ public class ClientPool implements AutoCloseable {
                             continue;
                         }
                     }
-                    return clientId;
+                    return new PooledGlideClient(getClient(clientId), ClientPool.this, clientId);
                 }
                 if (clientId == -2) throw new RuntimeException("Pool was destroyed");
 

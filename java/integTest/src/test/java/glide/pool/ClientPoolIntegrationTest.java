@@ -3,7 +3,6 @@ package glide.pool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import glide.api.GlideClient;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
@@ -41,18 +40,17 @@ public class ClientPoolIntegrationTest {
 
         assertTrue(pool.getIdleCount() >= 1, "Should have at least 1 idle client");
 
-        long clientId = pool.acquire().get(10, TimeUnit.SECONDS);
-        assertTrue(clientId > 0, "client_id should be positive");
+        // acquire() returns PooledGlideClient — try-with-resources returns to pool
+        try (glide.api.models.pool.PooledGlideClient client = pool.acquire().get(10, TimeUnit.SECONDS)) {
+            assertNotNull(client);
+            assertTrue(client.getClientId() > 0, "client_id should be positive");
 
-        GlideClient client = pool.getClient(clientId);
-        assertNotNull(client);
+            String key = "pool-test-" + UUID.randomUUID();
+            client.set(key, "hello").get(5, TimeUnit.SECONDS);
+            assertEquals("hello", client.get(key).get(5, TimeUnit.SECONDS));
+            client.del(new String[]{key}).get(5, TimeUnit.SECONDS);
+        } // auto-released back to pool
 
-        String key = "pool-test-" + UUID.randomUUID();
-        client.set(key, "hello").get(5, TimeUnit.SECONDS);
-        assertEquals("hello", client.get(key).get(5, TimeUnit.SECONDS));
-        client.del(new String[]{key}).get(5, TimeUnit.SECONDS);
-
-        pool.release(clientId);
         pool.close();
         System.out.println("testPoolCreateAcquireRelease PASSED");
     }
@@ -62,13 +60,15 @@ public class ClientPoolIntegrationTest {
         ClientPool pool = ClientPool.create(poolConfig());
         Thread.sleep(3000);
 
-        long id1 = pool.acquire().get(10, TimeUnit.SECONDS);
-        pool.release(id1);
+        glide.api.models.pool.PooledGlideClient c1 = pool.acquire().get(10, TimeUnit.SECONDS);
+        long id1 = c1.getClientId();
+        c1.close(); // returns to pool
         Thread.sleep(100);
 
-        long id2 = pool.acquire().get(10, TimeUnit.SECONDS);
+        glide.api.models.pool.PooledGlideClient c2 = pool.acquire().get(10, TimeUnit.SECONDS);
+        long id2 = c2.getClientId();
         assertEquals(id1, id2, "LIFO: same client_id returned after release");
-        pool.release(id2);
+        c2.close();
 
         pool.close();
         System.out.println("testPoolReuse PASSED");
@@ -82,7 +82,7 @@ public class ClientPoolIntegrationTest {
         assertTrue(pool.getIdleCount() >= 1);
         assertEquals(0, pool.getActiveCount());
 
-        long clientId = pool.acquire().get(10, TimeUnit.SECONDS);
+        long clientId = pool.acquire().get(10, TimeUnit.SECONDS).getClientId();
         // After acquire: idle decreases, active increases.
         pool.release(clientId);
 
