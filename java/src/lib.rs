@@ -30,6 +30,7 @@ use std::sync::{Arc, OnceLock};
 mod address_resolver;
 mod errors;
 mod jni_client;
+mod jni_pool;
 mod linked_hashmap;
 mod protobuf_bridge;
 
