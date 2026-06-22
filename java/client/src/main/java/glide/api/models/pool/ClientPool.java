@@ -1,0 +1,237 @@
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
+package glide.api.models.pool;
+
+import static connection_request.ConnectionRequestOuterClass.*;
+
+import glide.api.models.configuration.BackoffStrategy;
+import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.GlideClusterClientConfiguration;
+import glide.api.models.configuration.ServerCredentials;
+import glide.api.models.exceptions.ClosingException;
+import glide.ffi.resolvers.GlidePoolResolver;
+import glide.internal.GlideNativeBridge;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * Client-instance pool backed by the shared Rust core.
+ *
+ * <p>Callers borrow a client via {@link #acquire()}, use it for commands, and return
+ * it via {@link #release(long)}. The pool handles creation, LIFO reuse, bounded size,
+ * and background client creation.
+ *
+ * <p>Usage:
+ * <pre>{@code
+ * ClientPoolConfig config = ClientPoolConfig.builder()
+ *     .maxSize(10)
+ *     .minIdle(2)
+ *     .clientConfig(GlideClientConfiguration.builder()
+ *         .address(NodeAddress.builder().host("localhost").port(6379).build())
+ *         .build())
+ *     .build();
+ *
+ * ClientPool pool = ClientPool.create(config);
+ * long clientId = pool.acquire().get();
+ * GlideClient client = pool.getClient(clientId);
+ * client.set("key", "value").get();
+ * pool.release(clientId);
+ * pool.close();
+ * }</pre>
+ */
+public class ClientPool implements AutoCloseable {
+
+    private static final int RUNNING = 0;
+    private static final int CLOSED = 1;
+
+    private final long poolId;
+    private final ClientPoolConfig config;
+    private final AtomicInteger state = new AtomicInteger(RUNNING);
+
+    private ClientPool(long poolId, ClientPoolConfig config) {
+        this.poolId = poolId;
+        this.config = config;
+    }
+
+    /**
+     * Create a new pool.
+     *
+     * @param config pool configuration
+     * @return the pool (clients are created asynchronously in the background)
+     */
+    public static ClientPool create(ClientPoolConfig config) {
+        config.validate();
+        byte[] connectionRequestBytes = serializeConnectionRequest(config.getClientConfig());
+
+        long poolId = GlidePoolResolver.glidePoolCreate(
+                config.getMaxSize(),
+                config.getMinIdle(),
+                config.getIdleTimeout().toMillis(),
+                config.getRequestTimeout().toMillis(),
+                connectionRequestBytes);
+
+        if (poolId == -1) throw new IllegalArgumentException("Invalid pool configuration");
+        if (poolId < 0) throw new RuntimeException("Pool creation failed: " + poolId);
+
+        return new ClientPool(poolId, config);
+    }
+
+    /** Get the native pool handle. */
+    public long getPoolId() {
+        return poolId;
+    }
+
+    /**
+     * Acquire a client_id from the pool with default timeout.
+     *
+     * @return CompletableFuture resolving to a client_id
+     */
+    public CompletableFuture<Long> acquire() {
+        return acquire(config.getAcquireTimeout());
+    }
+
+    /**
+     * Acquire a client_id with custom timeout. Retries with exponential backoff.
+     *
+     * @param timeout max wait time
+     * @return CompletableFuture resolving to a client_id
+     */
+    public CompletableFuture<Long> acquire(Duration timeout) {
+        if (state.get() != RUNNING) {
+            CompletableFuture<Long> f = new CompletableFuture<>();
+            f.completeExceptionally(new ClosingException("Pool is closed"));
+            return f;
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            long deadlineNanos = System.nanoTime() + timeout.toNanos();
+            long backoffMs = 1;
+
+            while (System.nanoTime() < deadlineNanos) {
+                if (state.get() != RUNNING) {
+                    throw new RuntimeException(new ClosingException("Pool is closed"));
+                }
+
+                long clientId = GlidePoolResolver.glidePoolTryAcquire(poolId);
+                if (clientId >= 0) return clientId;
+                if (clientId == -2) throw new RuntimeException("Pool was destroyed");
+
+                long remainingMs = (deadlineNanos - System.nanoTime()) / 1_000_000;
+                long sleepMs = Math.min(backoffMs, Math.max(remainingMs, 0));
+                if (sleepMs <= 0) break;
+                try { Thread.sleep(sleepMs); } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Acquire interrupted", e);
+                }
+                backoffMs = Math.min(backoffMs * 2, 50);
+            }
+
+            throw new RuntimeException(new java.util.concurrent.TimeoutException(
+                    "Pool exhausted: could not acquire within " + timeout));
+        });
+    }
+
+    /**
+     * Get a usable GlideClient for the given client_id.
+     *
+     * TODO: Requires GlideClient.fromPoolHandle() factory method to wrap
+     * the native handle without creating a new connection. For now, callers
+     * can use the client_id directly with low-level JNI dispatch.
+     */
+    public Object getClient(long clientId) {
+        throw new UnsupportedOperationException(
+                "getClient() requires GlideClient.fromPoolHandle() — use low-level dispatch for now");
+    }
+
+    /** Release a client back to the pool. */
+    public void release(long clientId) {
+        GlidePoolResolver.glidePoolRelease(poolId, clientId);
+    }
+
+    /** Get pool metrics. */
+    public int[] getMetrics() {
+        return GlidePoolResolver.glidePoolMetrics(poolId);
+    }
+
+    public int getIdleCount() {
+        int[] m = getMetrics();
+        return m != null ? m[0] : 0;
+    }
+
+    public int getActiveCount() {
+        int[] m = getMetrics();
+        return m != null ? m[1] : 0;
+    }
+
+    public int getTotalCount() {
+        int[] m = getMetrics();
+        return m != null ? m[2] : 0;
+    }
+
+    @Override
+    public void close() {
+        if (state.compareAndSet(RUNNING, CLOSED)) {
+            GlidePoolResolver.glidePoolDestroy(poolId);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Internal: protobuf serialization (same as previous prototype)
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static byte[] serializeConnectionRequest(BaseClientConfiguration config) {
+        ConnectionRequest.Builder b = ConnectionRequest.newBuilder();
+
+        for (glide.api.models.configuration.NodeAddress addr : config.getAddresses()) {
+            b.addAddresses(NodeAddress.newBuilder()
+                    .setHost(addr.getHost()).setPort(addr.getPort()).build());
+        }
+
+        b.setTlsMode(config.isUseTLS() ? TlsMode.SecureTls : TlsMode.NoTls);
+        b.setClusterModeEnabled(config instanceof GlideClusterClientConfiguration);
+
+        int reqTimeout = config.getRequestTimeout() != null
+                ? config.getRequestTimeout()
+                : (int) GlideNativeBridge.getGlideCoreDefaultRequestTimeoutMs();
+        b.setRequestTimeout(reqTimeout);
+        b.setConnectionTimeout(reqTimeout);
+
+        int inflight = config.getInflightRequestsLimit() != null
+                ? config.getInflightRequestsLimit()
+                : GlideNativeBridge.getGlideCoreDefaultMaxInflightRequests();
+        b.setInflightRequestsLimit(inflight);
+
+        ServerCredentials creds = config.getCredentials();
+        if (creds != null) {
+            AuthenticationInfo.Builder auth = AuthenticationInfo.newBuilder();
+            if (creds.getUsername() != null) auth.setUsername(creds.getUsername());
+            if (creds.getPassword() != null) auth.setPassword(creds.getPassword());
+            b.setAuthenticationInfo(auth.build());
+        }
+
+        if (config.getReadFrom() != null) {
+            String rf = config.getReadFrom().name();
+            if ("PRIMARY".equals(rf)) b.setReadFrom(ReadFrom.Primary);
+            else if ("PREFER_REPLICA".equals(rf)) b.setReadFrom(ReadFrom.PreferReplica);
+        }
+
+        if (config.getClientName() != null) b.setClientName(config.getClientName());
+        if (config.getDatabaseId() != null) b.setDatabaseId(config.getDatabaseId());
+
+        if (config.getProtocol() != null) {
+            if ("RESP2".equals(config.getProtocol().name())) b.setProtocol(ProtocolVersion.RESP2);
+            else if ("RESP3".equals(config.getProtocol().name())) b.setProtocol(ProtocolVersion.RESP3);
+        }
+
+        BackoffStrategy rs = config.getReconnectStrategy();
+        if (rs != null) {
+            ConnectionRetryStrategy.Builder r = ConnectionRetryStrategy.newBuilder();
+            if (rs.getNumOfRetries() != null) r.setNumberOfRetries(rs.getNumOfRetries());
+            if (rs.getFactor() != null) r.setFactor(rs.getFactor());
+            if (rs.getExponentBase() != null) r.setExponentBase(rs.getExponentBase());
+            b.setConnectionRetryStrategy(r.build());
+        }
+
+        return b.build().toByteArray();
+    }
+}
