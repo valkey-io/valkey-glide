@@ -929,11 +929,7 @@ func ConvertMemoryStats(data any) (any, error) {
 			if err != nil {
 				return nil, fmt.Errorf("unexpected db key format: %s", key)
 			}
-			dbEntry, err := convertMemoryStatsDb(value)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing db.%d: %w", dbIndex, err)
-			}
-			stats.Db[dbIndex] = dbEntry
+			stats.Db[dbIndex] = convertMemoryStatsDb(value)
 		}
 	}
 
@@ -941,33 +937,15 @@ func ConvertMemoryStats(data any) (any, error) {
 }
 
 // convertMemoryStatsDb parses a nested map into a MemoryStatsDb struct.
-func convertMemoryStatsDb(data any) (models.MemoryStatsDb, error) {
+func convertMemoryStatsDb(data any) models.MemoryStatsDb {
+	db := models.MemoryStatsDb{}
 	rawMap, ok := data.(map[string]any)
 	if !ok {
-		return models.MemoryStatsDb{}, fmt.Errorf("unexpected type for db entry: %T, expected map[string]any", data)
+		return db
 	}
 
-	db := models.MemoryStatsDb{}
+	ReadValue(rawMap, "overhead.hashtable.main", &db.OverheadHashtableMain)
+	ReadValue(rawMap, "overhead.hashtable.expires", &db.OverheadHashtableExpires)
 
-	val, exists := rawMap["overhead.hashtable.main"]
-	if !exists || val == nil {
-		return db, fmt.Errorf("missing required field overhead.hashtable.main in db entry")
-	}
-	v, err := ConvertToInt64(val)
-	if err != nil {
-		return db, fmt.Errorf("error parsing overhead.hashtable.main: %w", err)
-	}
-	db.OverheadHashtableMain = v
-
-	val, exists = rawMap["overhead.hashtable.expires"]
-	if !exists || val == nil {
-		return db, fmt.Errorf("missing required field overhead.hashtable.expires in db entry")
-	}
-	v, err = ConvertToInt64(val)
-	if err != nil {
-		return db, fmt.Errorf("error parsing overhead.hashtable.expires: %w", err)
-	}
-	db.OverheadHashtableExpires = v
-
-	return db, nil
+	return db
 }
