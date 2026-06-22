@@ -5099,7 +5099,7 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      * Returns the internal statistics of the memory allocator.
      *
      * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
-     * @return Command Response - The allocator statistics.
+     * @return Command Response - The memory allocator statistics.
      */
     public T memoryMallocStats() {
         protobufBatch.addCommands(buildCommand(MemoryMallocStats));

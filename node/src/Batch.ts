@@ -4514,7 +4514,7 @@ export class BaseBatch<T extends BaseBatch<T>> {
      *
      * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
      *
-     * Command Response - A string containing the memory allocator statistics.
+     * Command Response - The memory allocator statistics.
      */
     public memoryMallocStats(): T {
         return this.addAndReturn(createMemoryMallocStats());

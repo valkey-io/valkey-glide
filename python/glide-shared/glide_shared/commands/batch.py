@@ -2506,7 +2506,7 @@ class BaseBatch:
         See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
 
         Command response:
-            str: A string containing the memory allocator statistics.
+            str: The memory allocator statistics.
         """
         return self.append_command(RequestType.MemoryMallocStats, [])
 

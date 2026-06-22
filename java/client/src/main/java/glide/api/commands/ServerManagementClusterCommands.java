@@ -1254,7 +1254,7 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes by default.
      *
      * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
-     * @return A cluster value containing the allocator statistics.
+     * @return A cluster value containing the memory allocator statistics.
      * @example
      *     <pre>{@code
      * ClusterValue<String> stats = clusterClient.memoryMallocStats().get();
@@ -1271,7 +1271,7 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containing the allocator statistics.
+     * @return A cluster value containing the memory allocator statistics.
      * @example
      *     <pre>{@code
      * ClusterValue<String> stats = clusterClient.memoryMallocStats(RANDOM).get();

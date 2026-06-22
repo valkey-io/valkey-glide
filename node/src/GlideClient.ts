@@ -1538,7 +1538,7 @@ export class GlideClient extends BaseClient {
      *
      * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
      *
-     * @returns A string containing the memory allocator statistics.
+     * @returns The memory allocator statistics.
      *
      * @example
      * ```typescript

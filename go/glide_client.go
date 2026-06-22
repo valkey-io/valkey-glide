@@ -800,7 +800,7 @@ func (client *Client) MemoryMallocStats(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	OK to confirm that the purge operation was executed.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/memory-purge/
 func (client *Client) MemoryPurge(ctx context.Context) (string, error) {

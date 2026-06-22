@@ -7468,7 +7468,7 @@ func (b *BaseBatch[T]) MemoryMallocStats() *T {
 //
 // Command Response:
 //
-//	OK to confirm that the purge operation was executed.
+//	`"OK"` response on success.
 //
 // [valkey.io]: https://valkey.io/commands/memory-purge/
 func (b *BaseBatch[T]) MemoryPurge() *T {

@@ -698,7 +698,7 @@ public interface ServerManagementCommands {
      * Returns the internal statistics of the memory allocator.
      *
      * @see <a href="https://valkey.io/commands/memory-malloc-stats/">valkey.io</a> for details.
-     * @return The allocator statistics.
+     * @return The memory allocator statistics.
      * @example
      *     <pre>{@code
      * String stats = client.memoryMallocStats().get();
