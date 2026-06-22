@@ -5462,6 +5462,16 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
     match pool_arc.try_lock() {
         Ok(mut pool) => {
             let result = pool.try_acquire();
+
+            // Record OTel metrics for pool hit/miss
+            if result >= 0 {
+                // Pool hit — client acquired from idle
+                let _ = GlideOpenTelemetry::record_pool_hit();
+            } else {
+                // Pool miss — no idle client available
+                let _ = GlideOpenTelemetry::record_pool_miss();
+            }
+
             if result < 0 && pool.should_create() {
                 // Trigger background creation
                 pool.total_count.fetch_add(1, AtomicOrdering::AcqRel);
