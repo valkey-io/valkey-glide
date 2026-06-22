@@ -20,10 +20,8 @@ class MemoryStatsDb:
 class MemoryStats:
     """Represents a MEMORY STATS response."""
 
-    # Per-database overhead keyed by database index.
     db: Dict[int, MemoryStatsDb] = field(default_factory=dict)
 
-    # Required int fields (alphabetical).
     allocator_active: int = 0
     allocator_allocated: int = 0
     allocator_fragmentation_bytes: int = 0
@@ -47,7 +45,6 @@ class MemoryStats:
     startup_allocated: int = 0
     total_allocated: int = 0
 
-    # Required float fields (alphabetical).
     allocator_fragmentation_ratio: float = 0.0
     allocator_rss_ratio: float = 0.0
     dataset_percentage: float = 0.0
@@ -55,7 +52,7 @@ class MemoryStats:
     peak_percentage: float = 0.0
     rss_overhead_ratio: float = 0.0
 
-    # Optional fields – Valkey 8.0+ (alphabetical).
+    # Optional Valkey 8.0+ fields
     db_dict_rehashing_count: Optional[int] = None
     overhead_db_hashtable_lut: Optional[int] = None
     overhead_db_hashtable_rehashing: Optional[int] = None
@@ -86,7 +83,6 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
 
     return MemoryStats(
         db=db_map,
-        # Required int fields (alphabetical)
         allocator_active=int(response[b"allocator.active"]),
         allocator_allocated=int(response[b"allocator.allocated"]),
         allocator_fragmentation_bytes=int(response[b"allocator-fragmentation.bytes"]),
@@ -109,14 +105,13 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
         rss_overhead_bytes=int(response[b"rss-overhead.bytes"]),
         startup_allocated=int(response[b"startup.allocated"]),
         total_allocated=int(response[b"total.allocated"]),
-        # Required float fields (alphabetical)
         allocator_fragmentation_ratio=float(response[b"allocator-fragmentation.ratio"]),
         allocator_rss_ratio=float(response[b"allocator-rss.ratio"]),
         dataset_percentage=float(response[b"dataset.percentage"]),
         fragmentation=float(response[b"fragmentation"]),
         peak_percentage=float(response[b"peak.percentage"]),
         rss_overhead_ratio=float(response[b"rss-overhead.ratio"]),
-        # Optional fields – Valkey 8.0+ (alphabetical)
+        # Optional Valkey 8.0+ fields
         db_dict_rehashing_count=(
             int(response[b"db.dict.rehashing.count"])
             if b"db.dict.rehashing.count" in response
