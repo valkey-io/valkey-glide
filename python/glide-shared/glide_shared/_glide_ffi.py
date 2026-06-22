@@ -388,6 +388,26 @@ class _GlideFFI:
             // ============== UTILITY FUNCTIONS ==============
             void free_c_string(char* s);
             unsigned long get_min_compressed_size();
+
+            // ============== CLIENT-INSTANCE POOL (Feature 1) ==============
+            int64_t glide_pool_create(
+                uint32_t max_size,
+                uint32_t min_idle,
+                uint64_t idle_timeout_ms,
+                uint64_t request_timeout_ms,
+                const uint8_t* connection_request_ptr,
+                size_t connection_request_len
+            );
+            int64_t glide_pool_try_acquire(uint64_t pool_id);
+            int32_t glide_pool_release(uint64_t pool_id, uint64_t client_id);
+            int32_t glide_pool_destroy(uint64_t pool_id);
+            size_t glide_pool_get_client_ptr(uint64_t client_id);
+            int32_t glide_pool_metrics(
+                uint64_t pool_id,
+                uint32_t* idle_out,
+                uint32_t* active_out,
+                uint32_t* total_out
+            );
             """)
 
         # Load the shared library
