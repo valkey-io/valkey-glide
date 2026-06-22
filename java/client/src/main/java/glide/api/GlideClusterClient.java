@@ -790,40 +790,21 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats() {
         return commandManager.submitNewCommand(
-                MemoryStats, EMPTY_STRING_ARRAY, this::handleMemoryStatsClusterResponse);
+                MemoryStats,
+                EMPTY_STRING_ARRAY,
+                response -> ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<String, Object>>> memoryStats(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                MemoryStats, EMPTY_STRING_ARRAY, route, this::handleMemoryStatsClusterResponse);
-    }
-
-    /**
-     * Process a <code>MEMORY STATS</code> cluster response.
-     *
-     * @param response The raw response from the server.
-     * @return A cluster value containing memory statistics map(s).
-     */
-    @SuppressWarnings("unchecked")
-    private ClusterValue<Map<String, Object>> handleMemoryStatsClusterResponse(Response response) {
-        Object data = handleObjectOrNullResponse(response);
-
-        if (data instanceof Map) {
-            Map<String, Object> map = (Map<String, Object>) data;
-            // Check if this is a per-node map (multi-value) or a single stats map.
-            boolean isMultiNode = !map.isEmpty() && map.values().stream().allMatch(v -> v instanceof Map);
-            if (isMultiNode) {
-                Map<String, Map<String, Object>> parsed = new LinkedHashMap<>();
-                for (Map.Entry<String, Object> entry : map.entrySet()) {
-                    parsed.put(entry.getKey(), (Map<String, Object>) entry.getValue());
-                }
-                return ClusterValue.ofMultiValue(parsed);
-            }
-            return ClusterValue.ofSingleValue(map);
-        }
-
-        return ClusterValue.ofSingleValue((Map<String, Object>) data);
+                MemoryStats,
+                EMPTY_STRING_ARRAY,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleMapResponse(response))
+                                : ClusterValue.of(handleMapResponse(response)));
     }
 
     @Override
