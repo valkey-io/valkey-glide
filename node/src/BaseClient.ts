@@ -54,6 +54,8 @@ import {
     InsertPosition,
     KeyWeight,
     LPosOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -10292,17 +10294,17 @@ export class BaseClient {
                 maxDuration: entry[
                     BaseClient.LATENCY_EVENT_INFO_MAX_DURATION_INDEX
                 ] as number,
+                // Valkey 8.1+ returns 6-element arrays with sum and count
+                ...(entry.length >
+                    BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX && {
+                    sum: entry[
+                        BaseClient.LATENCY_EVENT_INFO_SUM_INDEX
+                    ] as number,
+                    count: entry[
+                        BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX
+                    ] as number,
+                }),
             };
-
-            // Valkey 8.1+ returns 6-element arrays with sum and count
-            if (entry.length > BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX) {
-                info.sum = entry[
-                    BaseClient.LATENCY_EVENT_INFO_SUM_INDEX
-                ] as number;
-                info.count = entry[
-                    BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX
-                ] as number;
-            }
 
             return info;
         });
