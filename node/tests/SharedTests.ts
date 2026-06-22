@@ -13939,10 +13939,6 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
-                    // Write a key to ensure at least one db has entries
-                    const key = getRandomKey();
-                    await client.set(key, "memoryTestValue");
-
                     const statsResult = await client.memoryStats();
                     const statsList =
                         client instanceof GlideClient

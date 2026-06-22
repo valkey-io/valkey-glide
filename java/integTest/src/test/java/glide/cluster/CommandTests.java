@@ -4711,10 +4711,6 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void memoryStats_default_route(GlideClusterClient clusterClient) {
-        // Write a key to ensure at least one db entry exists on some node
-        clusterClient.set("memoryStats_test_key", "value").get();
-
-        // Default route (AllPrimaries) returns per-node map
         ClusterValue<Map<String, Object>> result = clusterClient.memoryStats().get();
         assertTrue(result.hasMultiData());
         for (Map<String, Object> nodeStats : result.getMultiValue().values()) {
@@ -4740,10 +4736,6 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void memoryStats_single_node_route(GlideClusterClient clusterClient) {
-        // Write a key to ensure at least one db entry exists
-        String key = "memoryStats_single_node_key";
-        clusterClient.set(key, "value").get();
-
         SlotKeyRoute route = new SlotKeyRoute(key, PRIMARY);
         ClusterValue<Map<String, Object>> result = clusterClient.memoryStats(route).get();
         assertTrue(result.hasSingleData());

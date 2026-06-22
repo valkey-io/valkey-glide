@@ -2403,10 +2403,6 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void memoryStats(GlideClient client) {
-        // Write a key to ensure at least one db entry exists
-        String key = "memoryStats_test_key";
-        client.set(key, "value").get();
-
         Map<String, Object> stats = client.memoryStats().get();
         assertMemoryStatsFields(stats);
     }
