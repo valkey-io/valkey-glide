@@ -10384,9 +10384,15 @@ class TestCommands:
         result = await glide_client.memory_doctor()
         reports = list(result.values()) if is_cluster else [result]
 
-        # Single-node route for cluster.
         if is_cluster:
+            # Single-node route.
             reports.append(await glide_client.memory_doctor(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = await glide_client.memory_doctor(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
 
         for report in reports:
             assert isinstance(report, str) and len(report) > 0
@@ -10399,9 +10405,15 @@ class TestCommands:
         result = await glide_client.memory_malloc_stats()
         reports = list(result.values()) if is_cluster else [result]
 
-        # Single-node route for cluster.
         if is_cluster:
+            # Single-node route.
             reports.append(await glide_client.memory_malloc_stats(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = await glide_client.memory_malloc_stats(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
 
         for report in reports:
             assert isinstance(report, str) and len(report) > 0
@@ -10412,13 +10424,16 @@ class TestCommands:
         result = await glide_client.memory_purge()
         assert result == OK
 
-        # Single-node route for cluster.
-        if isinstance(glide_client, GlideClusterClient):
+        if is_cluster:
+            # Single-node route.
             assert await glide_client.memory_purge(route=RandomNode()) == OK
+            # Multi-node route.
+            assert await glide_client.memory_purge(route=AllNodes()) == OK
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_memory_stats_standalone(self, glide_client: TGlideClient):
+        # Write a key and route to its node to ensure db entry exists
         key = get_random_string(10)
         await glide_client.set(key, "value")
 
@@ -10431,10 +10446,18 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_memory_stats_cluster_multi_node(self, glide_client: TGlideClient):
-        version = await get_version(glide_client)
-
+    async def test_memory_stats_cluster(self, glide_client: TGlideClient):
         result = await glide_client.memory_stats()
+        assert isinstance(result, dict)
+
+        for stats in result.values():
+            assert isinstance(stats, MemoryStats)
+            assert_memory_stats_fields(stats, version)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_memory_stats_cluster_multi_node(self, glide_client: TGlideClient):
+        result = await glide_client.memory_stats(route=AllNodes())
         assert isinstance(result, dict)
 
         for stats in result.values():
