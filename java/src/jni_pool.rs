@@ -35,6 +35,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
         min_idle: min_idle as u32,
         idle_timeout: Duration::from_millis(idle_timeout_ms as u64),
         request_timeout: Duration::from_millis(request_timeout_ms as u64),
+        test_on_borrow: false,
         connection_request: bytes.clone(),
     };
 
@@ -201,9 +202,18 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
         Some(arc) => arc,
         None => return -1,
     };
+    let handle_table = get_handle_table();
     let runtime = get_runtime();
     runtime.spawn(async move {
         let mut pool = pool_arc.lock().await;
+        // Clean up JNI handle table entries for all pooled clients
+        for entry in pool.idle.iter() {
+            handle_table.remove(&entry.client_id);
+        }
+        let in_use_keys: Vec<u64> = pool.in_use.iter().map(|e| *e.key()).collect();
+        for key in &in_use_keys {
+            handle_table.remove(key);
+        }
         pool.destroy();
     });
     0

@@ -5395,6 +5395,7 @@ pub unsafe extern "C" fn glide_pool_create(
         min_idle,
         idle_timeout: std::time::Duration::from_millis(idle_timeout_ms),
         request_timeout: std::time::Duration::from_millis(request_timeout_ms),
+        test_on_borrow: false,
         connection_request: connection_request.clone(),
     };
 

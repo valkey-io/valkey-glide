@@ -62,6 +62,8 @@ pub struct PoolConfig {
     pub idle_timeout: Duration,
     /// Request timeout (used for cleanup: 2×).
     pub request_timeout: Duration,
+    /// Send PING on borrow to verify connection health. Default: false.
+    pub test_on_borrow: bool,
     /// Serialized protobuf ConnectionRequest for background client creation.
     pub connection_request: Vec<u8>,
 }
