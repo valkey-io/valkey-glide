@@ -1033,9 +1033,10 @@ public class BatchTestUtilities {
         batch.set("{batch_memory_key}", "value");
 
         batch
-            .memoryDoctor()
-            eifjcbvcvrhlficlkrbhgvgevnvktrlfvdcnkuvrjrbd
-            .memoryMallocStats().memoryPurge().memoryStats();
+                .memoryDoctor()
+                .memoryMallocStats()
+                .memoryPurge()
+                .memoryStats();
 
         return new Object[] {
             OK, // set("{batch_memory_key}", "value")
