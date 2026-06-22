@@ -3,6 +3,7 @@ package glide.api.models.pool;
 
 import static connection_request.ConnectionRequestOuterClass.*;
 
+import glide.api.GlideClient;
 import glide.api.models.configuration.BackoffStrategy;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.GlideClusterClientConfiguration;
@@ -47,6 +48,8 @@ public class ClientPool implements AutoCloseable {
     private final long poolId;
     private final ClientPoolConfig config;
     private final AtomicInteger state = new AtomicInteger(RUNNING);
+    private final java.util.concurrent.ConcurrentHashMap<Long, GlideClient> clientCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private ClientPool(long poolId, ClientPoolConfig config) {
         this.poolId = poolId;
@@ -133,14 +136,13 @@ public class ClientPool implements AutoCloseable {
 
     /**
      * Get a usable GlideClient for the given client_id.
-     *
-     * TODO: Requires GlideClient.fromPoolHandle() factory method to wrap
-     * the native handle without creating a new connection. For now, callers
-     * can use the client_id directly with low-level JNI dispatch.
+     * Cached — no allocation on subsequent calls for the same client_id.
      */
-    public Object getClient(long clientId) {
-        throw new UnsupportedOperationException(
-                "getClient() requires GlideClient.fromPoolHandle() — use low-level dispatch for now");
+    public GlideClient getClient(long clientId) {
+        GlideClient cached = clientCache.get(clientId);
+        if (cached != null) return cached;
+        return clientCache.computeIfAbsent(clientId,
+                id -> GlideClient.fromPoolHandle(id, 0, config.getRequestTimeout().toMillis()));
     }
 
     /** Release a client back to the pool. */
@@ -172,6 +174,7 @@ public class ClientPool implements AutoCloseable {
     public void close() {
         if (state.compareAndSet(RUNNING, CLOSED)) {
             GlidePoolResolver.glidePoolDestroy(poolId);
+            clientCache.clear();
         }
     }
 

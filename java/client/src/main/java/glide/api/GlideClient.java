@@ -106,6 +106,44 @@ public class GlideClient extends BaseClient
     }
 
     /**
+     * Creates a GlideClient that wraps an existing native handle from the pool.
+     *
+     * <p>The pool's Rust side creates the actual connection and registers it in
+     * the JNI handle table. This factory wires up the Java command dispatch chain
+     * so that commands flow through the existing native bridge.
+     *
+     * @param nativeHandle the native client handle (same as client_id from pool)
+     * @param maxInflight max inflight requests (0 = use core defaults)
+     * @param requestTimeoutMs request timeout in ms (0 = no Java-side timeout)
+     * @return a fully-functional GlideClient backed by the pool connection
+     */
+    public static GlideClient fromPoolHandle(long nativeHandle, int maxInflight, long requestTimeoutMs) {
+        glide.internal.GlideCoreClient coreClient =
+                new glide.internal.GlideCoreClient(nativeHandle, maxInflight, requestTimeoutMs);
+        glide.managers.CommandManager commandManager = new glide.managers.CommandManager(coreClient);
+        glide.managers.ConnectionManager connectionManager = new glide.managers.ConnectionManager();
+        glide.connectors.handlers.MessageHandler messageHandler =
+                new glide.connectors.handlers.MessageHandler(
+                        java.util.Optional.empty(), java.util.Optional.empty(),
+                        new glide.managers.BaseResponseResolver(pointer -> {
+                            if (pointer == null || pointer == 0) return null;
+                            return glide.ffi.resolvers.GlideValueResolver.valueFromPointer(pointer);
+                        }));
+
+        GlideClient client = new GlideClient(
+                new ClientBuilder(connectionManager, commandManager, messageHandler,
+                        java.util.Optional.empty()));
+
+        try {
+            glide.internal.GlideCoreClient.registerClient(nativeHandle, client);
+        } catch (Throwable t) {
+            // Non-fatal: push delivery won't work but commands will
+        }
+
+        return client;
+    }
+
+    /**
      * Creates a new {@link GlideClient} instance and establishes a connection to a standalone Valkey
      *
      * @param config The configuration options for the client, including server addresses,
