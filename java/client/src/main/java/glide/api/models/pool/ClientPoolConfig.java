@@ -26,6 +26,9 @@ public class ClientPoolConfig {
     /** Request timeout (for cleanup operations). Default: 5 seconds. */
     @Builder.Default private final Duration requestTimeout = Duration.ofSeconds(5);
 
+    /** Send PING on borrow to verify connection health. Default: false. */
+    @Builder.Default private final boolean testOnBorrow = false;
+
     /** The client configuration (addresses, TLS, auth, etc.). */
     private final BaseClientConfiguration clientConfig;
 

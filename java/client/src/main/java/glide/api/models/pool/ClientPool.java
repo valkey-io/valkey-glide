@@ -116,7 +116,20 @@ public class ClientPool implements AutoCloseable {
                 }
 
                 long clientId = GlidePoolResolver.glidePoolTryAcquire(poolId);
-                if (clientId >= 0) return clientId;
+                if (clientId >= 0) {
+                    // test_on_borrow: PING to verify connection health
+                    if (config.isTestOnBorrow()) {
+                        try {
+                            GlideClient client = getClient(clientId);
+                            client.ping().get(2, java.util.concurrent.TimeUnit.SECONDS);
+                        } catch (Exception e) {
+                            // Dead connection — release and retry
+                            release(clientId);
+                            continue;
+                        }
+                    }
+                    return clientId;
+                }
                 if (clientId == -2) throw new RuntimeException("Pool was destroyed");
 
                 long remainingMs = (deadlineNanos - System.nanoTime()) / 1_000_000;
@@ -137,6 +150,10 @@ public class ClientPool implements AutoCloseable {
     /**
      * Get a usable GlideClient for the given client_id.
      * Cached — no allocation on subsequent calls for the same client_id.
+     *
+     * <p><b>Important:</b> Do NOT call {@code close()} on the returned client.
+     * The pool manages the client's lifecycle. Call {@link #release(long)} instead
+     * to return the client to the pool.
      */
     public GlideClient getClient(long clientId) {
         GlideClient cached = clientCache.get(clientId);
