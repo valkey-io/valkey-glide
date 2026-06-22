@@ -2653,39 +2653,39 @@ export function assertMemoryStatsFields(
 
     expect(stats.allocatorActive).toBeGreaterThan(0);
     expect(stats.allocatorAllocated).toBeGreaterThan(0);
-    expect(typeof stats.allocatorFragmentationBytes).toBe("number");
-    expect(typeof stats.allocatorMuzzy).toBe("number");
+    expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
+    expect(stats.allocatorMuzzy).toBeGreaterThanOrEqual(0);
     expect(stats.allocatorResident).toBeGreaterThan(0);
-    expect(typeof stats.allocatorRssBytes).toBe("number");
-    expect(typeof stats.aofBuffer).toBe("number");
-    expect(typeof stats.clientsNormal).toBe("number");
-    expect(typeof stats.clientsSlaves).toBe("number");
-    expect(typeof stats.clusterLinks).toBe("number");
-    expect(typeof stats.datasetBytes).toBe("number");
-    expect(typeof stats.fragmentationBytes).toBe("number");
-    expect(typeof stats.functionsCaches).toBe("number");
-    expect(typeof stats.keysBytesPerKey).toBe("number");
-    expect(typeof stats.keysCount).toBe("number");
-    expect(typeof stats.luaCaches).toBe("number");
+    expect(stats.allocatorRssBytes).toBeGreaterThanOrEqual(0);
+    expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
+    expect(stats.clientsNormal).toBeGreaterThanOrEqual(0);
+    expect(stats.clientsSlaves).toBeGreaterThanOrEqual(0);
+    expect(stats.clusterLinks).toBeGreaterThanOrEqual(0);
+    expect(stats.datasetBytes).toBeGreaterThanOrEqual(0);
+    expect(stats.fragmentationBytes).toBeGreaterThanOrEqual(0);
+    expect(stats.functionsCaches).toBeGreaterThanOrEqual(0);
+    expect(stats.keysBytesPerKey).toBeGreaterThanOrEqual(0);
+    expect(stats.keysCount).toBeGreaterThanOrEqual(0);
+    expect(stats.luaCaches).toBeGreaterThanOrEqual(0);
     expect(stats.overheadTotal).toBeGreaterThan(0);
     expect(stats.peakAllocated).toBeGreaterThan(0);
-    expect(typeof stats.replicationBacklog).toBe("number");
-    expect(typeof stats.rssOverheadBytes).toBe("number");
+    expect(stats.replicationBacklog).toBeGreaterThanOrEqual(0);
+    expect(stats.rssOverheadBytes).toBeGreaterThanOrEqual(0);
     expect(stats.startupAllocated).toBeGreaterThan(0);
     expect(stats.totalAllocated).toBeGreaterThan(0);
 
-    expect(typeof stats.allocatorFragmentationRatio).toBe("number");
-    expect(typeof stats.allocatorRssRatio).toBe("number");
-    expect(typeof stats.datasetPercentage).toBe("number");
-    expect(typeof stats.fragmentation).toBe("number");
-    expect(typeof stats.peakPercentage).toBe("number");
-    expect(typeof stats.rssOverheadRatio).toBe("number");
+    expect(stats.allocatorFragmentationRatio).toBeGreaterThanOrEqual(0);
+    expect(stats.allocatorRssRatio).toBeGreaterThanOrEqual(0);
+    expect(stats.datasetPercentage).toBeGreaterThanOrEqual(0);
+    expect(stats.fragmentation).toBeGreaterThanOrEqual(0);
+    expect(stats.peakPercentage).toBeGreaterThanOrEqual(0);
+    expect(stats.rssOverheadRatio).toBeGreaterThanOrEqual(0);
 
     // Optional Valkey 8.0+ fields
     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
-        expect(typeof stats.dbDictRehashingCount).toBe("number");
-        expect(typeof stats.overheadDbHashtableLut).toBe("number");
-        expect(typeof stats.overheadDbHashtableRehashing).toBe("number");
+        expect(stats.dbDictRehashingCount).toBeGreaterThanOrEqual(0);
+        expect(stats.overheadDbHashtableLut).toBeGreaterThanOrEqual(0);
+        expect(stats.overheadDbHashtableRehashing).toBeGreaterThanOrEqual(0);
     } else {
         expect(stats.dbDictRehashingCount).toBeUndefined();
         expect(stats.overheadDbHashtableLut).toBeUndefined();
