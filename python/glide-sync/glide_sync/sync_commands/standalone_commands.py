@@ -1356,7 +1356,8 @@ class StandaloneCommands(CoreCommands):
             >>> report = client.memory_doctor()
             >>> print("Memory report:", report)
         """
-        return cast(str, self._execute_command(RequestType.MemoryDoctor, []))
+        response = self._execute_command(RequestType.MemoryDoctor, [])
+        return cast(bytes, response).decode()
 
     def memory_malloc_stats(self) -> str:
         """
@@ -1371,7 +1372,8 @@ class StandaloneCommands(CoreCommands):
             >>> report = client.memory_malloc_stats()
             >>> print("Allocator stats:", report)
         """
-        return cast(str, self._execute_command(RequestType.MemoryMallocStats, []))
+        response = self._execute_command(RequestType.MemoryMallocStats, [])
+        return cast(bytes, response).decode()
 
     def memory_purge(self) -> TOK:
         """

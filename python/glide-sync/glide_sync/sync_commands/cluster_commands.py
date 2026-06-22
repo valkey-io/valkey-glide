@@ -1814,10 +1814,10 @@ class ClusterCommands(CoreCommands):
             >>> report = client.memory_doctor(RandomNode())
             >>> print("Memory report:", report)
         """
-        return cast(
-            TClusterResponse[str],
-            self._execute_command(RequestType.MemoryDoctor, [], route),
-        )
+        response = self._execute_command(RequestType.MemoryDoctor, [], route)
+        if isinstance(response, bytes):
+            return response.decode()
+        return {k: cast(bytes, v).decode() for k, v in cast(dict, response).items()}
 
     def memory_malloc_stats(
         self, route: Optional[Route] = None
@@ -1841,10 +1841,10 @@ class ClusterCommands(CoreCommands):
             >>> stats = client.memory_malloc_stats(RandomNode())
             >>> print("Allocator stats:", stats)
         """
-        return cast(
-            TClusterResponse[str],
-            self._execute_command(RequestType.MemoryMallocStats, [], route),
-        )
+        response = self._execute_command(RequestType.MemoryMallocStats, [], route)
+        if isinstance(response, bytes):
+            return response.decode()
+        return {k: cast(bytes, v).decode() for k, v in cast(dict, response).items()}
 
     def memory_purge(self, route: Optional[Route] = None) -> TOK:
         """
