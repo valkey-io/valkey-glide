@@ -3583,7 +3583,7 @@ describe("GlideClusterClient", () => {
             expect(statsList.length).toBeGreaterThan(0);
 
             for (const stats of statsList) {
-                assertMemoryStatsFields(stats, cluster);
+                assertMemoryStatsFields(stats, cluster.getVersion());
             }
 
             client.close();
@@ -3656,7 +3656,7 @@ describe("GlideClusterClient", () => {
                 route: { type: "primarySlotKey", key },
             });
             const stats = result as MemoryStats;
-            assertMemoryStatsFields(stats, cluster);
+            assertMemoryStatsFields(stats, cluster.getVersion());
             expect(stats.db[0]).toBeDefined();
             assertMemoryStatsDbEntry(stats.db[0]);
 

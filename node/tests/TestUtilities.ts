@@ -2638,11 +2638,11 @@ export function assertMemoryStatsDbEntry(dbEntry: MemoryStatsDb): void {
 /**
  * Validates that a MemoryStats object has expected field types and values.
  * @param stats - The MemoryStats object to validate.
- * @param cluster - The ValkeyCluster instance.
+ * @param serverVersion - The server version string (e.g. "8.1.0").
  */
 export function assertMemoryStatsFields(
     stats: MemoryStats,
-    cluster: ValkeyCluster,
+    serverVersion: string,
 ): void {
     expect(stats.db).toBeDefined();
     expect(typeof stats.db).toBe("object");
@@ -2682,7 +2682,7 @@ export function assertMemoryStatsFields(
     expect(stats.rssOverheadRatio).toBeGreaterThanOrEqual(0);
 
     // Optional Valkey 8.0+ fields
-    if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
+    if (serverVersion >= "8.0.0") {
         expect(stats.dbDictRehashingCount).toBeGreaterThanOrEqual(0);
         expect(stats.overheadDbHashtableLut).toBeGreaterThanOrEqual(0);
         expect(stats.overheadDbHashtableRehashing).toBeGreaterThanOrEqual(0);

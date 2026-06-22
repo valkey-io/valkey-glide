@@ -13955,7 +13955,7 @@ export function runBaseTests(config: {
                     expect(statsList.length).toBeGreaterThan(0);
 
                     for (const stats of statsList) {
-                        assertMemoryStatsFields(stats, cluster);
+                        assertMemoryStatsFields(stats, cluster.getVersion());
                     }
 
                     // For standalone, explicitly validate db entry
@@ -14010,7 +14010,7 @@ export function runBaseTests(config: {
                     expect(response![2]).toBe("OK");
 
                     const stats = response![3] as unknown as MemoryStats;
-                    assertMemoryStatsFields(stats, cluster);
+                    assertMemoryStatsFields(stats, cluster.getVersion());
                 },
                 protocol,
             );

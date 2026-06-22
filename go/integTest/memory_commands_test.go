@@ -53,7 +53,7 @@ func (suite *GlideTestSuite) TestMemoryStats_Standalone() {
 	result, err := client.MemoryStats(context.Background())
 	assert.NoError(t, err)
 
-	suite.assertMemoryStatsFields(result, false)
+	suite.assertMemoryStatsFields(result)
 	assert.NotEmpty(t, result.Db)
 	suite.assertMemoryStatsDbEntry(result.Db[0])
 }
@@ -122,7 +122,7 @@ func (suite *GlideTestSuite) TestMemoryStats_Cluster() {
 
 	for addr, stats := range multiValue {
 		assert.NotEmpty(t, addr)
-		suite.assertMemoryStatsFields(stats, true)
+		suite.assertMemoryStatsFields(stats)
 	}
 }
 
@@ -184,7 +184,7 @@ func (suite *GlideTestSuite) TestMemoryStatsWithOptions_ClusterAllNodes() {
 
 	for addr, stats := range multiValue {
 		assert.NotEmpty(t, addr)
-		suite.assertMemoryStatsFields(stats, true)
+		suite.assertMemoryStatsFields(stats)
 	}
 }
 
@@ -239,7 +239,7 @@ func (suite *GlideTestSuite) TestMemoryStatsWithOptions_ClusterSingleNode() {
 	assert.True(t, result.IsSingleValue())
 
 	stats := result.SingleValue()
-	suite.assertMemoryStatsFields(stats, true)
+	suite.assertMemoryStatsFields(stats)
 	assert.NotEmpty(t, stats.Db)
 	suite.assertMemoryStatsDbEntry(stats.Db[0])
 }
@@ -280,7 +280,7 @@ func (suite *GlideTestSuite) TestMemoryCommands_BatchTransaction_Cluster() {
 	// Result 3: MemoryStats — models.MemoryStats
 	stats, ok := results[3].(models.MemoryStats)
 	assert.True(t, ok)
-	suite.assertMemoryStatsFields(stats, true)
+	suite.assertMemoryStatsFields(stats)
 }
 
 func (suite *GlideTestSuite) TestMemoryCommands_BatchPipeline_Standalone() {
@@ -352,7 +352,7 @@ func (suite *GlideTestSuite) TestMemoryCommands_StandaloneSequentialExecution() 
 
 	result4, err4 := client.MemoryStats(context.Background())
 	assert.NoError(t, err4)
-	suite.assertMemoryStatsFields(result4, false)
+	suite.assertMemoryStatsFields(result4)
 }
 
 // assertMemoryStatsDbEntry validates a single MemoryStatsDb entry.
@@ -363,7 +363,7 @@ func (suite *GlideTestSuite) assertMemoryStatsDbEntry(dbStats models.MemoryStats
 }
 
 // assertMemoryStatsFields validates all expected fields in a MemoryStats result.
-func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats, isCluster bool) {
+func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) {
 	t := suite.T()
 
 	for _, dbStats := range result.Db {
