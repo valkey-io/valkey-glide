@@ -54,6 +54,8 @@ func (suite *GlideTestSuite) TestMemoryStats_Standalone() {
 	assert.NoError(t, err)
 
 	suite.assertMemoryStatsFields(result, false)
+	assert.NotEmpty(t, result.Db)
+	suite.assertMemoryStatsDbEntry(result.Db[0])
 }
 
 func (suite *GlideTestSuite) TestMemoryDoctor_Cluster() {
@@ -225,14 +227,21 @@ func (suite *GlideTestSuite) TestMemoryStatsWithOptions_ClusterSingleNode() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 
-	opts := options.RouteOption{Route: config.RandomRoute}
+	// Write a key and route to its node to ensure db entry exists
+	key := "memory_stats_single_node_key"
+	_, err := client.Set(context.Background(), key, "test_value")
+	assert.NoError(t, err)
+
+	opts := options.RouteOption{Route: config.NewSlotKeyRoute(config.SlotTypePrimary, key)}
 	result, err := client.MemoryStatsWithOptions(context.Background(), opts)
 
 	assert.NoError(t, err)
-	assert.True(t, result.IsSingleValue(), "RandomRoute should return single value")
+	assert.True(t, result.IsSingleValue())
 
 	stats := result.SingleValue()
 	suite.assertMemoryStatsFields(stats, true)
+	assert.NotEmpty(t, stats.Db)
+	suite.assertMemoryStatsDbEntry(stats.Db[0])
 }
 
 func (suite *GlideTestSuite) TestMemoryCommands_BatchTransaction_Cluster() {
@@ -346,11 +355,21 @@ func (suite *GlideTestSuite) TestMemoryCommands_StandaloneSequentialExecution() 
 	suite.assertMemoryStatsFields(result4, false)
 }
 
+// assertMemoryStatsDbEntry validates a single MemoryStatsDb entry.
+func (suite *GlideTestSuite) assertMemoryStatsDbEntry(dbStats models.MemoryStatsDb) {
+	t := suite.T()
+	assert.GreaterOrEqual(t, dbStats.OverheadHashtableExpires, int64(0))
+	assert.GreaterOrEqual(t, dbStats.OverheadHashtableMain, int64(0))
+}
+
 // assertMemoryStatsFields validates all expected fields in a MemoryStats result.
 func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats, isCluster bool) {
 	t := suite.T()
 
-	// Required int fields (alphabetical)
+	for _, dbStats := range result.Db {
+		suite.assertMemoryStatsDbEntry(dbStats)
+	}
+
 	assert.Greater(t, result.AllocatorActive, int64(0))
 	assert.Greater(t, result.AllocatorAllocated, int64(0))
 	assert.GreaterOrEqual(t, result.AllocatorFragmentationBytes, int64(0))
@@ -374,7 +393,6 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats, 
 	assert.Greater(t, result.StartupAllocated, int64(0))
 	assert.Greater(t, result.TotalAllocated, int64(0))
 
-	// Required float fields (alphabetical)
 	assert.GreaterOrEqual(t, result.AllocatorFragmentationRatio, float64(0))
 	assert.GreaterOrEqual(t, result.AllocatorRssRatio, float64(0))
 	assert.GreaterOrEqual(t, result.DatasetPercentage, float64(0))
@@ -390,11 +408,5 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats, 
 		assert.True(t, result.OverheadDbHashtableLut.IsNil())
 		assert.True(t, result.OverheadDbHashtableRehashing.IsNil())
 		assert.True(t, result.DbDictRehashingCount.IsNil())
-	}
-
-	assert.NotEmpty(t, result.Db)
-	for _, dbStats := range result.Db {
-		assert.GreaterOrEqual(t, dbStats.OverheadHashtableMain, int64(0))
-		assert.GreaterOrEqual(t, dbStats.OverheadHashtableExpires, int64(0))
 	}
 }

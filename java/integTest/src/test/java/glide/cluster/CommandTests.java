@@ -8,6 +8,7 @@ import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.assertMemoryStatsFields;
+import static glide.TestUtilities.assertMemoryStatsDbEntry;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
@@ -4736,9 +4737,15 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void memoryStats_single_node_route(GlideClusterClient clusterClient) {
+        // Write a key to ensure at least one db entry exists
+        String key = "memoryStats_single_node_key";
+        clusterClient.set(key, "value").get();
+
         SlotKeyRoute route = new SlotKeyRoute(key, PRIMARY);
         ClusterValue<Map<String, Object>> result = clusterClient.memoryStats(route).get();
         assertTrue(result.hasSingleData());
-        assertMemoryStatsFields(result.getSingleValue());
+        Map<String, Object> stats = result.getSingleValue();
+        assertMemoryStatsFields(stats);
+        assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
     }
 }

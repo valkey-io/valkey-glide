@@ -854,12 +854,9 @@ public class TestUtilities {
         assertNotNull(stats);
         assertFalse(stats.isEmpty());
 
-        assertTrue(stats.containsKey("db.0"));
-        Object db0 = stats.get("db.0");
-        assertInstanceOf(Map.class, db0);
-        Map<String, Object> db0Map = (Map<String, Object>) db0;
-        assertTrue((Long) db0Map.get("overhead.hashtable.expires") >= 0);
-        assertTrue((Long) db0Map.get("overhead.hashtable.main") >= 0);
+        if (stats.containsKey("db.0")) {
+            assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
+        }
 
         assertTrue((Long) stats.get("allocator.active") > 0);
         assertTrue((Long) stats.get("allocator.allocated") > 0);
@@ -884,7 +881,6 @@ public class TestUtilities {
         assertTrue((Long) stats.get("startup.allocated") > 0);
         assertTrue((Long) stats.get("total.allocated") > 0);
 
-        // Required float fields (alphabetical)
         assertTrue((Double) stats.get("allocator-fragmentation.ratio") >= 0);
         assertTrue((Double) stats.get("allocator-rss.ratio") >= 0);
         assertTrue((Double) stats.get("dataset.percentage") >= 0);
@@ -902,5 +898,17 @@ public class TestUtilities {
             assertFalse(stats.containsKey("overhead.db.hashtable.lut"));
             assertFalse(stats.containsKey("overhead.db.hashtable.rehashing"));
         }
+    }
+
+    /**
+     * Validates that a MEMORY STATS db entry map has expected fields with correct types and values.
+     *
+     * @param dbMap The db entry map (e.g. from stats.get("db.0")).
+     */
+    public static void assertMemoryStatsDbEntry(Map<String, Object> dbMap) {
+        assertNotNull(dbMap);
+        assertInstanceOf(Map.class, dbMap);
+        assertTrue((Long) dbMap.get("overhead.hashtable.expires") >= 0);
+        assertTrue((Long) dbMap.get("overhead.hashtable.main") >= 0);
     }
 }

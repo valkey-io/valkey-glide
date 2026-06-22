@@ -44,6 +44,7 @@ import { runBaseTests } from "./SharedTests";
 import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
     assertConnected,
+    assertMemoryStatsDbEntry,
     assertMemoryStatsFields,
     batchTest,
     checkClusterResponse,
@@ -3641,15 +3642,23 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "memoryStats with randomNode route %p",
+        "memoryStats with single node route %p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const result = await client.memoryStats({ route: "randomNode" });
+            // Write a key and route to its node to ensure db entry exists
+            const key = `memoryStats_single_node_${protocol}`;
+            await client.set(key, "value");
+
+            const result = await client.memoryStats({
+                route: { type: "primarySlotKey", key },
+            });
             const stats = result as MemoryStats;
             assertMemoryStatsFields(stats, cluster);
+            expect(stats.db[0]).toBeDefined();
+            assertMemoryStatsDbEntry(stats.db[0]);
 
             client.close();
         },

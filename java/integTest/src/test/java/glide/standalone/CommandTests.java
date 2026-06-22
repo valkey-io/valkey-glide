@@ -7,6 +7,7 @@ import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.assertMemoryStatsFields;
+import static glide.TestUtilities.assertMemoryStatsDbEntry;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
@@ -2403,7 +2404,11 @@ public class CommandTests {
     @MethodSource("getClients")
     @SneakyThrows
     public void memoryStats(GlideClient client) {
+        // Write a key to ensure at least one db entry exists
+        client.set("memoryStats_test_key", "value").get();
+
         Map<String, Object> stats = client.memoryStats().get();
         assertMemoryStatsFields(stats);
+        assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
     }
 }

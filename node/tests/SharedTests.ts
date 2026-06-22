@@ -66,6 +66,7 @@ import {
 import {
     Client,
     GetAndSetRandomValue,
+    assertMemoryStatsDbEntry,
     assertMemoryStatsFields,
     flattenClusterResponseArrays,
     getFirstResult,
@@ -13939,6 +13940,10 @@ export function runBaseTests(config: {
         async (protocol) => {
             await runTest(
                 async (client: BaseClient, cluster: ValkeyCluster) => {
+                    // Write a key to ensure at least one db entry exists
+                    const key = getRandomKey();
+                    await client.set(key, "memoryStatsTest");
+
                     const statsResult = await client.memoryStats();
                     const statsList =
                         client instanceof GlideClient
@@ -13951,6 +13956,13 @@ export function runBaseTests(config: {
 
                     for (const stats of statsList) {
                         assertMemoryStatsFields(stats, cluster);
+                    }
+
+                    // For standalone, explicitly validate db entry
+                    if (client instanceof GlideClient) {
+                        const stats = statsResult as MemoryStats;
+                        expect(stats.db[0]).toBeDefined();
+                        assertMemoryStatsDbEntry(stats.db[0]);
                     }
                 },
                 protocol,

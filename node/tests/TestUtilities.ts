@@ -37,6 +37,7 @@ import {
     ListDirection,
     Logger,
     MemoryStats,
+    MemoryStatsDb,
     ProtocolVersion,
     ReturnTypeMap,
     ScoreFilter,
@@ -2626,6 +2627,15 @@ export async function assertConnected(
 }
 
 /**
+ * Validates that a MemoryStats db entry has expected field types and values.
+ * @param dbEntry - The MemoryStatsDb entry to validate.
+ */
+export function assertMemoryStatsDbEntry(dbEntry: MemoryStatsDb): void {
+    expect(dbEntry.overheadHashtableExpires).toBeGreaterThanOrEqual(0);
+    expect(dbEntry.overheadHashtableMain).toBeGreaterThanOrEqual(0);
+}
+
+/**
  * Validates that a MemoryStats object has expected field types and values.
  * @param stats - The MemoryStats object to validate.
  * @param cluster - The ValkeyCluster instance.
@@ -2634,16 +2644,13 @@ export function assertMemoryStatsFields(
     stats: MemoryStats,
     cluster: ValkeyCluster,
 ): void {
-    // db
     expect(stats.db).toBeDefined();
     expect(typeof stats.db).toBe("object");
 
     for (const dbEntry of Object.values(stats.db)) {
-        expect(dbEntry.overheadHashtableExpires).toBeGreaterThanOrEqual(0);
-        expect(dbEntry.overheadHashtableMain).toBeGreaterThanOrEqual(0);
+        assertMemoryStatsDbEntry(dbEntry);
     }
 
-    // Required int fields (alphabetical)
     expect(stats.allocatorActive).toBeGreaterThan(0);
     expect(stats.allocatorAllocated).toBeGreaterThan(0);
     expect(typeof stats.allocatorFragmentationBytes).toBe("number");
@@ -2667,7 +2674,6 @@ export function assertMemoryStatsFields(
     expect(stats.startupAllocated).toBeGreaterThan(0);
     expect(stats.totalAllocated).toBeGreaterThan(0);
 
-    // Required float fields (alphabetical)
     expect(typeof stats.allocatorFragmentationRatio).toBe("number");
     expect(typeof stats.allocatorRssRatio).toBe("number");
     expect(typeof stats.datasetPercentage).toBe("number");
@@ -2675,7 +2681,7 @@ export function assertMemoryStatsFields(
     expect(typeof stats.peakPercentage).toBe("number");
     expect(typeof stats.rssOverheadRatio).toBe("number");
 
-    // Optional fields – Valkey 8.0+ (alphabetical)
+    // Optional Valkey 8.0+ fields
     if (!cluster.checkIfServerVersionLessThan("8.0.0")) {
         expect(typeof stats.dbDictRehashingCount).toBe("number");
         expect(typeof stats.overheadDbHashtableLut).toBe("number");

@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.assertMemoryStatsFields;
 import static glide.TestUtilities.concatenateArrays;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
@@ -981,6 +982,7 @@ public class BatchTestUtilities {
                     .configGet(new String[] {"timeout", "rdb-save-incremental-fsync"});
         }
 
+        @SuppressWarnings("unchecked")
         Object[] expectedResults =
                 new Object[] {
                     OK, // configSet(createMap("timeout", "1000"))
@@ -1007,12 +1009,15 @@ public class BatchTestUtilities {
                     OK, // flushdb(ASYNC)
                     0L, // dbsize()
                     ResponseMatcher.longGreaterThanOrEqualTo("latencyReset()", 0), // latencyReset()
-                    new Object[0], // latencyHistory("command") - empty after reset
-                    new Object[0], // latencyLatest() - empty after reset
-                    ResponseMatcher.nonEmptyString("memoryDoctor()"), // memoryDoctor()
-                    ResponseMatcher.nonEmptyString("memoryMallocStats()"), // memoryMallocStats()
-                    OK, // memoryPurge()
-                    ResponseMatcher.nonEmptyMap("memoryStats()"), // memoryStats()
+                    new Object[0],                                                 // latencyHistory("command")
+                    new Object[0],                                                 // latencyLatest()
+                    ResponseMatcher.nonEmptyString("memoryDoctor()"),              // memoryDoctor()
+                    ResponseMatcher.nonEmptyString("memoryMallocStats()"),         // memoryMallocStats()
+                    OK,                                                            // memoryPurge()
+                    new ResponseMatcher(obj -> {                                   // memoryStats()
+                        assertMemoryStatsFields((Map<String, Object>) obj);
+                        return true;
+                    }, "memoryStats()"),
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -1571,11 +1576,11 @@ public class BatchTestUtilities {
      * A reusable comparison object for batch test assertions. Overrides {@code equals} to perform
      * type-checked validation against actual command responses.
      */
-    private static class ResponseMatcher {
+    static class ResponseMatcher {
         private final java.util.function.Predicate<Object> predicate;
         private final String description;
 
-        private ResponseMatcher(java.util.function.Predicate<Object> predicate, String description) {
+        ResponseMatcher(java.util.function.Predicate<Object> predicate, String description) {
             this.predicate = predicate;
             this.description = description;
         }

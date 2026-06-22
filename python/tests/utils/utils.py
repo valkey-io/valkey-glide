@@ -2064,24 +2064,25 @@ def assert_connected_sync(client: TSyncGlideClient) -> None:
     assert result == b"PONG"
 
 
-def assert_memory_stats_fields(
-    stats: MemoryStats, server_version: str, is_cluster: bool
-) -> None:
+def assert_memory_stats_db_entry(db_entry: MemoryStatsDb) -> None:
+    """Validate that a MemoryStatsDb instance has expected field types and values."""
+    assert isinstance(db_entry, MemoryStatsDb)
+    assert db_entry.overhead_hashtable_expires >= 0
+    assert db_entry.overhead_hashtable_main >= 0
+
+
+def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     """Validate that a MemoryStats instance has expected field types and values.
 
     Args:
         stats: The MemoryStats object to validate.
         server_version: The server version string (e.g. "8.1.0").
-        is_cluster: Whether the server is running in cluster mode.
     """
     assert isinstance(stats.db, dict)
     for db_idx, db_entry in stats.db.items():
         assert isinstance(db_idx, int)
-        assert isinstance(db_entry, MemoryStatsDb)
-        assert db_entry.overhead_hashtable_expires >= 0
-        assert db_entry.overhead_hashtable_main >= 0
+        assert_memory_stats_db_entry(db_entry)
 
-    # Required int fields (alphabetical)
     assert stats.allocator_active > 0
     assert stats.allocator_allocated > 0
     assert stats.allocator_fragmentation_bytes >= 0
