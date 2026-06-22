@@ -152,6 +152,23 @@ func ReadValue[T any](data map[string]any, field string, into *T) {
 	}
 }
 
+// ReadFloatValue reads a field from the map and coerces it to float64.
+func ReadFloatValue(data map[string]any, field string, into *float64) {
+	val, exists := data[field]
+	if !exists {
+		return
+	}
+
+	switch v := val.(type) {
+	case float64:
+		*into = v
+	case string:
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+			*into = parsed
+		}
+	}
+}
+
 func ReadResult[T any](data map[string]any, field string, info *models.Result[T]) {
 	switch val := data[field].(type) {
 	case T:
@@ -281,26 +298,6 @@ func ConvertToInt64(value any) (int64, error) {
 		return parsed, nil
 	default:
 		return 0, fmt.Errorf("cannot convert %T to int64", value)
-	}
-}
-
-// ConvertToFloat64 converts any numeric value to float64.
-func ConvertToFloat64(value any) (float64, error) {
-	switch v := value.(type) {
-	case float64:
-		return v, nil
-	case int64:
-		return float64(v), nil
-	case int:
-		return float64(v), nil
-	case string:
-		parsed, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return 0, fmt.Errorf("cannot convert string %q to float64: %w", v, err)
-		}
-		return parsed, nil
-	default:
-		return 0, fmt.Errorf("cannot convert %T to float64", value)
 	}
 }
 
