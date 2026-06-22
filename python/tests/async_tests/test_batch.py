@@ -43,6 +43,7 @@ from glide_shared.routes import AllNodes, SlotIdRoute, SlotKeyRoute, SlotType
 
 from tests.async_tests.conftest import create_client
 from tests.utils.utils import (
+    assert_memory_stats_fields,
     batch_test,
     check_if_server_version_lt,
     convert_bytes_to_string_object,
@@ -1717,9 +1718,7 @@ class TestBatch:
         from tests.utils.cluster import ValkeyCluster
 
         tls = request.config.getoption("--tls")
-        cluster = ValkeyCluster(
-            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
-        )
+        cluster = ValkeyCluster(tls=tls, cluster_mode=False, shard_count=1, replica_count=0)
         yield cluster
         del cluster
 
@@ -1768,10 +1767,10 @@ class TestBatch:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("is_atomic", [True, False])
     async def test_memory_batch(self, glide_client: TGlideClient, is_atomic: bool):
-        from glide_shared.commands.memory import MemoryStats
-
         key = get_random_string(10)
         await glide_client.set(key, "value")
+
+        version = await get_version(glide_client)
 
         batch = (
             Batch(is_atomic=is_atomic)
@@ -1790,3 +1789,4 @@ class TestBatch:
         assert isinstance(result[1], str) and len(result[1]) > 0
         assert result[2] == OK
         assert isinstance(result[3], MemoryStats)
+        assert_memory_stats_fields(result[3], version)
