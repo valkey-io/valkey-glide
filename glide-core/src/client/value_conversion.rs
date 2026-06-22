@@ -1317,8 +1317,7 @@ pub(crate) fn convert_to_expected_type(
             _ => convert_to_expected_type(value, *value_type),
         }
         ExpectedReturnType::MemoryStatsReturnType => {
-            // Convert the top-level response to a map, then recursively
-            // convert nested db.<N> entries into maps as well.
+            // Convert the top-level response to a map, then recursively convert nested db.<N> entries into maps as well.
             let map_value = convert_to_expected_type(value, Some(ExpectedReturnType::Map {
                 key_type: &None,
                 value_type: &None,
@@ -1327,8 +1326,14 @@ pub(crate) fn convert_to_expected_type(
                 Value::Map(map) => {
                     let converted = map.into_iter().map(|(k, v)| {
                         let converted_v = match v {
+                            // Convert RESP2 two-dimensional arrays to maps.
                             Value::Array(arr) => convert_array_to_map_by_type(arr, None, None)
                                 .unwrap_or(Value::Nil),
+                            // Convert RESP2 bulk strings to doubles.
+                            Value::BulkString(_) => {
+                                convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Double))
+                                    .unwrap_or(v)
+                            }
                             other => other,
                         };
                         (k, converted_v)

@@ -152,23 +152,6 @@ func ReadValue[T any](data map[string]any, field string, into *T) {
 	}
 }
 
-// ReadFloatValue reads a field from the map and coerces it to float64.
-func ReadFloatValue(data map[string]any, field string, into *float64) {
-	val, exists := data[field]
-	if !exists {
-		return
-	}
-
-	switch v := val.(type) {
-	case float64:
-		*into = v
-	case string:
-		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-			*into = parsed
-		}
-	}
-}
-
 func ReadResult[T any](data map[string]any, field string, info *models.Result[T]) {
 	switch val := data[field].(type) {
 	case T:

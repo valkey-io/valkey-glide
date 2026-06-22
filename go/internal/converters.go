@@ -909,12 +909,12 @@ func ConvertMemoryStats(data any) (any, error) {
 	ReadValue(rawMap, "startup.allocated", &stats.StartupAllocated)
 	ReadValue(rawMap, "total.allocated", &stats.TotalAllocated)
 
-	ReadFloatValue(rawMap, "allocator-fragmentation.ratio", &stats.AllocatorFragmentationRatio)
-	ReadFloatValue(rawMap, "allocator-rss.ratio", &stats.AllocatorRssRatio)
-	ReadFloatValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
-	ReadFloatValue(rawMap, "fragmentation", &stats.Fragmentation)
-	ReadFloatValue(rawMap, "peak.percentage", &stats.PeakPercentage)
-	ReadFloatValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
+	ReadValue(rawMap, "allocator-fragmentation.ratio", &stats.AllocatorFragmentationRatio)
+	ReadValue(rawMap, "allocator-rss.ratio", &stats.AllocatorRssRatio)
+	ReadValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
+	ReadValue(rawMap, "fragmentation", &stats.Fragmentation)
+	ReadValue(rawMap, "peak.percentage", &stats.PeakPercentage)
+	ReadValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
 
 	// Optional Valkey 8.0+ fields
 	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
