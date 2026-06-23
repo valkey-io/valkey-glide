@@ -951,7 +951,7 @@ describe("OpenTelemetry parent span context propagation", () => {
                   getServerVersion,
               )
             : await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
-    }, 40000);
+    }, 120000);
 
     afterEach(async () => {
         OpenTelemetry.setParentSpanContextProvider(null);
