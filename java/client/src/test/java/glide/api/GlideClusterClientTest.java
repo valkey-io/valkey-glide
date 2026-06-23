@@ -43,11 +43,11 @@ import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
+import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
 import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
 import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
 import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
-import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
@@ -4871,8 +4871,7 @@ public class GlideClusterClientTest {
         Map<String, Object> statsMap = createMap("peak.allocated", 1024L, "total.allocated", 512L);
         ClusterValue<Map<String, Object>> value =
                 ClusterValue.ofMultiValue(createMap("node1:6379", statsMap));
-        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse =
-                new CompletableFuture<>();
+        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
@@ -4895,8 +4894,7 @@ public class GlideClusterClientTest {
         // setup
         Map<String, Object> statsMap = createMap("peak.allocated", 1024L, "total.allocated", 512L);
         ClusterValue<Map<String, Object>> value = ClusterValue.ofSingleValue(statsMap);
-        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse =
-                new CompletableFuture<>();
+        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
@@ -4905,8 +4903,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<Map<String, Object>>> response =
-                service.memoryStats(RANDOM);
+        CompletableFuture<ClusterValue<Map<String, Object>>> response = service.memoryStats(RANDOM);
 
         // verify
         assertEquals(testResponse, response);

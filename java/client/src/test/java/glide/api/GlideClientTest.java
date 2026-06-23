@@ -95,14 +95,14 @@ import static command_request.CommandRequestOuterClass.RequestType.LastSave;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
@@ -16664,8 +16664,7 @@ public class GlideClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(MemoryMallocStats), eq(new String[0]), any()))
+        when(commandManager.<String>submitNewCommand(eq(MemoryMallocStats), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise

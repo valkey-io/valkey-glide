@@ -1032,11 +1032,7 @@ public class BatchTestUtilities {
         // Write a key to ensure MEMORY STATS has db entries.
         batch.set("{batch_memory_key}", "value");
 
-        batch
-                .memoryDoctor()
-                .memoryMallocStats()
-                .memoryPurge()
-                .memoryStats();
+        batch.memoryDoctor().memoryMallocStats().memoryPurge().memoryStats();
 
         return new Object[] {
             OK, // set("{batch_memory_key}", "value")

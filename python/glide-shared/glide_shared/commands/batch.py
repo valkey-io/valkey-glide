@@ -2499,7 +2499,9 @@ class BaseBatch:
         Command response:
             List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
         """
-        return self.append_command(RequestType.LatencyLatest, [], converter=_parse_latency_latest)
+        return self.append_command(
+            RequestType.LatencyLatest, [], converter=_parse_latency_latest
+        )
 
     def latency_reset(self: TBatch, *events: TEncodable) -> TBatch:
         """
@@ -2568,7 +2570,9 @@ class BaseBatch:
             MemoryStats: A ``MemoryStats`` object containing detailed memory usage
                 statistics.
         """
-        return self.append_command(RequestType.MemoryStats, [], converter=_parse_memory_stats)
+        return self.append_command(
+            RequestType.MemoryStats, [], converter=_parse_memory_stats
+        )
 
     def type(self: TBatch, key: TEncodable) -> TBatch:
         """
