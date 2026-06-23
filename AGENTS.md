@@ -83,6 +83,9 @@ cargo fmt
 
 ```bash
 cd java
+./gradlew :client:cleanRust
+./gradlew :client:clean
+./gradlew :client:buildRust
 ./gradlew :client:buildAll
 ./gradlew :integTest:test
 ./gradlew :spotlessApply
