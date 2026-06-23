@@ -173,6 +173,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
     let cluster: ValkeyCluster;
     let client: GlideClusterClient;
     beforeAll(async () => {
+        const t0 = Date.now();
         const clusterAddresses = global.CLUSTER_ENDPOINTS;
         // Connect to cluster or create a new one based on the parsed addresses
         cluster = clusterAddresses
@@ -183,11 +184,17 @@ describe("OpenTelemetry GlideClusterClient", () => {
               )
             : // setting replicaCount to 1 to facilitate tests routed to replicas
               await ValkeyCluster.createCluster(true, 3, 1, getServerVersion);
+        const t1 = Date.now();
+        console.log(`[OTel beforeAll] createCluster: ${t1 - t0}ms`);
 
         // check wrong open telemetry config before initilise it
         await wrongOpenTelemetryConfig();
+        const t2 = Date.now();
+        console.log(`[OTel beforeAll] wrongOpenTelemetryConfig: ${t2 - t1}ms`);
 
         await testSpanNotExportedBeforeInitOtel();
+        const t3 = Date.now();
+        console.log(`[OTel beforeAll] testSpanNotExportedBeforeInitOtel: ${t3 - t2}ms`);
 
         // init open telemetry. The init can be called once per process.
         // Pass parentSpanContextProvider via init config to verify it is registered.
@@ -204,6 +211,7 @@ describe("OpenTelemetry GlideClusterClient", () => {
         };
         OpenTelemetry.init(openTelemetryConfig);
         await teardown_otel_test();
+        console.log(`[OTel beforeAll] total: ${Date.now() - t0}ms`);
     }, 40000);
 
     async function teardown_otel_test() {
