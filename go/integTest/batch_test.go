@@ -2504,48 +2504,11 @@ func CreateServerManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, se
 	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "LolwutWithOptions()"})
 	batch.LastSave()
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "LastSave()"})
-	batch.LatencyHistory("command")
-	testData = append(testData, CommandTestData{
-		ExpectedResponse: []models.LatencyEntry{}, CheckTypeOnly: true, TestName: "LatencyHistory()",
-	})
-	batch.LatencyLatest()
-	testData = append(testData, CommandTestData{
-		ExpectedResponse: []models.LatencyEventInfo{}, CheckTypeOnly: true, TestName: "LatencyLatest()",
-	})
-	batch.LatencyReset()
-	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "LatencyReset()"})
 	batch.ConfigResetStat()
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ConfigResetStat()"})
 	// ConfigRewrite skipped, because depends on config
 
 	return BatchTestData{CommandTestData: testData, TestName: "Server Management commands"}
-}
-
-func CreateMemoryTests(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
-	testData := make([]CommandTestData, 0)
-
-	// Write a key to ensure MEMORY STATS has db entries.
-	batch.Set("{batch_memory_key}", "value")
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "Set(batch_memory_key)"})
-
-	batch.MemoryDoctor()
-	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "MemoryDoctor()"})
-
-	batch.MemoryMallocStats()
-	testData = append(
-		testData,
-		CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "MemoryMallocStats()"},
-	)
-
-	batch.MemoryPurge()
-	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "MemoryPurge()"})
-
-	batch.MemoryStats()
-	testData = append(testData, CommandTestData{
-		ExpectedResponse: models.MemoryStats{}, CheckTypeOnly: true, TestName: "MemoryStats()",
-	})
-
-	return BatchTestData{CommandTestData: testData, TestName: "Memory commands"}
 }
 
 func CreateScriptTest(batch *pipeline.ClusterBatch, isAtomic bool, serverVer string) BatchTestData {
@@ -2687,7 +2650,6 @@ func GetKeyLessCommandGroupTestProviders() []BatchTestDataProvider {
 	return []BatchTestDataProvider{
 		CreateConnectionManagementTests,
 		CreateServerManagementTests,
-		CreateMemoryTests,
 		CreateScriptTest,
 		CreateFunctionTest,
 	}

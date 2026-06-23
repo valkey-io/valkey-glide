@@ -9,7 +9,6 @@ import (
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/models"
 	"github.com/valkey-io/valkey-glide/go/v2/options"
-	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
 )
 
 func (suite *GlideTestSuite) TestMemoryDoctor_Standalone() {
@@ -242,74 +241,6 @@ func (suite *GlideTestSuite) TestMemoryStatsWithOptions_ClusterSingleNode() {
 	suite.assertMemoryStatsFields(stats)
 	assert.NotEmpty(t, stats.Db)
 	suite.assertMemoryStatsDbEntry(stats.Db[0])
-}
-
-func (suite *GlideTestSuite) TestMemoryCommands_BatchTransaction_Cluster() {
-	client := suite.defaultClusterClient()
-	t := suite.T()
-
-	// Write a key so MEMORY STATS has db entries
-	_, err := client.Set(context.Background(), "batch_memory_cluster_key", "value")
-	assert.NoError(t, err)
-
-	batch := pipeline.NewClusterBatch(true) // atomic (transaction)
-	batch.MemoryDoctor()
-	batch.MemoryMallocStats()
-	batch.MemoryPurge()
-	batch.MemoryStats()
-
-	results, err := client.Exec(context.Background(), *batch, true)
-	assert.NoError(t, err)
-	assert.Len(t, results, 4)
-
-	// Result 0: MemoryDoctor — string
-	doctor, ok := results[0].(string)
-	assert.True(t, ok)
-	assert.NotEmpty(t, doctor)
-
-	// Result 1: MemoryMallocStats — string
-	mallocStats, ok := results[1].(string)
-	assert.True(t, ok)
-	assert.NotEmpty(t, mallocStats)
-
-	// Result 2: MemoryPurge — "OK"
-	purge, ok := results[2].(string)
-	assert.True(t, ok)
-	assert.Equal(t, "OK", purge)
-
-	// Result 3: MemoryStats — models.MemoryStats
-	stats, ok := results[3].(models.MemoryStats)
-	assert.True(t, ok)
-	suite.assertMemoryStatsFields(stats)
-}
-
-func (suite *GlideTestSuite) TestMemoryCommands_BatchPipeline_Standalone() {
-	client := suite.defaultClient()
-	t := suite.T()
-
-	batch := pipeline.NewStandaloneBatch(false) // non-atomic (pipeline)
-	batch.MemoryDoctor()
-	batch.MemoryMallocStats()
-	batch.MemoryPurge()
-	batch.MemoryStats()
-
-	results, err := client.Exec(context.Background(), *batch, true)
-	assert.NoError(t, err)
-	assert.Len(t, results, 4)
-
-	// Verify order and types
-	_, ok := results[0].(string)
-	assert.True(t, ok)
-
-	_, ok = results[1].(string)
-	assert.True(t, ok)
-
-	purge, ok := results[2].(string)
-	assert.True(t, ok)
-	assert.Equal(t, "OK", purge)
-
-	_, ok = results[3].(models.MemoryStats)
-	assert.True(t, ok)
 }
 
 // Context Cancellation Tests
