@@ -1016,11 +1016,7 @@ export class GlideClusterClient extends BaseClient {
             batch.isAtomic,
             raiseOnError,
         ).then((result) =>
-            this.processResultWithSetCommands(
-                result,
-                batch.setCommandsIndexes,
-                batch.commandConverters,
-            ),
+            this.processResultWithSetCommands(result, batch.setCommandsIndexes),
         );
     }
 

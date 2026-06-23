@@ -288,16 +288,8 @@ import {
     createZScore,
     createZUnion,
     createZUnionStore,
-    createMemoryDoctor,
-    createMemoryMallocStats,
-    createMemoryPurge,
-    createMemoryStats,
-    parseMemoryStatsResponse,
-    parseLatencyHistoryResponse,
-    parseLatencyLatestResponse,
 } from ".";
 import { command_request } from "../build-ts/ProtobufMessage";
-import { convertGlideRecordToRecord, isGlideRecord } from "./BaseClient";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a Batch.

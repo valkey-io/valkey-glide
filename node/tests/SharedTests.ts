@@ -58,8 +58,6 @@ import {
     UpdateByScore,
     convertElementsAndScores,
     convertGlideRecordToRecord,
-    LatencyEntry,
-    LatencyEventInfo,
     MemoryStats,
     parseInfoResponse,
 } from "../build-ts";
@@ -636,53 +634,6 @@ export function runBaseTests(config: {
                 expect(
                     flattenClusterResponseArrays(historyStillPresent).length,
                 ).toBeGreaterThan(0);
-            }, protocol);
-        },
-        config.timeout,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "latency batch commands %p",
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                await triggerLatencySpike(client);
-
-                for (const isAtomic of [true, false]) {
-                    const response =
-                        client instanceof GlideClient
-                            ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .latencyHistory("command")
-                                      .latencyLatest()
-                                      .latencyReset(),
-                                  isAtomic,
-                              )
-                            : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .latencyHistory("command")
-                                      .latencyLatest()
-                                      .latencyReset(),
-                                  isAtomic,
-                              );
-
-                    expect(response).not.toBeNull();
-                    expect(response!.length).toBe(3);
-
-                    expect(
-                        (response![0] as unknown[]).every(
-                            (e) => e instanceof LatencyEntry,
-                        ),
-                    ).toBe(true);
-
-                    expect(
-                        (response![1] as unknown[]).every(
-                            (e) => e instanceof LatencyEventInfo,
-                        ),
-                    ).toBe(true);
-
-                    // latencyReset returns a number
-                    expect(typeof response![2]).toBe("number");
-                }
             }, protocol);
         },
         config.timeout,
@@ -13964,64 +13915,6 @@ export function runBaseTests(config: {
                         expect(stats.db[0]).toBeDefined();
                         assertMemoryStatsDbEntry(stats.db[0]);
                     }
-                },
-                protocol,
-            );
-        },
-        config.timeout,
-    );
-
-    it.each([
-        [ProtocolVersion.RESP2, true],
-        [ProtocolVersion.RESP2, false],
-        [ProtocolVersion.RESP3, true],
-        [ProtocolVersion.RESP3, false],
-    ])(
-        "memory commands — batch protocol=%p isAtomic=%p",
-        async (protocol, isAtomic) => {
-            await runTest(
-                async (client: BaseClient, cluster: ValkeyCluster) => {
-                    const key = getRandomKey();
-                    await client.set(key, "batchMemTest");
-
-                    const response =
-                        client instanceof GlideClient
-                            ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .memoryDoctor()
-                                      .memoryMallocStats()
-                                      .memoryPurge()
-                                      .memoryStats(),
-                                  true,
-                              )
-                            : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .memoryDoctor()
-                                      .memoryMallocStats()
-                                      .memoryPurge()
-                                      .memoryStats(),
-                                  true,
-                                  {
-                                      route: {
-                                          type: "primarySlotKey",
-                                          key,
-                                      },
-                                  },
-                              );
-
-                    expect(response).not.toBeNull();
-                    expect(response!.length).toBe(4);
-
-                    expect(typeof response![0]).toBe("string");
-                    expect((response![0] as string).length).toBeGreaterThan(0);
-
-                    expect(typeof response![1]).toBe("string");
-                    expect((response![1] as string).length).toBeGreaterThan(0);
-
-                    expect(response![2]).toBe("OK");
-
-                    const stats = response![3] as unknown as MemoryStats;
-                    assertMemoryStatsFields(stats, cluster.getVersion());
                 },
                 protocol,
             );

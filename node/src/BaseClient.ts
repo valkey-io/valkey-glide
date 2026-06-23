@@ -1761,7 +1761,6 @@ export class BaseClient {
     protected processResultWithSetCommands(
         result: GlideReturnType[] | null,
         setCommandsIndexes: number[],
-        commandConverters?: (((raw: unknown) => unknown) | undefined)[],
     ): GlideReturnType[] | null {
         if (result === null) {
             return null;
@@ -1772,21 +1771,6 @@ export class BaseClient {
                 result[setCommandsIndexes[i]] = new Set<GlideReturnType>(
                     result[setCommandsIndexes[i]] as GlideReturnType[],
                 );
-            }
-        }
-
-        // Apply per-command result converters.
-        if (commandConverters) {
-            for (let i = 0, len = commandConverters.length; i < len; i++) {
-                const converter = commandConverters[i];
-
-                if (
-                    converter &&
-                    result[i] !== undefined &&
-                    result[i] !== null
-                ) {
-                    result[i] = converter(result[i]) as GlideReturnType;
-                }
             }
         }
 
