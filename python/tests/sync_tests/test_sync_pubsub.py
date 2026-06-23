@@ -812,17 +812,24 @@ class TestSyncPubSub:
                 if cluster_mode:
                     assert result == 1
 
-            # Wait for messages to propagate
+            # Wait for messages to propagate. Both the Callback and Sync read
+            # paths are non-blocking, so they must poll until every message has
+            # arrived; a fixed sleep races against slow CI (e.g. aarch64). Only
+            # the Async path (get_pubsub_message) blocks per-message and needs
+            # no pre-wait.
             if method == MethodTesting.Callback:
-                # Callback messages arrive asynchronously; poll until all are received
+                # Callback messages arrive asynchronously; poll the callback list.
                 wait_for_messages(
                     len(all_channels_and_messages), callback_messages, timeout=10.0
                 )
-            else:
-                # For Async (blocking read) and Sync (non-blocking read),
-                # allow a brief propagation window for messages to reach the
-                # internal queue before non-blocking try_get_pubsub_message calls
-                time.sleep(1)
+            elif method == MethodTesting.Sync:
+                # try_get_pubsub_message is non-blocking; poll the client's
+                # internal pubsub queue (a List[PubSubMsg]) until all arrive.
+                wait_for_messages(
+                    len(all_channels_and_messages),
+                    listening_client._pubsub_queue,
+                    timeout=10.0,
+                )
 
             # Check if all messages are received correctly
             for index in range(len(all_channels_and_messages)):
