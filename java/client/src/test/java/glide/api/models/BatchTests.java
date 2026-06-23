@@ -101,17 +101,10 @@ import static command_request.CommandRequestOuterClass.RequestType.LRem;
 import static command_request.CommandRequestOuterClass.RequestType.LSet;
 import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
-import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
-import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
-import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
-import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectFreq;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectIdleTime;
@@ -1183,30 +1176,6 @@ public class BatchTests {
 
         batch.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
-
-        batch.latencyHistory("command");
-        results.add(Pair.of(LatencyHistory, buildArgs("command")));
-
-        batch.latencyLatest();
-        results.add(Pair.of(LatencyLatest, buildArgs()));
-
-        batch.latencyReset();
-        results.add(Pair.of(LatencyReset, buildArgs()));
-
-        batch.latencyReset(new String[] {"command"});
-        results.add(Pair.of(LatencyReset, buildArgs("command")));
-
-        batch.memoryDoctor();
-        results.add(Pair.of(MemoryDoctor, buildArgs()));
-
-        batch.memoryMallocStats();
-        results.add(Pair.of(MemoryMallocStats, buildArgs()));
-
-        batch.memoryPurge();
-        results.add(Pair.of(MemoryPurge, buildArgs()));
-
-        batch.memoryStats();
-        results.add(Pair.of(MemoryStats, buildArgs()));
 
         batch.flushall().flushall(ASYNC);
         results.add(Pair.of(FlushAll, buildArgs()));

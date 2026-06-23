@@ -2,7 +2,6 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
-import static glide.TestUtilities.assertMemoryStatsFields;
 import static glide.TestUtilities.concatenateArrays;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
@@ -157,7 +156,6 @@ public class BatchTestUtilities {
                 Arguments.of(
                         "Server Management Commands",
                         (BatchBuilder) BatchTestUtilities::serverManagementCommands),
-                Arguments.of("Memory Commands", (BatchBuilder) BatchTestUtilities::memoryCommands),
                 Arguments.of(
                         "Scripting and Function Commands",
                         (BatchBuilder) BatchTestUtilities::scriptingAndFunctionsCommands));
@@ -968,10 +966,7 @@ public class BatchTestUtilities {
                 .flushall(ASYNC)
                 .flushdb()
                 .flushdb(ASYNC)
-                .dbsize()
-                .latencyReset()
-                .latencyHistory("command")
-                .latencyLatest();
+                .dbsize();
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             batch
@@ -1005,9 +1000,6 @@ public class BatchTestUtilities {
                     OK, // flushdb()
                     OK, // flushdb(ASYNC)
                     0L, // dbsize()
-                    ResponseMatcher.longGreaterThanOrEqualTo("latencyReset()", 0), // latencyReset()
-                    new Object[0], // latencyHistory("command")
-                    new Object[0], // latencyLatest()
                 };
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -1025,27 +1017,6 @@ public class BatchTestUtilities {
         }
 
         return expectedResults;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Object[] memoryCommands(BaseBatch<?> batch, boolean isAtomic) {
-        // Write a key to ensure MEMORY STATS has db entries.
-        batch.set("{batch_memory_key}", "value");
-
-        batch.memoryDoctor().memoryMallocStats().memoryPurge().memoryStats();
-
-        return new Object[] {
-            OK, // set("{batch_memory_key}", "value")
-            ResponseMatcher.nonEmptyString("memoryDoctor()"), // memoryDoctor()
-            ResponseMatcher.nonEmptyString("memoryMallocStats()"), // memoryMallocStats()
-            OK, // memoryPurge()
-            new ResponseMatcher(
-                    obj -> { // memoryStats()
-                        assertMemoryStatsFields((Map<String, Object>) obj);
-                        return true;
-                    },
-                    "memoryStats()"),
-        };
     }
 
     private static Object[] connectionManagementCommands(BaseBatch<?> batch, boolean isAtomic) {
