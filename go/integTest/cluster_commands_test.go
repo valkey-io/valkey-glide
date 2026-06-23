@@ -3389,4 +3389,18 @@ func (suite *GlideTestSuite) TestClusterMigrateMultiKeyRejected() {
 	)
 	suite.Error(err)
 	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
+
+	// ClusterBatch should also reject multi-key Migrate
+	batch := pipeline.NewClusterBatch(false)
+	batch.Migrate("nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
+	_, err = client.Exec(ctx, *batch, true)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
+
+	// ClusterBatch MigrateWithOptions should also reject multi-key
+	batch2 := pipeline.NewClusterBatch(false)
+	batch2.MigrateWithOptions("nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts)
+	_, err = client.Exec(ctx, *batch2, true)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
 }
