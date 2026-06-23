@@ -7690,7 +7690,7 @@ func (client *baseClient) CopyWithOptions(
 	return handleBoolResponse(result)
 }
 
-// Transfers a key from the current Valkey instance to a destination Valkey instance.
+// Transfers keys from the current Valkey instance to a destination Valkey instance.
 //
 // See [valkey.io] for details.
 //
@@ -7699,13 +7699,13 @@ func (client *baseClient) CopyWithOptions(
 //	ctx           - The context for controlling the command execution.
 //	host          - The host of the destination Valkey instance.
 //	port          - The port of the destination Valkey instance.
-//	key           - The key to migrate.
+//	keys          - The keys to migrate. Must not be empty.
 //	destinationDB - The database index on the destination instance.
 //	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
 //
 // Return value:
 //
-//	"OK" on success, or "NOKEY" if the key does not exist.
+//	"OK" on success, or "NOKEY" if none of the keys exist.
 //
 // [valkey.io]: https://valkey.io/commands/migrate/
 func (client *baseClient) Migrate(

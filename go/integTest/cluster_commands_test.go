@@ -3368,3 +3368,25 @@ func (suite *GlideTestSuite) TestClusterLinks() {
 	assert.NoError(t, err)
 	assert.NotNil(t, clusterResult.SingleValue())
 }
+
+func (suite *GlideTestSuite) TestClusterMigrateMultiKeyRejected() {
+	client := suite.defaultClusterClient()
+	ctx := context.Background()
+	key1 := "{migrate}" + uuid.New().String()
+	key2 := "{migrate}" + uuid.New().String()
+
+	// Multi-key Migrate should be rejected in cluster mode
+	_, err := client.Migrate(
+		ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000,
+	)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
+
+	// Multi-key MigrateWithOptions should also be rejected
+	migrateOpts := options.NewMigrateOptions().SetReplace()
+	_, err = client.MigrateWithOptions(
+		ctx, "nonexistent.host", 6379, []string{key1, key2}, 0, 1000, *migrateOpts,
+	)
+	suite.Error(err)
+	suite.Contains(err.Error(), "MIGRATE in cluster mode only supports a single key")
+}

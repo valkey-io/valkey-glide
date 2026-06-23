@@ -5122,7 +5122,7 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 	}, optionArgs...), reflect.Bool, false)
 }
 
-// Migrate atomically transfers a key from a source Valkey instance to a destination Valkey instance.
+// Migrate atomically transfers keys from a source Valkey instance to a destination Valkey instance.
 //
 // See [valkey.io] for details.
 //
