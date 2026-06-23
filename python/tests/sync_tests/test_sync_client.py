@@ -568,7 +568,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    def test_sync_get_into_buffer_non_byte_format(self, glide_sync_client: TGlideClient):
+    def test_sync_get_into_buffer_non_byte_format(
+        self, glide_sync_client: TGlideClient
+    ):
         """Regression: capacity is byte-based, not element-based.
 
         A memoryview over an ``itemsize > 1`` buffer has ``len()`` (element
