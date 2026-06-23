@@ -95,7 +95,10 @@ type ServerManagementClusterCommands interface {
 
 	MemoryStats(ctx context.Context) (models.ClusterValue[models.MemoryStats], error)
 
-	MemoryStatsWithOptions(ctx context.Context, routeOption options.RouteOption) (models.ClusterValue[models.MemoryStats], error)
+	MemoryStatsWithOptions(
+		ctx context.Context,
+		routeOption options.RouteOption,
+	) (models.ClusterValue[models.MemoryStats], error)
 
 	AclCat(ctx context.Context) ([]string, error)
 
