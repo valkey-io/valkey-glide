@@ -172,9 +172,6 @@ import {
     createLSet,
     createLTrim,
     createLastSave,
-    createLatencyHistory,
-    createLatencyLatest,
-    createLatencyReset,
     createLolwut,
     createMGet,
     createMigrate,
@@ -314,13 +311,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * @internal
      */
     readonly setCommandsIndexes: number[] = [];
-    /**
-     * Per-command result converter functions that transform raw responses into typed objects.
-     * Entries are `undefined` for commands that need no conversion.
-     * @internal
-     */
-    readonly commandConverters: (((raw: unknown) => unknown) | undefined)[] =
-        [];
 
     /**
      * @param isAtomic - Determines whether the batch is atomic or non-atomic. If `true`, the
@@ -333,20 +323,17 @@ export class BaseBatch<T extends BaseBatch<T>> {
      * Adds a command to the batch and returns the batch instance.
      * @param command - The command to add.
      * @param shouldConvertToSet - Indicates if the command should be converted to a `Set`.
-     * @param converter - Optional result converter function for this command.
      * @returns The updated batch instance.
      */
     protected addAndReturn(
         command: command_request.Command,
         shouldConvertToSet = false,
-        converter?: (raw: unknown) => unknown,
     ): T {
         if (shouldConvertToSet) {
             // The command's index within the batch is saved for later conversion of its response to a Set type.
             this.setCommandsIndexes.push(this.commands.length);
         }
 
-        this.commandConverters.push(converter);
         this.commands.push(command);
         return this as unknown as T;
     }
@@ -4164,52 +4151,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
     }
 
     /**
-     * Returns the latency spike time series for the specified event.
-     *
-     * @see {@link https://valkey.io/commands/latency-history/|valkey.io} for details.
-     *
-     * @param event - The name of the latency event (e.g., `"command"`).
-     *
-     * Command Response - An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't exist.
-     */
-    public latencyHistory(event: GlideString): T {
-        return this.addAndReturn(
-            createLatencyHistory(event),
-            false,
-            parseLatencyHistoryResponse as (raw: unknown) => unknown,
-        );
-    }
-
-    /**
-     * Reports the latest latency events logged by the server.
-     *
-     * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
-     *
-     * Command Response - An array of {@link LatencyEventInfo} for the latest latency events.
-     */
-    public latencyLatest(): T {
-        return this.addAndReturn(
-            createLatencyLatest(),
-            false,
-            parseLatencyLatestResponse as (raw: unknown) => unknown,
-        );
-    }
-
-    /**
-     * Resets the latency spike time series for all or specified events.
-     * If no events are provided, resets the latency spike time series for all events.
-     *
-     * @see {@link https://valkey.io/commands/latency-reset/|valkey.io} for details.
-     *
-     * @param events - The event names to reset. If not provided, resets all events.
-     *
-     * Command Response - The number of event time series that were reset.
-     */
-    public latencyReset(events?: GlideString[]): T {
-        return this.addAndReturn(createLatencyReset(events));
-    }
-
-    /**
      * Returns all the longest common subsequences combined between strings stored at `key1` and `key2`.
      *
      * @see {@link https://valkey.io/commands/lcs/|valkey.io} for details.
@@ -4487,58 +4428,6 @@ export class BaseBatch<T extends BaseBatch<T>> {
         options?: SortOptions,
     ): T {
         return this.addAndReturn(createSort(key, options, destination));
-    }
-
-    /**
-     * Returns a report about memory problems detected by the server.
-     *
-     * @see {@link https://valkey.io/commands/memory-doctor/|valkey.io} for details.
-     *
-     * Command Response - The memory diagnostic report.
-     */
-    public memoryDoctor(): T {
-        return this.addAndReturn(createMemoryDoctor());
-    }
-
-    /**
-     * Returns the internal statistics of the memory allocator.
-     *
-     * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
-     *
-     * Command Response - The memory allocator statistics.
-     */
-    public memoryMallocStats(): T {
-        return this.addAndReturn(createMemoryMallocStats());
-    }
-
-    /**
-     * Asks the server to reclaim memory from the allocator back to the operating system.
-     *
-     * @see {@link https://valkey.io/commands/memory-purge/|valkey.io} for details.
-     *
-     * Command Response - "OK".
-     */
-    public memoryPurge(): T {
-        return this.addAndReturn(createMemoryPurge());
-    }
-
-    /**
-     * Returns detailed memory consumption statistics of the server.
-     *
-     * @see {@link https://valkey.io/commands/memory-stats/|valkey.io} for details.
-     *
-     * Command Response - A {@link MemoryStats} object containing detailed memory usage statistics.
-     */
-    public memoryStats(): T {
-        return this.addAndReturn(createMemoryStats(), false, (raw: unknown) =>
-            parseMemoryStatsResponse(
-                isGlideRecord(raw)
-                    ? (convertGlideRecordToRecord(
-                          raw as GlideRecord<unknown>,
-                      ) as Record<string, unknown>)
-                    : (raw as Record<string, unknown>),
-            ),
-        );
     }
 }
 
