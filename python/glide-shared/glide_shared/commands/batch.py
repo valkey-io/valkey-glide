@@ -70,7 +70,7 @@ else:
 TBatch = TypeVar("TBatch", bound="BaseBatch")
 
 
-def apply_batch_converters(
+def _apply_batch_converters(
     result: Optional[List[Any]],
     converters: List[Optional[Callable[[Any], Any]]],
 ) -> Optional[List[Any]]:

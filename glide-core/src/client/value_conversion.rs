@@ -1325,16 +1325,18 @@ pub(crate) fn convert_to_expected_type(
             match map_value {
                 Value::Map(map) => {
                     let converted = map.into_iter().map(|(k, v)| {
-                        let converted_v = match v {
+                        let converted_v = match &v {
                             // Convert RESP2 two-dimensional arrays to maps.
-                            Value::Array(arr) => convert_array_to_map_by_type(arr, None, None)
-                                .unwrap_or(Value::Nil),
-                            // Convert RESP2 bulk strings to doubles.
-                            bulk @ Value::BulkString(_) => {
-                                convert_to_expected_type(bulk, Some(ExpectedReturnType::Double))
-                                    .unwrap_or(Value::Nil)
+                            Value::Array(arr) => {
+                                convert_array_to_map_by_type(arr.clone(), None, None)
+                                    .unwrap_or(v)
                             }
-                            other => other,
+                            // Convert RESP2 bulk strings to doubles.
+                            Value::BulkString(_) => {
+                                convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Double))
+                                    .unwrap_or(v)
+                            }
+                            _ => v,
                         };
                         (k, converted_v)
                     }).collect();

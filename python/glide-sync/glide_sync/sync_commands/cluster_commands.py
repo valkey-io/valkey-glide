@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Set, Union, cast
 
-from glide_shared.commands.batch import ClusterBatch, apply_batch_converters
+from glide_shared.commands.batch import ClusterBatch, _apply_batch_converters
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import (
@@ -214,7 +214,7 @@ class ClusterCommands(CoreCommands):
             route,
             timeout,
         )
-        return apply_batch_converters(result, batch.converters)
+        return _apply_batch_converters(result, batch.converters)
 
     def config_resetstat(
         self,
