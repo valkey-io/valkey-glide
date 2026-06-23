@@ -29,6 +29,9 @@ import static command_request.CommandRequestOuterClass.RequestType.GetSubscripti
 import static command_request.CommandRequestOuterClass.RequestType.Info;
 import static command_request.CommandRequestOuterClass.RequestType.Keys;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
@@ -60,6 +63,8 @@ import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
@@ -426,6 +431,33 @@ public class GlideClient extends BaseClient
     public CompletableFuture<String> replicaofNoOne() {
         return commandManager.submitNewCommand(
                 ReplicaOf, new String[] {"NO", "ONE"}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<LatencyEntry[]> latencyHistory(@NonNull String event) {
+        return commandManager.submitNewCommand(
+                LatencyHistory,
+                new String[] {event},
+                response -> handleLatencyHistoryResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<LatencyEventInfo[]> latencyLatest() {
+        return commandManager.submitNewCommand(
+                LatencyLatest,
+                EMPTY_STRING_ARRAY,
+                response -> handleLatencyLatestResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset() {
+        return commandManager.submitNewCommand(
+                LatencyReset, EMPTY_STRING_ARRAY, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> latencyReset(@NonNull String[] events) {
+        return commandManager.submitNewCommand(LatencyReset, events, this::handleLongResponse);
     }
 
     @Override

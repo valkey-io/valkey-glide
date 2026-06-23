@@ -692,7 +692,7 @@ func (client *Client) ConfigResetStat(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	The latency entries from the event.
+//	A slice of [models.LatencyEntry] for the event, or an empty slice if the event doesn't exist.
 //
 // [valkey.io]: https://valkey.io/commands/latency-history/
 func (client *Client) LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error) {
@@ -703,7 +703,7 @@ func (client *Client) LatencyHistory(ctx context.Context, event string) ([]model
 	return handleLatencyHistoryResponse(response)
 }
 
-// Reports the latest latency events logged.
+// Reports the latest latency events logged by the server.
 //
 // See [valkey.io] for details.
 //
@@ -713,10 +713,10 @@ func (client *Client) LatencyHistory(ctx context.Context, event string) ([]model
 //
 // Return value:
 //
-//	Latency info for each recorded event.
+//	A slice of [models.LatencyEventInfo] for the latest latency events.
 //
 // [valkey.io]: https://valkey.io/commands/latency-latest/
-func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyInfo, error) {
+func (client *Client) LatencyLatest(ctx context.Context) ([]models.LatencyEventInfo, error) {
 	response, err := client.executeCommand(ctx, C.LatencyLatest, []string{})
 	if err != nil {
 		return nil, err

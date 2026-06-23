@@ -1,22 +1,13 @@
 name: Install Engine
+description: Install and cache Valkey server for testing
 
 inputs:
     engine-version:
         description: "Engine version to install"
         required: true
-        type: string
     target:
         description: "Specified target toolchain, ex. x86_64-unknown-linux-gnu"
-        type: string
         required: true
-        options:
-            - x86_64-unknown-linux-gnu
-            - aarch64-unknown-linux-gnu
-            - x86_64-apple-darwin
-            - aarch64-apple-darwin
-            - aarch64-unknown-linux-musl
-            - x86_64-unknown-linux-musl
-            - x86_64-pc-windows-msvc
 
 env:
     CARGO_TERM_COLOR: always
@@ -112,7 +103,7 @@ runs:
               echo 'Configuring system for cluster mode...'
               sudo sysctl vm.overcommit_memory=1 || echo 'Cannot set overcommit'
               sudo bash -c 'echo never > /sys/kernel/mm/transparent_hugepage/enabled' || echo 'Cannot disable hugepage'
-                
+
               echo 'WSL Configuration complete'
 
         - name: Verify Valkey installation and symlinks

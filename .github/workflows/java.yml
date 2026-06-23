@@ -15,10 +15,10 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
@@ -29,10 +29,10 @@ on:
             - java/**
             - utils/cluster_manager.py
             - .github/workflows/java.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/workflows/create-test-matrices/action.yml
             - .github/json_matrices/**
 
@@ -165,7 +165,7 @@ jobs:
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -289,7 +289,7 @@ jobs:
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -365,7 +365,7 @@ jobs:
                   java-version: 11
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
                   target: aarch64-unknown-linux-gnu
@@ -426,7 +426,7 @@ jobs:
                   java-version: 21
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
                   target: x86_64-unknown-linux-gnu
@@ -520,7 +520,7 @@ jobs:
                   submodules: recursive
 
             - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}

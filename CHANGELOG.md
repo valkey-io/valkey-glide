@@ -11,8 +11,14 @@
 ### Changes
 
 * Go: Add multi-key `MIGRATE` support by unifying `Migrate`/`MigrateWithOptions` to accept `keys []string`. Single key uses standard wire format; multiple keys use `KEYS` clause. Cluster mode enforces single-key only. ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
+* Java: implement MONITOR command ([#6187](https://github.com/valkey-io/valkey-glide/pull/6187))
+* Node: Add GlideMonitorClient for MONITOR command ([#6212](https://github.com/valkey-io/valkey-glide/pull/6212))
+* Python: implement MONITOR command for sync and async clients ([#6132](https://github.com/valkey-io/valkey-glide/pull/6132))
+* Go: Add MonitorClient for MONITOR command ([#6211](https://github.com/valkey-io/valkey-glide/pull/6211))
+* Java: Add `MIGRATE KEYS` (multi-key) variant ([#6063](https://github.com/valkey-io/valkey-glide/pull/6063))
+* Node: Add `MIGRATE KEYS` (multi-key) variant ([#6064](https://github.com/valkey-io/valkey-glide/pull/6064))
+* Core, Java, Python, Node, Go: Add `LATENCY HISTORY`, `LATENCY LATEST`, and `LATENCY RESET` command support ([#6206](https://github.com/valkey-io/valkey-glide/issues/6206))
 * Node, Python, Go: Add `FAILOVER` and `REPLICAOF` command support ([#6222](https://github.com/valkey-io/valkey-glide/pull/6222))
-* Go: Add `LATENCY HISTORY`, `LATENCY LATEST`, and `LATENCY RESET` command support ([#6206](https://github.com/valkey-io/valkey-glide/issues/6206))
 * Python Async: Replace UDS+protobuf transport with FFI+pipe architecture. Commands go directly through CFFI to Rust; responses return via anonymous pipe with Rust-native parsing. Adds trio/anyio support, address resolver, cache metrics. +19-21% throughput for simple commands, +11-16% for collections vs v2.4.1. ([#5637](https://github.com/valkey-io/valkey-glide/pull/5637))
 * CORE: Extend timeout watchdog with structured diagnostics. Timeouts now report classified root cause (ServerUnresponsive, ClientBackpressure, SystemOverload), command phase (Queued vs Sent), inflight trend, per-client p99 latency, and suggested timeout. ([#6044](https://github.com/valkey-io/valkey-glide/pull/6044))
 * Core, Python, Java, Node, Go: Add `SAVE`, `BGSAVE` and `BGREWRITEAOF` command support ([#6095](https://github.com/valkey-io/valkey-glide/issues/6095))
@@ -25,6 +31,7 @@
 * Core/FFI: Add `MonitorClient` for the MONITOR command ([#5977](https://github.com/valkey-io/valkey-glide/pull/5977))
 * Node: Add RESET command support ([#5945](https://github.com/valkey-io/valkey-glide/pull/5945))
 * Python: Add RESET command support ([#5944](https://github.com/valkey-io/valkey-glide/pull/5944))
+* Python: Add `MIGRATE KEYS` (multi-key) variant ([#6066](https://github.com/valkey-io/valkey-glide/pull/6066))
 * Python: Add `MIGRATE` command support ([#5933](https://github.com/valkey-io/valkey-glide/pull/5933))
 * Core: Phase 2 client-side caching ([#5962](https://github.com/valkey-io/valkey-glide/pull/5962))
 * Java: Add `clientTrackingInfo` command and `serverAssisted` flag for Phase 2 client-side caching ([#5965](https://github.com/valkey-io/valkey-glide/pull/5965))

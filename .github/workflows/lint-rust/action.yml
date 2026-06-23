@@ -15,8 +15,11 @@ runs:
     steps:
         - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-        - name: Install Rust toolchain and protoc
-          uses: ./.github/workflows/install-rust-and-protoc
+        - name: Install Rust toolchain
+          uses: ./.github/actions/install-rust
+
+        - name: Install protoc
+          uses: ./.github/actions/install-protoc
           with:
               github-token: ${{ inputs.github-token }}
 

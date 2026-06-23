@@ -8,8 +8,8 @@ on:
             - .github/workflows/pypi-cd.yml
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
     push:
@@ -711,7 +711,7 @@ jobs:
                   sudo apt install -y pkg-config libssl-dev
 
             - name: Install engine
-              uses: ./.github/workflows/install-engine
+              uses: ./.github/actions/install-engine
               with:
                   engine-version: "8.0"
                   target: ${{ matrix.build.target }}

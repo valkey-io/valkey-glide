@@ -102,6 +102,9 @@ import static command_request.CommandRequestOuterClass.RequestType.LRem;
 import static command_request.CommandRequestOuterClass.RequestType.LSet;
 import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
@@ -5027,6 +5030,53 @@ public abstract class BaseBatch<T extends BaseBatch<T>> {
      */
     public T lastsave() {
         protobufBatch.addCommands(buildCommand(LastSave));
+        return getThis();
+    }
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., <code>"command"</code>).
+     * @return Command Response - An array of {@link LatencyEntry} for the event, or an empty array if
+     *     the event doesn't exist.
+     */
+    public T latencyHistory(@NonNull String event) {
+        protobufBatch.addCommands(buildCommand(LatencyHistory, newArgsBuilder().add(event)));
+        return getThis();
+    }
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @return Command Response - An array of {@link LatencyEventInfo} for the latest latency events.
+     */
+    public T latencyLatest() {
+        protobufBatch.addCommands(buildCommand(LatencyLatest));
+        return getThis();
+    }
+
+    /**
+     * Resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @return Command Response - The number of event time series that were reset.
+     */
+    public T latencyReset() {
+        protobufBatch.addCommands(buildCommand(LatencyReset));
+        return getThis();
+    }
+
+    /**
+     * Resets the latency spike time series for the specified events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The names of the latency events to reset.
+     * @return Command Response - The number of event time series that were reset.
+     */
+    public T latencyReset(@NonNull String[] events) {
+        protobufBatch.addCommands(buildCommand(LatencyReset, newArgsBuilder().add(events)));
         return getThis();
     }
 

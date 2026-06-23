@@ -101,6 +101,9 @@ import static command_request.CommandRequestOuterClass.RequestType.LRem;
 import static command_request.CommandRequestOuterClass.RequestType.LSet;
 import static command_request.CommandRequestOuterClass.RequestType.LTrim;
 import static command_request.CommandRequestOuterClass.RequestType.LastSave;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyHistory;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
+import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
@@ -1176,6 +1179,18 @@ public class BatchTests {
 
         batch.lastsave();
         results.add(Pair.of(LastSave, buildArgs()));
+
+        batch.latencyHistory("command");
+        results.add(Pair.of(LatencyHistory, buildArgs("command")));
+
+        batch.latencyLatest();
+        results.add(Pair.of(LatencyLatest, buildArgs()));
+
+        batch.latencyReset();
+        results.add(Pair.of(LatencyReset, buildArgs()));
+
+        batch.latencyReset(new String[] {"command"});
+        results.add(Pair.of(LatencyReset, buildArgs("command")));
 
         batch.flushall().flushall(ASYNC);
         results.add(Pair.of(FlushAll, buildArgs()));

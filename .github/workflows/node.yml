@@ -15,10 +15,10 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
     pull_request:
@@ -28,10 +28,10 @@ on:
             - node/**
             - utils/cluster_manager.py
             - .github/workflows/node.yml
-            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
-            - .github/workflows/install-engine/action.yml
+            - .github/actions/install-engine/action.yml
             - .github/json_matrices/**
             - .github/workflows/create-test-matrices/action.yml
     workflow_dispatch:
@@ -131,7 +131,7 @@ jobs:
 
             # Install software dependencies
             - name: Install shared dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
@@ -204,7 +204,7 @@ jobs:
 
             # Install software dependencies
             - name: Install shared dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ubuntu
                   target: x86_64-unknown-linux-gnu
@@ -381,7 +381,7 @@ jobs:
 
             # Install shared dependencies including Rust and Protocol Buffers
             - name: Install shared dependencies
-              uses: ./.github/workflows/install-shared-dependencies
+              uses: ./.github/actions/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}

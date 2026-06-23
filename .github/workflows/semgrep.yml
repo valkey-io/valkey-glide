@@ -4,6 +4,7 @@ permissions:
     contents: read
 
 on:
+    workflow_call:
     # Scan changed files in PRs (diff-aware scanning):
     pull_request: {}
     # Scan on-demand through GitHub Actions interface:

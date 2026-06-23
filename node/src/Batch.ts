@@ -172,6 +172,9 @@ import {
     createLSet,
     createLTrim,
     createLastSave,
+    createLatencyHistory,
+    createLatencyLatest,
+    createLatencyReset,
     createLolwut,
     createMGet,
     createMigrate,
@@ -4148,6 +4151,44 @@ export class BaseBatch<T extends BaseBatch<T>> {
      */
     public lastsave(): T {
         return this.addAndReturn(createLastSave());
+    }
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see {@link https://valkey.io/commands/latency-history/|valkey.io} for details.
+     *
+     * @param event - The name of the latency event (e.g., `"command"`).
+     *
+     * Command Response - An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't exist.
+     */
+    public latencyHistory(event: GlideString): T {
+        return this.addAndReturn(createLatencyHistory(event));
+    }
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
+     *
+     * Command Response - An array of {@link LatencyEventInfo} for the latest latency events.
+     */
+    public latencyLatest(): T {
+        return this.addAndReturn(createLatencyLatest());
+    }
+
+    /**
+     * Resets the latency spike time series for all or specified events.
+     * If no events are provided, resets the latency spike time series for all events.
+     *
+     * @see {@link https://valkey.io/commands/latency-reset/|valkey.io} for details.
+     *
+     * @param events - The event names to reset. If not provided, resets all events.
+     *
+     * Command Response - The number of event time series that were reset.
+     */
+    public latencyReset(events?: GlideString[]): T {
+        return this.addAndReturn(createLatencyReset(events));
     }
 
     /**

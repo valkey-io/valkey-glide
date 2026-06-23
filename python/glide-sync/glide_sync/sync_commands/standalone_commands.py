@@ -12,6 +12,13 @@ from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
+    MigrateOptions,
+)
+from glide_shared.commands.latency import (
+    LatencyEntry,
+    LatencyEventInfo,
+    _parse_latency_history,
+    _parse_latency_latest,
 )
 from glide_shared.constants import (
     TOK,
@@ -1127,6 +1134,77 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(TOK, self._execute_command(RequestType.ClientUnpause, []))
 
+    def latency_history(self, event: TEncodable) -> List[LatencyEntry]:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+
+        Returns:
+            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty list
+                if the event doesn't exist.
+
+        Examples:
+            >>> history = client.latency_history("command")
+            >>> for entry in history:
+            ...     print(f"Time: {entry.time}, Latency: {entry.latency}")
+        """
+        return _parse_latency_history(
+            cast(
+                List,
+                self._execute_command(RequestType.LatencyHistory, [event]),
+            ),
+        )
+
+    def latency_latest(self) -> List[LatencyEventInfo]:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
+
+        Returns:
+            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
+
+        Examples:
+            >>> latest = client.latency_latest()
+            >>> for info in latest:
+            ...     print(f"Event: {info.event_name}, Latest: {info.latest_duration}")
+        """
+        return _parse_latency_latest(
+            cast(
+                List,
+                self._execute_command(RequestType.LatencyLatest, []),
+            ),
+        )
+
+    def latency_reset(self, *events: TEncodable) -> int:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+
+        Returns:
+            int: The number of event time series that were reset.
+
+        Examples:
+            >>> client.latency_reset()
+                2
+            >>> client.latency_reset("command")
+                1
+        """
+        return cast(
+            int,
+            self._execute_command(RequestType.LatencyReset, list(events)),
+        )
+
     def failover(
         self,
         host: Optional[TEncodable] = None,
@@ -1208,3 +1286,56 @@ class StandaloneCommands(CoreCommands):
                 OK
         """
         return cast(TOK, self._execute_command(RequestType.ReplicaOf, ["NO", "ONE"]))
+
+    def migrate(
+        self,
+        host: str,
+        port: int,
+        keys: Union[TEncodable, List[TEncodable]],
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = None,
+    ) -> str:
+        """
+        Atomically transfers one or more keys from a source Valkey instance to a destination
+        Valkey instance. On success, the key(s) are deleted from the source instance.
+        Pass a list to migrate multiple keys in one command.
+
+        See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        Args:
+            host (str): The host of the destination Valkey instance.
+            port (int): The port of the destination Valkey instance.
+            keys (Union[TEncodable, List[TEncodable]]): The key or list of keys to migrate.
+            destination_db (int): The database index on the destination instance.
+            timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
+            options (Optional[MigrateOptions]): Additional migration options.
+
+        Returns:
+            str: "OK" on success, or "NOKEY" if no keys were found.
+
+        Examples:
+            >>> client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
+            >>> client.migrate("127.0.0.1", 6380, ["key1", "key2"], 0, 5000)
+        """
+        if isinstance(keys, list):
+            if len(keys) == 0:
+                raise ValueError("migrate: 'keys' list must not be empty")
+            args: List[TEncodable] = [
+                host,
+                str(port),
+                "",
+                str(destination_db),
+                str(timeout),
+            ]
+            if options:
+                args.extend(options.to_args())
+            args += ["KEYS"] + list(keys)
+        else:
+            args = [host, str(port), keys, str(destination_db), str(timeout)]
+            if options:
+                args.extend(options.to_args())
+        return cast(
+            str,
+            self._execute_command(RequestType.Migrate, args),
+        )
