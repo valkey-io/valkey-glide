@@ -772,7 +772,7 @@ def wait_for_all_topology_views(
                 break
             else:
                 retries -= 1
-                time.sleep(1)
+                time.sleep(0.1)
                 continue
 
         if retries < 0:
