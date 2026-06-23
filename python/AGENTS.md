@@ -192,6 +192,8 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - **Dual Client Support:** Maintain compatibility between async and sync clients
 - **Shared Logic:** Keep common code in `glide-shared/` package
 - **Async Framework Support:** Test with both asyncio and trio
+- **Use anyio in tests:** Never use `asyncio.sleep`, `asyncio.wait_for`, or `asyncio.Queue` directly in test code. Use `anyio.sleep`, `anyio.fail_after`, and the `wait_for()` helper from `tests/utils/utils.py` instead. Tests run under both asyncio and trio via pytest-anyio.
+- **Prefer polling over sleeps:** Use `await wait_for(condition, message, timeout)` instead of fixed `await anyio.sleep(N)` delays. The condition should be an async callable returning bool. The timeout should be a reasonable small seconds.
 - **Protobuf Updates:** Run `python3 dev.py protobuf` after proto changes
 - **Documentation Style:** Follow Google Style Python Docstrings format
 
