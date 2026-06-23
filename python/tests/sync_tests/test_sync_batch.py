@@ -33,8 +33,6 @@ from glide_shared.commands.core_options import (
     InfoSection,
     MigrateOptions,
 )
-from glide_shared.commands.latency import LatencyEntry, LatencyEventInfo
-from glide_shared.commands.memory import MemoryStats
 from glide_shared.commands.stream import StreamAddOptions
 from glide_shared.config import NodeAddress, ProtocolVersion
 from glide_shared.constants import OK, TResult, TSingleNodeRoute
@@ -43,14 +41,12 @@ from glide_sync.glide_client import GlideClient, GlideClusterClient, TGlideClien
 
 from tests.sync_tests.conftest import create_sync_client
 from tests.utils.utils import (
-    assert_memory_stats_fields,
     batch_test,
     convert_bytes_to_string_object,
     generate_lua_lib_code,
     get_random_string,
     sync_check_if_server_version_lt,
     sync_get_version,
-    trigger_latency_spike_sync,
 )
 
 
@@ -1353,80 +1349,3 @@ class TestSyncBatch:
         result = exec_batch(glide_sync_client, batch, raise_on_error=True)
         assert result is not None
         assert result[0] == b"RESET"
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
-    def test_transaction_latency(
-        self, glide_sync_client: TGlideClient, cluster_mode: bool, is_atomic: bool
-    ):
-        trigger_latency_spike_sync(glide_sync_client)
-
-        transaction = (
-            Batch(is_atomic=is_atomic)
-            if isinstance(glide_sync_client, GlideClient)
-            else ClusterBatch(is_atomic=is_atomic)
-        )
-
-        transaction.latency_history("command")
-        transaction.latency_latest()
-        transaction.latency_reset()
-
-        # Route to a single node for cluster.
-        route = (
-            SlotKeyRoute(SlotType.PRIMARY, "latency_key")
-            if isinstance(glide_sync_client, GlideClusterClient)
-            else None
-        )
-        response = exec_batch(glide_sync_client, transaction, route=route)
-        assert isinstance(response, list)
-        assert len(response) == 3
-
-        # LATENCY HISTORY
-        latency_entries = response[0]
-        assert isinstance(latency_entries, list)
-        assert len(latency_entries) > 0
-        assert all(isinstance(e, LatencyEntry) for e in latency_entries)
-
-        # LATENCY LATEST
-        latency_event_infos = response[1]
-        assert isinstance(latency_event_infos, list)
-        assert len(latency_event_infos) > 0
-        assert all(isinstance(e, LatencyEventInfo) for e in latency_event_infos)
-
-        # LATENCY RESET
-        assert isinstance(response[2], int)
-        assert response[2] > 0
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("is_atomic", [True, False])
-    def test_memory_batch(self, glide_sync_client: TGlideClient, is_atomic: bool):
-        # Write a key and route to its node to ensure db entry exists
-        key = get_random_string(10)
-        glide_sync_client.set(key, "value")
-
-        batch = (
-            Batch(is_atomic=is_atomic)
-            if isinstance(glide_sync_client, GlideClient)
-            else ClusterBatch(is_atomic=is_atomic)
-        )
-        batch.memory_doctor()
-        batch.memory_malloc_stats()
-        batch.memory_purge()
-        batch.memory_stats()
-
-        # Route to a single node for cluster.
-        route = (
-            SlotKeyRoute(SlotType.PRIMARY, key)
-            if isinstance(glide_sync_client, GlideClusterClient)
-            else None
-        )
-        result = exec_batch(glide_sync_client, batch, route=route)
-        assert result is not None
-        assert len(result) == 4
-        assert isinstance(result[0], str) and len(result[0]) > 0
-        assert isinstance(result[1], str) and len(result[1]) > 0
-        assert result[2] == OK
-        assert isinstance(result[3], MemoryStats)
-        assert_memory_stats_fields(result[3], sync_get_version(glide_sync_client))

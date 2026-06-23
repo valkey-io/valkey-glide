@@ -2,7 +2,7 @@
 
 import sys
 import threading
-from typing import Any, Callable, List, Mapping, Optional, Tuple, TypeVar, Union
+from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
 from glide_shared.commands.bitmap import (
     BitFieldGet,
@@ -27,8 +27,6 @@ from glide_shared.commands.core_options import (
     UpdateOptions,
     _build_sort_args,
 )
-from glide_shared.commands.latency import _parse_latency_history, _parse_latency_latest
-from glide_shared.commands.memory import _parse_memory_stats
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -70,27 +68,6 @@ else:
 TBatch = TypeVar("TBatch", bound="BaseBatch")
 
 
-def _apply_batch_converters(
-    result: Optional[List[Any]],
-    converters: List[Optional[Callable[[Any], Any]]],
-) -> Optional[List[Any]]:
-    """Apply per-command converters to batch results.
-
-    Args:
-        result: The raw result list from batch execution, or None.
-        converters: A parallel list of converter functions (None for commands that need no conversion).
-
-    Returns:
-        The result list with converters applied in-place, or None.
-    """
-    if result is None:
-        return result
-    for idx, converter in enumerate(converters):
-        if converter is not None and idx < len(result) and result[idx] is not None:
-            result[idx] = converter(result[idx])
-    return result
-
-
 class BaseBatch:
     """
     Base class encompassing shared commands for both standalone and cluster server installations.
@@ -119,7 +96,6 @@ class BaseBatch:
                 If `False`, the batch will be executed as a non-atomic pipeline.
         """
         self.commands: List[Tuple[int, List[TEncodable]]] = []
-        self.converters: List[Optional[Callable[[Any], Any]]] = []
         self.lock = threading.Lock()
         self.is_atomic = is_atomic
 
@@ -127,12 +103,10 @@ class BaseBatch:
         self: TBatch,
         request_type: int,
         args: List[TEncodable],
-        converter: Optional[Callable[[Any], Any]] = None,
     ) -> TBatch:
         self.lock.acquire()
         try:
             self.commands.append((request_type, args))
-            self.converters.append(converter)
         finally:
             self.lock.release()
         return self
@@ -140,7 +114,6 @@ class BaseBatch:
     def clear(self):
         with self.lock:
             self.commands.clear()
-            self.converters.clear()
 
     def get(self: TBatch, key: TEncodable) -> TBatch:
         """
@@ -2472,107 +2445,6 @@ class BaseBatch:
             int: The Unix time of the last successful DB save.
         """
         return self.append_command(RequestType.LastSave, [])
-
-    def latency_history(self: TBatch, event: TEncodable) -> TBatch:
-        """
-        Returns the latency spike time series for the specified event.
-
-        See [valkey.io](https://valkey.io/commands/latency-history/) for more details.
-
-        Args:
-            event (TEncodable): The name of the latency event (e.g., ``"command"``).
-
-        Command response:
-            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty
-                list if the event doesn't exist.
-        """
-        return self.append_command(
-            RequestType.LatencyHistory, [event], converter=_parse_latency_history
-        )
-
-    def latency_latest(self: TBatch) -> TBatch:
-        """
-        Reports the latest latency events logged by the server.
-
-        See [valkey.io](https://valkey.io/commands/latency-latest/) for more details.
-
-        Command response:
-            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
-        """
-        return self.append_command(
-            RequestType.LatencyLatest, [], converter=_parse_latency_latest
-        )
-
-    def latency_reset(self: TBatch, *events: TEncodable) -> TBatch:
-        """
-        Resets the latency spike time series for all or specified events.
-        If no events are provided, resets the latency spike time series for all events.
-
-        See [valkey.io](https://valkey.io/commands/latency-reset/) for more details.
-
-        Args:
-            *events (TEncodable): The event names to reset. If none provided, resets
-                all events.
-
-        Command response:
-            int: The number of event time series that were reset.
-        """
-        return self.append_command(RequestType.LatencyReset, list(events))
-
-    def memory_doctor(self: TBatch) -> TBatch:
-        """
-        Returns a report about memory problems detected by the server.
-
-        See [valkey.io](https://valkey.io/commands/memory-doctor/) for details.
-
-        Command response:
-            str: The memory diagnostic report.
-        """
-        return self.append_command(
-            RequestType.MemoryDoctor,
-            [],
-            converter=lambda r: r.decode() if isinstance(r, bytes) else r,
-        )
-
-    def memory_malloc_stats(self: TBatch) -> TBatch:
-        """
-        Returns the internal statistics of the memory allocator.
-
-        See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
-
-        Command response:
-            str: The memory allocator statistics.
-        """
-        return self.append_command(
-            RequestType.MemoryMallocStats,
-            [],
-            converter=lambda r: r.decode() if isinstance(r, bytes) else r,
-        )
-
-    def memory_purge(self: TBatch) -> TBatch:
-        """
-        Asks the server to reclaim memory from the allocator back to the operating system.
-
-        See [valkey.io](https://valkey.io/commands/memory-purge/) for details.
-
-        Command response:
-            TOK: A simple ``"OK"`` response.
-        """
-        return self.append_command(RequestType.MemoryPurge, [])
-
-    def memory_stats(self: TBatch) -> TBatch:
-        """
-        Returns detailed memory consumption statistics of the server.
-
-        See [valkey.io](https://valkey.io/commands/memory-stats/) for details.
-
-        Command response:
-            MemoryStats: A ``MemoryStats`` object containing detailed memory usage
-                statistics.
-        """
-        return self.append_command(
-            RequestType.MemoryStats, [], converter=_parse_memory_stats
-        )
 
     def type(self: TBatch, key: TEncodable) -> TBatch:
         """
