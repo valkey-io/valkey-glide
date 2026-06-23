@@ -1608,6 +1608,9 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeClient(
 
         // DashMap operations are sync and lock-free
         if let Some((_, client)) = handle_table.remove(&handle_id) {
+            // Unregister from the scope client registry
+            glide_core::scope::unregister_client(handle_id);
+
             // Schedule async cleanup
             let runtime = get_runtime();
             runtime.spawn(async move {

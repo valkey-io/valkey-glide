@@ -34,7 +34,6 @@
 
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
-use redis::aio::MultiplexedConnection;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -485,14 +484,20 @@ impl ScopePool {
                     self.idle.push_back(idle_conn);
                 } else {
                     // Dirty state — spawn async cleanup (UNSUBSCRIBE, DISCARD, etc.)
+                    // After successful cleanup, return the connection to the idle pool.
                     let conn_arc = entry.connection.clone();
                     let request_timeout = self.config.request_timeout;
-                    self.total_count.fetch_sub(1, Ordering::AcqRel);
+
+                    // We need the pool Arc to re-insert after cleanup.
+                    // The caller must provide it via the scope pool registry.
+                    let client_id = self.parent_client_id;
+                    let pools = get_client_scope_pools();
+                    let pool_arc = pools.get(&client_id).map(|p| p.value().clone());
 
                     tokio::spawn(async move {
                         let mut guard = conn_arc.lock().await;
                         let timeout = request_timeout * 2;
-                        let _ = tokio::time::timeout(timeout, async {
+                        let cleanup_result = tokio::time::timeout(timeout, async {
                             if guard.state.has_subscriptions() {
                                 let mut channels = Vec::new();
                                 let mut patterns = Vec::new();
@@ -539,6 +544,40 @@ impl ScopePool {
                                     &redis::Cmd::new().arg("SELECT").arg("0")).await;
                             }
                         }).await;
+
+                        // If cleanup succeeded and we have a pool reference, return to idle.
+                        if cleanup_result.is_ok() {
+                            if let Some(pool_arc) = pool_arc {
+                                let idle_conn = ScopedConnection {
+                                    scope_id: guard.scope_id,
+                                    connection: guard.connection.clone(),
+                                    created_at: guard.created_at,
+                                    last_idle_at: Instant::now(),
+                                    borrowed_at: None,
+                                    state: ConnectionState::default(),
+                                    pinned_slot: None,
+                                };
+                                drop(guard);
+
+                                let mut pool = pool_arc.lock().await;
+                                if pool.state.load(Ordering::Acquire) == POOL_RUNNING {
+                                    pool.idle.push_back(idle_conn);
+                                    // total_count was never decremented — connection is back in pool
+                                } else {
+                                    pool.total_count.fetch_sub(1, Ordering::AcqRel);
+                                }
+                            } else {
+                                // No pool reference — discard connection
+                                drop(guard);
+                            }
+                        } else {
+                            // Cleanup timed out — discard the connection
+                            drop(guard);
+                            if let Some(pool_arc) = pool_arc {
+                                let pool = pool_arc.lock().await;
+                                pool.total_count.fetch_sub(1, Ordering::AcqRel);
+                            }
+                        }
                     });
                 }
                 true

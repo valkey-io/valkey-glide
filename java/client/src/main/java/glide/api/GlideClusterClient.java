@@ -228,6 +228,51 @@ public class GlideClusterClient extends BaseClient
         return BaseClient.createClient(config, GlideClusterClient::new);
     }
 
+    /**
+     * Acquire an isolated scope (dedicated connection) for operations requiring
+     * per-connection server state (WATCH/MULTI/EXEC, CLIENT TRACKING, blocking commands).
+     *
+     * <p>In cluster mode, the scope connection is opened to the primary node for the
+     * relevant slot. The scope is pinned to a single slot after the first keyed command.
+     *
+     * @param timeout maximum time to wait for a scope to become available
+     * @return a Future resolving to an {@link glide.api.models.scope.IsolatedScope}
+     */
+    public CompletableFuture<glide.api.models.scope.IsolatedScope> scopedConnection(
+            @NonNull java.time.Duration timeout) {
+        long clientId = connectionManager.getNativeClientHandle();
+        byte[] connBytes = connectionManager.getConnectionRequestBytes();
+        if (connBytes == null) {
+            CompletableFuture<glide.api.models.scope.IsolatedScope> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException("Client not connected"));
+            return f;
+        }
+
+        long timeoutMs = timeout.toMillis();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
+        return CompletableFuture.supplyAsync(() -> {
+            while (true) {
+                long scopeId = glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(clientId, connBytes);
+                if (scopeId >= 0) {
+                    return new glide.api.models.scope.IsolatedScope(scopeId, clientId);
+                }
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) {
+                    throw new java.util.concurrent.CompletionException(
+                            new java.util.concurrent.TimeoutException(
+                                    "Timed out waiting for isolated scope (pool exhausted)"));
+                }
+                try {
+                    Thread.sleep(Math.min(10, remaining));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new java.util.concurrent.CompletionException(e);
+                }
+            }
+        });
+    }
+
     @Override
     public CompletableFuture<ClusterValue<Object>> customCommand(@NonNull String[] args) {
         // TODO if a command returns a map as a single value, ClusterValue misleads user

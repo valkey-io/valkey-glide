@@ -60,6 +60,11 @@ public class IsolatedScope implements AutoCloseable {
     public CompletableFuture<String> ping() { return cmd("PING"); }
     public CompletableFuture<String> select(int db) { return cmd("SELECT", String.valueOf(db)); }
 
+    /** Execute an arbitrary command on this scope. */
+    public CompletableFuture<String> executeCommand(String command, String... args) {
+        return cmd(command, args);
+    }
+
     public CompletableFuture<String> cmd(String command, String... args) {
         if (released.get()) {
             CompletableFuture<String> f = new CompletableFuture<>();

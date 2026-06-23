@@ -208,6 +208,9 @@ pub async fn ensure_client_for_handle(handle_id: u64) -> Result<GlideClient> {
         let client = create_glide_client(cfg, Some(tx)).await?;
         table.insert(handle_id, client.clone());
 
+        // Register in the glide-core scope registry for scope command execution
+        glide_core::scope::register_client(handle_id, client.clone());
+
         // Always spawn push notification handler
         let jvm_arc = JVM.get().cloned();
         let handle_for_java = handle_id as jlong;

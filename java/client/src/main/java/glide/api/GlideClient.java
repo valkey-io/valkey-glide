@@ -59,6 +59,7 @@ import glide.api.commands.TransactionsCommands;
 import glide.api.models.Batch;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
+import glide.api.models.scope.IsolatedScope;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
@@ -190,6 +191,52 @@ public class GlideClient extends BaseClient
     public static CompletableFuture<GlideClient> createClient(
             @NonNull GlideClientConfiguration config) {
         return BaseClient.createClient(config, GlideClient::new);
+    }
+
+    /**
+     * Acquire an isolated scope (dedicated connection) for operations requiring
+     * per-connection server state (WATCH/MULTI/EXEC, CLIENT TRACKING, blocking commands).
+     *
+     * <p>The returned {@link IsolatedScope} borrows a connection from the client's internal
+     * scope pool. Commands on the scope bypass the multiplexer. Use try-with-resources
+     * to ensure the scope is returned to the pool.
+     *
+     * @param timeout maximum time to wait for a scope to become available
+     * @return a Future resolving to an {@link IsolatedScope}
+     */
+    public CompletableFuture<IsolatedScope> scopedConnection(@NonNull java.time.Duration timeout) {
+        long clientId = connectionManager.getNativeClientHandle();
+        byte[] connBytes = connectionManager.getConnectionRequestBytes();
+        if (connBytes == null) {
+            CompletableFuture<IsolatedScope> f = new CompletableFuture<>();
+            f.completeExceptionally(new IllegalStateException("Client not connected"));
+            return f;
+        }
+
+        long timeoutMs = timeout.toMillis();
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
+        return CompletableFuture.supplyAsync(() -> {
+            while (true) {
+                long scopeId = glide.ffi.resolvers.GlideScopeResolver.glideScopeTryAcquire(clientId, connBytes);
+                if (scopeId >= 0) {
+                    return new IsolatedScope(scopeId, clientId);
+                }
+                // Pool exhausted — retry with backoff until deadline
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) {
+                    throw new java.util.concurrent.CompletionException(
+                            new java.util.concurrent.TimeoutException(
+                                    "Timed out waiting for isolated scope (pool exhausted)"));
+                }
+                try {
+                    Thread.sleep(Math.min(10, remaining));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new java.util.concurrent.CompletionException(e);
+                }
+            }
+        });
     }
 
     @Override

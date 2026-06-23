@@ -3,6 +3,7 @@ package glide.pool;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import glide.TestConfiguration;
 import glide.api.models.configuration.GlideClientConfiguration;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.pool.ClientPool;
@@ -14,20 +15,21 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Integration tests for Feature 1: Client-Instance Pooling.
- * Requires a Valkey server on localhost:6379.
+ * Requires a Valkey server (uses test infrastructure endpoints).
  */
 public class ClientPoolIntegrationTest {
 
-    private static final String HOST = "localhost";
-    private static final int PORT = 6379;
-
     private ClientPoolConfig poolConfig() {
+        String hostPort = TestConfiguration.STANDALONE_HOSTS[0];
+        String[] parts = hostPort.split(":");
+        String host = parts[0];
+        int port = Integer.parseInt(parts[1]);
         return ClientPoolConfig.builder()
                 .maxSize(3)
                 .minIdle(1)
                 .acquireTimeout(Duration.ofSeconds(10))
                 .clientConfig(GlideClientConfiguration.builder()
-                        .address(NodeAddress.builder().host(HOST).port(PORT).build())
+                        .address(NodeAddress.builder().host(host).port(port).build())
                         .requestTimeout(5000)
                         .build())
                 .build();
