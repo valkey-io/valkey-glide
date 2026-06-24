@@ -24,6 +24,7 @@ import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.TestUtilities.waitForSaveNotInProgress;
 import static glide.api.BaseClient.OK;
@@ -2235,6 +2236,13 @@ public class CommandTests {
                 .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
+        // Poll until the function is actually available on the replica
+        waitFor(
+                () ->
+                        clusterClient.functionList(libName, false, replicaRoute).get().getSingleValue().length
+                                > 0,
+                "Function not propagated to replica");
+
         // fcall on a replica should fail with a readonly error, because the function
         // is not flagged as read-only
         ExecutionException fcallReplicaException =
@@ -2274,6 +2282,18 @@ public class CommandTests {
                 .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
 
+        // Poll until the RO function is available on the replica
+        waitFor(
+                () -> {
+                    try {
+                        clusterClient.fcallReadOnly(funcNameRO, replicaRoute).get();
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                },
+                "RO function not propagated to replica");
+
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(funcNameRO, replicaRoute).get().getSingleValue());
 
@@ -2310,6 +2330,13 @@ public class CommandTests {
         clusterClient
                 .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
+
+        // Poll until the function is actually available on the replica
+        waitFor(
+                () ->
+                        clusterClient.functionList(libName, false, replicaRoute).get().getSingleValue().length
+                                > 0,
+                "Function not propagated to replica");
 
         // fcall on a replica should fail with a readonly error, because the function
         // is not flagged as read-only
@@ -2349,6 +2376,18 @@ public class CommandTests {
         clusterClient
                 .customCommand(new String[] {"WAIT", String.valueOf(replicaCount), "5000"}, primaryRoute)
                 .get();
+
+        // Poll until the RO function is available on the replica
+        waitFor(
+                () -> {
+                    try {
+                        clusterClient.fcallReadOnly(gs(funcNameRO), replicaRoute).get();
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                },
+                "RO function not propagated to replica");
 
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(gs(funcNameRO), replicaRoute).get().getSingleValue());
