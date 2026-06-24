@@ -10447,12 +10447,13 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_memory_stats_cluster(self, glide_client: TGlideClient):
+        version = await get_version(glide_client)
         result = await glide_client.memory_stats()
         assert isinstance(result, dict)
 
         for stats in result.values():
             assert isinstance(stats, MemoryStats)
-            assert_memory_stats_fields(stats, await get_version(glide_client))
+            assert_memory_stats_fields(stats, version)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
