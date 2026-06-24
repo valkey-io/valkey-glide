@@ -4,8 +4,6 @@ package glide.api.commands;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
@@ -622,32 +620,34 @@ public interface ServerManagementCommands {
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., "command").
-     * @return An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't
-     *     exist.
+     * @return An array of arrays, where each inner array is {@code [Long time, Long latency]}
+     *     representing a latency spike entry. Returns an empty array if the event doesn't exist.
      * @example
      *     <pre>{@code
-     * LatencyEntry[] history = client.latencyHistory("command").get();
-     * for (LatencyEntry entry : history) {
-     *     System.out.println("Time: " + entry.getTime() + ", Latency: " + entry.getLatency());
+     * Object[][] history = client.latencyHistory("command").get();
+     * for (Object[] entry : history) {
+     *     System.out.println("Time: " + entry[0] + ", Latency: " + entry[1]);
      * }
      * }</pre>
      */
-    CompletableFuture<LatencyEntry[]> latencyHistory(@NonNull String event);
+    CompletableFuture<Object[][]> latencyHistory(@NonNull String event);
 
     /**
      * Reports the latest latency events logged by the server.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return An array of {@link LatencyEventInfo} for the latest latency events.
+     * @return An array of arrays, where each inner array is {@code [String eventName, Long
+     *     latestTime, Long latestDuration, Long maxDuration]} (with optional additional {@code Long
+     *     sum} and {@code Long count} elements for Valkey 8.1+).
      * @example
      *     <pre>{@code
-     * LatencyEventInfo[] latest = client.latencyLatest().get();
-     * for (LatencyEventInfo info : latest) {
-     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatestDuration());
+     * Object[][] latest = client.latencyLatest().get();
+     * for (Object[] info : latest) {
+     *     System.out.println("Event: " + info[0] + ", Latest duration: " + info[2]);
      * }
      * }</pre>
      */
-    CompletableFuture<LatencyEventInfo[]> latencyLatest();
+    CompletableFuture<Object[][]> latencyLatest();
 
     /**
      * Resets the latency spike time series for all events.

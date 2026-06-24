@@ -72,8 +72,6 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.ScriptOptions;
@@ -952,36 +950,36 @@ public class CommandTests {
         triggerLatencySpike(clusterClient);
 
         // Multi-node route (default).
-        ClusterValue<LatencyEntry[]> multiCommand = clusterClient.latencyHistory("command").get();
+        ClusterValue<Object[][]> multiCommand = clusterClient.latencyHistory("command").get();
         assertTrue(multiCommand.hasMultiData());
 
-        for (LatencyEntry[] multiCommandEntries : multiCommand.getMultiValue().values()) {
+        for (Object[][] multiCommandEntries : multiCommand.getMultiValue().values()) {
             assertTrue(multiCommandEntries.length > 0);
 
-            for (LatencyEntry entry : multiCommandEntries) {
-                assertTrue(entry.getTime() >= beforeSpike);
-                assertTrue(entry.getLatency() > 0);
+            for (Object[] entry : multiCommandEntries) {
+                assertTrue((Long) entry[0] >= beforeSpike);
+                assertTrue((Long) entry[1] > 0);
             }
         }
 
         // Single-node route (primary)
-        ClusterValue<LatencyEntry[]> single =
+        ClusterValue<Object[][]> single =
                 clusterClient.latencyHistory("command", PRIMARY_SLOT_ROUTE).get();
         assertTrue(single.hasSingleData());
 
-        LatencyEntry[] entries = single.getSingleValue();
+        Object[][] entries = single.getSingleValue();
         assertTrue(entries.length > 0);
 
-        for (LatencyEntry entry : entries) {
-            assertTrue(entry.getTime() >= beforeSpike);
-            assertTrue(entry.getLatency() > 0);
+        for (Object[] entry : entries) {
+            assertTrue((Long) entry[0] >= beforeSpike);
+            assertTrue((Long) entry[1] > 0);
         }
 
         // Non-existent event.
-        ClusterValue<LatencyEntry[]> multiUnknown = clusterClient.latencyHistory("nonexistent").get();
+        ClusterValue<Object[][]> multiUnknown = clusterClient.latencyHistory("nonexistent").get();
         assertTrue(multiUnknown.hasMultiData());
 
-        for (LatencyEntry[] multiUnknownEntries : multiUnknown.getMultiValue().values()) {
+        for (Object[][] multiUnknownEntries : multiUnknown.getMultiValue().values()) {
             assertEquals(0, multiUnknownEntries.length);
         }
     }
@@ -993,31 +991,31 @@ public class CommandTests {
         long beforeSpike = getUnixSeconds(clusterClient);
         triggerLatencySpike(clusterClient);
 
-        ClusterValue<LatencyEventInfo[]> result = clusterClient.latencyLatest().get();
+        ClusterValue<Object[][]> result = clusterClient.latencyLatest().get();
         assertTrue(result.hasMultiData());
 
         // Find the "command" event on any node
-        LatencyEventInfo commandInfo =
+        Object[] commandInfo =
                 flattenLatencyEventInfos(result).stream()
-                        .filter(info -> "command".equals(info.getEventName()))
+                        .filter(info -> "command".equals(info[0]))
                         .findFirst()
                         .orElse(null);
         assertNotNull(commandInfo);
 
-        assertTrue(commandInfo.getLatestTime() >= beforeSpike);
-        assertTrue(commandInfo.getLatestDuration() > 0);
-        assertTrue(commandInfo.getMaxDuration() >= commandInfo.getLatestDuration());
+        assertTrue((Long) commandInfo[1] >= beforeSpike);
+        assertTrue((Long) commandInfo[2] > 0);
+        assertTrue((Long) commandInfo[3] >= (Long) commandInfo[2]);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
-            assertTrue(commandInfo.getSum().get() > 0);
-            assertTrue(commandInfo.getCount().get() > 0);
+            assertTrue(commandInfo.length > 4);
+            assertTrue((Long) commandInfo[4] > 0);
+            assertTrue((Long) commandInfo[5] > 0);
         } else {
-            assertFalse(commandInfo.getSum().isPresent());
-            assertFalse(commandInfo.getCount().isPresent());
+            assertEquals(4, commandInfo.length);
         }
 
         // Single-node route (primary)
-        ClusterValue<LatencyEventInfo[]> single = clusterClient.latencyLatest(PRIMARY_SLOT_ROUTE).get();
+        ClusterValue<Object[][]> single = clusterClient.latencyLatest(PRIMARY_SLOT_ROUTE).get();
         assertTrue(single.hasSingleData());
         assertTrue(single.getSingleValue().length >= 1);
     }
@@ -1043,8 +1041,8 @@ public class CommandTests {
         assertFalse(flattenLatencyEntries(clusterClient.latencyHistory("command").get()).isEmpty());
     }
 
-    /** Flattens a ClusterValue of LatencyEntry arrays. */
-    private static List<LatencyEntry> flattenLatencyEntries(ClusterValue<LatencyEntry[]> val) {
+    /** Flattens a ClusterValue of Object[][] arrays (latency history entries). */
+    private static List<Object[]> flattenLatencyEntries(ClusterValue<Object[][]> val) {
         if (val.hasSingleData()) {
             return Arrays.asList(val.getSingleValue());
         }
@@ -1053,9 +1051,9 @@ public class CommandTests {
                 .collect(Collectors.toList());
     }
 
-    /** Flattens a ClusterValue of LatencyEventInfo arrays. */
-    private static List<LatencyEventInfo> flattenLatencyEventInfos(
-            ClusterValue<LatencyEventInfo[]> val) {
+    /** Flattens a ClusterValue of Object[][] arrays (latency event infos). */
+    private static List<Object[]> flattenLatencyEventInfos(
+            ClusterValue<Object[][]> val) {
         if (val.hasSingleData()) {
             return Arrays.asList(val.getSingleValue());
         }

@@ -320,8 +320,6 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
@@ -16550,18 +16548,18 @@ public class GlideClientTest {
     @Test
     public void latencyHistory_returns_success() {
         // setup
-        LatencyEntry[] value = new LatencyEntry[] {new LatencyEntry(1709062230L, 50L)};
-        CompletableFuture<LatencyEntry[]> testResponse = new CompletableFuture<>();
+        Object[][] value = new Object[][] {new Object[] {1709062230L, 50L}};
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<LatencyEntry[]>submitNewCommand(
+        when(commandManager.<Object[][]>submitNewCommand(
                         eq(LatencyHistory), eq(new String[] {"command"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<LatencyEntry[]> response = service.latencyHistory("command");
-        LatencyEntry[] payload = response.get();
+        CompletableFuture<Object[][]> response = service.latencyHistory("command");
+        Object[][] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -16572,22 +16570,19 @@ public class GlideClientTest {
     @Test
     public void latencyLatest_returns_success() {
         // setup
-        LatencyEventInfo[] value =
-                new LatencyEventInfo[] {
-                    new LatencyEventInfo(
-                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
-                };
-        CompletableFuture<LatencyEventInfo[]> testResponse = new CompletableFuture<>();
+        Object[][] value =
+                new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<LatencyEventInfo[]>submitNewCommand(
+        when(commandManager.<Object[][]>submitNewCommand(
                         eq(LatencyLatest), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<LatencyEventInfo[]> response = service.latencyLatest();
-        LatencyEventInfo[] payload = response.get();
+        CompletableFuture<Object[][]> response = service.latencyLatest();
+        Object[][] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

@@ -99,8 +99,6 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.ScriptOptions;
@@ -2836,21 +2834,20 @@ public class GlideClusterClientTest {
         // setup
         String event = "command";
         String[] args = new String[] {event};
-        LatencyEntry[] entries =
-                new LatencyEntry[] {new LatencyEntry(1709062230L, 50L), new LatencyEntry(1709062231L, 42L)};
-        ClusterValue<LatencyEntry[]> value =
+        Object[][] entries = new Object[][] {new Object[] {1709062230L, 50L}, new Object[] {1709062231L, 42L}};
+        ClusterValue<Object[][]> value =
                 ClusterValue.ofMultiValue(createMap("node1:6379", entries));
-        CompletableFuture<ClusterValue<LatencyEntry[]>> testResponse = new CompletableFuture<>();
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEntry[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyHistory), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEntry[]>> response = service.latencyHistory(event);
-        ClusterValue<LatencyEntry[]> payload = response.get();
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyHistory(event);
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2863,20 +2860,20 @@ public class GlideClusterClientTest {
         // setup
         String event = "command";
         String[] args = new String[] {event};
-        LatencyEntry[] entries = new LatencyEntry[] {new LatencyEntry(1709062230L, 50L)};
-        ClusterValue<LatencyEntry[]> value = ClusterValue.ofSingleValue(entries);
-        CompletableFuture<ClusterValue<LatencyEntry[]>> testResponse = new CompletableFuture<>();
+        Object[][] entries = new Object[][] {new Object[] {1709062230L, 50L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofSingleValue(entries);
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEntry[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyHistory), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEntry[]>> response =
+        CompletableFuture<ClusterValue<Object[][]>> response =
                 service.latencyHistory(event, RANDOM);
-        ClusterValue<LatencyEntry[]> payload = response.get();
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2888,24 +2885,20 @@ public class GlideClusterClientTest {
     public void latencyLatest_returns_success() {
         // setup
         String[] args = new String[0];
-        LatencyEventInfo[] infos =
-                new LatencyEventInfo[] {
-                    new LatencyEventInfo(
-                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
-                };
-        ClusterValue<LatencyEventInfo[]> value =
+        Object[][] infos = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        ClusterValue<Object[][]> value =
                 ClusterValue.ofMultiValue(createMap("node1:6379", infos));
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> testResponse = new CompletableFuture<>();
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEventInfo[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyLatest), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> response = service.latencyLatest();
-        ClusterValue<LatencyEventInfo[]> payload = response.get();
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyLatest();
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2917,23 +2910,19 @@ public class GlideClusterClientTest {
     public void latencyLatest_with_route_returns_success() {
         // setup
         String[] args = new String[0];
-        LatencyEventInfo[] infos =
-                new LatencyEventInfo[] {
-                    new LatencyEventInfo(
-                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
-                };
-        ClusterValue<LatencyEventInfo[]> value = ClusterValue.ofSingleValue(infos);
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> testResponse = new CompletableFuture<>();
+        Object[][] infos = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofSingleValue(infos);
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEventInfo[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyLatest), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> response = service.latencyLatest(RANDOM);
-        ClusterValue<LatencyEventInfo[]> payload = response.get();
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyLatest(RANDOM);
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

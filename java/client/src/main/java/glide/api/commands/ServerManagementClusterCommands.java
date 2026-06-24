@@ -5,8 +5,6 @@ import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -1086,16 +1084,17 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., "command").
-     * @return A cluster value containing array(s) of {@link LatencyEntry} for the event.
+     * @return A cluster value containing array(s) of {@code [Long time, Long latency]} arrays
+     * representing a latency spike entry.
      * @example
      *     <pre>{@code
-     * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command").get();
-     * for (Map.Entry<String, LatencyEntry[]> node : history.getMultiValue().entrySet()) {
+     * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command").get();
+     * for (Map.Entry<String, Object[][]> node : history.getMultiValue().entrySet()) {
      *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " entries");
      * }
      * }</pre>
      */
-    CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(@NonNull String event);
+    CompletableFuture<ClusterValue<Object[][]>> latencyHistory(@NonNull String event);
 
     /**
      * Returns the latency spike time series for the specified event.
@@ -1104,16 +1103,17 @@ public interface ServerManagementClusterCommands {
      * @param event The name of the latency event (e.g., "command").
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containing array(s) of {@link LatencyEntry} for the event.
+     * @return A cluster value containing array(s) of arrays, where each inner array is {@code [Long
+     *     time, Long latency]} representing a latency spike entry.
      * @example
      *     <pre>{@code
-     * ClusterValue<LatencyEntry[]> history = clusterClient.latencyHistory("command", RANDOM).get();
-     * for (LatencyEntry entry : history.getSingleValue()) {
-     *     System.out.println("Time: " + entry.getTime() + ", Latency: " + entry.getLatency());
+     * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command", RANDOM).get();
+     * for (Object[] entry : history.getSingleValue()) {
+     *     System.out.println("Time: " + entry[0] + ", Latency: " + entry[1]);
      * }
      * }</pre>
      */
-    CompletableFuture<ClusterValue<LatencyEntry[]>> latencyHistory(
+    CompletableFuture<ClusterValue<Object[][]>> latencyHistory(
             @NonNull String event, @NonNull Route route);
 
     /**
@@ -1121,17 +1121,18 @@ public interface ServerManagementClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
-     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest latency
-     *     events.
+     * @return A cluster value containing array(s) of arrays, where each inner array is {@code
+     *     [String eventName, Long latestTime, Long latestDuration, Long maxDuration]} (with optional
+     *     additional {@code Long sum} and {@code Long count} elements for Valkey 8.1+).
      * @example
      *     <pre>{@code
-     * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest().get();
-     * for (Map.Entry<String, LatencyEventInfo[]> node : latest.getMultiValue().entrySet()) {
+     * ClusterValue<Object[][]> latest = clusterClient.latencyLatest().get();
+     * for (Map.Entry<String, Object[][]> node : latest.getMultiValue().entrySet()) {
      *     System.out.println("Node [" + node.getKey() + "]: " + node.getValue().length + " events");
      * }
      * }</pre>
      */
-    CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest();
+    CompletableFuture<ClusterValue<Object[][]>> latencyLatest();
 
     /**
      * Reports the latest latency events logged by the server.
@@ -1139,17 +1140,18 @@ public interface ServerManagementClusterCommands {
      * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containing array(s) of {@link LatencyEventInfo} for the latest latency
-     *     events.
+     * @return A cluster value containing array(s) of arrays, where each inner array is {@code
+     *     [String eventName, Long latestTime, Long latestDuration, Long maxDuration]} (with optional
+     *     additional {@code Long sum} and {@code Long count} elements for Valkey 8.1+).
      * @example
      *     <pre>{@code
-     * ClusterValue<LatencyEventInfo[]> latest = clusterClient.latencyLatest(RANDOM).get();
-     * for (LatencyEventInfo info : latest.getSingleValue()) {
-     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatestDuration());
+     * ClusterValue<Object[][]> latest = clusterClient.latencyLatest(RANDOM).get();
+     * for (Object[] info : latest.getSingleValue()) {
+     *     System.out.println("Event: " + info[0] + ", Latest duration: " + info[2]);
      * }
      * }</pre>
      */
-    CompletableFuture<ClusterValue<LatencyEventInfo[]>> latencyLatest(@NonNull Route route);
+    CompletableFuture<ClusterValue<Object[][]>> latencyLatest(@NonNull Route route);
 
     /**
      * Resets the latency spike time series for all events.<br>

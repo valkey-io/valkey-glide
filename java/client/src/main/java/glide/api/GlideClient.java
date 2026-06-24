@@ -67,8 +67,6 @@ import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.batch.BatchOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
@@ -438,19 +436,19 @@ public class GlideClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<LatencyEntry[]> latencyHistory(@NonNull String event) {
+    public CompletableFuture<Object[][]> latencyHistory(@NonNull String event) {
         return commandManager.submitNewCommand(
                 LatencyHistory,
                 new String[] {event},
-                response -> handleLatencyHistoryResponse(handleArrayResponse(response)));
+                response -> castArray(handleArrayResponse(response), Object[].class));
     }
 
     @Override
-    public CompletableFuture<LatencyEventInfo[]> latencyLatest() {
+    public CompletableFuture<Object[][]> latencyLatest() {
         return commandManager.submitNewCommand(
                 LatencyLatest,
                 EMPTY_STRING_ARRAY,
-                response -> handleLatencyLatestResponse(handleArrayResponse(response)));
+                response -> castArray(handleArrayResponse(response), Object[].class));
     }
 
     @Override
