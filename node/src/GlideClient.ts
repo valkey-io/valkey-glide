@@ -1582,8 +1582,12 @@ export class GlideClient extends BaseClient {
      * ```
      */
     public async memoryStats(): Promise<MemoryStats> {
-        return this.createWritePromise<Record<string, unknown>>(
+        return this.createWritePromise<GlideRecord<unknown>>(
             createMemoryStats(),
-        ).then((res) => parseMemoryStatsResponse(res));
+        ).then((res) =>
+            parseMemoryStatsResponse(
+                convertGlideRecordToRecord(res) as Record<string, unknown>,
+            ),
+        );
     }
 }
