@@ -38,6 +38,11 @@ TEST_TEARDOWN_MAX_RETRIES = 3
 TEST_TEARDOWN_BASE_DELAY = 1  # seconds
 MAX_BACKOFF_TIME = 8  # seconds
 
+# Client pool keyed by (cluster_mode, protocol) to avoid per-test connection overhead.
+# Clients are reused across tests with the same parameters; the pipe reader is
+# re-registered on the current event loop before each test.
+_client_pool: dict = {}
+
 
 @pytest.fixture(scope="function")
 async def glide_client(
@@ -45,21 +50,35 @@ async def glide_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
-    """Get async socket client for tests"""
-    client = await create_client(
-        request,
-        cluster_mode,
-        protocol=protocol,
-        request_timeout=5000,
-        lazy_connect=False,  # Explicitly false for general test client
-    )
-    try:
-        yield client
-    finally:
-        # Close the client first, then run teardown
-        await client.close()
-        # Run teardown which has its own robust error handling
-        await test_teardown(request, cluster_mode, protocol)
+    """Get async socket client for tests. Reuses connections across tests with
+    the same (cluster_mode, protocol) to eliminate per-test connection overhead."""
+    import asyncio
+
+    cache_key = (cluster_mode, protocol)
+    client = _client_pool.get(cache_key)
+
+    if client is not None and not client._is_closed:
+        # Re-register pipe reader on the current event loop
+        try:
+            client._loop = asyncio.get_running_loop()
+            client._is_asyncio = True
+            client._setup_pipe()
+        except Exception:
+            # If re-registration fails, create a fresh client
+            client = None
+
+    if client is None or client._is_closed:
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=5000,
+            lazy_connect=False,
+        )
+        _client_pool[cache_key] = client
+
+    yield client
+    # Don't close — reused across tests. Session cleanup handles it.
 
 
 @pytest.fixture(scope="function")
