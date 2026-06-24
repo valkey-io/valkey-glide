@@ -1084,7 +1084,8 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
      * @param event The name of the latency event (e.g., "command").
-     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an empty array if the event doesn't exist.
+     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an
+     *     empty array if the event doesn't exist.
      * @example
      *     <pre>{@code
      * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command").get();
@@ -1102,7 +1103,8 @@ public interface ServerManagementClusterCommands {
      * @param event The name of the latency event (e.g., "command").
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an empty array if the event doesn't exist.
+     * @return A cluster value containing array(s) of arrays representing latency spike entries, or an
+     *     empty array if the event doesn't exist.
      * @example
      *     <pre>{@code
      * ClusterValue<Object[][]> history = clusterClient.latencyHistory("command", RANDOM).get();
