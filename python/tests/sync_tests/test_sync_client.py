@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import array
 import math
 import os
 import threading
@@ -564,6 +565,33 @@ class TestCommands:
         n = glide_sync_client.get(key, buffer=memoryview(buf))
         assert n == b"100"
         assert buf[:100] == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_non_byte_format(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Regression: capacity is byte-based, not element-based.
+
+        A memoryview over an ``itemsize > 1`` buffer has ``len()`` (element
+        count) smaller than its ``nbytes`` (byte capacity). The value below is
+        4096 bytes and the buffer is 1024 ``uint32`` elements == 4096 bytes, so
+        it fits exactly. Before the fix, capacity was computed with ``len()``
+        (1024) and the GET was spuriously rejected with "exceeds buffer
+        capacity"; with ``nbytes`` (4096) it succeeds.
+        """
+        key = get_random_string(10)
+        data = os.urandom(4096)
+        assert glide_sync_client.set(key, data) == OK
+
+        arr = array.array("I", [0] * 1024)  # itemsize=4, len()=1024, nbytes=4096
+        buf = memoryview(arr)
+        assert len(buf) < len(data)  # element count under-reports capacity
+        assert buf.nbytes == len(data)
+
+        n = glide_sync_client.get(key, buffer=buf)
+        assert n == b"4096"
+        assert buf.cast("B")[:4096] == data
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
