@@ -1736,7 +1736,7 @@ func (client *ClusterClient) MemoryStats(ctx context.Context) (models.ClusterVal
 	}
 	result := make(map[string]models.MemoryStats, len(data))
 	for nodeAddr, nodeMap := range data {
-		converted, convErr := internal.ConvertMemoryStatsTyped(nodeMap)
+		converted, convErr := internal.ConvertMemoryStats(nodeMap)
 		if convErr != nil {
 			return models.CreateEmptyClusterValue[models.MemoryStats](), convErr
 		}
@@ -1778,7 +1778,7 @@ func (client *ClusterClient) MemoryStatsWithOptions(
 		}
 		result := make(map[string]models.MemoryStats, len(data))
 		for nodeAddr, nodeMap := range data {
-			converted, convErr := internal.ConvertMemoryStatsTyped(nodeMap)
+			converted, convErr := internal.ConvertMemoryStats(nodeMap)
 			if convErr != nil {
 				return models.CreateEmptyClusterValue[models.MemoryStats](), convErr
 			}
@@ -1791,7 +1791,7 @@ func (client *ClusterClient) MemoryStatsWithOptions(
 	if err != nil {
 		return models.CreateEmptyClusterValue[models.MemoryStats](), err
 	}
-	converted, err := internal.ConvertMemoryStatsTyped(rawMap)
+	converted, err := internal.ConvertMemoryStats(rawMap)
 	if err != nil {
 		return models.CreateEmptyClusterValue[models.MemoryStats](), err
 	}
