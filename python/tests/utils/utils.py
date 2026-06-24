@@ -2086,16 +2086,13 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     assert stats.allocator_active > 0
     assert stats.allocator_allocated > 0
     assert stats.allocator_fragmentation_bytes >= 0
-    assert stats.allocator_muzzy >= 0
     assert stats.allocator_resident > 0
     assert isinstance(stats.allocator_rss_bytes, int)
     assert stats.aof_buffer >= 0
     assert stats.clients_normal >= 0
     assert stats.clients_slaves >= 0
-    assert stats.cluster_links >= 0
     assert stats.dataset_bytes >= 0
     assert isinstance(stats.fragmentation_bytes, int)
-    assert stats.functions_caches >= 0
     assert stats.keys_bytes_per_key >= 0
     assert stats.keys_count >= 0
     assert stats.lua_caches >= 0
@@ -2113,6 +2110,16 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     assert stats.fragmentation >= 0
     assert stats.peak_percentage >= 0
     assert stats.rss_overhead_ratio >= 0
+
+    # Optional Valkey 7.0+ fields
+    if server_version >= "7.0.0":
+        assert stats.allocator_muzzy is not None and stats.allocator_muzzy >= 0
+        assert stats.cluster_links is not None and stats.cluster_links >= 0
+        assert stats.functions_caches is not None and stats.functions_caches >= 0
+    else:
+        assert stats.allocator_muzzy is None
+        assert stats.cluster_links is None
+        assert stats.functions_caches is None
 
     # Optional Valkey 8.0+ fields
     if server_version >= "8.0.0":

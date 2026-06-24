@@ -25,7 +25,6 @@ class MemoryStats:
     allocator_active: int = 0
     allocator_allocated: int = 0
     allocator_fragmentation_bytes: int = 0
-    allocator_muzzy: int = 0
     allocator_resident: int = 0
     allocator_rss_bytes: int = 0
     aof_buffer: int = 0
@@ -51,6 +50,7 @@ class MemoryStats:
     rss_overhead_ratio: float = 0.0
 
     # Optional Valkey 7.0+ fields
+    allocator_muzzy: Optional[int] = None
     cluster_links: Optional[int] = None
     functions_caches: Optional[int] = None
 
@@ -88,7 +88,6 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
         allocator_active=int(response[b"allocator.active"]),
         allocator_allocated=int(response[b"allocator.allocated"]),
         allocator_fragmentation_bytes=int(response[b"allocator-fragmentation.bytes"]),
-        allocator_muzzy=int(response[b"allocator.muzzy"]),
         allocator_resident=int(response[b"allocator.resident"]),
         allocator_rss_bytes=int(response[b"allocator-rss.bytes"]),
         aof_buffer=int(response[b"aof.buffer"]),
@@ -112,13 +111,12 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
         peak_percentage=float(response[b"peak.percentage"]),
         rss_overhead_ratio=float(response[b"rss-overhead.ratio"]),
         # Optional Valkey 7.0+ fields
-        cluster_links=(
-            int(response[b"cluster.links"]) if b"cluster.links" in response else None
+        allocator_muzzy=(
+            int(response[b"allocator.muzzy"]) if b"allocator.muzzy" in response else None
         ),
+        cluster_links=(int(response[b"cluster.links"]) if b"cluster.links" in response else None),
         functions_caches=(
-            int(response[b"functions.caches"])
-            if b"functions.caches" in response
-            else None
+            int(response[b"functions.caches"]) if b"functions.caches" in response else None
         ),
         # Optional Valkey 8.0+ fields
         db_dict_rehashing_count=(
