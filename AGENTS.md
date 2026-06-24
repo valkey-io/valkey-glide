@@ -91,9 +91,9 @@ cd java
 ./gradlew :spotlessApply
 
 # Unit tests
-./gradlew :client:test                                  # Run all unit tests
-./gradlew :client:test --tests 'BatchTests'             # Run unit tests from a class
-./gradlew :client:test --tests '*.latencyHistory'       # Run unit tests with a pattern
+./gradlew :client:test                             # Run all unit tests
+./gradlew :client:test --tests 'BatchTests'        # Run unit tests from a class
+./gradlew :client:test --tests '*.latencyHistory'  # Run unit tests with a pattern
 
 # Integration tests
 ./gradlew :integTest:test                               # Run all integration tests
@@ -111,22 +111,31 @@ python3 dev.py build --mode release               # Build both clients in releas
 python3 dev.py build --client async --mode debug  # Build async client only in debug node (faster)
 
 # Lint (isort, black, flake8, mypy)
-python3 dev.py lint                               # Fix formatting
-python3 dev.py lint --check                       # Check only
+python3 dev.py lint          # Fix formatting
+python3 dev.py lint --check  # Check only
 
 # Integration tests
-python3 dev.py test                               # Run all tests
-python3 dev.py test --args -k "test_memory"       # Run tests matching a pattern
+python3 dev.py test                          # Run all tests
+python3 dev.py test --args -k "test_memory"  # Run all tests matching a pattern
 ```
 
 **Node.js/TypeScript:**
 
 ```bash
 cd node
+
+# Install and build
 npm ci
-npm run build:release
-npm test
+npm run build:release  # Build Rust and TypeScript (slow)
+npm run build:ts       # Build TypeScript only (fast)
+
+# Lint
 npm run lint:fix
+
+# Integration tests
+npm test                                     # Run all tests
+npm test -- --testNamePattern='memoryStats'  # Run tests matching a pattern
+npm test -- --testPathPattern='GlideClient'  # Run tests from a specific file
 ```
 
 **Go:**
