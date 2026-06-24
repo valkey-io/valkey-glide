@@ -63,11 +63,12 @@ describe("NodeDiscoveryMode", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "skip info replication allows writes_%p",
         async (protocol) => {
+            // Use only the primary address (first address) to avoid connecting
+            // to a replica with NodeDiscoveryMode.Static, which would cause
+            // ReadOnly errors on write operations.
+            const primaryAddress = [cluster.getAddresses()[0]];
             client = await GlideClient.createClient({
-                ...getClientConfigurationOption(
-                    cluster.getAddresses(),
-                    protocol,
-                ),
+                ...getClientConfigurationOption(primaryAddress, protocol),
                 nodeDiscoveryMode: NodeDiscoveryMode.Static,
             });
 

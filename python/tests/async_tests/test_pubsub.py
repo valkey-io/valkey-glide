@@ -4726,6 +4726,7 @@ class TestPubSub:
                 return msg is not None
 
             await wait_for(_check_msg, "Large pubsub message was not received")
+            assert msg is not None
             assert msg.message == large_message.encode()
             assert msg.channel == channel.encode()
 

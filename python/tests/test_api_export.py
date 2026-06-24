@@ -117,6 +117,11 @@ excluded_shared_symbols = [
     # python/glide-shared/glide_shared/cluster_scan_cursor.py
     "ENCODING",  # Assignment (also in ffi_helpers.py, script.py)
     "FINISHED_SCAN_CURSOR",  # Assignment
+    # Base classes re-exported via per-package _ffi_wrappers (not directly from glide_shared)
+    "ClusterScanCursor",  # ClassDef - re-exported via glide._ffi_wrappers / glide_sync.sync_commands
+    "Script",  # ClassDef - re-exported via glide._ffi_wrappers / glide_sync.sync_commands
+    "Logger",  # ClassDef - re-exported via glide.logger / glide_sync.logger
+    "OpenTelemetry",  # ClassDef - re-exported via glide.opentelemetry / glide_sync.opentelemetry
     # python/glide-shared/glide_shared/ffi_helpers.py
     "encode_arg",  # FunctionDef
     "to_c_strings",  # FunctionDef
