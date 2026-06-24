@@ -83,28 +83,40 @@ cargo fmt
 
 ```bash
 cd java
+
 ./gradlew :client:cleanRust
 ./gradlew :client:clean
 ./gradlew :client:buildRust
 ./gradlew :client:buildAll
 ./gradlew :spotlessApply
 
-./gradlew :client:test                             # Run all unit tests
-./gradlew :client:test --tests 'BatchTests'        # Run unit tests for a class
-./gradlew :client:test --tests '*.latencyHistory'  # Run unit tests with a filter
+# Unit tests
+./gradlew :client:test                                  # Run all unit tests
+./gradlew :client:test --tests 'BatchTests'             # Run unit tests from a class
+./gradlew :client:test --tests '*.latencyHistory'       # Run unit tests with a pattern
 
+# Integration tests
 ./gradlew :integTest:test                               # Run all integration tests
-./gradlew :integTest:test --tests 'SharedCommandTests'  # Run integration tests for a class
-./gradlew :integTest:test --tests '*.latencyHistory'    # Run integration tests with a filter
+./gradlew :integTest:test --tests 'SharedCommandTests'  # Run integration tests from a class
+./gradlew :integTest:test --tests '*.latencyHistory'    # Run integration tests with a pattern
 ```
 
 **Python:**
 
 ```bash
 cd python
-python3 dev.py build --mode release
-python3 dev.py test
-python3 dev.py lint
+
+# Build
+python3 dev.py build --mode release               # Build both clients in release mode
+python3 dev.py build --client async --mode debug  # Build async client only in debug node (faster)
+
+# Lint (isort, black, flake8, mypy)
+python3 dev.py lint                               # Fix formatting
+python3 dev.py lint --check                       # Check only
+
+# Integration tests
+python3 dev.py test                               # Run all tests
+python3 dev.py test --args -k "test_memory"       # Run tests matching a pattern
 ```
 
 **Node.js/TypeScript:**
