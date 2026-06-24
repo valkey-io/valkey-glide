@@ -24,6 +24,7 @@ import static glide.TestUtilities.getUnixSeconds;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.isWindows;
 import static glide.TestUtilities.parseInfoResponseToMap;
+import static glide.TestUtilities.waitFor;
 import static glide.TestUtilities.waitForNotBusy;
 import static glide.TestUtilities.waitForSaveNotInProgress;
 import static glide.api.BaseClient.OK;
@@ -3945,6 +3946,18 @@ public class CommandTests {
         Route route = new SlotKeyRoute(key, PRIMARY);
         String code = createLongRunningLuaScript(6, false);
 
+        // Lower lua-time-limit on the target primary so the server starts reporting BUSY (and
+        // accepting SCRIPT KILL) shortly after the script begins, instead of after the 5000ms
+        // default. Without this, SCRIPT KILL is queued behind the running script and blocks until
+        // the request timeout fires, which is the source of the flakiness.
+        String originalLuaTimeLimit =
+                clusterClient
+                        .configGet(new String[] {"lua-time-limit"}, route)
+                        .get()
+                        .getSingleValue()
+                        .get("lua-time-limit");
+        clusterClient.configSet(Collections.singletonMap("lua-time-limit", "100"), route).get();
+
         try (Script script = new Script(code, false);
                 GlideClusterClient testClient =
                         GlideClusterClient.createClient(
@@ -3957,20 +3970,33 @@ public class CommandTests {
                                                 .build())
                                 .get()) {
 
-            // Poll scriptKill in background looking for "unkillable" error
-            CompletableFuture<Boolean> unkillableResult =
-                    pollForUnkillableInBackground(() -> clusterClient.scriptKill(route));
-
-            // Block on script execution to guarantee it's running on the server
+            // Start the script without blocking, so it runs on the server while we poll.
             CompletableFuture<Object> scriptFuture =
                     testClient.invokeScript(script, ScriptOptions.builder().key(key).build());
+
+            // Poll SCRIPT KILL until the server reports the script is unkillable (write script).
+            waitFor(
+                    () -> {
+                        try {
+                            clusterClient.scriptKill(route).get();
+                            return false; // returned OK - not the expected error, keep polling
+                        } catch (Exception e) {
+                            String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                            // NotBusy means the script hasn't started yet - keep polling.
+                            return msg.contains("unkillable");
+                        }
+                    },
+                    "Expected to find 'unkillable' error for write script");
+
             try {
                 scriptFuture.get();
             } catch (Exception ignored) {
                 // Write script completes normally after its duration
             }
-
-            assertTrue(unkillableResult.get(), "Expected to find 'unkillable' error for write script");
+        } finally {
+            clusterClient
+                    .configSet(Collections.singletonMap("lua-time-limit", originalLuaTimeLimit), route)
+                    .get();
         }
         waitForNotBusy(clusterClient::scriptKill);
         clusterClient.ping().get();
@@ -4012,51 +4038,6 @@ public class CommandTests {
                             result.completeExceptionally(
                                     new AssertionError(
                                             "Timed out waiting to kill script after " + SCRIPT_POLL_TIMEOUT_MS + "ms"));
-                        });
-        thread.setDaemon(true);
-        thread.start();
-        return result;
-    }
-
-    /**
-     * Polls scriptKill in a background thread until it returns an "unkillable" error, confirming the
-     * write script is running but cannot be killed.
-     */
-    private CompletableFuture<Boolean> pollForUnkillableInBackground(
-            Supplier<CompletableFuture<String>> killCommand) {
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
-        Thread thread =
-                new Thread(
-                        () -> {
-                            long deadline = System.currentTimeMillis() + SCRIPT_POLL_TIMEOUT_MS;
-                            while (System.currentTimeMillis() < deadline) {
-                                try {
-                                    killCommand.get().get();
-                                } catch (Exception e) {
-                                    String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-                                    if (msg.contains("unkillable")) {
-                                        result.complete(true);
-                                        return;
-                                    }
-                                    if (!msg.contains("no scripts in execution")) {
-                                        // Unexpected error - fail fast
-                                        result.completeExceptionally(e);
-                                        return;
-                                    }
-                                }
-                                try {
-                                    Thread.sleep(SCRIPT_POLL_INTERVAL_MS);
-                                } catch (InterruptedException ie) {
-                                    result.completeExceptionally(ie);
-                                    Thread.currentThread().interrupt();
-                                    return;
-                                }
-                            }
-                            result.completeExceptionally(
-                                    new AssertionError(
-                                            "Timed out waiting for 'unkillable' error after "
-                                                    + SCRIPT_POLL_TIMEOUT_MS
-                                                    + "ms"));
                         });
         thread.setDaemon(true);
         thread.start();
