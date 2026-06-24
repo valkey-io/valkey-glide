@@ -48,6 +48,7 @@ from glide_shared.commands.core_options import (
     OnlyIfEqual,
     UpdateOptions,
 )
+from glide_shared.commands.latency import LatencyEntry
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -106,6 +107,7 @@ from glide_shared.routes import (
 
 from tests.async_tests.conftest import create_client
 from tests.constants import IP_ADDRESS_V4, IP_ADDRESS_V6
+from tests.utils.cluster import ValkeyCluster
 from tests.utils.utils import (
     BGREWRITEAOF_RESPONSES,
     BGSAVE_NOT_CANCELLED_RESPONSE,
@@ -121,12 +123,15 @@ from tests.utils.utils import (
     convert_string_to_bytes_object,
     create_long_running_lua_script,
     create_lua_lib_with_long_running_function,
+    flatten_cluster_response_lists,
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
+    get_unix_seconds,
     get_version,
     parse_info_response,
     round_values,
+    trigger_latency_spike,
     wait_for_save_not_in_progress,
 )
 
@@ -9603,6 +9608,85 @@ class TestCommands:
         with pytest.raises(ValueError):
             MigrateOptions(username="user").to_args()
 
+        # Multi-key: only available on standalone clients
+        if not isinstance(glide_client, GlideClusterClient):
+            hash_tag = get_random_string(5)
+            key2 = f"{hash_tag}a"
+            key3 = f"{hash_tag}b"
+            await glide_client.set(key2, "value2")
+            await glide_client.set(key3, "value3")
+            with pytest.raises(RequestError):
+                await glide_client.migrate("invalid-host", 6379, [key2, key3], 0, 5000)
+
+            # Multi-key: empty keys list raises ValueError
+            with pytest.raises(ValueError):
+                await glide_client.migrate("invalid-host", 6379, [], 0, 5000)
+
+            # Multi-key NOKEY: non-existent keys return NOKEY immediately (no connection made).
+            non_existent1 = get_random_string(5)
+            non_existent2 = get_random_string(5)
+            result = await glide_client.migrate(
+                "invalid-host",
+                6379,
+                [non_existent1, non_existent2],
+                0,
+                5000,
+            )
+            assert result == b"NOKEY"
+
+    @pytest.fixture(scope="class")
+    def second_server(self, request):
+        from tests.utils.cluster import ValkeyCluster
+
+        tls = request.config.getoption("--tls")
+        cluster = ValkeyCluster(
+            tls=tls, cluster_mode=False, shard_count=1, replica_count=0
+        )
+        yield cluster
+        del cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_migrate_success(
+        self, glide_client: TGlideClient, second_server, request
+    ):
+        dest_addr = second_server.nodes_addr[0]
+        dest_host = dest_addr.host
+        dest_port = dest_addr.port
+        dest_client = await create_client(
+            request, cluster_mode=False, addresses=[NodeAddress(dest_host, dest_port)]
+        )
+        try:
+            # Single-key migrate
+            key = get_random_string(10)
+            value = get_random_string(5)
+            await glide_client.set(key, value)
+            result = await glide_client.migrate(dest_host, dest_port, key, 0, 5000)
+            assert result == OK or result == b"OK"
+            assert await glide_client.exists([key]) == 0
+            assert await dest_client.get(key) == value.encode()
+
+            # Multi-key migrate
+            key1 = get_random_string(10)
+            key2 = get_random_string(10)
+            val1 = get_random_string(5)
+            val2 = get_random_string(5)
+            await glide_client.set(key1, val1)
+            await glide_client.set(key2, val2)
+            result = await glide_client.migrate(
+                dest_host,
+                dest_port,
+                [key1, key2],
+                0,
+                5000,
+            )
+            assert result == OK or result == b"OK"
+            assert await glide_client.exists([key1, key2]) == 0
+            assert await dest_client.get(key1) == val1.encode()
+            assert await dest_client.get(key2) == val2.encode()
+        finally:
+            await dest_client.close()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_wait(self, glide_client: TGlideClient):
@@ -10187,6 +10271,107 @@ class TestCommands:
             assert await glide_client.get(key) == b"after"
         finally:
             await glide_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_history(self, glide_client: TGlideClient):
+        before_spike = await get_unix_seconds(glide_client)
+        await trigger_latency_spike(glide_client)
+
+        history = await glide_client.latency_history("command")
+        all_entries = flatten_cluster_response_lists(history)
+
+        assert len(all_entries) > 0
+        for entry in all_entries:
+            assert isinstance(entry, LatencyEntry)
+            assert entry.time >= before_spike
+            assert entry.latency > 0
+
+        # Non-existent event returns empty
+        unknown = await glide_client.latency_history("nonexistent")
+        assert len(flatten_cluster_response_lists(unknown)) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_latest(self, glide_client: TGlideClient):
+        before_spike = await get_unix_seconds(glide_client)
+        await trigger_latency_spike(glide_client)
+
+        latest = await glide_client.latency_latest()
+        all_entries = flatten_cluster_response_lists(latest)
+        assert len(all_entries) >= 1
+
+        # Find the "command" event
+        command_info = next(
+            (info for info in all_entries if info.event_name == "command"), None
+        )
+        assert command_info is not None
+
+        assert command_info.latest_time >= before_spike
+        assert command_info.latest_duration > 0
+        assert command_info.max_duration >= command_info.latest_duration
+
+        # Valkey 8.1+ populates sum and count
+        if not await check_if_server_version_lt(glide_client, "8.1.0"):
+            assert command_info.sum is not None and command_info.sum > 0
+            assert command_info.count is not None and command_info.count > 0
+        else:
+            assert command_info.sum is None
+            assert command_info.count is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_reset(self, glide_client: TGlideClient):
+
+        # Trigger spike then reset all events.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset() > 0
+
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset specific event.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command") > 0
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) == 0
+
+        # Trigger spike then reset unknown event — "command" data should persist.
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("unknown-event") == 0
+        history = await glide_client.latency_history("command")
+        assert len(flatten_cluster_response_lists(history)) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_latency_routing(self, glide_client: GlideClusterClient):
+        await trigger_latency_spike(glide_client)
+
+        # Default route (all primary nodes) returns a per-node mapping.
+        multi_history = await glide_client.latency_history("command")
+        assert isinstance(multi_history, dict)
+        assert len(flatten_cluster_response_lists(multi_history)) > 0
+
+        multi_latest = await glide_client.latency_latest()
+        assert isinstance(multi_latest, dict)
+        assert len(flatten_cluster_response_lists(multi_latest)) >= 1
+
+        # A single primary node route returns a flat list rather than a mapping.
+        single_history = await glide_client.latency_history(
+            "command", route=PRIMARY_SLOT_ROUTE
+        )
+        assert isinstance(single_history, list)
+        assert len(single_history) > 0
+
+        single_latest = await glide_client.latency_latest(route=PRIMARY_SLOT_ROUTE)
+        assert isinstance(single_latest, list)
+        assert len(single_latest) >= 1
+
+        # Reset honors explicit route options and aggregates the count.
+        assert await glide_client.latency_reset(route=AllNodes()) > 0
+
+        await trigger_latency_spike(glide_client)
+        assert await glide_client.latency_reset("command", route=AllPrimaries()) > 0
 
 
 @pytest.mark.anyio
@@ -12548,6 +12733,59 @@ class TestScripts:
                 await standalone_client.delete(["key"])
             finally:
                 await standalone_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_failover(self, glide_client: GlideClient):
+        # Spin up a dedicated standalone with 1 replica so the failover
+        # doesn't destabilize the shared test server.
+        dedicated_cluster = ValkeyCluster(
+            tls=False, cluster_mode=False, shard_count=1, replica_count=1
+        )
+        try:
+            client = await GlideClient.create(
+                GlideClientConfiguration(
+                    addresses=[dedicated_cluster.nodes_addr[0]],
+                    request_timeout=5000,
+                )
+            )
+            try:
+                # Verify initial role is master
+                info = (await client.info([InfoSection.REPLICATION])).decode()
+                assert "role:master" in info
+
+                # Execute failover — returns OK immediately
+                result = await client.failover()
+                assert result == OK
+
+                # Wait for role to change to slave (failover completed)
+                role_changed = False
+                for _ in range(60):
+                    info = (await client.info([InfoSection.REPLICATION])).decode()
+                    if "role:slave" in info:
+                        role_changed = True
+                        break
+                    await anyio.sleep(0.5)
+                assert role_changed, "Timed out waiting for role change to slave"
+            finally:
+                await client.close()
+        finally:
+            del dedicated_cluster
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_failover_abort_no_failover_in_progress(
+        self, glide_client: GlideClient
+    ):
+        # FAILOVER ABORT when no failover is in progress should error
+        with pytest.raises(RequestError):
+            await glide_client.failover(abort=True)
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_replicaof_no_one(self, glide_client: GlideClient):
+        # REPLICAOF NO ONE on a primary should succeed
+        assert await glide_client.replicaof_no_one() == OK
 
 
 class TestClientLifecycle:

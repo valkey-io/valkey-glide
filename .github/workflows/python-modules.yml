@@ -23,9 +23,9 @@ on:
             - python/tests/sync_tests/tests_server_modules/**
             - .github/workflows/python-modules.yml
             - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-engine/action.yml
-            - .github/workflows/start-valkey-docker/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+            - .github/actions/start-valkey-docker/action.yml
     pull_request:
         paths:
             - glide-core/src/**
@@ -39,9 +39,9 @@ on:
             - python/tests/sync_tests/tests_server_modules/**
             - .github/workflows/python-modules.yml
             - .github/workflows/build-python-wrapper/action.yml
-            - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-engine/action.yml
-            - .github/workflows/start-valkey-docker/action.yml
+            - .github/actions/install-shared-dependencies/action.yml
+            - .github/actions/install-engine/action.yml
+            - .github/actions/start-valkey-docker/action.yml
     workflow_dispatch:
         inputs:
             name:
@@ -88,7 +88,7 @@ jobs:
                   engine-version: "9.0"
 
             - name: Start module servers via Docker
-              uses: ./.github/workflows/start-valkey-docker
+              uses: ./.github/actions/start-valkey-docker
               with:
                   engine-version: "9.0"
 

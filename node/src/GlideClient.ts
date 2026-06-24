@@ -45,7 +45,11 @@ import {
     createGetSubscriptions,
     createInfo,
     createLastSave,
+    createLatencyHistory,
+    createLatencyLatest,
+    createLatencyReset,
     createLolwut,
+    createMigrate,
     createSave,
     createBgSave,
     createBgRewriteAof,
@@ -56,15 +60,22 @@ import {
     createScriptExists,
     createScriptFlush,
     createScriptKill,
+    createFailover,
+    createReplicaOf,
+    createReplicaOfNoOne,
     createTime,
     createUnWatch,
+    FailoverOptions,
     FlushMode,
     FunctionListOptions,
     FunctionListResponse,
     FunctionRestorePolicy,
     FunctionStatsFullResponse,
     InfoOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     LolwutOptions,
+    MigrateOptions,
     ScanOptions,
 } from "./Commands";
 
@@ -1006,6 +1017,68 @@ export class GlideClient extends BaseClient {
     }
 
     /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see {@link https://valkey.io/commands/latency-history/|valkey.io} for details.
+     *
+     * @param event - The name of the latency event (e.g., `"command"`).
+     * @returns An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't exist.
+     *
+     * @example
+     * ```typescript
+     * const history = await client.latencyHistory("command");
+     * for (const entry of history) {
+     *     console.log(`Time: ${entry.time}, Latency: ${entry.latency}`);
+     * }
+     * ```
+     */
+    public async latencyHistory(event: GlideString): Promise<LatencyEntry[]> {
+        return this.createWritePromise<unknown[]>(
+            createLatencyHistory(event),
+        ).then((res) => this.parseLatencyHistoryResponse(res));
+    }
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see {@link https://valkey.io/commands/latency-latest/|valkey.io} for details.
+     *
+     * @returns An array of {@link LatencyEventInfo} for the latest latency events.
+     *
+     * @example
+     * ```typescript
+     * const latest = await client.latencyLatest();
+     * for (const info of latest) {
+     *     console.log(`Event: ${info.eventName}, Latest: ${info.latestDuration}`);
+     * }
+     * ```
+     */
+    public async latencyLatest(): Promise<LatencyEventInfo[]> {
+        return this.createWritePromise<unknown[]>(createLatencyLatest()).then(
+            (res) => this.parseLatencyLatestResponse(res),
+        );
+    }
+
+    /**
+     * Resets the latency spike time series for all or specified events.
+     * If no events are provided, resets the latency spike time series for all events.
+     *
+     * @see {@link https://valkey.io/commands/latency-reset/|valkey.io} for details.
+     *
+     * @param events - The event names to reset. If not provided, resets all events.
+     * @returns The number of event time series that were reset.
+     *
+     * @example
+     * ```typescript
+     * await client.latencyReset(); // Resets all events
+     * await client.latencyReset(["command"]); // Resets only "command"
+     * ```
+     */
+    public async latencyReset(events?: GlideString[]): Promise<number> {
+        return this.createWritePromise(createLatencyReset(events));
+    }
+
+    /**
      * Synchronously saves the dataset to disk.
      *
      * @see {@link https://valkey.io/commands/save/|valkey.io} for more details.
@@ -1119,6 +1192,50 @@ export class GlideClient extends BaseClient {
         options?: DecoderOption,
     ): Promise<GlideString | null> {
         return this.createWritePromise(createRandomKey(), options);
+    }
+
+    /**
+     * Atomically transfers a key or multiple keys from the current Valkey instance
+     * to a destination Valkey instance.
+     * On success, keys are deleted from the source unless `copy` is set to `true` in options.
+     *
+     * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
+     *
+     * @param host - The host of the destination Valkey instance.
+     * @param port - The port of the destination Valkey instance.
+     * @param key - The key to migrate, or an array of keys to migrate.
+     * @param destinationDB - The database index on the destination instance.
+     * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
+     * @param options - Optional migration options.
+     * @returns `"OK"` on success, `"NOKEY"` if the key(s) do not exist.
+     *
+     * @example Single-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     * @example Single-key with copy and replace:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
+     * console.log(result); // "OK"
+     * ```
+     * @example Multi-key:
+     * ```typescript
+     * const result = await client.migrate("127.0.0.1", 6379, ["key1", "key2"], 0, 5000);
+     * console.log(result); // "OK"
+     * ```
+     */
+    public async migrate(
+        host: string,
+        port: number,
+        key: GlideString | GlideString[],
+        destinationDB: number,
+        timeout: number,
+        options?: MigrateOptions,
+    ): Promise<string> {
+        return this.createWritePromise(
+            createMigrate(host, port, key, destinationDB, timeout, options),
+        );
     }
 
     /**
@@ -1320,5 +1437,66 @@ export class GlideClient extends BaseClient {
      */
     public async clientUnpause(options?: DecoderOption): Promise<"OK"> {
         return this.createWritePromise(createClientUnpause(), options);
+    }
+
+    /**
+     * Starts a coordinated failover from the connected primary to one of its replicas.
+     * This is the standalone equivalent of `CLUSTER FAILOVER`.
+     *
+     * @see {@link https://valkey.io/commands/failover/|valkey.io} for details.
+     *
+     * @param options - (Optional) Failover options. See {@link FailoverOptions}.
+     * @returns `"OK"` if the failover was successfully initiated.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.failover();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async failover(options?: FailoverOptions): Promise<"OK"> {
+        return this.createWritePromise(createFailover(options), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Makes the server a replica of the specified primary.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @param host - The host of the primary to replicate.
+     * @param port - The port of the primary to replicate.
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaof("localhost", 6379);
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaof(host: string, port: number): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOf(host, port), {
+            decoder: Decoder.String,
+        });
+    }
+
+    /**
+     * Promotes the current server to a primary by stopping replication.
+     *
+     * @see {@link https://valkey.io/commands/replicaof/|valkey.io} for details.
+     *
+     * @returns `"OK"` on success.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.replicaofNoOne();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async replicaofNoOne(): Promise<"OK"> {
+        return this.createWritePromise(createReplicaOfNoOne(), {
+            decoder: Decoder.String,
+        });
     }
 }

@@ -39,10 +39,12 @@ from .commands.core_options import (
     InfoSection,
     InsertPosition,
     MigrateOptions,
+    MonitorMsg,
     OnlyIfEqual,
     PubSubMsg,
     UpdateOptions,
 )
+from .commands.latency import LatencyEntry, LatencyEventInfo
 from .commands.server_modules import json_batch
 from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
@@ -274,6 +276,8 @@ __all__ = [
     "InfBound",
     "InfoSection",
     "InsertPosition",
+    "LatencyEntry",
+    "LatencyEventInfo",
     "MigrateOptions",
     "LexBoundary",
     "Limit",
@@ -304,6 +308,8 @@ __all__ = [
     "ALL_CHANNELS",
     "ALL_PATTERNS",
     "ALL_SHARDED_CHANNELS",
+    # Monitor
+    "MonitorMsg",
     # Json
     "json_batch",
     "JsonGetOptions",

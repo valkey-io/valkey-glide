@@ -2504,6 +2504,16 @@ func CreateServerManagementTests(batch *pipeline.ClusterBatch, isAtomic bool, se
 	testData = append(testData, CommandTestData{ExpectedResponse: "", CheckTypeOnly: true, TestName: "LolwutWithOptions()"})
 	batch.LastSave()
 	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "LastSave()"})
+	batch.LatencyHistory("command")
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: []models.LatencyEntry{}, CheckTypeOnly: true, TestName: "LatencyHistory()",
+	})
+	batch.LatencyLatest()
+	testData = append(testData, CommandTestData{
+		ExpectedResponse: []models.LatencyEventInfo{}, CheckTypeOnly: true, TestName: "LatencyLatest()",
+	})
+	batch.LatencyReset()
+	testData = append(testData, CommandTestData{ExpectedResponse: int64(0), CheckTypeOnly: true, TestName: "LatencyReset()"})
 	batch.ConfigResetStat()
 	testData = append(testData, CommandTestData{ExpectedResponse: "OK", TestName: "ConfigResetStat()"})
 	// ConfigRewrite skipped, because depends on config

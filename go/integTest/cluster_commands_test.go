@@ -2745,32 +2745,27 @@ func (suite *GlideTestSuite) TestScriptKillWithRoute() {
 	code := CreateLongRunningLuaScript(10, true)
 	script := options.NewScript(code)
 
-	// Kill in a goroutine - polls until the script is running, matching testFunctionKillNoWrite pattern
-	var killErr error
-	var result string
+	// Start InvokeScript in a goroutine so it begins executing immediately
+	var invokeErr error
+	invokeDone := make(chan struct{})
 	go func() {
-		timeout := time.After(8 * time.Second)
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-timeout:
-				return
-			case <-ticker.C:
-				result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
-				if killErr == nil {
-					return
-				}
-			}
-		}
+		defer close(invokeDone)
+		_, invokeErr = invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
 	}()
 
-	// Block until script is killed (returns error) - guarantees script is running on server
-	_, err = invokeClient.InvokeScriptWithRoute(context.Background(), *script, route)
-	assert.Error(suite.T(), err)
-	assert.True(suite.T(), strings.Contains(strings.ToLower(err.Error()), "script killed"))
+	// Poll ScriptKill on the main goroutine until the script is running and killed
+	var killErr error
+	var result string
+	require.Eventually(suite.T(), func() bool {
+		result, killErr = killClient.ScriptKillWithRoute(context.Background(), route)
+		return killErr == nil
+	}, 10*time.Second, 500*time.Millisecond, "Timed out waiting for script kill to succeed")
 
+	// Wait for invoke to complete after kill
+	<-invokeDone
+
+	require.Error(suite.T(), invokeErr)
+	assert.Contains(suite.T(), strings.ToLower(invokeErr.Error()), "script killed")
 	assert.NoError(suite.T(), killErr)
 	assert.Equal(suite.T(), "OK", result)
 	script.Close()

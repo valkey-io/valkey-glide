@@ -32,7 +32,7 @@
     "license": "Apache-2.0",
     "dependencies": {
         "long": "5",
-        "protobufjs": "7"
+        "protobufjs": "^7.6.3"
     },
     "keywords": [
         "valkey",
@@ -112,6 +112,14 @@
         "*.@(js|ts|tsx|yml|yaml|md|json)": [
             "prettier --write"
         ]
+    },
+    "overrides": {
+        "replace": {
+            "minimatch": "3.1.5"
+        },
+        "markdown-it@<14.2.0": "^14.2.0",
+        "@babel/core@<7.29.6": "^7.29.6",
+        "js-yaml@<4.2.0": "^4.2.0"
     },
     "publishConfig": {
         "registry": "https://registry.npmjs.org/",

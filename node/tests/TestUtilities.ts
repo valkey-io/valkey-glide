@@ -519,6 +519,69 @@ export async function waitForSaveNotInProgress(
     }, "Timed out waiting for save to complete");
 }
 
+/** Route to a single primary node. */
+export const PRIMARY_SLOT_ROUTE_OPTION = {
+    route: { type: "primarySlotKey" as const, key: "1" },
+};
+
+/** Triggers a latency spike for the "command" event. */
+export async function triggerLatencySpike(
+    client: GlideClient | GlideClusterClient,
+): Promise<void> {
+    // Resets any existing latency data first so the spike is recorded against a clean baseline,
+    // then enables the server-side latency monitor, triggers a latency spike for the "command"
+    // event, and finally restores the original threshold.
+    await client.latencyReset();
+
+    // Save the current threshold so we can restore it after the spike.
+    const prev = (await client.configGet([
+        "latency-monitor-threshold",
+    ])) as Record<string, GlideString>;
+    const prevThreshold = prev["latency-monitor-threshold"]?.toString() ?? "0";
+
+    await client.configSet({ "latency-monitor-threshold": "1" });
+
+    const debug_sleep_args = ["DEBUG", "SLEEP", "0.05"];
+
+    if (client instanceof GlideClusterClient) {
+        await client.customCommand(debug_sleep_args, {
+            route: "allNodes",
+        });
+    } else {
+        await client.customCommand(debug_sleep_args);
+    }
+
+    // Restore the original latency-monitor-threshold value.
+    await client.configSet({ "latency-monitor-threshold": prevThreshold });
+}
+
+/** Returns the current server time as a Unix timestamp in seconds. */
+export async function getUnixSeconds(client: BaseClient): Promise<number> {
+    // TODO #6166: Use a base client method to call time() directly.
+    if (client instanceof GlideClusterClient) {
+        const result = (await client.time({
+            route: "randomNode",
+        })) as [string, string];
+        return Number(result[0]);
+    }
+
+    const result = await (client as GlideClient).time();
+    return Number(result[0]);
+}
+
+/**
+ * Flattens a cluster response of arrays.
+ */
+export function flattenClusterResponseArrays<T>(
+    response: T[] | Record<string, T[]>,
+): T[] {
+    if (Array.isArray(response)) {
+        return response;
+    }
+
+    return Object.values(response).flat();
+}
+
 /**
  * Create a lua script which runs an endless loop up to timeout sec.
  * Execution takes at least 5 sec regardless of the timeout

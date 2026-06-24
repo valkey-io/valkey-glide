@@ -2,23 +2,42 @@
 /* eslint @typescript-eslint/no-require-imports: off */
 "use strict";
 
-// Patch Module._resolveFilename to block 'long' resolution from
-// @protobufjs/inquire, simulating pnpm strict hoisting where inquire's
-// eval-wrapped require("long") fails. This forces protobufjs to return
-// JS numbers instead of Long objects for uint64 fields, exercising the
-// code path that requires correct 64-bit pointer handling.
+// Patch Module._resolveFilename to block 'long' resolution from within
+// protobufjs, simulating pnpm strict hoisting where protobufjs's
+// require("long") fails. This forces protobufjs to return JS numbers
+// instead of Long objects for uint64 fields, exercising the code path
+// that requires correct 64-bit pointer handling.
+//
+// protobufjs <= 7.6.0 loaded `long` via the @protobufjs/inquire helper;
+// 7.6.1+ dropped that dependency and requires `long` directly from its
+// own sources (e.g. protobufjs/src/util/minimal.js). Match both so the
+// guard keeps firing across versions. `longBlockCount` asserts the
+// interception actually triggered — otherwise the test would pass
+// trivially without exercising the JS-number pointer path.
 const Module = require("module");
 const origResolve = Module._resolveFilename;
+
+let longBlockCount = 0;
+
+function isProtobufjsCaller(filename) {
+    // Match the legacy @protobufjs/* helpers and protobufjs's own sources,
+    // while excluding unrelated packages that merely contain "protobuf".
+    return (
+        filename.includes("@protobufjs") ||
+        /[/\\]protobufjs[/\\]/.test(filename)
+    );
+}
 
 Module._resolveFilename = function (request, parent, ...rest) {
     if (
         request === "long" &&
         parent &&
         parent.filename &&
-        parent.filename.includes("@protobufjs")
+        isProtobufjsCaller(parent.filename)
     ) {
+        longBlockCount += 1;
         throw new Error(
-            "Simulated pnpm strict hoisting: long not found from @protobufjs/inquire",
+            "Simulated pnpm strict hoisting: long not found from protobufjs",
         );
     }
 
@@ -136,7 +155,22 @@ async function main() {
         await testProcessResponse(port);
         await testPubSub(port);
 
-        console.log("All pnpm pointer tests passed");
+        // Guard against the test silently passing trivially: if the
+        // interception never fired, protobufjs loaded `long` from a path
+        // this test no longer recognizes, so the JS-number pointer path
+        // was never exercised. Fail loudly so the matcher gets updated.
+        if (longBlockCount === 0) {
+            throw new Error(
+                "long-resolution guard never fired: protobufjs did not " +
+                    "require 'long' from a recognized path, so the JS-number " +
+                    "pointer path was not exercised. Update isProtobufjsCaller() " +
+                    "to match where the current protobufjs version loads 'long'.",
+            );
+        }
+
+        console.log(
+            `All pnpm pointer tests passed (long-resolution blocked ${longBlockCount} time(s))`,
+        );
         process.exit(0);
     } catch (error) {
         console.error("Error:", error.message);

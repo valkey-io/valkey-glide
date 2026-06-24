@@ -21,6 +21,7 @@ jni = "0.21.1"
 log = "0.4.30"
 bytes = { version = "1.6.0" }
 serde = "1.0.225"
+serde_json = "1.0.149"
 # Additional dependencies for JNI implementation
 anyhow = "1.0"
 dashmap = "6.1.0"

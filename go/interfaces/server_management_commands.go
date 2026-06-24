@@ -97,9 +97,17 @@ type ServerManagementCommands interface {
 
 	AclWhoAmI(ctx context.Context) (string, error)
 
+	Failover(ctx context.Context) (string, error)
+
+	FailoverWithOptions(ctx context.Context, opts *options.FailoverOptions) (string, error)
+
+	ReplicaOf(ctx context.Context, host string, port int) (string, error)
+
+	ReplicaOfNoOne(ctx context.Context) (string, error)
+
 	LatencyHistory(ctx context.Context, event string) ([]models.LatencyEntry, error)
 
-	LatencyLatest(ctx context.Context) ([]models.LatencyInfo, error)
+	LatencyLatest(ctx context.Context) ([]models.LatencyEventInfo, error)
 
 	LatencyReset(ctx context.Context, events ...string) (int64, error)
 }

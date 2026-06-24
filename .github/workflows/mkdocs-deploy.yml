@@ -22,7 +22,7 @@ jobs:
                   python-version: "3.12"
 
             - name: Install protoc
-              uses: ./.github/workflows/install-rust-and-protoc
+              uses: ./.github/actions/install-protoc
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 

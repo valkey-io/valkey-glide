@@ -54,6 +54,8 @@ import {
     InsertPosition,
     KeyWeight,
     LPosOptions,
+    LatencyEntry,
+    LatencyEventInfo,
     ListDirection,
     Logger,
     MemberOrigin, // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -2479,7 +2481,8 @@ export class BaseClient {
 
     /**
      * Atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-     * Once the key is successfully transferred, it is deleted from the source instance.
+     * Once the key is successfully transferred, it is deleted from the source instance
+     * unless `copy` is set to `true` in options.
      *
      * @see {@link https://valkey.io/commands/migrate/|valkey.io} for details.
      *
@@ -2489,16 +2492,18 @@ export class BaseClient {
      * @param destinationDB - The database index on the destination instance.
      * @param timeout - The maximum idle time in milliseconds for the bulk-transfer.
      * @param options - Optional migration options.
-     * @returns "OK" on success, or "NOKEY" if the key does not exist.
+     * @returns `"OK"` on success, or `"NOKEY"` if the key does not exist.
      *
      * @example
      * ```typescript
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000);
      * console.log(result); // Output: "OK" - "mykey" was migrated to the destination instance.
      * ```
+     * @example
      * ```typescript
+     * // Migrate with copy (keep source key) and replace (overwrite destination)
      * const result = await client.migrate("127.0.0.1", 6379, "mykey", 0, 5000, { copy: true, replace: true });
-     * console.log(result); // Output: "OK" - "mykey" was copied to the destination, replacing any existing key.
+     * console.log(result); // Output: "OK" - "mykey" was copied to the destination instance.
      * ```
      */
     public async migrate(
@@ -10225,6 +10230,74 @@ export class BaseClient {
         parseSubscriptionData(response[3], actualSubscriptions);
 
         return { desiredSubscriptions, actualSubscriptions };
+    }
+
+    // Indices for LATENCY HISTORY response.
+    private static readonly LATENCY_ENTRY_TIME_INDEX = 0;
+    private static readonly LATENCY_ENTRY_LATENCY_INDEX = 1;
+
+    // Indices for LATENCY LATEST response.
+    private static readonly LATENCY_EVENT_INFO_NAME_INDEX = 0;
+    private static readonly LATENCY_EVENT_INFO_TIME_INDEX = 1;
+    private static readonly LATENCY_EVENT_INFO_LATEST_DURATION_INDEX = 2;
+    private static readonly LATENCY_EVENT_INFO_MAX_DURATION_INDEX = 3;
+    private static readonly LATENCY_EVENT_INFO_SUM_INDEX = 4;
+    private static readonly LATENCY_EVENT_INFO_COUNT_INDEX = 5;
+
+    /**
+     * @internal
+     * Parses a `LATENCY HISTORY` response.
+     */
+    protected parseLatencyHistoryResponse(response: unknown[]): LatencyEntry[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => ({
+            time: entry[BaseClient.LATENCY_ENTRY_TIME_INDEX] as number,
+            latency: entry[BaseClient.LATENCY_ENTRY_LATENCY_INDEX] as number,
+        }));
+    }
+
+    /**
+     * @internal
+     * Parses a `LATENCY LATEST` response.
+     */
+    protected parseLatencyLatestResponse(
+        response: unknown[],
+    ): LatencyEventInfo[] {
+        if (!response || response.length === 0) {
+            return [];
+        }
+
+        return (response as unknown[][]).map((entry) => {
+            const info: LatencyEventInfo = {
+                eventName: entry[
+                    BaseClient.LATENCY_EVENT_INFO_NAME_INDEX
+                ] as string,
+                latestTime: entry[
+                    BaseClient.LATENCY_EVENT_INFO_TIME_INDEX
+                ] as number,
+                latestDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_LATEST_DURATION_INDEX
+                ] as number,
+                maxDuration: entry[
+                    BaseClient.LATENCY_EVENT_INFO_MAX_DURATION_INDEX
+                ] as number,
+            };
+
+            // Valkey 8.1+ returns 6-element arrays with sum and count
+            if (entry.length > BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX) {
+                info.sum = entry[
+                    BaseClient.LATENCY_EVENT_INFO_SUM_INDEX
+                ] as number;
+                info.count = entry[
+                    BaseClient.LATENCY_EVENT_INFO_COUNT_INDEX
+                ] as number;
+            }
+
+            return info;
+        });
     }
 
     /**

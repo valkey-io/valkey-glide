@@ -485,20 +485,20 @@ type LCSPosition struct {
 type LatencyEntry struct {
 	// Time is the time of latency spike.
 	Time time.Time
-	// Latency is the duration of the latency spike.
-	Latency time.Duration
+	// Duration is the duration of the latency spike.
+	Duration time.Duration
 }
 
-// LatencyInfo represents data about an event's latency spike time series.
-type LatencyInfo struct {
+// LatencyEventInfo represents information about an event's latency spike time series.
+type LatencyEventInfo struct {
 	// EventName is the name of the event.
 	EventName string
-	// Time is the time of the latest latency spike for the event.
-	Time time.Time
-	// Latest is the duration of the latest latency spike for the event.
-	Latest time.Duration
-	// Maximum is the all-time maximum duration of a latency spike for the event.
-	Maximum time.Duration
+	// LatestTime is the time of the latest latency spike.
+	LatestTime time.Time
+	// LatestDuration is the duration of the latest latency spike.
+	LatestDuration time.Duration
+	// MaxDuration is the all-time maximum duration of a latency spike.
+	MaxDuration time.Duration
 	// Sum is the duration of all latency spikes in the event's time series.
 	// Only populated for Valkey 8.1+.
 	Sum Result[time.Duration]

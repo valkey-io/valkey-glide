@@ -13,6 +13,13 @@ from glide_shared.commands.core_options import (
     FlushMode,
     FunctionRestorePolicy,
     InfoSection,
+    MigrateOptions,
+)
+from glide_shared.commands.latency import (
+    LatencyEntry,
+    LatencyEventInfo,
+    _parse_latency_history,
+    _parse_latency_latest,
 )
 from glide_shared.constants import (
     TOK,
@@ -1134,3 +1141,213 @@ class StandaloneCommands(CoreCommands):
                 OK
         """
         return cast(TOK, await self._execute_command(RequestType.ClientUnpause, []))
+
+    async def latency_history(self, event: TEncodable) -> List[LatencyEntry]:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+
+        Returns:
+            List[LatencyEntry]: A list of LatencyEntry for the event, or an empty list
+                if the event doesn't exist.
+
+        Examples:
+            >>> history = await client.latency_history("command")
+            >>> for entry in history:
+            ...     print(f"Time: {entry.time}, Latency: {entry.latency}")
+        """
+        return _parse_latency_history(
+            cast(
+                List,
+                await self._execute_command(RequestType.LatencyHistory, [event]),
+            ),
+        )
+
+    async def latency_latest(self) -> List[LatencyEventInfo]:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
+
+        Returns:
+            List[LatencyEventInfo]: A list of LatencyEventInfo for the latest latency events.
+
+        Examples:
+            >>> latest = await client.latency_latest()
+            >>> for info in latest:
+            ...     print(f"Event: {info.event_name}, Latest: {info.latest_duration}")
+        """
+        return _parse_latency_latest(
+            cast(
+                List,
+                await self._execute_command(RequestType.LatencyLatest, []),
+            ),
+        )
+
+    async def latency_reset(self, *events: TEncodable) -> int:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+
+        Returns:
+            int: The number of event time series that were reset.
+
+        Examples:
+            >>> await client.latency_reset()
+                2
+            >>> await client.latency_reset("command")
+                1
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.LatencyReset, list(events)),
+        )
+
+    async def failover(
+        self,
+        host: Optional[TEncodable] = None,
+        port: Optional[int] = None,
+        force: bool = False,
+        abort: bool = False,
+        timeout_ms: Optional[int] = None,
+    ) -> TOK:
+        """
+        Starts a coordinated failover from the connected primary to one of its replicas.
+        This is the standalone equivalent of CLUSTER FAILOVER.
+
+        See [valkey.io](https://valkey.io/commands/failover/) for more details.
+
+        Args:
+            host (Optional[TEncodable]): The host of the target replica (requires port).
+            port (Optional[int]): The port of the target replica (requires host).
+            force (bool): If True, forces failover after timeout (requires host, port, and timeout_ms).
+            abort (bool): If True, aborts an ongoing failover.
+            timeout_ms (Optional[int]): Timeout in milliseconds.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.failover()
+                OK
+            >>> await client.failover(abort=True)
+                OK
+            >>> await client.failover(host="localhost", port=6380, timeout_ms=1000)
+                OK
+        """
+        args: List[TEncodable] = []
+        if (host is None) != (port is None):
+            raise ValueError("Both host and port must be provided together")
+        if force and (host is None or port is None):
+            raise ValueError("force requires host and port to be specified")
+        if abort:
+            args.append("ABORT")
+        else:
+            if host is not None and port is not None:
+                args.extend(["TO", host, str(port)])
+                if force:
+                    args.append("FORCE")
+            if timeout_ms is not None:
+                args.extend(["TIMEOUT", str(timeout_ms)])
+        return cast(TOK, await self._execute_command(RequestType.FailOver, args))
+
+    async def replicaof(self, host: TEncodable, port: int) -> TOK:
+        """
+        Makes the server a replica of the specified primary.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Args:
+            host (TEncodable): The host of the primary to replicate.
+            port (int): The port of the primary to replicate.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.replicaof("localhost", 6379)
+                OK
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.ReplicaOf, [host, str(port)])
+        )
+
+    async def replicaof_no_one(self) -> TOK:
+        """
+        Promotes the current server to a primary by stopping replication.
+
+        See [valkey.io](https://valkey.io/commands/replicaof/) for more details.
+
+        Returns:
+            TOK: A simple OK response.
+
+        Examples:
+            >>> await client.replicaof_no_one()
+                OK
+        """
+        return cast(
+            TOK, await self._execute_command(RequestType.ReplicaOf, ["NO", "ONE"])
+        )
+
+    async def migrate(
+        self,
+        host: str,
+        port: int,
+        keys: Union[TEncodable, List[TEncodable]],
+        destination_db: int,
+        timeout: int,
+        options: Optional[MigrateOptions] = None,
+    ) -> str:
+        """
+        Atomically transfers one or more keys from a source Valkey instance to a destination
+        Valkey instance. On success, the key(s) are deleted from the source instance.
+        Pass a list to migrate multiple keys in one command.
+
+        See [valkey.io](https://valkey.io/commands/migrate/) for details.
+
+        Args:
+            host (str): The host of the destination Valkey instance.
+            port (int): The port of the destination Valkey instance.
+            keys (Union[TEncodable, List[TEncodable]]): The key or list of keys to migrate.
+            destination_db (int): The database index on the destination instance.
+            timeout (int): The maximum idle time in milliseconds for the bulk-transfer.
+            options (Optional[MigrateOptions]): Additional migration options.
+
+        Returns:
+            str: "OK" on success, or "NOKEY" if no keys were found.
+
+        Examples:
+            >>> await client.migrate("127.0.0.1", 6380, "mykey", 0, 5000)
+            >>> await client.migrate("127.0.0.1", 6380, ["key1", "key2"], 0, 5000)
+        """
+        if isinstance(keys, list):
+            if len(keys) == 0:
+                raise ValueError("migrate: 'keys' list must not be empty")
+            args: List[TEncodable] = [
+                host,
+                str(port),
+                "",
+                str(destination_db),
+                str(timeout),
+            ]
+            if options:
+                args.extend(options.to_args())
+            args += ["KEYS"] + list(keys)
+        else:
+            args = [host, str(port), keys, str(destination_db), str(timeout)]
+            if options:
+                args.extend(options.to_args())
+        return cast(
+            str,
+            await self._execute_command(RequestType.Migrate, args),
+        )

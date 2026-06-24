@@ -827,4 +827,16 @@ public class TestUtilities {
                                 info.contains("rdb_bgsave_in_progress:1")
                                         || info.contains("aof_rewrite_in_progress:1"));
     }
+
+    /** Returns the current server time as a Unix timestamp in seconds. */
+    @SneakyThrows
+    public static long getUnixSeconds(BaseClient client) {
+
+        // TODO #6166: Use a base client method to call time() directly.
+        if (client instanceof GlideClusterClient) {
+            return Long.parseLong(((GlideClusterClient) client).time().get()[0]);
+        }
+
+        return Long.parseLong(((GlideClient) client).time().get()[0]);
+    }
 }

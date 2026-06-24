@@ -3,7 +3,6 @@
 use glide_core::client::FINISHED_SCAN_CURSOR;
 use glide_core::errors::error_message;
 use logger_core::log_warn_lazy;
-
 // Protocol constants for Java (defined directly since we don't use socket layer)
 const TYPE_HASH: &str = "hash";
 const TYPE_LIST: &str = "list";
@@ -2699,6 +2698,179 @@ fn get_ok_jstring<'a>(env: &mut JNIEnv<'a>) -> Result<JString<'a>, FFIError> {
         .expect("OK_STRING_GLOBAL should be initialized");
     let local = env.new_local_ref(global.as_obj())?;
     Ok(JString::from(local))
+}
+
+// ==================== MONITOR CLIENT SUPPORT ====================
+
+static MONITOR_CLIENTS: std::sync::OnceLock<
+    dashmap::DashMap<u64, glide_core::client::MonitorClient>,
+> = std::sync::OnceLock::new();
+static NEXT_MONITOR_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn get_monitor_clients() -> &'static dashmap::DashMap<u64, glide_core::client::MonitorClient> {
+    MONITOR_CLIENTS.get_or_init(dashmap::DashMap::new)
+}
+
+/// Create a MONITOR client that streams all commands to a Java callback.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_createMonitorClient(
+    mut env: JNIEnv,
+    _class: JClass,
+    connection_request_bytes: JByteArray,
+    callback_object: JObject,
+) -> jlong {
+    run_ffi(|| {
+        fn create_monitor(
+            env: &mut JNIEnv,
+            connection_request_bytes: JByteArray,
+            callback_object: JObject,
+        ) -> Result<jlong, FFIError> {
+            let request_bytes = env.convert_byte_array(&connection_request_bytes)?;
+            let proto_request =
+                glide_core::connection_request::ConnectionRequest::parse_from_bytes(&request_bytes)
+                    .map_err(|e| {
+                        FFIError::Logger(format!("Failed to parse ConnectionRequest: {e}"))
+                    })?;
+
+            // Extract first address
+            let addr_proto = proto_request
+                .addresses
+                .first()
+                .ok_or_else(|| FFIError::Logger("No addresses in ConnectionRequest".to_string()))?;
+            let address = glide_core::client::NodeAddress {
+                host: addr_proto.host.to_string(),
+                port: addr_proto.port as u16,
+            };
+
+            // Build RedisConnectionInfo from protobuf auth fields
+            let redis_connection_info =
+                if let Some(auth) = proto_request.authentication_info.as_ref() {
+                    redis::RedisConnectionInfo {
+                        db: proto_request.database_id as i64,
+                        username: if auth.username.is_empty() {
+                            None
+                        } else {
+                            Some(auth.username.to_string())
+                        },
+                        password: if auth.password.is_empty() {
+                            None
+                        } else {
+                            Some(auth.password.to_string())
+                        },
+                        protocol: match proto_request.protocol.enum_value_or_default() {
+                            glide_core::connection_request::ProtocolVersion::RESP3 => {
+                                redis::ProtocolVersion::RESP3
+                            }
+                            _ => redis::ProtocolVersion::RESP2,
+                        },
+                        client_name: None,
+                        lib_name: None,
+                        cache: None,
+                        server_assisted_cache: false,
+                    }
+                } else {
+                    redis::RedisConnectionInfo {
+                        db: proto_request.database_id as i64,
+                        username: None,
+                        password: None,
+                        protocol: match proto_request.protocol.enum_value_or_default() {
+                            glide_core::connection_request::ProtocolVersion::RESP3 => {
+                                redis::ProtocolVersion::RESP3
+                            }
+                            _ => redis::ProtocolVersion::RESP2,
+                        },
+                        client_name: None,
+                        lib_name: None,
+                        cache: None,
+                        server_assisted_cache: false,
+                    }
+                };
+
+            // TLS mode
+            let tls_mode = match proto_request.tls_mode.enum_value_or_default() {
+                glide_core::connection_request::TlsMode::SecureTls => {
+                    glide_core::client::TlsMode::SecureTls
+                }
+                glide_core::connection_request::TlsMode::InsecureTls => {
+                    glide_core::client::TlsMode::InsecureTls
+                }
+                _ => glide_core::client::TlsMode::NoTls,
+            };
+
+            // Cache JVM if not already cached
+            if let Ok(jvm) = env.get_java_vm() {
+                let _ = jni_client::JVM.set(Arc::new(jvm));
+            }
+
+            // Make a global ref so the callback object outlives this stack frame
+            let callback_global = env.new_global_ref(&callback_object)?;
+
+            let on_line: glide_core::client::MonitorLineCallback =
+                Arc::new(move |line: glide_core::client::MonitorLine| {
+                    let Some(jvm) = jni_client::JVM.get() else {
+                        log::warn!("MonitorClient callback: JVM not initialized, dropping message");
+                        return;
+                    };
+                    let Ok(mut cb_env) = jvm.attach_current_thread_as_daemon() else {
+                        return;
+                    };
+                    let args_json =
+                        serde_json::to_string(&line.args).unwrap_or_else(|_| "[]".to_string());
+                    let Ok(j_client_addr) = cb_env.new_string(&line.client_addr) else {
+                        return;
+                    };
+                    let Ok(j_command) = cb_env.new_string(&line.command) else {
+                        return;
+                    };
+                    let Ok(j_args_json) = cb_env.new_string(&args_json) else {
+                        return;
+                    };
+                    let result = cb_env.call_method(
+                        &callback_global,
+                        "onMonitorMessage",
+                        "(DJLjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+                        &[
+                            jni::objects::JValue::Double(line.timestamp),
+                            jni::objects::JValue::Long(line.db),
+                            jni::objects::JValue::Object(&j_client_addr),
+                            jni::objects::JValue::Object(&j_command),
+                            jni::objects::JValue::Object(&j_args_json),
+                        ],
+                    );
+                    if let Err(e) = result {
+                        log::warn!("MonitorClient: JNI callback failed: {e}");
+                        let _ = cb_env.exception_clear();
+                    }
+                });
+
+            let monitor = jni_client::get_runtime()
+                .block_on(glide_core::client::MonitorClient::new(
+                    &address,
+                    redis_connection_info,
+                    tls_mode,
+                    on_line,
+                ))
+                .map_err(|e| FFIError::Logger(format!("Failed to create MonitorClient: {e}")))?;
+
+            let id = NEXT_MONITOR_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            get_monitor_clients().insert(id, monitor);
+            Ok(id as jlong)
+        }
+
+        let result = create_monitor(&mut env, connection_request_bytes, callback_object);
+        handle_errors(&mut env, result)
+    })
+    .unwrap_or(0)
+}
+
+/// Close a MONITOR client by ID (drops it, stopping the monitor stream).
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_glide_internal_GlideNativeBridge_closeMonitorClient(
+    _env: JNIEnv,
+    _class: JClass,
+    monitor_id: jlong,
+) {
+    get_monitor_clients().remove(&(monitor_id as u64));
 }
 
 /// Get cache metrics asynchronously

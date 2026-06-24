@@ -4,6 +4,8 @@ package glide.api.commands;
 import glide.api.models.commands.FailoverOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
+import glide.api.models.commands.LatencyEntry;
+import glide.api.models.commands.LatencyEventInfo;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
@@ -614,4 +616,64 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> replicaofNoOne();
+
+    /**
+     * Returns the latency spike time series for the specified event.
+     *
+     * @see <a href="https://valkey.io/commands/latency-history/">valkey.io</a> for details.
+     * @param event The name of the latency event (e.g., "command").
+     * @return An array of {@link LatencyEntry} for the event, or an empty array if the event doesn't
+     *     exist.
+     * @example
+     *     <pre>{@code
+     * LatencyEntry[] history = client.latencyHistory("command").get();
+     * for (LatencyEntry entry : history) {
+     *     System.out.println("Time: " + entry.getTime() + ", Latency: " + entry.getLatency());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<LatencyEntry[]> latencyHistory(@NonNull String event);
+
+    /**
+     * Reports the latest latency events logged by the server.
+     *
+     * @see <a href="https://valkey.io/commands/latency-latest/">valkey.io</a> for details.
+     * @return An array of {@link LatencyEventInfo} for the latest latency events.
+     * @example
+     *     <pre>{@code
+     * LatencyEventInfo[] latest = client.latencyLatest().get();
+     * for (LatencyEventInfo info : latest) {
+     *     System.out.println("Event: " + info.getEventName() + ", Latest: " + info.getLatestDuration());
+     * }
+     * }</pre>
+     */
+    CompletableFuture<LatencyEventInfo[]> latencyLatest();
+
+    /**
+     * Resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @return The number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = client.latencyReset().get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset();
+
+    /**
+     * Resets the latency spike time series for the specified events.<br>
+     * If {@code events} is empty, resets the latency spike time series for all events.
+     *
+     * @see <a href="https://valkey.io/commands/latency-reset/">valkey.io</a> for details.
+     * @param events The event names to reset.
+     * @return The number of event time series that were reset.
+     * @example
+     *     <pre>{@code
+     * Long count = client.latencyReset(new String[] {"command"}).get();
+     * System.out.println("Reset " + count + " events");
+     * }</pre>
+     */
+    CompletableFuture<Long> latencyReset(@NonNull String[] events);
 }

@@ -1,40 +1,23 @@
 name: Install shared software dependencies
+description: Install platform-specific dependencies for valkey-glide builds
 
 inputs:
     os:
         description: "The current operating system"
         required: true
-        type: string
-        options:
-            - amazon-linux
-            - macos
-            - ubuntu
-            - windows
     target:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
-        type: string
         required: false
-        defalt: "x86_64-unknown-linux-gnu"
-        options:
-            - x86_64-unknown-linux-gnu
-            - aarch64-unknown-linux-gnu
-            - x86_64-apple-darwin
-            - aarch64-apple-darwin
-            - aarch64-unknown-linux-musl
-            - x86_64-unknown-linux-musl
-            - x86_64-pc-windows-msvc
+        default: "x86_64-unknown-linux-gnu"
     engine-version:
         description: "Engine version to install"
         required: false
-        type: string
     language:
         description: "The language being built (optional, for language-specific setup)"
         required: false
-        type: string
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
-        type: string
 
 runs:
     using: "composite"
@@ -83,22 +66,27 @@ runs:
           with:
               python-version: "3.x"
 
-        - name: Install Rust toolchain and protoc
+        - name: Install Rust toolchain
           if: "${{ !contains(inputs.target, 'musl') }}"
-          uses: ./.github/workflows/install-rust-and-protoc
+          uses: ./.github/actions/install-rust
           with:
               target: ${{ inputs.target }}
+
+        - name: Install protoc
+          if: "${{ !contains(inputs.target, 'musl') }}"
+          uses: ./.github/actions/install-protoc
+          with:
               github-token: ${{ inputs.github-token }}
 
         - name: Install engine
           if: "${{ inputs.engine-version }}"
-          uses: ./.github/workflows/install-engine
+          uses: ./.github/actions/install-engine
           with:
               engine-version: ${{ inputs.engine-version }}
               target: ${{ inputs.target }}
 
         - name: Install zig
           if: ${{ contains(inputs.target, 'linux-gnu') }}
-          uses: ./.github/workflows/install-zig
+          uses: ./.github/actions/install-zig
           with:
               target: ${{ inputs.target }}

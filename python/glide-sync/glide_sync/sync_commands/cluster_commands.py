@@ -13,6 +13,12 @@ from glide_shared.commands.core_options import (
     FunctionRestorePolicy,
     InfoSection,
 )
+from glide_shared.commands.latency import (
+    LatencyEntry,
+    LatencyEventInfo,
+    _parse_latency_history_cluster,
+    _parse_latency_latest_cluster,
+)
 from glide_shared.constants import (
     TOK,
     TClusterResponse,
@@ -1709,3 +1715,78 @@ class ClusterCommands(CoreCommands):
                 OK
         """
         return cast(TOK, self._execute_command(RequestType.ClientUnpause, [], route))
+
+    def latency_history(
+        self, event: TEncodable, route: Optional[Route] = None
+    ) -> TClusterResponse[List[LatencyEntry]]:
+        """
+        Returns the latency spike time series for the specified event.
+
+        See [valkey.io](https://valkey.io/commands/latency-history/) for details.
+
+        Args:
+            event (TEncodable): The name of the latency event (e.g., ``"command"``).
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[List[LatencyEntry]]: A cluster value containing list(s)
+                of LatencyEntry for the event.
+
+        Examples:
+            >>> history = client.latency_history("command")
+            >>> for node, entries in history.items():
+            ...     print(f"Node [{node}]: {len(entries)} entries")
+        """
+        return _parse_latency_history_cluster(
+            self._execute_command(RequestType.LatencyHistory, [event], route),
+        )
+
+    def latency_latest(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[List[LatencyEventInfo]]:
+        """
+        Reports the latest latency events logged by the server.
+
+        See [valkey.io](https://valkey.io/commands/latency-latest/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[List[LatencyEventInfo]]: A cluster value containing list(s)
+                of LatencyEventInfo for the latest latency events.
+
+        Examples:
+            >>> latest = client.latency_latest()
+            >>> for node, entries in latest.items():
+            ...     print(f"Node [{node}]: {len(entries)} events")
+        """
+        return _parse_latency_latest_cluster(
+            self._execute_command(RequestType.LatencyLatest, [], route),
+        )
+
+    def latency_reset(self, *events: TEncodable, route: Optional[Route] = None) -> int:
+        """
+        Resets the latency spike time series for all or specified events.
+        If no events are provided, resets the latency spike time series for all events.
+
+        See [valkey.io](https://valkey.io/commands/latency-reset/) for details.
+
+        Args:
+            *events (TEncodable): The event names to reset. If none provided, resets
+                all events.
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            int: The total number of event time series that were reset across all nodes.
+
+        Examples:
+            >>> client.latency_reset()
+                4
+            >>> client.latency_reset("command", route=AllNodes())
+                2
+        """
+        return cast(
+            int,
+            self._execute_command(RequestType.LatencyReset, list(events), route),
+        )
