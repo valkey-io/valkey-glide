@@ -465,7 +465,12 @@ class BaseClient(CoreCommands):
                 if response_buffer
                 else self._ffi.NULL
             )
-            buf_len = len(response_buffer) if response_buffer else 0
+            # Capacity must be expressed in bytes, not elements. ``len()`` on a
+            # memoryview returns the element count (``shape[0]``), which equals
+            # the byte count only for itemsize-1 formats (e.g. "B"). For any
+            # itemsize > 1 view (e.g. "I"/"Q"/float) it under-reports capacity,
+            # causing the FFI to spuriously reject values that actually fit.
+            buf_len = response_buffer.nbytes if response_buffer else 0
             result = self._lib.command_with_buffer(
                 client_adapter_ptr,
                 0,
