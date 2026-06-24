@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import math
 import threading
 from typing import Any, Callable, List, Optional
 
@@ -31,7 +30,7 @@ class MonitorClient:
         self._is_closed = False
         self._stop_lock = threading.Lock()
         self._user_callback: Optional[Callable[[MonitorMsg], None]] = None
-        self._backend: str = "asyncio"
+        self._is_asyncio: bool = True
         # asyncio path
         self._asyncio_queue: Optional[asyncio.Queue[MonitorMsg]] = None
         self._asyncio_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -42,10 +41,13 @@ class MonitorClient:
 
     def _setup_queue(self) -> None:
         """Initialize the backend-specific message queue."""
-        if self._backend == "trio":
+        if not self._is_asyncio:
+            import math
+
             import trio
 
             self._trio_token = trio.lowlevel.current_trio_token()
+            # Unbounded — matches asyncio.Queue() default behavior for this debug-only client
             self._trio_send, self._trio_receive = trio.open_memory_channel(math.inf)
         else:
             self._asyncio_loop = asyncio.get_running_loop()
@@ -53,15 +55,19 @@ class MonitorClient:
 
     def _enqueue_message(self, msg: MonitorMsg) -> None:
         """Thread-safe enqueue from the FFI callback thread."""
-        if self._backend == "trio":
+        if not self._is_asyncio:
+            import trio
 
             def _safe_send(msg=msg):
                 try:
                     self._trio_send.send_nowait(msg)
-                except Exception:
-                    pass
+                except (trio.ClosedResourceError, trio.BrokenResourceError):
+                    pass  # channel torn down, discard
 
-            self._trio_token.run_sync_soon(_safe_send)
+            try:
+                self._trio_token.run_sync_soon(_safe_send)
+            except trio.RunFinishedError:
+                pass  # trio loop exited, discard
         else:
             loop = self._asyncio_loop
             if loop is not None and not loop.is_closed():
@@ -91,7 +97,10 @@ class MonitorClient:
                 "MonitorClient requires a GlideClientConfiguration (standalone only)"
             )
         instance = cls()
-        instance._backend = sniffio.current_async_library()
+        try:
+            instance._is_asyncio = sniffio.current_async_library() == "asyncio"
+        except sniffio.AsyncLibraryNotFoundError:
+            instance._is_asyncio = True
         instance._user_callback = callback
         instance._setup_queue()
 
@@ -158,20 +167,22 @@ class MonitorClient:
 
     async def get_monitor_message(self) -> MonitorMsg:
         """Wait for and return the next MonitorMsg."""
-        if self._backend == "trio":
+        if not self._is_asyncio:
             return await self._trio_receive.receive()
         return await self._asyncio_queue.get()  # type: ignore[union-attr]
 
     def try_get_monitor_message(self) -> Optional[MonitorMsg]:
         """Non-blocking retrieval. Returns None if queue is empty."""
-        if self._backend == "trio":
+        if not self._is_asyncio:
+            import trio
+
             try:
                 return self._trio_receive.receive_nowait()
-            except Exception:
+            except trio.WouldBlock:
                 return None
         try:
             return self._asyncio_queue.get_nowait()  # type: ignore[union-attr]
-        except Exception:
+        except asyncio.QueueEmpty:
             return None
 
     async def stop(self) -> None:
@@ -184,7 +195,7 @@ class MonitorClient:
         if core_client != self._ffi.NULL:
             self._lib.close_monitor_client(core_client)
         self._callback_ref = None
-        if self._backend == "trio" and self._trio_send is not None:
+        if not self._is_asyncio and self._trio_send is not None:
             await self._trio_send.aclose()
             if self._trio_receive is not None:
                 await self._trio_receive.aclose()

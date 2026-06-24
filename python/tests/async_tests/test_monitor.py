@@ -11,6 +11,12 @@ from tests.async_tests.conftest import create_client
 from tests.utils.utils import create_client_config
 
 
+async def _wait_for_command(received, command, timeout=5.0):
+    with anyio.fail_after(timeout):
+        while command not in [m.command.upper() for m in received]:
+            await anyio.sleep(0.05)
+
+
 @pytest.mark.anyio
 class TestMonitorAsync:
     @pytest.mark.parametrize("cluster_mode", [False])
@@ -26,8 +32,7 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.set("monitor_test_key", "monitor_test_val")
-                # Give time for monitor callback to fire
-                await anyio.sleep(0.5)
+                await _wait_for_command(received, "SET")
             finally:
                 await client.close()
         finally:
@@ -46,7 +51,6 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.ping()
-                await anyio.sleep(0.5)
             finally:
                 await client.close()
 
@@ -98,7 +102,7 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.set("field_test_key", "field_test_val")
-                await anyio.sleep(0.5)
+                await _wait_for_command(received, "SET")
             finally:
                 await client.close()
         finally:
