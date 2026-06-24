@@ -87,8 +87,15 @@ cd java
 ./gradlew :client:clean
 ./gradlew :client:buildRust
 ./gradlew :client:buildAll
-./gradlew :integTest:test
 ./gradlew :spotlessApply
+
+./gradlew :client:test                             # Run all unit tests
+./gradlew :client:test --tests 'BatchTests'        # Run unit tests for a class
+./gradlew :client:test --tests '*.latencyHistory'  # Run unit tests with a filter
+
+./gradlew :integTest:test                               # Run all integration tests
+./gradlew :integTest:test --tests 'SharedCommandTests'  # Run integration tests for a class
+./gradlew :integTest:test --tests '*.latencyHistory'    # Run integration tests with a filter
 ```
 
 **Python:**
