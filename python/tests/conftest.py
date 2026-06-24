@@ -156,19 +156,21 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             addresses=standalone_endpoints,
         )
 
-    pytest.valkey_tls_cluster = ValkeyCluster(
-        tls=True,
-        cluster_mode=True,
-        load_module=load_module,
-        replica_count=2,
-    )
-    pytest.standalone_tls_cluster = ValkeyCluster(
-        tls=True,
-        cluster_mode=False,
-        shard_count=1,
-        replica_count=1,
-        load_module=load_module,
-    )
+    if not standalone_endpoints:
+     if not (cluster_endpoints or standalone_endpoints):
+        pytest.valkey_tls_cluster = ValkeyCluster(
+            tls=True,
+            cluster_mode=True,
+            load_module=load_module,
+            replica_count=2,
+        )
+        pytest.standalone_tls_cluster = ValkeyCluster(
+            tls=True,
+            cluster_mode=False,
+            shard_count=1,
+            replica_count=1,
+            load_module=load_module,
+        )
 
 
 @pytest.fixture(autouse=True, scope="session")

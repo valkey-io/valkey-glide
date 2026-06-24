@@ -56,18 +56,25 @@ async def glide_client(
 
     cache_key = (cluster_mode, protocol)
     client = _client_pool.get(cache_key)
+    needs_new = (
+        client is None
+        or client._is_closed
+        or client._core_client is None
+        or client._core_client == client._ffi.NULL
+    )
 
-    if client is not None and not client._is_closed:
+    if not needs_new:
         # Re-register pipe reader on the current event loop
         try:
             client._loop = asyncio.get_running_loop()
             client._is_asyncio = True
             client._setup_pipe()
+            # Verify client is still responsive
+            await client.custom_command(["PING"])
         except Exception:
-            # If re-registration fails, create a fresh client
-            client = None
+            needs_new = True
 
-    if client is None or client._is_closed:
+    if needs_new:
         client = await create_client(
             request,
             cluster_mode,
@@ -78,7 +85,16 @@ async def glide_client(
         _client_pool[cache_key] = client
 
     yield client
-    # Don't close — reused across tests. Session cleanup handles it.
+
+    # Post-test: reset server config that tests may have changed
+    if not client._is_closed and client._core_client is not None:
+        try:
+            await client.custom_command(["CLIENT", "UNPAUSE"])
+            await client.custom_command(["CONFIG", "SET", "timeout", "0"])
+            await client.custom_command(["FLUSHDB", "ASYNC"])
+        except Exception:
+            # Client is dead — will be recreated next test
+            _client_pool.pop(cache_key, None)
 
 
 @pytest.fixture(scope="function")

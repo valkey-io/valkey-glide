@@ -42,22 +42,62 @@ MAX_BACKOFF_TIME = 8  # seconds
 Logger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
 
 
+_sync_client_pool: dict = {}
+
+
 @pytest.fixture(scope="function")
 def glide_sync_client(
     request,
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> Generator[TSyncGlideClient, None, None]:
-    "Get sync socket client for tests"
-    client = create_sync_client(
-        request,
-        cluster_mode,
-        protocol=protocol,
-        request_timeout=5000,
+    """Get sync socket client for tests. Reuses connections with auto-recovery."""
+    cache_key = (cluster_mode, protocol)
+    client = _sync_client_pool.get(cache_key)
+    needs_new = (
+        client is None
+        or client._is_closed
+        or client._core_client is None
+        or client._core_client == client._ffi.NULL
     )
+
+    if not needs_new:
+        try:
+            client.custom_command(["PING"])
+        except Exception:
+            try:
+                client.close()
+            except Exception:
+                pass
+            needs_new = True
+
+    if needs_new:
+        client = create_sync_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=5000,
+        )
+        _sync_client_pool[cache_key] = client
+
     yield client
-    sync_test_teardown(request, cluster_mode, protocol)
-    client.close()
+
+    # Post-test cleanup
+    if (
+        not client._is_closed
+        and client._core_client is not None
+        and client._core_client != client._ffi.NULL
+    ):
+        try:
+            client.custom_command(["CLIENT", "UNPAUSE"])
+            client.custom_command(["CONFIG", "SET", "timeout", "0"])
+            client.custom_command(["FLUSHDB", "ASYNC"])
+        except Exception:
+            try:
+                client.close()
+            except Exception:
+                pass
+            _sync_client_pool.pop(cache_key, None)
 
 
 @pytest.fixture(scope="function")
