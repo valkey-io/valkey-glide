@@ -2747,3 +2747,24 @@ func makeFullTestName(client interfaces.BaseClientCommands, testName string, isA
 	}
 	return fullTestName
 }
+
+func (suite *GlideTestSuite) TestMigrateBatch() {
+	client := suite.defaultClient()
+	ctx := context.Background()
+	key1 := "{migrate}" + uuid.New().String()
+	key2 := "{migrate}" + uuid.New().String()
+
+	// Standalone batch with empty keys should produce an error
+	batch := pipeline.NewStandaloneBatch(false)
+	batch.Migrate("nonexistent.host", 6379, []string{}, 0, 1000)
+	_, err := client.Exec(ctx, *batch, true)
+	suite.Error(err)
+	suite.Contains(err.Error(), "keys must not be empty")
+
+	// Standalone batch with multi-key NOKEY
+	batch2 := pipeline.NewStandaloneBatch(false)
+	batch2.Migrate("nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
+	results, err := client.Exec(ctx, *batch2, false)
+	suite.NoError(err)
+	suite.Equal("NOKEY", results[0])
+}
