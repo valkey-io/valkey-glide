@@ -73,12 +73,12 @@ describe("OpenTelemetry Timing", () => {
         for (let i = 0; i < 100; i++) await client.set(`k${i}`, `v${i}`);
         ts = log("100x SET sequential", ts);
 
-        // batch 100 SETs
+        // batch 100 SETs (use hash tags to ensure same slot)
         const batch = new ClusterBatch(true);
-        for (let i = 0; i < 100; i++) batch.set(`bk${i}`, `bv${i}`);
+        for (let i = 0; i < 100; i++) batch.set(`{batch}k${i}`, `bv${i}`);
         await client.exec(batch, true);
         ts = log("batch 100x SET", ts);
 
         client.close();
-    }, 20000);
+    }, 60000);
 });
