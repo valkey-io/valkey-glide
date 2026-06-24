@@ -462,22 +462,26 @@ def _cargo_clean(crate_dir: Path) -> None:
 
 def clean_clients(client: ClientTarget) -> None:
     """Clean build artifacts for the selected client(s)."""
+
+    # Clean shared artifacts.
+    _cargo_clean(GLIDE_SHARED_DIR)
+    _cargo_clean(FFI_DIR)
+    SHARED_FFI_LIB.unlink(missing_ok=True)
+    SHARED_NATIVE_MODULE.unlink(missing_ok=True)
+
+    # Clean async-only artifacts.
     if client in (ClientTarget.ASYNC, ClientTarget.ALL):
         _cargo_clean(GLIDE_ASYNC_DIR)
         rmtree(ASYNC_VENDORED_SHARED_DIR, ignore_errors=True)
 
+    # Clean sync-only artifacts.
     if client in (ClientTarget.SYNC, ClientTarget.ALL):
-        _cargo_clean(FFI_DIR)
         run_command(
             [sys.executable, "setup.py", "clean"],
             cwd=GLIDE_SYNC_DIR,
             label="setup.py clean",
         )
         SYNC_FFI_LIB.unlink(missing_ok=True)
-
-    _cargo_clean(GLIDE_SHARED_DIR)
-    SHARED_FFI_LIB.unlink(missing_ok=True)
-    SHARED_NATIVE_MODULE.unlink(missing_ok=True)
 
     print("[OK] Clean completed")
 
