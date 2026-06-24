@@ -3,7 +3,6 @@
 from typing import List
 
 import pytest
-import sniffio
 from glide import GlideClusterClientConfiguration, MonitorClient
 from glide_shared.commands.core_options import MonitorMsg
 
@@ -13,19 +12,9 @@ from tests.utils.utils import create_client_config, wait_for
 
 @pytest.mark.anyio
 class TestMonitorAsync:
-    @staticmethod
-    def _skip_if_trio():
-        """MonitorClient uses asyncio.Queue internally and doesn't support trio."""
-        try:
-            if sniffio.current_async_library() == "trio":
-                pytest.skip("MonitorClient requires asyncio (uses asyncio.Queue)")
-        except sniffio.AsyncLibraryNotFoundError:
-            pass
-
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_monitor_receives_commands(self, request, cluster_mode):
         """Test that MonitorClient receives commands issued by another client."""
-        self._skip_if_trio()
         config = create_client_config(request, cluster_mode=False)
         received: List[MonitorMsg] = []
 
@@ -54,7 +43,6 @@ class TestMonitorAsync:
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_monitor_queue(self, request, cluster_mode):
         """Test that MonitorClient queues messages when no callback is provided."""
-        self._skip_if_trio()
         config = create_client_config(request, cluster_mode=False)
 
         monitor = await MonitorClient.create(config)
@@ -80,7 +68,6 @@ class TestMonitorAsync:
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_monitor_context_manager(self, request, cluster_mode):
         """Test MonitorClient as async context manager."""
-        self._skip_if_trio()
         config = create_client_config(request, cluster_mode=False)
 
         monitor = await MonitorClient.create(config)
@@ -94,7 +81,6 @@ class TestMonitorAsync:
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_monitor_stop_idempotent(self, request, cluster_mode):
         """Test that calling stop() multiple times is safe."""
-        self._skip_if_trio()
         config = create_client_config(request, cluster_mode=False)
         monitor = await MonitorClient.create(config)
         await monitor.stop()
@@ -112,7 +98,6 @@ class TestMonitorAsync:
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_monitor_msg_fields(self, request, cluster_mode):
         """Test that MonitorMsg has correct field types."""
-        self._skip_if_trio()
         config = create_client_config(request, cluster_mode=False)
         received: List[MonitorMsg] = []
 
