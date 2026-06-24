@@ -72,6 +72,10 @@ class BaseClient(CoreCommands):
         self._pubsub_lock = threading.Lock()
         self._pubsub_condition = threading.Condition(self._pubsub_lock)
         self._pubsub_callback_ref = None  # Keep callback alive
+        # Lock protecting _core_client and _is_closed for free-threading safety.
+        # Under GIL builds this is a no-op (GIL serializes access).
+        # Under free-threaded builds this prevents use-after-free on concurrent close.
+        self._client_lock = threading.Lock()
 
         self._is_closed: bool = False
 
@@ -977,13 +981,14 @@ class BaseClient(CoreCommands):
         return self._handle_cmd_result(result)
 
     def close(self) -> None:
-        if not self._is_closed:
-            self._is_closed = True
-            with self._pubsub_condition:
-                self._pubsub_condition.notify_all()
-            self._lib.close_client(self._core_client)
-            self._core_client = self._ffi.NULL
-            self._pubsub_callback_ref = None
+        with self._client_lock:
+            if not self._is_closed:
+                self._is_closed = True
+                with self._pubsub_condition:
+                    self._pubsub_condition.notify_all()
+                self._lib.close_client(self._core_client)
+                self._core_client = self._ffi.NULL
+                self._pubsub_callback_ref = None
 
     def __enter__(self) -> Self:
         return self

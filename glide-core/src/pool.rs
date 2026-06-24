@@ -35,7 +35,7 @@
 use crate::client::Client as GlideClient;
 use dashmap::DashMap;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex as TokioMutex;
@@ -104,8 +104,8 @@ pub struct ClientPool {
     pub config: PoolConfig,
     /// LIFO idle stack — most recently returned client is at the back.
     pub idle: VecDeque<PooledClient>,
-    /// Currently borrowed clients (client_id → placeholder for tracking).
-    pub in_use: DashMap<u64, ()>,
+    /// Currently borrowed clients (client_id → PooledClient).
+    pub in_use: DashMap<u64, PooledClient>,
     /// Current total count (idle + in_use + creating).
     pub total_count: AtomicU32,
     /// Pool lifecycle state.
@@ -119,7 +119,9 @@ impl ClientPool {
             return Err(PoolError::InvalidConfig("max_size must be >= 1".into()));
         }
         if config.min_idle > config.max_size {
-            return Err(PoolError::InvalidConfig("min_idle must be <= max_size".into()));
+            return Err(PoolError::InvalidConfig(
+                "min_idle must be <= max_size".into(),
+            ));
         }
         if config.idle_timeout.is_zero() {
             return Err(PoolError::InvalidConfig("idle_timeout must be > 0".into()));
@@ -141,9 +143,8 @@ impl ClientPool {
 
     /// Non-blocking acquire. Returns client_id on success.
     /// Returns -1 if pool is closed/closing, -3 if no idle client available.
-    /// Evicts idle connections past idle_timeout before returning.
-    /// Evicted client_ids are appended to `evicted` for caller cleanup.
-    pub fn try_acquire(&mut self, evicted: &mut Vec<u64>) -> i64 {
+    /// Evicts idle connections past idle_timeout internally.
+    pub fn try_acquire(&mut self) -> i64 {
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             return -1;
         }
@@ -151,14 +152,13 @@ impl ClientPool {
         while let Some(mut entry) = self.idle.pop_back() {
             let idle_duration = Instant::now().duration_since(entry.last_idle_at);
             if idle_duration > self.config.idle_timeout {
-                evicted.push(entry.client_id);
                 self.total_count.fetch_sub(1, Ordering::AcqRel);
                 continue;
             }
             let client_id = entry.client_id;
             entry.state = ClientState::InUse;
             entry.borrowed_at = Some(Instant::now());
-            self.in_use.insert(client_id, ());
+            self.in_use.insert(client_id, entry);
             return client_id as i64;
         }
 
@@ -171,14 +171,52 @@ impl ClientPool {
             && self.total_count.load(Ordering::Acquire) < self.config.max_size
     }
 
-    /// Release a client back to the idle pool. Returns false if not found.
-    pub fn release(&mut self, client_id: u64, client: PooledClient) -> bool {
-        self.in_use.remove(&client_id);
+    /// Add a newly created client to the idle pool. Returns the assigned client_id.
+    /// Increments total_count. Use `add_client_reserved` if the slot was pre-reserved.
+    pub fn add_client(&mut self, client: GlideClient) -> u64 {
+        let client_id = self.next_id();
+        let entry = PooledClient {
+            client_id,
+            client,
+            created_at: Instant::now(),
+            last_idle_at: Instant::now(),
+            borrowed_at: None,
+            state: ClientState::Idle,
+        };
+        self.idle.push_back(entry);
+        self.total_count.fetch_add(1, Ordering::AcqRel);
+        client_id
+    }
+
+    /// Add a newly created client to the idle pool when the caller already
+    /// pre-incremented total_count (e.g., background creation after should_create check).
+    /// Returns the assigned client_id.
+    pub fn add_client_reserved(&mut self, client: GlideClient) -> u64 {
+        let client_id = self.next_id();
+        let entry = PooledClient {
+            client_id,
+            client,
+            created_at: Instant::now(),
+            last_idle_at: Instant::now(),
+            borrowed_at: None,
+            state: ClientState::Idle,
+        };
+        self.idle.push_back(entry);
+        client_id
+    }
+
+    /// Release a client back to the idle pool by client_id.
+    /// Returns false if not found in in_use.
+    pub fn release(&mut self, client_id: u64) -> bool {
+        let entry = self.in_use.remove(&client_id);
+        let Some((_, mut entry)) = entry else {
+            return false;
+        };
+
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             self.total_count.fetch_sub(1, Ordering::AcqRel);
             return true;
         }
-        let mut entry = client;
         entry.state = ClientState::Idle;
         entry.last_idle_at = Instant::now();
         entry.borrowed_at = None;
@@ -190,10 +228,7 @@ impl ClientPool {
     pub fn destroy(&mut self) {
         self.state.store(POOL_CLOSED, Ordering::Release);
         self.idle.clear();
-        let keys: Vec<u64> = self.in_use.iter().map(|e| *e.key()).collect();
-        for key in keys {
-            self.in_use.remove(&key);
-        }
+        self.in_use.clear();
         self.total_count.store(0, Ordering::Release);
     }
 
@@ -262,7 +297,6 @@ impl std::fmt::Display for PoolError {
 
 impl std::error::Error for PoolError {}
 
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // FEATURE 2: ISOLATED EXECUTION (SCOPE POOL)
 //
@@ -304,6 +338,7 @@ pub enum ScopeSubscription {
 }
 
 /// Update ConnectionState based on a command about to execute.
+#[allow(clippy::collapsible_if)]
 pub fn update_state_for_command(state: &mut ConnectionState, cmd: &str, args: &[&[u8]]) {
     match cmd.to_uppercase().as_str() {
         "WATCH" => state.watch_active = true,
@@ -396,7 +431,11 @@ pub struct ScopePool {
 }
 
 impl ScopePool {
-    pub fn new(config: ScopePoolConfig, connection_request_bytes: Vec<u8>, parent_client_id: u64) -> Self {
+    pub fn new(
+        config: ScopePoolConfig,
+        connection_request_bytes: Vec<u8>,
+        parent_client_id: u64,
+    ) -> Self {
         Self {
             config,
             idle: VecDeque::new(),
@@ -430,9 +469,12 @@ impl ScopePool {
                         let scope_id = next.scope_id;
                         next.borrowed_at = Some(Instant::now());
                         next.state = ConnectionState::default();
-                        registry.insert(scope_id, ScopeEntry {
-                            connection: Arc::new(TokioMutex::new(next)),
-                        });
+                        registry.insert(
+                            scope_id,
+                            ScopeEntry {
+                                connection: Arc::new(TokioMutex::new(next)),
+                            },
+                        );
                         self.in_use.insert(scope_id, ());
                         return scope_id as i64;
                     }
@@ -442,9 +484,12 @@ impl ScopePool {
                 let scope_id = conn.scope_id;
                 conn.borrowed_at = Some(Instant::now());
                 conn.state = ConnectionState::default();
-                registry.insert(scope_id, ScopeEntry {
-                    connection: Arc::new(TokioMutex::new(conn)),
-                });
+                registry.insert(
+                    scope_id,
+                    ScopeEntry {
+                        connection: Arc::new(TokioMutex::new(conn)),
+                    },
+                );
                 self.in_use.insert(scope_id, ());
                 return scope_id as i64;
             }
@@ -456,12 +501,15 @@ impl ScopePool {
     }
 
     /// Release a scope. Zero-cost if state is clean.
+    #[allow(clippy::needless_borrow)]
     pub fn release(&mut self, scope_id: u64, registry: &DashMap<u64, ScopeEntry>) -> bool {
         if self.in_use.remove(&scope_id).is_none() {
             return false;
         }
         let entry = registry.remove(&scope_id);
-        let Some((_, entry)) = entry else { return false; };
+        let Some((_, entry)) = entry else {
+            return false;
+        };
 
         if self.state.load(Ordering::Acquire) != POOL_RUNNING {
             self.total_count.fetch_sub(1, Ordering::AcqRel);
@@ -506,44 +554,63 @@ impl ScopePool {
                                     match sub {
                                         ScopeSubscription::Channel(c) => channels.push(c.clone()),
                                         ScopeSubscription::Pattern(p) => patterns.push(p.clone()),
-                                        ScopeSubscription::ShardedChannel(s) => sharded.push(s.clone()),
+                                        ScopeSubscription::ShardedChannel(s) => {
+                                            sharded.push(s.clone())
+                                        }
                                     }
                                 }
                                 if !channels.is_empty() {
                                     let mut cmd = redis::Cmd::new();
                                     cmd.arg("UNSUBSCRIBE");
-                                    for c in &channels { cmd.arg(c.as_slice()); }
+                                    for c in &channels {
+                                        cmd.arg(c.as_slice());
+                                    }
                                     let _ = guard.connection.send_packed_command(&cmd).await;
                                 }
                                 if !patterns.is_empty() {
                                     let mut cmd = redis::Cmd::new();
                                     cmd.arg("PUNSUBSCRIBE");
-                                    for p in &patterns { cmd.arg(p.as_slice()); }
+                                    for p in &patterns {
+                                        cmd.arg(p.as_slice());
+                                    }
                                     let _ = guard.connection.send_packed_command(&cmd).await;
                                 }
                                 if !sharded.is_empty() {
                                     let mut cmd = redis::Cmd::new();
                                     cmd.arg("SUNSUBSCRIBE");
-                                    for s in &sharded { cmd.arg(s.as_slice()); }
+                                    for s in &sharded {
+                                        cmd.arg(s.as_slice());
+                                    }
                                     let _ = guard.connection.send_packed_command(&cmd).await;
                                 }
                             }
                             if guard.state.multi_active {
-                                let _ = guard.connection.send_packed_command(
-                                    &redis::Cmd::new().arg("DISCARD")).await;
+                                let _ = guard
+                                    .connection
+                                    .send_packed_command(&redis::Cmd::new().arg("DISCARD"))
+                                    .await;
                             } else if guard.state.watch_active {
-                                let _ = guard.connection.send_packed_command(
-                                    &redis::Cmd::new().arg("UNWATCH")).await;
+                                let _ = guard
+                                    .connection
+                                    .send_packed_command(&redis::Cmd::new().arg("UNWATCH"))
+                                    .await;
                             }
                             if guard.state.tracking_enabled {
-                                let _ = guard.connection.send_packed_command(
-                                    &redis::Cmd::new().arg("CLIENT").arg("TRACKING").arg("OFF")).await;
+                                let _ = guard
+                                    .connection
+                                    .send_packed_command(
+                                        &redis::Cmd::new().arg("CLIENT").arg("TRACKING").arg("OFF"),
+                                    )
+                                    .await;
                             }
                             if guard.state.db_selected != 0 {
-                                let _ = guard.connection.send_packed_command(
-                                    &redis::Cmd::new().arg("SELECT").arg("0")).await;
+                                let _ = guard
+                                    .connection
+                                    .send_packed_command(&redis::Cmd::new().arg("SELECT").arg("0"))
+                                    .await;
                             }
-                        }).await;
+                        })
+                        .await;
 
                         // If cleanup succeeded and we have a pool reference, return to idle.
                         if cleanup_result.is_ok() {
@@ -642,7 +709,6 @@ pub fn get_or_create_scope_pool(
         .clone()
 }
 
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // CLUSTER SLOT VALIDATION
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -656,10 +722,7 @@ pub fn slot_for_key(key: &[u8]) -> u16 {
 /// Validate that a command's keys target the scope's pinned slot.
 /// Returns Ok(slot) if consistent, Err if cross-slot.
 /// If scope has no pinned slot yet, returns the slot from the first key.
-pub fn validate_scope_slot(
-    pinned: Option<u16>,
-    keys: &[&[u8]],
-) -> Result<Option<u16>, String> {
+pub fn validate_scope_slot(pinned: Option<u16>, keys: &[&[u8]]) -> Result<Option<u16>, String> {
     if keys.is_empty() {
         return Ok(pinned); // No keys — no slot constraint
     }

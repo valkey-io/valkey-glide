@@ -6,13 +6,13 @@
 //! Background client creation produces entries in the JNI_HANDLE_TABLE
 //! so that commands flow through the existing Java command dispatch path.
 
-use crate::jni_client::{generate_safe_handle, get_handle_table, get_runtime};
-use glide_core::pool::{self, ClientPool, ClientState, PoolConfig, PooledClient, POOL_RUNNING};
+use crate::jni_client::{get_handle_table, get_runtime};
+use glide_core::pool::{self, ClientPool, PoolConfig, POOL_RUNNING};
 use jni::objects::{JByteArray, JClass};
 use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 use std::sync::atomic::Ordering;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Create a new pool. Returns pool_id > 0 on success, -1 on invalid config.
 #[unsafe(no_mangle)]
@@ -49,7 +49,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
     // Spawn min_idle background client creation
     if min_idle > 0 {
         let pool_arc = pool::get_pool(pool_id).unwrap();
-        let max = max_size as u32;
         for _ in 0..(min_idle as u32) {
             let pool_clone = pool_arc.clone();
             let conn_bytes = bytes.clone();
@@ -61,18 +60,12 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolCreat
                         if pool.state.load(Ordering::Acquire) != POOL_RUNNING {
                             return;
                         }
-                        let handle_id = generate_safe_handle();
-                        get_handle_table().insert(handle_id, client.clone());
-                        let entry = PooledClient {
-                            client_id: handle_id,
-                            client,
-                            created_at: Instant::now(),
-                            last_idle_at: Instant::now(),
-                            borrowed_at: None,
-                            state: ClientState::Idle,
-                        };
-                        pool.idle.push_back(entry);
-                        pool.total_count.fetch_add(1, Ordering::AcqRel);
+                        // add_client returns the assigned client_id
+                        let client_id = pool.add_client(client.clone());
+                        // Also register in JNI handle table for command dispatch
+                        get_handle_table().insert(client_id, client.clone());
+                        // Register in scope client registry too
+                        glide_core::scope::register_client(client_id, client);
                     }
                     Err(e) => log::error!("Pool background client creation failed: {}", e),
                 }
@@ -97,11 +90,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            let mut evicted = Vec::new();
-            let result = pool.try_acquire(&mut evicted);
-            // Clean up evicted entries from JNI handle table
-            let handle_table = get_handle_table();
-            for eid in &evicted { handle_table.remove(eid); }
+            let result = pool.try_acquire();
             if result < 0 && pool.should_create() {
                 pool.total_count.fetch_add(1, Ordering::AcqRel);
                 let pool_clone = pool_arc.clone();
@@ -116,17 +105,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolTryAc
                                 pool.total_count.fetch_sub(1, Ordering::AcqRel);
                                 return;
                             }
-                            let handle_id = generate_safe_handle();
-                            get_handle_table().insert(handle_id, client.clone());
-                            let entry = PooledClient {
-                                client_id: handle_id,
-                                client,
-                                created_at: Instant::now(),
-                                last_idle_at: Instant::now(),
-                                borrowed_at: None,
-                                state: ClientState::Idle,
-                            };
-                            pool.idle.push_back(entry);
+                            let client_id = pool.add_client_reserved(client.clone());
+                            get_handle_table().insert(client_id, client.clone());
+                            glide_core::scope::register_client(client_id, client);
                         }
                         Err(e) => {
                             log::error!("Pool background client creation failed: {}", e);
@@ -155,24 +136,10 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolRelea
         None => return -1,
     };
 
-    // Get the client from the handle table to rebuild PooledClient
-    let client = match get_handle_table().get(&(client_id as u64)) {
-        Some(c) => c.value().clone(),
-        None => return -1,
-    };
-
     let pool_clone = pool_arc.clone();
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            let entry = PooledClient {
-                client_id: client_id as u64,
-                client,
-                created_at: Instant::now(), // approximation
-                last_idle_at: Instant::now(),
-                borrowed_at: None,
-                state: ClientState::Idle,
-            };
-            pool.release(client_id as u64, entry);
+            pool.release(client_id as u64);
             0
         }
         Err(_) => {
@@ -180,15 +147,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolRelea
             let cid = client_id as u64;
             runtime.spawn(async move {
                 let mut pool = pool_clone.lock().await;
-                let entry = PooledClient {
-                    client_id: cid,
-                    client,
-                    created_at: Instant::now(),
-                    last_idle_at: Instant::now(),
-                    borrowed_at: None,
-                    state: ClientState::Idle,
-                };
-                pool.release(cid, entry);
+                pool.release(cid);
             });
             0
         }
@@ -213,10 +172,11 @@ pub extern "system" fn Java_glide_ffi_resolvers_GlidePoolResolver_glidePoolDestr
         // Clean up JNI handle table entries for all pooled clients
         for entry in pool.idle.iter() {
             handle_table.remove(&entry.client_id);
+            glide_core::scope::unregister_client(entry.client_id);
         }
-        let in_use_keys: Vec<u64> = pool.in_use.iter().map(|e| *e.key()).collect();
-        for key in &in_use_keys {
-            handle_table.remove(key);
+        for entry in pool.in_use.iter() {
+            handle_table.remove(entry.key());
+            glide_core::scope::unregister_client(*entry.key());
         }
         pool.destroy();
     });

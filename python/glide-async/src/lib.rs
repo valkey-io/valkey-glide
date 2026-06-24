@@ -231,7 +231,7 @@ impl Script {
 }
 
 /// A Python module implemented in Rust.
-#[pymodule]
+#[pymodule(gil_used = false)]
 fn glide(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Level>()?;
     m.add_class::<Script>()?;

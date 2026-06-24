@@ -27,41 +27,45 @@ struct CommandResponse {
 }
 
 /// Cached reference to glide_shared.exceptions.RequestError class.
-static mut REQUEST_ERROR_CLASS: *mut ffi::PyObject = std::ptr::null_mut();
+/// Wrapped for Send+Sync safety — the pointer is valid for the process lifetime.
+struct PyClassPtr(*mut ffi::PyObject);
+unsafe impl Sync for PyClassPtr {}
+unsafe impl Send for PyClassPtr {}
+
+static REQUEST_ERROR_CLASS: std::sync::OnceLock<PyClassPtr> = std::sync::OnceLock::new();
 
 /// Get (and cache) the RequestError class from glide_shared.exceptions.
 unsafe fn get_request_error_class() -> *mut ffi::PyObject {
-    unsafe {
-        if REQUEST_ERROR_CLASS.is_null() {
+    REQUEST_ERROR_CLASS.get_or_init(|| {
+        unsafe {
             let mod_name =
                 ffi::PyUnicode_FromStringAndSize(c"glide_shared.exceptions".as_ptr(), 23);
             if mod_name.is_null() {
                 ffi::PyErr_Clear();
-                return std::ptr::null_mut();
+                return PyClassPtr(std::ptr::null_mut());
             }
             let module = ffi::PyImport_Import(mod_name);
             ffi::Py_DECREF(mod_name);
             if module.is_null() {
                 ffi::PyErr_Clear();
-                return std::ptr::null_mut();
+                return PyClassPtr(std::ptr::null_mut());
             }
             let attr = ffi::PyUnicode_FromStringAndSize(c"RequestError".as_ptr(), 12);
             if attr.is_null() {
                 ffi::Py_DECREF(module);
                 ffi::PyErr_Clear();
-                return std::ptr::null_mut();
+                return PyClassPtr(std::ptr::null_mut());
             }
             let cls = ffi::PyObject_GetAttr(module, attr);
             ffi::Py_DECREF(attr);
             ffi::Py_DECREF(module);
             if cls.is_null() {
                 ffi::PyErr_Clear();
-                return std::ptr::null_mut();
+                return PyClassPtr(std::ptr::null_mut());
             }
-            REQUEST_ERROR_CLASS = cls; // keep one reference
+            PyClassPtr(cls)
         }
-        REQUEST_ERROR_CLASS
-    }
+    }).0
 }
 
 /// Response type values — must match ffi/src/lib.rs `ResponseType` enum exactly.
@@ -227,7 +231,7 @@ fn parse_response(py: Python<'_>, ptr: usize) -> (PyObject, usize) {
     (obj, arena_ptr)
 }
 
-#[pymodule]
+#[pymodule(gil_used = false)]
 fn _fast_response(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_response, m)?)?;
     Ok(())

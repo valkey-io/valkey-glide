@@ -5359,11 +5359,11 @@ fn create_pool_client_sync(
     });
     // For sync dispatch to work correctly, we need a background_runtime ref
     // so execute_request can enter its context during block_on.
-    // Clone the pool runtime's handle into a dedicated wrapper.
-    let bg_handle = shared_bg.handle().clone();
+    // Use a minimal single-threaded runtime as the background context.
     let bg_wrapper = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .worker_threads(0) // No actual threads — we just need the Handle
+        .worker_threads(1)
+        .thread_name("glide-pool-bg")
         .build()
         .ok(); // Fallback: if this fails, sync dispatch still works without bg context
 
@@ -5472,13 +5472,7 @@ pub extern "C" fn glide_pool_try_acquire(pool_id: u64) -> i64 {
 
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            let mut evicted = Vec::new();
-            let result = pool.try_acquire(&mut evicted);
-
-            // Clean up evicted entries from POOL_CLIENTS
-            for evicted_id in &evicted {
-                get_pool_clients().remove(evicted_id);
-            }
+            let result = pool.try_acquire();
 
             // Record OTel metrics for pool hit/miss
             if result >= 0 {
@@ -5545,24 +5539,9 @@ pub extern "C" fn glide_pool_release(pool_id: u64, client_id: u64) -> i32 {
         None => return -1,
     };
 
-    // Get the client entry to return to pool
-    let entry = get_pool_clients().get(&client_id);
-    let Some(entry) = entry else { return -1; };
-    let client = entry.client.clone();
-    let created_at = entry.created_at;
-    drop(entry);
-
     match pool_arc.try_lock() {
         Ok(mut pool) => {
-            let pooled = PooledClient {
-                client_id,
-                client,
-                created_at,
-                last_idle_at: std::time::Instant::now(),
-                borrowed_at: None,
-                state: ClientState::Idle,
-            };
-            pool.release(client_id, pooled);
+            pool.release(client_id);
             0
         }
         Err(_) => {
@@ -5571,15 +5550,7 @@ pub extern "C" fn glide_pool_release(pool_id: u64, client_id: u64) -> i32 {
             let rt = get_pool_runtime();
             rt.spawn(async move {
                 let mut pool = pool_clone.lock().await;
-                let pooled = PooledClient {
-                    client_id,
-                    client,
-                    created_at,
-                    last_idle_at: std::time::Instant::now(),
-                    borrowed_at: None,
-                    state: ClientState::Idle,
-                };
-                pool.release(client_id, pooled);
+                pool.release(client_id);
             });
             0
         }

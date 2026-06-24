@@ -142,6 +142,18 @@ _pipe_remainder: bytes = b""
 _FRAME_STRUCT = struct.Struct("=QQQQ")  # Pre-compiled for hot path
 _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
 
+# Free-threading support: detect no-GIL builds and create a thread pool
+# for parallel response parsing when GIL is disabled.
+_FREE_THREADED: bool = hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled()
+_response_thread_pool = None
+if _FREE_THREADED:
+    from concurrent.futures import ThreadPoolExecutor
+
+    _response_thread_pool = ThreadPoolExecutor(
+        max_workers=min(os.cpu_count() or 4, 8),
+        thread_name_prefix="glide-resp-parser",
+    )
+
 
 def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
     """Free resources from a pipe frame whose client has been closed."""
@@ -200,7 +212,11 @@ def _handle_pipe_success(client, request_id, response_ptr, arena_or_err):
     finally:
         if arena_or_err:
             client._lib.free_response_arena(client._ffi.cast("void*", arena_or_err))
-    fut = client._pending_futures.pop(request_id, None)
+    if _FREE_THREADED:
+        with client._lock:
+            fut = client._pending_futures.pop(request_id, None)
+    else:
+        fut = client._pending_futures.pop(request_id, None)
     if fut is not None and not fut.done():
         _resolve_future(fut, result, client)
 
@@ -225,7 +241,11 @@ def _handle_pipe_error(client, request_id, arena_or_err):
         finally:
             client._lib.free_pipe_error_string(client._ffi.cast("char*", err_ptr))
     exc = get_request_error_class(error_type)(msg)
-    fut = client._pending_futures.pop(request_id, None)
+    if _FREE_THREADED:
+        with client._lock:
+            fut = client._pending_futures.pop(request_id, None)
+    else:
+        fut = client._pending_futures.pop(request_id, None)
     if fut is not None and not fut.done():
         _resolve_future(fut, exc, client)
 
@@ -276,10 +296,10 @@ def _drain_stale_pipe_frames():
             break
 
 
-def _on_async_pipe_readable() -> None:
-    # TODO(free-threading): When sys._is_gil_enabled() is False, dispatch frames
-    # to a thread pool for parallel response parsing across cores. Currently
-    # responses are parsed serially on the event loop thread.
+def _on_async_pipe_readable() -> None:  # noqa: C901
+    # Free-threading optimization: when GIL is disabled, dispatch response parsing
+    # to a thread pool for parallel execution across cores. With GIL enabled,
+    # parse serially on the event loop thread (thread pool overhead not worth it).
     global _pipe_remainder
     try:
         data = os.read(_async_pipe_read_fd, 32 * 512)
@@ -312,9 +332,19 @@ def _on_async_pipe_readable() -> None:
             _free_orphaned_frame(request_id, response_ptr, arena_or_err)
             continue
         if response_ptr != 0:
-            _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
+            if _FREE_THREADED and _response_thread_pool is not None:
+                _response_thread_pool.submit(
+                    _handle_pipe_success, client, request_id, response_ptr, arena_or_err
+                )
+            else:
+                _handle_pipe_success(client, request_id, response_ptr, arena_or_err)
         else:
-            _handle_pipe_error(client, request_id, arena_or_err)
+            if _FREE_THREADED and _response_thread_pool is not None:
+                _response_thread_pool.submit(
+                    _handle_pipe_error, client, request_id, arena_or_err
+                )
+            else:
+                _handle_pipe_error(client, request_id, arena_or_err)
     if offset < len(data):
         _pipe_remainder = data[offset:]
 
@@ -502,6 +532,14 @@ class BaseClient(CoreCommands):
     def _get_callback_id(self) -> int:
         return next(self._callback_id_gen)
 
+    def _register_future(self, callback_id: int, fut: "TFuture") -> None:
+        """Register a pending future (thread-safe for free-threading)."""
+        if _FREE_THREADED:
+            with self._lock:
+                self._pending_futures[callback_id] = fut
+        else:
+            self._pending_futures[callback_id] = fut
+
     def _complete_pubsub_futures_safe(self):
         """Complete pending pubsub futures with available messages. Must hold _pubsub_lock."""
         loop = self._loop
@@ -584,7 +622,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._pending_futures[callback_id] = fut
+        self._register_future(callback_id, fut)
 
         c_args, c_lengths, buffers = self._to_c_strings(args)
 
@@ -646,7 +684,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._pending_futures[callback_id] = fut
+        self._register_future(callback_id, fut)
 
         span = 0
         if OpenTelemetry.should_sample():
@@ -694,7 +732,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._pending_futures[callback_id] = fut
+        self._register_future(callback_id, fut)
 
         if keys is None:
             keys = []
@@ -764,7 +802,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._pending_futures[callback_id] = fut
+        self._register_future(callback_id, fut)
 
         c_password = (
             self._ffi.new("char[]", password.encode(ENCODING))
@@ -793,7 +831,7 @@ class BaseClient(CoreCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._pending_futures[callback_id] = fut
+        self._register_future(callback_id, fut)
 
         self._lib.refresh_iam_token(
             self._core_client,
@@ -918,7 +956,7 @@ class GlideClusterClient(BaseClient, ClusterCommands):
         callback_id = self._get_callback_id()
         fut = _get_new_future_instance()
 
-        self._pending_futures[callback_id] = fut
+        self._register_future(callback_id, fut)
 
         # Build scan args
         args = []

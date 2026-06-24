@@ -24,15 +24,15 @@ Usage:
     pool.close()
 """
 
-import time
 import threading
+import time
 from dataclasses import dataclass
 from typing import Optional
 
 from glide_shared._glide_ffi import _GlideFFI
 from glide_shared.config import BaseClientConfiguration, GlideClusterClientConfiguration
 
-from .glide_client import BaseClient, GlideClient, GlideClusterClient
+from .glide_client import BaseClient, GlideClient
 
 
 @dataclass
@@ -67,8 +67,15 @@ class ClientPool:
     """
 
     __slots__ = (
-        '_ffi', '_lib', '_client_config', '_pool_config',
-        '_closed', '_client_cache', '_conn_req_bytes', '_pool_id',
+        "_ffi",
+        "_lib",
+        "_client_config",
+        "_pool_config",
+        "_closed",
+        "_client_cache",
+        "_conn_req_bytes",
+        "_pool_id",
+        "_cache_lock",
     )
 
     def __init__(
@@ -83,10 +90,14 @@ class ClientPool:
         self._pool_config = pool_config or PoolConfig()
         self._closed = False
         self._client_cache: dict = {}
+        # Lock for _client_cache under free-threading (concurrent get_or_create_client)
+        self._cache_lock = threading.Lock()
 
         # Serialize the connection request protobuf
         is_cluster = isinstance(client_config, GlideClusterClientConfiguration)
-        conn_req = client_config._create_a_protobuf_conn_request(cluster_mode=is_cluster)
+        conn_req = client_config._create_a_protobuf_conn_request(
+            cluster_mode=is_cluster
+        )
         self._conn_req_bytes = conn_req.SerializeToString()
 
         # Create the Rust pool via FFI
@@ -130,7 +141,9 @@ class ClientPool:
         if self._closed:
             raise RuntimeError("Pool is closed")
 
-        timeout = timeout if timeout is not None else self._pool_config.acquire_timeout_s
+        timeout = (
+            timeout if timeout is not None else self._pool_config.acquire_timeout_s
+        )
         deadline = time.monotonic() + timeout
         backoff_ms = 1.0
 
@@ -183,30 +196,36 @@ class ClientPool:
         if cached is not None:
             return cached
 
-        # Get the native ClientAdapter pointer from the Rust pool
-        adapter_ptr = self._lib.glide_pool_get_client_ptr(client_id)
-        if adapter_ptr == 0:
-            raise RuntimeError(
-                f"Pool client_id {client_id} has no associated ClientAdapter"
-            )
+        with self._cache_lock:
+            # Double-check after acquiring lock
+            cached = self._client_cache.get(client_id)
+            if cached is not None:
+                return cached
 
-        # Create a GlideClient shell pointing to the pooled adapter.
-        # Cache the ffi.cast so subsequent borrows pay zero FFI overhead.
-        cast_ptr = self._ffi.cast("void*", adapter_ptr)
+            # Get the native ClientAdapter pointer from the Rust pool
+            adapter_ptr = self._lib.glide_pool_get_client_ptr(client_id)
+            if adapter_ptr == 0:
+                raise RuntimeError(
+                    f"Pool client_id {client_id} has no associated ClientAdapter"
+                )
 
-        client = GlideClient.__new__(GlideClient)
-        client._ffi = self._ffi
-        client._lib = self._lib
-        client._config = self._client_config
-        client._is_closed = False
-        client._pubsub_queue = []
-        client._pubsub_lock = threading.Lock()
-        client._pubsub_condition = threading.Condition(client._pubsub_lock)
-        client._pubsub_callback_ref = None
-        client._core_client = cast_ptr
+            # Create a GlideClient shell pointing to the pooled adapter.
+            cast_ptr = self._ffi.cast("void*", adapter_ptr)
 
-        self._client_cache[client_id] = client
-        return client
+            client = GlideClient.__new__(GlideClient)  # type: ignore[type-abstract]
+            client._ffi = self._ffi
+            client._lib = self._lib
+            client._config = self._client_config
+            client._is_closed = False
+            client._pubsub_queue = []
+            client._pubsub_lock = threading.Lock()
+            client._pubsub_condition = threading.Condition(client._pubsub_lock)
+            client._pubsub_callback_ref = None
+            client._client_lock = threading.Lock()
+            client._core_client = cast_ptr
+
+            self._client_cache[client_id] = client
+            return client
 
     def metrics(self) -> dict:
         """Get pool metrics: idle, active, total counts."""
@@ -242,7 +261,7 @@ class ClientPool:
 class _BorrowContext:
     """Fast context manager for pool borrow/release (avoids generator overhead)."""
 
-    __slots__ = ('_pool', '_timeout', '_client_id')
+    __slots__ = ("_pool", "_timeout", "_client_id")
 
     def __init__(self, pool: ClientPool, timeout):
         self._pool = pool
