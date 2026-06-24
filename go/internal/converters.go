@@ -881,9 +881,23 @@ func ConvertMemoryStats(data any) (any, error) {
 
 	stats := models.MemoryStats{
 		Db:                           make(map[int64]models.MemoryStatsDb),
+		ClusterLinks:                 models.CreateNilInt64Result(),
+		FunctionsCaches:              models.CreateNilInt64Result(),
 		OverheadDbHashtableLut:       models.CreateNilInt64Result(),
 		OverheadDbHashtableRehashing: models.CreateNilInt64Result(),
 		DbDictRehashingCount:         models.CreateNilInt64Result(),
+	}
+
+	// Parse db.<N> entries
+	for key, value := range rawMap {
+		if strings.HasPrefix(key, memoryStatsDbPrefix) && key != "db.dict.rehashing.count" {
+			suffix := key[len(memoryStatsDbPrefix):]
+			dbIndex, err := strconv.ParseInt(suffix, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("unexpected db key format: %s", key)
+			}
+			stats.Db[dbIndex] = convertMemoryStatsDb(value)
+		}
 	}
 
 	ReadValue(rawMap, "allocator.active", &stats.AllocatorActive)
@@ -895,10 +909,8 @@ func ConvertMemoryStats(data any) (any, error) {
 	ReadValue(rawMap, "aof.buffer", &stats.AofBuffer)
 	ReadValue(rawMap, "clients.normal", &stats.ClientsNormal)
 	ReadValue(rawMap, "clients.slaves", &stats.ClientsSlaves)
-	ReadValue(rawMap, "cluster.links", &stats.ClusterLinks)
 	ReadValue(rawMap, "dataset.bytes", &stats.DatasetBytes)
 	ReadValue(rawMap, "fragmentation.bytes", &stats.FragmentationBytes)
-	ReadValue(rawMap, "functions.caches", &stats.FunctionsCaches)
 	ReadValue(rawMap, "keys.bytes-per-key", &stats.KeysBytesPerKey)
 	ReadValue(rawMap, "keys.count", &stats.KeysCount)
 	ReadValue(rawMap, "lua.caches", &stats.LuaCaches)
@@ -916,22 +928,14 @@ func ConvertMemoryStats(data any) (any, error) {
 	ReadValue(rawMap, "peak.percentage", &stats.PeakPercentage)
 	ReadValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
 
+	// Optional Valkey 7.0+ fields
+	ReadResult(rawMap, "cluster.links", &stats.ClusterLinks)
+	ReadResult(rawMap, "functions.caches", &stats.FunctionsCaches)
+
 	// Optional Valkey 8.0+ fields
 	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
 	ReadResult(rawMap, "overhead.db.hashtable.lut", &stats.OverheadDbHashtableLut)
 	ReadResult(rawMap, "overhead.db.hashtable.rehashing", &stats.OverheadDbHashtableRehashing)
-
-	// Parse db.<N> entries
-	for key, value := range rawMap {
-		if strings.HasPrefix(key, memoryStatsDbPrefix) && key != "db.dict.rehashing.count" {
-			suffix := key[len(memoryStatsDbPrefix):]
-			dbIndex, err := strconv.ParseInt(suffix, 10, 64)
-			if err != nil {
-				return nil, fmt.Errorf("unexpected db key format: %s", key)
-			}
-			stats.Db[dbIndex] = convertMemoryStatsDb(value)
-		}
-	}
 
 	return stats, nil
 }

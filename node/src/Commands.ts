@@ -5279,8 +5279,6 @@ export interface MemoryStats {
     /** Per-database overhead keyed by database index. */
     db: Record<number, MemoryStatsDb>;
 
-    // Required int fields (alphabetical).
-
     /** Bytes active (in use) by the allocator. */
     allocatorActive: number;
 
@@ -5308,17 +5306,11 @@ export interface MemoryStats {
     /** Memory used by replica clients in bytes. */
     clientsSlaves: number;
 
-    /** Memory used by cluster links in bytes. */
-    clusterLinks: number;
-
     /** Memory used to store dataset in bytes. */
     datasetBytes: number;
 
     /** Bytes of overall fragmentation. */
     fragmentationBytes: number;
-
-    /** Memory used by functions caches in bytes. */
-    functionsCaches: number;
 
     /** Average bytes per key. */
     keysBytesPerKey: number;
@@ -5347,8 +5339,6 @@ export interface MemoryStats {
     /** Total bytes allocated by the server. */
     totalAllocated: number;
 
-    // Required float fields (alphabetical).
-
     /** Ratio of allocator fragmentation. */
     allocatorFragmentationRatio: number;
 
@@ -5367,7 +5357,17 @@ export interface MemoryStats {
     /** Ratio of RSS overhead. */
     rssOverheadRatio: number;
 
-    // Optional fields – Valkey 8.0+ (alphabetical).
+    /**
+     * Memory used by cluster links in bytes.
+     * @remarks Valkey 7.0+ only.
+     */
+    clusterLinks?: number;
+
+    /**
+     * Memory used by functions caches in bytes.
+     * @remarks Valkey 7.0+ only.
+     */
+    functionsCaches?: number;
 
     /**
      * Count of db dictionaries currently rehashing.
@@ -5420,7 +5420,6 @@ export function parseMemoryStatsResponse(
 
     return {
         db,
-        // Required int fields (alphabetical)
         allocatorActive: Number(raw["allocator.active"]),
         allocatorAllocated: Number(raw["allocator.allocated"]),
         allocatorFragmentationBytes: Number(
@@ -5432,10 +5431,8 @@ export function parseMemoryStatsResponse(
         aofBuffer: Number(raw["aof.buffer"]),
         clientsNormal: Number(raw["clients.normal"]),
         clientsSlaves: Number(raw["clients.slaves"]),
-        clusterLinks: Number(raw["cluster.links"]),
         datasetBytes: Number(raw["dataset.bytes"]),
         fragmentationBytes: Number(raw["fragmentation.bytes"]),
-        functionsCaches: Number(raw["functions.caches"]),
         keysBytesPerKey: Number(raw["keys.bytes-per-key"]),
         keysCount: Number(raw["keys.count"]),
         luaCaches: Number(raw["lua.caches"]),
@@ -5445,7 +5442,6 @@ export function parseMemoryStatsResponse(
         rssOverheadBytes: Number(raw["rss-overhead.bytes"]),
         startupAllocated: Number(raw["startup.allocated"]),
         totalAllocated: Number(raw["total.allocated"]),
-        // Required float fields (alphabetical)
         allocatorFragmentationRatio: Number(
             raw["allocator-fragmentation.ratio"],
         ),
@@ -5454,7 +5450,16 @@ export function parseMemoryStatsResponse(
         fragmentation: Number(raw["fragmentation"]),
         peakPercentage: Number(raw["peak.percentage"]),
         rssOverheadRatio: Number(raw["rss-overhead.ratio"]),
-        // Optional fields – Valkey 8.0+ (alphabetical)
+
+        // Optional Valkey 7.0+ fields
+        clusterLinks:
+            "cluster.links" in raw ? Number(raw["cluster.links"]) : undefined,
+        functionsCaches:
+            "functions.caches" in raw
+                ? Number(raw["functions.caches"])
+                : undefined,
+
+        // Optional Valkey 8.0+ fields
         dbDictRehashingCount:
             "db.dict.rehashing.count" in raw
                 ? Number(raw["db.dict.rehashing.count"])

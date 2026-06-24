@@ -867,10 +867,8 @@ public class TestUtilities {
         assertTrue((Long) stats.get("aof.buffer") >= 0);
         assertTrue((Long) stats.get("clients.normal") >= 0);
         assertTrue((Long) stats.get("clients.slaves") >= 0);
-        assertTrue((Long) stats.get("cluster.links") >= 0);
         assertTrue((Long) stats.get("dataset.bytes") >= 0);
         assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
-        assertTrue((Long) stats.get("functions.caches") >= 0);
         assertTrue((Long) stats.get("keys.bytes-per-key") >= 0);
         assertTrue((Long) stats.get("keys.count") >= 0);
         assertTrue((Long) stats.get("lua.caches") >= 0);
@@ -888,7 +886,16 @@ public class TestUtilities {
         assertTrue((Double) stats.get("peak.percentage") >= 0);
         assertTrue((Double) stats.get("rss-overhead.ratio") >= 0);
 
-        // Optional fields – Valkey 8.0+ (alphabetical)
+        // Optional Valkey 7.0+ fields
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertTrue((Long) stats.get("cluster.links") >= 0);
+            assertTrue((Long) stats.get("functions.caches") >= 0);
+        } else {
+            assertFalse(stats.containsKey("cluster.links"));
+            assertFalse(stats.containsKey("functions.caches"));
+        }
+
+        // Optional Valkey 8.0+ fields
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
             assertTrue((Long) stats.get("db.dict.rehashing.count") >= 0);
             assertTrue((Long) stats.get("overhead.db.hashtable.lut") >= 0);

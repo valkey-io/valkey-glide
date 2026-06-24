@@ -526,10 +526,8 @@ type MemoryStats struct {
 	AofBuffer                   int64
 	ClientsNormal               int64
 	ClientsSlaves               int64
-	ClusterLinks                int64
 	DatasetBytes                int64
 	FragmentationBytes          int64
-	FunctionsCaches             int64
 	KeysBytesPerKey             int64
 	KeysCount                   int64
 	LuaCaches                   int64
@@ -546,6 +544,10 @@ type MemoryStats struct {
 	Fragmentation               float64
 	PeakPercentage              float64
 	RssOverheadRatio            float64
+
+	// Optional Valkey 7.0+ fields
+	ClusterLinks    Result[int64]
+	FunctionsCaches Result[int64]
 
 	// Optional Valkey 8.0+ fields
 	DbDictRehashingCount         Result[int64]

@@ -31,10 +31,8 @@ class MemoryStats:
     aof_buffer: int = 0
     clients_normal: int = 0
     clients_slaves: int = 0
-    cluster_links: int = 0
     dataset_bytes: int = 0
     fragmentation_bytes: int = 0
-    functions_caches: int = 0
     keys_bytes_per_key: int = 0
     keys_count: int = 0
     lua_caches: int = 0
@@ -51,6 +49,10 @@ class MemoryStats:
     fragmentation: float = 0.0
     peak_percentage: float = 0.0
     rss_overhead_ratio: float = 0.0
+
+    # Optional Valkey 7.0+ fields
+    cluster_links: Optional[int] = None
+    functions_caches: Optional[int] = None
 
     # Optional Valkey 8.0+ fields
     db_dict_rehashing_count: Optional[int] = None
@@ -92,10 +94,8 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
         aof_buffer=int(response[b"aof.buffer"]),
         clients_normal=int(response[b"clients.normal"]),
         clients_slaves=int(response[b"clients.slaves"]),
-        cluster_links=int(response[b"cluster.links"]),
         dataset_bytes=int(response[b"dataset.bytes"]),
         fragmentation_bytes=int(response[b"fragmentation.bytes"]),
-        functions_caches=int(response[b"functions.caches"]),
         keys_bytes_per_key=int(response[b"keys.bytes-per-key"]),
         keys_count=int(response[b"keys.count"]),
         lua_caches=int(response[b"lua.caches"]),
@@ -111,6 +111,11 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
         fragmentation=float(response[b"fragmentation"]),
         peak_percentage=float(response[b"peak.percentage"]),
         rss_overhead_ratio=float(response[b"rss-overhead.ratio"]),
+        # Optional Valkey 7.0+ fields
+        cluster_links=(int(response[b"cluster.links"]) if b"cluster.links" in response else None),
+        functions_caches=(
+            int(response[b"functions.caches"]) if b"functions.caches" in response else None
+        ),
         # Optional Valkey 8.0+ fields
         db_dict_rehashing_count=(
             int(response[b"db.dict.rehashing.count"])

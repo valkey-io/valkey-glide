@@ -310,10 +310,8 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	assert.GreaterOrEqual(t, result.AofBuffer, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsNormal, int64(0))
 	assert.GreaterOrEqual(t, result.ClientsSlaves, int64(0))
-	assert.GreaterOrEqual(t, result.ClusterLinks, int64(0))
 	assert.GreaterOrEqual(t, result.DatasetBytes, int64(0))
 	assert.IsType(t, int64(0), result.FragmentationBytes)
-	assert.GreaterOrEqual(t, result.FunctionsCaches, int64(0))
 	assert.GreaterOrEqual(t, result.KeysBytesPerKey, int64(0))
 	assert.GreaterOrEqual(t, result.KeysCount, int64(0))
 	assert.GreaterOrEqual(t, result.LuaCaches, int64(0))
@@ -331,6 +329,16 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	assert.GreaterOrEqual(t, result.PeakPercentage, float64(0))
 	assert.GreaterOrEqual(t, result.RssOverheadRatio, float64(0))
 
+	// Optional Valkey 7.0+ fields
+	if suite.serverVersion >= "7.0.0" {
+		assert.False(t, result.ClusterLinks.IsNil())
+		assert.False(t, result.FunctionsCaches.IsNil())
+	} else {
+		assert.True(t, result.ClusterLinks.IsNil())
+		assert.True(t, result.FunctionsCaches.IsNil())
+	}
+
+	// Optional Valkey 8.0+ fields
 	if suite.serverVersion >= "8.0.0" {
 		assert.False(t, result.OverheadDbHashtableLut.IsNil())
 		assert.False(t, result.OverheadDbHashtableRehashing.IsNil())

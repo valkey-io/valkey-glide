@@ -2660,10 +2660,8 @@ export function assertMemoryStatsFields(
     expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
     expect(stats.clientsNormal).toBeGreaterThanOrEqual(0);
     expect(stats.clientsSlaves).toBeGreaterThanOrEqual(0);
-    expect(stats.clusterLinks).toBeGreaterThanOrEqual(0);
     expect(stats.datasetBytes).toBeGreaterThanOrEqual(0);
     expect(typeof stats.fragmentationBytes).toBe("number");
-    expect(stats.functionsCaches).toBeGreaterThanOrEqual(0);
     expect(stats.keysBytesPerKey).toBeGreaterThanOrEqual(0);
     expect(stats.keysCount).toBeGreaterThanOrEqual(0);
     expect(stats.luaCaches).toBeGreaterThanOrEqual(0);
@@ -2680,6 +2678,15 @@ export function assertMemoryStatsFields(
     expect(stats.fragmentation).toBeGreaterThanOrEqual(0);
     expect(stats.peakPercentage).toBeGreaterThanOrEqual(0);
     expect(stats.rssOverheadRatio).toBeGreaterThanOrEqual(0);
+
+    // Optional Valkey 7.0+ fields
+    if (serverVersion >= "7.0.0") {
+        expect(stats.clusterLinks).toBeGreaterThanOrEqual(0);
+        expect(stats.functionsCaches).toBeGreaterThanOrEqual(0);
+    } else {
+        expect(stats.clusterLinks).toBeUndefined();
+        expect(stats.functionsCaches).toBeUndefined();
+    }
 
     // Optional Valkey 8.0+ fields
     if (serverVersion >= "8.0.0") {
