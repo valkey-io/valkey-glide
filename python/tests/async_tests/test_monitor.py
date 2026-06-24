@@ -1,8 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import asyncio
 from typing import List
 
+import anyio
 import pytest
 from glide import GlideClusterClientConfiguration, MonitorClient
 from glide_shared.commands.core_options import MonitorMsg
@@ -27,7 +27,7 @@ class TestMonitorAsync:
             try:
                 await client.set("monitor_test_key", "monitor_test_val")
                 # Give time for monitor callback to fire
-                await asyncio.sleep(0.5)
+                await anyio.sleep(0.5)
             finally:
                 await client.close()
         finally:
@@ -46,11 +46,12 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.ping()
-                await asyncio.sleep(0.5)
+                await anyio.sleep(0.5)
             finally:
                 await client.close()
 
-            msg = await asyncio.wait_for(monitor.get_monitor_message(), timeout=5.0)
+            with anyio.fail_after(5.0):
+                msg = await monitor.get_monitor_message()
             assert msg is not None
             assert isinstance(msg, MonitorMsg)
         finally:
@@ -82,9 +83,7 @@ class TestMonitorAsync:
         cluster_config = GlideClusterClientConfiguration(addresses=[])
         with pytest.raises(TypeError):
             # TypeError is raised synchronously before any async work
-            import asyncio
-
-            asyncio.run(MonitorClient.create(cluster_config))
+            anyio.run(MonitorClient.create, cluster_config)
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_monitor_msg_fields(self, request, cluster_mode):
@@ -99,7 +98,7 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.set("field_test_key", "field_test_val")
-                await asyncio.sleep(0.5)
+                await anyio.sleep(0.5)
             finally:
                 await client.close()
         finally:
