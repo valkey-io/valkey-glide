@@ -10,7 +10,7 @@
 
 ### Changes
 
-* Go: Add multi-key `MIGRATE` support by unifying `Migrate`/`MigrateWithOptions` to accept `keys []string`. Single key uses standard wire format; multiple keys use `KEYS` clause. Cluster mode enforces single-key only. ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
+* Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
 * Java: implement MONITOR command ([#6187](https://github.com/valkey-io/valkey-glide/pull/6187))
 * Node: Add GlideMonitorClient for MONITOR command ([#6212](https://github.com/valkey-io/valkey-glide/pull/6212))
 * Python: implement MONITOR command for sync and async clients ([#6132](https://github.com/valkey-io/valkey-glide/pull/6132))
