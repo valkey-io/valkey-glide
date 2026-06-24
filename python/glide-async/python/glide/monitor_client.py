@@ -55,6 +55,8 @@ class MonitorClient:
 
     def _enqueue_message(self, msg: MonitorMsg) -> None:
         """Thread-safe enqueue from the FFI callback thread."""
+        if self._is_closed:
+            return
         if not self._is_asyncio:
             import trio
 
@@ -169,6 +171,8 @@ class MonitorClient:
         """Wait for and return the next MonitorMsg."""
         if not self._is_asyncio:
             return await self._trio_receive.receive()
+        # asyncio path also covers uvloop: uvloop is a drop-in asyncio replacement
+        # and sniffio reports it as "asyncio"
         return await self._asyncio_queue.get()  # type: ignore[union-attr]
 
     def try_get_monitor_message(self) -> Optional[MonitorMsg]:
@@ -194,11 +198,11 @@ class MonitorClient:
             core_client, self._core_client = self._core_client, self._ffi.NULL
         if core_client != self._ffi.NULL:
             self._lib.close_monitor_client(core_client)
-        self._callback_ref = None
         if not self._is_asyncio and self._trio_send is not None:
             await self._trio_send.aclose()
             if self._trio_receive is not None:
                 await self._trio_receive.aclose()
+        self._callback_ref = None  # clear after Rust is done and channels are closed
 
     async def aclose(self) -> None:
         """Alias for stop()."""
@@ -207,5 +211,5 @@ class MonitorClient:
     async def __aenter__(self) -> "MonitorClient":
         return self
 
-    async def __aexit__(self, *args) -> None:
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.stop()
