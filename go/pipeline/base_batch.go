@@ -5126,6 +5126,18 @@ func (b *BaseBatch[T]) CopyWithOptions(source string, destination string, option
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	keys          - The keys to migrate. Must not be empty.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
+//
 // [valkey.io]: https://valkey.io/commands/migrate/
 func (b *BaseBatch[T]) Migrate(
 	host string,
@@ -5141,6 +5153,19 @@ func (b *BaseBatch[T]) Migrate(
 // with additional options.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	keys           - The keys to migrate. Must not be empty.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if none of the keys exist.
 //
 // [valkey.io]: https://valkey.io/commands/migrate/
 func (b *BaseBatch[T]) MigrateWithOptions(
