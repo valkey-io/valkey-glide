@@ -2834,9 +2834,9 @@ public class GlideClusterClientTest {
         // setup
         String event = "command";
         String[] args = new String[] {event};
-        Object[][] entries = new Object[][] {new Object[] {1709062230L, 50L}, new Object[] {1709062231L, 42L}};
-        ClusterValue<Object[][]> value =
-                ClusterValue.ofMultiValue(createMap("node1:6379", entries));
+        Object[][] entries =
+                new Object[][] {new Object[] {1709062230L, 50L}, new Object[] {1709062231L, 42L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofMultiValue(createMap("node1:6379", entries));
         CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
@@ -2871,8 +2871,7 @@ public class GlideClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<Object[][]>> response =
-                service.latencyHistory(event, RANDOM);
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyHistory(event, RANDOM);
         ClusterValue<Object[][]> payload = response.get();
 
         // verify
@@ -2886,8 +2885,7 @@ public class GlideClusterClientTest {
         // setup
         String[] args = new String[0];
         Object[][] infos = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
-        ClusterValue<Object[][]> value =
-                ClusterValue.ofMultiValue(createMap("node1:6379", infos));
+        ClusterValue<Object[][]> value = ClusterValue.ofMultiValue(createMap("node1:6379", infos));
         CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 

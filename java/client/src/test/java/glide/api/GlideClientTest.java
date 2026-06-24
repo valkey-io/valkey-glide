@@ -16570,14 +16570,12 @@ public class GlideClientTest {
     @Test
     public void latencyLatest_returns_success() {
         // setup
-        Object[][] value =
-                new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        Object[][] value = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
         CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Object[][]>submitNewCommand(
-                        eq(LatencyLatest), eq(new String[0]), any()))
+        when(commandManager.<Object[][]>submitNewCommand(eq(LatencyLatest), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise

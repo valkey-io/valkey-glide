@@ -951,7 +951,6 @@ public abstract class BaseClient
         }
     }
 
-
     /** Process a <code>LCS key1 key2 IDX</code> response */
     protected Map<String, Object> handleLcsIdxResponse(Map<String, Object> response)
             throws GlideException {

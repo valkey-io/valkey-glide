@@ -996,7 +996,7 @@ public class CommandTests {
 
         // Find the "command" event on any node
         Object[] commandInfo =
-                flattenLatencyEventInfos(result).stream()
+                flattenArrayofArrays(result).stream()
                         .filter(info -> "command".equals(info[0]))
                         .findFirst()
                         .orElse(null);
@@ -1052,8 +1052,7 @@ public class CommandTests {
     }
 
     /** Flattens a ClusterValue of Object[][] arrays (latency event infos). */
-    private static List<Object[]> flattenLatencyEventInfos(
-            ClusterValue<Object[][]> val) {
+    private static List<Object[]> flattenArrayofArrays(ClusterValue<Object[][]> val) {
         if (val.hasSingleData()) {
             return Arrays.asList(val.getSingleValue());
         }

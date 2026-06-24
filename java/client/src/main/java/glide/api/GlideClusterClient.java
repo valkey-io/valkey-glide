@@ -647,36 +647,26 @@ public class GlideClusterClient extends BaseClient
     @Override
     public CompletableFuture<ClusterValue<Object[][]>> latencyHistory(@NonNull String event) {
         return commandManager.submitNewCommand(
-                LatencyHistory,
-                new String[] {event},
-                this::handleArrayofArraysClusterResponse);
+                LatencyHistory, new String[] {event}, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object[][]>> latencyHistory(
             @NonNull String event, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                LatencyHistory,
-                new String[] {event},
-                route,
-                this::handleArrayofArraysClusterResponse);
+                LatencyHistory, new String[] {event}, route, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object[][]>> latencyLatest() {
         return commandManager.submitNewCommand(
-                LatencyLatest,
-                EMPTY_STRING_ARRAY,
-                this::handleArrayofArraysClusterResponse);
+                LatencyLatest, EMPTY_STRING_ARRAY, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
     public CompletableFuture<ClusterValue<Object[][]>> latencyLatest(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                LatencyLatest,
-                EMPTY_STRING_ARRAY,
-                route,
-                this::handleArrayofArraysClusterResponse);
+                LatencyLatest, EMPTY_STRING_ARRAY, route, this::handleArrayofArraysClusterResponse);
     }
 
     @Override
