@@ -104,13 +104,31 @@ class OpenTelemetryConfig:
 
 
 class OpenTelemetry:
-    """Singleton class for managing OpenTelemetry configuration and operations."""
+    """Manages OpenTelemetry configuration and lifecycle for the Glide client.
+
+    This is a singleton class — OpenTelemetry can only be initialized once per process.
+    Subsequent calls to init() will be ignored. To change configuration, restart the
+    process with new settings.
+    """
 
     _instance: Optional["OpenTelemetry"] = None
     _config: Optional[OpenTelemetryConfig] = None
 
     @classmethod
     def init(cls, config: OpenTelemetryConfig) -> None:
+        """Initialize OpenTelemetry with the given configuration.
+
+        This method can only be called once per process. Subsequent calls will log
+        a warning and be ignored.
+
+        Args:
+            config: The OpenTelemetry configuration specifying trace/metrics endpoints
+                and flush intervals.
+
+        Raises:
+            ConfigurationError: If the underlying FFI initialization fails (e.g., invalid
+                endpoint or file path).
+        """
         if not cls._instance:
             cls._config = config
             from glide_shared._glide_ffi import GlideFFI
@@ -175,16 +193,34 @@ class OpenTelemetry:
 
     @classmethod
     def is_initialized(cls) -> bool:
+        """Check whether OpenTelemetry has been initialized.
+
+        Returns:
+            bool: True if init() has been successfully called, False otherwise.
+        """
         return cls._instance is not None
 
     @classmethod
     def get_sample_percentage(cls) -> Optional[int]:
+        """Get the current trace sampling percentage.
+
+        Returns:
+            Optional[int]: The sampling percentage (0-100), or None if traces are not configured.
+        """
         if cls._config and cls._config.traces:
             return cls._config.traces.sample_percentage
         return None
 
     @classmethod
     def should_sample(cls) -> bool:
+        """Determine whether the current request should be sampled.
+
+        Uses random sampling based on the configured sample percentage.
+
+        Returns:
+            bool: True if the request should be traced, False otherwise.
+                Always returns False if OpenTelemetry is not initialized.
+        """
         if not cls._instance:
             return False
         percentage = cls.get_sample_percentage()
@@ -192,6 +228,14 @@ class OpenTelemetry:
 
     @classmethod
     def set_sample_percentage(cls, percentage: int) -> None:
+        """Update the trace sampling percentage at runtime.
+
+        Args:
+            percentage: The new sampling percentage (0-100).
+
+        Raises:
+            ConfigurationError: If traces are not initialized or percentage is out of range.
+        """
         if not cls._config or not cls._config.traces:
             raise ConfigurationError("OpenTelemetry traces not initialized")
         if percentage < 0 or percentage > 100:

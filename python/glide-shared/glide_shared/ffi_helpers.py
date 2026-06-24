@@ -2,6 +2,8 @@
 
 """Shared FFI helper utilities for converting Python arguments to C-compatible arrays."""
 
+from enum import IntEnum
+
 ENCODING = "utf-8"
 
 
@@ -49,6 +51,15 @@ def to_c_route_ptr_and_len(ffi, route):
     return route_ptr, route_len, route_bytes
 
 
+class _RouteType(IntEnum):
+    ALL_NODES = 0
+    ALL_PRIMARIES = 1
+    RANDOM = 2
+    SLOT_ID = 3
+    SLOT_KEY = 4
+    BY_ADDRESS = 5
+
+
 def to_c_route_info(ffi, route):
     """Convert a Route to a C RouteInfo* for batch operations.
 
@@ -71,29 +82,29 @@ def to_c_route_info(ffi, route):
     refs = []
     slot_key_ptr = ffi.NULL
     hostname_ptr = ffi.NULL
-    route_type = 2  # Random
+    route_type = _RouteType.RANDOM
     slot_id = 0
     slot_type = 0  # Primary
     port = 0
 
     if isinstance(route, AllNodes):
-        route_type = 0
+        route_type = _RouteType.ALL_NODES
     elif isinstance(route, AllPrimaries):
-        route_type = 1
+        route_type = _RouteType.ALL_PRIMARIES
     elif isinstance(route, RandomNode):
-        route_type = 2
+        route_type = _RouteType.RANDOM
     elif isinstance(route, SlotIdRoute):
-        route_type = 3
+        route_type = _RouteType.SLOT_ID
         slot_id = route.slot_id
         slot_type = 0 if route.slot_type == SlotType.PRIMARY else 1
     elif isinstance(route, SlotKeyRoute):
-        route_type = 4
+        route_type = _RouteType.SLOT_KEY
         slot_key_bytes = route.slot_key.encode(ENCODING) + b"\0"
         refs.append(slot_key_bytes)
         slot_key_ptr = ffi.from_buffer(slot_key_bytes)
         slot_type = 0 if route.slot_type == SlotType.PRIMARY else 1
     elif isinstance(route, ByAddressRoute):
-        route_type = 5
+        route_type = _RouteType.BY_ADDRESS
         hostname_bytes = route.host.encode(ENCODING) + b"\0"
         refs.append(hostname_bytes)
         hostname_ptr = ffi.from_buffer(hostname_bytes)
@@ -268,7 +279,13 @@ def create_address_resolver_callback(ffi, resolver_fn):
             ffi.memmove(resolved_host_buf, encoded_host, write_len)
             resolved_host_len_ptr[0] = write_len
             return resolved_port
-        except Exception:
+        except Exception as e:
+            # Return 0 (original port) to signal failure to the Rust layer,
+            # which will fall back to the original address. We cannot propagate
+            # exceptions across the FFI callback boundary.
+            from glide_shared.logger import Level, Logger
+
+            Logger.log(Level.WARN, "address_resolver", f"Resolver failed: {e}")
             return 0
 
     return ffi.callback("AddressResolverCallback", _address_resolver_callback)

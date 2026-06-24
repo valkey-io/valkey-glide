@@ -55,8 +55,6 @@ excluded_async_symbols = [
     "ClusterCommands",  # ClassDef
     # python/glide-async/python/glide/async_commands/core.py
     "CoreCommands",  # ClassDef
-    # python/glide-async/python/glide/opentelemetry.py
-    "OpenTelemetry",  # ClassDef
 ]
 
 excluded_sync_symbols = [
@@ -119,7 +117,6 @@ excluded_shared_symbols = [
     # python/glide-shared/glide_shared/cluster_scan_cursor.py
     "ENCODING",  # Assignment (also in ffi_helpers.py, script.py)
     "FINISHED_SCAN_CURSOR",  # Assignment
-    "ClusterScanCursor",  # ClassDef
     # python/glide-shared/glide_shared/ffi_helpers.py
     "encode_arg",  # FunctionDef
     "to_c_strings",  # FunctionDef
@@ -135,13 +132,8 @@ excluded_shared_symbols = [
     "parse_inline_pubsub",  # FunctionDef
     # python/glide-shared/glide_shared/request_type.py
     "RequestType",  # Assignment
-    # python/glide-shared/glide_shared/script.py
-    "Script",  # ClassDef
     # python/glide-shared/glide_shared/logger.py
     "Level",  # ClassDef
-    "Logger",  # ClassDef
-    # python/glide-shared/glide_shared/opentelemetry.py
-    "OpenTelemetry",  # ClassDef
 ]
 
 allowed_missing_re_exports_in_async = [

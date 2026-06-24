@@ -25,9 +25,9 @@ try:
 except ImportError:
     HAS_ANYIO = False
 
+from glide._ffi_wrappers import ClusterScanCursor
 from glide_shared._fast_response import parse_response as _c_parse_response
 from glide_shared._glide_ffi import _GlideFFI
-from glide_shared.cluster_scan_cursor import ClusterScanCursor
 from glide_shared.commands.command_args import ObjectType
 from glide_shared.commands.core_options import PubSubMsg
 from glide_shared.config import (
@@ -145,8 +145,15 @@ _PUBSUB_SENTINEL = 0xFFFFFFFFFFFFFFFF  # request_id sentinel for pubsub frames
 
 def _free_orphaned_frame(request_id, response_ptr, arena_or_err):
     """Free resources from a pipe frame whose client has been closed."""
-    # Pubsub frames are inline (no pointers to free)
     if request_id == _PUBSUB_SENTINEL:
+        if arena_or_err & (1 << 63):
+            # Pointer-mode pubsub: free the heap-allocated payload
+            payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
+            any_c = next(iter(_client_registry.values()), None)
+            if any_c:
+                any_c._lib.free_pubsub_pointer_payload(
+                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
+                )
         return
     any_c = next(iter(_client_registry.values()), None)
     if any_c is None:
@@ -265,6 +272,48 @@ def _handle_inline_pubsub(client, payload: bytes):
         )
 
 
+def _handle_pointer_pubsub(client, ptr_val: int, payload_len: int):
+    """Handle pointer-mode pubsub data (large messages delivered via heap pointer)."""
+    try:
+        ffi = client._ffi
+        buf_ptr = ffi.cast("uint8_t*", ptr_val)
+        payload = bytes(ffi.buffer(buf_ptr, payload_len))
+        _handle_inline_pubsub(client, payload)
+    except Exception as e:
+        ClientLogger.log(
+            LogLevel.ERROR, "pubsub_pipe", f"Error handling pointer pubsub: {e}"
+        )
+    finally:
+        client._lib.free_pubsub_pointer_payload(
+            client._ffi.cast("uint8_t*", ptr_val), payload_len
+        )
+
+
+def _handle_pubsub_frame(client, response_ptr, arena_or_err, data, offset):
+    """Handle a pubsub sentinel frame. Returns new offset, or negative value if incomplete."""
+    if arena_or_err & (1 << 63):
+        # Pointer-mode: large message delivered via heap pointer
+        payload_len = arena_or_err & 0x7FFFFFFFFFFFFFFF
+        if client is not None:
+            _handle_pointer_pubsub(client, response_ptr, payload_len)
+        else:
+            any_c = next(iter(_client_registry.values()), None)
+            if any_c:
+                any_c._lib.free_pubsub_pointer_payload(
+                    any_c._ffi.cast("uint8_t*", response_ptr), payload_len
+                )
+    else:
+        # Inline: response_ptr = payload_len, data follows header
+        payload_len = response_ptr
+        if offset + payload_len > len(data):
+            # Incomplete payload — signal caller to rewind (encode as -(offset-32+1))
+            return -(offset - 32 + 1)
+        if client is not None:
+            _handle_inline_pubsub(client, data[offset : offset + payload_len])
+        offset += payload_len
+    return offset
+
+
 def _drain_stale_pipe_frames():
     """Drain stale frames from the pipe to prevent reading freed pointers."""
     while True:
@@ -298,15 +347,13 @@ def _on_async_pipe_readable() -> None:
         offset += 32
         client = _client_registry.get(client_id)
         if request_id == _PUBSUB_SENTINEL:
-            # Inline pubsub: response_ptr = payload_len, data follows header
-            payload_len = response_ptr
-            if offset + payload_len > len(data):
-                # Incomplete payload — put header + remaining back
-                offset -= 32
+            offset = _handle_pubsub_frame(
+                client, response_ptr, arena_or_err, data, offset
+            )
+            if offset < 0:
+                # Incomplete inline payload — rewind and break
+                offset = -(offset + 1)
                 break
-            if client is not None:
-                _handle_inline_pubsub(client, data[offset : offset + payload_len])
-            offset += payload_len
             continue
         if client is None:
             _free_orphaned_frame(request_id, response_ptr, arena_or_err)
@@ -364,10 +411,44 @@ class BaseClient(CoreCommands):
         """Creates a Glide client.
 
         Args:
-            config (ClientConfiguration): The configuration options for the client.
+            config (ClientConfiguration): The configuration options for the client, including cluster addresses,
+            authentication credentials, TLS settings, periodic checks, and Pub/Sub subscriptions.
 
         Returns:
             Self: A promise that resolves to a connected client instance.
+
+        Examples:
+            # Connecting to a Standalone Server
+            >>> from glide import GlideClientConfiguration, NodeAddress, GlideClient, ServerCredentials, BackoffStrategy
+            >>> config = GlideClientConfiguration(
+            ...     [
+            ...         NodeAddress('primary.example.com', 6379),
+            ...         NodeAddress('replica1.example.com', 6379),
+            ...     ],
+            ...     use_tls = True,
+            ...     database_id = 1,
+            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
+            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ... )
+            >>> client = await GlideClient.create(config)
+
+            # Connecting to a Cluster
+            >>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
+            >>> config = GlideClusterClientConfiguration(
+            ...     [
+            ...         NodeAddress('address1.example.com', 6379),
+            ...         NodeAddress('address2.example.com', 6379),
+            ...     ],
+            ...     use_tls = True,
+            ...     credentials = ServerCredentials(username = 'user1', password = 'passwordA'),
+            ...     reconnect_strategy = BackoffStrategy(num_of_retries = 5, factor = 1000, exponent_base = 2),
+            ... )
+            >>> client = await GlideClusterClient.create(config)
+
+        Remarks:
+            Use this static method to create and connect a client to a Valkey server.
+            The client will automatically handle connection establishment, including cluster topology
+            discovery and handling of authentication and TLS configurations.
         """
         self = cls(config)
 
@@ -803,6 +884,22 @@ class BaseClient(CoreCommands):
         return await fut
 
     async def get_statistics(self) -> dict:
+        """
+        Get compression and connection statistics for this client.
+
+        Returns:
+            dict: A dictionary containing statistics with integer values:
+                - total_connections: Total number of connections
+                - total_clients: Total number of clients
+                - total_values_compressed: Number of values successfully compressed
+                - total_values_decompressed: Number of values successfully decompressed
+                - total_original_bytes: Total bytes of original data before compression
+                - total_bytes_compressed: Total bytes after compression
+                - total_bytes_decompressed: Total bytes after decompression
+                - compression_skipped_count: Number of times compression was skipped
+                - subscription_out_of_sync_count: Number of times subscriptions were out of sync
+                - subscription_last_sync_timestamp: Timestamp of last successful subscription sync
+        """
         stats = self._lib.get_statistics()
         return {
             "total_connections": stats.total_connections,
@@ -861,6 +958,14 @@ class BaseClient(CoreCommands):
         )
 
     async def close(self, err_message: Optional[str] = None) -> None:
+        """
+        Terminate the client by closing all associated resources and any active futures.
+        All open futures will be closed with an exception.
+
+        Args:
+            err_message (Optional[str]): If not None, this error message will be passed along with
+            the exceptions when closing all open futures. Defaults to None.
+        """
         if not self._is_closed:
             self._is_closed = True
             err_message = "" if err_message is None else err_message
@@ -884,7 +989,16 @@ class BaseClient(CoreCommands):
                 self._core_client = None
 
     async def aclose(self, err_message: Optional[str] = None) -> None:
-        """Alias for close() for compatibility with async context managers."""
+        """
+        Terminate the client by closing all associated resources and any active futures.
+        All open futures will be closed with an exception.
+
+        This is an alias for close() for compatibility with async context managers.
+
+        Args:
+            err_message (Optional[str]): If not None, this error message will be passed along with
+            the exceptions when closing all open futures. Defaults to None.
+        """
         await self.close(err_message)
 
     async def __aenter__(self) -> "BaseClient":
@@ -968,6 +1082,14 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     async def get_subscriptions(
         self,
     ) -> GlideClusterClientConfiguration.PubSubState:
+        """
+        Retrieves both the desired and current subscription states as tracked by the client.
+
+        Returns:
+            GlideClusterClientConfiguration.PubSubState: An object containing:
+                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
+                - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
+        """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(
             GlideClusterClientConfiguration.PubSubState,
@@ -986,6 +1108,14 @@ class GlideClient(BaseClient, StandaloneCommands):
     async def get_subscriptions(
         self,
     ) -> GlideClientConfiguration.PubSubState:
+        """
+        Retrieves both the desired and current subscription states as tracked by the client.
+
+        Returns:
+            GlideClientConfiguration.PubSubState: An object containing:
+                - desired_subscriptions: Dict[PubSubChannelModes, Set[str]]
+                - actual_subscriptions: Dict[PubSubChannelModes, Set[str]]
+        """
         result = await self._execute_command(RequestType.GetSubscriptions, [])
         return cast(
             GlideClientConfiguration.PubSubState,
