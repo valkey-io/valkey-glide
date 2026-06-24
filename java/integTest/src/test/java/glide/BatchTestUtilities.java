@@ -980,21 +980,12 @@ public class BatchTestUtilities {
                     OK, // configSet(createMap("timeout", "1000"))
                     createMap("timeout", "1000"), // configGet(new String[] {"timeout"})
                     OK, // configResetStat()
-                    new Object() {
-                        @Override
-                        public boolean equals(Object obj) {
-                            if (obj instanceof String) {
-                                String response = (String) obj;
-                                return response.contains("ver") && response.contains(SERVER_VERSION.toString());
-                            }
-                            return false;
-                        }
-
-                        @Override
-                        public String toString() {
-                            return "LOLWUT version matcher for " + SERVER_VERSION;
-                        }
-                    }, // lolwut(1) - accepts both Redis and Valkey formats
+                    new ResponseMatcher(
+                            obj ->
+                                    obj instanceof String
+                                            && ((String) obj).contains("ver")
+                                            && ((String) obj).contains(SERVER_VERSION.toString()),
+                            "LOLWUT version matcher for " + SERVER_VERSION), // lolwut(1)
                     OK, // flushall()
                     OK, // flushall(ASYNC)
                     OK, // flushdb()
@@ -1575,24 +1566,6 @@ public class BatchTestUtilities {
         @Override
         public String toString() {
             return description;
-        }
-
-        /** Matches any non-empty {@code String}. */
-        static ResponseMatcher nonEmptyString(String context) {
-            return new ResponseMatcher(
-                    obj -> obj instanceof String && !((String) obj).isEmpty(), context + " non-empty string");
-        }
-
-        /** Matches any non-empty {@code Map}. */
-        static ResponseMatcher nonEmptyMap(String context) {
-            return new ResponseMatcher(
-                    obj -> obj instanceof Map && !((Map<?, ?>) obj).isEmpty(), context + " non-empty map");
-        }
-
-        /** Matches a {@code Long} that is greater than or equal to {@code min}. */
-        static ResponseMatcher longGreaterThanOrEqualTo(String context, long min) {
-            return new ResponseMatcher(
-                    obj -> obj instanceof Long && (Long) obj >= min, context + " >= " + min);
         }
     }
 }
