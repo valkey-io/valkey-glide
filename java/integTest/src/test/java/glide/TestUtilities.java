@@ -12,6 +12,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -838,5 +839,28 @@ public class TestUtilities {
         }
 
         return Long.parseLong(((GlideClient) client).time().get()[0]);
+    }
+
+    /** Asserts that a CLIENT TRACKINGINFO response matches expected tracking state. */
+    @SuppressWarnings("unchecked")
+    public static void assertClientTrackingInfo(Map<String, Object> info, boolean on) {
+        assertNotNull(info);
+        assertEquals(3, info.size());
+
+        Set<String> flags = (Set<String>) info.get("flags");
+        Long redirect = (Long) info.get("redirect");
+        Object[] prefixes = (Object[]) info.get("prefixes");
+
+        if (on) {
+            assertTrue(flags.contains("on"));
+            assertTrue(flags.contains("bcast"));
+            assertEquals(0L, redirect);
+            assertEquals(1, prefixes.length);
+            assertEquals("", prefixes[0].toString());
+        } else {
+            assertTrue(flags.contains("off"));
+            assertEquals(-1L, redirect);
+            assertEquals(0, prefixes.length);
+        }
     }
 }

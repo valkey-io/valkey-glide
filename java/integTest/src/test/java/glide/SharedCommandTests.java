@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.SERVER_VERSION;
+import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
@@ -18729,22 +18730,32 @@ public class SharedCommandTests {
         }
     }
 
-    // TODO #6144: Move to a shared interface method once ConnectionManagementBaseCommands is created.
-
     @SuppressWarnings("unchecked")
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientTrackingInfo(BaseClient client) {
+    public void clientTrackingInfo_off(BaseClient client) {
+
         // TODO #6144: simplify once clientTrackingInfo is moved to base class
         Map<String, Object> info =
                 client instanceof GlideClusterClient
                         ? ((GlideClusterClient) client).clientTrackingInfo().get()
                         : ((GlideClient) client).clientTrackingInfo().get();
 
-        assertNotNull(info);
-        assertTrue(((Set<String>) info.get("flags")).contains("off"));
-        assertEquals(-1L, info.get("redirect"));
-        assertEquals(0, ((Object[]) info.get("prefixes")).length);
+        assertClientTrackingInfo(info, false);
+    }
+
+    @ParameterizedTest(autoCloseArguments = true)
+    @MethodSource("glide.TestSources#serverAssistedCacheClients")
+    @SneakyThrows
+    public void clientTrackingInfo_on(BaseClient client) {
+
+        // TODO #6144: simplify once clientTrackingInfo is moved to base class
+        Map<String, Object> info =
+                client instanceof GlideClusterClient
+                        ? ((GlideClusterClient) client).clientTrackingInfo().get()
+                        : ((GlideClient) client).clientTrackingInfo().get();
+
+        assertClientTrackingInfo(info, true);
     }
 }

@@ -16,7 +16,6 @@ import glide.api.GlideClient;
 import glide.api.GlideClusterClient;
 import glide.api.models.configuration.ClientSideCache;
 import glide.api.models.configuration.EvictionPolicy;
-import glide.api.models.configuration.ProtocolVersion;
 import glide.api.models.exceptions.RequestException;
 import java.util.HashMap;
 import java.util.Map;
@@ -626,36 +625,8 @@ public class ClientSideCacheTests {
         assertTrue(exception.getCause().getMessage().contains("WRONGTYPE"));
     }
 
-    private static ClientSideCache buildServerAssistedCache() {
-        return ClientSideCache.builder()
-                .maxCacheKb(1L)
-                .entryTtlMs(60000L)
-                .enableMetrics(true)
-                .serverAssisted(true)
-                .build();
-    }
-
-    @SneakyThrows
-    public static Stream<Arguments> getServerAssistedCacheClients() {
-        return Stream.of(
-                Arguments.of(
-                        GlideClient.createClient(
-                                        commonClientConfig()
-                                                .protocol(ProtocolVersion.RESP3)
-                                                .clientSideCache(buildServerAssistedCache())
-                                                .build())
-                                .get()),
-                Arguments.of(
-                        GlideClusterClient.createClient(
-                                        commonClusterClientConfig()
-                                                .protocol(ProtocolVersion.RESP3)
-                                                .clientSideCache(buildServerAssistedCache())
-                                                .build())
-                                .get()));
-    }
-
     @ParameterizedTest(autoCloseArguments = true)
-    @MethodSource("getServerAssistedCacheClients")
+    @MethodSource("glide.TestSources#serverAssistedCacheClients")
     @SneakyThrows
     public void clientSideCache_set_and_get(BaseClient client) {
         // Tests server-assisted client-side caching using the CLIENT TRACKING protocol.
@@ -679,7 +650,7 @@ public class ClientSideCacheTests {
     }
 
     @ParameterizedTest(autoCloseArguments = true)
-    @MethodSource("getServerAssistedCacheClients")
+    @MethodSource("glide.TestSources#serverAssistedCacheClients")
     @SneakyThrows
     public void clientSideCache_serverAssisted_invalidation(BaseClient clientA) {
         String key = UUID.randomUUID().toString();

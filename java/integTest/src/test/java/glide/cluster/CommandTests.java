@@ -6,6 +6,7 @@ import static glide.TestUtilities.BGREWRITEAOF_RESPONSES;
 import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
+import static glide.TestUtilities.assertClientTrackingInfo;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
@@ -4587,6 +4588,17 @@ public class CommandTests {
         } else {
             assertNotNull(countWithRoute.getSingleValue());
             assertTrue(countWithRoute.getSingleValue() >= 0);
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void clientTrackingInfo_off_with_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<Map<String, Object>> multiInfo =
+                clusterClient.clientTrackingInfo(ALL_PRIMARIES).get();
+        for (Map<String, Object> nodeInfo : multiInfo.getMultiValue().values()) {
+            assertClientTrackingInfo(nodeInfo, false);
         }
     }
 }
