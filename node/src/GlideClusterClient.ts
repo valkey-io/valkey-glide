@@ -20,6 +20,7 @@ import {
     GlideString,
     PubSubMsg,
     convertGlideRecordToRecord,
+    isGlideRecord,
 } from "./BaseClient";
 import { ClusterBatch } from "./Batch";
 import {
@@ -2632,9 +2633,11 @@ export class GlideClusterClient extends BaseClient {
                 isSingleNodeRoute(false, options?.route),
                 (raw) =>
                     parseMemoryStatsResponse(
-                        convertGlideRecordToRecord(
-                            raw as unknown as GlideRecord<unknown>,
-                        ) as Record<string, unknown>,
+                        isGlideRecord(raw)
+                            ? (convertGlideRecordToRecord(
+                                  raw as unknown as GlideRecord<unknown>,
+                              ) as Record<string, unknown>)
+                            : (raw as Record<string, unknown>),
                     ),
             ),
         );
