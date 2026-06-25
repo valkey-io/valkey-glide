@@ -1567,7 +1567,10 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
-        b"CLIENT TRACKINGINFO" => Some(ExpectedReturnType::ClientTrackingInfoReturnType),
+        b"CLIENT TRACKINGINFO" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::ClientTrackingInfoReturnType),
+            Some(&is_array),
+        )),
         b"HGETALL" | b"FT.CONFIG GET" | b"FT._ALIASLIST" | b"HELLO" => {
             Some(ExpectedReturnType::Map {
                 key_type: &None,
