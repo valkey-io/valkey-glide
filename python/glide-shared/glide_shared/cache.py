@@ -53,6 +53,7 @@ class ClientSideCache:
     entry_ttl_ms: int
     eviction_policy: Optional[EvictionPolicy] = None
     enable_metrics: bool = False
+    server_assisted: bool = False
 
     @classmethod
     def create(
@@ -61,6 +62,7 @@ class ClientSideCache:
         entry_ttl_ms: int,
         eviction_policy: Optional[EvictionPolicy] = None,
         enable_metrics: bool = False,
+        server_assisted: bool = False,
     ) -> "ClientSideCache":
         """
         Create a new client-side cache configuration with an auto-generated unique ID.
@@ -85,6 +87,9 @@ class ClientSideCache:
                 policy of LRU will be used.
                 See `EvictionPolicy` enum for available options.
             enable_metrics (bool): If True, enables collection of cache metrics such as hit/miss rates.
+            server_assisted (bool): If True, enables server-assisted client-side caching.
+                When enabled, Valkey remembers the keys that the connection requested and sends
+                invalidation messages when such keys are modified. Only available with RESP3 protocol.
 
         Returns:
             ClientSideCache: A new ClientSideCache instance.
@@ -113,4 +118,5 @@ class ClientSideCache:
             entry_ttl_ms=entry_ttl_ms,
             eviction_policy=eviction_policy,
             enable_metrics=enable_metrics,
+            server_assisted=server_assisted,
         )

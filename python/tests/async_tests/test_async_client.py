@@ -14,6 +14,7 @@ import anyio
 import pytest
 from glide import GlideClient, GlideClusterClient, Script, TGlideClient
 from glide_shared import ClosingError, RequestError
+from glide_shared.cache import ClientSideCache
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.bitmap import (
@@ -30,6 +31,7 @@ from glide_shared.commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
+from glide_shared.commands.client_tracking import ClientTrackingInfo
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
     ClientPauseMode,
@@ -113,6 +115,7 @@ from tests.utils.utils import (
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
     PRIMARY_SLOT_ROUTE,
+    assert_client_tracking_info,
     assert_connected,
     assert_responses_in,
     check_function_list_response,
@@ -1022,6 +1025,35 @@ class TestCommands:
         client_id = await glide_client.client_id()
         assert type(client_id) is int
         assert client_id > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_client_tracking_info_off(self, glide_client: TGlideClient):
+        info = await glide_client.client_tracking_info()
+        assert isinstance(info, ClientTrackingInfo)
+        assert_client_tracking_info(info, on=False)
+
+        # Cluster multi-node
+        if isinstance(glide_client, GlideClusterClient):
+            multi_info = await glide_client.client_tracking_info(AllPrimaries())
+            for node_info in multi_info.values():
+                assert_client_tracking_info(node_info, on=False)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_client_tracking_info_on(self, request, glide_client: TGlideClient):
+        cache = ClientSideCache.create(max_cache_kb=1, server_assisted=True)
+        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        info = await client.client_tracking_info()
+        assert_client_tracking_info(info, on=True)
+
+        await client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

@@ -2061,3 +2061,14 @@ def assert_connected_sync(client: TSyncGlideClient) -> None:
     """
     result = client.ping()
     assert result == b"PONG"
+
+
+def assert_client_tracking_info(info, on: bool) -> None:
+    """Assert that a ClientTrackingInfo reflects expected tracking state."""
+    if on:
+        assert "on" in info.flags
+        assert "bcast" in info.flags
+    else:
+        assert "off" in info.flags
+        assert len(info.prefixes) == 0
+    assert info.redirect == -1

@@ -7,6 +7,7 @@ from glide_shared.cache import ClientSideCache, EvictionPolicy
 from glide_shared.config import ProtocolVersion
 
 from tests.sync_tests.conftest import create_sync_client
+from tests.utils.utils import get_random_string, sync_wait_for
 
 
 class TestSyncClientSideCache:
@@ -569,3 +570,55 @@ class TestSyncClientSideCache:
         # Negative should raise
         with pytest.raises(ValueError, match="entry_ttl_ms must be non-negative"):
             ClientSideCache.create(max_cache_kb=1, entry_ttl_ms=-1)
+
+    def test_sync_server_assisted_defaults_to_false(self):
+        """Test that server_assisted defaults to False."""
+        cache = ClientSideCache.create(max_cache_kb=1024)
+        assert cache.server_assisted is False
+
+    def test_sync_server_assisted_can_be_set_to_true(self):
+        """Test that server_assisted can be set to True."""
+        cache = ClientSideCache.create(max_cache_kb=1024, server_assisted=True)
+        assert cache.server_assisted is True
+
+    def test_sync_server_assisted_can_be_explicitly_set_to_false(self):
+        """Test that server_assisted can be explicitly set to False."""
+        cache = ClientSideCache.create(max_cache_kb=1024, server_assisted=False)
+        assert cache.server_assisted is False
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_server_assisted_invalidation(self, request, cluster_mode):
+        """Test that server-assisted caching invalidates entries when modified by another client."""
+        cache = ClientSideCache.create(
+            max_cache_kb=1,
+            server_assisted=True,
+        )
+        client_a = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+        client_b = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+        )
+
+        key = "test_sync_invalidation_" + get_random_string(10)
+
+        # Client A caches the key
+        assert client_a.set(key, "v1") == "OK"
+        assert client_a.get(key) == b"v1"  # miss, populates cache
+        assert client_a.get(key) == b"v1"  # hit
+
+        # Client B modifies the key — triggers server invalidation
+        assert client_b.set(key, "v2") == "OK"
+
+        # Poll until invalidation is processed and Client A sees the new value
+        sync_wait_for(
+            lambda: client_a.get(key) == b"v2",
+            "Cache was not invalidated after key was modified by another client",
+        )
+
+        client_a.close()
+        client_b.close()
