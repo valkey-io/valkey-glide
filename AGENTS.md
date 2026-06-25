@@ -117,6 +117,11 @@ python3 dev.py lint --check  # Check only
 # Integration tests
 python3 dev.py test                          # Run all tests
 python3 dev.py test --args -k "test_memory"  # Run all tests matching a pattern
+
+# Clean (Rust and Python artifacts)
+python3 dev.py clean                 # Clean both client artifacts
+python3 dev.py clean --client async  # Clean shared and async client artifacts
+
 ```
 
 **Node.js/TypeScript:**
