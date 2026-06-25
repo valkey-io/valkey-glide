@@ -35,6 +35,10 @@ for (let i = 1; i <= RUNS; i++) {
         passed = parseInt(summary?.match(/(\d+) passed/)?.[1] ?? "0");
         failed = parseInt(summary?.match(/(\d+) failed/)?.[1] ?? "0");
 
+        // Also detect suite-level failures (beforeAll crash = 0 tests run)
+        const suiteFailed = output.includes("Test Suites:") && 
+            output.match(/Test Suites:.*?(\d+) failed/) !== null;
+        
         // Extract failing test names and errors
         const lines = output.split("\n");
         let inFailure = false;
@@ -51,6 +55,15 @@ for (let i = 1; i <= RUNS; i++) {
             }
         }
         if (currentTest) failedTests.push({ test: currentTest, error: currentError.join(" ").trim().slice(0, 200) });
+        
+        // If no specific test failures found but suite failed, report the error
+        if (failedTests.length === 0 && suiteFailed) {
+            // Find the thrown error
+            const thrownMatch = output.match(/thrown: "([^"]+)"/);
+            const errorMatch = output.match(/Error: ([^\n]+)/);
+            const errorMsg = thrownMatch?.[1] ?? errorMatch?.[1] ?? "Suite failed to run";
+            failedTests.push({ test: "[beforeAll/Suite]", error: errorMsg.slice(0, 200) });
+        }
     }
 
     const duration = ((Date.now() - t0) / 1000).toFixed(1);
