@@ -33,6 +33,7 @@ runs:
           shell: bash
           if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
+              sudo rm -f /etc/apt/sources.list.d/azure-cli.list
               sudo apt update -y
               sudo apt install -y git gcc pkg-config openssl libssl-dev
 
