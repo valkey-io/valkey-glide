@@ -11,8 +11,9 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 **Architecture:** Hybrid Python/Rust with PyO3 (async) and CFFI (sync) bindings
 
 **Key Components:**
+
 - `glide-async/` - Async client using PyO3 bindings and Unix Domain Socket communication
-- `glide-sync/` - Sync client using CFFI bindings and direct FFI communication  
+- `glide-sync/` - Sync client using CFFI bindings and direct FFI communication
 - `glide-shared/` - Shared Python logic used by both clients
 - `tests/` - Shared test suite for both clients
 - `dev.py` - CLI utility for build, test, and development tasks
@@ -25,6 +26,7 @@ This is the Python client binding for Valkey GLIDE, providing both async and syn
 **Communication:** UDS (async), Direct FFI (sync)
 
 **Supported Platforms:**
+
 - Linux: Ubuntu 20+, Amazon Linux 2/2023 (x86_64, aarch64)
 - macOS: 13.7+ (x86_64), 14.7+ (aarch64)
 - **Note:** Alpine Linux/MUSL not supported
@@ -61,11 +63,17 @@ python3 dev.py lint --check                           # Check formatting only
 # Protobuf generation
 python3 dev.py protobuf                               # Regenerate protobuf files
 
+# Cleaning build artifacts
+python3 dev.py clean                                  # Remove all client build artifacts
+python3 dev.py clean --client async                   # Remove async client artifacts only
+python3 dev.py clean --client sync                    # Remove sync client artifacts only
+
 # Help
 python3 dev.py --help                                 # Show all available commands
 ```
 
 ### Raw Equivalents
+
 ```bash
 # Manual async client build (from glide-async/)
 source ../.env/bin/activate
@@ -89,6 +97,7 @@ protoc --python_out=glide-shared/glide_shared/protobuf --pyi_out=glide-shared/gl
 ```
 
 ### Test Execution Options
+
 ```bash
 # Run with existing endpoints
 python3 dev.py test --args --cluster-endpoints=localhost:7000 --standalone-endpoints=localhost:6379
@@ -138,18 +147,21 @@ Use conventional commit format:
 ### Code Quality Requirements
 
 **Python Linters (via dev.py):**
+
 ```bash
 python3 dev.py lint                    # Must pass before commit (auto-fixes)
 python3 dev.py lint --check            # Check-only mode
 ```
 
 **Individual Tools:**
+
 - `isort` - Import sorting
-- `black` - Code formatting  
+- `black` - Code formatting
 - `flake8` - Style and error checking
 - `mypy` - Type checking
 
 **Rust Components:**
+
 ```bash
 # From python/ directory
 rustup component add clippy rustfmt
@@ -160,6 +172,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 ## Guardrails & Policies
 
 ### Generated Outputs (Never Commit)
+
 - `.env/` - Python virtual environment
 - `glide-async/target/` - Rust build artifacts (async)
 - `glide-sync/target/` - Rust build artifacts (sync)
@@ -173,6 +186,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - `docs/_build/` - Sphinx documentation build
 
 ### Python-Specific Rules
+
 - **Python 3.9+ Required:** Minimum runtime version
 - **Virtual Environment:** Always use `.env/` for development
 - **Dual Client Support:** Maintain compatibility between async and sync clients
@@ -182,6 +196,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 - **Documentation Style:** Follow Google Style Python Docstrings format
 
 ### Package Structure Rules
+
 - **Async Client:** `import glide` (PyPI: `valkey-glide`)
 - **Sync Client:** `import glide_sync` (PyPI: `valkey-glide-sync`)
 - **Shared Logic:** `import glide_shared` (local install only)
@@ -189,7 +204,7 @@ cargo fmt --manifest-path ./Cargo.toml --all
 
 ## Project Structure (Essential)
 
-```
+```text
 python/
 ├── glide-async/                # Async client (PyO3 + Maturin)
 │   ├── Cargo.toml              # Rust dependencies
