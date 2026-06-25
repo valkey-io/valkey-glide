@@ -233,14 +233,15 @@ def pytest_collection_modifyitems(config, items):
             "--standalone-endpoints"
         ):
             # Skip TLS/DNS tests — no TLS clusters are created when using
-            # external endpoints (no certs available for pre-existing servers).
+            # external endpoints without --tls (no certs available).
             if "tls" in item.nodeid or "dns" in item.nodeid:
-                item.add_marker(
-                    pytest.mark.skip(
-                        reason="TLS tests skipped when external endpoints are provided"
+                if not config.getoption("--tls"):
+                    item.add_marker(
+                        pytest.mark.skip(
+                            reason="TLS tests skipped: external endpoints provided without --tls"
+                        )
                     )
-                )
-                continue
+                    continue
 
             if "cluster_mode" in item.fixturenames:
                 cluster_mode_value = item.callspec.params.get("cluster_mode", None)
