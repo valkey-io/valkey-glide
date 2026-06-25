@@ -930,7 +930,7 @@ class BaseClientConfiguration:
         cache_request.enable_metrics = cache_config.enable_metrics
         cache_request.server_assisted = cache_config.server_assisted
 
-        if self.client_side_cache.eviction_policy:
+        if cache_config.eviction_policy:
             cache_request.eviction_policy = cache_config.eviction_policy.value
 
     def _create_a_protobuf_conn_request(
