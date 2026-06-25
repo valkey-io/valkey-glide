@@ -946,7 +946,8 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 
 // TODO #6144: Move to base class
 
-// Returns the client tracking information.
+// Returns information about the current client connection's use
+// of the server assisted client side caching feature.
 //
 // See [valkey.io] for details.
 //
@@ -956,7 +957,7 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	Tracking info for the client.
+//	The tracking info for the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-trackinginfo/
 func (client *Client) ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error) {

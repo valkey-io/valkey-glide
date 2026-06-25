@@ -413,7 +413,8 @@ class ClusterCommands(CoreCommands):
         self, route: Optional[Route] = None
     ) -> TClusterResponse[ClientTrackingInfo]:
         """
-        Returns information about the current client connection's tracking state.
+        Returns information about the current client connection's use
+        of the server assisted client side caching feature.
 
         See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
 
@@ -422,7 +423,7 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[ClientTrackingInfo]: The client tracking info(s) for the client.
+            TClusterResponse[ClientTrackingInfo]: The tracking info(s) for the client.
 
         Examples:
             >>> info = client.client_tracking_info()

@@ -507,16 +507,16 @@ type LatencyEventInfo struct {
 	Count Result[int64]
 }
 
-// ClientTrackingInfo represents the response from [CLIENT TRACKINGINFO].
+// ClientTrackingInfo represents a [CLIENT TRACKINGINFO] response.
 //
 // [CLIENT TRACKINGINFO]: https://valkey.io/commands/client-trackinginfo/
 type ClientTrackingInfo struct {
-	// Flags is the list of tracking flags.
+	// Flags is the slice of tracking flags.
 	Flags []string
 
 	// Redirect is the client ID receiving invalidation messages, or -1 if not redirecting.
 	Redirect int64
 
-	// Prefixes is the list of key prefixes monitored for invalidation.
+	// Prefixes is the slice of key prefixes monitored for invalidation.
 	Prefixes []string
 }

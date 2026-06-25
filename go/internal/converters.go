@@ -891,7 +891,7 @@ func convertArrayToStringSlice(data []any) ([]string, error) {
 	return result, nil
 }
 
-// ConvertClientTrackingInfoResponse converts a CLIENT TRACKINGINFO response.
+// ConvertClientTrackingInfoResponse converts a `CLIENT TRACKINGINFO` response.
 func ConvertClientTrackingInfoResponse(data any) (any, error) {
 	dataMap, ok := data.(map[string]any)
 	if !ok {

@@ -378,13 +378,13 @@ public interface ConnectionManagementClusterCommands {
     // TODO #6144: Move to a shared ConnectionManagementBaseCommands interface once created
 
     /**
-     * Returns information about the current client connection's tracking state.
+     * Returns information about the current client connection's use of the server assisted client
+     * side caching feature.
      *
      * <p>Routes to a random node by default. To specify routing, use {@link
      * #clientTrackingInfo(Route)}.
      *
      * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
-     * @since Valkey 6.2.0 and above.
      * @return A {@link Map} with the client's tracking state. The map contains:
      *     <ul>
      *       <li>{@code flags}: a {@link java.util.Set} of tracking flags. See <a
@@ -412,10 +412,10 @@ public interface ConnectionManagementClusterCommands {
     CompletableFuture<Map<String, Object>> clientTrackingInfo();
 
     /**
-     * Returns information about the current client connection's tracking state.
+     * Returns information about the current client connection's use of the server assisted client
+     * side caching feature.
      *
      * @see <a href="https://valkey.io/commands/client-trackinginfo/">valkey.io</a> for details.
-     * @since Valkey 6.2.0 and above.
      * @param route Specifies the routing configuration for the command.
      * @return A {@link glide.api.models.ClusterValue} containing the tracking state map per the
      *     routing.

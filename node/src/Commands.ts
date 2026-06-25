@@ -4435,10 +4435,9 @@ export function createLatencyReset(
 }
 
 /**
- * Represents the response from `CLIENT TRACKINGINFO`.
+ * Represents a `CLIENT TRACKINGINFO` response.
  *
  * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
- * @since Valkey 6.2.0
  */
 export class ClientTrackingInfo {
     /** Set of tracking flags. */

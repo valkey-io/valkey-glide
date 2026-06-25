@@ -1166,12 +1166,12 @@ export class GlideClusterClient extends BaseClient {
     }
 
     /**
-     * Returns information about the client connection's tracking state.
+     * Returns information about the current client connection's use
+     * of the server assisted client side caching feature.
      *
      * The command will be routed to a random node, unless `route` is provided.
      *
      * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
-     * @since Valkey 6.2.0
      *
      * @param options - (Optional) See {@link RouteOption}.
      * @returns A {@link ClusterResponse} containing tracking info(s) for the client.

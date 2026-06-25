@@ -305,7 +305,8 @@ class StandaloneCommands(CoreCommands):
 
     def client_tracking_info(self) -> ClientTrackingInfo:
         """
-        Returns information about the current client connection's tracking state.
+        Returns information about the current client connection's use
+        of the server assisted client side caching feature.
 
         See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
 

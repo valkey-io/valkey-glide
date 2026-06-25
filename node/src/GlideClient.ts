@@ -574,7 +574,8 @@ export class GlideClient extends BaseClient {
     }
 
     /**
-     * Returns information about the client connection's tracking state.
+     * Returns information about the current client connection's use
+     * of the server assisted client side caching feature.
      *
      * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
      *

@@ -2143,7 +2143,8 @@ func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, opts 
 
 // TODO #6144: Move to base class
 
-// Returns the client tracking information.
+// Returns information about the current client connection's use
+// of the server assisted client side caching feature.
 // The command is routed to a random node by default.
 //
 // See [valkey.io] for details.
@@ -2154,7 +2155,7 @@ func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, opts 
 //
 // Return value:
 //
-//	tracking info for the client.
+//	The tracking info for the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-trackinginfo/
 func (client *ClusterClient) ClientTrackingInfo(
@@ -2167,7 +2168,8 @@ func (client *ClusterClient) ClientTrackingInfo(
 	return handleClientTrackingInfoResponse(response)
 }
 
-// Returns the client tracking information.
+// Returns information about the current client connection's use
+// of the server assisted client side caching feature.
 //
 // See [valkey.io] for details.
 //
@@ -2175,11 +2177,11 @@ func (client *ClusterClient) ClientTrackingInfo(
 //
 //	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	       command to the nodes defined by `options`.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
-//	A [models.ClusterValue] containing client tracking info(s) for the client.
+//	A [models.ClusterValue] containing the tracking info(s) for the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-trackinginfo/
 func (client *ClusterClient) ClientTrackingInfoWithOptions(
