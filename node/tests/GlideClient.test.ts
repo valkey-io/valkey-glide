@@ -66,6 +66,8 @@ describe("GlideClient", () => {
     let client: GlideClient;
     let azClient: GlideClient;
     let lastProtocol: ProtocolVersion | undefined;
+    let pooledClient: GlideClient | undefined;
+    let pooledAzClient: GlideClient | undefined;
     beforeAll(async () => {
         const standaloneAddresses: string =
             global.STAND_ALONE_ENDPOINT as string;
@@ -92,6 +94,18 @@ describe("GlideClient", () => {
     afterEach(async () => {
         await flushClient(client);
         await flushClient(azClient);
+
+        // Close clients that were created by standalone tests (not pooled).
+        // Pooled clients are kept alive for reuse in runBaseTests.init().
+        if (client && client !== pooledClient) {
+            client.close();
+            client = undefined!;
+        }
+
+        if (azClient && azClient !== pooledAzClient) {
+            azClient.close();
+            azClient = undefined!;
+        }
     });
 
     afterAll(async () => {
@@ -2216,6 +2230,8 @@ describe("GlideClient", () => {
             }
 
             lastProtocol = protocol;
+            pooledClient = client;
+            pooledAzClient = azClient;
             testsFailed += 1;
             return { client, cluster, azClient, azCluster };
         },

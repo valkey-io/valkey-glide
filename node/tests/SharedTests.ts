@@ -12501,18 +12501,20 @@ export function runBaseTests(config: {
                     },
                 });
 
-                // wait to get some minIdleTime
+                // wait to get some minIdleTime (test below uses minIdleTime: 42)
                 await waitFor(async () => {
-                    const pending = await client.xpending(
+                    const result = await client.xpendingWithOptions(
                         Buffer.from(key),
                         group,
+                        {
+                            start: InfBoundary.NegativeInfinity,
+                            end: InfBoundary.PositiveInfinity,
+                            count: 1,
+                            minIdleTime: 42,
+                        },
                     );
-                    return (
-                        Array.isArray(pending) &&
-                        pending.length > 0 &&
-                        pending[0] > 0
-                    );
-                }, "minIdleTime did not become > 0");
+                    return Array.isArray(result) && result.length > 0;
+                }, "Pending message idle time did not reach 42ms");
 
                 expect(await client.xpending(Buffer.from(key), group)).toEqual([
                     2,

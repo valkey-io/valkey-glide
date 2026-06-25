@@ -77,6 +77,8 @@ describe("GlideClusterClient", () => {
     let client: GlideClusterClient;
     let azClient: GlideClusterClient;
     let lastProtocol: ProtocolVersion | undefined;
+    let pooledClient: GlideClusterClient | undefined;
+    let pooledAzClient: GlideClusterClient | undefined;
     beforeAll(async () => {
         const clusterAddresses = global.CLUSTER_ENDPOINTS;
 
@@ -120,6 +122,17 @@ describe("GlideClusterClient", () => {
     afterEach(async () => {
         await flushClient(client);
         await flushClient(azClient);
+
+        // Close clients that were created by standalone tests (not pooled).
+        if (client && client !== pooledClient) {
+            client.close();
+            client = undefined!;
+        }
+
+        if (azClient && azClient !== pooledAzClient) {
+            azClient.close();
+            azClient = undefined!;
+        }
     });
 
     afterAll(async () => {
@@ -179,6 +192,8 @@ describe("GlideClusterClient", () => {
             }
 
             lastProtocol = protocol;
+            pooledClient = client;
+            pooledAzClient = azClient;
             testsFailed += 1;
             return {
                 client,
