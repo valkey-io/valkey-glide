@@ -287,7 +287,7 @@ impl StandaloneClient {
                     .map_err(|err| (format!("{}:{}", address.host, address.port), err))
                 }
             })
-            .buffer_unordered(node_count);
+            .buffered(node_count);
 
         let mut nodes = Vec::with_capacity(node_count);
         let mut addresses_and_errors = Vec::with_capacity(node_count);
