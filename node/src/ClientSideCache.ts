@@ -33,6 +33,14 @@ export interface ClientSideCacheConfig {
      * Defaults to false if not specified.
      */
     enableMetrics?: boolean;
+
+    /**
+     * Whether to enable server-assisted client-side caching.
+     * When enabled, Valkey remembers the keys that the connection requested and sends
+     * invalidation messages when such keys are modified. Only available with RESP3 protocol.
+     * Defaults to false if not specified.
+     */
+    serverAssisted?: boolean;
 }
 
 /**
@@ -48,6 +56,11 @@ export interface ClientSideCacheOptions {
      * Whether to enable metrics collection for this cache.
      */
     enableMetrics?: boolean;
+
+    /**
+     * Whether to enable server-assisted client-side caching.
+     */
+    serverAssisted?: boolean;
 }
 
 /**
@@ -100,6 +113,11 @@ export class ClientSideCache {
     readonly enableMetrics: boolean;
 
     /**
+     * Whether server-assisted client-side caching is enabled.
+     */
+    readonly serverAssisted: boolean;
+
+    /**
      * Creates a new ClientSideCache instance.
      *
      * @param config - Configuration options for the cache
@@ -122,6 +140,7 @@ export class ClientSideCache {
         this.entryTtlMs = config.entryTtlMs;
         this.evictionPolicy = config.evictionPolicy;
         this.enableMetrics = config.enableMetrics ?? false;
+        this.serverAssisted = config.serverAssisted ?? false;
     }
 
     /**
@@ -156,6 +175,7 @@ export class ClientSideCache {
             entryTtlMs,
             evictionPolicy: options?.evictionPolicy,
             enableMetrics: options?.enableMetrics,
+            serverAssisted: options?.serverAssisted,
         });
     }
 }

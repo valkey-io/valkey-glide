@@ -310,7 +310,7 @@ class StandaloneCommands(CoreCommands):
         See [valkey.io](https://valkey.io/commands/client-trackinginfo/) for more details.
 
         Returns:
-            ClientTrackingInfo: The client tracking info for the client.
+            ClientTrackingInfo: The tracking info for the client.
 
         Examples:
             >>> info = await client.client_tracking_info()

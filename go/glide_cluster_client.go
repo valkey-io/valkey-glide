@@ -2154,7 +2154,7 @@ func (client *ClusterClient) ClientUnpauseWithOptions(ctx context.Context, opts 
 //
 // Return value:
 //
-//	Client tracking info for the client.
+//	tracking info for the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-trackinginfo/
 func (client *ClusterClient) ClientTrackingInfo(

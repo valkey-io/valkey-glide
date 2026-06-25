@@ -21,9 +21,11 @@ import { Batch } from "./Batch";
 import {
     BatchOptions,
     ClientPauseMode,
+    ClientTrackingInfo,
     createClientGetName,
     createClientId,
     createClientPause,
+    createClientTrackingInfo,
     createClientUnpause,
     createConfigGet,
     createConfigResetStat,
@@ -76,6 +78,7 @@ import {
     LatencyEventInfo,
     LolwutOptions,
     MigrateOptions,
+    parseClientTrackingInfoResponse,
     ScanOptions,
 } from "./Commands";
 
@@ -568,6 +571,31 @@ export class GlideClient extends BaseClient {
      */
     public async clientId(): Promise<number> {
         return this.createWritePromise(createClientId());
+    }
+
+    /**
+     * Returns information about the client connection's tracking state.
+     *
+     * @see {@link https://valkey.io/commands/client-trackinginfo/|valkey.io} for details.
+     *
+     * @returns The tracking info for the client.
+     *
+     * @example
+     * ```typescript
+     * const info = await client.clientTrackingInfo();
+     * console.log(info.flags); // Set { "off" }
+     * console.log(info.redirect); // -1
+     * console.log(info.prefixes); // Set {}
+     * ```
+     */
+    public async clientTrackingInfo(): Promise<ClientTrackingInfo> {
+        return this.createWritePromise<GlideRecord<unknown>>(
+            createClientTrackingInfo(),
+        ).then((res) =>
+            parseClientTrackingInfoResponse(
+                convertGlideRecordToRecord(res) as Record<string, unknown>,
+            ),
+        );
     }
 
     /**

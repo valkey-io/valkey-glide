@@ -956,7 +956,7 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 //
 // Return value:
 //
-//	Client tracking info for the client.
+//	Tracking info for the client.
 //
 // [valkey.io]: https://valkey.io/commands/client-trackinginfo/
 func (client *Client) ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error) {
