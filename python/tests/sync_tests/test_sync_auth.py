@@ -133,7 +133,9 @@ class TestSyncAuthCommands:
         glide_sync_client.set("test_key", "test_value")
         config_set_new_password(glide_sync_client, NEW_PASSWORD)
         kill_connections(management_sync_client)
-        time.sleep(2)
+        # Don't sleep here - immediate_auth=True should fail because the
+        # connection is dead and we haven't called immediate_auth yet.
+        # A long sleep allows auto-reconnection to complete, masking the test.
         result = glide_sync_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=False
         )

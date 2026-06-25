@@ -133,7 +133,9 @@ class TestAuthCommands:
         await glide_client.set("test_key", "test_value")
         await config_set_new_password(glide_client, NEW_PASSWORD)
         await kill_connections(management_client)
-        await anyio.sleep(2)
+        # Don't sleep here - immediate_auth=True should fail because the
+        # connection is dead and we haven't called immediate_auth yet.
+        # A long sleep allows auto-reconnection to complete, masking the test.
         result = await glide_client.update_connection_password(
             NEW_PASSWORD, immediate_auth=False
         )
