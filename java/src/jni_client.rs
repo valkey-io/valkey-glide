@@ -1,5 +1,5 @@
 //! JNI client management infrastructure extracted from JNI-java implementation
-//! This module provides direct JNI calls to glide-core while preserving protobuf serialization
+//! This module provides direct JNI calls to glide-core
 
 use anyhow::Result;
 use dashmap::DashMap;
