@@ -146,9 +146,10 @@ func (suite *GlideTestSuite) TestMemoryStats_StandaloneWithDataOperations() {
 	statsBefore, err := client.MemoryStats(context.Background())
 	assert.NoError(t, err)
 
-	for i := 0; i < 100; i++ {
+	// Write enough data (~10MB) to reliably exceed any background memory reclamation jitter.
+	for i := 0; i < 1000; i++ {
 		key := fmt.Sprintf("memory_test_key_%d", i)
-		value := strings.Repeat("x", 1000)
+		value := strings.Repeat("x", 10000)
 		_, err := client.Set(context.Background(), key, value)
 		assert.NoError(t, err)
 	}
