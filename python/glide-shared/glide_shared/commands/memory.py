@@ -112,11 +112,17 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
         rss_overhead_ratio=float(response[b"rss-overhead.ratio"]),
         # Optional Valkey 7.0+ fields
         allocator_muzzy=(
-            int(response[b"allocator.muzzy"]) if b"allocator.muzzy" in response else None
+            int(response[b"allocator.muzzy"])
+            if b"allocator.muzzy" in response
+            else None
         ),
-        cluster_links=(int(response[b"cluster.links"]) if b"cluster.links" in response else None),
+        cluster_links=(
+            int(response[b"cluster.links"]) if b"cluster.links" in response else None
+        ),
         functions_caches=(
-            int(response[b"functions.caches"]) if b"functions.caches" in response else None
+            int(response[b"functions.caches"])
+            if b"functions.caches" in response
+            else None
         ),
         # Optional Valkey 8.0+ fields
         db_dict_rehashing_count=(
