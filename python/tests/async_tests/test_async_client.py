@@ -1040,7 +1040,7 @@ class TestCommands:
                 assert_client_tracking_info(node_info, on=False)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_client_tracking_info_on(self, request, glide_client: TGlideClient):
+    async def test_client_tracking_info_on(self, request, cluster_mode):
         cache = ClientSideCache.create(max_cache_kb=1, server_assisted=True)
         cluster_mode = isinstance(glide_client, GlideClusterClient)
         client = await create_client(
