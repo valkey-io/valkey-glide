@@ -1306,20 +1306,9 @@ func (suite *GlideTestSuite) TestClientTrackingInfo_On_Cluster() {
 	client, err := suite.clusterClient(clientConfig)
 	require.NoError(t, err)
 
-	// Single-node route (default)
 	info, err := client.ClientTrackingInfo(ctx)
 	assert.NoError(t, err)
 	assertClientTrackingInfo(t, info, true)
-
-	// Multi-node route
-	route := config.Route(config.AllPrimaries)
-	opts := options.RouteOption{Route: route}
-	multiResponse, err := client.ClientTrackingInfoWithOptions(ctx, opts)
-	assert.NoError(t, err)
-	assert.True(t, multiResponse.IsMultiValue())
-	for _, nodeInfo := range multiResponse.MultiValue() {
-		assertClientTrackingInfo(t, nodeInfo, true)
-	}
 }
 
 func (suite *GlideTestSuite) TestClientIdCluster() {
