@@ -156,8 +156,7 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             addresses=standalone_endpoints,
         )
 
-    if not standalone_endpoints:
-     if not (cluster_endpoints or standalone_endpoints):
+    if not (cluster_endpoints or standalone_endpoints):
         pytest.valkey_tls_cluster = ValkeyCluster(
             tls=True,
             cluster_mode=True,
