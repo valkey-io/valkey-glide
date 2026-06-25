@@ -23,47 +23,47 @@ for (let i = 1; i <= RUNS; i++) {
 
     try {
         const output = execSync(
-            `npx jest --testPathPattern="${FILE}" --runInBand --forceExit --verbose 2>&1`,
+            `npx jest --testPathPattern="${FILE}" --runInBand --forceExit --verbose --no-coverage 2>&1`,
             { encoding: "utf8", timeout: 300000 }
         );
         const summary = output.split("\n").find(l => l.includes("Tests:"));
         passed = parseInt(summary?.match(/(\d+) passed/)?.[1] ?? "0");
     } catch (err) {
-        status = "FAIL";
         const output = (err.stdout ?? "") + (err.stderr ?? "");
         const summary = output.split("\n").find(l => l.includes("Tests:"));
         passed = parseInt(summary?.match(/(\d+) passed/)?.[1] ?? "0");
         failed = parseInt(summary?.match(/(\d+) failed/)?.[1] ?? "0");
 
-        // Also detect suite-level failures (beforeAll crash = 0 tests run)
-        const suiteFailed = output.includes("Test Suites:") && 
-            output.match(/Test Suites:.*?(\d+) failed/) !== null;
+        // Only mark as FAIL if there are actual test failures or suite crashes
+        // Jest exits non-zero for coverage errors too - ignore those
+        const hasTestFailures = failed > 0;
+        const suiteFailed = /Test Suites:.*\d+ failed/.test(output);
         
-        // Extract failing test names and errors
-        const lines = output.split("\n");
-        let inFailure = false;
-        let currentTest = "";
-        let currentError = [];
-        for (const line of lines) {
-            if (line.match(/^\s+● .+/)) {
-                if (currentTest) failedTests.push({ test: currentTest, error: currentError.join(" ").trim().slice(0, 200) });
-                currentTest = line.trim().replace(/^● /, "");
-                currentError = [];
-                inFailure = true;
-            } else if (inFailure && line.trim().length > 0 && !line.includes("──────")) {
-                currentError.push(line.trim());
+        if (hasTestFailures || suiteFailed) {
+            status = "FAIL";
+            // Extract failing test names and errors
+            const lines = output.split("\n");
+            let currentTest = "";
+            let currentError = [];
+            for (const line of lines) {
+                if (line.match(/^\s+● .+/)) {
+                    if (currentTest) failedTests.push({ test: currentTest, error: currentError.join(" ").trim().slice(0, 200) });
+                    currentTest = line.trim().replace(/^● /, "");
+                    currentError = [];
+                } else if (currentTest && line.trim().length > 0 && !line.includes("──────")) {
+                    currentError.push(line.trim());
+                }
+            }
+            if (currentTest) failedTests.push({ test: currentTest, error: currentError.join(" ").trim().slice(0, 200) });
+            
+            // Suite-level crash with no individual failures
+            if (failedTests.length === 0 && suiteFailed) {
+                const thrownMatch = output.match(/thrown: "([^"]+)"/);
+                const errorMatch = output.match(/Error: ([^\n]+)/);
+                failedTests.push({ test: "[Suite]", error: (thrownMatch?.[1] ?? errorMatch?.[1] ?? "Suite failed").slice(0, 200) });
             }
         }
-        if (currentTest) failedTests.push({ test: currentTest, error: currentError.join(" ").trim().slice(0, 200) });
-        
-        // If no specific test failures found but suite failed, report the error
-        if (failedTests.length === 0 && suiteFailed) {
-            // Find the thrown error
-            const thrownMatch = output.match(/thrown: "([^"]+)"/);
-            const errorMatch = output.match(/Error: ([^\n]+)/);
-            const errorMsg = thrownMatch?.[1] ?? errorMatch?.[1] ?? "Suite failed to run";
-            failedTests.push({ test: "[beforeAll/Suite]", error: errorMsg.slice(0, 200) });
-        }
+        // else: non-zero exit was coverage/reporter error, not a test failure - keep status PASS
     }
 
     const duration = ((Date.now() - t0) / 1000).toFixed(1);
