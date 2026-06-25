@@ -4,6 +4,7 @@ package glide;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.getRandomString;
+import static glide.TestUtilities.waitFor;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -675,6 +676,31 @@ public class ClientSideCacheTests {
 
         // Verify caching was actually used by checking metrics
         assertTrue(client.getCacheHitRate().get() > 0, "Expected cache hit rate > 0 after second GET");
+    }
+
+    @ParameterizedTest(autoCloseArguments = true)
+    @MethodSource("getServerAssistedCacheClients")
+    @SneakyThrows
+    public void clientSideCache_serverAssisted_invalidation(BaseClient clientA) {
+        String key = UUID.randomUUID().toString();
+
+        // Client A caches the key
+        assertEquals(OK, clientA.set(key, "v1").get());
+        assertEquals("v1", clientA.get(key).get()); // miss, populates cache
+        assertEquals("v1", clientA.get(key).get()); // hit
+
+        // Client B modifies the key — triggers server invalidation to Client A
+        BaseClient clientB =
+                clientA instanceof GlideClusterClient
+                        ? GlideClusterClient.createClient(commonClusterClientConfig().build()).get()
+                        : GlideClient.createClient(commonClientConfig().build()).get();
+        assertEquals(OK, clientB.set(key, "v2").get());
+        clientB.close();
+
+        // Poll until invalidation is processed and Client A sees the new value
+        waitFor(
+                () -> "v2".equals(clientA.get(key).get()),
+                "Cache was not invalidated after key was modified by another client");
     }
 
     /** Test that only cacheable commands are actually cached. */
