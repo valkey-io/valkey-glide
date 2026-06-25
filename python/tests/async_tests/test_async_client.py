@@ -14,7 +14,6 @@ import anyio
 import pytest
 from glide import GlideClient, GlideClusterClient, Script, TGlideClient
 from glide_shared import ClosingError, RequestError
-from glide_shared.cache import ClientSideCache
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.bitmap import (
@@ -118,6 +117,7 @@ from tests.utils.utils import (
     assert_client_tracking_info,
     assert_connected,
     assert_responses_in,
+    build_client_side_cache,
     check_function_list_response,
     check_function_stats_response,
     check_if_server_version_lt,
@@ -1041,8 +1041,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_client_tracking_info_on(self, request, cluster_mode):
-        cache = ClientSideCache.create(max_cache_kb=1, server_assisted=True)
-        cluster_mode = isinstance(glide_client, GlideClusterClient)
+        cache = build_client_side_cache(server_assisted=True)
         client = await create_client(
             request,
             cluster_mode=cluster_mode,

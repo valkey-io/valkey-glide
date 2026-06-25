@@ -12,7 +12,6 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 import pytest
-from glide_shared.cache import ClientSideCache
 from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.commands.batch_options import ClusterBatchOptions
 from glide_shared.commands.bitmap import (
@@ -121,6 +120,7 @@ from tests.utils.utils import (
     assert_client_tracking_info,
     assert_connected_sync,
     assert_responses_in,
+    build_client_side_cache,
     check_function_list_response,
     check_function_stats_response,
     compare_maps,
@@ -966,11 +966,8 @@ class TestCommands:
                 assert_client_tracking_info(node_info, on=False)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    def test_sync_client_tracking_info_on(
-        self, request, glide_sync_client: TGlideClient
-    ):
-        cache = ClientSideCache.create(max_cache_kb=1, server_assisted=True)
-        cluster_mode = isinstance(glide_sync_client, GlideClusterClient)
+    def test_sync_client_tracking_info_on(self, request, cluster_mode):
+        cache = build_client_side_cache(server_assisted=True)
         client = create_sync_client(
             request,
             cluster_mode=cluster_mode,
