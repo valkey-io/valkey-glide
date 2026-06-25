@@ -944,6 +944,29 @@ func (client *Client) ClientUnpause(ctx context.Context) (string, error) {
 	return handleOkResponse(result)
 }
 
+// TODO #6144: Move to base class
+
+// Returns the client tracking information.
+//
+// See [valkey.io] for details.
+//
+// Parameters:
+//
+//	ctx - The context for controlling the command execution.
+//
+// Return value:
+//
+//	Client tracking info for the client.
+//
+// [valkey.io]: https://valkey.io/commands/client-trackinginfo/
+func (client *Client) ClientTrackingInfo(ctx context.Context) (models.ClientTrackingInfo, error) {
+	response, err := client.executeCommand(ctx, C.ClientTrackingInfo, []string{})
+	if err != nil {
+		return models.ClientTrackingInfo{}, err
+	}
+	return handleClientTrackingInfoResponse(response)
+}
+
 // Iterates incrementally over a database for matching keys.
 //
 // See [valkey.io] for details.

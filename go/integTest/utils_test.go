@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 	"github.com/valkey-io/valkey-glide/go/v2/interfaces"
+	"github.com/valkey-io/valkey-glide/go/v2/models"
 )
 
 // Default connection and request timeouts for testing.
@@ -237,5 +238,20 @@ func skipIfTlsDisabled(suite *GlideTestSuite) {
 func skipIfTlsEnabled(suite *GlideTestSuite) {
 	if suite.tls {
 		suite.T().Skip("TLS is enabled, skipping non-TLS tests")
+	}
+}
+
+// assertClientTrackingInfo asserts that a ClientTrackingInfo reflects expected tracking state.
+func assertClientTrackingInfo(t *testing.T, info models.ClientTrackingInfo, on bool) {
+	if on {
+		assert.Contains(t, info.Flags, "on")
+		assert.Contains(t, info.Flags, "bcast")
+		assert.Equal(t, int64(0), info.Redirect)
+		assert.Len(t, info.Prefixes, 1)
+		assert.Contains(t, info.Prefixes, "")
+	} else {
+		assert.Contains(t, info.Flags, "off")
+		assert.Equal(t, int64(-1), info.Redirect)
+		assert.Empty(t, info.Prefixes)
 	}
 }

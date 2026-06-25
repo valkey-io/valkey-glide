@@ -797,3 +797,47 @@ func (suite *GlideTestSuite) TestClientSideCache_CacheableCommands() {
 		assert.Equal(suite.T(), int64(3), entryCount)
 	})
 }
+
+func (suite *GlideTestSuite) TestClientSideCache_ServerAssisted_Invalidation() {
+	suite.runWithDefaultClients(func(client interfaces.BaseClientCommands) {
+		cache, err := config.NewClientSideCache(defaultTestCacheKb, defaultTestTtlMs)
+		require.NoError(suite.T(), err)
+		cache.WithServerAssisted(true)
+
+		testClientA, err := suite.createClientWithCache(client, cache)
+		require.NoError(suite.T(), err)
+
+		ctx := context.Background()
+		key := "server_assisted_inv_" + uuid.New().String()
+
+		// Client A caches the key
+		result, err := testClientA.Set(ctx, key, "v1")
+		suite.verifyOK(result, err)
+
+		value, err := testClientA.Get(ctx, key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "v1", value.Value()) // miss, populates cache
+
+		value, err = testClientA.Get(ctx, key)
+		assert.NoError(suite.T(), err)
+		assert.Equal(suite.T(), "v1", value.Value()) // hit
+
+		// Client B modifies the key — triggers server invalidation to Client A
+		switch client.(type) {
+		case *glide.Client:
+			clientB := suite.defaultClient()
+			_, err = clientB.Set(ctx, key, "v2")
+			assert.NoError(suite.T(), err)
+		case *glide.ClusterClient:
+			clientB := suite.defaultClusterClient()
+			_, err = clientB.Set(ctx, key, "v2")
+			assert.NoError(suite.T(), err)
+		}
+
+		// Poll until invalidation is processed and Client A sees the new value
+		suite.waitFor(func() bool {
+			val, err := testClientA.Get(ctx, key)
+			return err == nil && val.Value() == "v2"
+		}, "Cache was not invalidated after key was modified by another client")
+	})
+}
