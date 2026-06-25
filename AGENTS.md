@@ -95,6 +95,8 @@ cd python
 python3 dev.py build --mode release
 python3 dev.py test
 python3 dev.py lint
+python3 dev.py clean
+python3 dev.py clean --client async
 ```
 
 **Node.js/TypeScript:**
