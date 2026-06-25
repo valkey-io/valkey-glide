@@ -4,7 +4,7 @@ This guide helps you migrate existing Jedis 4.x applications to Valkey GLIDE usi
 
 ## Overview
 
-The `jedis-4-compatibility` layer provides a drop-in replacement for Jedis 4.x, allowing you to benefit from GLIDE's performance and features without changing your application code.
+The `jedis-4-compatibility` layer provides a near-drop-in replacement for Jedis 4.x, allowing you to benefit from GLIDE's performance and features with minimal application code changes. Applications that use custom `SSLSocketFactory`, `HostnameVerifier`, keystore/truststore, cipher suites, TLS protocols, client-auth, endpoint identification, `AuthXManager`, or custom credential providers will need code changes — see the [Limitations](#limitations) section.
 
 ## Quick Start
 
@@ -62,7 +62,7 @@ mvn clean package
 
 ### Step 3: Test Your Application
 
-Run your existing test suite. The Jedis 4.x compatibility layer maintains full API compatibility, so your tests should pass without modification.
+Run your existing test suite. The Jedis 4.x compatibility layer maintains API compatibility for the majority of use cases, so most tests should pass without modification. Tests that exercise custom SSL/TLS configuration, `AuthXManager`, or other [unsupported features](#limitations) will require code changes.
 
 ## Common Migration Scenarios
 
@@ -413,7 +413,7 @@ After successful migration:
 ## FAQ
 
 **Q: Do I need to change any code?**  
-A: No, the Jedis 4.x compatibility layer is a drop-in replacement.
+A: For most applications, no. The Jedis 4.x compatibility layer is a near-drop-in replacement. However, applications that use custom SSL/TLS configuration (custom `SSLSocketFactory`, `HostnameVerifier`, keystore/truststore, cipher suites, etc.), `AuthXManager`, or custom credential providers will need code changes. See the [Limitations](#limitations) section for the full list.
 
 **Q: Will my pool configuration still work?**  
 A: The API accepts pool configuration, but GLIDE manages pooling internally. Your settings won't affect GLIDE's behavior.

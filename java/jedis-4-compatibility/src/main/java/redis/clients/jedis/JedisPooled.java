@@ -2,6 +2,8 @@
 package redis.clients.jedis;
 
 import java.net.URI;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
@@ -13,9 +15,40 @@ import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
  * pooled connection API while using Valkey GLIDE underneath. This is the recommended client for
  * standalone Redis/Valkey usage.
  *
- * <p>Note: Pool configurations are ignored since GLIDE handles connection pooling internally.
+ * <p>Note: Pool configurations are accepted for API compatibility but ignored at runtime, since
+ * GLIDE manages connection pooling internally. A one-time warning is logged when a non-default pool
+ * configuration is supplied.
  */
 public class JedisPooled extends UnifiedJedis {
+
+    private static final Logger logger = Logger.getLogger(JedisPooled.class.getName());
+    private static final AtomicBoolean poolConfigWarningEmitted = new AtomicBoolean(false);
+
+    /**
+     * Logs a one-time warning if a non-default pool configuration is provided. GLIDE manages
+     * connection pooling internally; pool settings such as {@code maxTotal} and {@code maxIdle} are
+     * ignored. Use {@link glide.api.models.configuration.ConnectionRetryStrategy} via GLIDE's own
+     * configuration to control connection behaviour.
+     */
+    private static void warnIfNonDefaultPoolConfig(
+            org.apache.commons.pool2.impl.GenericObjectPoolConfig<?> poolConfig) {
+        if (poolConfig == null) {
+            return;
+        }
+        org.apache.commons.pool2.impl.GenericObjectPoolConfig<?> defaults =
+                new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
+        if (poolConfig.getMaxTotal() != defaults.getMaxTotal()
+                || poolConfig.getMaxIdle() != defaults.getMaxIdle()
+                || poolConfig.getMinIdle() != defaults.getMinIdle()
+                || poolConfig.getMaxWaitDuration() != defaults.getMaxWaitDuration()) {
+            if (poolConfigWarningEmitted.compareAndSet(false, true)) {
+                logger.warning(
+                        "JedisPooled: pool configuration (maxTotal, maxIdle, minIdle, maxWait, etc.) is not"
+                                + " honoured — GLIDE manages connection pooling internally. To control connection"
+                                + " settings, configure GLIDE's client configuration directly.");
+            }
+        }
+    }
 
     public JedisPooled() {
         this("localhost", 6379);
@@ -606,7 +639,7 @@ public class JedisPooled extends UnifiedJedis {
                         .database(database)
                         .clientName(clientName)
                         .build());
-        // poolConfig is ignored since GLIDE handles pooling internally
+        warnIfNonDefaultPoolConfig(poolConfig);
     }
 
     public JedisPooled(
@@ -639,7 +672,7 @@ public class JedisPooled extends UnifiedJedis {
                         .sslParameters(sslParameters)
                         .hostnameVerifier(hostnameVerifier)
                         .build());
-        // poolConfig is ignored since GLIDE handles pooling internally
+        warnIfNonDefaultPoolConfig(poolConfig);
     }
 
     // URI-based constructors
@@ -718,7 +751,7 @@ public class JedisPooled extends UnifiedJedis {
                         .connectionTimeoutMillis(connectionTimeout)
                         .socketTimeoutMillis(soTimeout)
                         .build());
-        // poolConfig is ignored since GLIDE handles pooling internally
+        warnIfNonDefaultPoolConfig(poolConfig);
     }
 
     public JedisPooled(
@@ -738,14 +771,14 @@ public class JedisPooled extends UnifiedJedis {
                         .sslParameters(sslParameters)
                         .hostnameVerifier(hostnameVerifier)
                         .build());
-        // poolConfig is ignored since GLIDE handles pooling internally
+        warnIfNonDefaultPoolConfig(poolConfig);
     }
 
     // Additional constructors for compatibility
     public JedisPooled(
             final HostAndPort hostAndPort, final GenericObjectPoolConfig<Connection> poolConfig) {
         this(hostAndPort, DefaultJedisClientConfig.builder().build());
-        // poolConfig is ignored since GLIDE handles pooling internally
+        warnIfNonDefaultPoolConfig(poolConfig);
     }
 
     public JedisPooled(
@@ -753,7 +786,7 @@ public class JedisPooled extends UnifiedJedis {
             final HostAndPort hostAndPort,
             final JedisClientConfig clientConfig) {
         this(hostAndPort, clientConfig);
-        // poolConfig is ignored since GLIDE handles pooling internally
+        warnIfNonDefaultPoolConfig(poolConfig);
     }
 
     public JedisPooled(
@@ -761,7 +794,7 @@ public class JedisPooled extends UnifiedJedis {
             final JedisClientConfig clientConfig,
             final GenericObjectPoolConfig<Connection> poolConfig) {
         this(hostAndPort, clientConfig);
-        // poolConfig is ignored since GLIDE handles pooling internally
+        warnIfNonDefaultPoolConfig(poolConfig);
     }
 
     //    public JedisPooled(
@@ -770,7 +803,7 @@ public class JedisPooled extends UnifiedJedis {
     //            Object cacheConfig,
     //            final GenericObjectPoolConfig<Connection> poolConfig) {
     //        this(hostAndPort, clientConfig, cacheConfig);
-    //        // poolConfig is ignored since GLIDE handles pooling internally
+    //        warnIfNonDefaultPoolConfig(poolConfig);
     //    }
     //
     //    public JedisPooled(
@@ -779,7 +812,7 @@ public class JedisPooled extends UnifiedJedis {
     //            Object clientSideCache,
     //            final GenericObjectPoolConfig<Connection> poolConfig) {
     //        this(hostAndPort, clientConfig, clientSideCache);
-    //        // poolConfig is ignored since GLIDE handles pooling internally
+    //        warnIfNonDefaultPoolConfig(poolConfig);
     //    }
 
     // Factory-based constructors (simplified for GLIDE compatibility)

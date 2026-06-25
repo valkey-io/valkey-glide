@@ -26,6 +26,13 @@ import redis.clients.jedis.util.KeyValue;
 /**
  * Unit tests for Jedis 4.x method signatures and API contracts. Tests that required methods exist
  * with correct signatures without executing them.
+ *
+ * <p><b>Scope:</b> This file verifies the <em>delegation surface</em> only — it uses reflection to
+ * assert that each method exists with the correct name, parameter types, and return type. It does
+ * not instantiate a client or invoke any command, so a method that delegates to a wrong GLIDE
+ * command or returns a hard-coded value would still pass here. Behavioural correctness (argument
+ * marshalling, return-value mapping, multibyte / 0x80+ byte round-trips, etc.) is covered by the
+ * live-server integration tests in the {@code integTest} source set.
  */
 public class Jedis4MethodsTest {
 

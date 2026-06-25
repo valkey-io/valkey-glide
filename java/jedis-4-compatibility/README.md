@@ -129,7 +129,7 @@ try (UnifiedJedis jedis = new UnifiedJedis("localhost", 6379)) {
 ## Migration from Jedis 4.x
 
 1. **Replace your Jedis 4.x dependency** with `valkey-glide-jedis-4-compatibility`
-2. **No code changes required** - The API is fully compatible with Jedis 4.x
+2. **Minimal code changes required for most applications** — The API is fully compatible with Jedis 4.x unless you use any of the unsupported features listed in the [Limitations](#limitations) section below
 3. **Benefit from GLIDE's performance** - Improved connection management, automatic failover, better error handling
 
 ## Key Differences from Jedis 5.x Layer

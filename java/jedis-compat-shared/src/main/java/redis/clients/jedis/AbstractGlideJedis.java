@@ -561,7 +561,7 @@ public abstract class AbstractGlideJedis extends JedisCommon {
     }
 
     /** Convert Jedis AbstractSetParams<?> to GLIDE SetOptions. */
-    private static SetOptions convertSetParamsToSetOptions(AbstractSetParams<?> params) {
+    static SetOptions convertSetParamsToSetOptions(AbstractSetParams<?> params) {
         SetOptions.SetOptionsBuilder builder = SetOptions.builder();
 
         // Handle existence conditions
