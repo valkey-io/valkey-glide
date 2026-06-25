@@ -1,5 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import asyncio
 from typing import List
 
 import pytest
@@ -7,7 +8,7 @@ from glide import GlideClusterClientConfiguration, MonitorClient
 from glide_shared.commands.core_options import MonitorMsg
 
 from tests.async_tests.conftest import create_client
-from tests.utils.utils import create_client_config, wait_for
+from tests.utils.utils import create_client_config
 
 
 @pytest.mark.anyio
@@ -25,13 +26,8 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.set("monitor_test_key", "monitor_test_val")
-
-                async def _set_received():
-                    return any(m.command.upper() == "SET" for m in received)
-
-                await wait_for(
-                    _set_received, "SET command not received by monitor", timeout=1
-                )
+                # Give time for monitor callback to fire
+                await asyncio.sleep(0.5)
             finally:
                 await client.close()
         finally:
@@ -50,17 +46,12 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.ping()
+                await asyncio.sleep(0.5)
             finally:
                 await client.close()
 
-            msg = None
-
-            async def _msg_available():
-                nonlocal msg
-                msg = monitor.try_get_monitor_message()
-                return msg is not None
-
-            await wait_for(_msg_available, "No monitor message received", timeout=5.0)
+            msg = await asyncio.wait_for(monitor.get_monitor_message(), timeout=5.0)
+            assert msg is not None
             assert isinstance(msg, MonitorMsg)
         finally:
             await monitor.stop()
@@ -108,13 +99,7 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.set("field_test_key", "field_test_val")
-
-                async def _set_received():
-                    return any(m.command.upper() == "SET" for m in received)
-
-                await wait_for(
-                    _set_received, "SET command not received by monitor", timeout=1
-                )
+                await asyncio.sleep(0.5)
             finally:
                 await client.close()
         finally:
