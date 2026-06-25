@@ -327,7 +327,8 @@ public class PubSubTests {
                 unsubscribeStandaloneClient((GlideClient) client, subscriptionTypes);
             }
         }
-        Thread.sleep(200); // Wait for unsubscribe commands to fully propagate
+        // Unsubscribe commands above use .get() which blocks until server confirms,
+        // so no additional sleep is needed for propagation.
         listeners.clear();
     }
 
