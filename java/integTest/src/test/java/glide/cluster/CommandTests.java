@@ -618,7 +618,12 @@ public class CommandTests {
         CompletableFuture<String> set = clusterClient.set(key, "after");
         CompletableFuture<String> unpause = clusterClient.clientUnpause();
 
-        Thread.sleep(300);
+        // Poll until we confirm commands are paused (not completing)
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start < 300) {
+            if (!set.isDone() && !unpause.isDone()) break;
+            Thread.sleep(50);
+        }
 
         // Verify that none of the commands completes.
         assertFalse(set.isDone());
@@ -644,7 +649,12 @@ public class CommandTests {
 
         CompletableFuture<String> set = clusterClient.set(key, "after");
 
-        Thread.sleep(300);
+        // Poll until we confirm command is paused (not completing)
+        long start2 = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start2 < 300) {
+            if (!set.isDone()) break;
+            Thread.sleep(50);
+        }
 
         // Verify that SET has not completed because server is paused.
         assertFalse(set.isDone());
