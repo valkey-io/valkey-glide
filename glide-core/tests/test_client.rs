@@ -2342,14 +2342,15 @@ pub(crate) mod shared_client_tests {
             pipeline.add_command(cmd("FLUSHALL"));
             pipeline.add_command(cmd("DBSIZE")); // AllPrimary cmd + SUM aggregation
 
-            // Execute the pipeline.
+            // Execute the pipeline with an explicit timeout to avoid flakiness
+            // under CI load (FLUSHALL/DBSIZE route to all primaries and can be slow).
             let result = test_basics
                 .client
                 .send_pipeline(
                     &pipeline,
                     None,
                     false,
-                    None,
+                    Some(10_000),
                     PipelineRetryStrategy {
                         retry_server_error: true,
                         retry_connection_error: false,
