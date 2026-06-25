@@ -5288,9 +5288,6 @@ export interface MemoryStats {
     /** Bytes of allocator fragmentation. */
     allocatorFragmentationBytes: number;
 
-    /** Memory used by allocator muzzy pages in bytes. */
-    allocatorMuzzy: number;
-
     /** Bytes resident (RSS) by the allocator. */
     allocatorResident: number;
 
@@ -5359,15 +5356,21 @@ export interface MemoryStats {
 
     /**
      * Memory used by cluster links in bytes.
-     * @remarks Valkey 7.0+ only.
+     * @remarks Redis 7.0+ only.
      */
     clusterLinks?: number;
 
     /**
      * Memory used by functions caches in bytes.
-     * @remarks Valkey 7.0+ only.
+     * @remarks Redis 7.0+ only.
      */
     functionsCaches?: number;
+
+    /**
+     * Memory used by allocator muzzy pages in bytes.
+     * @remarks Valkey 8.0+ only.
+     */
+    allocatorMuzzy?: number;
 
     /**
      * Count of db dictionaries currently rehashing.
@@ -5425,7 +5428,6 @@ export function parseMemoryStatsResponse(
         allocatorFragmentationBytes: Number(
             raw["allocator-fragmentation.bytes"],
         ),
-        allocatorMuzzy: Number(raw["allocator.muzzy"]),
         allocatorResident: Number(raw["allocator.resident"]),
         allocatorRssBytes: Number(raw["allocator-rss.bytes"]),
         aofBuffer: Number(raw["aof.buffer"]),
@@ -5451,7 +5453,7 @@ export function parseMemoryStatsResponse(
         peakPercentage: Number(raw["peak.percentage"]),
         rssOverheadRatio: Number(raw["rss-overhead.ratio"]),
 
-        // Optional Valkey 7.0+ fields
+        // Optional Redis 7.0+ fields
         clusterLinks:
             "cluster.links" in raw ? Number(raw["cluster.links"]) : undefined,
         functionsCaches:
@@ -5460,6 +5462,10 @@ export function parseMemoryStatsResponse(
                 : undefined,
 
         // Optional Valkey 8.0+ fields
+        allocatorMuzzy:
+            "allocator.muzzy" in raw
+                ? Number(raw["allocator.muzzy"])
+                : undefined,
         dbDictRehashingCount:
             "db.dict.rehashing.count" in raw
                 ? Number(raw["db.dict.rehashing.count"])

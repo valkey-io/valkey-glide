@@ -2654,7 +2654,6 @@ export function assertMemoryStatsFields(
     expect(stats.allocatorActive).toBeGreaterThan(0);
     expect(stats.allocatorAllocated).toBeGreaterThan(0);
     expect(stats.allocatorFragmentationBytes).toBeGreaterThanOrEqual(0);
-    expect(stats.allocatorMuzzy).toBeGreaterThanOrEqual(0);
     expect(stats.allocatorResident).toBeGreaterThan(0);
     expect(typeof stats.allocatorRssBytes).toBe("number");
     expect(stats.aofBuffer).toBeGreaterThanOrEqual(0);
@@ -2679,7 +2678,7 @@ export function assertMemoryStatsFields(
     expect(stats.peakPercentage).toBeGreaterThanOrEqual(0);
     expect(stats.rssOverheadRatio).toBeGreaterThanOrEqual(0);
 
-    // Optional Valkey 7.0+ fields
+    // Optional Redis 7.0+ fields
     if (serverVersion >= "7.0.0") {
         expect(stats.clusterLinks).toBeGreaterThanOrEqual(0);
         expect(stats.functionsCaches).toBeGreaterThanOrEqual(0);
@@ -2690,10 +2689,12 @@ export function assertMemoryStatsFields(
 
     // Optional Valkey 8.0+ fields
     if (serverVersion >= "8.0.0") {
+        expect(stats.allocatorMuzzy).toBeGreaterThanOrEqual(0);
         expect(stats.dbDictRehashingCount).toBeGreaterThanOrEqual(0);
         expect(stats.overheadDbHashtableLut).toBeGreaterThanOrEqual(0);
         expect(stats.overheadDbHashtableRehashing).toBeGreaterThanOrEqual(0);
     } else {
+        expect(stats.allocatorMuzzy).toBeUndefined();
         expect(stats.dbDictRehashingCount).toBeUndefined();
         expect(stats.overheadDbHashtableLut).toBeUndefined();
         expect(stats.overheadDbHashtableRehashing).toBeUndefined();

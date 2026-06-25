@@ -2111,22 +2111,22 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
     assert stats.peak_percentage >= 0
     assert stats.rss_overhead_ratio >= 0
 
-    # Optional Valkey 7.0+ fields
+    # Optional Redis 7.0+ fields
     if server_version >= "7.0.0":
-        assert stats.allocator_muzzy is not None and stats.allocator_muzzy >= 0
         assert stats.cluster_links is not None and stats.cluster_links >= 0
         assert stats.functions_caches is not None and stats.functions_caches >= 0
     else:
-        assert stats.allocator_muzzy is None
         assert stats.cluster_links is None
         assert stats.functions_caches is None
 
     # Optional Valkey 8.0+ fields
     if server_version >= "8.0.0":
+        assert stats.allocator_muzzy is not None and stats.allocator_muzzy >= 0
         assert stats.db_dict_rehashing_count is not None
         assert stats.overhead_db_hashtable_lut is not None
         assert stats.overhead_db_hashtable_rehashing is not None
     else:
+        assert stats.allocator_muzzy is None
         assert stats.db_dict_rehashing_count is None
         assert stats.overhead_db_hashtable_lut is None
         assert stats.overhead_db_hashtable_rehashing is None

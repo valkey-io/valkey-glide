@@ -520,7 +520,6 @@ type MemoryStats struct {
 	AllocatorActive             int64
 	AllocatorAllocated          int64
 	AllocatorFragmentationBytes int64
-	AllocatorMuzzy              int64
 	AllocatorResident           int64
 	AllocatorRssBytes           int64
 	AofBuffer                   int64
@@ -545,11 +544,12 @@ type MemoryStats struct {
 	PeakPercentage              float64
 	RssOverheadRatio            float64
 
-	// Optional Valkey 7.0+ fields
+	// Optional Redis 7.0+ fields
 	ClusterLinks    Result[int64]
 	FunctionsCaches Result[int64]
 
 	// Optional Valkey 8.0+ fields
+	AllocatorMuzzy               Result[int64]
 	DbDictRehashingCount         Result[int64]
 	OverheadDbHashtableLut       Result[int64]
 	OverheadDbHashtableRehashing Result[int64]

@@ -861,7 +861,6 @@ public class TestUtilities {
         assertTrue((Long) stats.get("allocator.active") > 0);
         assertTrue((Long) stats.get("allocator.allocated") > 0);
         assertTrue((Long) stats.get("allocator-fragmentation.bytes") >= 0);
-        assertTrue((Long) stats.get("allocator.muzzy") >= 0);
         assertTrue((Long) stats.get("allocator.resident") > 0);
         assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
         assertTrue((Long) stats.get("aof.buffer") >= 0);
@@ -886,7 +885,7 @@ public class TestUtilities {
         assertTrue((Double) stats.get("peak.percentage") >= 0);
         assertTrue((Double) stats.get("rss-overhead.ratio") >= 0);
 
-        // Optional Valkey 7.0+ fields
+        // Optional Redis 7.0+ fields
         if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertTrue((Long) stats.get("cluster.links") >= 0);
             assertTrue((Long) stats.get("functions.caches") >= 0);
@@ -897,10 +896,12 @@ public class TestUtilities {
 
         // Optional Valkey 8.0+ fields
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            assertTrue((Long) stats.get("allocator.muzzy") >= 0);
             assertTrue((Long) stats.get("db.dict.rehashing.count") >= 0);
             assertTrue((Long) stats.get("overhead.db.hashtable.lut") >= 0);
             assertTrue((Long) stats.get("overhead.db.hashtable.rehashing") >= 0);
         } else {
+            assertFalse(stats.containsKey("allocator.muzzy"));
             assertFalse(stats.containsKey("db.dict.rehashing.count"));
             assertFalse(stats.containsKey("overhead.db.hashtable.lut"));
             assertFalse(stats.containsKey("overhead.db.hashtable.rehashing"));

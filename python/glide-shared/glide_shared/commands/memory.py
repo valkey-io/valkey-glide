@@ -49,12 +49,12 @@ class MemoryStats:
     peak_percentage: float = 0.0
     rss_overhead_ratio: float = 0.0
 
-    # Optional Valkey 7.0+ fields
-    allocator_muzzy: Optional[int] = None
+    # Optional Redis 7.0+ fields
     cluster_links: Optional[int] = None
     functions_caches: Optional[int] = None
 
     # Optional Valkey 8.0+ fields
+    allocator_muzzy: Optional[int] = None
     db_dict_rehashing_count: Optional[int] = None
     overhead_db_hashtable_lut: Optional[int] = None
     overhead_db_hashtable_rehashing: Optional[int] = None
@@ -110,12 +110,7 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
         fragmentation=float(response[b"fragmentation"]),
         peak_percentage=float(response[b"peak.percentage"]),
         rss_overhead_ratio=float(response[b"rss-overhead.ratio"]),
-        # Optional Valkey 7.0+ fields
-        allocator_muzzy=(
-            int(response[b"allocator.muzzy"])
-            if b"allocator.muzzy" in response
-            else None
-        ),
+        # Optional Redis 7.0+ fields
         cluster_links=(
             int(response[b"cluster.links"]) if b"cluster.links" in response else None
         ),
@@ -125,6 +120,11 @@ def _parse_memory_stats(response: Mapping[bytes, Any]) -> MemoryStats:
             else None
         ),
         # Optional Valkey 8.0+ fields
+        allocator_muzzy=(
+            int(response[b"allocator.muzzy"])
+            if b"allocator.muzzy" in response
+            else None
+        ),
         db_dict_rehashing_count=(
             int(response[b"db.dict.rehashing.count"])
             if b"db.dict.rehashing.count" in response

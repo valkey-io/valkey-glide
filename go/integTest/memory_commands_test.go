@@ -304,7 +304,6 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	assert.Greater(t, result.AllocatorActive, int64(0))
 	assert.Greater(t, result.AllocatorAllocated, int64(0))
 	assert.GreaterOrEqual(t, result.AllocatorFragmentationBytes, int64(0))
-	assert.GreaterOrEqual(t, result.AllocatorMuzzy, int64(0))
 	assert.Greater(t, result.AllocatorResident, int64(0))
 	assert.IsType(t, int64(0), result.AllocatorRssBytes)
 	assert.GreaterOrEqual(t, result.AofBuffer, int64(0))
@@ -329,7 +328,7 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 	assert.GreaterOrEqual(t, result.PeakPercentage, float64(0))
 	assert.GreaterOrEqual(t, result.RssOverheadRatio, float64(0))
 
-	// Optional Valkey 7.0+ fields
+	// Optional Redis 7.0+ fields
 	if suite.serverVersion >= "7.0.0" {
 		assert.False(t, result.ClusterLinks.IsNil())
 		assert.False(t, result.FunctionsCaches.IsNil())
@@ -340,12 +339,14 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 
 	// Optional Valkey 8.0+ fields
 	if suite.serverVersion >= "8.0.0" {
-		assert.False(t, result.OverheadDbHashtableLut.IsNil())
-		assert.False(t, result.OverheadDbHashtableRehashing.IsNil())
-		assert.False(t, result.DbDictRehashingCount.IsNil())
+		assert.NotNil(t, result.AllocatorMuzzy)
+		assert.NotNil(t, result.OverheadDbHashtableLut)
+		assert.NotNil(t, result.OverheadDbHashtableRehashing)
+		assert.NotNil(t, result.DbDictRehashingCount)
 	} else {
-		assert.True(t, result.OverheadDbHashtableLut.IsNil())
-		assert.True(t, result.OverheadDbHashtableRehashing.IsNil())
-		assert.True(t, result.DbDictRehashingCount.IsNil())
+		assert.Nil(t, result.AllocatorMuzzy)
+		assert.Nil(t, result.OverheadDbHashtableLut)
+		assert.Nil(t, result.OverheadDbHashtableRehashing)
+		assert.Nil(t, result.DbDictRehashingCount)
 	}
 }

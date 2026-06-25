@@ -913,10 +913,6 @@ func ConvertMemoryStats(data any) (models.MemoryStats, error) {
 	if err != nil {
 		return models.MemoryStats{}, err
 	}
-	err = ReadRequiredValue(rawMap, "allocator.muzzy", &stats.AllocatorMuzzy)
-	if err != nil {
-		return models.MemoryStats{}, err
-	}
 	err = ReadRequiredValue(rawMap, "allocator.resident", &stats.AllocatorResident)
 	if err != nil {
 		return models.MemoryStats{}, err
@@ -1006,11 +1002,12 @@ func ConvertMemoryStats(data any) (models.MemoryStats, error) {
 		return models.MemoryStats{}, err
 	}
 
-	// Optional Valkey 7.0+ fields
+	// Optional Redis 7.0+ fields
 	ReadResult(rawMap, "cluster.links", &stats.ClusterLinks)
 	ReadResult(rawMap, "functions.caches", &stats.FunctionsCaches)
 
 	// Optional Valkey 8.0+ fields
+	ReadResult(rawMap, "allocator.muzzy", &stats.AllocatorMuzzy)
 	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
 	ReadResult(rawMap, "overhead.db.hashtable.lut", &stats.OverheadDbHashtableLut)
 	ReadResult(rawMap, "overhead.db.hashtable.rehashing", &stats.OverheadDbHashtableRehashing)
