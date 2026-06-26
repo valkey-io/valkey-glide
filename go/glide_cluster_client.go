@@ -4068,7 +4068,7 @@ func (client *ClusterClient) ClusterLinksWithRoute(
 }
 
 // Migrate atomically transfers a key from the source Valkey instance to a destination Valkey instance.
-// In cluster mode, only a single key is allowed.
+// Only a single key is allowed.
 //
 // See [valkey.io] for details.
 //
@@ -4077,7 +4077,7 @@ func (client *ClusterClient) ClusterLinksWithRoute(
 //	ctx           - The context for controlling the command execution.
 //	host          - The host of the destination Valkey instance.
 //	port          - The port of the destination Valkey instance.
-//	keys          - The keys to migrate. Must contain exactly one key in cluster mode.
+//	keys          - The keys to migrate. Must contain exactly one key.
 //	destinationDB - The database index on the destination instance.
 //	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
 //
@@ -4101,7 +4101,7 @@ func (client *ClusterClient) Migrate(
 }
 
 // MigrateWithOptions atomically transfers a key from the source Valkey instance to a destination
-// Valkey instance with additional options. In cluster mode, only a single key is allowed.
+// Valkey instance with additional options. Only a single key is allowed.
 //
 // See [valkey.io] for details.
 //
@@ -4110,7 +4110,7 @@ func (client *ClusterClient) Migrate(
 //	ctx            - The context for controlling the command execution.
 //	host           - The host of the destination Valkey instance.
 //	port           - The port of the destination Valkey instance.
-//	keys           - The keys to migrate. Must contain exactly one key in cluster mode.
+//	keys           - The keys to migrate. Must contain exactly one key.
 //	destinationDB  - The database index on the destination instance.
 //	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
 //	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).

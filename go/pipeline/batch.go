@@ -192,7 +192,7 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 }
 
 // Migrate atomically transfers a key from a source Valkey instance to a destination Valkey instance.
-// In cluster mode, only a single key is allowed.
+// Only a single key is allowed.
 //
 // See [valkey.io] for details.
 //
@@ -227,16 +227,7 @@ func (b *ClusterBatch) MigrateWithOptions(
 	if len(keys) > 1 {
 		return b.addError("MigrateWithOptions", errors.New("MIGRATE in cluster mode only supports a single key"))
 	}
-	if len(keys) == 0 {
-		return b.addError("MigrateWithOptions", errors.New("keys must not be empty"))
-	}
-	optionArgs, err := migrateOptions.ToArgs()
-	if err != nil {
-		return b.addError("MigrateWithOptions", err)
-	}
-	args := []string{host, utils.IntToString(port), keys[0], utils.IntToString(destinationDB), utils.IntToString(timeout)}
-	args = append(args, optionArgs...)
-	return b.addCmdAndTypeChecker(C.Migrate, args, reflect.String, false)
+	return b.BaseBatch.MigrateWithOptions(host, port, keys, destinationDB, timeout, migrateOptions)
 }
 
 // Posts a message to the specified sharded channel. Returns the number of clients that received the message.

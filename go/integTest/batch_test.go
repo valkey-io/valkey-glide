@@ -2753,18 +2753,45 @@ func (suite *GlideTestSuite) TestMigrateBatch() {
 	ctx := context.Background()
 	key1 := "{migrate}" + uuid.New().String()
 	key2 := "{migrate}" + uuid.New().String()
+	nonExistentKey := "{migrate}" + uuid.New().String()
+
+	// Standalone batch with single-key NOKEY
+	batch := pipeline.NewStandaloneBatch(false)
+	batch.Migrate("nonexistent.host", 6379, []string{nonExistentKey}, 0, 1000)
+	results, err := client.Exec(ctx, *batch, false)
+	suite.NoError(err)
+	suite.Equal("NOKEY", results[0])
 
 	// Standalone batch with empty keys should produce an error
-	batch := pipeline.NewStandaloneBatch(false)
-	batch.Migrate("nonexistent.host", 6379, []string{}, 0, 1000)
-	_, err := client.Exec(ctx, *batch, true)
+	batch2 := pipeline.NewStandaloneBatch(false)
+	batch2.Migrate("nonexistent.host", 6379, []string{}, 0, 1000)
+	_, err = client.Exec(ctx, *batch2, true)
 	suite.Error(err)
 	suite.Contains(err.Error(), "keys must not be empty")
 
 	// Standalone batch with multi-key NOKEY
-	batch2 := pipeline.NewStandaloneBatch(false)
-	batch2.Migrate("nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
-	results, err := client.Exec(ctx, *batch2, false)
+	batch3 := pipeline.NewStandaloneBatch(false)
+	batch3.Migrate("nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
+	results, err = client.Exec(ctx, *batch3, false)
+	suite.NoError(err)
+	suite.Equal("NOKEY", results[0])
+
+	// Cluster batch rejects multi-key
+	clusterClient := suite.defaultClusterClient()
+	clusterBatch := pipeline.NewClusterBatch(false)
+	clusterBatch.Migrate("nonexistent.host", 6379, []string{key1, key2}, 0, 1000)
+	_, err = clusterClient.Exec(ctx, *clusterBatch, true)
+	suite.Error(err)
+	suite.Contains(
+		err.Error(), "MIGRATE in cluster mode only supports a single key",
+	)
+
+	// Cluster batch allows single-key
+	clusterBatch2 := pipeline.NewClusterBatch(false)
+	clusterBatch2.Migrate(
+		"nonexistent.host", 6379, []string{nonExistentKey}, 0, 1000,
+	)
+	results, err = clusterClient.Exec(ctx, *clusterBatch2, false)
 	suite.NoError(err)
 	suite.Equal("NOKEY", results[0])
 }
