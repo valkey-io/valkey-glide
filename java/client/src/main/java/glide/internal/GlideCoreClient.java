@@ -6,6 +6,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import glide.api.BaseClient;
 import glide.api.logging.Logger;
 import glide.ffi.resolvers.NativeUtils;
+import glide.ffi.resolvers.OpenTelemetryResolver;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
@@ -443,10 +444,16 @@ public class GlideCoreClient implements AutoCloseable {
             boolean hasRoute,
             int routeType,
             String routeParam,
-            boolean expectUtf8Response) {
+            boolean expectUtf8Response,
+            long spanPtr) {
         try {
             long handle = nativeClientHandle.get();
             if (handle == 0) {
+                // The span pointer is not handed to native code on this path; drop it
+                // here so the leaked span is not orphaned.
+                if (spanPtr != 0) {
+                    OpenTelemetryResolver.dropOtelSpan(spanPtr);
+                }
                 CompletableFuture<Object> future = new CompletableFuture<>();
                 future.completeExceptionally(
                         new glide.api.models.exceptions.ClosingException("Client is closed"));
@@ -460,6 +467,10 @@ public class GlideCoreClient implements AutoCloseable {
                         AsyncRegistry.register(
                                 future, this.maxInflightRequests, handle, this.requestTimeoutMillis);
             } catch (glide.api.models.exceptions.RequestException e) {
+                // The span pointer is not handed to native code on this path; drop it.
+                if (spanPtr != 0) {
+                    OpenTelemetryResolver.dropOtelSpan(spanPtr);
+                }
                 future.completeExceptionally(e);
                 return future;
             }
@@ -473,7 +484,8 @@ public class GlideCoreClient implements AutoCloseable {
                     hasRoute,
                     routeType,
                     routeParam,
-                    expectUtf8Response);
+                    expectUtf8Response,
+                    spanPtr);
 
             return future;
 

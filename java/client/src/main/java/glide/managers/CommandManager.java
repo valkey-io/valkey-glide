@@ -368,19 +368,30 @@ public class CommandManager {
         try {
             byte[][] keyArgs = toByteMatrix(keys);
             byte[][] argArgs = toByteMatrix(args);
+            String hash = script.getHash();
 
             final boolean expectUtf8Response =
                     script.getBinaryOutput() == null || !script.getBinaryOutput();
 
+            // Create an OpenTelemetry span for the EVALSHA invocation if OTel is
+            // enabled and the request is sampled (mirrors prepareCommandRequest).
+            // Created last so nothing between here and the executeScriptAsync hand-off
+            // can throw and orphan the span; executeScriptAsync owns it from there.
+            long spanPtr = 0;
+            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("EVALSHA");
+            }
+
             CompletableFuture<Object> jniFuture =
                     coreClient.executeScriptAsync(
-                            script.getHash(),
+                            hash,
                             keyArgs,
                             argArgs, /* hasRoute */
                             false, /* routeType */
                             0, /* routeParam */
                             null,
-                            expectUtf8Response);
+                            expectUtf8Response,
+                            spanPtr);
 
             return jniFuture
                     .thenApply(result -> createDirectResponse(result, expectUtf8Response))
@@ -409,21 +420,32 @@ public class CommandManager {
         try {
             byte[][] keyArgs = GlideCoreClient.EMPTY_2D_BYTE_ARRAY;
             byte[][] argArgs = toByteMatrix(args);
+            String hash = script.getHash();
             final boolean expectUtf8Response =
                     script.getBinaryOutput() == null || !script.getBinaryOutput();
 
             // Map Route to simple route tuple via centralized helper
             ScriptRouteArgs routeArgs = computeScriptRouteArgs(route);
 
+            // Create an OpenTelemetry span for the EVALSHA invocation if OTel is
+            // enabled and the request is sampled (mirrors prepareCommandRequest).
+            // Created last so nothing between here and the executeScriptAsync hand-off
+            // can throw and orphan the span; executeScriptAsync owns it from there.
+            long spanPtr = 0;
+            if (OpenTelemetry.isInitialized() && OpenTelemetry.shouldSample()) {
+                spanPtr = OpenTelemetryResolver.createLeakedOtelSpan("EVALSHA");
+            }
+
             CompletableFuture<Object> jniFuture =
                     coreClient.executeScriptAsync(
-                            script.getHash(),
+                            hash,
                             keyArgs,
                             argArgs,
                             routeArgs.hasRoute,
                             routeArgs.routeType,
                             routeArgs.routeParam,
-                            expectUtf8Response);
+                            expectUtf8Response,
+                            spanPtr);
 
             return jniFuture
                     .thenApply(result -> createDirectResponse(result, expectUtf8Response))

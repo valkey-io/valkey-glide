@@ -76,7 +76,8 @@ public class GlideNativeBridge {
             boolean hasRoute,
             int routeType,
             String routeParam,
-            boolean expectUtf8Response);
+            boolean expectUtf8Response,
+            long spanPtr);
 
     /** Get glide-core default connection timeout in milliseconds */
     public static native long getGlideCoreDefaultConnectionTimeoutMs();

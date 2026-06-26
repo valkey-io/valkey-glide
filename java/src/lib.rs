@@ -1982,6 +1982,35 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeBinaryComman
     .unwrap_or(())
 }
 
+/// Ends and drops an OpenTelemetry span that was created via `createLeakedOtelSpan`
+/// and handed to the native layer as `span_ptr`. No-op when `span_ptr` is 0.
+///
+/// This reclaims the leaked `Arc<GlideSpan>` reference exactly once, mirroring the
+/// span lifecycle used by the regular command path.
+fn finalize_leaked_otel_span(span_ptr: jlong) {
+    if span_ptr == 0 {
+        return;
+    }
+
+    match unsafe { glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64) } {
+        Ok(span) => {
+            span.end();
+            unsafe {
+                std::sync::Arc::from_raw(span_ptr as *const glide_core::GlideSpan);
+            }
+        }
+        Err(err) => {
+            log_warn_lazy!(
+                "otel",
+                format!(
+                    "Failed to finalize OpenTelemetry span: pointer={}, error={}",
+                    span_ptr, err
+                )
+            );
+        }
+    }
+}
+
 /// Execute a script asynchronously using FFI-imported logic
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
@@ -1996,6 +2025,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
     route_type: jint,
     route_param: JString,
     expect_utf8: jni::sys::jboolean,
+    span_ptr: jlong,
 ) {
     run_ffi(|| {
         let Some(jvm) = get_jvm_or_complete_error(&mut env, callback_id, "executeScriptAsync")
@@ -2008,6 +2038,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
             Ok(h) => h.to_string_lossy().to_string(),
             Err(e) => {
                 log::error!("Failed to read script hash: {e}");
+                finalize_leaked_otel_span(span_ptr);
                 complete_callback(
                     jvm,
                     callback_id,
@@ -2048,6 +2079,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
             Ok(k) => k,
             Err(e) => {
                 log::error!("Failed to extract script keys: {e}");
+                finalize_leaked_otel_span(span_ptr);
                 complete_callback(
                     jvm,
                     callback_id,
@@ -2088,6 +2120,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
             Ok(a) => a,
             Err(e) => {
                 log::error!("Failed to extract script args: {e}");
+                finalize_leaked_otel_span(span_ptr);
                 complete_callback(
                     jvm,
                     callback_id,
@@ -2180,6 +2213,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         match protobuf_bridge::get_route(routes, None) {
                             Ok(r) => r,
                             Err(e) => {
+                                finalize_leaked_otel_span(span_ptr);
                                 complete_callback(
                                     jvm,
                                     callback_id,
@@ -2207,6 +2241,7 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         match protobuf_bridge::get_route(Default::default(), Some(&route_cmd)) {
                             Ok(r) => r,
                             Err(e) => {
+                                finalize_leaked_otel_span(span_ptr);
                                 complete_callback(
                                     jvm,
                                     callback_id,
@@ -2222,13 +2257,13 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                         }
                     };
 
+                    let keys_refs: Vec<&[u8]> =
+                        keys_data.iter().map(|k| k.as_slice()).collect();
+                    let args_refs: Vec<&[u8]> =
+                        args_data.iter().map(|a| a.as_slice()).collect();
+
                     let result = client
-                        .invoke_script(
-                            &hash_str,
-                            &keys_data.iter().map(|k| k.as_slice()).collect::<Vec<_>>(),
-                            &args_data.iter().map(|a| a.as_slice()).collect::<Vec<_>>(),
-                            routing_info,
-                        )
+                        .invoke_script(&hash_str, &keys_refs, &args_refs, routing_info)
                         .await
                         .map_err(|e| {
                             redis::RedisError::from((
@@ -2238,10 +2273,37 @@ pub extern "system" fn Java_glide_internal_GlideNativeBridge_executeScriptAsync(
                             ))
                         });
 
+                    // Attach DB semantic convention attributes to the EVALSHA span
+                    // (if one was created) and finalize it, mirroring the command path.
+                    if span_ptr != 0 {
+                        match unsafe {
+                            glide_core::GlideOpenTelemetry::span_from_pointer(span_ptr as u64)
+                        } {
+                            Ok(span) => {
+                                glide_core::otel_db_semantics::set_db_script_attributes(
+                                    &span, &hash_str, &keys_refs, &args_refs, &client,
+                                );
+                                span.end();
+                                unsafe {
+                                    std::sync::Arc::from_raw(
+                                        span_ptr as *const glide_core::GlideSpan,
+                                    );
+                                }
+                            }
+                            Err(err) => {
+                                log_warn_lazy!(
+                                    "otel",
+                                    format!("Failed to finalize OpenTelemetry span: pointer={}, error={}", span_ptr, err)
+                                );
+                            }
+                        }
+                    }
+
                     let binary_mode = expect_utf8 == 0;
                     complete_callback(jvm, callback_id, result, binary_mode);
                 }
                 Err(err) => {
+                    finalize_leaked_otel_span(span_ptr);
                     let error = Err(redis::RedisError::from((
                         redis::ErrorKind::ClientError,
                         "Client not found",

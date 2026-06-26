@@ -8,7 +8,10 @@ import glide.api.GlideClusterClient;
 import glide.api.OpenTelemetry;
 import glide.api.OpenTelemetry.OpenTelemetryConfig;
 import glide.api.models.ClusterBatch;
+import glide.api.models.Script;
+import glide.api.models.commands.ScriptOptions;
 import glide.api.models.configuration.ProtocolVersion;
+import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -381,5 +384,80 @@ public class OpenTelemetryTests {
         // Check for expected span names
         assertTrue(spanData.spanNames.contains("Batch"));
         assertTrue(spanData.spanNames.contains("send_batch"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClientsProtocolVersion")
+    @SneakyThrows
+    public void testScriptInvocationSpan(ProtocolVersion protocol) {
+        teardownOtelTest();
+        OpenTelemetry.setSamplePercentage(100);
+
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        try (Script script = new Script("return 'OTel script span'", false)) {
+            Object result = client.invokeScript(script).get();
+            assertEquals("OTel script span", result);
+        }
+
+        // Wait for the EVALSHA span to be flushed to file
+        SpanFileData spanData = waitForSpansWithRetry(VALID_ENDPOINT_TRACES, 1, "EVALSHA", 10000);
+
+        // The EVALSHA span must exist and carry the DB semantic convention attributes.
+        assertTrue(spanData.spanNames.contains("EVALSHA"));
+        assertTrue(spanData.spanData.contains("\"db.operation.name\":\"EVALSHA\""));
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClientsProtocolVersion")
+    @SneakyThrows
+    public void testScriptInvocationWithRouteSpan(ProtocolVersion protocol) {
+        teardownOtelTest();
+        OpenTelemetry.setSamplePercentage(100);
+
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        try (Script script = new Script("return 'OTel routed script span'", false)) {
+            Object result = client.invokeScript(script, SimpleMultiNodeRoute.ALL_PRIMARIES).get();
+            assertNotNull(result);
+        }
+
+        // Wait for the EVALSHA span to be flushed to file
+        SpanFileData spanData = waitForSpansWithRetry(VALID_ENDPOINT_TRACES, 1, "EVALSHA", 10000);
+
+        assertTrue(spanData.spanNames.contains("EVALSHA"));
+        assertTrue(spanData.spanData.contains("\"db.operation.name\":\"EVALSHA\""));
+    }
+
+    @ParameterizedTest
+    @MethodSource("getClientsProtocolVersion")
+    @SneakyThrows
+    public void testScriptInvocationSpanMasksArgsInQueryText(ProtocolVersion protocol) {
+        teardownOtelTest();
+        OpenTelemetry.setSamplePercentage(100);
+
+        client =
+                GlideClusterClient.createClient(commonClusterClientConfig().protocol(protocol).build())
+                        .get();
+
+        String key = "{otelScript}-key";
+        String secretArg = "otel-secret-arg-value";
+
+        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])", false)) {
+            client.invokeScript(script, ScriptOptions.builder().key(key).arg(secretArg).build()).get();
+        }
+
+        SpanFileData spanData = waitForSpansWithRetry(VALID_ENDPOINT_TRACES, 1, "EVALSHA", 10000);
+
+        // db.query.text shows keys but masks args with '?', so the key appears while the
+        // sensitive arg value must not be present anywhere in the exported spans.
+        assertTrue(spanData.spanData.contains("\"db.operation.name\":\"EVALSHA\""));
+        assertTrue(spanData.spanData.contains("\"db.query.text\":"));
+        assertTrue(spanData.spanData.contains(key));
+        assertFalse(spanData.spanData.contains(secretArg));
     }
 }
