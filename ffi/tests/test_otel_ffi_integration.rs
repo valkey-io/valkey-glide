@@ -1,3 +1,4 @@
+use glide_core::GlideSpan;
 use glide_core::request_type::RequestType;
 use glide_ffi::{
     create_batch_otel_span, create_batch_otel_span_with_parent,
@@ -9,6 +10,29 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
+
+/// Take a co-owning [`Arc<GlideSpan>`] for a span pointer returned by one of the
+/// `create_*_otel_span` FFI functions, WITHOUT consuming the reference still held by
+/// the raw pointer.
+///
+/// The FFI create functions leave the span's strong count at 1 (the count owned by the
+/// raw pointer handed back to the caller). Cloning that ownership here lets a test observe
+/// the strong count across a subsequent `drop_otel_span` call: a correct drop releases the
+/// FFI-held reference, so the count returned to this owner must fall back to 1. If
+/// `drop_otel_span` ever leaked (e.g. failed to call `Arc::from_raw`), the count would stay
+/// at 2 and the assertion would fire.
+///
+/// # Safety
+/// `span_ptr` must be a live span pointer returned by a `create_*_otel_span` FFI function
+/// that has NOT yet been passed to `drop_otel_span`.
+unsafe fn co_owner(span_ptr: u64) -> Arc<GlideSpan> {
+    unsafe {
+        // Bump the strong count so converting the raw pointer back to an Arc does not steal
+        // the reference owned by the FFI-side raw pointer.
+        Arc::increment_strong_count(span_ptr as *const GlideSpan);
+        Arc::from_raw(span_ptr as *const GlideSpan)
+    }
+}
 
 #[test]
 fn test_create_otel_span_with_valid_inputs() {
@@ -1244,4 +1268,171 @@ fn test_regression_no_error_logs_for_custom_command() {
 
     // If we reach here without panics, the fix is working correctly
     // No error logs should have been produced
+}
+
+// ---------------------------------------------------------------------------
+// Native-memory leak regression tests (tracked by issue #6226).
+//
+// These replace the two Java integration tests `testSpanMemoryLeak` and
+// `testSpanTransactionMemoryLeak` disabled in #6008. Those tests ran commands and then
+// asserted on the JVM heap (`Runtime.totalMemory() - freeMemory()`), but OpenTelemetry
+// spans are allocated in native Rust memory (`Arc<GlideSpan>` handed across FFI via
+// `Arc::into_raw`), so a JVM-heap measurement could never observe the leak it targeted
+// and varied 20-30% from GC/JIT noise.
+//
+// Scope: these are FFI-boundary guards. They prove `drop_otel_span` releases its
+// `Arc<GlideSpan>` reference rather than leaking it — the only layer at which a leak can
+// occur given the current design. They do not cover a wrapper that forgets to call
+// `drop_otel_span` at all; that is a per-language binding concern.
+//
+// The checks below instead observe the span's `Arc` strong count directly, so a leak in
+// `drop_otel_span` (a missed `Arc::from_raw`) is caught deterministically at the layer
+// where it can actually occur.
+// ---------------------------------------------------------------------------
+
+/// A single create -> drop cycle must release the span's native allocation: the FFI-held
+/// `Arc` reference is gone after `drop_otel_span`, leaving only the test's co-owner.
+#[test]
+fn test_drop_otel_span_releases_native_reference() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    let span_ptr = create_otel_span(RequestType::Get);
+    assert_ne!(span_ptr, 0, "Span creation should succeed");
+
+    // Co-own the span so we can watch the strong count across the FFI drop.
+    let owner = unsafe { co_owner(span_ptr) };
+    assert_eq!(
+        Arc::strong_count(&owner),
+        2,
+        "Before drop: the FFI raw pointer and the test co-owner should both hold a reference"
+    );
+
+    unsafe {
+        drop_otel_span(span_ptr);
+    }
+
+    assert_eq!(
+        Arc::strong_count(&owner),
+        1,
+        "After drop: only the test co-owner should remain; drop_otel_span must release the \
+         FFI-held reference rather than leak it"
+    );
+}
+
+/// Repeatedly creating and dropping spans through the FFI entry points must not accumulate
+/// native allocations: every span's reference count must return to baseline after its drop.
+/// This is the sustained-load loop the disabled Java `testSpanMemoryLeak` intended, run at
+/// the FFI boundary where the allocation actually lives.
+#[test]
+fn test_span_create_drop_loop_does_not_leak() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    const ITERATIONS: usize = 1000;
+    let named = CString::new("loop_named_span").expect("CString::new failed");
+
+    for i in 0..ITERATIONS {
+        // Rotate across the parentless create paths to exercise each one's into_raw/from_raw.
+        let span_ptr = match i % 3 {
+            0 => create_otel_span(RequestType::Get),
+            1 => create_otel_span(RequestType::Set),
+            _ => unsafe { create_named_otel_span(named.as_ptr()) },
+        };
+        assert_ne!(span_ptr, 0, "Span creation should succeed on iteration {i}");
+
+        let owner = unsafe { co_owner(span_ptr) };
+        assert_eq!(
+            Arc::strong_count(&owner),
+            2,
+            "Iteration {i}: span should have exactly the FFI reference plus the test co-owner"
+        );
+
+        unsafe {
+            drop_otel_span(span_ptr);
+        }
+
+        assert_eq!(
+            Arc::strong_count(&owner),
+            1,
+            "Iteration {i}: drop_otel_span must release the native reference (no leak)"
+        );
+        // `owner` is dropped here, fully reclaiming the span before the next iteration.
+    }
+}
+
+/// A parent batch span with command children (the shape exercised by the disabled
+/// `testSpanTransactionMemoryLeak`) must release every native allocation once each span is
+/// dropped, including the parent reference held by its children's creation path.
+#[test]
+fn test_batch_span_hierarchy_does_not_leak() {
+    logger_core::init(Some(logger_core::Level::Debug), None);
+
+    let parent_ptr = create_batch_otel_span();
+    assert_ne!(parent_ptr, 0, "Batch parent span creation should succeed");
+    let parent_owner = unsafe { co_owner(parent_ptr) };
+
+    assert_eq!(
+        Arc::strong_count(&parent_owner),
+        2,
+        "Parent before children: FFI reference plus test co-owner"
+    );
+
+    // Create a batch of command children, mirroring an exec/transaction with multiple commands.
+    // Include a nested batch span via create_batch_otel_span_with_parent to match the
+    // parented-batch shape of the disabled testSpanTransactionMemoryLeak.
+    const CHILDREN: usize = 50;
+    let mut child_ptrs = Vec::with_capacity(CHILDREN + 1);
+    for i in 0..CHILDREN {
+        let request_type = if i % 2 == 0 {
+            RequestType::Set
+        } else {
+            RequestType::Get
+        };
+        let child_ptr = unsafe { create_otel_span_with_parent(request_type, parent_ptr) };
+        assert_ne!(child_ptr, 0, "Child span {i} creation should succeed");
+        child_ptrs.push(child_ptr);
+    }
+    let nested_batch_ptr = unsafe { create_batch_otel_span_with_parent(parent_ptr) };
+    assert_ne!(
+        nested_batch_ptr, 0,
+        "Nested batch span creation should succeed"
+    );
+    child_ptrs.push(nested_batch_ptr);
+
+    // Creating children must not bump the parent's strong count: the link is via span context,
+    // not a retained clone of the parent's outer Arc. A leak here would be masked if the count
+    // were only checked after all drops, so assert stability while the children are still live.
+    assert_eq!(
+        Arc::strong_count(&parent_owner),
+        2,
+        "Parent count must be unchanged by child creation (children hold no parent Arc clone)"
+    );
+
+    // Each child holds only its own FFI reference, so dropping a child returns its count to the
+    // co-owner baseline.
+    for (i, &child_ptr) in child_ptrs.iter().enumerate() {
+        let child_owner = unsafe { co_owner(child_ptr) };
+        assert_eq!(
+            Arc::strong_count(&child_owner),
+            2,
+            "Child {i} before drop: FFI reference plus test co-owner"
+        );
+        unsafe {
+            drop_otel_span(child_ptr);
+        }
+        assert_eq!(
+            Arc::strong_count(&child_owner),
+            1,
+            "Child {i} after drop: native reference released (no leak)"
+        );
+    }
+
+    // The parent falls back to the co-owner baseline once its own FFI reference is dropped.
+    unsafe {
+        drop_otel_span(parent_ptr);
+    }
+    assert_eq!(
+        Arc::strong_count(&parent_owner),
+        1,
+        "Parent batch span after drop: native reference released (no leak)"
+    );
 }
