@@ -36,9 +36,10 @@ export interface ClientSideCacheConfig {
 
     /**
      * Whether to enable server-assisted client-side caching.
-     * When enabled, Valkey remembers the keys that the connection requested and sends
-     * invalidation messages when such keys are modified. Only available with RESP3 protocol.
-     * Defaults to false if not specified.
+     *
+     * When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup
+     * and the server sends invalidation messages when tracked keys are modified.
+     * Requires RESP3 protocol. Defaults to false if not specified.
      */
     serverAssisted?: boolean;
 }

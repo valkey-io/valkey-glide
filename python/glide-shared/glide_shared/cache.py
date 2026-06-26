@@ -88,8 +88,9 @@ class ClientSideCache:
                 See `EvictionPolicy` enum for available options.
             enable_metrics (bool): If True, enables collection of cache metrics such as hit/miss rates.
             server_assisted (bool): If True, enables server-assisted client-side caching.
-                When enabled, Valkey remembers the keys that the connection requested and sends
-                invalidation messages when such keys are modified. Only available with RESP3 protocol.
+                When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup
+                and the server sends invalidation messages when tracked keys are modified.
+                Requires RESP3 protocol.
 
         Returns:
             ClientSideCache: A new ClientSideCache instance.

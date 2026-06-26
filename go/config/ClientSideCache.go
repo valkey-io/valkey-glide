@@ -74,7 +74,8 @@ type ClientSideCache struct {
 	// EnableMetrics enables collection of cache metrics such as hit/miss rates.
 	EnableMetrics bool
 
-	// ServerAssisted enables server-assisted client-side caching.
+	// ServerAssisted specifies whether to enable server-assisted client-side caching.
+    //
 	// When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection setup
 	// and the server sends invalidation messages when tracked keys are modified.
 	// Requires RESP3 protocol.
