@@ -57,12 +57,12 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.SneakyThrows;
@@ -308,11 +308,11 @@ public class PubSubTests {
 
     private static final int MESSAGE_DELIVERY_DELAY = 500; // ms
 
-    private void waitForCondition(Supplier<Boolean> condition, long timeoutMs, String message)
-            throws InterruptedException {
+    private void waitForCondition(Callable<Boolean> condition, long timeoutMs, String message)
+            throws Exception {
         long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < timeoutMs) {
-            if (condition.get()) return;
+            if (condition.call()) return;
             Thread.sleep(50);
         }
         fail(message);

@@ -12045,7 +12045,7 @@ export function runBaseTests(config: {
                 // Poll until idle time is > 0
                 await waitFor(async () => {
                     const info = await client.xinfoConsumers(key, groupName1);
-                    return info.length > 0 && info[0].idle > 0;
+                    return info.length > 0 && (info[0].idle as number) > 0;
                 }, "Consumer idle time did not become > 0");
                 let result = await client.xinfoConsumers(key, groupName1);
                 expect(result.length).toEqual(1);
