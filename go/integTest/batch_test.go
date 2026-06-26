@@ -2784,4 +2784,52 @@ func (suite *GlideTestSuite) TestMigrateBatch() {
 	results, err = clusterClient.Exec(ctx, *clusterBatch2, false)
 	suite.NoError(err)
 	suite.Equal("NOKEY", results[0])
+
+	// Success: standalone batch with single-key OK
+	output, err := startDedicatedValkeyServer(suite, false)
+	suite.NoError(err)
+	clusterFolder := extractClusterFolder(suite, output)
+	defer stopDedicatedValkeyServer(suite, clusterFolder)
+	destAddresses := extractAddresses(suite, output)
+	destHost := destAddresses[0].Host
+	destPort := int64(destAddresses[0].Port)
+
+	srcKey1 := "{migrate}" + uuid.New().String()
+	client.Set(ctx, srcKey1, "val1")
+
+	batch4 := pipeline.NewStandaloneBatch(false)
+	batch4.Migrate(destHost, destPort, []string{srcKey1}, 0, 5000)
+	results, err = client.Exec(ctx, *batch4, false)
+	suite.NoError(err)
+	suite.Equal("OK", results[0])
+
+	// Success: standalone batch with multi-key OK
+	srcKey2 := "{migrate}" + uuid.New().String()
+	srcKey3 := "{migrate}" + uuid.New().String()
+	client.Set(ctx, srcKey2, "val2")
+	client.Set(ctx, srcKey3, "val3")
+
+	batch5 := pipeline.NewStandaloneBatch(false)
+	batch5.Migrate(destHost, destPort, []string{srcKey2, srcKey3}, 0, 5000)
+	results, err = client.Exec(ctx, *batch5, false)
+	suite.NoError(err)
+	suite.Equal("OK", results[0])
+
+	// Success: cluster batch with single-key OK
+	output2, err := startDedicatedValkeyServer(suite, false)
+	suite.NoError(err)
+	clusterFolder2 := extractClusterFolder(suite, output2)
+	defer stopDedicatedValkeyServer(suite, clusterFolder2)
+	destAddresses2 := extractAddresses(suite, output2)
+	destHost2 := destAddresses2[0].Host
+	destPort2 := int64(destAddresses2[0].Port)
+
+	clusterKey := "{migrate}" + uuid.New().String()
+	clusterClient.Set(ctx, clusterKey, "clusterval")
+
+	clusterBatch3 := pipeline.NewClusterBatch(false)
+	clusterBatch3.Migrate(destHost2, destPort2, []string{clusterKey}, 0, 5000)
+	results, err = clusterClient.Exec(ctx, *clusterBatch3, false)
+	suite.NoError(err)
+	suite.Equal("OK", results[0])
 }
