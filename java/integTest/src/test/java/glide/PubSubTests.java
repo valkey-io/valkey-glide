@@ -2834,7 +2834,7 @@ public class PubSubTests {
             publisher.publish(channel, "test_message").get();
             waitForCondition(
                     () -> client.getPubSubMessageCount() >= 1,
-                    MESSAGE_DELIVERY_DELAY,
+                    2000,
                     "Timed out waiting for message in standalone timeout test");
         } finally {
             client.close();
@@ -2863,7 +2863,7 @@ public class PubSubTests {
             publisher.publish(channel, "test_message").get();
             waitForCondition(
                     () -> client.getPubSubMessageCount() >= 1,
-                    MESSAGE_DELIVERY_DELAY,
+                    2000,
                     "Timed out waiting for message in cluster timeout test");
         } finally {
             client.close();
@@ -2892,7 +2892,7 @@ public class PubSubTests {
                     Set<String> ch = s.getActualSubscriptions().get(PubSubClusterChannelMode.SHARDED);
                     return ch != null && ch.size() >= 2;
                 },
-                MESSAGE_DELIVERY_DELAY,
+                2000,
                 "Timed out waiting for sharded subscriptions in different slots");
 
         // Verify both subscriptions
@@ -2907,7 +2907,7 @@ public class PubSubTests {
             publisher.publish(channel2, "message2", true).get();
             waitForCondition(
                     () -> client.getPubSubMessageCount() >= 2,
-                    MESSAGE_DELIVERY_DELAY,
+                    2000,
                     "Timed out waiting for messages in different slots test");
         } finally {
             client.sunsubscribeLazy().get();
