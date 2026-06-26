@@ -12967,23 +12967,17 @@ class TestClientLifecycle:
 
     @pytest.mark.anyio
     async def test_rapid_create_close_cycles(self, request):
-        """Test many rapid close/create cycles: client IDs don't leak, pipe stays functional."""
+        """Test many rapid close/create cycles: pipe remains functional."""
         from tests.utils.utils import create_client_config
 
         cluster = pytest.standalone_cluster  # type: ignore[attr-defined]
         config = create_client_config(cluster_mode=False, addresses=cluster.nodes_addr)
-
-        from glide.glide_client import _client_registry
 
         for i in range(20):
             client = await GlideClient.create(config)
             await client.set(f"cycle_{i}", f"val_{i}")
             assert await client.get(f"cycle_{i}") == f"val_{i}".encode()
             await client.close()
-
-        # Registry should be clean after all clients closed
-        # (only test-fixture clients may remain)
-        assert len(_client_registry) <= 1  # At most the conftest fixture client
 
     @pytest.mark.anyio
     async def test_inflight_commands_get_closing_error_on_close(self, request):

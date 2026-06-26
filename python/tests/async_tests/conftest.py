@@ -126,6 +126,7 @@ async def glide_client(
     if not needs_new:
         # Re-register pipe reader on the current event loop (anyio creates
         # a new loop per test). See _rebind_client_to_current_loop docstring.
+        assert client is not None  # narrowing: _client_is_usable returned True
         try:
             _rebind_client_to_current_loop(client)
             # TODO #6144: replace with client.ping() once moved to base class
@@ -144,6 +145,7 @@ async def glide_client(
         with _client_pool_lock:
             _client_pool[cache_key] = client
 
+    assert client is not None
     yield client
 
     # Post-test: restore server and client state for the next test.
