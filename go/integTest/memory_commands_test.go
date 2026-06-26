@@ -297,6 +297,9 @@ func (suite *GlideTestSuite) assertMemoryStatsDbEntry(dbStats models.MemoryStats
 func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) {
 	t := suite.T()
 
+	// Db entries are only populated if the node has at least one key. In cluster mode, an entry
+	// will only be present if that key is stored on that node. Standalone and single-node cluster
+	// tests validate db entries directly via assertMemoryStatsDbEntry.
 	for _, dbStats := range result.Db {
 		suite.assertMemoryStatsDbEntry(dbStats)
 	}

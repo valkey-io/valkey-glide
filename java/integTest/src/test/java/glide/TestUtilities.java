@@ -854,6 +854,9 @@ public class TestUtilities {
         assertNotNull(stats);
         assertFalse(stats.isEmpty());
 
+        // db.0 is only populated if the node has at least one key. In cluster mode, it will only
+        // be present if that key is stored on that node. Standalone and single-node cluster tests
+        // validate db.0 directly via assertMemoryStatsDbEntry.
         if (stats.containsKey("db.0")) {
             assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
         }

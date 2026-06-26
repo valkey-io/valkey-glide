@@ -2079,6 +2079,9 @@ def assert_memory_stats_fields(stats: MemoryStats, server_version: str) -> None:
         server_version: The server version string (e.g. "8.1.0").
     """
     assert isinstance(stats.db, dict)
+    # Db entries are only populated if the node has at least one key. In cluster mode, an entry
+    # will only be present if that key is stored on that node. Standalone and single-node cluster
+    # tests validate db entries directly via assert_memory_stats_db_entry.
     for db_idx, db_entry in stats.db.items():
         assert isinstance(db_idx, int)
         assert_memory_stats_db_entry(db_entry)

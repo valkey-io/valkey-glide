@@ -2647,6 +2647,9 @@ export function assertMemoryStatsFields(
     expect(stats.db).toBeDefined();
     expect(typeof stats.db).toBe("object");
 
+    // db entries are only populated if the node has at least one key. In cluster mode, an entry
+    // will only be present if that key is stored on that node. Standalone and single-node cluster
+    // tests validate db entries directly via assertMemoryStatsDbEntry.
     for (const dbEntry of Object.values(stats.db)) {
         assertMemoryStatsDbEntry(dbEntry);
     }
