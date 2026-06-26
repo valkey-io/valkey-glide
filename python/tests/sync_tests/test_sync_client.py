@@ -724,6 +724,32 @@ class TestCommands:
         assert res == value.encode()
         assert glide_sync_client.get(key) == new_value.encode()
 
+    @pytest.mark.skip_if_version_below("6.2.0")
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_set_return_types(self, glide_sync_client: TGlideClient):
+        # Regression test for https://github.com/valkey-io/valkey-glide/issues/6347:
+        # set() can return a str ("OK"), bytes (old value), or None, so its
+        # return type is Optional[Union[TOK, bytes]] - not Optional[bytes].
+        key = get_random_string(10)
+        value = get_random_string(10)
+
+        # Success reply is the simple string "OK", decoded to str (not bytes).
+        ok = glide_sync_client.set(key, value)
+        assert ok == OK
+        assert isinstance(ok, str)
+
+        # A failed conditional set returns None.
+        none_res = glide_sync_client.set(
+            key, value, conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
+        )
+        assert none_res is None
+
+        # The old value (a bulk string) is returned as bytes.
+        old = glide_sync_client.set(key, get_random_string(10), return_old_value=True)
+        assert old == value.encode()
+        assert isinstance(old, bytes)
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_custom_command_single_arg(self, glide_sync_client: TGlideClient):
