@@ -2518,6 +2518,9 @@ pub fn remove_address_resolver(key: String) {
 
 static NEXT_MONITOR_HANDLE: AtomicU64 = AtomicU64::new(1);
 
+type MonitorCallbackArgs = (f64, i64, String, String, Vec<String>);
+type MonitorCallback<'a> = Function<'a, FnArgs<MonitorCallbackArgs>, ()>;
+
 fn monitor_store() -> &'static Mutex<StdHashMap<u64, MonitorClient>> {
     static STORE: OnceLock<Mutex<StdHashMap<u64, MonitorClient>>> = OnceLock::new();
     STORE.get_or_init(|| Mutex::new(StdHashMap::new()))
@@ -2530,7 +2533,7 @@ pub fn create_monitor_client<'a>(
     #[napi(
         ts_arg_type = "(timestamp: number, db: number, clientAddr: string, command: string, args: string[]) => void"
     )]
-    callback: Function<'_, FnArgs<(f64, i64, String, String, Vec<String>)>, ()>,
+    callback: MonitorCallback<'_>,
 ) -> Result<Object<'a>> {
     let (deferred, promise) = env.create_deferred()?;
     let conn_req =
