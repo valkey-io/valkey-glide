@@ -12,6 +12,7 @@ from glide import (
     OpenTelemetryConfig,
     OpenTelemetryMetricsConfig,
     OpenTelemetryTracesConfig,
+    Script,
 )
 from glide.opentelemetry import OpenTelemetry
 from glide_shared.commands.batch import Batch, ClusterBatch
@@ -604,3 +605,38 @@ class TestOpenTelemetryGlide:
         # Close clients
         await client1.close()
         await client2.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_span_script_invocation(self, request, protocol, cluster_mode):
+        """Test that script invocation (EVALSHA) creates a span with DB attributes"""
+        client = await create_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=protocol,
+        )
+
+        script = Script("return 'Hello'")
+        result = await client.invoke_script(script)
+        assert result == b"Hello"
+
+        # Wait for spans to be flushed
+        await wait_for_spans_to_be_flushed(
+            VALID_ENDPOINT_TRACES, expected_span_names=["EVALSHA"]
+        )
+
+        # Read the span file and check the EVALSHA span and its DB attributes
+        _, span_objects, span_names = read_and_parse_span_file(VALID_ENDPOINT_TRACES)
+
+        assert "EVALSHA" in span_names
+
+        # The core attaches DB semantic convention attributes via invoke_script.
+        evalsha_attrs = [
+            attr
+            for span in span_objects
+            if span.get("name") == "EVALSHA"
+            for attr in span.get("span_attributes", [])
+        ]
+        assert {"db.operation.name": "EVALSHA"} in evalsha_attrs
+
+        await client.close()

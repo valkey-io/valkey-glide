@@ -819,6 +819,13 @@ class BaseClient(CoreCommands):
 
         route_ptr, route_len, route_bytes = self._to_c_route_ptr_and_len(route)
 
+        # OTel span creation only when initialized (rare). The core attaches the
+        # EVALSHA DB semantic convention attributes to the span via invoke_script.
+        span = 0
+        if OpenTelemetry._instance is not None and OpenTelemetry.should_sample():
+            span_name_cstr = self._ffi.new("char[]", "EVALSHA".encode())
+            span = self._lib.create_named_otel_span(span_name_cstr)
+
         self._lib.invoke_script(
             self._core_client,
             callback_id,
@@ -831,10 +838,14 @@ class BaseClient(CoreCommands):
             args_c_lengths,
             route_ptr,
             route_len,
-            0,
+            span,
         )
 
-        return await fut
+        try:
+            return await fut
+        finally:
+            if span:
+                self._lib.drop_otel_span(span)
 
     # ==================== Cache Metrics ====================
 
