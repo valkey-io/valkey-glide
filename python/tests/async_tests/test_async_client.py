@@ -779,7 +779,9 @@ class TestCommands:
         assert res == value.encode()
         assert await glide_client.get(key) == new_value.encode()
 
+    @pytest.mark.skip_if_version_below("6.2.0")
     @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_set_return_types(self, glide_client: TGlideClient):
         # Regression test for https://github.com/valkey-io/valkey-glide/issues/6347:
