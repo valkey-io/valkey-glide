@@ -330,9 +330,11 @@ func (suite *GlideTestSuite) TearDownTest() {
 	// Flush cached clients without closing (they're reused across tests)
 	if suite.cachedStandaloneClient != nil {
 		suite.cachedStandaloneClient.FlushDB(context.Background())
+		suite.cachedStandaloneClient.ClientSetName(context.Background(), "")
 	}
 	if suite.cachedClusterClient != nil {
 		suite.cachedClusterClient.FlushDB(context.Background())
+		suite.cachedClusterClient.ClientSetName(context.Background(), "")
 	}
 
 	// Close and flush any ad-hoc clients created during this test
