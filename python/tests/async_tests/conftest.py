@@ -1,5 +1,8 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import asyncio
+import os
+import threading
 from typing import AsyncGenerator, List, Optional, Union
 
 import anyio
@@ -8,6 +11,7 @@ from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
 from glide.logger import Logger
 from glide_shared.cache import ClientSideCache
+from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -38,6 +42,70 @@ TEST_TEARDOWN_MAX_RETRIES = 3
 TEST_TEARDOWN_BASE_DELAY = 1  # seconds
 MAX_BACKOFF_TIME = 8  # seconds
 
+# Client pool keyed by (worker_id, cluster_mode, protocol) to avoid per-test
+# connection overhead. Clients are reused across tests with the same parameters;
+# the pipe reader is re-registered on the current event loop before each test.
+#
+# xdist compatibility: Each pytest-xdist worker gets its own key prefix via
+# the worker_id fixture, preventing data races between parallel workers.
+_client_pool: dict = {}
+_client_pool_lock = threading.Lock()
+
+
+def _get_worker_id() -> str:
+    """Get the xdist worker id, or 'main' if not running under xdist."""
+    return os.environ.get("PYTEST_XDIST_WORKER", "main")
+
+
+def _rebind_client_to_current_loop(client: TGlideClient) -> None:
+    """TEST-ONLY: Rebind a pooled client's pipe reader to the current event loop.
+
+    This is intentionally coupled to GlideClient internals. It exists solely to
+    support connection pooling in tests where anyio creates a new event loop per
+    test function. General users should create a new client per event loop instead.
+
+    Internals accessed: _loop, _is_asyncio, _setup_pipe()
+    If these change, the PING health check in _client_is_usable() will fail loudly.
+    """
+    client._loop = asyncio.get_running_loop()
+    client._is_asyncio = True
+    client._setup_pipe()
+
+
+def _client_is_usable(client: Optional[TGlideClient]) -> bool:
+    """Check if a pooled client's FFI handle is still valid (not closed/freed).
+
+    Accesses internals: _is_closed, _core_client, _ffi.NULL.
+    These are stable attributes unlikely to change, but grouped here for clarity.
+    """
+    if (
+        client is None
+    ):  # First call before any client has been created for this pool key
+        return False
+    return (
+        not client._is_closed
+        and client._core_client is not None
+        and client._core_client != client._ffi.NULL
+    )
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Close all pooled clients at end of test session to prevent fd leaks."""
+    with _client_pool_lock:
+        clients = list(_client_pool.values())
+        _client_pool.clear()
+    for client in clients:
+        if _client_is_usable(client):
+            try:
+                loop = asyncio.get_event_loop()
+                if not loop.is_closed():
+                    if loop.is_running():
+                        loop.create_task(client.close())
+                    else:
+                        loop.run_until_complete(client.close())
+            except Exception:
+                pass
+
 
 @pytest.fixture(scope="function")
 async def glide_client(
@@ -45,21 +113,64 @@ async def glide_client(
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> AsyncGenerator[TGlideClient, None]:
-    """Get async socket client for tests"""
-    client = await create_client(
-        request,
-        cluster_mode,
-        protocol=protocol,
-        request_timeout=5000,
-        lazy_connect=False,  # Explicitly false for general test client
-    )
+    """Get async socket client for tests. Reuses connections across tests with
+    the same (cluster_mode, protocol) to eliminate per-test connection overhead.
+
+    xdist-safe: pool is keyed per worker to avoid cross-worker races.
+    """
+    cache_key = (_get_worker_id(), cluster_mode, protocol)
+    with _client_pool_lock:
+        client = _client_pool.get(cache_key)
+    needs_new = not _client_is_usable(client)
+
+    if not needs_new:
+        # Re-register pipe reader on the current event loop (anyio creates
+        # a new loop per test). See _rebind_client_to_current_loop docstring.
+        try:
+            _rebind_client_to_current_loop(client)
+            # TODO #6144: replace with client.ping() once moved to base class
+            await client.custom_command(["PING"])
+        except Exception:
+            needs_new = True
+
+    if needs_new:
+        client = await create_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=5000,
+            lazy_connect=False,
+        )
+        with _client_pool_lock:
+            _client_pool[cache_key] = client
+
+    yield client
+
+    # Post-test: restore server and client state for the next test.
+    await _async_pool_teardown(client, cluster_mode, cache_key)
+
+
+async def _async_pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> None:
+    """Reset server state after a test. Evicts client from pool on failure."""
+    if not _client_is_usable(client):
+        return
     try:
-        yield client
-    finally:
-        # Close the client first, then run teardown
-        await client.close()
-        # Run teardown which has its own robust error handling
-        await test_teardown(request, cluster_mode, protocol)
+        # Pipeline all teardown commands in a single round-trip
+        # TODO #6144: replace custom_command with typed methods once available
+        # TODO #6166: use typed CONFIG SET and FLUSHALL once available
+        batch = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        batch.custom_command(["CLIENT", "UNPAUSE"])
+        batch.custom_command(["CONFIG", "SET", "timeout", "0"])
+        if not cluster_mode:
+            batch.custom_command(["SELECT", "0"])
+        batch.custom_command(["FLUSHALL", "ASYNC"])
+        await client.exec(batch, raise_on_error=True)
+    except Exception:
+        # Client is dead — will be recreated next test
+        with _client_pool_lock:
+            _client_pool.pop(cache_key, None)
 
 
 @pytest.fixture(scope="function")

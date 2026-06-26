@@ -3,6 +3,7 @@ package glide;
 
 import static glide.TestConfiguration.AZ_CLUSTER_HOSTS;
 import static glide.TestConfiguration.CLUSTER_HOSTS;
+import static glide.TestConfiguration.SERVER_VERSION;
 import static glide.TestConfiguration.STANDALONE_HOSTS;
 import static glide.TestConfiguration.TLS;
 import static glide.api.BaseClient.OK;
@@ -12,6 +13,9 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static glide.utils.Java8Utils.createMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -838,5 +842,84 @@ public class TestUtilities {
         }
 
         return Long.parseLong(((GlideClient) client).time().get()[0]);
+    }
+
+    /**
+     * Validates that a MEMORY STATS response map contains expected fields with correct types.
+     *
+     * @param stats The memory stats map to validate.
+     */
+    @SuppressWarnings("unchecked")
+    public static void assertMemoryStatsFields(Map<String, Object> stats) {
+        assertNotNull(stats);
+        assertFalse(stats.isEmpty());
+
+        // db.0 is only populated if the node has at least one key. In cluster mode, it will only
+        // be present if that key is stored on that node. Standalone and single-node cluster tests
+        // validate db.0 directly via assertMemoryStatsDbEntry.
+        if (stats.containsKey("db.0")) {
+            assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
+        }
+
+        assertTrue((Long) stats.get("allocator.active") > 0);
+        assertTrue((Long) stats.get("allocator.allocated") > 0);
+        assertTrue((Long) stats.get("allocator-fragmentation.bytes") >= 0);
+        assertTrue((Long) stats.get("allocator.resident") > 0);
+        assertInstanceOf(Long.class, stats.get("allocator-rss.bytes"));
+        assertTrue((Long) stats.get("aof.buffer") >= 0);
+        assertTrue((Long) stats.get("clients.normal") >= 0);
+        assertTrue((Long) stats.get("clients.slaves") >= 0);
+        assertTrue((Long) stats.get("dataset.bytes") >= 0);
+        assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
+        assertTrue((Long) stats.get("keys.bytes-per-key") >= 0);
+        assertTrue((Long) stats.get("keys.count") >= 0);
+        assertTrue((Long) stats.get("lua.caches") >= 0);
+        assertTrue((Long) stats.get("overhead.total") > 0);
+        assertTrue((Long) stats.get("peak.allocated") > 0);
+        assertTrue((Long) stats.get("replication.backlog") >= 0);
+        assertInstanceOf(Long.class, stats.get("rss-overhead.bytes"));
+        assertTrue((Long) stats.get("startup.allocated") > 0);
+        assertTrue((Long) stats.get("total.allocated") > 0);
+
+        assertTrue((Double) stats.get("allocator-fragmentation.ratio") >= 0);
+        assertTrue((Double) stats.get("allocator-rss.ratio") >= 0);
+        assertTrue((Double) stats.get("dataset.percentage") >= 0);
+        assertTrue((Double) stats.get("fragmentation") >= 0);
+        assertTrue((Double) stats.get("peak.percentage") >= 0);
+        assertTrue((Double) stats.get("rss-overhead.ratio") >= 0);
+
+        // Optional Redis 7.0+ fields
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertTrue((Long) stats.get("cluster.links") >= 0);
+            assertTrue((Long) stats.get("functions.caches") >= 0);
+        } else {
+            assertFalse(stats.containsKey("cluster.links"));
+            assertFalse(stats.containsKey("functions.caches"));
+        }
+
+        // Optional Valkey 8.0+ fields
+        if (SERVER_VERSION.isGreaterThanOrEqualTo("8.0.0")) {
+            assertTrue((Long) stats.get("allocator.muzzy") >= 0);
+            assertTrue((Long) stats.get("db.dict.rehashing.count") >= 0);
+            assertTrue((Long) stats.get("overhead.db.hashtable.lut") >= 0);
+            assertTrue((Long) stats.get("overhead.db.hashtable.rehashing") >= 0);
+        } else {
+            assertFalse(stats.containsKey("allocator.muzzy"));
+            assertFalse(stats.containsKey("db.dict.rehashing.count"));
+            assertFalse(stats.containsKey("overhead.db.hashtable.lut"));
+            assertFalse(stats.containsKey("overhead.db.hashtable.rehashing"));
+        }
+    }
+
+    /**
+     * Validates that a MEMORY STATS db entry map has expected fields with correct types and values.
+     *
+     * @param dbMap The db entry map (e.g. from stats.get("db.0")).
+     */
+    public static void assertMemoryStatsDbEntry(Map<String, Object> dbMap) {
+        assertNotNull(dbMap);
+        assertInstanceOf(Map.class, dbMap);
+        assertTrue((Long) dbMap.get("overhead.hashtable.expires") >= 0);
+        assertTrue((Long) dbMap.get("overhead.hashtable.main") >= 0);
     }
 }

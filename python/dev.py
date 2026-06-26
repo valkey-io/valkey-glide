@@ -6,9 +6,22 @@ import os
 import platform
 import subprocess
 import sys
+import sysconfig
+from enum import Enum
 from pathlib import Path
 from shutil import copy2, copytree, rmtree, which
 from typing import Any, Dict, List, Optional
+
+
+class ClientTarget(str, Enum):
+    """Which client(s) to target."""
+
+    ASYNC = "async"
+    SYNC = "sync"
+    ALL = "all"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 def find_project_root() -> Path:
@@ -23,33 +36,46 @@ venv_ctx: Dict[str, Optional[Path]] = {
     "python_exe": None,
 }
 
-# Constants
+# Constants – Project
 PROTO_REL_PATH = "glide-core/src/protobuf"
 GLIDE_ROOT = find_project_root()
 PYTHON_DIR = GLIDE_ROOT / "python"
-GLIDE_SHARED_DIR = PYTHON_DIR / "glide-shared"
-GLIDE_SYNC_DIR = PYTHON_DIR / "glide-sync"
-GLIDE_ASYNC_DIR = PYTHON_DIR / "glide-async"
+
+# Constants – FFI
 FFI_DIR = GLIDE_ROOT / "ffi"
 FFI_OUTPUT_DIR_DEBUG = FFI_DIR / "target" / "debug"
 FFI_OUTPUT_DIR_RELEASE = FFI_DIR / "target" / "release"
-FFI_TARGET_LIB_NAME = "libglide_ffi.so"
-GLIDE_SYNC_NAME = "GlidePySync"
-GLIDE_ASYNC_NAME = "GlidePy"
+
+# Constants – Shared
+GLIDE_SHARED_DIR = PYTHON_DIR / "glide-shared"
+SHARED_PACKAGE_DIR = GLIDE_SHARED_DIR / "glide_shared"
+SHARED_FFI_LIB_NAME_MAP = {
+    "Linux": "libglide_ffi.so",
+    "Darwin": "libglide_ffi.dylib",
+    "Windows": "glide_ffi.dll",
+}
+SHARED_FFI_LIB = SHARED_PACKAGE_DIR / SHARED_FFI_LIB_NAME_MAP[platform.system()]
+SHARED_NATIVE_MODULE = SHARED_PACKAGE_DIR / (
+    "_fast_response" + sysconfig.get_config_var("EXT_SUFFIX")
+)
+
+
+# Constants -- Async
+GLIDE_ASYNC_DIR = PYTHON_DIR / "glide-async"
+ASYNC_VENDORED_SHARED_DIR = GLIDE_ASYNC_DIR / "python" / "glide_shared"
+
+# Constants -- Sync
+GLIDE_SYNC_DIR = PYTHON_DIR / "glide-sync"
+SYNC_FFI_LIB = GLIDE_SYNC_DIR / "glide_sync" / "libglide_ffi.so"
 
 
 def find_libglide_ffi(lib_dir: Path) -> Path:
     """
     Searches for the correct shared library file depending on the OS.
     """
-    possible_names = {
-        "Linux": "libglide_ffi.so",
-        "Darwin": "libglide_ffi.dylib",
-        "Windows": "glide_ffi.dll",
-    }
 
     system = platform.system()
-    lib_name = possible_names.get(system)
+    lib_name = SHARED_FFI_LIB_NAME_MAP.get(system)
     if not lib_name:
         raise RuntimeError(f"Unsupported platform: {system}")
 
@@ -71,6 +97,7 @@ def set_venv_paths(custom_path: Optional[str] = None):
 
 def check_dependencies() -> None:
     print("[INFO] Checking required dependencies...")
+
     if not which("rustc"):
         print("❌ Error: Rust is not installed.")
         sys.exit(1)
@@ -192,7 +219,6 @@ def copy_readme_to_package(package_dir: Path) -> None:
 
 
 def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
-    shared_dir = PYTHON_DIR / "glide-shared"
     cmd = [str(venv_ctx["python_exe"]), "-m", "maturin", "develop"]
     if release:
         cmd += ["--release"]
@@ -200,7 +226,7 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     shared_env = {k: v for k, v in env.items() if k != "CARGO_ZIGBUILD_TARGET"}
     run_command(
         cmd,
-        cwd=shared_dir,
+        cwd=GLIDE_SHARED_DIR,
         env=shared_env,
         label="install glide-shared",
     )
@@ -210,7 +236,7 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
     ffi_output_dir = FFI_OUTPUT_DIR_RELEASE if release else FFI_OUTPUT_DIR_DEBUG
     try:
         ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = shared_dir / "glide_shared" / ffi_lib_path.name
+        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
         needs_build = not dest.exists()
     except FileNotFoundError:
         needs_build = True
@@ -227,7 +253,7 @@ def install_glide_shared(env: Dict[str, str], release: bool = False) -> None:
             label="build FFI library",
         )
         ffi_lib_path = find_libglide_ffi(ffi_output_dir)
-        dest = shared_dir / "glide_shared" / ffi_lib_path.name
+        dest = SHARED_PACKAGE_DIR / ffi_lib_path.name
         copy2(ffi_lib_path, dest)
 
 
@@ -237,13 +263,13 @@ def build_async_client_wheel(
     features: Optional[str] = "",
 ) -> None:
     # 1. Copy shared module
-    dest_shared = GLIDE_ASYNC_DIR / "python" / "glide_shared"
+    dest_shared = ASYNC_VENDORED_SHARED_DIR
     if dest_shared.exists():
         rmtree(dest_shared)
     dest_shared.parent.mkdir(parents=True, exist_ok=True)
-    origin_shared = GLIDE_SHARED_DIR / "glide_shared"
-    print(f"[INFO] Copying glide_shared from: {origin_shared} to: {dest_shared}")
-    copytree(origin_shared, dest_shared)
+
+    print(f"[INFO] Copying glide_shared from: {SHARED_PACKAGE_DIR} to: {dest_shared}")
+    copytree(SHARED_PACKAGE_DIR, dest_shared)
 
     # 2. Build wheel using maturin
     maturin_cmd = ["maturin", "build"]
@@ -409,7 +435,7 @@ def build_sync_client(
         )
 
     # Copy to glide_sync package dir
-    dest_path = GLIDE_SYNC_DIR / "glide_sync" / FFI_TARGET_LIB_NAME
+    dest_path = SYNC_FFI_LIB
     print(f"[INFO] Copying: {libglide_ffi_path} to: {dest_path}")
     copy2(libglide_ffi_path, dest_path)
 
@@ -421,6 +447,43 @@ def build_sync_client(
         label="install glide-sync",
     )
     print("[OK] Sync client build completed")
+
+
+def _cargo_clean(crate_dir: Path) -> None:
+    """Run `cargo clean` for a crate if it has a Cargo.toml."""
+    if not (crate_dir / "Cargo.toml").exists():
+        return
+    run_command(
+        ["cargo", "clean"],
+        cwd=crate_dir,
+        label=f"cargo clean ({crate_dir.name})",
+    )
+
+
+def clean_clients(client: ClientTarget) -> None:
+    """Clean build artifacts for the selected client(s)."""
+
+    # Clean shared artifacts.
+    _cargo_clean(GLIDE_SHARED_DIR)
+    _cargo_clean(FFI_DIR)
+    SHARED_FFI_LIB.unlink(missing_ok=True)
+    SHARED_NATIVE_MODULE.unlink(missing_ok=True)
+
+    # Clean async-only artifacts.
+    if client in (ClientTarget.ASYNC, ClientTarget.ALL):
+        _cargo_clean(GLIDE_ASYNC_DIR)
+        rmtree(ASYNC_VENDORED_SHARED_DIR, ignore_errors=True)
+
+    # Clean sync-only artifacts.
+    if client in (ClientTarget.SYNC, ClientTarget.ALL):
+        run_command(
+            [sys.executable, "setup.py", "clean"],
+            cwd=GLIDE_SYNC_DIR,
+            label="setup.py clean",
+        )
+        SYNC_FFI_LIB.unlink(missing_ok=True)
+
+    print("[OK] Clean completed")
 
 
 def run_command(
@@ -508,6 +571,8 @@ Examples:
     python dev.py protobuf                                # Generate Python protobuf files (.py and .pyi)
     python dev.py lint                                    # Run Python linters
     python dev.py test                                    # Run all tests
+    python dev.py clean                                   # Remove all client build artifacts
+    python dev.py clean --client async                    # Remove async client build artifacts
         """,
         formatter_class=argparse.RawTextHelpFormatter,
     )
@@ -520,13 +585,15 @@ Examples:
         help="Optional path to the virtual environment to use (default: python/.env)",
     )
 
+    # Build subparsers for each command.
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     build_parser = subparsers.add_parser("build", help="Build the Python clients")
     build_parser.add_argument(
         "--client",
-        default="all",
-        choices=["async", "sync", "all"],
+        default=ClientTarget.ALL,
+        type=ClientTarget,
+        choices=list(ClientTarget),
         help="Which client to build: 'async', 'sync', or 'all' to build both.",
     )
     build_parser.add_argument(
@@ -575,11 +642,34 @@ Examples:
         help="Indicate running with mock pubsub (skips connection kill tests)",
     )
 
+    clean_parser = subparsers.add_parser("clean", help="Remove client build artifacts")
+    clean_parser.add_argument(
+        "--client",
+        default=ClientTarget.ALL,
+        type=ClientTarget,
+        choices=list(ClientTarget),
+        help="Which client's artifacts to clean: 'async', 'sync', or 'all'.",
+    )
+
+    # Run command
     args = parser.parse_args()
     check_dependencies()
     set_venv_paths(args.venv)
 
-    if args.command == "protobuf":
+    if args.command == "build":
+        version = args.glide_version
+        release = args.mode == "release"
+        no_cache = args.no_cache
+        wheel = args.wheel
+        features = args.features
+        if args.client in (ClientTarget.ASYNC, ClientTarget.ALL):
+            print(f"🛠 Building async client ({args.mode} mode)...")
+            build_async_client(version, release, no_cache, wheel, features)
+        if args.client in (ClientTarget.SYNC, ClientTarget.ALL):
+            print(f"🛠 Building sync client ({args.mode} mode)...")
+            build_sync_client(version, release, no_cache, wheel)
+
+    elif args.command == "protobuf":
         print("📦 Generating protobuf Python files...")
         activate_venv()
         generate_protobuf_files()
@@ -592,18 +682,9 @@ Examples:
         print("🧪 Running tests...")
         run_tests(args.args, mock_pubsub=args.mock_pubsub)
 
-    elif args.command == "build":
-        version = args.glide_version
-        release = args.mode == "release"
-        no_cache = args.no_cache
-        wheel = args.wheel
-        features = args.features
-        if args.client in ["async", "all"]:
-            print(f"🛠 Building async client ({args.mode} mode)...")
-            build_async_client(version, release, no_cache, wheel, features)
-        if args.client in ["sync", "all"]:
-            print("🛠 Building sync client ({args.mode} mode)...")
-            build_sync_client(version, release, no_cache, wheel)
+    elif args.command == "clean":
+        print(f"🧹 Cleaning {args.client} client build artifacts...")
+        clean_clients(args.client)
 
     print("[✅ DONE] Task completed successfully.")
 

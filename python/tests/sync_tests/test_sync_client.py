@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import array
 import math
 import os
 import threading
@@ -46,6 +47,7 @@ from glide_shared.commands.core_options import (
     UpdateOptions,
 )
 from glide_shared.commands.latency import LatencyEntry
+from glide_shared.commands.memory import MemoryStats
 from glide_shared.commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -116,6 +118,8 @@ from tests.utils.utils import (
     BGSAVE_RESPONSES,
     PRIMARY_SLOT_ROUTE,
     assert_connected_sync,
+    assert_memory_stats_db_entry,
+    assert_memory_stats_fields,
     assert_responses_in,
     check_function_list_response,
     check_function_stats_response,
@@ -564,6 +568,33 @@ class TestCommands:
         n = glide_sync_client.get(key, buffer=memoryview(buf))
         assert n == b"100"
         assert buf[:100] == data
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_get_into_buffer_non_byte_format(
+        self, glide_sync_client: TGlideClient
+    ):
+        """Regression: capacity is byte-based, not element-based.
+
+        A memoryview over an ``itemsize > 1`` buffer has ``len()`` (element
+        count) smaller than its ``nbytes`` (byte capacity). The value below is
+        4096 bytes and the buffer is 1024 ``uint32`` elements == 4096 bytes, so
+        it fits exactly. Before the fix, capacity was computed with ``len()``
+        (1024) and the GET was spuriously rejected with "exceeds buffer
+        capacity"; with ``nbytes`` (4096) it succeeds.
+        """
+        key = get_random_string(10)
+        data = os.urandom(4096)
+        assert glide_sync_client.set(key, data) == OK
+
+        arr = array.array("I", [0] * 1024)  # itemsize=4, len()=1024, nbytes=4096
+        buf = memoryview(arr)
+        assert len(buf) < len(data)  # element count under-reports capacity
+        assert buf.nbytes == len(data)
+
+        n = glide_sync_client.get(key, buffer=buf)
+        assert n == b"4096"
+        assert buf.cast("B")[:4096] == data
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10241,6 +10272,116 @@ class TestCommands:
                 set_thread.join(timeout=1.0)
         finally:
             glide_sync_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_doctor(self, glide_sync_client: TGlideClient):
+        is_cluster = isinstance(glide_sync_client, GlideClusterClient)
+
+        result = glide_sync_client.memory_doctor()
+        reports = list(result.values()) if is_cluster else [result]
+
+        if is_cluster:
+            # Single-node route.
+            reports.append(glide_sync_client.memory_doctor(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = glide_sync_client.memory_doctor(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
+
+        for report in reports:
+            assert isinstance(report, str) and len(report) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_malloc_stats(self, glide_sync_client: TGlideClient):
+        is_cluster = isinstance(glide_sync_client, GlideClusterClient)
+
+        result = glide_sync_client.memory_malloc_stats()
+        reports = list(result.values()) if is_cluster else [result]
+
+        if is_cluster:
+            # Single-node route.
+            reports.append(glide_sync_client.memory_malloc_stats(route=RandomNode()))
+
+            # Multi-node route.
+            all_nodes_result = glide_sync_client.memory_malloc_stats(route=AllNodes())
+            assert isinstance(all_nodes_result, dict)
+            assert len(all_nodes_result) > 1
+            reports.extend(all_nodes_result.values())
+
+        for report in reports:
+            assert isinstance(report, str) and len(report) > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_purge(self, glide_sync_client: TGlideClient):
+        result = glide_sync_client.memory_purge()
+        assert result == OK
+
+        if isinstance(glide_sync_client, GlideClusterClient):
+            # Single-node route.
+            assert glide_sync_client.memory_purge(route=RandomNode()) == OK
+            # Multi-node route.
+            assert glide_sync_client.memory_purge(route=AllNodes()) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_standalone(self, glide_sync_client: TGlideClient):
+        # Write a key and route to its node to ensure db entry exists
+        key = get_random_string(10)
+        glide_sync_client.set(key, "value")
+
+        version = sync_get_version(glide_sync_client)
+        result = glide_sync_client.memory_stats()
+
+        assert isinstance(result, MemoryStats)
+        assert_memory_stats_fields(result, version)
+        assert_memory_stats_db_entry(result.db[0])
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_cluster(self, glide_sync_client: TGlideClient):
+        version = sync_get_version(glide_sync_client)
+        result = glide_sync_client.memory_stats()
+        assert isinstance(result, dict)
+
+        for stats in result.values():
+            assert isinstance(stats, MemoryStats)
+            assert_memory_stats_fields(stats, version)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_cluster_multi_node(
+        self, glide_sync_client: TGlideClient
+    ):
+        version = sync_get_version(glide_sync_client)
+        result = glide_sync_client.memory_stats(route=AllNodes())
+        assert isinstance(result, dict)
+
+        for stats in result.values():
+            assert isinstance(stats, MemoryStats)
+            assert_memory_stats_fields(stats, version)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_memory_stats_cluster_single_node(
+        self, glide_sync_client: TGlideClient
+    ):
+        # Write a key and route to its node to ensure db entry exists
+        key = get_random_string(10)
+        glide_sync_client.set(key, "value")
+
+        version = sync_get_version(glide_sync_client)
+        stats = glide_sync_client.memory_stats(
+            route=SlotKeyRoute(SlotType.PRIMARY, key)
+        )
+
+        assert isinstance(stats, MemoryStats)
+        assert_memory_stats_fields(stats, version)
+        assert_memory_stats_db_entry(stats.db[0])
 
 
 class TestMultiKeyCommandCrossSlot:

@@ -152,6 +152,21 @@ func ReadValue[T any](data map[string]any, field string, into *T) {
 	}
 }
 
+// ReadRequiredValue reads a required field from the map.
+// Returns an error if the field is missing or has the wrong type.
+func ReadRequiredValue[T any](data map[string]any, field string, into *T) error {
+	raw, exists := data[field]
+	if !exists {
+		return fmt.Errorf("missing required field %q", field)
+	}
+	val, ok := raw.(T)
+	if !ok {
+		return fmt.Errorf("field %q: expected %T, got %T", field, *into, raw)
+	}
+	*into = val
+	return nil
+}
+
 func ReadResult[T any](data map[string]any, field string, info *models.Result[T]) {
 	switch val := data[field].(type) {
 	case T:

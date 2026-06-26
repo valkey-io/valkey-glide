@@ -19,6 +19,7 @@ from glide_shared.commands.latency import (
     _parse_latency_history_cluster,
     _parse_latency_latest_cluster,
 )
+from glide_shared.commands.memory import MemoryStats, _parse_memory_stats_cluster
 from glide_shared.constants import (
     TOK,
     TClusterResponse,
@@ -1790,3 +1791,102 @@ class ClusterCommands(CoreCommands):
             int,
             self._execute_command(RequestType.LatencyReset, list(events), route),
         )
+
+    # TODO #6166: move to shared base class once server management refactor lands
+
+    def memory_doctor(self, route: Optional[Route] = None) -> TClusterResponse[str]:
+        """
+        Returns a report about memory problems detected by the server.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-doctor/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[str]: A cluster response containing the memory diagnostic report(s)
+
+        Examples:
+            >>> reports = client.memory_doctor()
+            >>> for node, report in reports.items():
+            ...     print(f"Node [{node}]: {report}")
+            >>> report = client.memory_doctor(RandomNode())
+            >>> print("Memory report:", report)
+        """
+        response = self._execute_command(RequestType.MemoryDoctor, [], route)
+        if isinstance(response, bytes):
+            return response.decode()
+        return {k: cast(bytes, v).decode() for k, v in cast(dict, response).items()}
+
+    def memory_malloc_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[str]:
+        """
+        Returns the internal statistics of the memory allocator.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-malloc-stats/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[str]: A cluster value containing the memory allocator statistics
+
+        Examples:
+            >>> stats_all = client.memory_malloc_stats()
+            >>> for node, stats in stats_all.items():
+            ...     print(f"Node [{node}]: {stats}")
+            >>> stats = client.memory_malloc_stats(RandomNode())
+            >>> print("Allocator stats:", stats)
+        """
+        response = self._execute_command(RequestType.MemoryMallocStats, [], route)
+        if isinstance(response, bytes):
+            return response.decode()
+        return {k: cast(bytes, v).decode() for k, v in cast(dict, response).items()}
+
+    def memory_purge(self, route: Optional[Route] = None) -> TOK:
+        """
+        Asks the server to reclaim memory from the allocator back to the operating system.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-purge/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> client.memory_purge()
+                "OK"
+        """
+        return cast(TOK, self._execute_command(RequestType.MemoryPurge, [], route))
+
+    def memory_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[MemoryStats]:
+        """
+        Returns detailed memory consumption statistics of the server.
+        Routes to all primary nodes by default.
+
+        See [valkey.io](https://valkey.io/commands/memory-stats/) for details.
+
+        Args:
+            route (Optional[Route]): Routing for the command. Defaults to all primary nodes.
+
+        Returns:
+            TClusterResponse[MemoryStats]: A ``MemoryStats`` object containing detailed
+                memory usage statistics.
+
+        Examples:
+            >>> stats = client.memory_stats(RandomNode())
+            >>> print(f"Peak allocated: {stats.peak_allocated}")
+            >>> stats_all = client.memory_stats()
+            >>> for node, node_stats in stats_all.items():
+            ...     print(f"Node [{node}]: peak={node_stats.peak_allocated}")
+        """
+        response = self._execute_command(RequestType.MemoryStats, [], route)
+        return _parse_memory_stats_cluster(cast(Mapping, response))
