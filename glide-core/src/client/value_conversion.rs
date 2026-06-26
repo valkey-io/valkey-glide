@@ -3877,13 +3877,25 @@ mod tests {
         let conversion_type = expected_type_for_cmd(&cmd);
 
         let multi_node_input = Value::Map(vec![
-            (Value::BulkString(b"node1:6379".to_vec()), tracking_info_resp2()),
-            (Value::BulkString(b"node2:6370".to_vec()), tracking_info_resp2()),
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp2(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp2(),
+            ),
         ]);
 
         let expected = Value::Map(vec![
-            (Value::BulkString(b"node1:6379".to_vec()), tracking_info_resp3()),
-            (Value::BulkString(b"node2:6370".to_vec()), tracking_info_resp3()),
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp3(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp3(),
+            ),
         ]);
 
         let result = convert_to_expected_type(multi_node_input, conversion_type).unwrap();
@@ -3896,13 +3908,25 @@ mod tests {
         let conversion_type = expected_type_for_cmd(&cmd);
 
         let multi_node_input = Value::Map(vec![
-            (Value::BulkString(b"node1:6379".to_vec()), tracking_info_resp3()),
-            (Value::BulkString(b"node2:6370".to_vec()), tracking_info_resp3()),
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp3(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp3(),
+            ),
         ]);
 
         let expected = Value::Map(vec![
-            (Value::BulkString(b"node1:6379".to_vec()), tracking_info_resp3()),
-            (Value::BulkString(b"node2:6370".to_vec()), tracking_info_resp3()),
+            (
+                Value::BulkString(b"node1:6379".to_vec()),
+                tracking_info_resp3(),
+            ),
+            (
+                Value::BulkString(b"node2:6370".to_vec()),
+                tracking_info_resp3(),
+            ),
         ]);
 
         let result = convert_to_expected_type(multi_node_input, conversion_type).unwrap();
