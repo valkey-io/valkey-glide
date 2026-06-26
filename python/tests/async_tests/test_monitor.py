@@ -1,14 +1,21 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-import asyncio
 from typing import List
 
+import anyio
 import pytest
 from glide import GlideClusterClientConfiguration, MonitorClient
 from glide_shared.commands.core_options import MonitorMsg
 
 from tests.async_tests.conftest import create_client
-from tests.utils.utils import create_client_config
+from tests.utils.utils import create_client_config, wait_for
+
+
+async def _wait_for_command(received: List[MonitorMsg], command: str) -> None:
+    async def _check() -> bool:
+        return command in [m.command.upper() for m in received]
+
+    await wait_for(_check, f"{command} command not received by monitor")
 
 
 @pytest.mark.anyio
@@ -26,8 +33,7 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.set("monitor_test_key", "monitor_test_val")
-                # Give time for monitor callback to fire
-                await asyncio.sleep(0.5)
+                await _wait_for_command(received, "SET")
             finally:
                 await client.close()
         finally:
@@ -46,11 +52,11 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.ping()
-                await asyncio.sleep(0.5)
             finally:
                 await client.close()
 
-            msg = await asyncio.wait_for(monitor.get_monitor_message(), timeout=5.0)
+            with anyio.fail_after(5.0):
+                msg = await monitor.get_monitor_message()
             assert msg is not None
             assert isinstance(msg, MonitorMsg)
         finally:
@@ -81,10 +87,27 @@ class TestMonitorAsync:
         """Test that MonitorClient raises TypeError for cluster config."""
         cluster_config = GlideClusterClientConfiguration(addresses=[])
         with pytest.raises(TypeError):
-            # TypeError is raised synchronously before any async work
-            import asyncio
+            # TypeError is raised synchronously in create() before any async work.
+            # anyio.run() uses asyncio backend by default.
+            anyio.run(MonitorClient.create, cluster_config)
 
-            asyncio.run(MonitorClient.create(cluster_config))
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_try_get_monitor_message_empty(self, request, cluster_mode):
+        """Test that try_get_monitor_message returns None when queue is empty."""
+        config = create_client_config(request, cluster_mode=False)
+        monitor = await MonitorClient.create(config)
+        try:
+            assert monitor.try_get_monitor_message() is None
+        finally:
+            await monitor.stop()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_monitor_aclose(self, request, cluster_mode):
+        """Test that aclose() is a valid alias for stop()."""
+        config = create_client_config(request, cluster_mode=False)
+        monitor = await MonitorClient.create(config)
+        await monitor.aclose()
+        assert monitor._is_closed
 
     @pytest.mark.parametrize("cluster_mode", [False])
     async def test_monitor_msg_fields(self, request, cluster_mode):
@@ -99,7 +122,7 @@ class TestMonitorAsync:
             client = await create_client(request, cluster_mode=False)
             try:
                 await client.set("field_test_key", "field_test_val")
-                await asyncio.sleep(0.5)
+                await _wait_for_command(received, "SET")
             finally:
                 await client.close()
         finally:

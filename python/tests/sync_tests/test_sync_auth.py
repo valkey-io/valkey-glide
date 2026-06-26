@@ -123,25 +123,37 @@ class TestSyncAuthCommands:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     def test_sync_update_connection_password_connection_lost_before_password_update(
-        self, glide_sync_client: TGlideClient, management_sync_client: TGlideClient
+        self, management_sync_client: TGlideClient, request, cluster_mode, protocol
     ):
         """
         Test changing server password when connection is lost before password update.
         Verifies that the client will not be able to reach the inner core and return an error
         on immediate re-authentication, but will succeed with non-immediate re-auth
         """
-        glide_sync_client.set("test_key", "test_value")
-        config_set_new_password(glide_sync_client, NEW_PASSWORD)
-        kill_connections(management_sync_client)
-        time.sleep(2)
-        result = glide_sync_client.update_connection_password(
-            NEW_PASSWORD, immediate_auth=False
+        # Use a fresh client (not pooled) since this test kills and expects it to stay dead
+        test_client = create_sync_client(
+            request, cluster_mode, protocol=protocol, request_timeout=5000
         )
-        assert result == OK
-        with pytest.raises(RequestError):
-            glide_sync_client.update_connection_password(
-                NEW_PASSWORD, immediate_auth=True
+        try:
+            test_client.set("test_key", "test_value")
+            config_set_new_password(test_client, NEW_PASSWORD)
+            kill_connections(management_sync_client)
+            # Wait for glide-core to detect dead connection and fail reconnect
+            # (reconnects with old/empty password, which server now rejects)
+            time.sleep(2)
+            result = test_client.update_connection_password(
+                NEW_PASSWORD, immediate_auth=False
             )
+            assert result == OK
+            with pytest.raises(RequestError):
+                test_client.update_connection_password(
+                    NEW_PASSWORD, immediate_auth=True
+                )
+        finally:
+            try:
+                test_client.close()
+            except Exception:
+                pass
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
