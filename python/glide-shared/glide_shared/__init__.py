@@ -44,6 +44,7 @@ from .commands.core_options import (
     PubSubMsg,
     UpdateOptions,
 )
+from .commands.client_tracking import ClientTrackingInfo
 from .commands.latency import LatencyEntry, LatencyEventInfo
 from .commands.server_modules import json_batch
 from .commands.server_modules.ft_options.ft_aggregate_options import (
@@ -373,5 +374,6 @@ __all__ = [
     "OpenTelemetryTracesConfig",
     # Cache
     "ClientSideCache",
+    "ClientTrackingInfo",
     "EvictionPolicy",
 ]
