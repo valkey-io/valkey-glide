@@ -1,7 +1,7 @@
 // Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::client::{MonitorClient, MonitorLine, MonitorLineCallback, NodeAddress, TlsMode};
+use glide_core::cluster_scan_container::get_cluster_scan_cursor;
 use glide_core::compression::process_command_args_for_compression;
 use glide_core::connection_request;
 use glide_core::errors::{error_message, error_type};
@@ -11,7 +11,6 @@ use glide_core::{
     GlideOpenTelemetrySignalsExporter, GlideSpan, Telemetry,
 };
 use logger_core::{log_warn, log_warn_lazy};
-use redis::GlideConnectionOptions;
 use redis::cluster_routing::Routable;
 use redis::{
     Arg, ClusterScanArgs, Cmd, ErrorKind, PipelineRetryStrategy, PushInfo, RedisError, ScanStateRC,
@@ -2525,14 +2524,14 @@ fn monitor_store() -> &'static Mutex<StdHashMap<u64, MonitorClient>> {
 }
 
 #[napi(js_name = "createMonitorClient", ts_return_type = "Promise<number>")]
-pub fn create_monitor_client(
-    env: Env,
+pub fn create_monitor_client<'a>(
+    env: &'a Env,
     connection_request_bytes: Uint8Array,
     #[napi(
         ts_arg_type = "(timestamp: number, db: number, clientAddr: string, command: string, args: string[]) => void"
     )]
-    callback: napi::JsFunction,
-) -> Result<JsObject> {
+    callback: Function<'_, FnArgs<(f64, i64, String, String, Vec<String>)>, ()>,
+) -> Result<Object<'a>> {
     let (deferred, promise) = env.create_deferred()?;
     let conn_req =
         connection_request::ConnectionRequest::parse_from_bytes(&connection_request_bytes)
@@ -2566,32 +2565,22 @@ pub fn create_monitor_client(
         ..Default::default()
     };
     let _client_name = conn_req.client_name.to_string(); // TODO: pass to MonitorClient::new once its signature supports it
-    let mut tsfn: napi::threadsafe_function::ThreadsafeFunction<
-        MonitorLine,
-        napi::threadsafe_function::ErrorStrategy::Fatal,
-    > = callback.create_threadsafe_function(
-        0,
-        |ctx: napi::threadsafe_function::ThreadSafeCallContext<MonitorLine>| {
+    // Weak mode calls napi_unref_threadsafe_function, so monitor callbacks do not keep
+    // the Node.js event loop alive while the monitor client is open.
+    let tsfn = callback
+        .build_threadsafe_function::<MonitorLine>()
+        .callee_handled::<false>()
+        .weak::<true>()
+        .build_callback(|ctx| {
             let line = ctx.value;
-            let ts = ctx.env.create_double(line.timestamp)?;
-            let db = ctx.env.create_int64(line.db)?;
-            let addr = ctx.env.create_string(&line.client_addr)?;
-            let cmd = ctx.env.create_string(&line.command)?;
-            let mut args_arr = ctx.env.create_array_with_length(line.args.len())?;
-            for (i, arg) in line.args.iter().enumerate() {
-                args_arr.set_element(i as u32, ctx.env.create_string(arg)?)?;
-            }
-            Ok(vec![
-                ts.into_unknown(),
-                db.into_unknown(),
-                addr.into_unknown(),
-                cmd.into_unknown(),
-                args_arr.into_unknown(),
-            ])
-        },
-    )?;
-    // Unref so the TSFN does not prevent the Node.js event loop from exiting naturally.
-    tsfn.unref(&env)?;
+            Ok(FnArgs::from((
+                line.timestamp,
+                line.db,
+                line.client_addr,
+                line.command,
+                line.args,
+            )))
+        })?;
     let on_line: MonitorLineCallback = Arc::new(move |line: MonitorLine| {
         tsfn.call(
             line,
@@ -2613,7 +2602,7 @@ pub fn create_monitor_client(
 }
 
 #[napi(js_name = "closeMonitorClient", ts_return_type = "Promise<void>")]
-pub fn close_monitor_client(env: Env, handle_id: i64) -> Result<JsObject> {
+pub fn close_monitor_client(env: &Env, handle_id: i64) -> Result<Object<'_>> {
     let (deferred, promise) = env.create_deferred()?;
     let client = monitor_store().lock().unwrap().remove(&(handle_id as u64));
     let glide_rt = get_or_init_runtime().map_err(|e| napi::Error::new(Status::Unknown, e))?;
