@@ -4688,7 +4688,7 @@ class TestPubSub:
         GET command concurrently with publishing a large message. The GET must
         resolve without being starved by the large pubsub frame.
         """
-        sub_client, pub_client, cmd_client = None, None, None
+        sub_client, pub_client = None, None
         try:
             channel = "large_msg_channel"
             # 128KB message — exceeds the 64KB MAX_INLINE_PUBSUB threshold
@@ -4698,7 +4698,6 @@ class TestPubSub:
                 request, cluster_mode, channels={channel}, timeout=10000
             )
             pub_client = await create_client(request, cluster_mode)
-            cmd_client = await create_client(request, cluster_mode)
 
             await wait_for_subscription_state_if_needed(
                 sub_client,
@@ -4707,14 +4706,14 @@ class TestPubSub:
             )
 
             # Set a key we'll read concurrently
-            await cmd_client.set("pointer_test_key", "pointer_test_value")
+            await pub_client.set("pointer_test_key", "pointer_test_value")
 
             # Publish the large message
             await pub_client.publish(large_message, channel)
 
-            # Immediately issue a GET on a different client — should not be blocked
+            # Immediately issue a GET — should not be blocked by large pubsub frame
             with anyio.fail_after(5):
-                get_result = await cmd_client.get("pointer_test_key")
+                get_result = await pub_client.get("pointer_test_key")
             assert get_result == b"pointer_test_value"
 
             # Poll for the large pubsub message
@@ -4733,5 +4732,3 @@ class TestPubSub:
         finally:
             await pubsub_client_cleanup(sub_client)
             await pubsub_client_cleanup(pub_client)
-            if cmd_client:
-                await cmd_client.close()
