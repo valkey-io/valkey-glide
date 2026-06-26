@@ -27,7 +27,7 @@ public final class TestSources {
     @SneakyThrows
     public static Stream<Arguments> serverAssistedCacheClients() {
 
-        // Server-assisted code invalidation is only support for RESP3.
+        // Server-assisted code invalidation is only supported for RESP3.
         ProtocolVersion protocol = ProtocolVersion.RESP3;
 
         return Stream.of(

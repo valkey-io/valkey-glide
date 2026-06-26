@@ -2122,7 +2122,7 @@ func (client *ClusterClient) ClientUnpause(ctx context.Context) (string, error) 
 //
 //	ctx - The context for controlling the command execution.
 //	opts - Specifies the routing configuration for the command. The client will route the
-//	       command to the nodes defined by `options`.
+//	       command to the nodes defined by `opts`.
 //
 // Return value:
 //
