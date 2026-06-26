@@ -28,6 +28,12 @@ This is the Valkey GLIDE mono-repository containing a Rust core (`glide-core`) a
 **Design Constraints:** Async-first APIs, cluster-aware routing, batching support, cross-AZ affinity
 **Key Features:** Multi-slot command handling, PubSub auto-reconnection, cluster scan, OpenTelemetry integration
 
+### RESP2/RESP3 Response Normalization
+
+Valkey supports two wire protocols (RESP2 and RESP3) that may return structurally different responses for the same commands. For example, RESP2 returns flat arrays where RESP3 returns maps, and RESP2 returns bulk strings where RESP3 returns typed doubles.
+
+The Rust core normalizes these differences in `glide-core/src/client/value_conversion.rs` so that language bindings receive a consistent data structure regardless of protocol version; language bindings should *not* need to handle RESP2/RESP3 differences themselves. When adding a new command whose RESP2 and RESP3 responses differ, add or reuse an `ExpectedReturnType` variant and implement the conversion logic in `convert_to_expected_type`.
+
 **Supported Engine Versions:**
 
 | Engine Type | 6.2 | 7.0 | 7.1 | 7.2 | 8.0 | 8.1 |
