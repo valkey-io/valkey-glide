@@ -1,7 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from .cache import ClientSideCache, EvictionPolicy
-from .commands.batch import Batch, ClusterBatch, ClusterTransaction, TBatch, Transaction
+from .commands.batch import (
+    Batch,
+    ClusterBatch,
+    ClusterTransaction,
+    TBatch,
+    Transaction,
+)
 from .commands.batch_options import (
     BatchOptions,
     BatchRetryStrategy,
@@ -46,6 +52,7 @@ from .commands.core_options import (
     UpdateOptions,
 )
 from .commands.latency import LatencyEntry, LatencyEventInfo
+from .commands.memory import MemoryStats, MemoryStatsDb
 from .commands.server_modules import json_batch
 from .commands.server_modules.ft_options.ft_aggregate_options import (
     FtAggregateApply,
@@ -279,6 +286,8 @@ __all__ = [
     "InsertPosition",
     "LatencyEntry",
     "LatencyEventInfo",
+    "MemoryStats",
+    "MemoryStatsDb",
     "MigrateOptions",
     "LexBoundary",
     "Limit",
