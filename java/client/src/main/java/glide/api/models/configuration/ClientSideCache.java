@@ -63,7 +63,7 @@ public class ClientSideCache {
      * When enabled, GLIDE sends CLIENT TRACKING ON BCAST during connection
      * setup and the server sends invalidation messages when tracked keys
      * are modified. Requires RESP3 protocol. Defaults to false.
-    */
+     */
     @Builder.Default private final boolean serverAssisted = false;
 
     /**
