@@ -196,6 +196,18 @@ func (b *StandaloneBatch) ScanWithOptions(cursor int64, scanOptions options.Scan
 //
 // See [valkey.io] for details.
 //
+// Parameters:
+//
+//	host          - The host of the destination Valkey instance.
+//	port          - The port of the destination Valkey instance.
+//	keys          - The keys to migrate. Must contain exactly one key.
+//	destinationDB - The database index on the destination instance.
+//	timeout       - The maximum idle time in milliseconds for the bulk-transfer.
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
+//
 // [valkey.io]: https://valkey.io/commands/migrate/
 func (b *ClusterBatch) Migrate(
 	host string,
@@ -211,9 +223,22 @@ func (b *ClusterBatch) Migrate(
 }
 
 // MigrateWithOptions atomically transfers a key from a source Valkey instance to a destination Valkey
-// instance with additional options. In cluster mode, only a single key is allowed.
+// instance with additional options. Only a single key is allowed.
 //
 // See [valkey.io] for details.
+//
+// Parameters:
+//
+//	host           - The host of the destination Valkey instance.
+//	port           - The port of the destination Valkey instance.
+//	keys           - The keys to migrate. Must contain exactly one key.
+//	destinationDB  - The database index on the destination instance.
+//	timeout        - The maximum idle time in milliseconds for the bulk-transfer.
+//	migrateOptions - Additional options (COPY, REPLACE, AUTH, AUTH2).
+//
+// Command Response:
+//
+//	"OK" on success, or "NOKEY" if the key does not exist.
 //
 // [valkey.io]: https://valkey.io/commands/migrate/
 func (b *ClusterBatch) MigrateWithOptions(
