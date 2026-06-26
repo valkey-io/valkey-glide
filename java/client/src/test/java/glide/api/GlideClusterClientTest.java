@@ -4723,6 +4723,7 @@ public class GlideClusterClientTest {
         assertNull(response.get());
     }
 
+    // TODO #6166: Move to shared tests.
     @SneakyThrows
     @Test
     public void memoryDoctor_returns_success() {

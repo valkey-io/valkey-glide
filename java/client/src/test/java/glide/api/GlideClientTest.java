@@ -16628,6 +16628,7 @@ public class GlideClientTest {
         assertEquals(value, response.get());
     }
 
+    // TODO #6166: Memory command declarations will move to a shared base interface.
     @SneakyThrows
     @Test
     public void memoryDoctor_returns_success() {
