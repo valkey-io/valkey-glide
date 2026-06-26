@@ -14,6 +14,7 @@ import {
     ProtocolVersion,
     GlideSpanContext,
     GlideOpenTelemetryConfig,
+    Script,
 } from "../build-ts";
 import {
     flushAndCloseClient,
@@ -70,6 +71,52 @@ function readAndParseSpanFile(path: string): {
         spans,
         spanNames,
     };
+}
+
+/**
+ * Finds the first span with the given name in a parsed span file and returns
+ * the value of one of its `span_attributes` entries.
+ *
+ * The file exporter serializes attributes as an array of single-key objects,
+ * e.g. `span_attributes: [{ "db.operation.name": "EVALSHA" }, ...]`.
+ *
+ * @param spans - The raw span lines from {@link readAndParseSpanFile}.
+ * @param spanName - The span name to look for (e.g. `"EVALSHA"`).
+ * @param attributeKey - The attribute key to extract (e.g. `"db.operation.name"`).
+ * @returns The attribute value, or `undefined` if the span/attribute is absent.
+ */
+function getSpanAttribute(
+    spans: string[],
+    spanName: string,
+    attributeKey: string,
+): string | undefined {
+    for (const line of spans) {
+        let spanJson: Record<string, unknown>;
+
+        try {
+            spanJson = JSON.parse(line);
+        } catch {
+            continue;
+        }
+
+        if (spanJson.name !== spanName) {
+            continue;
+        }
+
+        const attributes = spanJson.span_attributes;
+
+        if (!Array.isArray(attributes)) {
+            continue;
+        }
+
+        for (const attr of attributes) {
+            if (attr && typeof attr === "object" && attributeKey in attr) {
+                return (attr as Record<string, string>)[attributeKey];
+            }
+        }
+    }
+
+    return undefined;
 }
 
 const TIMEOUT = 50000;
@@ -501,6 +548,137 @@ describe("OpenTelemetry GlideClusterClient", () => {
         },
         TIMEOUT,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test script invocation span_%p`,
+        async (protocol) => {
+            await teardown_otel_test();
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            const script = new Script("return 'OTel script span'");
+            const result = await client.invokeScript(script);
+            expect(result).toEqual("OTel script span");
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            // Read the span file and check that the EVALSHA span was created
+            // with the expected DB semantic convention attributes.
+            const { spans, spanNames } = readAndParseSpanFile(
+                VALID_ENDPOINT_TRACES,
+            );
+
+            expect(spanNames).toContain("EVALSHA");
+            expect(
+                getSpanAttribute(spans, "EVALSHA", "db.operation.name"),
+            ).toBe("EVALSHA");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test script invocation with route span_%p`,
+        async (protocol) => {
+            await teardown_otel_test();
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            const script = new Script("return 'OTel routed script span'");
+            const result = await client.invokeScriptWithRoute(script, {
+                route: "allPrimaries",
+            });
+            expect(result).toBeDefined();
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            // Read the span file and check that the EVALSHA span was created
+            // with the expected DB semantic convention attributes.
+            const { spans, spanNames } = readAndParseSpanFile(
+                VALID_ENDPOINT_TRACES,
+            );
+
+            expect(spanNames).toContain("EVALSHA");
+            expect(
+                getSpanAttribute(spans, "EVALSHA", "db.operation.name"),
+            ).toBe("EVALSHA");
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test script invocation span memory leak_%p`,
+        async (protocol) => {
+            if (global.gc) {
+                global.gc(); // Run garbage collection
+            }
+
+            const startMemory = process.memoryUsage().heapUsed;
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            const script = new Script("return ARGV[1]");
+
+            // Execute many script invocations sequentially - each should
+            // create and clean up its span.
+            for (let i = 0; i < 100; i++) {
+                await client.invokeScript(script, { args: [`value_${i}`] });
+            }
+
+            // Force GC and check memory
+            if (global.gc) {
+                global.gc();
+            }
+
+            const endMemory = process.memoryUsage().heapUsed;
+
+            expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow 10% growth
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClusterClient test failed script invocation still creates span_%p`,
+        async (protocol) => {
+            await teardown_otel_test();
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            // A script that raises an error - the span must still be created
+            // and cleaned up on the error path.
+            const script = new Script("return redis.error_reply('boom')");
+            await expect(client.invokeScript(script)).rejects.toThrow();
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            const { spanNames } = readAndParseSpanFile(VALID_ENDPOINT_TRACES);
+
+            expect(spanNames).toContain("EVALSHA");
+        },
+        TIMEOUT,
+    );
 });
 
 //standalone tests
@@ -565,6 +743,45 @@ describe("OpenTelemetry GlideClient", () => {
             const endMemory = process.memoryUsage().heapUsed;
 
             expect(endMemory).toBeLessThan(startMemory * 1.1); // Allow small fluctuations
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `GlideClient test script invocation span_%p`,
+        async (protocol) => {
+            // OpenTelemetry.init is global per-process and runs in the cluster
+            // describe's beforeAll. Ensure 100% sampling here since the
+            // standalone block does not manage the sample percentage itself.
+            OpenTelemetry.setSamplePercentage(100);
+
+            // Drain any stale spans from previous tests.
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                fs.unlinkSync(VALID_ENDPOINT_TRACES);
+            }
+
+            client = await GlideClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    protocol,
+                ),
+            });
+
+            const script = new Script("return 'OTel standalone script span'");
+            const result = await client.invokeScript(script);
+            expect(result).toEqual("OTel standalone script span");
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            const { spans, spanNames } = readAndParseSpanFile(
+                VALID_ENDPOINT_TRACES,
+            );
+
+            expect(spanNames).toContain("EVALSHA");
+            expect(
+                getSpanAttribute(spans, "EVALSHA", "db.operation.name"),
+            ).toBe("EVALSHA");
         },
         TIMEOUT,
     );
@@ -1063,6 +1280,74 @@ describe("OpenTelemetry parent span context propagation", () => {
 
                 if (spanJson.name === "Set" || spanJson.name === "Get") {
                     expect(spanJson.parent_span_id).toBe("0000000000000000");
+                }
+            }
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "EVALSHA script spans inherit trace_id and parent_span_id from provided context",
+        async () => {
+            const parentTraceId = "0af7651916cd43dd8448eb211c80319c";
+            const parentSpanId = "b7ad6b7169203331";
+            const parentTraceFlags = 1;
+
+            OpenTelemetry.setParentSpanContextProvider(() => ({
+                traceId: parentTraceId,
+                spanId: parentSpanId,
+                traceFlags: parentTraceFlags,
+            }));
+
+            OpenTelemetry.setSamplePercentage(100);
+
+            // Drain any stale spans from previous tests.
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                fs.unlinkSync(VALID_ENDPOINT_TRACES);
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 200));
+
+            if (fs.existsSync(VALID_ENDPOINT_TRACES)) {
+                fs.unlinkSync(VALID_ENDPOINT_TRACES);
+            }
+
+            client = await GlideClusterClient.createClient({
+                ...getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                ),
+            });
+
+            const script = new Script("return 'OTel parent ctx script'");
+            const result = await client.invokeScript(script);
+            expect(result).toEqual("OTel parent ctx script");
+
+            // Wait for spans to be flushed to file
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+            const { spans, spanNames } = readAndParseSpanFile(
+                VALID_ENDPOINT_TRACES,
+            );
+
+            // Verify the EVALSHA span was created
+            expect(spanNames).toContain("EVALSHA");
+
+            // Verify the EVALSHA span inherits the parent trace context
+            for (const line of spans) {
+                let spanJson: Record<string, unknown>;
+
+                try {
+                    spanJson = JSON.parse(line);
+                } catch {
+                    continue;
+                }
+
+                if (spanJson.name === "EVALSHA") {
+                    expect(spanJson.trace_id).toBe(parentTraceId);
+                    expect(spanJson.parent_span_id).toBe(parentSpanId);
+                    expect(spanJson.span_id).toBeDefined();
+                    expect(spanJson.span_id).not.toBe(parentSpanId);
                 }
             }
         },

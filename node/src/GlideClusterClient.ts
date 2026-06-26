@@ -2274,6 +2274,8 @@ export class GlideClusterClient extends BaseClient {
 
         return new Promise<T>((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
+            // Create a span only if OpenTelemetry is enabled and the request is sampled.
+            const spanPtr = this.createCommandSpanPtr("EVALSHA");
             this.promiseCallbackFunctions[callbackIdx] = [
                 resolve,
                 reject,
@@ -2284,6 +2286,7 @@ export class GlideClusterClient extends BaseClient {
                     callbackIdx,
                     scriptInvocation: command,
                     route: this.toProtobufRoute(options?.route),
+                    rootSpanPtr: spanPtr,
                 }),
                 (message: command_request.CommandRequest, writer: Writer) => {
                     command_request.CommandRequest.encodeDelimited(

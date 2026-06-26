@@ -1343,6 +1343,34 @@ export class BaseClient {
         }
     }
 
+    /**
+     * @internal
+     * Creates an OpenTelemetry span for a command if OpenTelemetry is enabled
+     * and the request is selected for sampling. When a parent span context is
+     * available it is propagated so the span is linked to the parent trace.
+     *
+     * @param commandName - The span name (e.g. the request type or `"EVALSHA"`).
+     * @returns A pointer to the created span as a `Long`, or `null` when no span
+     *     was created (OpenTelemetry disabled or request not sampled).
+     */
+    protected createCommandSpanPtr(commandName: string): Long | null {
+        if (!OpenTelemetry.shouldSample()) {
+            return null;
+        }
+
+        const parentCtx = OpenTelemetry.getParentSpanContext();
+        const pair = parentCtx
+            ? createOtelSpanWithTraceContext(
+                  commandName,
+                  parentCtx.traceId,
+                  parentCtx.spanId,
+                  parentCtx.traceFlags,
+                  parentCtx.traceState,
+              )
+            : createLeakedOtelSpan(commandName);
+        return new Long(pair[0], pair[1]);
+    }
+
     private dropCommandSpan(spanPtr: number | Long | null | undefined) {
         if (spanPtr === null || spanPtr === undefined) return;
 
@@ -1494,26 +1522,12 @@ export class BaseClient {
         const route = this.toProtobufRoute(options?.route);
         const callbackIndex = this.getCallbackIndex();
         const basePromise = new Promise<T>((resolve, reject) => {
-            // Create a span only if the OpenTelemetry is enabled and measure statistics only according to the requests percentage configuration
-            let spanPtr: Long | null = null;
-
-            if (OpenTelemetry.shouldSample()) {
-                const commandName =
-                    command instanceof command_request.Command
-                        ? command_request.RequestType[command.requestType]
-                        : "Batch";
-                const parentCtx = OpenTelemetry.getParentSpanContext();
-                const pair = parentCtx
-                    ? createOtelSpanWithTraceContext(
-                          commandName,
-                          parentCtx.traceId,
-                          parentCtx.spanId,
-                          parentCtx.traceFlags,
-                          parentCtx.traceState,
-                      )
-                    : createLeakedOtelSpan(commandName);
-                spanPtr = new Long(pair[0], pair[1]);
-            }
+            // Create a span only if OpenTelemetry is enabled and the request is sampled.
+            const commandName =
+                command instanceof command_request.Command
+                    ? command_request.RequestType[command.requestType]
+                    : "Batch";
+            const spanPtr = this.createCommandSpanPtr(commandName);
 
             this.promiseCallbackFunctions[callbackIndex] = [
                 resolve,
@@ -1659,6 +1673,8 @@ export class BaseClient {
 
         return new Promise<T>((resolve, reject) => {
             const callbackIdx = this.getCallbackIndex();
+            // Create a span only if OpenTelemetry is enabled and the request is sampled.
+            const spanPtr = this.createCommandSpanPtr("EVALSHA");
             this.promiseCallbackFunctions[callbackIdx] = [
                 resolve,
                 reject,
@@ -1668,6 +1684,7 @@ export class BaseClient {
                 new command_request.CommandRequest({
                     callbackIdx,
                     scriptInvocation: command,
+                    rootSpanPtr: spanPtr,
                 }),
                 (message: command_request.CommandRequest, writer: Writer) => {
                     command_request.CommandRequest.encodeDelimited(

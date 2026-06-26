@@ -11,6 +11,7 @@
 
 ### Changes
 
+* Node: Add OpenTelemetry span creation for script invocations (`EVALSHA`) so `invokeScript`/`invokeScriptWithRoute` calls appear in traces with DB semantic convention attributes and respect parent span context ([#5599](https://github.com/valkey-io/valkey-glide/issues/5599))
 * Java: implement MONITOR command ([#6187](https://github.com/valkey-io/valkey-glide/pull/6187))
 * Node: Add GlideMonitorClient for MONITOR command ([#6212](https://github.com/valkey-io/valkey-glide/pull/6212))
 * Python: implement MONITOR command for sync and async clients ([#6132](https://github.com/valkey-io/valkey-glide/pull/6132))
