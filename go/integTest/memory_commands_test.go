@@ -339,14 +339,14 @@ func (suite *GlideTestSuite) assertMemoryStatsFields(result models.MemoryStats) 
 
 	// Optional Valkey 8.0+ fields
 	if suite.serverVersion >= "8.0.0" {
-		assert.NotNil(t, result.AllocatorMuzzy)
-		assert.NotNil(t, result.OverheadDbHashtableLut)
-		assert.NotNil(t, result.OverheadDbHashtableRehashing)
-		assert.NotNil(t, result.DbDictRehashingCount)
+		assert.False(t, result.AllocatorMuzzy.IsNil())
+		assert.False(t, result.OverheadDbHashtableLut.IsNil())
+		assert.False(t, result.OverheadDbHashtableRehashing.IsNil())
+		assert.False(t, result.DbDictRehashingCount.IsNil())
 	} else {
-		assert.Nil(t, result.AllocatorMuzzy)
-		assert.Nil(t, result.OverheadDbHashtableLut)
-		assert.Nil(t, result.OverheadDbHashtableRehashing)
-		assert.Nil(t, result.DbDictRehashingCount)
+		assert.True(t, result.AllocatorMuzzy.IsNil())
+		assert.True(t, result.OverheadDbHashtableLut.IsNil())
+		assert.True(t, result.OverheadDbHashtableRehashing.IsNil())
+		assert.True(t, result.DbDictRehashingCount.IsNil())
 	}
 }
