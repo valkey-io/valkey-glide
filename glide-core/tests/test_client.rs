@@ -40,6 +40,15 @@ pub(crate) mod shared_client_tests {
     use utilities::cluster::*;
     use utilities::*;
 
+    /// Explicit pipeline timeout (in milliseconds) used by pipeline tests.
+    ///
+    /// These pipelines include commands that route to all primary nodes (e.g.
+    /// `FLUSHALL`, `DBSIZE`). Under CI load (many tests running in parallel
+    /// against a shared server) these multi-node operations can exceed the
+    /// `DEFAULT_RESPONSE_TIMEOUT` (250ms), causing flaky timeouts. A higher,
+    /// explicit timeout keeps these tests stable without affecting behaviour.
+    const PIPELINE_TEST_TIMEOUT_MS: u32 = 10_000;
+
     #[cfg(feature = "iam_tests")]
     use glide_core::connection_request::{
         AuthenticationInfo, IamCredentials, ServiceType, TlsMode,
@@ -1658,7 +1667,7 @@ pub(crate) mod shared_client_tests {
                     &pipeline,
                     None,
                     false,
-                    Some(10_000),
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
                     PipelineRetryStrategy {
                         retry_server_error: true,
                         retry_connection_error: false,
@@ -1722,7 +1731,7 @@ pub(crate) mod shared_client_tests {
                     &pipeline,
                     None,
                     raise_error,
-                    Some(10_000),
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
                     PipelineRetryStrategy {
                         retry_server_error: true,
                         retry_connection_error: false,
@@ -1796,7 +1805,7 @@ pub(crate) mod shared_client_tests {
                     &pipeline,
                     None,
                     false,
-                    Some(10_000),
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
                     PipelineRetryStrategy {
                         retry_server_error: true,
                         retry_connection_error: false,
@@ -2255,7 +2264,7 @@ pub(crate) mod shared_client_tests {
                     &pipeline,
                     None,
                     false,
-                    Some(10_000),
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
                     PipelineRetryStrategy {
                         retry_server_error: true,
                         retry_connection_error: false,
@@ -2299,7 +2308,7 @@ pub(crate) mod shared_client_tests {
                     &pipeline,
                     None,
                     false,
-                    Some(10_000),
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
                     PipelineRetryStrategy {
                         retry_server_error: true,
                         retry_connection_error: false,
@@ -2342,15 +2351,14 @@ pub(crate) mod shared_client_tests {
             pipeline.add_command(cmd("FLUSHALL"));
             pipeline.add_command(cmd("DBSIZE")); // AllPrimary cmd + SUM aggregation
 
-            // Execute the pipeline with an explicit timeout to avoid flakiness
-            // under CI load (multi-node routing can exceed default 250ms timeout).
+            // Execute the pipeline.
             let result = test_basics
                 .client
                 .send_pipeline(
                     &pipeline,
                     None,
                     false,
-                    Some(10_000),
+                    Some(PIPELINE_TEST_TIMEOUT_MS),
                     PipelineRetryStrategy {
                         retry_server_error: true,
                         retry_connection_error: false,
@@ -2407,7 +2415,7 @@ pub(crate) mod shared_client_tests {
                         &pipeline,
                         None,
                         false,
-                        Some(10_000),
+                        Some(PIPELINE_TEST_TIMEOUT_MS),
                         PipelineRetryStrategy {
                             retry_server_error: false,
                             retry_connection_error: false,
