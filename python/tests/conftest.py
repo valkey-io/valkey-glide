@@ -156,19 +156,20 @@ def create_clusters(tls, load_module, cluster_endpoints, standalone_endpoints):
             addresses=standalone_endpoints,
         )
 
-    pytest.valkey_tls_cluster = ValkeyCluster(
-        tls=True,
-        cluster_mode=True,
-        load_module=load_module,
-        replica_count=2,
-    )
-    pytest.standalone_tls_cluster = ValkeyCluster(
-        tls=True,
-        cluster_mode=False,
-        shard_count=1,
-        replica_count=1,
-        load_module=load_module,
-    )
+    if not (cluster_endpoints or standalone_endpoints):
+        pytest.valkey_tls_cluster = ValkeyCluster(
+            tls=True,
+            cluster_mode=True,
+            load_module=load_module,
+            replica_count=2,
+        )
+        pytest.standalone_tls_cluster = ValkeyCluster(
+            tls=True,
+            cluster_mode=False,
+            shard_count=1,
+            replica_count=1,
+            load_module=load_module,
+        )
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -231,6 +232,23 @@ def pytest_collection_modifyitems(config, items):
         if config.getoption("--cluster-endpoints") or config.getoption(
             "--standalone-endpoints"
         ):
+            # DNS tests always require internally-created TLS clusters with
+            # specific hostname configs — skip with any external endpoints.
+            if "dns" in item.nodeid:
+                item.add_marker(
+                    pytest.mark.skip(reason="DNS tests require internal cluster setup")
+                )
+                continue
+
+            # TLS tests need TLS clusters — skip only when --tls is not set.
+            if "tls" in item.nodeid and not config.getoption("--tls"):
+                item.add_marker(
+                    pytest.mark.skip(
+                        reason="TLS tests skipped: external endpoints provided without --tls"
+                    )
+                )
+                continue
+
             if "cluster_mode" in item.fixturenames:
                 cluster_mode_value = item.callspec.params.get("cluster_mode", None)
                 if cluster_mode_value is True and not config.getoption(

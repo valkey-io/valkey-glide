@@ -1,10 +1,13 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+import os
+import threading
 import time
 from typing import Generator, List, Optional
 
 import pytest
 from glide_shared.cache import ClientSideCache
+from glide_shared.commands.batch import Batch, ClusterBatch
 from glide_shared.config import (
     BackoffStrategy,
     GlideClientConfiguration,
@@ -42,22 +45,111 @@ MAX_BACKOFF_TIME = 8  # seconds
 Logger.set_logger_config(DEFAULT_SYNC_TEST_LOG_LEVEL)
 
 
+# Client pool keyed by (worker_id, cluster_mode, protocol) to avoid per-test
+# connection overhead. xdist-safe via worker_id prefix.
+_sync_client_pool: dict = {}
+_sync_client_pool_lock = threading.Lock()
+
+
+def _get_worker_id() -> str:
+    """Get the xdist worker id, or 'main' if not running under xdist."""
+    return os.environ.get("PYTEST_XDIST_WORKER", "main")
+
+
+def _client_is_usable(client) -> bool:
+    """Check if a pooled client's FFI handle is still valid (not closed/freed).
+
+    Accesses internals: _is_closed, _core_client, _ffi.NULL.
+    These are stable attributes unlikely to change, but grouped here for clarity.
+    """
+    if (
+        client is None
+    ):  # First call before any client has been created for this pool key
+        return False
+    return (
+        not client._is_closed
+        and client._core_client is not None
+        and client._core_client != client._ffi.NULL
+    )
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Close all pooled clients at end of test session to prevent fd leaks."""
+    with _sync_client_pool_lock:
+        clients = list(_sync_client_pool.values())
+        _sync_client_pool.clear()
+    for client in clients:
+        if _client_is_usable(client):
+            try:
+                client.close()
+            except Exception:
+                pass
+
+
+def _pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> None:
+    """Reset server state after a test. Evicts client from pool on failure."""
+    if not _client_is_usable(client):
+        return
+    try:
+        # TODO #6144: replace custom_command with typed methods once available
+        # TODO #6166: use typed CONFIG SET and FLUSHALL once available
+        batch = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        batch.custom_command(["CLIENT", "UNPAUSE"])
+        batch.custom_command(["CONFIG", "SET", "timeout", "0"])
+        if not cluster_mode:
+            batch.custom_command(["SELECT", "0"])
+        batch.custom_command(["FLUSHALL", "ASYNC"])
+        client.exec(batch, raise_on_error=True)
+    except Exception:
+        try:
+            client.close()
+        except Exception:
+            pass
+        with _sync_client_pool_lock:
+            _sync_client_pool.pop(cache_key, None)
+
+
 @pytest.fixture(scope="function")
 def glide_sync_client(
     request,
     cluster_mode: bool,
     protocol: ProtocolVersion,
 ) -> Generator[TSyncGlideClient, None, None]:
-    "Get sync socket client for tests"
-    client = create_sync_client(
-        request,
-        cluster_mode,
-        protocol=protocol,
-        request_timeout=5000,
-    )
+    """Get sync socket client for tests. Reuses connections with auto-recovery.
+
+    xdist-safe: pool is keyed per worker to avoid cross-worker races.
+    """
+    cache_key = (_get_worker_id(), cluster_mode, protocol)
+    with _sync_client_pool_lock:
+        client = _sync_client_pool.get(cache_key)
+    needs_new = not _client_is_usable(client)
+
+    if not needs_new:
+        try:
+            # TODO #6144: replace with client.ping() once moved to base class
+            client.custom_command(["PING"])
+        except Exception:
+            try:
+                client.close()
+            except Exception:
+                pass
+            needs_new = True
+
+    if needs_new:
+        client = create_sync_client(
+            request,
+            cluster_mode,
+            protocol=protocol,
+            request_timeout=5000,
+        )
+        with _sync_client_pool_lock:
+            _sync_client_pool[cache_key] = client
+
     yield client
-    sync_test_teardown(request, cluster_mode, protocol)
-    client.close()
+
+    _pool_teardown(client, cluster_mode, cache_key)
 
 
 @pytest.fixture(scope="function")
