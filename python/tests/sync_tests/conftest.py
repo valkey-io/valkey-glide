@@ -62,7 +62,9 @@ def _client_is_usable(client) -> bool:
     Accesses internals: _is_closed, _core_client, _ffi.NULL.
     These are stable attributes unlikely to change, but grouped here for clarity.
     """
-    if client is None:
+    if (
+        client is None
+    ):  # First call before any client has been created for this pool key
         return False
     return (
         not client._is_closed
@@ -89,6 +91,8 @@ def _pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> None:
     if not _client_is_usable(client):
         return
     try:
+        # TODO #6144: replace custom_command with typed methods once available
+        # TODO #6166: use typed CONFIG SET and FLUSHALL once available
         batch = (
             ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
         )
@@ -124,6 +128,7 @@ def glide_sync_client(
 
     if not needs_new:
         try:
+            # TODO #6144: replace with client.ping() once moved to base class
             client.custom_command(["PING"])
         except Exception:
             try:

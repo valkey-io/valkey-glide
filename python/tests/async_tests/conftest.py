@@ -65,7 +65,7 @@ def _rebind_client_to_current_loop(client: TGlideClient) -> None:
     test function. General users should create a new client per event loop instead.
 
     Internals accessed: _loop, _is_asyncio, _setup_pipe()
-    If these change, the PING health check below will fail loudly.
+    If these change, the PING health check in _client_is_usable() will fail loudly.
     """
     client._loop = asyncio.get_running_loop()
     client._is_asyncio = True
@@ -78,7 +78,9 @@ def _client_is_usable(client: Optional[TGlideClient]) -> bool:
     Accesses internals: _is_closed, _core_client, _ffi.NULL.
     These are stable attributes unlikely to change, but grouped here for clarity.
     """
-    if client is None:
+    if (
+        client is None
+    ):  # First call before any client has been created for this pool key
         return False
     return (
         not client._is_closed
@@ -126,6 +128,7 @@ async def glide_client(
         # a new loop per test). See _rebind_client_to_current_loop docstring.
         try:
             _rebind_client_to_current_loop(client)
+            # TODO #6144: replace with client.ping() once moved to base class
             await client.custom_command(["PING"])
         except Exception:
             needs_new = True
@@ -144,24 +147,30 @@ async def glide_client(
     yield client
 
     # Post-test: restore server and client state for the next test.
-    if _client_is_usable(client):
-        try:
-            # Pipeline all teardown commands in a single round-trip
-            batch = (
-                ClusterBatch(is_atomic=False)
-                if cluster_mode
-                else Batch(is_atomic=False)
-            )
-            batch.custom_command(["CLIENT", "UNPAUSE"])
-            batch.custom_command(["CONFIG", "SET", "timeout", "0"])
-            if not cluster_mode:
-                batch.custom_command(["SELECT", "0"])
-            batch.custom_command(["FLUSHALL", "ASYNC"])
-            await client.exec(batch, raise_on_error=True)
-        except Exception:
-            # Client is dead — will be recreated next test
-            with _client_pool_lock:
-                _client_pool.pop(cache_key, None)
+    await _async_pool_teardown(client, cluster_mode, cache_key)
+
+
+async def _async_pool_teardown(client, cluster_mode: bool, cache_key: tuple) -> None:
+    """Reset server state after a test. Evicts client from pool on failure."""
+    if not _client_is_usable(client):
+        return
+    try:
+        # Pipeline all teardown commands in a single round-trip
+        # TODO #6144: replace custom_command with typed methods once available
+        # TODO #6166: use typed CONFIG SET and FLUSHALL once available
+        batch = (
+            ClusterBatch(is_atomic=False) if cluster_mode else Batch(is_atomic=False)
+        )
+        batch.custom_command(["CLIENT", "UNPAUSE"])
+        batch.custom_command(["CONFIG", "SET", "timeout", "0"])
+        if not cluster_mode:
+            batch.custom_command(["SELECT", "0"])
+        batch.custom_command(["FLUSHALL", "ASYNC"])
+        await client.exec(batch, raise_on_error=True)
+    except Exception:
+        # Client is dead — will be recreated next test
+        with _client_pool_lock:
+            _client_pool.pop(cache_key, None)
 
 
 @pytest.fixture(scope="function")
