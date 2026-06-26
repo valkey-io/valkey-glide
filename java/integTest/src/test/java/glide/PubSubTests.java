@@ -420,11 +420,11 @@ public class PubSubTests {
                     MESSAGE_DELIVERY_DELAY,
                     "Timed out waiting for " + expectedCount + " callback messages");
         } else {
-            // For Async/Sync modes, poll until first message is available
+            // For Async/Sync modes, poll until all expected messages are buffered
             waitForCondition(
-                    () -> listener.getPubSubMessage().isDone(),
+                    () -> listener.getPubSubMessageCount() >= expectedCount,
                     MESSAGE_DELIVERY_DELAY,
-                    "Timed out waiting for messages to be delivered");
+                    "Timed out waiting for " + expectedCount + " messages to be delivered");
         }
         verifyReceivedPubsubMessages(pubsubMessages, listener, method);
     }
@@ -883,10 +883,16 @@ public class PubSubTests {
                     listenerExactSub,
                     method);
         } else {
+            long exactExpected = messages.stream().filter(m -> !m.getPattern().isPresent()).count();
+            long patternExpected = messages.stream().filter(m -> m.getPattern().isPresent()).count();
             waitForCondition(
-                    () -> listenerExactSub.getPubSubMessage().isDone(),
+                    () -> listenerExactSub.getPubSubMessageCount() >= exactExpected,
                     MESSAGE_DELIVERY_DELAY,
-                    "Timed out waiting for messages");
+                    "Timed out waiting for exact messages");
+            waitForCondition(
+                    () -> listenerPatternSub.getPubSubMessageCount() >= patternExpected,
+                    MESSAGE_DELIVERY_DELAY,
+                    "Timed out waiting for pattern messages");
             verifyReceivedPubsubMessages(
                     messages.stream()
                             .filter(m -> !m.getPattern().isPresent())
@@ -1027,9 +1033,9 @@ public class PubSubTests {
         messages.addAll(shardedMessages);
 
         waitForCondition(
-                () -> listener.getPubSubMessage().isDone(),
+                () -> listener.getPubSubMessageCount() >= messages.size(),
                 MESSAGE_DELIVERY_DELAY,
-                "Timed out waiting for messages to be delivered");
+                "Timed out waiting for " + messages.size() + " messages to be delivered");
 
         LinkedHashSet<PubSubMessage> received = new LinkedHashSet<PubSubMessage>(messages.size());
         Random rand = new Random();
@@ -1161,9 +1167,17 @@ public class PubSubTests {
             verifyReceivedPubsubMessages(expected, listenerExact, method);
         } else {
             waitForCondition(
-                    () -> listenerExact.getPubSubMessage().isDone(),
+                    () -> listenerExact.getPubSubMessageCount() >= exactMessages.size(),
                     MESSAGE_DELIVERY_DELAY,
-                    "Timed out waiting for messages");
+                    "Timed out waiting for exact messages");
+            waitForCondition(
+                    () -> listenerPattern.getPubSubMessageCount() >= patternMessages.size(),
+                    MESSAGE_DELIVERY_DELAY,
+                    "Timed out waiting for pattern messages");
+            waitForCondition(
+                    () -> listenerSharded.getPubSubMessageCount() >= shardedMessages.size(),
+                    MESSAGE_DELIVERY_DELAY,
+                    "Timed out waiting for sharded messages");
             verifyReceivedPubsubMessages(
                     exactMessages.stream()
                             .map(m -> Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), m))
@@ -1268,9 +1282,17 @@ public class PubSubTests {
             verifyReceivedPubsubMessages(expected, listenerExact, method);
         } else {
             waitForCondition(
-                    () -> listenerExact.getPubSubMessage().isDone(),
+                    () -> listenerExact.getPubSubMessageCount() >= 2,
                     MESSAGE_DELIVERY_DELAY,
-                    "Timed out waiting for messages");
+                    "Timed out waiting for exact messages");
+            waitForCondition(
+                    () -> listenerPattern.getPubSubMessageCount() >= 2,
+                    MESSAGE_DELIVERY_DELAY,
+                    "Timed out waiting for pattern messages");
+            waitForCondition(
+                    () -> listenerSharded.getPubSubMessageCount() >= 1,
+                    MESSAGE_DELIVERY_DELAY,
+                    "Timed out waiting for sharded messages");
             verifyReceivedPubsubMessages(
                     new HashSet<Pair<Integer, PubSubMessage>>(
                             Arrays.asList(
@@ -1410,7 +1432,7 @@ public class PubSubTests {
 
         // Allow the message to propagate.
         waitForCondition(
-                () -> listener.getPubSubMessage().isDone(),
+                () -> listener.getPubSubMessageCount() >= 2,
                 MESSAGE_DELIVERY_DELAY,
                 "Timed out waiting for messages to be delivered");
 
@@ -1452,7 +1474,7 @@ public class PubSubTests {
 
         // Allow the message to propagate.
         waitForCondition(
-                () -> listener.getPubSubMessage().isDone(),
+                () -> listener.getPubSubMessageCount() >= 2,
                 MESSAGE_DELIVERY_DELAY,
                 "Timed out waiting for messages to be delivered");
 
@@ -2811,7 +2833,7 @@ public class PubSubTests {
             // Publish and verify message received
             publisher.publish(channel, "test_message").get();
             waitForCondition(
-                    () -> client.getPubSubMessage().isDone(),
+                    () -> client.getPubSubMessageCount() >= 1,
                     MESSAGE_DELIVERY_DELAY,
                     "Timed out waiting for message in standalone timeout test");
         } finally {
@@ -2840,7 +2862,7 @@ public class PubSubTests {
             // Publish and verify message received
             publisher.publish(channel, "test_message").get();
             waitForCondition(
-                    () -> client.getPubSubMessage().isDone(),
+                    () -> client.getPubSubMessageCount() >= 1,
                     MESSAGE_DELIVERY_DELAY,
                     "Timed out waiting for message in cluster timeout test");
         } finally {
@@ -2884,7 +2906,7 @@ public class PubSubTests {
             publisher.publish(channel1, "message1", true).get();
             publisher.publish(channel2, "message2", true).get();
             waitForCondition(
-                    () -> client.getPubSubMessage().isDone(),
+                    () -> client.getPubSubMessageCount() >= 2,
                     MESSAGE_DELIVERY_DELAY,
                     "Timed out waiting for messages in different slots test");
         } finally {

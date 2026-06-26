@@ -8,7 +8,6 @@ import (
 
 func (suite *GlideTestSuite) TestGetStatistics() {
 	client := suite.defaultClient()
-	defer client.Close()
 
 	stats := client.GetStatistics()
 
@@ -39,7 +38,6 @@ func (suite *GlideTestSuite) TestGetStatistics() {
 
 func (suite *GlideTestSuite) TestGetStatisticsCluster() {
 	client := suite.defaultClusterClient()
-	defer client.Close()
 
 	stats := client.GetStatistics()
 
