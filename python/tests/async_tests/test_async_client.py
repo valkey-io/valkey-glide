@@ -1028,7 +1028,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_client_tracking_info_off(self, glide_client: TGlideClient):
+    async def test_client_tracking_info_cache_off(self, glide_client: TGlideClient):
         info = await glide_client.client_tracking_info()
         assert isinstance(info, ClientTrackingInfo)
         assert_client_tracking_info(info, on=False)
@@ -1040,7 +1040,7 @@ class TestCommands:
                 assert_client_tracking_info(node_info, on=False)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_client_tracking_info_on(self, request, cluster_mode):
+    async def test_client_tracking_info_cache_on(self, request, cluster_mode):
         cache = build_client_side_cache(server_assisted=True)
         client = await create_client(
             request,

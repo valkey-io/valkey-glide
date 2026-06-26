@@ -4594,7 +4594,7 @@ public class CommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientTrackingInfo_off_with_multi_node_route(GlideClusterClient clusterClient) {
+    public void clientTrackingInfo_cache_off_with_multi_node_route(GlideClusterClient clusterClient) {
         ClusterValue<Map<String, Object>> multiInfo =
                 clusterClient.clientTrackingInfo(ALL_PRIMARIES).get();
         for (Map<String, Object> nodeInfo : multiInfo.getMultiValue().values()) {

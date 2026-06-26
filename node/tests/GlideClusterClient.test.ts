@@ -3543,7 +3543,7 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientTrackingInfo_off default route_%p",
+        "clientTrackingInfo with cache off and default route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -3556,7 +3556,7 @@ describe("GlideClusterClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientTrackingInfo_off multi-node route_%p",
+        "clientTrackingInfo with cache off and multi-node route_%p",
         async (protocol) => {
             client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -3575,7 +3575,7 @@ describe("GlideClusterClient", () => {
     );
 
     it(
-        "clientTrackingInfo_on default route",
+        "clientTrackingInfo with cache on and default route",
         async () => {
             const cache = new ClientSideCache({
                 maxCacheKb: 1,

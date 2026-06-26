@@ -1273,7 +1273,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_RandomNode() {
 	}
 }
 
-func (suite *GlideTestSuite) TestClientTrackingInfo_Off_Cluster() {
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOff_Cluster() {
 	client := suite.defaultClusterClient()
 	t := suite.T()
 	ctx := context.Background()
@@ -1294,7 +1294,7 @@ func (suite *GlideTestSuite) TestClientTrackingInfo_Off_Cluster() {
 	}
 }
 
-func (suite *GlideTestSuite) TestClientTrackingInfo_On_Cluster() {
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOn_Cluster() {
 	t := suite.T()
 	ctx := context.Background()
 

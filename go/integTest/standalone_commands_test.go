@@ -842,7 +842,7 @@ func (suite *GlideTestSuite) TestLolwutWithOptions_Version9_FourParams() {
 	}
 }
 
-func (suite *GlideTestSuite) TestClientTrackingInfo_Off() {
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOff() {
 	client := suite.defaultClient()
 	ctx := context.Background()
 
@@ -851,7 +851,7 @@ func (suite *GlideTestSuite) TestClientTrackingInfo_Off() {
 	assertClientTrackingInfo(suite.T(), info, false)
 }
 
-func (suite *GlideTestSuite) TestClientTrackingInfo_On() {
+func (suite *GlideTestSuite) TestClientTrackingInfo_CacheOn() {
 	cache, err := config.NewClientSideCache(defaultTestCacheKb, defaultTestTtlMs)
 	require.NoError(suite.T(), err)
 	cache.WithServerAssisted(true)

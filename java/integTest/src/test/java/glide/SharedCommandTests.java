@@ -18730,11 +18730,10 @@ public class SharedCommandTests {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     @SneakyThrows
-    public void clientTrackingInfo_off(BaseClient client) {
+    public void clientTrackingInfo_cache_off(BaseClient client) {
 
         // TODO #6144: simplify once clientTrackingInfo is moved to base class
         Map<String, Object> info =
@@ -18748,7 +18747,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = true)
     @MethodSource("glide.TestSources#serverAssistedCacheClients")
     @SneakyThrows
-    public void clientTrackingInfo_on(BaseClient client) {
+    public void clientTrackingInfo_cache_on(BaseClient client) {
 
         // TODO #6144: simplify once clientTrackingInfo is moved to base class
         Map<String, Object> info =

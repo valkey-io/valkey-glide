@@ -2358,7 +2358,7 @@ describe("GlideClient", () => {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "clientTrackingInfo_off_%p",
+        "clientTrackingInfo_cacheOff_%p",
         async (protocol) => {
             client = await GlideClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
@@ -2370,7 +2370,7 @@ describe("GlideClient", () => {
     );
 
     it(
-        "clientTrackingInfo_on",
+        "clientTrackingInfo_cacheOn",
         async () => {
             const cache = new ClientSideCache({
                 maxCacheKb: 1,
