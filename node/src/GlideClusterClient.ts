@@ -20,6 +20,7 @@ import {
     GlideString,
     PubSubMsg,
     convertGlideRecordToRecord,
+    isGlideRecord,
 } from "./BaseClient";
 import { ClusterBatch } from "./Batch";
 import {
@@ -35,6 +36,7 @@ import {
     LatencyEntry,
     LatencyEventInfo,
     LolwutOptions,
+    MemoryStats,
     createClientGetName,
     createClientId,
     createClientPause,
@@ -65,6 +67,13 @@ import {
     createLatencyLatest,
     createLatencyReset,
     createLolwut,
+    createMemoryDoctor,
+    createMemoryMallocStats,
+    createMemoryPurge,
+    createMemoryStats,
+    parseLatencyHistoryResponse,
+    parseLatencyLatestResponse,
+    parseMemoryStatsResponse,
     createSave,
     createBgSave,
     createBgRewriteAof,
@@ -360,6 +369,37 @@ function convertClusterGlideRecord<T>(
         ? (res as T)
         : convertGlideRecordToRecord(res as GlideRecord<T>);
 }
+
+/**
+ * Converts a cluster response by applying a transform function to each node's raw value.
+ * Handles both single-node and multi-node routing automatically.
+ *
+ * @param res - Raw response from Glide core.
+ * @param isSingleNode - Whether the response is from a single node.
+ * @param transform - A function that transforms the raw value into the desired type.
+ * @returns Transformed single value or a record mapping node addresses to transformed values.
+ */
+function convertAndParseClusterResponse<TRaw, TParsed>(
+    res: ClusterGlideRecord<TRaw>,
+    isSingleNode: boolean,
+    transform: (raw: TRaw) => TParsed,
+): ClusterResponse<TParsed> {
+    if (isSingleNode) {
+        return transform(res as TRaw);
+    }
+
+    const record = convertGlideRecordToRecord(
+        res as GlideRecord<TRaw>,
+    ) as Record<string, TRaw>;
+    const result: Record<string, TParsed> = {};
+
+    for (const [node, raw] of Object.entries(record)) {
+        result[node] = transform(raw);
+    }
+
+    return result;
+}
+
 /**
  * Routing configuration for commands based on a specific slot ID in a Valkey cluster.
  *
@@ -1897,22 +1937,13 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise<ClusterGlideRecord<unknown[]>>(
             createLatencyHistory(event),
             options,
-        ).then((res) => {
-            if (isSingleNodeRoute(false, options?.route)) {
-                return this.parseLatencyHistoryResponse(res as unknown[]);
-            }
-
-            const record = convertGlideRecordToRecord(
-                res as GlideRecord<unknown[]>,
-            ) as Record<string, unknown[]>;
-            const result: Record<string, LatencyEntry[]> = {};
-
-            for (const [node, entries] of Object.entries(record)) {
-                result[node] = this.parseLatencyHistoryResponse(entries);
-            }
-
-            return result;
-        });
+        ).then((res) =>
+            convertAndParseClusterResponse(
+                res,
+                isSingleNodeRoute(false, options?.route),
+                (raw) => parseLatencyHistoryResponse(raw as unknown[]),
+            ),
+        );
     }
 
     /**
@@ -1937,22 +1968,13 @@ export class GlideClusterClient extends BaseClient {
         return this.createWritePromise<ClusterGlideRecord<unknown[]>>(
             createLatencyLatest(),
             options,
-        ).then((res) => {
-            if (isSingleNodeRoute(false, options?.route)) {
-                return this.parseLatencyLatestResponse(res as unknown[]);
-            }
-
-            const record = convertGlideRecordToRecord(
-                res as GlideRecord<unknown[]>,
-            ) as Record<string, unknown[]>;
-            const result: Record<string, LatencyEventInfo[]> = {};
-
-            for (const [node, entries] of Object.entries(record)) {
-                result[node] = this.parseLatencyLatestResponse(entries);
-            }
-
-            return result;
-        });
+        ).then((res) =>
+            convertAndParseClusterResponse(
+                res,
+                isSingleNodeRoute(false, options?.route),
+                (raw) => parseLatencyLatestResponse(raw as unknown[]),
+            ),
+        );
     }
 
     /**
@@ -2506,6 +2528,118 @@ export class GlideClusterClient extends BaseClient {
         );
         return this.parseGetSubscriptionsResponse<GlideClusterClientConfiguration.PubSubChannelModes>(
             response,
+        );
+    }
+
+    // TODO #6166: move to shared base once server management refactor lands
+
+    /**
+     * Returns a report about memory problems detected by the server.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-doctor/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns A {@link ClusterResponse} containing the memory diagnostic report string(s).
+     *
+     * @example
+     * ```typescript
+     * const report = await client.memoryDoctor();
+     * // report is Record<string, string> (multi-node) or string (single-node)
+     * ```
+     */
+    public async memoryDoctor(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createMemoryDoctor(),
+            { decoder: Decoder.String, ...options },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Returns the internal statistics of the memory allocator.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-malloc-stats/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns A {@link ClusterResponse} containing the memory allocator statistics string(s).
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryMallocStats();
+     * // stats is Record<string, string> (multi-node) or string (single-node)
+     * ```
+     */
+    public async memoryMallocStats(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<string>> {
+        return this.createWritePromise<ClusterGlideRecord<string>>(
+            createMemoryMallocStats(),
+            { decoder: Decoder.String, ...options },
+        ).then((res) => convertClusterGlideRecord(res, false, options?.route));
+    }
+
+    /**
+     * Asks the server to reclaim memory from the allocator back to the operating system.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-purge/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns `"OK"`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.memoryPurge();
+     * console.log(result); // Output: 'OK'
+     * ```
+     */
+    public async memoryPurge(options?: RouteOption): Promise<"OK"> {
+        return this.createWritePromise(createMemoryPurge(), {
+            decoder: Decoder.String,
+            ...options,
+        });
+    }
+
+    /**
+     * Returns detailed memory consumption statistics of the server.
+     *
+     * The command will be routed to all primary nodes, unless `route` is provided.
+     *
+     * @see {@link https://valkey.io/commands/memory-stats/|valkey.io} for details.
+     *
+     * @param options - (Optional) See {@link RouteOption} to specify the route to override the default.
+     * @returns A {@link ClusterResponse} containing {@link MemoryStats} object(s).
+     *
+     * @example
+     * ```typescript
+     * const stats = await client.memoryStats();
+     * // stats is Record<string, MemoryStats> (multi-node) or MemoryStats (single-node)
+     * ```
+     */
+    public async memoryStats(
+        options?: RouteOption,
+    ): Promise<ClusterResponse<MemoryStats>> {
+        return this.createWritePromise<
+            ClusterGlideRecord<Record<string, unknown>>
+        >(createMemoryStats(), options).then((res) =>
+            convertAndParseClusterResponse(
+                res,
+                isSingleNodeRoute(false, options?.route),
+                (raw) =>
+                    parseMemoryStatsResponse(
+                        isGlideRecord(raw)
+                            ? (convertGlideRecordToRecord(
+                                  raw as unknown as GlideRecord<unknown>,
+                              ) as Record<string, unknown>)
+                            : (raw as Record<string, unknown>),
+                    ),
+            ),
         );
     }
 }

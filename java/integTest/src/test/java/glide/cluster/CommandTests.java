@@ -7,6 +7,8 @@ import static glide.TestUtilities.BGSAVE_NOT_CANCELLED_RESPONSE;
 import static glide.TestUtilities.BGSAVE_RESPONSES;
 import static glide.TestUtilities.PRIMARY_SLOT_ROUTE;
 import static glide.TestUtilities.assertDeepEquals;
+import static glide.TestUtilities.assertMemoryStatsDbEntry;
+import static glide.TestUtilities.assertMemoryStatsFields;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionListResponseBinary;
 import static glide.TestUtilities.checkFunctionStatsBinaryResponse;
@@ -71,8 +73,6 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.ScriptOptions;
@@ -951,36 +951,36 @@ public class CommandTests {
         triggerLatencySpike(clusterClient);
 
         // Multi-node route (default).
-        ClusterValue<LatencyEntry[]> multiCommand = clusterClient.latencyHistory("command").get();
+        ClusterValue<Object[][]> multiCommand = clusterClient.latencyHistory("command").get();
         assertTrue(multiCommand.hasMultiData());
 
-        for (LatencyEntry[] multiCommandEntries : multiCommand.getMultiValue().values()) {
+        for (Object[][] multiCommandEntries : multiCommand.getMultiValue().values()) {
             assertTrue(multiCommandEntries.length > 0);
 
-            for (LatencyEntry entry : multiCommandEntries) {
-                assertTrue(entry.getTime() >= beforeSpike);
-                assertTrue(entry.getLatency() > 0);
+            for (Object[] entry : multiCommandEntries) {
+                assertTrue((Long) entry[0] >= beforeSpike);
+                assertTrue((Long) entry[1] > 0);
             }
         }
 
         // Single-node route (primary)
-        ClusterValue<LatencyEntry[]> single =
+        ClusterValue<Object[][]> single =
                 clusterClient.latencyHistory("command", PRIMARY_SLOT_ROUTE).get();
         assertTrue(single.hasSingleData());
 
-        LatencyEntry[] entries = single.getSingleValue();
+        Object[][] entries = single.getSingleValue();
         assertTrue(entries.length > 0);
 
-        for (LatencyEntry entry : entries) {
-            assertTrue(entry.getTime() >= beforeSpike);
-            assertTrue(entry.getLatency() > 0);
+        for (Object[] entry : entries) {
+            assertTrue((Long) entry[0] >= beforeSpike);
+            assertTrue((Long) entry[1] > 0);
         }
 
         // Non-existent event.
-        ClusterValue<LatencyEntry[]> multiUnknown = clusterClient.latencyHistory("nonexistent").get();
+        ClusterValue<Object[][]> multiUnknown = clusterClient.latencyHistory("nonexistent").get();
         assertTrue(multiUnknown.hasMultiData());
 
-        for (LatencyEntry[] multiUnknownEntries : multiUnknown.getMultiValue().values()) {
+        for (Object[][] multiUnknownEntries : multiUnknown.getMultiValue().values()) {
             assertEquals(0, multiUnknownEntries.length);
         }
     }
@@ -992,31 +992,31 @@ public class CommandTests {
         long beforeSpike = getUnixSeconds(clusterClient);
         triggerLatencySpike(clusterClient);
 
-        ClusterValue<LatencyEventInfo[]> result = clusterClient.latencyLatest().get();
+        ClusterValue<Object[][]> result = clusterClient.latencyLatest().get();
         assertTrue(result.hasMultiData());
 
         // Find the "command" event on any node
-        LatencyEventInfo commandInfo =
-                flattenLatencyEventInfos(result).stream()
-                        .filter(info -> "command".equals(info.getEventName()))
+        Object[] commandInfo =
+                flattenArrayofArrays(result).stream()
+                        .filter(info -> "command".equals(info[0]))
                         .findFirst()
                         .orElse(null);
         assertNotNull(commandInfo);
 
-        assertTrue(commandInfo.getLatestTime() >= beforeSpike);
-        assertTrue(commandInfo.getLatestDuration() > 0);
-        assertTrue(commandInfo.getMaxDuration() >= commandInfo.getLatestDuration());
+        assertTrue((Long) commandInfo[1] >= beforeSpike);
+        assertTrue((Long) commandInfo[2] > 0);
+        assertTrue((Long) commandInfo[3] >= (Long) commandInfo[2]);
 
         if (SERVER_VERSION.isGreaterThanOrEqualTo("8.1.0")) {
-            assertTrue(commandInfo.getSum().get() > 0);
-            assertTrue(commandInfo.getCount().get() > 0);
+            assertTrue(commandInfo.length > 4);
+            assertTrue((Long) commandInfo[4] > 0);
+            assertTrue((Long) commandInfo[5] > 0);
         } else {
-            assertFalse(commandInfo.getSum().isPresent());
-            assertFalse(commandInfo.getCount().isPresent());
+            assertEquals(4, commandInfo.length);
         }
 
         // Single-node route (primary)
-        ClusterValue<LatencyEventInfo[]> single = clusterClient.latencyLatest(PRIMARY_SLOT_ROUTE).get();
+        ClusterValue<Object[][]> single = clusterClient.latencyLatest(PRIMARY_SLOT_ROUTE).get();
         assertTrue(single.hasSingleData());
         assertTrue(single.getSingleValue().length >= 1);
     }
@@ -1042,8 +1042,8 @@ public class CommandTests {
         assertFalse(flattenLatencyEntries(clusterClient.latencyHistory("command").get()).isEmpty());
     }
 
-    /** Flattens a ClusterValue of LatencyEntry arrays. */
-    private static List<LatencyEntry> flattenLatencyEntries(ClusterValue<LatencyEntry[]> val) {
+    /** Flattens a ClusterValue of Object[][] arrays (latency history entries). */
+    private static List<Object[]> flattenLatencyEntries(ClusterValue<Object[][]> val) {
         if (val.hasSingleData()) {
             return Arrays.asList(val.getSingleValue());
         }
@@ -1052,9 +1052,8 @@ public class CommandTests {
                 .collect(Collectors.toList());
     }
 
-    /** Flattens a ClusterValue of LatencyEventInfo arrays. */
-    private static List<LatencyEventInfo> flattenLatencyEventInfos(
-            ClusterValue<LatencyEventInfo[]> val) {
+    /** Flattens a ClusterValue of Object[][] arrays (latency event infos). */
+    private static List<Object[]> flattenArrayofArrays(ClusterValue<Object[][]> val) {
         if (val.hasSingleData()) {
             return Arrays.asList(val.getSingleValue());
         }
@@ -4588,5 +4587,143 @@ public class CommandTests {
             assertNotNull(countWithRoute.getSingleValue());
             assertTrue(countWithRoute.getSingleValue() >= 0);
         }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor_default_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryDoctor().get();
+        assertTrue(result.hasMultiData());
+        for (String diagnostic : result.getMultiValue().values()) {
+            assertNotNull(diagnostic);
+            assertFalse(diagnostic.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryDoctor(ALL_NODES).get();
+        assertTrue(result.hasMultiData());
+        assertTrue(result.getMultiValue().size() > 1);
+        for (String diagnostic : result.getMultiValue().values()) {
+            assertNotNull(diagnostic);
+            assertFalse(diagnostic.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryDoctor_single_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryDoctor(RANDOM).get();
+        assertTrue(result.hasSingleData());
+        String diagnostic = result.getSingleValue();
+        assertNotNull(diagnostic);
+        assertFalse(diagnostic.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats_default_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryMallocStats().get();
+        assertTrue(result.hasMultiData());
+        for (String allocStats : result.getMultiValue().values()) {
+            assertNotNull(allocStats);
+            assertFalse(allocStats.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryMallocStats(ALL_NODES).get();
+        assertTrue(result.hasMultiData());
+        assertTrue(result.getMultiValue().size() > 1);
+        for (String allocStats : result.getMultiValue().values()) {
+            assertNotNull(allocStats);
+            assertFalse(allocStats.isEmpty());
+        }
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryMallocStats_single_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<String> result = clusterClient.memoryMallocStats(RANDOM).get();
+        assertTrue(result.hasSingleData());
+        String allocStats = result.getSingleValue();
+        assertNotNull(allocStats);
+        assertFalse(allocStats.isEmpty());
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge_default_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.memoryPurge().get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge_multi_node_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.memoryPurge(ALL_NODES).get();
+        assertEquals(OK, result);
+    }
+
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryPurge_single_node_route(GlideClusterClient clusterClient) {
+        String result = clusterClient.memoryPurge(RANDOM).get();
+        assertEquals(OK, result);
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats_default_route(GlideClusterClient clusterClient) {
+        ClusterValue<Map<String, Object>> result = clusterClient.memoryStats().get();
+        assertTrue(result.hasMultiData());
+        for (Map<String, Object> nodeStats : result.getMultiValue().values()) {
+            assertMemoryStatsFields(nodeStats);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats_multi_node_route(GlideClusterClient clusterClient) {
+        ClusterValue<Map<String, Object>> result = clusterClient.memoryStats(ALL_NODES).get();
+        assertTrue(result.hasMultiData());
+        assertTrue(result.getMultiValue().size() > 1, "Expected responses from multiple nodes");
+        for (Map<String, Object> nodeStats : result.getMultiValue().values()) {
+            assertMemoryStatsFields(nodeStats);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    @SneakyThrows
+    public void memoryStats_single_node_route(GlideClusterClient clusterClient) {
+        // Write a key to ensure at least one db entry exists
+        String key = "memoryStats_single_node_key";
+        clusterClient.set(key, "value").get();
+
+        SlotKeyRoute route = new SlotKeyRoute(key, PRIMARY);
+        ClusterValue<Map<String, Object>> result = clusterClient.memoryStats(route).get();
+        assertTrue(result.hasSingleData());
+        Map<String, Object> stats = result.getSingleValue();
+        assertMemoryStatsFields(stats);
+        assertMemoryStatsDbEntry((Map<String, Object>) stats.get("db.0"));
     }
 }

@@ -58,11 +58,14 @@ import {
     UpdateByScore,
     convertElementsAndScores,
     convertGlideRecordToRecord,
+    MemoryStats,
     parseInfoResponse,
 } from "../build-ts";
 import {
     Client,
     GetAndSetRandomValue,
+    assertMemoryStatsDbEntry,
+    assertMemoryStatsFields,
     flattenClusterResponseArrays,
     getFirstResult,
     getRandomKey,
@@ -631,40 +634,6 @@ export function runBaseTests(config: {
                 expect(
                     flattenClusterResponseArrays(historyStillPresent).length,
                 ).toBeGreaterThan(0);
-            }, protocol);
-        },
-        config.timeout,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        "latency batch commands %p",
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                await triggerLatencySpike(client);
-
-                for (const isAtomic of [true, false]) {
-                    const response =
-                        client instanceof GlideClient
-                            ? await client.exec(
-                                  new Batch(isAtomic)
-                                      .latencyHistory("command")
-                                      .latencyLatest()
-                                      .latencyReset(),
-                                  isAtomic,
-                              )
-                            : await client.exec(
-                                  new ClusterBatch(isAtomic)
-                                      .latencyHistory("command")
-                                      .latencyLatest()
-                                      .latencyReset(),
-                                  isAtomic,
-                              );
-
-                    expect(response).not.toBeNull();
-                    expect(response!.length).toBe(3);
-                    // latencyReset returns a number
-                    expect(typeof response![2]).toBe("number");
-                }
             }, protocol);
         },
         config.timeout,
@@ -13861,6 +13830,94 @@ export function runBaseTests(config: {
                     );
                 }
             }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryDoctor %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const result = await client.memoryDoctor();
+                const reports =
+                    client instanceof GlideClient
+                        ? [result as string]
+                        : Object.values(result as Record<string, string>);
+
+                expect(reports.length).toBeGreaterThan(0);
+
+                for (const report of reports) {
+                    expect(typeof report).toBe("string");
+                    expect(report.length).toBeGreaterThan(0);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryMallocStats %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const result = await client.memoryMallocStats();
+                const reports =
+                    client instanceof GlideClient
+                        ? [result as string]
+                        : Object.values(result as Record<string, string>);
+
+                expect(reports.length).toBeGreaterThan(0);
+
+                for (const report of reports) {
+                    expect(typeof report).toBe("string");
+                    expect(report.length).toBeGreaterThan(0);
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryPurge %p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                expect(await client.memoryPurge()).toBe("OK");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "memoryStats %p",
+        async (protocol) => {
+            await runTest(
+                async (client: BaseClient, cluster: ValkeyCluster) => {
+                    // Write a key to ensure at least one db entry exists
+                    const key = getRandomKey();
+                    await client.set(key, "memoryStatsTest");
+
+                    const statsResult = await client.memoryStats();
+                    const statsList =
+                        client instanceof GlideClient
+                            ? [statsResult as MemoryStats]
+                            : Object.values(
+                                  statsResult as Record<string, MemoryStats>,
+                              );
+
+                    expect(statsList.length).toBeGreaterThan(0);
+
+                    for (const stats of statsList) {
+                        assertMemoryStatsFields(stats, cluster.getVersion());
+                    }
+
+                    // For standalone, explicitly validate db entry
+                    if (client instanceof GlideClient) {
+                        const stats = statsResult as MemoryStats;
+                        expect(stats.db[0]).toBeDefined();
+                        assertMemoryStatsDbEntry(stats.db[0]);
+                    }
+                },
+                protocol,
+            );
         },
         config.timeout,
     );

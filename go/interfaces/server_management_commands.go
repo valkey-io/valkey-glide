@@ -63,7 +63,7 @@ type ServerManagementCommands interface {
 
 	MemoryPurge(ctx context.Context) (string, error)
 
-	MemoryStats(ctx context.Context) (map[string]any, error)
+	MemoryStats(ctx context.Context) (models.MemoryStats, error)
 
 	AclCat(ctx context.Context) ([]string, error)
 
