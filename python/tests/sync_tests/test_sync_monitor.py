@@ -78,6 +78,24 @@ class TestMonitorSync:
             MonitorClient.create(cluster_config)
 
     @pytest.mark.parametrize("cluster_mode", [False])
+    def test_try_get_monitor_message_empty(self, request, cluster_mode):
+        """Test that try_get_monitor_message returns None when queue is empty."""
+        config = create_sync_client_config(request, cluster_mode=False)
+        monitor = MonitorClient.create(config)
+        try:
+            assert monitor.try_get_monitor_message() is None
+        finally:
+            monitor.close()
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    def test_monitor_aclose(self, request, cluster_mode):
+        """Test that stop() closes the monitor."""
+        config = create_sync_client_config(request, cluster_mode=False)
+        monitor = MonitorClient.create(config)
+        monitor.stop()
+        assert monitor._is_closed
+
+    @pytest.mark.parametrize("cluster_mode", [False])
     def test_monitor_msg_fields(self, request, cluster_mode):
         """Test that MonitorMsg has correct field types."""
         config = create_sync_client_config(request, cluster_mode=False)
