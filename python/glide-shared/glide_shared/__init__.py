@@ -24,6 +24,7 @@ from .commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
+from .commands.client_tracking import ClientTrackingInfo
 from .commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from .commands.core_options import (
     ClientPauseMode,
@@ -44,7 +45,6 @@ from .commands.core_options import (
     PubSubMsg,
     UpdateOptions,
 )
-from .commands.client_tracking import ClientTrackingInfo
 from .commands.latency import LatencyEntry, LatencyEventInfo
 from .commands.server_modules import json_batch
 from .commands.server_modules.ft_options.ft_aggregate_options import (
