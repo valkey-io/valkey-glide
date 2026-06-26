@@ -36,6 +36,7 @@
 * Go: Add multi-key `MIGRATE` support ([#6293](https://github.com/valkey-io/valkey-glide/pull/6293))
 * Core, Java, Go, Node, Python: Support server-assisted invalidation and add `CLIENT TRACKINGINFO` command ([#5961](https://github.com/valkey-io/valkey-glide/issues/5961))
 * Core, Java, Python, Node, Go: Add `MEMORY DOCTOR`, `MEMORY MALLOC-STATS`, `MEMORY PURGE`, and `MEMORY STATS` commands ([#6286](https://github.com/valkey-io/valkey-glide/issues/6286))
+* Python: Add OpenTelemetry span creation for script invocations (`EVALSHA`) so `invoke_script` calls appear in traces with DB semantic convention attributes ([#6350](https://github.com/valkey-io/valkey-glide/pull/6350))
 * Java: implement MONITOR command ([#6187](https://github.com/valkey-io/valkey-glide/pull/6187))
 * Node: Add GlideMonitorClient for MONITOR command ([#6212](https://github.com/valkey-io/valkey-glide/pull/6212))
 * Python: implement MONITOR command for sync and async clients ([#6132](https://github.com/valkey-io/valkey-glide/pull/6132))
