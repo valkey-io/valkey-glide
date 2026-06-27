@@ -9457,6 +9457,7 @@ export class BaseClient {
                 entryTtlMs: cache.entryTtlMs,
                 evictionPolicy: cache.evictionPolicy,
                 enableMetrics: cache.enableMetrics,
+                serverAssisted: cache.serverAssisted,
             });
         }
 
