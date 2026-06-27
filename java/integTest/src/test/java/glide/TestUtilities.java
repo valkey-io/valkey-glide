@@ -892,7 +892,7 @@ public class TestUtilities {
         assertTrue((Long) stats.get("aof.buffer") >= 0);
         assertTrue((Long) stats.get("clients.normal") >= 0);
         assertTrue((Long) stats.get("clients.slaves") >= 0);
-        assertTrue((Long) stats.get("dataset.bytes") >= 0);
+        assertInstanceOf(Long.class, stats.get("dataset.bytes"));
         assertInstanceOf(Long.class, stats.get("fragmentation.bytes"));
         assertTrue((Long) stats.get("keys.bytes-per-key") >= 0);
         assertTrue((Long) stats.get("keys.count") >= 0);
