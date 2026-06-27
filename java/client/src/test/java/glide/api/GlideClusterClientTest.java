@@ -44,6 +44,10 @@ import static command_request.CommandRequestOuterClass.RequestType.LatencyHistor
 import static command_request.CommandRequestOuterClass.RequestType.LatencyLatest;
 import static command_request.CommandRequestOuterClass.RequestType.LatencyReset;
 import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Ping;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardChannels;
 import static command_request.CommandRequestOuterClass.RequestType.PubSubShardNumSub;
@@ -95,8 +99,6 @@ import glide.api.models.Script;
 import glide.api.models.commands.ClientPauseMode;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions.Section;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ScriptArgOptions;
 import glide.api.models.commands.ScriptArgOptionsGlideString;
 import glide.api.models.commands.ScriptOptions;
@@ -2832,21 +2834,20 @@ public class GlideClusterClientTest {
         // setup
         String event = "command";
         String[] args = new String[] {event};
-        LatencyEntry[] entries =
-                new LatencyEntry[] {new LatencyEntry(1709062230L, 50L), new LatencyEntry(1709062231L, 42L)};
-        ClusterValue<LatencyEntry[]> value =
-                ClusterValue.ofMultiValue(createMap("node1:6379", entries));
-        CompletableFuture<ClusterValue<LatencyEntry[]>> testResponse = new CompletableFuture<>();
+        Object[][] entries =
+                new Object[][] {new Object[] {1709062230L, 50L}, new Object[] {1709062231L, 42L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofMultiValue(createMap("node1:6379", entries));
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEntry[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyHistory), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEntry[]>> response = service.latencyHistory(event);
-        ClusterValue<LatencyEntry[]> payload = response.get();
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyHistory(event);
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2859,20 +2860,19 @@ public class GlideClusterClientTest {
         // setup
         String event = "command";
         String[] args = new String[] {event};
-        LatencyEntry[] entries = new LatencyEntry[] {new LatencyEntry(1709062230L, 50L)};
-        ClusterValue<LatencyEntry[]> value = ClusterValue.ofSingleValue(entries);
-        CompletableFuture<ClusterValue<LatencyEntry[]>> testResponse = new CompletableFuture<>();
+        Object[][] entries = new Object[][] {new Object[] {1709062230L, 50L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofSingleValue(entries);
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEntry[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyHistory), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEntry[]>> response =
-                service.latencyHistory(event, RANDOM);
-        ClusterValue<LatencyEntry[]> payload = response.get();
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyHistory(event, RANDOM);
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2884,24 +2884,19 @@ public class GlideClusterClientTest {
     public void latencyLatest_returns_success() {
         // setup
         String[] args = new String[0];
-        LatencyEventInfo[] infos =
-                new LatencyEventInfo[] {
-                    new LatencyEventInfo(
-                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
-                };
-        ClusterValue<LatencyEventInfo[]> value =
-                ClusterValue.ofMultiValue(createMap("node1:6379", infos));
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> testResponse = new CompletableFuture<>();
+        Object[][] infos = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofMultiValue(createMap("node1:6379", infos));
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEventInfo[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyLatest), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> response = service.latencyLatest();
-        ClusterValue<LatencyEventInfo[]> payload = response.get();
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyLatest();
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2913,23 +2908,19 @@ public class GlideClusterClientTest {
     public void latencyLatest_with_route_returns_success() {
         // setup
         String[] args = new String[0];
-        LatencyEventInfo[] infos =
-                new LatencyEventInfo[] {
-                    new LatencyEventInfo(
-                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
-                };
-        ClusterValue<LatencyEventInfo[]> value = ClusterValue.ofSingleValue(infos);
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> testResponse = new CompletableFuture<>();
+        Object[][] infos = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        ClusterValue<Object[][]> value = ClusterValue.ofSingleValue(infos);
+        CompletableFuture<ClusterValue<Object[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<LatencyEventInfo[]>>submitNewCommand(
+        when(commandManager.<ClusterValue<Object[][]>>submitNewCommand(
                         eq(LatencyLatest), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<LatencyEventInfo[]>> response = service.latencyLatest(RANDOM);
-        ClusterValue<LatencyEventInfo[]> payload = response.get();
+        CompletableFuture<ClusterValue<Object[][]>> response = service.latencyLatest(RANDOM);
+        ClusterValue<Object[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -4730,5 +4721,180 @@ public class GlideClusterClientTest {
 
         // verify
         assertNull(response.get());
+    }
+
+    // TODO #6166: Move to shared tests.
+    @SneakyThrows
+    @Test
+    public void memoryDoctor_returns_success() {
+        // setup
+        ClusterValue<String> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", "No memory issues detected"));
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryDoctor), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryDoctor();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryDoctor_with_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("No memory issues detected");
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryDoctor), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryDoctor(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryMallocStats_returns_success() {
+        // setup
+        ClusterValue<String> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", "jemalloc stats"));
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryMallocStats), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryMallocStats();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryMallocStats_with_route_returns_success() {
+        // setup
+        ClusterValue<String> value = ClusterValue.ofSingleValue("jemalloc stats");
+        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<String>>submitNewCommand(
+                        eq(MemoryMallocStats), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<String>> response = service.memoryMallocStats(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryPurge_returns_success() {
+        // setup
+        String value = OK;
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(MemoryPurge), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.memoryPurge();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryPurge_with_route_returns_success() {
+        // setup
+        String value = OK;
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(MemoryPurge), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.memoryPurge(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SuppressWarnings("unchecked")
+    @SneakyThrows
+    @Test
+    public void memoryStats_returns_success() {
+        // setup
+        Map<String, Object> statsMap = createMap("peak.allocated", 1024L, "total.allocated", 512L);
+        ClusterValue<Map<String, Object>> value =
+                ClusterValue.ofMultiValue(createMap("node1:6379", statsMap));
+        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Object>>>submitNewCommand(
+                        eq(MemoryStats), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Object>>> response = service.memoryStats();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SuppressWarnings("unchecked")
+    @SneakyThrows
+    @Test
+    public void memoryStats_with_route_returns_success() {
+        // setup
+        Map<String, Object> statsMap = createMap("peak.allocated", 1024L, "total.allocated", 512L);
+        ClusterValue<Map<String, Object>> value = ClusterValue.ofSingleValue(statsMap);
+        CompletableFuture<ClusterValue<Map<String, Object>>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Object>>>submitNewCommand(
+                        eq(MemoryStats), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Object>>> response = service.memoryStats(RANDOM);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
     }
 }

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/valkey-io/valkey-glide/go/v2/models"
@@ -867,4 +868,169 @@ func ConvertLatencyLatestEntries(data any) (any, error) {
 		result = append(result, info)
 	}
 	return result, nil
+}
+
+const memoryStatsDbPrefix = "db."
+
+// ConvertMemoryStats converts a raw map[string]any response from glide-core into a typed models.MemoryStats.
+func ConvertMemoryStats(data any) (models.MemoryStats, error) {
+	rawMap, ok := data.(map[string]any)
+	if !ok {
+		return models.MemoryStats{}, fmt.Errorf("unexpected type for MEMORY STATS response: %T, expected map[string]any", data)
+	}
+
+	stats := models.MemoryStats{
+		Db: make(map[int64]models.MemoryStatsDb),
+	}
+
+	// Parse db.<N> entries
+	for key, value := range rawMap {
+		if strings.HasPrefix(key, memoryStatsDbPrefix) && key != "db.dict.rehashing.count" {
+			suffix := key[len(memoryStatsDbPrefix):]
+			dbIndex, err := strconv.ParseInt(suffix, 10, 64)
+			if err != nil {
+				return models.MemoryStats{}, fmt.Errorf("unexpected db key format: %s", key)
+			}
+			dbStats, err := convertMemoryStatsDb(value)
+			if err != nil {
+				return models.MemoryStats{}, fmt.Errorf("failed to parse %s: %w", key, err)
+			}
+			stats.Db[dbIndex] = dbStats
+		}
+	}
+
+	var err error
+
+	err = ReadRequiredValue(rawMap, "allocator.active", &stats.AllocatorActive)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator.allocated", &stats.AllocatorAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-fragmentation.bytes", &stats.AllocatorFragmentationBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator.resident", &stats.AllocatorResident)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-rss.bytes", &stats.AllocatorRssBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "aof.buffer", &stats.AofBuffer)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "clients.normal", &stats.ClientsNormal)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "clients.slaves", &stats.ClientsSlaves)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "dataset.bytes", &stats.DatasetBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "fragmentation.bytes", &stats.FragmentationBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "keys.bytes-per-key", &stats.KeysBytesPerKey)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "keys.count", &stats.KeysCount)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "lua.caches", &stats.LuaCaches)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "overhead.total", &stats.OverheadTotal)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "peak.allocated", &stats.PeakAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "replication.backlog", &stats.ReplicationBacklog)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "rss-overhead.bytes", &stats.RssOverheadBytes)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "startup.allocated", &stats.StartupAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "total.allocated", &stats.TotalAllocated)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-fragmentation.ratio", &stats.AllocatorFragmentationRatio)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "allocator-rss.ratio", &stats.AllocatorRssRatio)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "dataset.percentage", &stats.DatasetPercentage)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "fragmentation", &stats.Fragmentation)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "peak.percentage", &stats.PeakPercentage)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+	err = ReadRequiredValue(rawMap, "rss-overhead.ratio", &stats.RssOverheadRatio)
+	if err != nil {
+		return models.MemoryStats{}, err
+	}
+
+	// Optional Redis 7.0+ fields
+	ReadResult(rawMap, "cluster.links", &stats.ClusterLinks)
+	ReadResult(rawMap, "functions.caches", &stats.FunctionsCaches)
+
+	// Optional Valkey 8.0+ fields
+	ReadResult(rawMap, "allocator.muzzy", &stats.AllocatorMuzzy)
+	ReadResult(rawMap, "db.dict.rehashing.count", &stats.DbDictRehashingCount)
+	ReadResult(rawMap, "overhead.db.hashtable.lut", &stats.OverheadDbHashtableLut)
+	ReadResult(rawMap, "overhead.db.hashtable.rehashing", &stats.OverheadDbHashtableRehashing)
+
+	return stats, nil
+}
+
+// convertMemoryStatsDb parses a nested map into a MemoryStatsDb struct.
+func convertMemoryStatsDb(data any) (models.MemoryStatsDb, error) {
+	rawMap, ok := data.(map[string]any)
+	if !ok {
+		return models.MemoryStatsDb{}, fmt.Errorf(
+			"unexpected type for db entry: %T, expected map[string]any", data,
+		)
+	}
+
+	var db models.MemoryStatsDb
+	if err := ReadRequiredValue(rawMap, "overhead.hashtable.expires", &db.OverheadHashtableExpires); err != nil {
+		return models.MemoryStatsDb{}, err
+	}
+	if err := ReadRequiredValue(rawMap, "overhead.hashtable.main", &db.OverheadHashtableMain); err != nil {
+		return models.MemoryStatsDb{}, err
+	}
+
+	return db, nil
 }

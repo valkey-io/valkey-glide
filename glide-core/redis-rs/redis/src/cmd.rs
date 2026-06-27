@@ -40,6 +40,11 @@ pub struct Cmd {
     span: Option<GlideSpan>,
     //  A flag indicating whether this is a fenced command  (will have PING appended to ensure ordering)
     is_fenced: bool,
+    /// Whether this is a blocking command (e.g. XREAD BLOCK, BLPOP). When true,
+    /// the response-wait warning in the multiplexed connection is suppressed for
+    /// waits that are within the blocking window, because long waits are expected
+    /// and not indicative of a slow connection.
+    is_blocking: bool,
     /// Per-command response timeout. When set, overrides the connection-level
     /// response_timeout for this specific command. Used to propagate the
     /// caller's request_timeout into the multiplexed connection layer.
@@ -68,6 +73,7 @@ impl Clone for Cmd {
             no_response: self.no_response,
             span: self.span.clone(),
             is_fenced: self.is_fenced,
+            is_blocking: self.is_blocking,
             response_timeout: self.response_timeout,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: self.inflight_tracker.clone(),
@@ -397,6 +403,7 @@ impl Cmd {
             no_response: false,
             span: None,
             is_fenced: false,
+            is_blocking: false,
             response_timeout: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
@@ -414,6 +421,7 @@ impl Cmd {
             no_response: false,
             span: None,
             is_fenced: false,
+            is_blocking: false,
             response_timeout: None,
             #[cfg(feature = "cluster-async")]
             inflight_tracker: None,
@@ -712,6 +720,22 @@ impl Cmd {
         self.is_fenced
     }
 
+    /// Mark this command as blocking (e.g. XREAD BLOCK, BLPOP). Blocking
+    /// commands intentionally wait for a server event and thus have long
+    /// response times; the pipeline layer suppresses its response-wait warning
+    /// for these commands to avoid spurious noise.
+    #[inline]
+    pub fn set_is_blocking(&mut self, blocking: bool) -> &mut Cmd {
+        self.is_blocking = blocking;
+        self
+    }
+
+    /// Check whether this command is a blocking command.
+    #[inline]
+    pub fn is_blocking(&self) -> bool {
+        self.is_blocking
+    }
+
     /// Set a per-command response timeout that overrides the connection default.
     #[inline]
     pub fn set_response_timeout(&mut self, timeout: Option<std::time::Duration>) {
@@ -848,5 +872,37 @@ mod tests {
 
         cmd.set_response_timeout(None);
         assert_eq!(cmd.response_timeout(), None);
+    }
+
+    #[test]
+    fn test_is_blocking_defaults_to_false() {
+        let cmd = Cmd::new();
+        assert!(
+            !cmd.is_blocking(),
+            "new Cmd must default to is_blocking=false"
+        );
+    }
+
+    #[test]
+    fn test_set_is_blocking_round_trip() {
+        let mut cmd = Cmd::new();
+        cmd.arg("XREAD").arg("BLOCK").arg("5000");
+
+        assert!(!cmd.is_blocking());
+        cmd.set_is_blocking(true);
+        assert!(cmd.is_blocking());
+
+        cmd.set_is_blocking(false);
+        assert!(!cmd.is_blocking());
+    }
+
+    #[test]
+    fn test_is_blocking_preserved_on_clone() {
+        let mut cmd = Cmd::new();
+        cmd.arg("BLPOP").arg("mylist").arg("0");
+        cmd.set_is_blocking(true);
+
+        let cloned = cmd.clone();
+        assert!(cloned.is_blocking(), "clone must preserve is_blocking=true");
     }
 }
