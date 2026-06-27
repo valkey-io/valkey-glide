@@ -99,6 +99,10 @@ import static command_request.CommandRequestOuterClass.RequestType.Lolwut;
 import static command_request.CommandRequestOuterClass.RequestType.MGet;
 import static command_request.CommandRequestOuterClass.RequestType.MSet;
 import static command_request.CommandRequestOuterClass.RequestType.MSetNX;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryDoctor;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryMallocStats;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryPurge;
+import static command_request.CommandRequestOuterClass.RequestType.MemoryStats;
 import static command_request.CommandRequestOuterClass.RequestType.Migrate;
 import static command_request.CommandRequestOuterClass.RequestType.Move;
 import static command_request.CommandRequestOuterClass.RequestType.ObjectEncoding;
@@ -316,8 +320,6 @@ import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
-import glide.api.models.commands.LatencyEntry;
-import glide.api.models.commands.LatencyEventInfo;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.MigrateOptions;
 import glide.api.models.commands.RangeOptions;
@@ -16546,18 +16548,18 @@ public class GlideClientTest {
     @Test
     public void latencyHistory_returns_success() {
         // setup
-        LatencyEntry[] value = new LatencyEntry[] {new LatencyEntry(1709062230L, 50L)};
-        CompletableFuture<LatencyEntry[]> testResponse = new CompletableFuture<>();
+        Object[][] value = new Object[][] {new Object[] {1709062230L, 50L}};
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<LatencyEntry[]>submitNewCommand(
+        when(commandManager.<Object[][]>submitNewCommand(
                         eq(LatencyHistory), eq(new String[] {"command"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<LatencyEntry[]> response = service.latencyHistory("command");
-        LatencyEntry[] payload = response.get();
+        CompletableFuture<Object[][]> response = service.latencyHistory("command");
+        Object[][] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -16568,22 +16570,17 @@ public class GlideClientTest {
     @Test
     public void latencyLatest_returns_success() {
         // setup
-        LatencyEventInfo[] value =
-                new LatencyEventInfo[] {
-                    new LatencyEventInfo(
-                            "command", 1709062230L, 50L, 100L, Optional.of(150L), Optional.of(2L))
-                };
-        CompletableFuture<LatencyEventInfo[]> testResponse = new CompletableFuture<>();
+        Object[][] value = new Object[][] {new Object[] {"command", 1709062230L, 50L, 100L, 150L, 2L}};
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<LatencyEventInfo[]>submitNewCommand(
-                        eq(LatencyLatest), eq(new String[0]), any()))
+        when(commandManager.<Object[][]>submitNewCommand(eq(LatencyLatest), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<LatencyEventInfo[]> response = service.latencyLatest();
-        LatencyEventInfo[] payload = response.get();
+        CompletableFuture<Object[][]> response = service.latencyLatest();
+        Object[][] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -16625,6 +16622,88 @@ public class GlideClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.latencyReset(events);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    // TODO #6166: Memory command declarations will move to a shared base interface.
+    @SneakyThrows
+    @Test
+    public void memoryDoctor_returns_success() {
+        // setup
+        String value = "No memory issues detected";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(MemoryDoctor), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.memoryDoctor();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryMallocStats_returns_success() {
+        // setup
+        String value = "jemalloc stats";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(MemoryMallocStats), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.memoryMallocStats();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryPurge_returns_success() {
+        // setup
+        String value = OK;
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(MemoryPurge), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.memoryPurge();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void memoryStats_returns_success() {
+        // setup
+        Map<String, Object> value = createMap("peak.allocated", 1024L, "total.allocated", 512L);
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(
+                        eq(MemoryStats), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.memoryStats();
 
         // verify
         assertEquals(testResponse, response);

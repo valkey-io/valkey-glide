@@ -46,6 +46,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     XAutoClaimReturnType,
     ClientTrackingInfoReturnType,
     XInfoStreamFullReturnType,
+    MemoryStatsReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -1315,6 +1316,35 @@ pub(crate) fn convert_to_expected_type(
                 }
             _ => convert_to_expected_type(value, *value_type),
         }
+        ExpectedReturnType::MemoryStatsReturnType => {
+            // Convert the top-level response to a map, then recursively convert nested db.<N> entries into maps as well.
+            let map_value = convert_to_expected_type(value, Some(ExpectedReturnType::Map {
+                key_type: &None,
+                value_type: &None,
+            }))?;
+            match map_value {
+                Value::Map(map) => {
+                    let converted = map.into_iter().map(|(k, v)| {
+                        let converted_v = match &v {
+                            // Convert RESP2 two-dimensional arrays to maps.
+                            Value::Array(arr) => {
+                                convert_array_to_map_by_type(arr.clone(), None, None)
+                                    .unwrap_or(v)
+                            }
+                            // Convert RESP2 bulk strings to doubles.
+                            Value::BulkString(_) => {
+                                convert_to_expected_type(v.clone(), Some(ExpectedReturnType::Double))
+                                    .unwrap_or(v)
+                            }
+                            _ => v,
+                        };
+                        (k, converted_v)
+                    }).collect();
+                    Ok(Value::Map(converted))
+                }
+                other => Ok(other),
+            }
+        }
     }
 }
 
@@ -1700,6 +1730,10 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType<'_>>
             key_type: &None,
             value_type: &None,
         }),
+        b"MEMORY STATS" => Some(ExpectedReturnType::SingleOrMultiNode(
+            &Some(ExpectedReturnType::MemoryStatsReturnType),
+            Some(&is_array),
+        )),
         b"FT.AGGREGATE" => Some(ExpectedReturnType::FTAggregateReturnType),
         b"FT.SEARCH" => {
             if cmd.position(b"WITHSORTKEYS").is_some() {

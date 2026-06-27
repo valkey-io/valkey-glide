@@ -11,7 +11,7 @@ import (
 )
 
 func ExampleClient_MemoryDoctor() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.MemoryDoctor(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -23,7 +23,7 @@ func ExampleClient_MemoryDoctor() {
 }
 
 func ExampleClient_MemoryMallocStats() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.MemoryMallocStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -35,7 +35,7 @@ func ExampleClient_MemoryMallocStats() {
 }
 
 func ExampleClient_MemoryPurge() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.MemoryPurge(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -47,28 +47,22 @@ func ExampleClient_MemoryPurge() {
 }
 
 func ExampleClient_MemoryStats() {
-	var client *Client = getExampleClient() // example helper function
+	var client *Client = getExampleClient()
 	result, err := client.MemoryStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
 	}
-	// Verify we get expected keys in the stats map
-	hasExpectedKeys := false
-	if result != nil {
-		// Check for common memory stats keys
-		_, hasPeakAllocated := result["peak.allocated"]
-		_, hasTotalAllocated := result["total.allocated"]
-		_, hasUsedMemory := result["used_memory"]
-		hasExpectedKeys = hasPeakAllocated || hasTotalAllocated || hasUsedMemory
-	}
-	fmt.Println(hasExpectedKeys)
+
+	fmt.Println("TotalAllocated > 0:", result.TotalAllocated > 0)
+	fmt.Println("PeakAllocated > 0:", result.PeakAllocated > 0)
 
 	// Output:
-	// true
+	// TotalAllocated > 0: true
+	// PeakAllocated > 0: true
 }
 
 func ExampleClusterClient_MemoryDoctor() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.MemoryDoctor(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -81,7 +75,7 @@ func ExampleClusterClient_MemoryDoctor() {
 }
 
 func ExampleClusterClient_MemoryDoctorWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	opts := options.RouteOption{Route: config.RandomRoute}
 	result, err := client.MemoryDoctorWithOptions(context.Background(), opts)
 	if err != nil {
@@ -95,7 +89,7 @@ func ExampleClusterClient_MemoryDoctorWithOptions() {
 }
 
 func ExampleClusterClient_MemoryMallocStats() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.MemoryMallocStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -108,7 +102,7 @@ func ExampleClusterClient_MemoryMallocStats() {
 }
 
 func ExampleClusterClient_MemoryMallocStatsWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	opts := options.RouteOption{Route: config.RandomRoute}
 	result, err := client.MemoryMallocStatsWithOptions(context.Background(), opts)
 	if err != nil {
@@ -122,7 +116,7 @@ func ExampleClusterClient_MemoryMallocStatsWithOptions() {
 }
 
 func ExampleClusterClient_MemoryPurge() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.MemoryPurge(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -134,8 +128,8 @@ func ExampleClusterClient_MemoryPurge() {
 }
 
 func ExampleClusterClient_MemoryPurgeWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
-	opts := options.RouteOption{Route: config.AllNodes}
+	var client *ClusterClient = getExampleClusterClient()
+	opts := options.RouteOption{Route: config.AllPrimaries}
 	result, err := client.MemoryPurgeWithOptions(context.Background(), opts)
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -147,7 +141,7 @@ func ExampleClusterClient_MemoryPurgeWithOptions() {
 }
 
 func ExampleClusterClient_MemoryStats() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	result, err := client.MemoryStats(context.Background())
 	if err != nil {
 		fmt.Println("Glide example failed with an error:", err)
@@ -160,7 +154,7 @@ func ExampleClusterClient_MemoryStats() {
 }
 
 func ExampleClusterClient_MemoryStatsWithOptions() {
-	var client *ClusterClient = getExampleClusterClient() // example helper function
+	var client *ClusterClient = getExampleClusterClient()
 	opts := options.RouteOption{Route: config.RandomRoute}
 	result, err := client.MemoryStatsWithOptions(context.Background(), opts)
 	if err != nil {
