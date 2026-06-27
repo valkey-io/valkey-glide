@@ -490,6 +490,11 @@ public class GlideCoreClient implements AutoCloseable {
             return future;
 
         } catch (Exception e) {
+            // If the native call threw before the Rust side took ownership of the
+            // span pointer, it would otherwise be leaked and never ended; drop it here.
+            if (spanPtr != 0) {
+                OpenTelemetryResolver.dropOtelSpan(spanPtr);
+            }
             CompletableFuture<Object> future = new CompletableFuture<>();
             future.completeExceptionally(e);
             return future;
