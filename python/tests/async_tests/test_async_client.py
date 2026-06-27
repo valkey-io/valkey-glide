@@ -10382,9 +10382,10 @@ class TestCommands:
         is_cluster = isinstance(glide_client, GlideClusterClient)
 
         result = await glide_client.memory_doctor()
-        reports = list(result.values()) if is_cluster else [result]
+        reports = list(result.values()) if isinstance(result, dict) else [result]
 
         if is_cluster:
+            assert isinstance(glide_client, GlideClusterClient)
             # Single-node route.
             reports.append(await glide_client.memory_doctor(route=RandomNode()))
 
@@ -10403,9 +10404,10 @@ class TestCommands:
         is_cluster = isinstance(glide_client, GlideClusterClient)
 
         result = await glide_client.memory_malloc_stats()
-        reports = list(result.values()) if is_cluster else [result]
+        reports = list(result.values()) if isinstance(result, dict) else [result]
 
         if is_cluster:
+            assert isinstance(glide_client, GlideClusterClient)
             # Single-node route.
             reports.append(await glide_client.memory_malloc_stats(route=RandomNode()))
 
@@ -10458,6 +10460,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_memory_stats_cluster_multi_node(self, glide_client: TGlideClient):
+        assert isinstance(glide_client, GlideClusterClient)
         result = await glide_client.memory_stats(route=AllNodes())
         assert isinstance(result, dict)
 
@@ -10473,6 +10476,7 @@ class TestCommands:
         await glide_client.set(key, "value")
 
         version = await get_version(glide_client)
+        assert isinstance(glide_client, GlideClusterClient)
         stats = await glide_client.memory_stats(
             route=SlotKeyRoute(SlotType.PRIMARY, key)
         )
