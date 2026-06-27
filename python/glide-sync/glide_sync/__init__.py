@@ -33,7 +33,6 @@ from glide_shared import (
     ClientCircuitBreakerConfiguration,
     ClientPauseMode,
     ClientSideCache,
-    ClientTrackingInfo,
     ClosingError,
     ClusterBatch,
     ClusterBatchOptions,
