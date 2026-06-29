@@ -28,6 +28,7 @@ from glide_shared.commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
+from glide_shared.commands.client_tracking import ClientTrackingInfo
 from glide_shared.commands.command_args import Limit, ListDirection, OrderBy
 from glide_shared.commands.core_options import (
     ClientPauseMode,
@@ -117,10 +118,12 @@ from tests.utils.utils import (
     BGSAVE_NOT_CANCELLED_RESPONSE,
     BGSAVE_RESPONSES,
     PRIMARY_SLOT_ROUTE,
+    assert_client_tracking_info,
     assert_connected_sync,
     assert_memory_stats_db_entry,
     assert_memory_stats_fields,
     assert_responses_in,
+    build_client_side_cache,
     check_function_list_response,
     check_function_stats_response,
     compare_maps,
@@ -951,6 +954,35 @@ class TestCommands:
         client_id = glide_sync_client.client_id()
         assert type(client_id) is int
         assert client_id > 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    def test_sync_client_tracking_info_cache_off(self, glide_sync_client: TGlideClient):
+        info = glide_sync_client.client_tracking_info()
+        assert isinstance(info, ClientTrackingInfo)
+        assert_client_tracking_info(info, on=False)
+
+        # Cluster multi-node
+        if isinstance(glide_sync_client, GlideClusterClient):
+            multi_info = glide_sync_client.client_tracking_info(AllPrimaries())
+            assert isinstance(multi_info, dict)
+            for node_info in multi_info.values():
+                assert_client_tracking_info(node_info, on=False)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def test_sync_client_tracking_info_cache_on(self, request, cluster_mode):
+        cache = build_client_side_cache(server_assisted=True)
+        client = create_sync_client(
+            request,
+            cluster_mode=cluster_mode,
+            protocol=ProtocolVersion.RESP3,
+            cache=cache,
+        )
+
+        info = client.client_tracking_info()
+        assert_client_tracking_info(info, on=True)
+
+        client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -10279,13 +10311,15 @@ class TestCommands:
         is_cluster = isinstance(glide_sync_client, GlideClusterClient)
 
         result = glide_sync_client.memory_doctor()
-        reports = list(result.values()) if is_cluster else [result]
+        reports = list(result.values()) if isinstance(result, dict) else [result]
 
         if is_cluster:
             # Single-node route.
+            assert isinstance(glide_sync_client, GlideClusterClient)
             reports.append(glide_sync_client.memory_doctor(route=RandomNode()))
 
             # Multi-node route.
+            assert isinstance(glide_sync_client, GlideClusterClient)
             all_nodes_result = glide_sync_client.memory_doctor(route=AllNodes())
             assert isinstance(all_nodes_result, dict)
             assert len(all_nodes_result) > 1
@@ -10300,13 +10334,15 @@ class TestCommands:
         is_cluster = isinstance(glide_sync_client, GlideClusterClient)
 
         result = glide_sync_client.memory_malloc_stats()
-        reports = list(result.values()) if is_cluster else [result]
+        reports = list(result.values()) if isinstance(result, dict) else [result]
 
         if is_cluster:
             # Single-node route.
+            assert isinstance(glide_sync_client, GlideClusterClient)
             reports.append(glide_sync_client.memory_malloc_stats(route=RandomNode()))
 
             # Multi-node route.
+            assert isinstance(glide_sync_client, GlideClusterClient)
             all_nodes_result = glide_sync_client.memory_malloc_stats(route=AllNodes())
             assert isinstance(all_nodes_result, dict)
             assert len(all_nodes_result) > 1
@@ -10358,6 +10394,7 @@ class TestCommands:
         self, glide_sync_client: TGlideClient
     ):
         version = sync_get_version(glide_sync_client)
+        assert isinstance(glide_sync_client, GlideClusterClient)
         result = glide_sync_client.memory_stats(route=AllNodes())
         assert isinstance(result, dict)
 
@@ -10375,6 +10412,7 @@ class TestCommands:
         glide_sync_client.set(key, "value")
 
         version = sync_get_version(glide_sync_client)
+        assert isinstance(glide_sync_client, GlideClusterClient)
         stats = glide_sync_client.memory_stats(
             route=SlotKeyRoute(SlotType.PRIMARY, key)
         )

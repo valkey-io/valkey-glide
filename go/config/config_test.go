@@ -1462,3 +1462,23 @@ func TestClusterConfig_PeriodicChecks_ManualInterval(t *testing.T) {
 	assert.True(t, ok, "expected PeriodicChecksManualInterval protobuf type")
 	assert.Equal(t, uint32(30), manual.PeriodicChecksManualInterval.DurationInSec)
 }
+
+func TestNewClientSideCache_ServerAssistedDefault(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	assert.False(t, cache.ServerAssisted)
+}
+
+func TestNewClientSideCache_ServerAssistedEnabled(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithServerAssisted(true)
+	assert.True(t, cache.ServerAssisted)
+}
+
+func TestNewClientSideCache_ServerAssistedExplicitlyDisabled(t *testing.T) {
+	cache, err := NewClientSideCache(1024, 60000)
+	assert.NoError(t, err)
+	cache.WithServerAssisted(false)
+	assert.False(t, cache.ServerAssisted)
+}

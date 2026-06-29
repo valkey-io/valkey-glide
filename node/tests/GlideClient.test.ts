@@ -16,6 +16,7 @@ import { ValkeyCluster } from "../../utils/TestUtils.js";
 import {
     Batch,
     ClientPauseMode,
+    ClientSideCache,
     Decoder,
     FlushMode,
     FunctionRestorePolicy,
@@ -33,6 +34,7 @@ import { command_request } from "../build-ts/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import { IP_ADDRESS_V4, IP_ADDRESS_V6 } from "./Constants";
 import {
+    assertClientTrackingInfo,
     assertConnected,
     batchTest,
     checkFunctionListResponse,
@@ -2351,6 +2353,39 @@ describe("GlideClient", () => {
             const result = await client.replicaofNoOne();
             expect(result).toBe("OK");
             client.close();
+        },
+        TIMEOUT,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "clientTrackingInfo_cacheOff_%p",
+        async (protocol) => {
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+            const info = await client.clientTrackingInfo();
+            assertClientTrackingInfo(info, false);
+        },
+        TIMEOUT,
+    );
+
+    it(
+        "clientTrackingInfo_cacheOn",
+        async () => {
+            const cache = new ClientSideCache({
+                maxCacheKb: 1,
+                entryTtlMs: 60000,
+                serverAssisted: true,
+            });
+            client = await GlideClient.createClient(
+                getClientConfigurationOption(
+                    cluster.getAddresses(),
+                    ProtocolVersion.RESP3,
+                    { clientSideCache: cache },
+                ),
+            );
+            const info = await client.clientTrackingInfo();
+            assertClientTrackingInfo(info, true);
         },
         TIMEOUT,
     );
