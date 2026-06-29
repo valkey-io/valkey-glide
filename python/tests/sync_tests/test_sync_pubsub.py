@@ -773,16 +773,17 @@ class TestSyncPubSub:
         """
 
         NUM_CHANNELS = 256
-        PATTERN = "{{{}}}:{}".format("pattern", "*")
+        PATTERN = "{pattern}:*"
 
-        # Create dictionaries of channels and their corresponding messages
+        # Create dictionaries of channels and their corresponding messages.
+        # Deterministic, index-unique names keep exact channels and the
+        # subscribed pattern from overlapping, so callback counts stay exact.
         exact_channels_and_messages = {
-            "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(10)
-            for _ in range(NUM_CHANNELS)
+            f"{{channel}}:exact_{i}": f"exact_message_{i}" for i in range(NUM_CHANNELS)
         }
         pattern_channels_and_messages = {
-            "{{{}}}:{}".format("pattern", get_random_string(5)): get_random_string(5)
-            for _ in range(NUM_CHANNELS)
+            f"{{pattern}}:match_{i}": f"pattern_message_{i}"
+            for i in range(NUM_CHANNELS)
         }
 
         all_channels_and_messages = {
